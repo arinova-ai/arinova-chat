@@ -1,0 +1,52 @@
+{
+  "name": "@arinova-ai/arinova-chat",
+  "version": "0.0.1",
+  "description": "OpenClaw channel plugin for Arinova Chat (A2A protocol with native streaming)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "tsc --noEmit"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "channel": {
+      "id": "arinova-chat",
+      "label": "Arinova Chat",
+      "selectionLabel": "Arinova Chat (A2A streaming)",
+      "docsPath": "/channels/arinova-chat",
+      "docsLabel": "arinova-chat",
+      "blurb": "Human-to-AI messaging via Arinova Chat with native streaming.",
+      "aliases": [
+        "arinova"
+      ],
+      "order": 70,
+      "quickstartAllowFrom": true
+    }
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026"
+  },
+  "dependencies": {
+    "zod": "^4"
+  },
+  "devDependencies": {
+    "openclaw": "latest",
+    "tsup": "^8",
+    "typescript": "^5"
+  }
+}

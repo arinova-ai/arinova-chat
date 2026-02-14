@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: arinova-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: arinova
+      POSTGRES_PASSWORD: arinova_dev
+      POSTGRES_DB: arinova_chat
+    ports:
+      - "5458:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: arinova-redis
+    restart: unless-stopped
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

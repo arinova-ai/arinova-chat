@@ -1,0 +1,9 @@
+{
+  "id": "arinova-chat",
+  "channels": ["arinova-chat"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

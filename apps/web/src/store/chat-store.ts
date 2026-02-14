@@ -1,0 +1,333 @@
+import { create } from "zustand";
+import type { Agent, Conversation, Message } from "@arinova/shared/types";
+import type { WSServerEvent } from "@arinova/shared/types";
+import { api } from "@/lib/api";
+import { wsManager } from "@/lib/ws";
+
+interface ConversationWithAgent extends Conversation {
+  agentName: string;
+  agentDescription: string | null;
+  agentAvatarUrl: string | null;
+  lastMessage: Message | null;
+}
+
+interface GroupMember {
+  id: string;
+  conversationId: string;
+  agentId: string;
+  addedAt: string;
+  agentName: string;
+  agentDescription: string | null;
+  agentAvatarUrl: string | null;
+}
+
+interface ChatState {
+  agents: Agent[];
+  conversations: ConversationWithAgent[];
+  messagesByConversation: Record<string, Message[]>;
+  activeConversationId: string | null;
+  sidebarOpen: boolean;
+  searchQuery: string;
+  loading: boolean;
+  unreadCounts: Record<string, number>;
+  agentHealth: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }>;
+
+  // Actions
+  setActiveConversation: (id: string) => void;
+  setSidebarOpen: (open: boolean) => void;
+  setSearchQuery: (query: string) => void;
+  loadAgents: () => Promise<void>;
+  loadConversations: (query?: string) => Promise<void>;
+  loadMessages: (conversationId: string) => Promise<void>;
+  sendMessage: (content: string) => void;
+  createAgent: (data: { name: string; description?: string; a2aEndpoint: string }) => Promise<Agent>;
+  deleteAgent: (id: string) => Promise<void>;
+  createConversation: (agentId: string, title?: string) => Promise<Conversation>;
+  createGroupConversation: (agentIds: string[], title: string) => Promise<Conversation>;
+  loadGroupMembers: (conversationId: string) => Promise<GroupMember[]>;
+  addGroupMember: (conversationId: string, agentId: string) => Promise<void>;
+  removeGroupMember: (conversationId: string, agentId: string) => Promise<void>;
+  deleteConversation: (id: string) => Promise<void>;
+  updateConversation: (id: string, data: { title?: string; pinned?: boolean }) => Promise<void>;
+  deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
+  loadAgentHealth: () => Promise<void>;
+  handleWSEvent: (event: WSServerEvent) => void;
+  initWS: () => () => void;
+}
+
+export const useChatStore = create<ChatState>((set, get) => ({
+  agents: [],
+  conversations: [],
+  messagesByConversation: {},
+  activeConversationId: null,
+  sidebarOpen: false,
+  searchQuery: "",
+  loading: false,
+  unreadCounts: {},
+  agentHealth: {},
+
+  setActiveConversation: (id) => {
+    set({
+      activeConversationId: id,
+      sidebarOpen: false,
+      unreadCounts: { ...get().unreadCounts, [id]: 0 },
+    });
+    get().loadMessages(id);
+  },
+
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+
+  setSearchQuery: (query) => {
+    set({ searchQuery: query });
+    get().loadConversations(query || undefined);
+  },
+
+  loadAgents: async () => {
+    const agents = await api<Agent[]>("/api/agents");
+    set({ agents });
+  },
+
+  loadConversations: async (query) => {
+    const path = query
+      ? `/api/conversations?q=${encodeURIComponent(query)}`
+      : "/api/conversations";
+    const conversations = await api<ConversationWithAgent[]>(path);
+    set({ conversations });
+  },
+
+  loadMessages: async (conversationId) => {
+    const { messagesByConversation } = get();
+    if (messagesByConversation[conversationId]) return;
+
+    const data = await api<{ messages: Message[]; hasMore: boolean }>(
+      `/api/conversations/${conversationId}/messages`
+    );
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [conversationId]: data.messages,
+      },
+    });
+  },
+
+  sendMessage: (content) => {
+    const { activeConversationId } = get();
+    if (!activeConversationId) return;
+
+    // Optimistic: add user message to UI
+    const userMsg: Message = {
+      id: `temp-${Date.now()}`,
+      conversationId: activeConversationId,
+      role: "user",
+      content,
+      status: "completed",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const current = get().messagesByConversation[activeConversationId] ?? [];
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [activeConversationId]: [...current, userMsg],
+      },
+    });
+
+    // Send via WebSocket
+    wsManager.send({
+      type: "send_message",
+      conversationId: activeConversationId,
+      content,
+    });
+  },
+
+  createAgent: async (data) => {
+    const agent = await api<Agent>("/api/agents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    set({ agents: [...get().agents, agent] });
+    return agent;
+  },
+
+  deleteAgent: async (id) => {
+    await api(`/api/agents/${id}`, { method: "DELETE" });
+    set({ agents: get().agents.filter((a) => a.id !== id) });
+  },
+
+  createConversation: async (agentId, title) => {
+    const conv = await api<Conversation>("/api/conversations", {
+      method: "POST",
+      body: JSON.stringify({ agentId, title }),
+    });
+    await get().loadConversations();
+    return conv;
+  },
+
+  createGroupConversation: async (agentIds, title) => {
+    const conv = await api<Conversation>("/api/conversations/group", {
+      method: "POST",
+      body: JSON.stringify({ agentIds, title }),
+    });
+    await get().loadConversations();
+    return conv;
+  },
+
+  loadGroupMembers: async (conversationId) => {
+    return api<GroupMember[]>(`/api/conversations/${conversationId}/members`);
+  },
+
+  addGroupMember: async (conversationId, agentId) => {
+    await api(`/api/conversations/${conversationId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ agentId }),
+    });
+    await get().loadConversations();
+  },
+
+  removeGroupMember: async (conversationId, agentId) => {
+    await api(`/api/conversations/${conversationId}/members/${agentId}`, {
+      method: "DELETE",
+    });
+    await get().loadConversations();
+  },
+
+  deleteConversation: async (id) => {
+    await api(`/api/conversations/${id}`, { method: "DELETE" });
+    const { activeConversationId, messagesByConversation } = get();
+    const newMessages = { ...messagesByConversation };
+    delete newMessages[id];
+    set({
+      conversations: get().conversations.filter((c) => c.id !== id),
+      activeConversationId: activeConversationId === id ? null : activeConversationId,
+      messagesByConversation: newMessages,
+    });
+  },
+
+  updateConversation: async (id, data) => {
+    await api(`/api/conversations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    await get().loadConversations();
+  },
+
+  deleteMessage: async (conversationId, messageId) => {
+    await api(`/api/conversations/${conversationId}/messages/${messageId}`, {
+      method: "DELETE",
+    });
+    const current = get().messagesByConversation[conversationId] ?? [];
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [conversationId]: current.filter((m) => m.id !== messageId),
+      },
+    });
+  },
+
+  loadAgentHealth: async () => {
+    try {
+      const results = await api<{ agentId: string; status: "online" | "offline" | "error"; latencyMs: number | null }[]>(
+        "/api/agents/health"
+      );
+      const health: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }> = {};
+      for (const r of results) {
+        health[r.agentId] = { status: r.status, latencyMs: r.latencyMs };
+      }
+      set({ agentHealth: health });
+    } catch {
+      // ignore health check failures
+    }
+  },
+
+  handleWSEvent: (event) => {
+    if (event.type === "pong") return;
+
+    if (event.type === "stream_start") {
+      const { conversationId, messageId } = event;
+      const current = get().messagesByConversation[conversationId] ?? [];
+      // Add streaming agent message
+      const agentMsg: Message = {
+        id: messageId,
+        conversationId,
+        role: "agent",
+        content: "",
+        status: "streaming",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      set({
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [conversationId]: [...current, agentMsg],
+        },
+      });
+      return;
+    }
+
+    if (event.type === "stream_chunk") {
+      const { conversationId, messageId, chunk } = event;
+      const current = get().messagesByConversation[conversationId] ?? [];
+      set({
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [conversationId]: current.map((m) =>
+            m.id === messageId ? { ...m, content: m.content + chunk } : m
+          ),
+        },
+      });
+      return;
+    }
+
+    if (event.type === "stream_end") {
+      const { conversationId, messageId } = event;
+      const current = get().messagesByConversation[conversationId] ?? [];
+      const { activeConversationId, unreadCounts } = get();
+      set({
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [conversationId]: current.map((m) =>
+            m.id === messageId
+              ? { ...m, status: "completed" as const, updatedAt: new Date() }
+              : m
+          ),
+        },
+        // Increment unread if not viewing this conversation
+        unreadCounts:
+          conversationId !== activeConversationId
+            ? { ...unreadCounts, [conversationId]: (unreadCounts[conversationId] ?? 0) + 1 }
+            : unreadCounts,
+      });
+      // Refresh conversation list to update last message
+      get().loadConversations();
+      return;
+    }
+
+    if (event.type === "stream_error") {
+      const { conversationId, messageId, error } = event;
+      const current = get().messagesByConversation[conversationId] ?? [];
+      set({
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [conversationId]: current.map((m) =>
+            m.id === messageId
+              ? { ...m, content: error, status: "error" as const }
+              : m
+          ),
+        },
+      });
+      return;
+    }
+  },
+
+  initWS: () => {
+    wsManager.connect();
+    const unsub = wsManager.subscribe((event) => {
+      get().handleWSEvent(event);
+    });
+    return () => {
+      unsub();
+      wsManager.disconnect();
+    };
+  },
+}));
