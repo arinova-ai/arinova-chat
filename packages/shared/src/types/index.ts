@@ -312,7 +312,7 @@ export interface AppPurchase {
   createdAt: Date;
 }
 
-// ===== WebSocket Events =====
+// ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
   | { type: "send_message"; conversationId: string; content: string }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
@@ -341,4 +341,21 @@ export type WSServerEvent =
       messageId: string;
       error: string;
     }
+  | { type: "pong" };
+
+// ===== Agent WebSocket Events (Agent ↔ Backend) =====
+
+/** Events sent from Agent → Backend */
+export type AgentWSClientEvent =
+  | { type: "agent_auth"; agentId: string }
+  | { type: "agent_chunk"; taskId: string; chunk: string }
+  | { type: "agent_complete"; taskId: string; content: string }
+  | { type: "agent_error"; taskId: string; error: string }
+  | { type: "ping" };
+
+/** Events sent from Backend → Agent */
+export type AgentWSServerEvent =
+  | { type: "auth_ok"; agentName: string }
+  | { type: "auth_error"; error: string }
+  | { type: "task"; taskId: string; conversationId: string; content: string }
   | { type: "pong" };

@@ -4,6 +4,7 @@ import { agents } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { redis } from "../db/redis.js";
+import { isAgentConnected } from "../ws/agent-handler.js";
 
 const HEALTH_CACHE_TTL = 60; // seconds
 
@@ -23,7 +24,17 @@ export async function agentHealthRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Agent not found" });
       }
 
-      // Check cache first
+      // WS connection is real-time — skip cache if connected
+      if (isAgentConnected(agent.id)) {
+        return reply.send({
+          status: "online",
+          mode: "websocket",
+          latencyMs: 0,
+          checkedAt: new Date().toISOString(),
+        });
+      }
+
+      // Fallback: check A2A endpoint (legacy)
       const cacheKey = `agent:health:${agent.id}`;
       const cached = await redis.get(cacheKey);
       if (cached) {
@@ -32,7 +43,6 @@ export async function agentHealthRoutes(app: FastifyInstance) {
 
       const result = await checkAgentHealth(agent.a2aEndpoint);
 
-      // Cache the result
       await redis.setex(cacheKey, HEALTH_CACHE_TTL, JSON.stringify(result));
 
       return reply.send(result);
@@ -50,6 +60,17 @@ export async function agentHealthRoutes(app: FastifyInstance) {
 
     const results = await Promise.all(
       userAgents.map(async (agent) => {
+        // WS connection is real-time
+        if (isAgentConnected(agent.id)) {
+          return {
+            agentId: agent.id,
+            status: "online",
+            mode: "websocket",
+            latencyMs: 0,
+            checkedAt: new Date().toISOString(),
+          };
+        }
+
         const cacheKey = `agent:health:${agent.id}`;
         const cached = await redis.get(cacheKey);
         if (cached) {

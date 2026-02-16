@@ -23,8 +23,8 @@ import {
 } from "./normalize.js";
 import { getArinovaChatRuntime } from "./runtime.js";
 import { sendMessageArinovaChat } from "./send.js";
-import { authenticateWithArinova, exchangePairingCode } from "./auth.js";
-import { createA2AServer } from "./a2a-server.js";
+import { exchangePairingCode } from "./auth.js";
+import { createWSClient } from "./ws-client.js";
 import { handleArinovaChatInbound } from "./inbound.js";
 
 const meta = {
@@ -205,7 +205,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
     buildChannelSummary: ({ snapshot }) => ({
       configured: snapshot.configured ?? false,
       running: snapshot.running ?? false,
-      mode: "a2a-server",
+      mode: "websocket",
       lastStartAt: snapshot.lastStartAt ?? null,
       lastStopAt: snapshot.lastStopAt ?? null,
       lastError: snapshot.lastError ?? null,
@@ -226,7 +226,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         lastStartAt: runtime?.lastStartAt ?? null,
         lastStopAt: runtime?.lastStopAt ?? null,
         lastError: runtime?.lastError ?? null,
-        mode: "a2a-server",
+        mode: "websocket",
         lastInboundAt: runtime?.lastInboundAt ?? null,
         lastOutboundAt: runtime?.lastOutboundAt ?? null,
       };
@@ -260,59 +260,16 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         },
       };
 
-      // Start A2A server first (needed for pairing code exchange)
-      const a2aPort = account.config.a2aPort ?? 8790;
-      const a2aHost = account.config.a2aHost ?? "0.0.0.0";
+      // Derive WebSocket URL from apiUrl
+      const wsUrl = account.apiUrl.replace(/^http/, "ws") + "/ws/agent";
 
-      logger.info(`[${account.accountId}] starting A2A server on ${a2aHost}:${a2aPort}`);
-
-      const { start, stop } = createA2AServer({
-        port: a2aPort,
-        host: a2aHost,
-        agentName: account.name ?? "OpenClaw Agent",
-        onTask: async ({ message, res }) => {
-          core.channel.activity.record({
-            channel: "arinova-chat",
-            accountId: account.accountId,
-            direction: "inbound",
-            at: message.timestamp,
-          });
-
-          await handleArinovaChatInbound({
-            message,
-            res,
-            account,
-            config: cfg,
-            runtime,
-            statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
-          });
-        },
-        onError: (error) => {
-          logger.error(`[arinova-chat:${account.accountId}] A2A server error: ${error.message}`);
-        },
-        abortSignal: ctx.abortSignal,
-      });
-
-      await start();
-
-      const publicUrl = `http://${a2aHost === "0.0.0.0" ? "localhost" : a2aHost}:${a2aPort}`;
-      logger.info(
-        `[arinova-chat:${account.accountId}] A2A server listening on ${publicUrl}`,
-      );
-      logger.info(
-        `[arinova-chat:${account.accountId}] Agent card: ${publicUrl}/.well-known/agent.json`,
-      );
-
-      const endpointUrl = `${publicUrl}/.well-known/agent.json`;
-
-      // Pairing code flow: exchange code for agentId + register endpoint (no auth needed)
+      // Pairing code flow: exchange code for agentId (no a2aEndpoint needed now)
       if (account.pairingCode && !account.agentId) {
         logger.info(`[${account.accountId}] exchanging pairing code...`);
         try {
           const result = await exchangePairingCode({
             apiUrl: account.apiUrl,
             pairingCode: account.pairingCode,
-            a2aEndpoint: endpointUrl,
           });
           account.agentId = result.agentId;
           logger.info(
@@ -323,52 +280,58 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           logger.error(`[${account.accountId}] pairing failed: ${errorMsg}`);
           throw err;
         }
-      } else {
-        // Legacy email/password flow: authenticate then update endpoint
-        let sessionCookie = account.sessionToken
-          ? `better-auth.session_token=${account.sessionToken}`
-          : "";
-
-        if (!sessionCookie && account.config.email && account.config.password) {
-          logger.info(`[${account.accountId}] authenticating with Arinova Chat...`);
-          try {
-            const authResult = await authenticateWithArinova({
-              apiUrl: account.apiUrl,
-              email: account.config.email,
-              password: account.config.password,
-            });
-            sessionCookie = authResult.sessionCookie;
-            logger.info(`[${account.accountId}] authenticated successfully`);
-          } catch (err) {
-            const errorMsg = err instanceof Error ? err.message : String(err);
-            logger.error(`[${account.accountId}] auth failed: ${errorMsg}`);
-            throw err;
-          }
-        }
-
-        // Update the agent's a2aEndpoint in Arinova
-        if (sessionCookie && account.agentId) {
-          try {
-            const updateRes = await fetch(`${account.apiUrl}/api/agents/${account.agentId}`, {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-                Cookie: sessionCookie,
-              },
-              body: JSON.stringify({ a2aEndpoint: endpointUrl }),
-            });
-            if (updateRes.ok) {
-              logger.info(
-                `[arinova-chat:${account.accountId}] updated agent a2aEndpoint to ${endpointUrl}`,
-              );
-            }
-          } catch {
-            // Non-critical: agent endpoint update is best-effort
-          }
-        }
       }
 
-      return { stop };
+      if (!account.agentId) {
+        throw new Error(
+          `Arinova Chat: agentId not available for account "${account.accountId}" after pairing`,
+        );
+      }
+
+      // Connect to backend via WebSocket (Pull model)
+      logger.info(`[${account.accountId}] connecting to backend WS: ${wsUrl}`);
+
+      const client = createWSClient({
+        wsUrl,
+        agentId: account.agentId,
+        onTask: async ({ taskId, conversationId, content, sendChunk, sendComplete, sendError }) => {
+          core.channel.activity.record({
+            channel: "arinova-chat",
+            accountId: account.accountId,
+            direction: "inbound",
+            at: Date.now(),
+          });
+
+          await handleArinovaChatInbound({
+            message: { taskId, text: content, timestamp: Date.now() },
+            sendChunk,
+            sendComplete,
+            sendError,
+            account,
+            config: cfg,
+            runtime,
+            statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
+          });
+        },
+        onConnected: () => {
+          logger.info(`[arinova-chat:${account.accountId}] WebSocket connected`);
+        },
+        onDisconnected: () => {
+          logger.info(`[arinova-chat:${account.accountId}] WebSocket disconnected, will reconnect...`);
+        },
+        onError: (error) => {
+          logger.error(`[arinova-chat:${account.accountId}] WebSocket error: ${error.message}`);
+        },
+        abortSignal: ctx.abortSignal,
+      });
+
+      client.connect();
+
+      return {
+        stop: () => {
+          client.disconnect();
+        },
+      };
     },
   },
 };

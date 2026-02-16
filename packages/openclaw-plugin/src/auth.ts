@@ -79,14 +79,17 @@ export async function validateSession(params: {
 export async function exchangePairingCode(params: {
   apiUrl: string;
   pairingCode: string;
-  a2aEndpoint: string;
-}): Promise<{ agentId: string; name: string }> {
+  a2aEndpoint?: string;
+}): Promise<{ agentId: string; name: string; wsUrl?: string }> {
   const { apiUrl, pairingCode, a2aEndpoint } = params;
+
+  const body: Record<string, string> = { pairingCode };
+  if (a2aEndpoint) body.a2aEndpoint = a2aEndpoint;
 
   const response = await fetch(`${apiUrl}/api/agents/pair`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pairingCode, a2aEndpoint }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -96,7 +99,7 @@ export async function exchangePairingCode(params: {
     );
   }
 
-  return (await response.json()) as { agentId: string; name: string };
+  return (await response.json()) as { agentId: string; name: string; wsUrl?: string };
 }
 
 function extractSessionCookie(setCookieHeaders: string[]): string | undefined {

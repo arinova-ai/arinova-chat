@@ -11,8 +11,6 @@ export const ArinovaChatAccountSchemaBase = z
     password: z.string().optional(),
     sessionToken: z.string().optional(),
     agentId: z.string().uuid().optional(),
-    a2aPort: z.number().int().positive().optional(),
-    a2aHost: z.string().optional(),
     dmPolicy: DmPolicySchema.optional().default("open"),
     allowFrom: z.array(z.string()).optional(),
     textChunkLimit: z.number().int().positive().optional(),

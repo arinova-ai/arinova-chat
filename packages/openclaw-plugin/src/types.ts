@@ -17,10 +17,6 @@ export type ArinovaChatAccountConfig = {
   sessionToken?: string;
   /** Arinova agent UUID that this plugin acts as. */
   agentId?: string;
-  /** A2A server listen port. Default: 8790. */
-  a2aPort?: number;
-  /** A2A server listen host. Default: "0.0.0.0". */
-  a2aHost?: string;
   /** Direct message policy. Default: "open". */
   dmPolicy?: DmPolicy;
   /** Optional allowlist of user IDs. */

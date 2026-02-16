@@ -77,7 +77,7 @@ export const sendMessageSchema = z.object({
 // ===== Pairing =====
 export const pairingExchangeSchema = z.object({
   pairingCode: z.string().min(6).max(6),
-  a2aEndpoint: z.string().url(),
+  a2aEndpoint: z.string().url().optional(),
 });
 
 // ===== App Manifest =====
@@ -190,7 +190,7 @@ export const appManifestSchema = z.object({
   "maxStateSize and maxActions are required for dynamic mode"
 );
 
-// ===== WebSocket =====
+// ===== WebSocket (User ↔ Backend) =====
 export const wsClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("send_message"),
@@ -201,6 +201,32 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
     type: z.literal("cancel_stream"),
     conversationId: z.string().uuid(),
     messageId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("ping"),
+  }),
+]);
+
+// ===== Agent WebSocket (Agent → Backend) =====
+export const agentWSClientEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("agent_auth"),
+    agentId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("agent_chunk"),
+    taskId: z.string(),
+    chunk: z.string(),
+  }),
+  z.object({
+    type: z.literal("agent_complete"),
+    taskId: z.string(),
+    content: z.string(),
+  }),
+  z.object({
+    type: z.literal("agent_error"),
+    taskId: z.string(),
+    error: z.string(),
   }),
   z.object({
     type: z.literal("ping"),

@@ -6,13 +6,13 @@ import { messages, conversations, agents } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { wsClientEventSchema } from "@arinova/shared/schemas";
 import type { WSServerEvent } from "@arinova/shared/types";
-import { streamA2AResponse } from "../a2a/client.js";
+import { isAgentConnected, sendTaskToAgent } from "./agent-handler.js";
 
 // Active connections: userId -> Set of WebSockets
 const wsConnections = new Map<string, Set<WebSocket>>();
 
-// Active streaming abort controllers
-const streamAbortControllers = new Map<string, AbortController>();
+// Active stream cancellers: messageId -> { cancel }
+const streamCancellers = new Map<string, { cancel: () => void }>();
 
 // Rate limiting: userId -> { count, resetAt }
 const wsRateLimits = new Map<string, { count: number; resetAt: number }>();
@@ -106,10 +106,10 @@ export async function wsRoutes(app: FastifyInstance) {
         }
 
         if (event.type === "cancel_stream") {
-          const controller = streamAbortControllers.get(event.messageId);
-          if (controller) {
-            controller.abort();
-            streamAbortControllers.delete(event.messageId);
+          const canceller = streamCancellers.get(event.messageId);
+          if (canceller) {
+            canceller.cancel();
+            streamCancellers.delete(event.messageId);
           }
           return;
         }
@@ -152,10 +152,9 @@ async function handleSendMessage(
 
   if (!conv || !conv.agentId) return;
 
-  // Get agent endpoint
+  // Get agent info
   const [agent] = await db
     .select({
-      a2aEndpoint: agents.a2aEndpoint,
       name: agents.name,
       pairingCode: agents.pairingCode,
     })
@@ -164,8 +163,8 @@ async function handleSendMessage(
 
   if (!agent) return;
 
-  if (!agent.a2aEndpoint) {
-    // Agent has no endpoint configured — cannot send messages
+  // Check if agent is connected via WebSocket
+  if (!isAgentConnected(conv.agentId)) {
     const codeHint = agent.pairingCode
       ? `Use pairing code: \`${agent.pairingCode}\``
       : `Configure your AI agent with this bot's ID: \`${conv.agentId}\``;
@@ -229,28 +228,13 @@ async function handleSendMessage(
     messageId: agentMsg.id,
   });
 
-  // Stream response via A2A (with fallback to mock)
-  const abortController = new AbortController();
-  streamAbortControllers.set(agentMsg.id, abortController);
-
-  // Idle timeout — resets on each chunk (600s allows for long reasoning/tool chains)
-  let timeout: ReturnType<typeof setTimeout>;
-  const resetIdleTimeout = () => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      abortController.abort();
-    }, 600_000);
-  };
-  resetIdleTimeout();
-
-  await streamA2AResponse({
-    endpoint: agent.a2aEndpoint,
-    content,
+  // Send task to agent via WebSocket
+  const { cancel } = sendTaskToAgent({
+    agentId: conv.agentId,
+    taskId: agentMsg.id,
     conversationId,
-    messageId: agentMsg.id,
-    signal: abortController.signal,
+    content,
     onChunk: (chunk) => {
-      resetIdleTimeout();
       sendToUser(userId, {
         type: "stream_chunk",
         conversationId,
@@ -259,8 +243,7 @@ async function handleSendMessage(
       });
     },
     onComplete: async (fullContent) => {
-      clearTimeout(timeout);
-      streamAbortControllers.delete(agentMsg.id);
+      streamCancellers.delete(agentMsg.id);
 
       await db
         .update(messages)
@@ -274,8 +257,7 @@ async function handleSendMessage(
       });
     },
     onError: async (error) => {
-      clearTimeout(timeout);
-      streamAbortControllers.delete(agentMsg.id);
+      streamCancellers.delete(agentMsg.id);
 
       await db
         .update(messages)
@@ -290,4 +272,6 @@ async function handleSendMessage(
       });
     },
   });
+
+  streamCancellers.set(agentMsg.id, { cancel });
 }

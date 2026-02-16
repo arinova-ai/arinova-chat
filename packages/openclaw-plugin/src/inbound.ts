@@ -1,38 +1,36 @@
-import type { ServerResponse } from "node:http";
 import { createReplyPrefixOptions, type OpenClawConfig, type RuntimeEnv } from "openclaw/plugin-sdk";
 import type { ResolvedArinovaChatAccount } from "./accounts.js";
 import type { ArinovaChatInboundMessage, CoreConfig } from "./types.js";
 import { getArinovaChatRuntime } from "./runtime.js";
-import { writeA2ASSEEvent } from "./a2a-server.js";
 
 const CHANNEL_ID = "arinova-chat" as const;
 
 /**
- * Handle an inbound A2A message: route it to the OpenClaw agent,
- * and stream the reply back as A2A SSE events on the response.
+ * Handle an inbound message from the backend via WebSocket.
+ * Streams the reply back using sendChunk/sendComplete/sendError callbacks.
  */
 export async function handleArinovaChatInbound(params: {
   message: ArinovaChatInboundMessage;
-  res: ServerResponse;
+  sendChunk: (chunk: string) => void;
+  sendComplete: (content: string) => void;
+  sendError: (error: string) => void;
   account: ResolvedArinovaChatAccount;
   config: CoreConfig;
   runtime: RuntimeEnv;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
 }): Promise<void> {
-  const { message, res, account, config, runtime, statusSink } = params;
+  const { message, sendChunk, sendComplete, sendError, account, config, runtime, statusSink } = params;
   const core = getArinovaChatRuntime();
 
   const rawBody = message.text.trim();
   if (!rawBody) {
-    writeA2ASSEEvent(res, message.taskId, "completed", "");
-    res.end();
+    sendComplete("");
     return;
   }
 
   statusSink?.({ lastInboundAt: message.timestamp });
 
   // The sender is the Arinova backend on behalf of the user.
-  // A2A protocol doesn't expose user identity, so we use a fixed sender ID.
   const senderId = "arinova-user";
   const senderName = "Arinova User";
 
@@ -40,8 +38,7 @@ export async function handleArinovaChatInbound(params: {
   const dmPolicy = account.config.dmPolicy ?? "open";
   if (dmPolicy === "disabled") {
     runtime.log?.(`arinova-chat: drop DM (dmPolicy=disabled)`);
-    writeA2ASSEEvent(res, message.taskId, "completed", "");
-    res.end();
+    sendComplete("");
     return;
   }
 
@@ -113,8 +110,8 @@ export async function handleArinovaChatInbound(params: {
     accountId: account.accountId,
   });
 
-  // Track text for final "completed" event
-  let finalText = "";
+  // Track accumulated text for delta computation and final content
+  let accumulated = "";
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -122,10 +119,10 @@ export async function handleArinovaChatInbound(params: {
     dispatcherOptions: {
       ...prefixOptions,
       deliver: async (payload) => {
-        // Block-level delivery — track final text for "completed" event
         const text = (payload as { text?: string }).text ?? "";
         if (!text.trim()) return;
-        finalText += (finalText ? "\n\n" : "") + text;
+        // Block delivery — update accumulated for final content
+        accumulated += (accumulated ? "\n\n" : "") + text;
         statusSink?.({ lastOutboundAt: Date.now() });
       },
       onError: (err, info) => {
@@ -140,16 +137,17 @@ export async function handleArinovaChatInbound(params: {
         const text = (payload as { text?: string }).text ?? "";
         if (!text) return;
 
-        if (!res.writableEnded) {
-          writeA2ASSEEvent(res, message.taskId, "working", text);
+        // Compute delta: send only the new content since last partial
+        const delta = text.slice(accumulated.length);
+        if (delta) {
+          sendChunk(delta);
+          // Note: we don't update `accumulated` here — it's managed by deliver()
+          // The delta is computed against the accumulated value from block delivery
         }
       },
     },
   });
 
-  // Send final "completed" event and close the SSE stream
-  if (!res.writableEnded) {
-    writeA2ASSEEvent(res, message.taskId, "completed", finalText);
-    res.end();
-  }
+  // Send final completed event
+  sendComplete(accumulated);
 }

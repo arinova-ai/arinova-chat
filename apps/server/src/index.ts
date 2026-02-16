@@ -13,6 +13,7 @@ import { conversationRoutes } from "./routes/conversations.js";
 import { messageRoutes } from "./routes/messages.js";
 import { uploadRoutes } from "./routes/uploads.js";
 import { wsRoutes } from "./ws/handler.js";
+import { agentWsRoutes } from "./ws/agent-handler.js";
 import { agentHealthRoutes } from "./routes/agent-health.js";
 import { sandboxRoutes } from "./routes/sandbox.js";
 import { groupRoutes } from "./routes/groups.js";
@@ -38,7 +39,7 @@ await app.register(cors, {
 await app.register(rateLimit, {
   max: 100,
   timeWindow: "1 minute",
-  allowList: ["/health", "/ws"],
+  allowList: ["/health", "/ws", "/ws/agent"],
 });
 
 // Multipart (file upload)
@@ -81,6 +82,7 @@ await app.register(conversationRoutes);
 await app.register(messageRoutes);
 await app.register(uploadRoutes);
 await app.register(wsRoutes);
+await app.register(agentWsRoutes);
 await app.register(agentHealthRoutes);
 await app.register(sandboxRoutes);
 // Phase 2+ routes (on features/platform-extras branch)

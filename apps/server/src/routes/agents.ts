@@ -42,17 +42,26 @@ export async function agentRoutes(app: FastifyInstance) {
     }
 
     // Pair and clear the code (free it for reuse)
+    const updateFields: Record<string, unknown> = {
+      pairingCode: null,
+      pairingCodeExpiresAt: null,
+      updatedAt: new Date(),
+    };
+    if (body.a2aEndpoint) {
+      updateFields.a2aEndpoint = body.a2aEndpoint;
+    }
+
     await db
       .update(agents)
-      .set({
-        a2aEndpoint: body.a2aEndpoint,
-        pairingCode: null,
-        pairingCodeExpiresAt: null,
-        updatedAt: new Date(),
-      })
+      .set(updateFields)
       .where(eq(agents.id, agent.id));
 
-    return reply.send({ agentId: agent.id, name: agent.name });
+    // Build WS URL for the agent to connect back
+    const host = request.headers.host ?? "localhost:3501";
+    const protocol = request.headers["x-forwarded-proto"] === "https" ? "wss" : "ws";
+    const wsUrl = `${protocol}://${host}/ws/agent`;
+
+    return reply.send({ agentId: agent.id, name: agent.name, wsUrl });
   });
 
   // Create agent

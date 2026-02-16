@@ -1,0 +1,157 @@
+/**
+ * WebSocket client for Agent ↔ Backend communication (Pull model).
+ * The agent connects OUT to the backend, so it doesn't need to expose any port.
+ */
+
+export type AgentWSClientOptions = {
+  wsUrl: string;
+  agentId: string;
+  onTask: (params: {
+    taskId: string;
+    conversationId: string;
+    content: string;
+    sendChunk: (chunk: string) => void;
+    sendComplete: (content: string) => void;
+    sendError: (error: string) => void;
+  }) => void | Promise<void>;
+  onConnected?: () => void;
+  onDisconnected?: () => void;
+  onError?: (error: Error) => void;
+  abortSignal?: AbortSignal;
+};
+
+export type AgentWSClient = {
+  connect: () => void;
+  disconnect: () => void;
+};
+
+const RECONNECT_INTERVAL_MS = 5_000;
+const PING_INTERVAL_MS = 30_000;
+
+export function createWSClient(opts: AgentWSClientOptions): AgentWSClient {
+  const { wsUrl, agentId, onTask, onConnected, onDisconnected, onError, abortSignal } = opts;
+
+  let ws: WebSocket | null = null;
+  let pingTimer: ReturnType<typeof setInterval> | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
+
+  function send(event: Record<string, unknown>) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(event));
+    }
+  }
+
+  function cleanup() {
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (ws) {
+      try { ws.close(); } catch {}
+      ws = null;
+    }
+  }
+
+  function scheduleReconnect() {
+    if (stopped) return;
+    reconnectTimer = setTimeout(() => {
+      if (!stopped) connect();
+    }, RECONNECT_INTERVAL_MS);
+  }
+
+  function connect() {
+    if (stopped) return;
+    cleanup();
+
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (err) {
+      onError?.(err instanceof Error ? err : new Error(String(err)));
+      scheduleReconnect();
+      return;
+    }
+
+    ws.onopen = () => {
+      // Authenticate immediately
+      send({ type: "agent_auth", agentId });
+
+      // Start ping keepalive
+      pingTimer = setInterval(() => {
+        send({ type: "ping" });
+      }, PING_INTERVAL_MS);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(String(event.data));
+
+        if (data.type === "auth_ok") {
+          onConnected?.();
+          return;
+        }
+
+        if (data.type === "auth_error") {
+          onError?.(new Error(`Agent auth failed: ${data.error}`));
+          // Don't reconnect on auth error — it won't succeed
+          stopped = true;
+          cleanup();
+          return;
+        }
+
+        if (data.type === "pong") {
+          return;
+        }
+
+        if (data.type === "task") {
+          const { taskId, conversationId, content } = data;
+          const sendChunk = (chunk: string) => send({ type: "agent_chunk", taskId, chunk });
+          const sendComplete = (finalContent: string) => send({ type: "agent_complete", taskId, content: finalContent });
+          const sendError = (error: string) => send({ type: "agent_error", taskId, error });
+
+          // Fire and forget — errors are caught inside
+          Promise.resolve(
+            onTask({ taskId, conversationId, content, sendChunk, sendComplete, sendError })
+          ).catch((err) => {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            sendError(errorMsg);
+          });
+          return;
+        }
+      } catch (err) {
+        onError?.(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
+
+    ws.onerror = (event) => {
+      // WebSocket errors are followed by close events, so we just log here
+      onError?.(new Error(`WebSocket error: ${(event as { message?: string }).message ?? "unknown"}`));
+    };
+
+    ws.onclose = () => {
+      cleanup();
+      onDisconnected?.();
+      scheduleReconnect();
+    };
+  }
+
+  function disconnect() {
+    stopped = true;
+    cleanup();
+  }
+
+  // Honor abort signal
+  if (abortSignal) {
+    if (abortSignal.aborted) {
+      stopped = true;
+    } else {
+      abortSignal.addEventListener("abort", disconnect, { once: true });
+    }
+  }
+
+  return { connect, disconnect };
+}
