@@ -110,8 +110,10 @@ export async function handleArinovaChatInbound(params: {
     accountId: account.accountId,
   });
 
-  // Track accumulated text for delta computation and final content
-  let accumulated = "";
+  // Track final content from block delivery
+  let finalText = "";
+  // Track how much of onPartialReply text has already been sent as chunks
+  let lastSentLength = 0;
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -121,8 +123,7 @@ export async function handleArinovaChatInbound(params: {
       deliver: async (payload) => {
         const text = (payload as { text?: string }).text ?? "";
         if (!text.trim()) return;
-        // Block delivery — update accumulated for final content
-        accumulated += (accumulated ? "\n\n" : "") + text;
+        finalText += (finalText ? "\n\n" : "") + text;
         statusSink?.({ lastOutboundAt: Date.now() });
       },
       onError: (err, info) => {
@@ -137,17 +138,16 @@ export async function handleArinovaChatInbound(params: {
         const text = (payload as { text?: string }).text ?? "";
         if (!text) return;
 
-        // Compute delta: send only the new content since last partial
-        const delta = text.slice(accumulated.length);
+        // Send only new tokens since last partial
+        const delta = text.slice(lastSentLength);
         if (delta) {
+          lastSentLength = text.length;
           sendChunk(delta);
-          // Note: we don't update `accumulated` here — it's managed by deliver()
-          // The delta is computed against the accumulated value from block delivery
         }
       },
     },
   });
 
   // Send final completed event
-  sendComplete(accumulated);
+  sendComplete(finalText);
 }
