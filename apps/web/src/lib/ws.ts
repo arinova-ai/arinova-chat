@@ -12,19 +12,24 @@ class WebSocketManager {
   private connected = false;
 
   connect() {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return;
+
+    // Close any lingering socket before creating a new one
+    this.cleanupSocket();
 
     try {
-      this.ws = new WebSocket(WS_URL);
+      const ws = new WebSocket(WS_URL);
+      this.ws = ws;
 
-      this.ws.onopen = () => {
+      ws.onopen = () => {
+        if (this.ws !== ws) return; // stale reference guard
         this.connected = true;
         this.reconnectDelay = 1000;
-        // Start ping interval
         this.startPing();
       };
 
-      this.ws.onmessage = (event) => {
+      ws.onmessage = (event) => {
+        if (this.ws !== ws) return; // stale reference guard
         try {
           const data = JSON.parse(event.data) as WSServerEvent;
           for (const handler of this.handlers) {
@@ -35,13 +40,14 @@ class WebSocketManager {
         }
       };
 
-      this.ws.onclose = () => {
+      ws.onclose = () => {
+        if (this.ws !== ws) return; // stale reference guard
         this.connected = false;
         this.scheduleReconnect();
       };
 
-      this.ws.onerror = () => {
-        this.ws?.close();
+      ws.onerror = () => {
+        ws.close();
       };
     } catch {
       this.scheduleReconnect();
@@ -53,9 +59,23 @@ class WebSocketManager {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close();
-    this.ws = null;
+    this.cleanupSocket();
     this.connected = false;
+  }
+
+  private cleanupSocket() {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    if (this.ws) {
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
   }
 
   send(event: WSClientEvent) {
