@@ -1,11 +1,39 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { readRequestBodyWithLimit, isRequestBodyLimitError } from "openclaw/plugin-sdk";
 import type { ArinovaChatInboundMessage } from "./types.js";
 
 const DEFAULT_A2A_PORT = 8790;
 const DEFAULT_A2A_HOST = "0.0.0.0";
 const MAX_BODY_BYTES = 1024 * 1024;
 const BODY_TIMEOUT_MS = 30_000;
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    const timer = setTimeout(() => {
+      req.destroy();
+      reject(new Error("Request body timeout"));
+    }, BODY_TIMEOUT_MS);
+    req.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > MAX_BODY_BYTES) {
+        req.destroy();
+        clearTimeout(timer);
+        reject(new Error("Payload too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      clearTimeout(timer);
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    });
+    req.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
 
 export type A2AServerOptions = {
   port?: number;
@@ -150,10 +178,7 @@ export function createA2AServer(opts: A2AServerOptions): {
     // A2A task endpoint
     if (req.url === "/tasks/send" && req.method === "POST") {
       try {
-        const body = await readRequestBodyWithLimit(req, {
-          maxBytes: MAX_BODY_BYTES,
-          timeoutMs: BODY_TIMEOUT_MS,
-        });
+        const body = await readBody(req);
 
         const message = parseA2ARequest(body);
         if (!message) {
@@ -180,7 +205,7 @@ export function createA2AServer(opts: A2AServerOptions): {
           onError?.(err instanceof Error ? err : new Error(errorText));
         }
       } catch (err) {
-        if (isRequestBodyLimitError(err, "PAYLOAD_TOO_LARGE")) {
+        if (err instanceof Error && err.message === "Payload too large") {
           if (!res.headersSent) {
             res.writeHead(413, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Payload too large" }));

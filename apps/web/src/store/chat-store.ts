@@ -21,6 +21,12 @@ interface GroupMember {
   agentAvatarUrl: string | null;
 }
 
+interface AgentSkill {
+  id: string;
+  name: string;
+  description: string;
+}
+
 interface ChatState {
   agents: Agent[];
   conversations: ConversationWithAgent[];
@@ -31,6 +37,7 @@ interface ChatState {
   loading: boolean;
   unreadCounts: Record<string, number>;
   agentHealth: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }>;
+  agentSkills: Record<string, AgentSkill[]>;
 
   // Actions
   setActiveConversation: (id: string) => void;
@@ -40,7 +47,8 @@ interface ChatState {
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   sendMessage: (content: string) => void;
-  createAgent: (data: { name: string; description?: string; a2aEndpoint: string }) => Promise<Agent>;
+  cancelStream: () => void;
+  createAgent: (data: { name: string; description?: string; a2aEndpoint?: string }) => Promise<Agent>;
   deleteAgent: (id: string) => Promise<void>;
   createConversation: (agentId: string, title?: string) => Promise<Conversation>;
   createGroupConversation: (agentIds: string[], title: string) => Promise<Conversation>;
@@ -50,6 +58,7 @@ interface ChatState {
   deleteConversation: (id: string) => Promise<void>;
   updateConversation: (id: string, data: { title?: string; pinned?: boolean }) => Promise<void>;
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
+  loadAgentSkills: (agentId: string) => Promise<void>;
   loadAgentHealth: () => Promise<void>;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
@@ -65,6 +74,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loading: false,
   unreadCounts: {},
   agentHealth: {},
+  agentSkills: {},
 
   setActiveConversation: (id) => {
     set({
@@ -141,6 +151,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  cancelStream: () => {
+    const { activeConversationId, messagesByConversation } = get();
+    if (!activeConversationId) return;
+    const msgs = messagesByConversation[activeConversationId] ?? [];
+    const streamingMsg = msgs.find((m) => m.status === "streaming");
+    if (!streamingMsg) return;
+    wsManager.send({
+      type: "cancel_stream",
+      conversationId: activeConversationId,
+      messageId: streamingMsg.id,
+    });
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [activeConversationId]: msgs.map((m) =>
+          m.id === streamingMsg.id
+            ? { ...m, status: "cancelled" as const }
+            : m
+        ),
+      },
+    });
+  },
+
   createAgent: async (data) => {
     const agent = await api<Agent>("/api/agents", {
       method: "POST",
@@ -213,9 +246,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   deleteMessage: async (conversationId, messageId) => {
-    await api(`/api/conversations/${conversationId}/messages/${messageId}`, {
-      method: "DELETE",
-    });
+    // Optimistic messages (temp-*) only exist in UI, skip API call
+    if (!messageId.startsWith("temp-")) {
+      await api(`/api/conversations/${conversationId}/messages/${messageId}`, {
+        method: "DELETE",
+      });
+    }
     const current = get().messagesByConversation[conversationId] ?? [];
     set({
       messagesByConversation: {
@@ -223,6 +259,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: current.filter((m) => m.id !== messageId),
       },
     });
+  },
+
+  loadAgentSkills: async (agentId) => {
+    if (get().agentSkills[agentId]) return;
+    try {
+      const data = await api<{ skills: AgentSkill[] }>(`/api/agents/${agentId}/skills`);
+      set({
+        agentSkills: { ...get().agentSkills, [agentId]: data.skills },
+      });
+    } catch {
+      set({
+        agentSkills: { ...get().agentSkills, [agentId]: [] },
+      });
+    }
   },
 
   loadAgentHealth: async () => {

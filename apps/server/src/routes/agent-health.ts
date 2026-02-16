@@ -66,11 +66,19 @@ export async function agentHealthRoutes(app: FastifyInstance) {
   });
 }
 
-async function checkAgentHealth(endpoint: string): Promise<{
+async function checkAgentHealth(endpoint: string | null): Promise<{
   status: "online" | "offline" | "error";
   latencyMs: number | null;
   checkedAt: string;
 }> {
+  if (!endpoint) {
+    return {
+      status: "offline",
+      latencyMs: null,
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
   const start = Date.now();
   try {
     const controller = new AbortController();

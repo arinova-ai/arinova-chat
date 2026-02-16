@@ -154,11 +154,48 @@ async function handleSendMessage(
 
   // Get agent endpoint
   const [agent] = await db
-    .select({ a2aEndpoint: agents.a2aEndpoint })
+    .select({
+      a2aEndpoint: agents.a2aEndpoint,
+      name: agents.name,
+      pairingCode: agents.pairingCode,
+    })
     .from(agents)
     .where(eq(agents.id, conv.agentId));
 
   if (!agent) return;
+
+  if (!agent.a2aEndpoint) {
+    // Agent has no endpoint configured — cannot send messages
+    const codeHint = agent.pairingCode
+      ? `Use pairing code: \`${agent.pairingCode}\``
+      : `Configure your AI agent with this bot's ID: \`${conv.agentId}\``;
+    const shortHint = agent.pairingCode
+      ? `Use pairing code: ${agent.pairingCode}`
+      : `Configure your AI agent with bot ID: ${conv.agentId}`;
+
+    const [errMsg] = await db
+      .insert(messages)
+      .values({
+        conversationId,
+        role: "agent",
+        content: `**${agent.name}** is not connected yet. An AI agent needs to connect to this bot before it can respond.\n\n${codeHint}`,
+        status: "error",
+      })
+      .returning();
+
+    sendToUser(userId, {
+      type: "stream_start",
+      conversationId,
+      messageId: errMsg.id,
+    });
+    sendToUser(userId, {
+      type: "stream_error",
+      conversationId,
+      messageId: errMsg.id,
+      error: `${agent.name} is not connected. ${shortHint}`,
+    });
+    return;
+  }
 
   // Save user message
   await db.insert(messages).values({

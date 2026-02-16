@@ -85,8 +85,8 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[
-          [rehypeSanitize, sanitizeSchema],
           rehypeHighlight,
+          [rehypeSanitize, sanitizeSchema],
         ]}
         components={{
           pre(props: ComponentProps<"pre">) {
@@ -119,3 +119,4 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     </div>
   );
 }
+

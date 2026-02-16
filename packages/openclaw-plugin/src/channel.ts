@@ -23,7 +23,7 @@ import {
 } from "./normalize.js";
 import { getArinovaChatRuntime } from "./runtime.js";
 import { sendMessageArinovaChat } from "./send.js";
-import { authenticateWithArinova } from "./auth.js";
+import { authenticateWithArinova, exchangePairingCode } from "./auth.js";
 import { createA2AServer } from "./a2a-server.js";
 import { handleArinovaChatInbound } from "./inbound.js";
 
@@ -66,13 +66,20 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       resolveArinovaChatAccount({ cfg: cfg as CoreConfig, accountId }),
     defaultAccountId: (cfg) => resolveDefaultArinovaChatAccountId(cfg as CoreConfig),
     isConfigured: (account) =>
-      Boolean(account.apiUrl?.trim() && account.agentId?.trim()),
+      Boolean(
+        account.apiUrl?.trim() &&
+          (account.agentId?.trim() || account.pairingCode?.trim()),
+      ),
     describeAccount: (account) => ({
       accountId: account.accountId,
       name: account.name,
       enabled: account.enabled,
-      configured: Boolean(account.apiUrl?.trim() && account.agentId?.trim()),
+      configured: Boolean(
+        account.apiUrl?.trim() &&
+          (account.agentId?.trim() || account.pairingCode?.trim()),
+      ),
       apiUrl: account.apiUrl ? "[set]" : "[missing]",
+      pairingCode: account.pairingCode ? "[set]" : "[not set]",
       agentId: account.agentId ? "[set]" : "[missing]",
     }),
     resolveAllowFrom: ({ cfg, accountId }) =>
@@ -204,7 +211,10 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       lastError: snapshot.lastError ?? null,
     }),
     buildAccountSnapshot: ({ account, runtime }) => {
-      const configured = Boolean(account.apiUrl?.trim() && account.agentId?.trim());
+      const configured = Boolean(
+        account.apiUrl?.trim() &&
+          (account.agentId?.trim() || account.pairingCode?.trim()),
+      );
       return {
         accountId: account.accountId,
         name: account.name,
@@ -225,9 +235,14 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
   gateway: {
     startAccount: async (ctx) => {
       const account = ctx.account;
-      if (!account.apiUrl || !account.agentId) {
+      if (!account.apiUrl) {
         throw new Error(
-          `Arinova Chat not configured for account "${account.accountId}" (missing apiUrl or agentId)`,
+          `Arinova Chat not configured for account "${account.accountId}" (missing apiUrl)`,
+        );
+      }
+      if (!account.agentId && !account.pairingCode) {
+        throw new Error(
+          `Arinova Chat not configured for account "${account.accountId}" (missing agentId or pairingCode)`,
         );
       }
 
@@ -245,29 +260,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         },
       };
 
-      // Authenticate with Arinova if credentials provided and no session token
-      let sessionCookie = account.sessionToken
-        ? `better-auth.session_token=${account.sessionToken}`
-        : "";
-
-      if (!sessionCookie && account.config.email && account.config.password) {
-        logger.info(`[${account.accountId}] authenticating with Arinova Chat...`);
-        try {
-          const authResult = await authenticateWithArinova({
-            apiUrl: account.apiUrl,
-            email: account.config.email,
-            password: account.config.password,
-          });
-          sessionCookie = authResult.sessionCookie;
-          logger.info(`[${account.accountId}] authenticated successfully`);
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`[${account.accountId}] auth failed: ${errorMsg}`);
-          throw err;
-        }
-      }
-
-      // Start A2A server
+      // Start A2A server first (needed for pairing code exchange)
       const a2aPort = account.config.a2aPort ?? 8790;
       const a2aHost = account.config.a2aHost ?? "0.0.0.0";
 
@@ -310,25 +303,68 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         `[arinova-chat:${account.accountId}] Agent card: ${publicUrl}/.well-known/agent.json`,
       );
 
-      // Optionally update the agent's a2aEndpoint in Arinova
-      if (sessionCookie && account.agentId) {
+      const endpointUrl = `${publicUrl}/.well-known/agent.json`;
+
+      // Pairing code flow: exchange code for agentId + register endpoint (no auth needed)
+      if (account.pairingCode && !account.agentId) {
+        logger.info(`[${account.accountId}] exchanging pairing code...`);
         try {
-          const endpointUrl = `${publicUrl}/.well-known/agent.json`;
-          const updateRes = await fetch(`${account.apiUrl}/api/agents/${account.agentId}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Cookie: sessionCookie,
-            },
-            body: JSON.stringify({ a2aEndpoint: endpointUrl }),
+          const result = await exchangePairingCode({
+            apiUrl: account.apiUrl,
+            pairingCode: account.pairingCode,
+            a2aEndpoint: endpointUrl,
           });
-          if (updateRes.ok) {
-            logger.info(
-              `[arinova-chat:${account.accountId}] updated agent a2aEndpoint to ${endpointUrl}`,
-            );
+          account.agentId = result.agentId;
+          logger.info(
+            `[${account.accountId}] paired successfully — agentId=${result.agentId} name="${result.name}"`,
+          );
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[${account.accountId}] pairing failed: ${errorMsg}`);
+          throw err;
+        }
+      } else {
+        // Legacy email/password flow: authenticate then update endpoint
+        let sessionCookie = account.sessionToken
+          ? `better-auth.session_token=${account.sessionToken}`
+          : "";
+
+        if (!sessionCookie && account.config.email && account.config.password) {
+          logger.info(`[${account.accountId}] authenticating with Arinova Chat...`);
+          try {
+            const authResult = await authenticateWithArinova({
+              apiUrl: account.apiUrl,
+              email: account.config.email,
+              password: account.config.password,
+            });
+            sessionCookie = authResult.sessionCookie;
+            logger.info(`[${account.accountId}] authenticated successfully`);
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            logger.error(`[${account.accountId}] auth failed: ${errorMsg}`);
+            throw err;
           }
-        } catch {
-          // Non-critical: agent endpoint update is best-effort
+        }
+
+        // Update the agent's a2aEndpoint in Arinova
+        if (sessionCookie && account.agentId) {
+          try {
+            const updateRes = await fetch(`${account.apiUrl}/api/agents/${account.agentId}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Cookie: sessionCookie,
+              },
+              body: JSON.stringify({ a2aEndpoint: endpointUrl }),
+            });
+            if (updateRes.ok) {
+              logger.info(
+                `[arinova-chat:${account.accountId}] updated agent a2aEndpoint to ${endpointUrl}`,
+              );
+            }
+          } catch {
+            // Non-critical: agent endpoint update is best-effort
+          }
         }
       }
 

@@ -3,20 +3,54 @@ import { db } from "../db/index.js";
 import { agents } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
-import { createAgentSchema, updateAgentSchema } from "@arinova/shared/schemas";
+import {
+  createAgentSchema,
+  updateAgentSchema,
+  pairingExchangeSchema,
+} from "@arinova/shared/schemas";
+import {
+  generateUniquePairingCode,
+  normalizePairingCode,
+} from "../utils/pairing-code.js";
 
 export async function agentRoutes(app: FastifyInstance) {
+  // Exchange pairing code for agent connection (public — no auth required)
+  // MUST be registered before /api/agents/:id to avoid route conflicts
+  app.post("/api/agents/pair", async (request, reply) => {
+    const body = pairingExchangeSchema.parse(request.body);
+    const code = normalizePairingCode(body.pairingCode);
+
+    const [agent] = await db
+      .select({ id: agents.id, name: agents.name })
+      .from(agents)
+      .where(eq(agents.pairingCode, code));
+
+    if (!agent) {
+      return reply.status(404).send({ error: "Invalid pairing code" });
+    }
+
+    await db
+      .update(agents)
+      .set({ a2aEndpoint: body.a2aEndpoint, updatedAt: new Date() })
+      .where(eq(agents.id, agent.id));
+
+    return reply.send({ agentId: agent.id, name: agent.name });
+  });
+
   // Create agent
   app.post("/api/agents", async (request, reply) => {
     const user = await requireAuth(request, reply);
     const body = createAgentSchema.parse(request.body);
+
+    const pairingCode = await generateUniquePairingCode();
 
     const [agent] = await db
       .insert(agents)
       .values({
         name: body.name,
         description: body.description ?? null,
-        a2aEndpoint: body.a2aEndpoint,
+        a2aEndpoint: body.a2aEndpoint ?? null,
+        pairingCode,
         ownerId: user.id,
       })
       .returning();
@@ -74,6 +108,53 @@ export async function agentRoutes(app: FastifyInstance) {
       }
 
       return reply.send(agent);
+    }
+  );
+
+  // Get agent skills from A2A card
+  app.get<{ Params: { id: string } }>(
+    "/api/agents/:id/skills",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      const [agent] = await db
+        .select({ a2aEndpoint: agents.a2aEndpoint })
+        .from(agents)
+        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
+
+      if (!agent) {
+        return reply.status(404).send({ error: "Agent not found" });
+      }
+
+      if (!agent.a2aEndpoint) {
+        return reply.send({ skills: [] });
+      }
+
+      try {
+        const cardUrl = agent.a2aEndpoint;
+        const res = await fetch(cardUrl, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (!res.ok) {
+          return reply.send({ skills: [] });
+        }
+
+        const card = (await res.json()) as {
+          skills?: { id: string; name: string; description?: string }[];
+        };
+
+        const skills = (card.skills ?? []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          description: s.description ?? "",
+        }));
+
+        return reply.send({ skills });
+      } catch {
+        return reply.send({ skills: [] });
+      }
     }
   );
 

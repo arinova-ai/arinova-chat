@@ -6,7 +6,7 @@ import {
   messages,
   conversationMembers,
 } from "../db/schema.js";
-import { eq, and, desc, ilike, or, sql } from "drizzle-orm";
+import { eq, and, desc, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { createConversationSchema } from "@arinova/shared/schemas";
 
@@ -50,14 +50,7 @@ export async function conversationRoutes(app: FastifyInstance) {
       const allConvs = await db
         .select()
         .from(conversations)
-        .where(
-          query
-            ? and(
-                eq(conversations.userId, user.id),
-                ilike(conversations.title, `%${query}%`)
-              )
-            : eq(conversations.userId, user.id)
-        )
+        .where(eq(conversations.userId, user.id))
         .orderBy(
           desc(conversations.pinnedAt),
           desc(conversations.updatedAt)
@@ -92,14 +85,11 @@ export async function conversationRoutes(app: FastifyInstance) {
             agentDescription = `${members.length} agent${members.length !== 1 ? "s" : ""}`;
           }
 
-          // Also search by agent name for direct conversations
-          if (query && conv.type === "direct") {
-            const nameMatch = agentName
-              .toLowerCase()
-              .includes(query.toLowerCase());
-            const titleMatch = conv.title
-              ?.toLowerCase()
-              .includes(query.toLowerCase());
+          // Filter by search query (title or agent name)
+          if (query) {
+            const q = query.toLowerCase();
+            const nameMatch = agentName.toLowerCase().includes(q);
+            const titleMatch = conv.title?.toLowerCase().includes(q);
             if (!nameMatch && !titleMatch) return null;
           }
 

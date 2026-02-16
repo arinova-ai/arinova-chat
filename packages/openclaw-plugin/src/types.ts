@@ -7,6 +7,8 @@ export type ArinovaChatAccountConfig = {
   enabled?: boolean;
   /** Arinova backend URL (e.g., "http://localhost:3501"). */
   apiUrl?: string;
+  /** 6-char pairing code from Arinova UI (no email/password needed). */
+  pairingCode?: string;
   /** Bot account email for Better Auth sign-in. */
   email?: string;
   /** Bot account password for Better Auth sign-in. */

@@ -36,6 +36,20 @@
       "when": 1771005344196,
       "tag": "0004_mysterious_rocket_racer",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771062325669,
+      "tag": "0005_fancy_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771089329351,
+      "tag": "0006_fuzzy_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

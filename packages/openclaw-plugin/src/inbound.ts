@@ -113,8 +113,8 @@ export async function handleArinovaChatInbound(params: {
     accountId: account.accountId,
   });
 
-  // Track accumulated text for SSE streaming
-  let accumulated = "";
+  // Track text for final "completed" event
+  let finalText = "";
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -122,16 +122,10 @@ export async function handleArinovaChatInbound(params: {
     dispatcherOptions: {
       ...prefixOptions,
       deliver: async (payload) => {
+        // Block-level delivery — track final text for "completed" event
         const text = (payload as { text?: string }).text ?? "";
         if (!text.trim()) return;
-
-        accumulated += (accumulated ? "\n\n" : "") + text;
-
-        // Send "working" SSE event with accumulated text
-        if (!res.writableEnded) {
-          writeA2ASSEEvent(res, message.taskId, "working", accumulated);
-        }
-
+        finalText += (finalText ? "\n\n" : "") + text;
         statusSink?.({ lastOutboundAt: Date.now() });
       },
       onError: (err, info) => {
@@ -140,13 +134,22 @@ export async function handleArinovaChatInbound(params: {
     },
     replyOptions: {
       onModelSelected,
-      disableBlockStreaming: true,
+      disableBlockStreaming: false,
+      onPartialReply: (payload) => {
+        // Token-level streaming — text is the full accumulated reply so far
+        const text = (payload as { text?: string }).text ?? "";
+        if (!text) return;
+
+        if (!res.writableEnded) {
+          writeA2ASSEEvent(res, message.taskId, "working", text);
+        }
+      },
     },
   });
 
   // Send final "completed" event and close the SSE stream
   if (!res.writableEnded) {
-    writeA2ASSEEvent(res, message.taskId, "completed", accumulated);
+    writeA2ASSEEvent(res, message.taskId, "completed", finalText);
     res.end();
   }
 }

@@ -83,7 +83,8 @@ export const agents = pgTable("agents", {
   name: varchar({ length: 100 }).notNull(),
   description: text(),
   avatarUrl: text("avatar_url"),
-  a2aEndpoint: text("a2a_endpoint").notNull(),
+  a2aEndpoint: text("a2a_endpoint"),
+  pairingCode: varchar("pairing_code", { length: 6 }).unique(),
   ownerId: text("owner_id")
     .notNull()
     .references(() => user.id),

@@ -105,40 +105,8 @@ export async function streamA2AResponse(options: A2AStreamOptions): Promise<void
       return;
     }
 
-    // Fallback to mock streaming
-    console.log(`A2A agent unreachable (${endpoint}), falling back to mock response`);
-    await mockStream(options);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`A2A agent unreachable (${endpoint}): ${message}`);
+    onError(`Agent unreachable: ${message}`);
   }
-}
-
-async function mockStream(options: A2AStreamOptions): Promise<void> {
-  const { onChunk, onComplete, signal } = options;
-
-  const mockResponses = [
-    "I received your message. Let me think about this...\n\nHere's what I'd suggest:\n\n1. **Start with the basics** — understand the core problem\n2. **Break it down** into smaller, manageable steps\n3. **Iterate** and refine your approach\n\nWould you like me to elaborate on any of these points?",
-    "That's an interesting question! Let me help you with that.\n\n```typescript\n// Here's a quick example\nfunction solve(input: string): string {\n  return input.trim().toLowerCase();\n}\n```\n\nThis approach keeps things simple and efficient. Let me know if you need more details!",
-    "Great point! Here's my analysis:\n\n> The key insight is that we need to consider both performance and maintainability.\n\n- **Performance**: Use efficient data structures\n- **Maintainability**: Keep the code readable\n- **Testing**: Write comprehensive tests\n\nShall I dive deeper into any of these areas?",
-  ];
-
-  const response = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-  const chars = [...response];
-  let index = 0;
-  let accumulated = "";
-
-  while (index < chars.length) {
-    if (signal?.aborted) {
-      onComplete(accumulated);
-      return;
-    }
-
-    const chunkSize = Math.random() < 0.3 ? 3 : Math.random() < 0.5 ? 2 : 1;
-    const chunk = chars.slice(index, index + chunkSize).join("");
-    index += chunkSize;
-    accumulated += chunk;
-    onChunk(chunk);
-
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-
-  onComplete(accumulated);
 }

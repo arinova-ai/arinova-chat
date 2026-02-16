@@ -4,17 +4,18 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Search, Plus, LogOut, Settings, Store, Building2 } from "lucide-react";
+import { Search, Plus, LogOut, Settings, Store, Building2, Bot } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { ConversationList } from "./conversation-list";
-import { NewChatDialog } from "./new-chat-dialog";
+import { NewChatDialog, CreateBotDialog } from "./new-chat-dialog";
 
 export function Sidebar() {
   const searchQuery = useChatStore((s) => s.searchQuery);
   const setSearchQuery = useChatStore((s) => s.setSearchQuery);
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [createBotOpen, setCreateBotOpen] = useState(false);
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -77,6 +78,14 @@ export function Sidebar() {
           New Chat
         </Button>
         <Button
+          variant="secondary"
+          className="w-full gap-2"
+          onClick={() => setCreateBotOpen(true)}
+        >
+          <Bot className="h-4 w-4" />
+          Create Bot
+        </Button>
+        <Button
           variant="outline"
           className="w-full gap-2"
           onClick={() => router.push("/marketplace")}
@@ -95,6 +104,7 @@ export function Sidebar() {
       </div>
 
       <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
+      <CreateBotDialog open={createBotOpen} onOpenChange={setCreateBotOpen} />
     </div>
   );
 }

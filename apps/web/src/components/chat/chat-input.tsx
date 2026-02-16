@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { SendHorizontal, Paperclip, X, FileText, ImageIcon } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
-import { api } from "@/lib/api";
-import type { Message } from "@arinova/shared/types";
 
 const BACKEND_URL = "http://localhost:3501";
 
@@ -13,10 +11,68 @@ export function ChatInput() {
   const [value, setValue] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const conversations = useChatStore((s) => s.conversations);
+  const agentSkills = useChatStore((s) => s.agentSkills);
+  const loadAgentSkills = useChatStore((s) => s.loadAgentSkills);
+
+  // Get the active conversation's agentId (only for direct conversations)
+  const activeConversation = conversations.find(
+    (c) => c.id === activeConversationId
+  );
+  const agentId =
+    activeConversation?.type === "direct" ? activeConversation.agentId : null;
+
+  // Load skills when agentId is available
+  useEffect(() => {
+    if (agentId) {
+      loadAgentSkills(agentId);
+    }
+  }, [agentId, loadAgentSkills]);
+
+  // Determine if slash popup should show
+  const slashQuery = value.startsWith("/") ? value.slice(1) : null;
+  const showSlashPopup = slashQuery !== null && agentId !== null;
+
+  const filteredSkills = useMemo(() => {
+    if (!showSlashPopup || !agentId) return [];
+    const skills = agentSkills[agentId] ?? [];
+    if (!slashQuery) return skills;
+    const q = slashQuery.toLowerCase();
+    return skills.filter(
+      (s) =>
+        s.id.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+    );
+  }, [showSlashPopup, agentId, agentSkills, slashQuery]);
+
+  // Reset selected index when filtered list changes
+  useEffect(() => {
+    setSlashSelectedIndex(0);
+  }, [filteredSkills.length]);
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (!showSlashPopup || !popupRef.current) return;
+    const items = popupRef.current.querySelectorAll("[data-slash-item]");
+    items[slashSelectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [slashSelectedIndex, showSlashPopup]);
+
+  const selectSlashSkill = useCallback(
+    (skillId: string) => {
+      const text = `/${skillId}`;
+      sendMessage(text);
+      setValue("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    },
+    [sendMessage]
+  );
 
   const handleUpload = useCallback(async () => {
     if (!selectedFile || !activeConversationId) return;
@@ -85,7 +141,40 @@ export function ChatInput() {
   }, [value, sendMessage, selectedFile, handleUpload]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Slash popup keyboard navigation
+    if (showSlashPopup && filteredSkills.length > 0) {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashSelectedIndex((prev) =>
+          prev <= 0 ? filteredSkills.length - 1 : prev - 1
+        );
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashSelectedIndex((prev) =>
+          prev >= filteredSkills.length - 1 ? 0 : prev + 1
+        );
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        selectSlashSkill(filteredSkills[slashSelectedIndex].id);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setValue("");
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        setValue(`/${filteredSkills[slashSelectedIndex].id}`);
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -111,7 +200,38 @@ export function ChatInput() {
 
   return (
     <div className="shrink-0 border-t border-border p-4">
-      <div className="mx-auto max-w-3xl">
+      <div className="relative mx-auto max-w-3xl">
+        {/* Slash command popup */}
+        {showSlashPopup && filteredSkills.length > 0 && (
+          <div
+            ref={popupRef}
+            className="absolute bottom-full left-0 right-0 mb-2 max-h-60 overflow-y-auto rounded-xl border border-border bg-neutral-900 shadow-lg"
+          >
+            {filteredSkills.map((skill, i) => (
+              <button
+                key={skill.id}
+                data-slash-item
+                type="button"
+                className={`flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors ${
+                  i === slashSelectedIndex
+                    ? "bg-neutral-800 text-foreground"
+                    : "text-muted-foreground hover:bg-neutral-800/50"
+                }`}
+                onMouseEnter={() => setSlashSelectedIndex(i)}
+                onMouseDown={(e) => {
+                  e.preventDefault(); // prevent textarea blur
+                  selectSlashSkill(skill.id);
+                }}
+              >
+                <span className="shrink-0 font-mono text-sm text-blue-400">
+                  /{skill.id}
+                </span>
+                <span className="truncate text-sm">{skill.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* File preview */}
         {selectedFile && (
           <div className="mb-2 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2">
@@ -159,7 +279,7 @@ export function ChatInput() {
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder="Type a message... (Shift+Enter for new line)"
             rows={1}
             className="flex-1 resize-none rounded-xl border border-input bg-neutral-800 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />

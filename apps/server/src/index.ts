@@ -25,6 +25,7 @@ const app = Fastify({ logger: true });
 await app.register(cors, {
   origin: env.CORS_ORIGIN,
   credentials: true,
+  methods: ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"],
 });
 
 // Rate limiting

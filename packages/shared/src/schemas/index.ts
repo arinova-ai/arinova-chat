@@ -16,7 +16,7 @@ export const loginSchema = z.object({
 export const createAgentSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  a2aEndpoint: z.string().url(),
+  a2aEndpoint: z.string().url().optional(),
 });
 
 export const updateAgentSchema = createAgentSchema.partial();
@@ -58,6 +58,12 @@ export const updateChannelSchema = createChannelSchema.partial();
 export const sendMessageSchema = z.object({
   conversationId: z.string().uuid(),
   content: z.string().min(1).max(32000),
+});
+
+// ===== Pairing =====
+export const pairingExchangeSchema = z.object({
+  pairingCode: z.string().min(6).max(6),
+  a2aEndpoint: z.string().url(),
 });
 
 // ===== WebSocket =====

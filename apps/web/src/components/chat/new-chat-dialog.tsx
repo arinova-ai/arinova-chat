@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, Plus, Circle, Users, Check } from "lucide-react";
+import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NewChatDialogProps {
@@ -130,7 +130,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               onClick={() => setView("add-agent")}
             >
               <Plus className="h-4 w-4" />
-              Add Agent
+              Create Bot
             </Button>
             {agents.length >= 2 && (
               <Button
@@ -289,35 +289,126 @@ function AddAgentDialog({
   onBack: () => void;
 }) {
   const createAgent = useChatStore((s) => s.createAgent);
+  const createConversation = useChatStore((s) => s.createConversation);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [endpoint, setEndpoint] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [createdAgent, setCreatedAgent] = useState<{
+    id: string;
+    name: string;
+    pairingCode: string | null;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await createAgent({
+      const agent = await createAgent({
         name,
         description: description || undefined,
-        a2aEndpoint: endpoint,
+        a2aEndpoint: endpoint || undefined,
       });
-      onBack();
+      setCreatedAgent({ id: agent.id, name: agent.name, pairingCode: agent.pairingCode });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add agent");
+      setError(err instanceof Error ? err.message : "Failed to create bot");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCopy = async () => {
+    if (!createdAgent) return;
+    await navigator.clipboard.writeText(createdAgent.pairingCode ?? createdAgent.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Success state — show pairing code and instructions
+  if (createdAgent) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bot Created</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-lg bg-green-500/10 px-4 py-3">
+              <Check className="h-5 w-5 text-green-500 shrink-0" />
+              <p className="text-sm">
+                <span className="font-medium">{createdAgent.name}</span> has
+                been created successfully.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Pairing Code</label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-2xl font-mono tracking-widest select-all">
+                  {createdAgent.pairingCode ?? createdAgent.id}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleCopy}
+                  className="shrink-0"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
+              <p className="font-medium text-foreground">Next steps:</p>
+              <p>
+                Use this pairing code to connect your AI agent. No email or
+                password needed.
+              </p>
+              <details className="group">
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  OpenClaw config example
+                </summary>
+                <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
+  "channels": {
+    "arinova-chat": {
+      "apiUrl": "${typeof window !== "undefined" ? window.location.origin.replace(":3500", ":3501") : "http://localhost:3501"}",
+      "pairingCode": "${createdAgent.pairingCode ?? ""}"
+    }
+  }
+}`}</pre>
+              </details>
+            </div>
+
+            <Button
+              onClick={async () => {
+                const conv = await createConversation(createdAgent.id);
+                setActiveConversation(conv.id);
+                onOpenChange(false);
+              }}
+              className="w-full"
+            >
+              Start Chat
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Agent</DialogTitle>
+          <DialogTitle>Create Bot</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -344,17 +435,41 @@ function AddAgentDialog({
               className="bg-neutral-800 border-none"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">A2A Endpoint</label>
-            <Input
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
-              placeholder="https://agent.example.com/.well-known/agent.json"
-              type="url"
-              required
-              className="bg-neutral-800 border-none"
-            />
-          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showAdvanced ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
+            Advanced: Connect existing agent
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                A2A Endpoint{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </label>
+              <Input
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+                placeholder="https://agent.example.com/.well-known/agent.json"
+                type="url"
+                className="bg-neutral-800 border-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to create a bot first, then connect an agent later.
+              </p>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <Button
               type="button"
@@ -365,9 +480,223 @@ function AddAgentDialog({
               Back
             </Button>
             <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Adding..." : "Add Agent"}
+              {loading ? "Creating..." : "Create Bot"}
             </Button>
           </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Standalone Create Bot dialog (used from sidebar)
+export function CreateBotDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const createAgent = useChatStore((s) => s.createAgent);
+  const createConversation = useChatStore((s) => s.createConversation);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [createdAgent, setCreatedAgent] = useState<{
+    id: string;
+    name: string;
+    pairingCode: string | null;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const reset = () => {
+    setName("");
+    setDescription("");
+    setEndpoint("");
+    setShowAdvanced(false);
+    setError("");
+    setLoading(false);
+    setCreatedAgent(null);
+    setCopied(false);
+  };
+
+  const handleOpenChange = (v: boolean) => {
+    if (!v) reset();
+    onOpenChange(v);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const agent = await createAgent({
+        name,
+        description: description || undefined,
+        a2aEndpoint: endpoint || undefined,
+      });
+      setCreatedAgent({ id: agent.id, name: agent.name, pairingCode: agent.pairingCode });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create bot");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!createdAgent) return;
+    await navigator.clipboard.writeText(createdAgent.pairingCode ?? createdAgent.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (createdAgent) {
+    return (
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bot Created</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-lg bg-green-500/10 px-4 py-3">
+              <Check className="h-5 w-5 text-green-500 shrink-0" />
+              <p className="text-sm">
+                <span className="font-medium">{createdAgent.name}</span> has
+                been created successfully.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Pairing Code</label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-2xl font-mono tracking-widest select-all">
+                  {createdAgent.pairingCode ?? createdAgent.id}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleCopy}
+                  className="shrink-0"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
+              <p className="font-medium text-foreground">Next steps:</p>
+              <p>
+                Use this pairing code to connect your AI agent. No email or
+                password needed.
+              </p>
+              <details className="group">
+                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  OpenClaw config example
+                </summary>
+                <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
+  "channels": {
+    "arinova-chat": {
+      "apiUrl": "${typeof window !== "undefined" ? window.location.origin.replace(":3500", ":3501") : "http://localhost:3501"}",
+      "pairingCode": "${createdAgent.pairingCode ?? ""}"
+    }
+  }
+}`}</pre>
+              </details>
+            </div>
+
+            <Button
+              onClick={async () => {
+                const conv = await createConversation(createdAgent.id);
+                setActiveConversation(conv.id);
+                handleOpenChange(false);
+              }}
+              className="w-full"
+            >
+              Start Chat
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create Bot</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Name</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. CodeBot"
+              required
+              className="bg-neutral-800 border-none"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Description</label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What does this agent do?"
+              className="bg-neutral-800 border-none"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showAdvanced ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
+            Advanced: Connect existing agent
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                A2A Endpoint{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </label>
+              <Input
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+                placeholder="https://agent.example.com/.well-known/agent.json"
+                type="url"
+                className="bg-neutral-800 border-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to create a bot first, then connect an agent later.
+              </p>
+            </div>
+          )}
+
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? "Creating..." : "Create Bot"}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

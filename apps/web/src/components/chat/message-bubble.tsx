@@ -18,6 +18,7 @@ import {
   AlertCircle,
   FileText,
   Download,
+  Square,
 } from "lucide-react";
 
 interface MessageBubbleProps {
@@ -32,6 +33,7 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const cancelStream = useChatStore((s) => s.cancelStream);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
 
   const handleCopy = useCallback(async () => {
@@ -86,112 +88,127 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
         </AvatarFallback>
       </Avatar>
 
-      <div className="relative max-w-[75%]">
-        <div
-          className={cn(
-            "rounded-2xl px-4 py-2.5",
-            isUser
-              ? "bg-blue-600 text-white"
-              : "bg-neutral-800 text-neutral-100",
-            isError && "border border-red-500/30"
-          )}
-        >
-          {!isUser && agentName && (
-            <p className="mb-1 text-xs font-medium text-blue-400">
-              {agentName}
-            </p>
-          )}
-          {isError && (
-            <div className="mb-1 flex items-center gap-1 text-xs text-red-400">
-              <AlertCircle className="h-3 w-3" />
-              <span>Error</span>
-            </div>
-          )}
-          {/* Attachments */}
-          {message.attachments && message.attachments.length > 0 && (
-            <div className="mb-1 space-y-1">
-              {message.attachments.map((att) =>
-                att.fileType.startsWith("image/") ? (
-                  <a
-                    key={att.id}
-                    href={`http://localhost:3501${att.url}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <img
-                      src={`http://localhost:3501${att.url}`}
-                      alt={att.fileName}
-                      className="max-h-64 rounded-lg object-contain"
-                    />
-                  </a>
-                ) : (
-                  <a
-                    key={att.id}
-                    href={`http://localhost:3501${att.url}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-lg bg-neutral-700/50 px-3 py-2 text-xs hover:bg-neutral-700"
-                  >
-                    <FileText className="h-4 w-4 shrink-0" />
-                    <span className="flex-1 truncate">{att.fileName}</span>
-                    <Download className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  </a>
-                )
-              )}
-            </div>
-          )}
-          {message.content ? (
-            <MarkdownContent content={message.content} />
-          ) : isStreaming ? (
-            <StreamingCursor />
-          ) : null}
-          {isStreaming && message.content && <StreamingCursor />}
-        </div>
-
-        {/* Hover action buttons */}
-        {!isStreaming && (
+      <div className="flex items-end gap-2 max-w-[75%]">
+        <div className="relative">
           <div
             className={cn(
-              "absolute -top-8 flex items-center gap-0.5 rounded-lg border border-border bg-neutral-800 p-0.5 opacity-0 shadow-md transition-opacity group-hover:opacity-100",
-              isUser ? "right-0" : "left-0"
+              "rounded-2xl px-4 py-2.5",
+              isUser
+                ? "bg-blue-600 text-white"
+                : "bg-neutral-800 text-neutral-100",
+              isError && "border border-red-500/30"
             )}
           >
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={handleCopy}
-              className="h-6 w-6 text-neutral-400 hover:text-neutral-100"
-              title="Copy message"
-            >
-              {copied ? (
-                <Check className="h-3 w-3 text-green-400" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={handleDelete}
-              className="h-6 w-6 text-neutral-400 hover:text-red-400"
-              title="Delete message"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-
+            {!isUser && agentName && (
+              <p className="mb-1 text-xs font-medium text-blue-400">
+                {agentName}
+              </p>
+            )}
             {isError && (
+              <div className="mb-1 flex items-center gap-1 text-xs text-red-400">
+                <AlertCircle className="h-3 w-3" />
+                <span>Error</span>
+              </div>
+            )}
+            {/* Attachments */}
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="mb-1 space-y-1">
+                {message.attachments.map((att) =>
+                  att.fileType.startsWith("image/") ? (
+                    <a
+                      key={att.id}
+                      href={`http://localhost:3501${att.url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <img
+                        src={`http://localhost:3501${att.url}`}
+                        alt={att.fileName}
+                        className="max-h-64 rounded-lg object-contain"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      key={att.id}
+                      href={`http://localhost:3501${att.url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 rounded-lg bg-neutral-700/50 px-3 py-2 text-xs hover:bg-neutral-700"
+                    >
+                      <FileText className="h-4 w-4 shrink-0" />
+                      <span className="flex-1 truncate">{att.fileName}</span>
+                      <Download className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    </a>
+                  )
+                )}
+              </div>
+            )}
+            {message.content ? (
+              <MarkdownContent content={message.content} />
+            ) : isStreaming ? (
+              <StreamingCursor />
+            ) : null}
+            {isStreaming && message.content && <StreamingCursor />}
+          </div>
+
+          {/* Hover action buttons */}
+          {!isStreaming && (
+            <div
+              className={cn(
+                "absolute -top-8 flex items-center gap-0.5 rounded-lg border border-border bg-neutral-800 p-0.5 opacity-0 shadow-md transition-opacity group-hover:opacity-100",
+                isUser ? "right-0" : "left-0"
+              )}
+            >
               <Button
                 variant="ghost"
                 size="icon-xs"
-                onClick={handleRetry}
-                className="h-6 w-6 text-neutral-400 hover:text-blue-400"
-                title="Retry message"
+                onClick={handleCopy}
+                className="h-6 w-6 text-neutral-400 hover:text-neutral-100"
+                title="Copy message"
               >
-                <RotateCcw className="h-3 w-3" />
+                {copied ? (
+                  <Check className="h-3 w-3 text-green-400" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
               </Button>
-            )}
-          </div>
+
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={handleDelete}
+                className="h-6 w-6 text-neutral-400 hover:text-red-400"
+                title="Delete message"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+
+              {isError && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleRetry}
+                  className="h-6 w-6 text-neutral-400 hover:text-blue-400"
+                  title="Retry message"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Stop button next to streaming message */}
+        {isStreaming && !isUser && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={cancelStream}
+            className="mb-1 h-7 w-7 shrink-0 rounded-full border border-neutral-600 text-neutral-400 hover:border-red-500 hover:text-red-400"
+            title="Stop generating"
+          >
+            <Square className="h-3 w-3 fill-current" />
+          </Button>
         )}
       </div>
     </div>

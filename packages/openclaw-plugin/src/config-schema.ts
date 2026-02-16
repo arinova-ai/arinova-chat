@@ -6,6 +6,7 @@ export const ArinovaChatAccountSchemaBase = z
     name: z.string().optional(),
     enabled: z.boolean().optional(),
     apiUrl: z.string().optional(),
+    pairingCode: z.string().optional(),
     email: z.string().optional(),
     password: z.string().optional(),
     sessionToken: z.string().optional(),

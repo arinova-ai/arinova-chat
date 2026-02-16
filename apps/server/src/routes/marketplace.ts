@@ -77,21 +77,23 @@ export async function marketplaceRoutes(app: FastifyInstance) {
       }
 
       // Check if user already has an agent with the same endpoint
-      const [existing] = await db
-        .select()
-        .from(agents)
-        .where(
-          and(
-            eq(agents.ownerId, user.id),
-            eq(agents.a2aEndpoint, publicAgent.a2aEndpoint)
-          )
-        );
+      if (publicAgent.a2aEndpoint) {
+        const [existing] = await db
+          .select()
+          .from(agents)
+          .where(
+            and(
+              eq(agents.ownerId, user.id),
+              eq(agents.a2aEndpoint, publicAgent.a2aEndpoint)
+            )
+          );
 
-      if (existing) {
-        return reply.status(409).send({
-          error: "You already have this agent",
-          agent: existing,
-        });
+        if (existing) {
+          return reply.status(409).send({
+            error: "You already have this agent",
+            agent: existing,
+          });
+        }
       }
 
       // Clone the agent for this user
