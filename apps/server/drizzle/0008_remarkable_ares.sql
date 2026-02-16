@@ -1,0 +1,1 @@
+ALTER TABLE "agents" ADD COLUMN "pairing_code_expires_at" timestamp;

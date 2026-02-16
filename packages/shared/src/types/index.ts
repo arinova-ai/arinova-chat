@@ -17,6 +17,7 @@ export interface Agent {
   avatarUrl: string | null;
   a2aEndpoint: string | null;
   pairingCode: string | null;
+  pairingCodeExpiresAt: string | Date | null;
   ownerId: string;
   isPublic: boolean;
   category: string | null;

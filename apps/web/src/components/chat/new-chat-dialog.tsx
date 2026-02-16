@@ -413,8 +413,8 @@ function AddAgentDialog({
             <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
               <p className="font-medium text-foreground">Next steps:</p>
               <p>
-                Use this pairing code to connect your AI agent. No email or
-                password needed.
+                Use this pairing code to connect your AI agent. Code expires in
+                15 minutes.
               </p>
               <details className="group">
                 <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -637,8 +637,8 @@ export function CreateBotDialog({
             <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
               <p className="font-medium text-foreground">Next steps:</p>
               <p>
-                Use this pairing code to connect your AI agent. No email or
-                password needed.
+                Use this pairing code to connect your AI agent. Code expires in
+                15 minutes.
               </p>
               <details className="group">
                 <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">

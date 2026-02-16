@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Bot, Camera, Check, Copy, Circle, Loader2 } from "lucide-react";
+import { Bot, Camera, Check, Copy, Circle, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
@@ -25,6 +25,7 @@ interface BotManageDialogProps {
     avatarUrl: string | null;
     a2aEndpoint: string | null;
     pairingCode: string | null;
+    pairingCodeExpiresAt: string | Date | null;
   };
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,6 +54,9 @@ export function BotManageDialog({
 
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [localPairingCode, setLocalPairingCode] = useState(agent.pairingCode);
+  const [localExpiresAt, setLocalExpiresAt] = useState(agent.pairingCodeExpiresAt);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +70,8 @@ export function BotManageDialog({
       setError("");
       setDeleteConfirm(false);
       setDeleting(false);
+      setLocalPairingCode(agent.pairingCode);
+      setLocalExpiresAt(agent.pairingCodeExpiresAt);
     }
   }, [open, agent]);
 
@@ -240,31 +246,80 @@ export function BotManageDialog({
           </div>
 
           {/* Pairing code (if not connected) */}
-          {!agent.a2aEndpoint && agent.pairingCode && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Pairing Code</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-lg font-mono tracking-widest select-all">
-                  {agent.pairingCode}
-                </code>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyPairingCode}
-                  className="shrink-0"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
+          {!agent.a2aEndpoint && (() => {
+            const isExpired = localExpiresAt
+              ? new Date(localExpiresAt) < new Date()
+              : !localPairingCode;
+            const hasCode = !!localPairingCode && !isExpired;
+
+            const handleRegenerate = async () => {
+              setRegenerating(true);
+              setError("");
+              try {
+                const result = await api<{ pairingCode: string; expiresAt: string }>(
+                  `/api/agents/${agent.id}/regenerate-code`,
+                  { method: "POST" }
+                );
+                setLocalPairingCode(result.pairingCode);
+                setLocalExpiresAt(result.expiresAt);
+                await useChatStore.getState().loadAgents();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to regenerate code");
+              } finally {
+                setRegenerating(false);
+              }
+            };
+
+            return (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Pairing Code</label>
+                {hasCode ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-lg font-mono tracking-widest select-all">
+                        {localPairingCode}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleCopyPairingCode}
+                        className="shrink-0"
+                      >
+                        {copied ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Expires in 15 minutes. Use this code to connect your AI agent.
+                    </p>
+                  </>
+                ) : (
+                  <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-center">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {isExpired ? "Pairing code expired." : "No active pairing code."}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRegenerate}
+                      disabled={regenerating}
+                      className="gap-2"
+                    >
+                      {regenerating ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      Generate New Code
+                    </Button>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Use this code to connect your AI agent.
-              </p>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Save button */}
           <Button

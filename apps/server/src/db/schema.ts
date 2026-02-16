@@ -86,6 +86,7 @@ export const agents = pgTable("agents", {
   avatarUrl: text("avatar_url"),
   a2aEndpoint: text("a2a_endpoint"),
   pairingCode: varchar("pairing_code", { length: 6 }).unique(),
+  pairingCodeExpiresAt: timestamp("pairing_code_expires_at"),
   ownerId: text("owner_id")
     .notNull()
     .references(() => user.id),

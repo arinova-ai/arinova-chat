@@ -57,6 +57,13 @@
       "when": 1771214396488,
       "tag": "0007_majestic_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1771230922315,
+      "tag": "0008_remarkable_ares",
+      "breakpoints": true
     }
   ]
 }
