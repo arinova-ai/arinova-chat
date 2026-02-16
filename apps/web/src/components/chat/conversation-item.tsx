@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Message } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,10 +24,13 @@ import {
 import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users } from "lucide-react";
 import type { ConversationType } from "@arinova/shared/types";
 
+const BACKEND_URL = "http://localhost:3501";
+
 interface ConversationItemProps {
   id: string;
   title: string | null;
   agentName: string;
+  agentAvatarUrl?: string | null;
   type?: ConversationType;
   lastMessage: Message | null;
   pinnedAt: Date | null;
@@ -65,6 +68,7 @@ export function ConversationItem({
   id,
   title,
   agentName,
+  agentAvatarUrl,
   type = "direct",
   lastMessage,
   pinnedAt,
@@ -136,6 +140,13 @@ export function ConversationItem({
           className="flex flex-1 items-center gap-3 text-left"
         >
           <Avatar className="h-10 w-10 shrink-0">
+            {agentAvatarUrl && type === "direct" && (
+              <AvatarImage
+                src={`${BACKEND_URL}${agentAvatarUrl}`}
+                alt={agentName}
+                className="object-cover"
+              />
+            )}
             <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">
               {type === "group" ? (
                 <Users className="h-5 w-5" />

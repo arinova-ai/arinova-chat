@@ -19,7 +19,12 @@ export const createAgentSchema = z.object({
   a2aEndpoint: z.string().url().optional(),
 });
 
-export const updateAgentSchema = createAgentSchema.partial();
+export const updateAgentSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional().nullable(),
+  a2aEndpoint: z.string().url().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
+});
 
 // ===== Conversation =====
 export const createConversationSchema = z.object({

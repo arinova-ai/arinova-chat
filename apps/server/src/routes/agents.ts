@@ -12,6 +12,9 @@ import {
   generateUniquePairingCode,
   normalizePairingCode,
 } from "../utils/pairing-code.js";
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
+import { env } from "../env.js";
 
 export async function agentRoutes(app: FastifyInstance) {
   // Exchange pairing code for agent connection (public — no auth required)
@@ -155,6 +158,59 @@ export async function agentRoutes(app: FastifyInstance) {
       } catch {
         return reply.send({ skills: [] });
       }
+    }
+  );
+
+  // Upload agent avatar
+  app.post<{ Params: { id: string } }>(
+    "/api/agents/:id/avatar",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      // Verify ownership
+      const [agent] = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
+
+      if (!agent) {
+        return reply.status(404).send({ error: "Agent not found" });
+      }
+
+      const data = await request.file();
+      if (!data) {
+        return reply.status(400).send({ error: "No file uploaded" });
+      }
+
+      // Validate image type
+      if (!data.mimetype.startsWith("image/")) {
+        return reply.status(400).send({ error: "Only image files are allowed" });
+      }
+
+      const buffer = await data.toBuffer();
+
+      // Max 2MB for avatars
+      if (buffer.length > 2 * 1024 * 1024) {
+        return reply.status(400).send({ error: "Avatar must be under 2MB" });
+      }
+
+      // Save file
+      const ext = data.filename.split(".").pop() ?? "jpg";
+      const filename = `avatar_${agent.id}_${Date.now()}.${ext}`;
+      const avatarDir = path.resolve(env.UPLOAD_DIR, "avatars");
+      await mkdir(avatarDir, { recursive: true });
+      await writeFile(path.join(avatarDir, filename), buffer);
+
+      const avatarUrl = `/uploads/avatars/${filename}`;
+
+      // Update agent
+      const [updated] = await db
+        .update(agents)
+        .set({ avatarUrl, updatedAt: new Date() })
+        .where(eq(agents.id, agent.id))
+        .returning();
+
+      return reply.send({ avatarUrl: updated.avatarUrl });
     }
   );
 

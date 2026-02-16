@@ -50,6 +50,7 @@ interface ChatState {
   sendMessage: (content: string) => void;
   cancelStream: () => void;
   createAgent: (data: { name: string; description?: string; a2aEndpoint?: string }) => Promise<Agent>;
+  updateAgent: (id: string, data: { name?: string; description?: string | null; avatarUrl?: string | null }) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
   createConversation: (agentId: string, title?: string) => Promise<Conversation>;
   createGroupConversation: (agentIds: string[], title: string) => Promise<Conversation>;
@@ -189,6 +190,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
     set({ agents: [...get().agents, agent] });
     return agent;
+  },
+
+  updateAgent: async (id, data) => {
+    await api(`/api/agents/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    // Refresh agents list
+    await get().loadAgents();
+    // Also refresh conversations (agent name may have changed)
+    await get().loadConversations();
   },
 
   deleteAgent: async (id) => {

@@ -10,8 +10,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp } from "lucide-react";
+import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BotManageDialog } from "./bot-manage-dialog";
+import type { Agent } from "@arinova/shared/types";
+
+const BACKEND_URL = "http://localhost:3501";
 
 interface NewChatDialogProps {
   open: boolean;
@@ -30,6 +34,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const agentHealth = useChatStore((s) => s.agentHealth);
   const loadAgentHealth = useChatStore((s) => s.loadAgentHealth);
   const [view, setView] = useState<DialogView>("select");
+  const [managingAgent, setManagingAgent] = useState<Agent | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -89,38 +94,58 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
             </p>
           ) : (
             agents.map((agent) => (
-              <button
-                key={agent.id}
-                onClick={() => handleSelectAgent(agent.id)}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left hover:bg-accent transition-colors"
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-700">
-                  <Bot className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium">{agent.name}</p>
-                    {agentHealth[agent.id] && (
-                      <Circle
-                        className={cn(
-                          "h-2 w-2 shrink-0 fill-current",
-                          agentHealth[agent.id].status === "online" &&
-                            "text-green-500",
-                          agentHealth[agent.id].status === "offline" &&
-                            "text-neutral-500",
-                          agentHealth[agent.id].status === "error" &&
-                            "text-yellow-500"
-                        )}
-                      />
+              <div key={agent.id} className="flex items-center gap-1">
+                <button
+                  onClick={() => handleSelectAgent(agent.id)}
+                  className="flex flex-1 items-center gap-3 rounded-lg px-3 py-3 text-left hover:bg-accent transition-colors"
+                >
+                  {agent.avatarUrl ? (
+                    <img
+                      src={`${BACKEND_URL}${agent.avatarUrl}`}
+                      alt={agent.name}
+                      className="h-10 w-10 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-700">
+                      <Bot className="h-5 w-5" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium">{agent.name}</p>
+                      {agentHealth[agent.id] && (
+                        <Circle
+                          className={cn(
+                            "h-2 w-2 shrink-0 fill-current",
+                            agentHealth[agent.id].status === "online" &&
+                              "text-green-500",
+                            agentHealth[agent.id].status === "offline" &&
+                              "text-neutral-500",
+                            agentHealth[agent.id].status === "error" &&
+                              "text-yellow-500"
+                          )}
+                        />
+                      )}
+                    </div>
+                    {agent.description && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        {agent.description}
+                      </p>
                     )}
                   </div>
-                  {agent.description && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {agent.description}
-                    </p>
-                  )}
-                </div>
-              </button>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setManagingAgent(agent);
+                  }}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
             ))
           )}
           <div className="flex gap-2 pt-2">
@@ -145,6 +170,16 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
           </div>
         </div>
       </DialogContent>
+
+      {managingAgent && (
+        <BotManageDialog
+          agent={managingAgent}
+          open={!!managingAgent}
+          onOpenChange={(v) => {
+            if (!v) setManagingAgent(null);
+          }}
+        />
+      )}
     </Dialog>
   );
 }
@@ -159,7 +194,7 @@ function CreateGroupDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBack: () => void;
-  agents: { id: string; name: string; description: string | null }[];
+  agents: { id: string; name: string; description: string | null; avatarUrl: string | null }[];
   onCreateGroup: (agentIds: string[], title: string) => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
@@ -238,9 +273,17 @@ function CreateGroupDialog({
                       : "hover:bg-accent"
                   )}
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-700">
-                    <Bot className="h-4 w-4" />
-                  </div>
+                  {agent.avatarUrl ? (
+                    <img
+                      src={`${BACKEND_URL}${agent.avatarUrl}`}
+                      alt={agent.name}
+                      className="h-8 w-8 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-700">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{agent.name}</p>
                     {agent.description && (
