@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-arinova}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-arinova_chat}
-    ports:
-      - "5458:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,8 +19,6 @@ services:
     image: redis:7-alpine
     container_name: arinova-redis
     restart: unless-stopped
-    ports:
-      - "6381:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -46,6 +42,13 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3500}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3501}
+      UPLOAD_DIR: /app/uploads
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -56,6 +59,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     container_name: arinova-web
     restart: unless-stopped
     ports:
@@ -63,9 +68,11 @@ services:
     environment:
       PORT: 3500
       HOSTNAME: 0.0.0.0
+      INTERNAL_API_URL: http://server:3501
     depends_on:
       - server
 
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:

@@ -52,6 +52,9 @@ COPY packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
 COPY --from=builder /app/packages/shared ./packages/shared
 
+# Copy drizzle migrations for auto-migrate on startup
+COPY apps/server/drizzle ./apps/server/drizzle
+
 # Copy node_modules
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
@@ -61,6 +64,10 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 RUN pnpm --filter @arinova/server prune --prod && \
     pnpm --filter @arinova/shared prune --prod
 
+# Create uploads directory
+RUN mkdir -p /app/apps/server/uploads
+
 EXPOSE 3501
 
-CMD ["node", "apps/server/dist/index.js"]
+# Run migrations then start server
+CMD ["sh", "-c", "cd apps/server && node dist/migrate.js && node dist/index.js"]

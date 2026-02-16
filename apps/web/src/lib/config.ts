@@ -1,5 +1,11 @@
 function getBackendUrl(): string {
-  if (typeof window === "undefined") return "http://localhost:3501";
+  if (typeof window === "undefined") {
+    return (
+      process.env.INTERNAL_API_URL ??
+      process.env.NEXT_PUBLIC_API_URL ??
+      "http://localhost:3501"
+    );
+  }
   return (
     process.env.NEXT_PUBLIC_API_URL ??
     `${window.location.protocol}//${window.location.hostname}:3501`

@@ -422,7 +422,7 @@ function AddAgentDialog({
                 <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
   "channels": {
     "arinova-chat": {
-      "apiUrl": "${typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:3501` : "http://localhost:3501"}",
+      "apiUrl": "${typeof window !== "undefined" ? BACKEND_URL : "http://localhost:3501"}",
       "pairingCode": "${createdAgent.pairingCode ?? ""}"
     }
   }
@@ -646,7 +646,7 @@ export function CreateBotDialog({
                 <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
   "channels": {
     "arinova-chat": {
-      "apiUrl": "${typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:3501` : "http://localhost:3501"}",
+      "apiUrl": "${typeof window !== "undefined" ? BACKEND_URL : "http://localhost:3501"}",
       "pairingCode": "${createdAgent.pairingCode ?? ""}"
     }
   }

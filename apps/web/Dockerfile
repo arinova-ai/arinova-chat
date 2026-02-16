@@ -20,6 +20,10 @@ RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
 WORKDIR /app
 
+# NEXT_PUBLIC_ vars must be set at build time
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
