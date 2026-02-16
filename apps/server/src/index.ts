@@ -26,9 +26,10 @@ import { groupRoutes } from "./routes/groups.js";
 
 const app = Fastify({ logger: true });
 
-// CORS
+// CORS — support comma-separated origins; "*" allows all (dev mode)
+const corsOrigins = env.CORS_ORIGIN.split(",").map((s) => s.trim());
 await app.register(cors, {
-  origin: env.CORS_ORIGIN,
+  origin: corsOrigins.includes("*") ? true : corsOrigins,
   credentials: true,
   methods: ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"],
 });

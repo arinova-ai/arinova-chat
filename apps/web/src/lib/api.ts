@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:3501";
+import { BACKEND_URL } from "./config";
 
 export class ApiError extends Error {
   constructor(
@@ -18,7 +18,7 @@ export async function api<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
     ...options,
     credentials: "include",
     headers: {

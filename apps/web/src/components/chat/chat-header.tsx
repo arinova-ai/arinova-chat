@@ -2,7 +2,7 @@
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Bot, Menu, Users } from "lucide-react";
+import { ArrowLeft, Bot, Users } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import type { ConversationType } from "@arinova/shared/types";
 
@@ -17,7 +17,7 @@ export function ChatHeader({
   agentDescription,
   type = "direct",
 }: ChatHeaderProps) {
-  const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
 
   return (
     <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -25,9 +25,9 @@ export function ChatHeader({
         variant="ghost"
         size="icon"
         className="md:hidden"
-        onClick={() => setSidebarOpen(true)}
+        onClick={() => setActiveConversation(null)}
       >
-        <Menu className="h-5 w-5" />
+        <ArrowLeft className="h-5 w-5" />
       </Button>
       <Avatar className="h-8 w-8">
         <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">

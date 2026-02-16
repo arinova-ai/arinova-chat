@@ -14,8 +14,7 @@ import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp, Settings
 import { cn } from "@/lib/utils";
 import { BotManageDialog } from "./bot-manage-dialog";
 import type { Agent } from "@arinova/shared/types";
-
-const BACKEND_URL = "http://localhost:3501";
+import { BACKEND_URL } from "@/lib/config";
 
 interface NewChatDialogProps {
   open: boolean;
@@ -423,7 +422,7 @@ function AddAgentDialog({
                 <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
   "channels": {
     "arinova-chat": {
-      "apiUrl": "${typeof window !== "undefined" ? window.location.origin.replace(":3500", ":3501") : "http://localhost:3501"}",
+      "apiUrl": "${typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:3501` : "http://localhost:3501"}",
       "pairingCode": "${createdAgent.pairingCode ?? ""}"
     }
   }
@@ -647,7 +646,7 @@ export function CreateBotDialog({
                 <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
   "channels": {
     "arinova-chat": {
-      "apiUrl": "${typeof window !== "undefined" ? window.location.origin.replace(":3500", ":3501") : "http://localhost:3501"}",
+      "apiUrl": "${typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:3501` : "http://localhost:3501"}",
       "pairingCode": "${createdAgent.pairingCode ?? ""}"
     }
   }

@@ -67,10 +67,10 @@ export function MessageList({ messages, agentName }: MessageListProps) {
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto py-4"
+      className="flex-1 overflow-y-auto overflow-x-hidden py-4"
       onScroll={handleScroll}
     >
-      <div className="mx-auto flex max-w-3xl flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
         {loadingMore && (
           <div className="flex justify-center py-2">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

@@ -14,8 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Bot, Camera, Check, Copy, Circle, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-
-const BACKEND_URL = "http://localhost:3501";
+import { BACKEND_URL } from "@/lib/config";
 
 interface BotManageDialogProps {
   agent: {

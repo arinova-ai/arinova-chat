@@ -89,6 +89,13 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           [rehypeSanitize, sanitizeSchema],
         ]}
         components={{
+          table(props: ComponentProps<"table">) {
+            return (
+              <div className="overflow-x-auto">
+                <table {...props} />
+              </div>
+            );
+          },
           pre(props: ComponentProps<"pre">) {
             const { children, ...rest } = props;
             const codeText = extractTextFromChildren(children).trim();

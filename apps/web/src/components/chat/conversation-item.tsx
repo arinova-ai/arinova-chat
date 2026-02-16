@@ -23,8 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users } from "lucide-react";
 import type { ConversationType } from "@arinova/shared/types";
-
-const BACKEND_URL = "http://localhost:3501";
+import { BACKEND_URL } from "@/lib/config";
 
 interface ConversationItemProps {
   id: string;
@@ -129,7 +128,7 @@ export function ConversationItem({
     <>
       <div
         className={cn(
-          "group relative flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors",
+          "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-3 text-left transition-colors",
           isActive
             ? "bg-accent text-accent-foreground"
             : "hover:bg-accent/50 text-foreground"
@@ -137,7 +136,7 @@ export function ConversationItem({
       >
         <button
           onClick={onClick}
-          className="flex flex-1 items-center gap-3 text-left"
+          className="flex flex-1 min-w-0 items-center gap-3 text-left"
         >
           <Avatar className="h-10 w-10 shrink-0">
             {agentAvatarUrl && type === "direct" && (

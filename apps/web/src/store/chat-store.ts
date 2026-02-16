@@ -41,7 +41,7 @@ interface ChatState {
   ttsEnabled: boolean;
 
   // Actions
-  setActiveConversation: (id: string) => void;
+  setActiveConversation: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
   loadAgents: () => Promise<void>;
@@ -86,6 +86,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     : false,
 
   setActiveConversation: (id) => {
+    if (id === null) {
+      set({ activeConversationId: null });
+      return;
+    }
     set({
       activeConversationId: id,
       sidebarOpen: false,

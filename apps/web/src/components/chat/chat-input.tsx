@@ -14,8 +14,7 @@ import {
   type PlatformCommand,
   type CommandCategory,
 } from "@/lib/platform-commands";
-
-const BACKEND_URL = "http://localhost:3501";
+import { BACKEND_URL } from "@/lib/config";
 
 // ---------- Popup item types ----------
 
@@ -445,7 +444,10 @@ export function ChatInput() {
       }
     }
 
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+    // Desktop: Enter sends, Shift+Enter new line
+    // Mobile: Enter always new line, send via button only
+    const isMobile = window.innerWidth < 768;
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isMobile) {
       e.preventDefault();
       handleSend();
     }
@@ -607,7 +609,7 @@ export function ChatInput() {
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message... (Shift+Enter for new line)"
+            placeholder="Type a message..."
             rows={1}
             className="flex-1 resize-none rounded-xl border border-input bg-neutral-800 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />

@@ -20,6 +20,7 @@ import {
   Download,
   Square,
 } from "lucide-react";
+import { BACKEND_URL } from "@/lib/config";
 
 interface MessageBubbleProps {
   message: Message;
@@ -88,11 +89,11 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
         </AvatarFallback>
       </Avatar>
 
-      <div className="flex items-end gap-2 max-w-[75%]">
-        <div className="relative">
+      <div className="flex items-end gap-2 max-w-[75%] min-w-0">
+        <div className="relative min-w-0">
           <div
             className={cn(
-              "rounded-2xl px-4 py-2.5",
+              "rounded-2xl px-4 py-2.5 overflow-hidden",
               isUser
                 ? "bg-blue-600 text-white"
                 : "bg-neutral-800 text-neutral-100",
@@ -117,12 +118,12 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
                   att.fileType.startsWith("image/") ? (
                     <a
                       key={att.id}
-                      href={`http://localhost:3501${att.url}`}
+                      href={`${BACKEND_URL}${att.url}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       <img
-                        src={`http://localhost:3501${att.url}`}
+                        src={`${BACKEND_URL}${att.url}`}
                         alt={att.fileName}
                         className="max-h-64 rounded-lg object-contain"
                       />
@@ -130,7 +131,7 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
                   ) : (
                     <a
                       key={att.id}
-                      href={`http://localhost:3501${att.url}`}
+                      href={`${BACKEND_URL}${att.url}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 rounded-lg bg-neutral-700/50 px-3 py-2 text-xs hover:bg-neutral-700"

@@ -31,30 +31,19 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-card">
+    <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between px-4">
         <h1 className="text-base font-bold">Arinova Chat</h1>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/settings")}
-            className="h-8 w-8"
-            title="Settings"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSignOut}
-            className="h-8 w-8"
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push("/settings")}
+          className="h-8 w-8"
+          title="Settings"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
       </div>
       <Separator />
 
@@ -91,6 +80,14 @@ export function Sidebar() {
         >
           <Bot className="h-4 w-4" />
           Create Bot
+        </Button>
+        <Button
+          variant="ghost"
+          className="w-full gap-2 text-muted-foreground"
+          onClick={handleSignOut}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign Out
         </Button>
       </div>
 

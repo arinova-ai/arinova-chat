@@ -12,13 +12,13 @@ export function ConversationList() {
   const unreadCounts = useChatStore((s) => s.unreadCounts);
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-1">
+    <div className="flex-1 min-w-0 overflow-y-auto px-2 py-1">
       {conversations.length === 0 ? (
         <p className="px-3 py-8 text-center text-sm text-muted-foreground">
           No conversations yet
         </p>
       ) : (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
           {conversations.map((conv) => (
             <ConversationItem
               key={conv.id}

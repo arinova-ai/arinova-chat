@@ -1,4 +1,5 @@
 import type { WSClientEvent, WSServerEvent } from "@arinova/shared/types";
+import { WS_URL } from "./config";
 
 type WSEventHandler = (event: WSServerEvent) => void;
 
@@ -14,7 +15,7 @@ class WebSocketManager {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
     try {
-      this.ws = new WebSocket("ws://localhost:3501/ws");
+      this.ws = new WebSocket(WS_URL);
 
       this.ws.onopen = () => {
         this.connected = true;
