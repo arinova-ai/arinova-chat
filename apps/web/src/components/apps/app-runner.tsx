@@ -212,10 +212,8 @@ export function AppRunner({
           sandbox={sandboxAttrs}
           onLoad={handleIframeLoad}
           data-storage-key={storageKey}
+          data-csp={csp}
           className="h-full w-full border-0"
-          style={{
-            ...(csp ? { csp } : {}),
-          }}
           title={manifest.name}
         />
         {!loaded && (
