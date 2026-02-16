@@ -233,13 +233,13 @@ async function handleSendMessage(
   const abortController = new AbortController();
   streamAbortControllers.set(agentMsg.id, abortController);
 
-  // Idle timeout — resets on each chunk (120s allows for agent tool calls)
+  // Idle timeout — resets on each chunk (600s allows for long reasoning/tool chains)
   let timeout: ReturnType<typeof setTimeout>;
   const resetIdleTimeout = () => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
       abortController.abort();
-    }, 120_000);
+    }, 600_000);
   };
   resetIdleTimeout();
 
