@@ -58,6 +58,7 @@ export function ChatInput() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const conversations = useChatStore((s) => s.conversations);
+  const agents = useChatStore((s) => s.agents);
   const agentSkills = useChatStore((s) => s.agentSkills);
   const loadAgentSkills = useChatStore((s) => s.loadAgentSkills);
   const cancelStream = useChatStore((s) => s.cancelStream);
@@ -74,6 +75,10 @@ export function ChatInput() {
   );
   const agentId =
     activeConversation?.type === "direct" ? activeConversation.agentId : null;
+
+  // Get quick replies for the active agent
+  const activeAgent = agentId ? agents.find((a) => a.id === agentId) : null;
+  const quickReplies = activeAgent?.quickReplies ?? [];
 
   // Load skills when agentId is available
   useEffect(() => {
@@ -559,6 +564,24 @@ export function ChatInput() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Quick reply buttons */}
+        {quickReplies.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {quickReplies.map((qr, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  sendMessage(qr.message);
+                }}
+                className="rounded-full border border-border bg-neutral-800 px-3 py-1 text-xs text-foreground transition-colors hover:bg-neutral-700"
+              >
+                {qr.label}
+              </button>
+            ))}
           </div>
         )}
 

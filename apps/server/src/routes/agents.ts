@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { agents } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { agents, conversations, messages } from "../db/schema.js";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import {
   createAgentSchema,
@@ -259,6 +259,142 @@ export async function agentRoutes(app: FastifyInstance) {
         pairingCode: updated.pairingCode,
         expiresAt: updated.pairingCodeExpiresAt,
       });
+    }
+  );
+
+  // Get agent usage stats
+  app.get<{ Params: { id: string } }>(
+    "/api/agents/:id/stats",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      const [agent] = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
+
+      if (!agent) {
+        return reply.status(404).send({ error: "Agent not found" });
+      }
+
+      // Get conversation IDs for this agent
+      const agentConvos = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(eq(conversations.agentId, agent.id), eq(conversations.userId, user.id)));
+
+      const convoIds = agentConvos.map((c) => c.id);
+
+      let totalMessages = 0;
+      let lastActive: Date | null = null;
+
+      if (convoIds.length > 0) {
+        const [msgStats] = await db
+          .select({
+            count: sql<number>`count(*)::int`,
+            lastMessage: sql<Date>`max(${messages.createdAt})`,
+          })
+          .from(messages)
+          .where(sql`${messages.conversationId} = ANY(${convoIds})`);
+
+        totalMessages = msgStats?.count ?? 0;
+        lastActive = msgStats?.lastMessage ?? null;
+      }
+
+      return reply.send({
+        totalMessages,
+        totalConversations: convoIds.length,
+        lastActive,
+      });
+    }
+  );
+
+  // Clear all conversation history for an agent
+  app.delete<{ Params: { id: string } }>(
+    "/api/agents/:id/history",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      const [agent] = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
+
+      if (!agent) {
+        return reply.status(404).send({ error: "Agent not found" });
+      }
+
+      // Delete all conversations with this agent (messages cascade)
+      await db
+        .delete(conversations)
+        .where(and(eq(conversations.agentId, agent.id), eq(conversations.userId, user.id)));
+
+      return reply.status(204).send();
+    }
+  );
+
+  // Export chat history for an agent
+  app.get<{ Params: { id: string }; Querystring: { format?: string } }>(
+    "/api/agents/:id/export",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+      const format = (request.query as { format?: string }).format ?? "json";
+
+      const [agent] = await db
+        .select({ id: agents.id, name: agents.name })
+        .from(agents)
+        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
+
+      if (!agent) {
+        return reply.status(404).send({ error: "Agent not found" });
+      }
+
+      const convos = await db
+        .select()
+        .from(conversations)
+        .where(and(eq(conversations.agentId, agent.id), eq(conversations.userId, user.id)))
+        .orderBy(conversations.createdAt);
+
+      const result = [];
+      for (const convo of convos) {
+        const msgs = await db
+          .select()
+          .from(messages)
+          .where(eq(messages.conversationId, convo.id))
+          .orderBy(messages.createdAt);
+
+        result.push({
+          conversationId: convo.id,
+          title: convo.title,
+          createdAt: convo.createdAt,
+          messages: msgs.map((m) => ({
+            role: m.role,
+            content: m.content,
+            status: m.status,
+            createdAt: m.createdAt,
+          })),
+        });
+      }
+
+      if (format === "markdown") {
+        let md = `# Chat Export: ${agent.name}\n\n`;
+        for (const convo of result) {
+          md += `## ${convo.title ?? "Untitled"} (${new Date(convo.createdAt).toLocaleDateString()})\n\n`;
+          for (const msg of convo.messages) {
+            const role = msg.role === "user" ? "You" : agent.name;
+            const time = new Date(msg.createdAt).toLocaleTimeString();
+            md += `**${role}** [${time}]\n${msg.content}\n\n`;
+          }
+          md += "---\n\n";
+        }
+        reply.header("Content-Type", "text/markdown");
+        reply.header("Content-Disposition", `attachment; filename="${agent.name}-export.md"`);
+        return reply.send(md);
+      }
+
+      reply.header("Content-Type", "application/json");
+      reply.header("Content-Disposition", `attachment; filename="${agent.name}-export.json"`);
+      return reply.send({ agent: agent.name, exportedAt: new Date(), conversations: result });
     }
   );
 

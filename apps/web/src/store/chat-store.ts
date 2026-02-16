@@ -50,7 +50,7 @@ interface ChatState {
   sendMessage: (content: string) => void;
   cancelStream: () => void;
   createAgent: (data: { name: string; description?: string; a2aEndpoint?: string }) => Promise<Agent>;
-  updateAgent: (id: string, data: { name?: string; description?: string | null; avatarUrl?: string | null }) => Promise<void>;
+  updateAgent: (id: string, data: Record<string, unknown>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
   createConversation: (agentId: string, title?: string) => Promise<Conversation>;
   createGroupConversation: (agentIds: string[], title: string) => Promise<Conversation>;

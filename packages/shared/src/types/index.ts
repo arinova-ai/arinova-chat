@@ -22,6 +22,10 @@ export interface Agent {
   isPublic: boolean;
   category: string | null;
   usageCount: number;
+  systemPrompt: string | null;
+  welcomeMessage: string | null;
+  quickReplies: { label: string; message: string }[] | null;
+  notificationsEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

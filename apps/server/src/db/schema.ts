@@ -93,6 +93,10 @@ export const agents = pgTable("agents", {
   isPublic: boolean("is_public").notNull().default(false),
   category: varchar("category", { length: 50 }),
   usageCount: integer("usage_count").notNull().default(0),
+  systemPrompt: text("system_prompt"),
+  welcomeMessage: text("welcome_message"),
+  quickReplies: jsonb("quick_replies").$type<{ label: string; message: string }[]>(),
+  notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

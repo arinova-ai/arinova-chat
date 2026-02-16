@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <linearGradient id="g" x1="18" y1="170" x2="178" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e6cc7"/>
+      <stop offset="100%" stop-color="#5cd6d6"/>
+    </linearGradient>
+  </defs>
+
+  <g stroke="url(#g)" stroke-width="9.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Chat bubble body (C-shape: top + left + bottom) -->
+    <path d="M 106 48 L 48 48 Q 30 48 30 66 L 30 118 Q 30 134 46 134 L 86 134"/>
+
+    <!-- Chat bubble tail -->
+    <line x1="34" y1="126" x2="20" y2="150"/>
+
+    <!-- A: left leg -->
+    <line x1="98" y1="18" x2="44" y2="168"/>
+
+    <!-- A: right leg -->
+    <line x1="98" y1="18" x2="152" y2="168"/>
+
+    <!-- Right swoosh curve -->
+    <path d="M 116 30 Q 186 86 152 168"/>
+  </g>
+
+  <!-- Dot in center of A -->
+  <circle cx="76" cy="108" r="7" fill="url(#g)"/>
+</svg>

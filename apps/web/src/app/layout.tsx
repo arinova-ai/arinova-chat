@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     title: "Arinova Chat",
   },
   icons: {
-    icon: "/favicon.svg",
+    icon: "/logo.svg",
     apple: "/apple-touch-icon.png",
   },
 };

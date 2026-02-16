@@ -64,6 +64,13 @@
       "when": 1771230922315,
       "tag": "0008_remarkable_ares",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1771241446502,
+      "tag": "0009_pretty_stingray",
+      "breakpoints": true
     }
   ]
 }

@@ -24,6 +24,15 @@ export const updateAgentSchema = z.object({
   description: z.string().max(500).optional().nullable(),
   a2aEndpoint: z.string().url().optional().nullable(),
   avatarUrl: z.string().optional().nullable(),
+  systemPrompt: z.string().max(4000).optional().nullable(),
+  welcomeMessage: z.string().max(1000).optional().nullable(),
+  quickReplies: z.array(z.object({
+    label: z.string().min(1).max(50),
+    message: z.string().min(1).max(500),
+  })).max(10).optional().nullable(),
+  notificationsEnabled: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  category: z.string().max(50).optional().nullable(),
 });
 
 // ===== Conversation =====
