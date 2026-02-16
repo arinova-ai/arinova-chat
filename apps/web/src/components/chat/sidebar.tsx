@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Search, Plus, LogOut, Settings, Store, Building2, Bot, Package, Wallet, Code } from "lucide-react";
+import { Search, Plus, LogOut, Settings, Bot } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
@@ -91,46 +91,6 @@ export function Sidebar() {
         >
           <Bot className="h-4 w-4" />
           Create Bot
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          onClick={() => router.push("/marketplace")}
-        >
-          <Store className="h-4 w-4" />
-          Marketplace
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          onClick={() => router.push("/communities")}
-        >
-          <Building2 className="h-4 w-4" />
-          Communities
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          onClick={() => router.push("/apps")}
-        >
-          <Package className="h-4 w-4" />
-          Apps
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          onClick={() => router.push("/wallet")}
-        >
-          <Wallet className="h-4 w-4" />
-          Wallet
-        </Button>
-        <Button
-          variant="outline"
-          className="w-full gap-2"
-          onClick={() => router.push("/developer")}
-        >
-          <Code className="h-4 w-4" />
-          Developer
         </Button>
       </div>
 
