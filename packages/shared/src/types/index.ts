@@ -123,6 +123,190 @@ export interface ChannelMessage {
   updatedAt: Date;
 }
 
+// ===== App Manifest =====
+export type AppCategory = "game" | "shopping" | "tool" | "social" | "other";
+export type AgentInterfaceMode = "static" | "dynamic";
+export type ControlMode = "agent" | "human" | "copilot";
+export type HumanInputType = "direct" | "chat" | "both";
+export type MonetizationModel = "free" | "paid" | "freemium" | "subscription";
+export type AgeRating = "4+" | "9+" | "12+" | "17+";
+
+export interface AppManifestViewport {
+  minWidth: number;
+  maxWidth: number;
+  aspectRatio: string; // e.g. "1:1", "16:9", "flexible"
+  orientation: "portrait" | "landscape" | "any";
+}
+
+export interface AppManifestUI {
+  entry: string;
+  viewport: AppManifestViewport;
+}
+
+export interface AppManifestPlatforms {
+  web: boolean;
+  ios: boolean;
+  android: boolean;
+}
+
+export interface AppManifestPlayers {
+  min: number;
+  max: number;
+}
+
+export interface AppActionDefinition {
+  name: string;
+  description: string;
+  params?: Record<string, unknown>; // JSON Schema object
+  humanOnly?: boolean;
+  agentOnly?: boolean;
+}
+
+export interface AppEventDefinition {
+  name: string;
+  description: string;
+  payload?: Record<string, unknown>; // JSON Schema object
+}
+
+export interface AppRoleDefinition {
+  prompt: string;
+  state: Record<string, unknown>; // JSON Schema object
+  actions: AppActionDefinition[];
+  events?: AppEventDefinition[];
+}
+
+export interface AppSharedDefinition {
+  events?: AppEventDefinition[];
+  actions?: AppActionDefinition[];
+}
+
+export interface AppAgentInterface {
+  mode: AgentInterfaceMode;
+  description: string;
+  maxStateSize?: number; // bytes, for dynamic mode
+  maxActions?: number;   // for dynamic mode
+}
+
+export interface AppInteraction {
+  controlModes: ControlMode[];
+  defaultMode: ControlMode;
+  humanInput: HumanInputType;
+}
+
+export interface AppMonetization {
+  model: MonetizationModel;
+  virtualGoods: boolean;
+  externalPayments: boolean;
+}
+
+export interface AppRating {
+  age: AgeRating;
+  descriptors: string[];
+}
+
+export interface AppManifest {
+  manifest_version: number;
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: {
+    name: string;
+    url?: string;
+  };
+  category: AppCategory;
+  tags: string[];
+  icon: string;
+  screenshots?: string[];
+  sdkVersion?: string;
+
+  ui: AppManifestUI;
+  platforms: AppManifestPlatforms;
+  players: AppManifestPlayers;
+
+  roles: Record<string, AppRoleDefinition | AppSharedDefinition>;
+  agentInterface: AppAgentInterface;
+  interaction: AppInteraction;
+  monetization: AppMonetization;
+  rating: AppRating;
+
+  permissions: string[];
+  network?: {
+    allowed: string[];
+  };
+}
+
+// ===== App Entity =====
+export type AppStatus = "draft" | "submitted" | "scanning" | "in_review" | "published" | "rejected" | "suspended";
+export type AppVersionStatus = "submitted" | "scanning" | "in_review" | "published" | "rejected";
+
+export interface MarketplaceApp {
+  id: string;
+  developerId: string;
+  appId: string; // manifest id
+  name: string;
+  description: string;
+  category: AppCategory;
+  icon: string;
+  status: AppStatus;
+  currentVersionId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AppVersion {
+  id: string;
+  appId: string;
+  version: string;
+  manifestJson: AppManifest;
+  packagePath: string;
+  status: AppVersionStatus;
+  reviewNotes: string | null;
+  createdAt: Date;
+}
+
+// ===== Developer Account =====
+export interface DeveloperAccount {
+  id: string;
+  userId: string;
+  displayName: string;
+  contactEmail: string;
+  payoutInfo: string | null;
+  termsAcceptedAt: Date;
+  createdAt: Date;
+}
+
+// ===== Arinova Coins =====
+export type CoinTransactionType = "topup" | "purchase" | "refund" | "payout" | "earning";
+
+export interface CoinBalance {
+  userId: string;
+  balance: number;
+  updatedAt: Date;
+}
+
+export interface CoinTransaction {
+  id: string;
+  userId: string;
+  type: CoinTransactionType;
+  amount: number; // positive for credits, negative for debits
+  relatedAppId: string | null;
+  relatedProductId: string | null;
+  receiptId: string | null;
+  description: string | null;
+  createdAt: Date;
+}
+
+export interface AppPurchase {
+  id: string;
+  userId: string;
+  appVersionId: string;
+  productId: string;
+  amount: number;
+  status: "completed" | "refunded";
+  createdAt: Date;
+}
+
 // ===== WebSocket Events =====
 export type WSClientEvent =
   | { type: "send_message"; conversationId: string; content: string }

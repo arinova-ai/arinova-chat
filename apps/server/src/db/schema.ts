@@ -7,6 +7,7 @@ import {
   boolean,
   integer,
   pgEnum,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 // ===== Better Auth tables =====
@@ -199,5 +200,116 @@ export const attachments = pgTable("attachments", {
   fileType: varchar("file_type", { length: 100 }).notNull(),
   fileSize: integer("file_size").notNull(),
   storagePath: text("storage_path").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ===== Marketplace tables =====
+
+export const appStatusEnum = pgEnum("app_status", [
+  "draft",
+  "submitted",
+  "scanning",
+  "in_review",
+  "published",
+  "rejected",
+  "suspended",
+]);
+
+export const appVersionStatusEnum = pgEnum("app_version_status", [
+  "submitted",
+  "scanning",
+  "in_review",
+  "published",
+  "rejected",
+]);
+
+export const coinTransactionTypeEnum = pgEnum("coin_transaction_type", [
+  "topup",
+  "purchase",
+  "refund",
+  "payout",
+  "earning",
+]);
+
+export const purchaseStatusEnum = pgEnum("purchase_status", [
+  "completed",
+  "refunded",
+]);
+
+export const developerAccounts = pgTable("developer_accounts", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  contactEmail: varchar("contact_email", { length: 255 }).notNull(),
+  payoutInfo: text("payout_info"),
+  termsAcceptedAt: timestamp("terms_accepted_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const apps = pgTable("apps", {
+  id: uuid().primaryKey().defaultRandom(),
+  developerId: uuid("developer_id")
+    .notNull()
+    .references(() => developerAccounts.id),
+  appId: varchar("app_id", { length: 100 }).notNull().unique(),
+  name: varchar({ length: 100 }).notNull(),
+  description: text().notNull(),
+  category: varchar({ length: 50 }).notNull(),
+  icon: text().notNull(),
+  status: appStatusEnum().notNull().default("draft"),
+  currentVersionId: uuid("current_version_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const appVersions = pgTable("app_versions", {
+  id: uuid().primaryKey().defaultRandom(),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => apps.id, { onDelete: "cascade" }),
+  version: varchar({ length: 50 }).notNull(),
+  manifestJson: jsonb("manifest_json").notNull(),
+  packagePath: text("package_path").notNull(),
+  status: appVersionStatusEnum().notNull().default("submitted"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const coinBalances = pgTable("coin_balances", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id),
+  balance: integer().notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const coinTransactions = pgTable("coin_transactions", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  type: coinTransactionTypeEnum().notNull(),
+  amount: integer().notNull(),
+  relatedAppId: uuid("related_app_id").references(() => apps.id),
+  relatedProductId: varchar("related_product_id", { length: 100 }),
+  receiptId: varchar("receipt_id", { length: 255 }),
+  description: text(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const appPurchases = pgTable("app_purchases", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  appVersionId: uuid("app_version_id")
+    .notNull()
+    .references(() => appVersions.id),
+  productId: varchar("product_id", { length: 100 }).notNull(),
+  amount: integer().notNull(),
+  status: purchaseStatusEnum().notNull().default("completed"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

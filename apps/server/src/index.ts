@@ -18,6 +18,10 @@ import { sandboxRoutes } from "./routes/sandbox.js";
 import { groupRoutes } from "./routes/groups.js";
 import { marketplaceRoutes } from "./routes/marketplace.js";
 import { communityRoutes } from "./routes/communities.js";
+import { appSubmissionRoutes } from "./routes/app-submissions.js";
+import { appMarketplaceRoutes } from "./routes/app-marketplace.js";
+import { walletRoutes } from "./routes/wallet.js";
+import { developerRoutes } from "./routes/developer.js";
 
 const app = Fastify({ logger: true });
 
@@ -79,6 +83,10 @@ await app.register(agentHealthRoutes);
 await app.register(sandboxRoutes);
 await app.register(marketplaceRoutes);
 await app.register(communityRoutes);
+await app.register(appSubmissionRoutes);
+await app.register(appMarketplaceRoutes);
+await app.register(walletRoutes);
+await app.register(developerRoutes);
 
 try {
   await app.listen({ port: env.PORT, host: "0.0.0.0" });

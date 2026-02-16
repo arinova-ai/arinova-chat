@@ -29,8 +29,10 @@
     "zod": "^3"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^22",
     "@types/ws": "^8.18.1",
+    "adm-zip": "^0.5.16",
     "drizzle-kit": "^0.31",
     "tsx": "^4",
     "typescript": "^5"
