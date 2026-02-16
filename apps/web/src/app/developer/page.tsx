@@ -72,6 +72,15 @@ function DeveloperContent() {
 
   // Submit app dialog state
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [submitFile, setSubmitFile] = useState<File | null>(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitResult, setSubmitResult] = useState<{
+    app: { name: string; status: string };
+    version: { version: string; status: string };
+    permissionTier: number;
+    requiresReview: boolean;
+  } | null>(null);
 
   const loadDeveloperProfile = useCallback(async () => {
     try {
@@ -411,41 +420,142 @@ function DeveloperContent() {
       </div>
 
       {/* Submit app dialog */}
-      <Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+      <Dialog
+        open={submitDialogOpen}
+        onOpenChange={(open) => {
+          setSubmitDialogOpen(open);
+          if (!open) {
+            setSubmitFile(null);
+            setSubmitError("");
+            setSubmitResult(null);
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Submit App</DialogTitle>
             <DialogDescription>
-              Upload your app package for review
+              Upload your app package (.zip) for review
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="rounded-lg border border-border bg-neutral-800/50 p-6 text-center">
-              <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-              <p className="mt-4 text-sm font-medium">
-                App submission is coming soon
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                To submit an app, prepare a ZIP file containing:
-              </p>
-              <ul className="mt-2 space-y-1 text-left text-xs text-muted-foreground">
-                <li>• manifest.json (app metadata)</li>
-                <li>• Your app code and assets</li>
-                <li>• Documentation and screenshots</li>
-                <li>• Test credentials (if applicable)</li>
-              </ul>
-              <p className="mt-4 text-xs text-muted-foreground">
-                The upload interface will be available in the next update.
-              </p>
+          {submitResult ? (
+            <div className="space-y-4 py-4">
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-center">
+                <CheckCircle2 className="mx-auto h-10 w-10 text-green-400" />
+                <p className="mt-3 font-semibold">{submitResult.app.name}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  v{submitResult.version.version}
+                </p>
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  {getStatusBadge(submitResult.app.status as App["status"])}
+                  <span className="text-xs text-muted-foreground">
+                    Tier {submitResult.permissionTier}
+                  </span>
+                </div>
+                {submitResult.requiresReview && (
+                  <p className="mt-3 text-xs text-yellow-400">
+                    This app requires manual review before publishing.
+                  </p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => {
+                    setSubmitDialogOpen(false);
+                    setSubmitResult(null);
+                    setSubmitFile(null);
+                    loadApps();
+                  }}
+                >
+                  Done
+                </Button>
+              </DialogFooter>
             </div>
-          </div>
+          ) : (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!submitFile) return;
+                setSubmitLoading(true);
+                setSubmitError("");
+                try {
+                  const formData = new FormData();
+                  formData.append("file", submitFile);
+                  const result = await api<{
+                    app: { name: string; status: string };
+                    version: { version: string; status: string };
+                    permissionTier: number;
+                    requiresReview: boolean;
+                  }>("/api/apps/submit", {
+                    method: "POST",
+                    body: formData,
+                  });
+                  setSubmitResult(result);
+                } catch (err) {
+                  if (err instanceof ApiError) {
+                    setSubmitError(err.message);
+                  } else {
+                    setSubmitError("Upload failed");
+                  }
+                } finally {
+                  setSubmitLoading(false);
+                }
+              }}
+            >
+              <div className="space-y-4 py-4">
+                {submitError && (
+                  <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {submitError}
+                  </div>
+                )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
+                <label
+                  htmlFor="app-zip"
+                  className={cn(
+                    "flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed p-8 transition-colors",
+                    submitFile
+                      ? "border-blue-500/50 bg-blue-500/5"
+                      : "border-border hover:border-muted-foreground"
+                  )}
+                >
+                  <Upload className="h-10 w-10 text-muted-foreground" />
+                  {submitFile ? (
+                    <div className="mt-3 text-center">
+                      <p className="text-sm font-medium">{submitFile.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(submitFile.size / 1024).toFixed(0)} KB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-center">
+                      <p className="text-sm font-medium">Choose a .zip file</p>
+                      <p className="text-xs text-muted-foreground">
+                        Must contain manifest.json · Max 50MB
+                      </p>
+                    </div>
+                  )}
+                  <input
+                    id="app-zip"
+                    type="file"
+                    accept=".zip,application/zip"
+                    className="hidden"
+                    onChange={(e) => setSubmitFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={() => setSubmitDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={!submitFile || submitLoading}>
+                  {submitLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Upload & Submit
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

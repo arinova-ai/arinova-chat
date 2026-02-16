@@ -53,6 +53,7 @@ export async function streamA2AResponse(options: A2AStreamOptions): Promise<void
     const decoder = new TextDecoder();
     let accumulated = "";
     let buffer = "";
+    let completed = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -90,12 +91,16 @@ export async function streamA2AResponse(options: A2AStreamOptions): Promise<void
                   }
                 }
               }
+              // Agent signaled completion — finalize immediately
+              completed = true;
             }
           } catch {
             // Skip non-JSON lines
           }
         }
       }
+
+      if (completed) break;
     }
 
     onComplete(accumulated);

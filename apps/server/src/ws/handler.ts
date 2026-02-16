@@ -233,10 +233,15 @@ async function handleSendMessage(
   const abortController = new AbortController();
   streamAbortControllers.set(agentMsg.id, abortController);
 
-  // Set timeout (30s)
-  const timeout = setTimeout(() => {
-    abortController.abort();
-  }, 30000);
+  // Idle timeout — resets on each chunk (120s allows for agent tool calls)
+  let timeout: ReturnType<typeof setTimeout>;
+  const resetIdleTimeout = () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      abortController.abort();
+    }, 120_000);
+  };
+  resetIdleTimeout();
 
   await streamA2AResponse({
     endpoint: agent.a2aEndpoint,
@@ -245,6 +250,7 @@ async function handleSendMessage(
     messageId: agentMsg.id,
     signal: abortController.signal,
     onChunk: (chunk) => {
+      resetIdleTimeout();
       sendToUser(userId, {
         type: "stream_chunk",
         conversationId,
