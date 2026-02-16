@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { AuthGuard } from "@/components/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, Code, Coins, Upload, CheckCircle2 } from "lucide-react";
+import { Loader2, Code, Coins, Upload, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Developer {
@@ -55,7 +54,7 @@ interface EarningsResponse {
   transactions: Transaction[];
 }
 
-function DeveloperContent() {
+export default function DeveloperPage() {
   const [loading, setLoading] = useState(true);
   const [developer, setDeveloper] = useState<Developer | null>(null);
   const [apps, setApps] = useState<App[]>([]);
@@ -198,7 +197,7 @@ function DeveloperContent() {
 
   if (loading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-background">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -207,123 +206,97 @@ function DeveloperContent() {
   // Registration form
   if (!developer) {
     return (
-      <div className="min-h-dvh bg-background">
-        {/* Header */}
-        <div className="border-b border-border">
-          <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 py-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <h1 className="text-xl font-bold">Developer Registration</h1>
+      <div className="mx-auto max-w-lg py-4">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-600">
+            <Code className="h-8 w-8 text-white" />
           </div>
+          <h2 className="mb-2 text-2xl font-bold">Become a Developer</h2>
+          <p className="text-muted-foreground">
+            Create and monetize apps in the Arinova ecosystem
+          </p>
         </div>
 
-        <div className="mx-auto max-w-lg px-4 py-8">
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-600">
-              <Code className="h-8 w-8 text-white" />
+        <form onSubmit={handleRegister} className="space-y-6">
+          {registerError && (
+            <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {registerError}
             </div>
-            <h2 className="mb-2 text-2xl font-bold">Become a Developer</h2>
-            <p className="text-muted-foreground">
-              Create and monetize apps in the Arinova ecosystem
+          )}
+
+          <div className="space-y-2">
+            <label htmlFor="displayName" className="text-sm font-medium">
+              Display Name
+            </label>
+            <Input
+              id="displayName"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Your name or company name"
+              required
+              className="bg-neutral-800 border-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="contactEmail" className="text-sm font-medium">
+              Contact Email
+            </label>
+            <Input
+              id="contactEmail"
+              type="email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="developer@example.com"
+              required
+              className="bg-neutral-800 border-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="payoutInfo" className="text-sm font-medium">
+              Payout Information (Optional)
+            </label>
+            <Input
+              id="payoutInfo"
+              type="text"
+              value={payoutInfo}
+              onChange={(e) => setPayoutInfo(e.target.value)}
+              placeholder="PayPal email, bank details, etc."
+              className="bg-neutral-800 border-none"
+            />
+            <p className="text-xs text-muted-foreground">
+              Required for receiving earnings. You can add this later.
             </p>
           </div>
 
-          <form onSubmit={handleRegister} className="space-y-6">
-            {registerError && (
-              <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                {registerError}
-              </div>
-            )}
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="acceptTerms"
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-1"
+            />
+            <label htmlFor="acceptTerms" className="text-sm text-muted-foreground">
+              I accept the developer terms and conditions, including the revenue sharing model and app guidelines.
+            </label>
+          </div>
 
-            <div className="space-y-2">
-              <label htmlFor="displayName" className="text-sm font-medium">
-                Display Name
-              </label>
-              <Input
-                id="displayName"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Your name or company name"
-                required
-                className="bg-neutral-800 border-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="contactEmail" className="text-sm font-medium">
-                Contact Email
-              </label>
-              <Input
-                id="contactEmail"
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                placeholder="developer@example.com"
-                required
-                className="bg-neutral-800 border-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="payoutInfo" className="text-sm font-medium">
-                Payout Information (Optional)
-              </label>
-              <Input
-                id="payoutInfo"
-                type="text"
-                value={payoutInfo}
-                onChange={(e) => setPayoutInfo(e.target.value)}
-                placeholder="PayPal email, bank details, etc."
-                className="bg-neutral-800 border-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                Required for receiving earnings. You can add this later.
-              </p>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                id="acceptTerms"
-                checked={acceptTerms}
-                onChange={(e) => setAcceptTerms(e.target.checked)}
-                className="mt-1"
-              />
-              <label htmlFor="acceptTerms" className="text-sm text-muted-foreground">
-                I accept the developer terms and conditions, including the revenue sharing model and app guidelines.
-              </label>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={registerLoading}>
-              {registerLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Register as Developer
-            </Button>
-          </form>
-        </div>
+          <Button type="submit" className="w-full" disabled={registerLoading}>
+            {registerLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Register as Developer
+          </Button>
+        </form>
       </div>
     );
   }
 
   // Developer dashboard
   return (
-    <div className="min-h-dvh bg-background">
-      {/* Header */}
-      <div className="border-b border-border">
-        <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 py-4">
-          <Link href="/">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <h1 className="text-xl font-bold">Developer Dashboard</h1>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-4xl px-4 py-6">
+    <>
+      <div className="mx-auto max-w-4xl">
         {/* Developer info card */}
         <div className="mb-6 rounded-xl border border-border bg-card p-6">
           <div className="flex items-start justify-between">
@@ -385,7 +358,7 @@ function DeveloperContent() {
             <div className="rounded-xl border border-border bg-card py-12 text-center">
               <Code className="mx-auto h-12 w-12 text-muted-foreground" />
               <p className="mt-4 text-muted-foreground">
-                You haven't submitted any apps yet.
+                You haven&apos;t submitted any apps yet.
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Submit your first app to start monetizing.
@@ -558,14 +531,6 @@ function DeveloperContent() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-export default function DeveloperPage() {
-  return (
-    <AuthGuard>
-      <DeveloperContent />
-    </AuthGuard>
+    </>
   );
 }
