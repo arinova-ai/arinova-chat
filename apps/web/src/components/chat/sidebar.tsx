@@ -35,7 +35,7 @@ export function Sidebar() {
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <img src="/logo.svg" alt="Arinova" className="h-6 w-6" />
+          <img src="/logo.png" alt="Arinova" className="h-6 w-6" />
           <h1 className="text-base font-bold">Arinova Chat</h1>
         </div>
         <Button
