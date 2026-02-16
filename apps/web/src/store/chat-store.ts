@@ -38,6 +38,7 @@ interface ChatState {
   unreadCounts: Record<string, number>;
   agentHealth: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }>;
   agentSkills: Record<string, AgentSkill[]>;
+  ttsEnabled: boolean;
 
   // Actions
   setActiveConversation: (id: string) => void;
@@ -60,6 +61,10 @@ interface ChatState {
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
   loadAgentSkills: (agentId: string) => Promise<void>;
   loadAgentHealth: () => Promise<void>;
+  insertSystemMessage: (content: string) => void;
+  clearConversation: (conversationId: string) => Promise<void>;
+  getConversationStatus: () => string;
+  setTtsEnabled: (enabled: boolean) => void;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -75,6 +80,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
+  ttsEnabled: typeof window !== "undefined"
+    ? localStorage.getItem("arinova_tts") === "true"
+    : false,
 
   setActiveConversation: (id) => {
     set({
@@ -287,6 +295,83 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ agentHealth: health });
     } catch {
       // ignore health check failures
+    }
+  },
+
+  insertSystemMessage: (content) => {
+    const { activeConversationId } = get();
+    if (!activeConversationId) return;
+
+    const systemMsg: Message = {
+      id: `system-${Date.now()}`,
+      conversationId: activeConversationId,
+      role: "agent",
+      content: `**[System]**\n\n${content}`,
+      status: "completed",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const current = get().messagesByConversation[activeConversationId] ?? [];
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [activeConversationId]: [...current, systemMsg],
+      },
+    });
+  },
+
+  clearConversation: async (conversationId) => {
+    try {
+      await api(`/api/conversations/${conversationId}/messages`, {
+        method: "DELETE",
+      });
+    } catch {
+      // If API fails (e.g., endpoint not implemented), still clear locally
+    }
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [conversationId]: [],
+      },
+    });
+  },
+
+  getConversationStatus: () => {
+    const { activeConversationId, conversations, agentHealth, messagesByConversation } = get();
+    if (!activeConversationId) return "No active conversation.";
+
+    const conv = conversations.find((c) => c.id === activeConversationId);
+    if (!conv) return "Conversation not found.";
+
+    const msgs = messagesByConversation[activeConversationId] ?? [];
+    const streamingMsg = msgs.find((m) => m.status === "streaming");
+
+    const lines: string[] = [];
+    lines.push(`**Conversation:** ${conv.title ?? "Untitled"}`);
+    lines.push(`**Type:** ${conv.type}`);
+    lines.push(`**Messages:** ${msgs.length}`);
+    lines.push(`**Streaming:** ${streamingMsg ? "Yes" : "No"}`);
+
+    if (conv.type === "direct" && conv.agentId) {
+      const agentName = conv.agentName ?? "Unknown";
+      const health = agentHealth[conv.agentId];
+      const status = health?.status ?? "unknown";
+      const latency = health?.latencyMs != null ? `${health.latencyMs}ms` : "N/A";
+      lines.push(`**Agent:** ${agentName}`);
+      lines.push(`**Agent Status:** ${status}`);
+      lines.push(`**Latency:** ${latency}`);
+    }
+
+    lines.push(`**WebSocket:** ${wsManager.isConnected() ? "Connected" : "Disconnected"}`);
+
+    return lines.join("\n");
+  },
+
+  setTtsEnabled: (enabled) => {
+    set({ ttsEnabled: enabled });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("arinova_tts", String(enabled));
     }
   },
 

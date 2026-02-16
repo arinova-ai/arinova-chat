@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +17,13 @@ export function Sidebar() {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [createBotOpen, setCreateBotOpen] = useState(false);
   const router = useRouter();
+
+  // Listen for platform command "/new" to open the new chat dialog
+  useEffect(() => {
+    const handler = () => setNewChatOpen(true);
+    window.addEventListener("arinova:new-chat", handler);
+    return () => window.removeEventListener("arinova:new-chat", handler);
+  }, []);
 
   const handleSignOut = async () => {
     await authClient.signOut();

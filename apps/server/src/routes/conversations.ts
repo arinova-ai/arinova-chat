@@ -194,4 +194,115 @@ export async function conversationRoutes(app: FastifyInstance) {
       return reply.status(204).send();
     }
   );
+
+  // Clear all messages in a conversation (/clear command)
+  app.delete<{ Params: { id: string } }>(
+    "/api/conversations/:id/messages",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      // Verify ownership
+      const [conv] = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, request.params.id),
+            eq(conversations.userId, user.id)
+          )
+        );
+
+      if (!conv) {
+        return reply.status(404).send({ error: "Conversation not found" });
+      }
+
+      // Count messages before deleting
+      const [{ count: msgCount }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messages)
+        .where(eq(messages.conversationId, request.params.id));
+
+      // Delete all messages
+      await db
+        .delete(messages)
+        .where(eq(messages.conversationId, request.params.id));
+
+      return reply.send({ success: true, deleted: msgCount });
+    }
+  );
+
+  // Get conversation status info (/status command)
+  app.get<{ Params: { id: string } }>(
+    "/api/conversations/:id/status",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      const [conv] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, request.params.id),
+            eq(conversations.userId, user.id)
+          )
+        );
+
+      if (!conv) {
+        return reply.status(404).send({ error: "Conversation not found" });
+      }
+
+      // Count messages
+      const [{ count: msgCount }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messages)
+        .where(eq(messages.conversationId, conv.id));
+
+      // Get agent info
+      let agentInfo = null;
+      if (conv.agentId) {
+        const [agent] = await db
+          .select()
+          .from(agents)
+          .where(eq(agents.id, conv.agentId));
+
+        if (agent) {
+          let status: "online" | "offline" | "error" = "offline";
+          let latencyMs: number | null = null;
+
+          if (agent.a2aEndpoint) {
+            try {
+              const start = Date.now();
+              const res = await fetch(agent.a2aEndpoint, {
+                method: "GET",
+                signal: AbortSignal.timeout(5000),
+              });
+              latencyMs = Date.now() - start;
+              status = res.ok ? "online" : "error";
+            } catch {
+              status = "offline";
+            }
+          }
+
+          agentInfo = {
+            id: agent.id,
+            name: agent.name,
+            a2aEndpoint: agent.a2aEndpoint,
+            status,
+            latencyMs,
+          };
+        }
+      }
+
+      return reply.send({
+        conversation: {
+          id: conv.id,
+          title: conv.title,
+          type: conv.type,
+          createdAt: conv.createdAt,
+          messageCount: msgCount,
+        },
+        agent: agentInfo,
+      });
+    }
+  );
 }
