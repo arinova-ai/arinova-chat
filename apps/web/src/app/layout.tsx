@@ -34,19 +34,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} antialiased`}>
+    <html lang="en" className="h-full">
+      <body className={`${inter.className} h-full antialiased`}>
         {children}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               const setAppHeight = () => {
-                document.documentElement.style.setProperty("--app-height", window.innerHeight + "px");
+                const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+                document.documentElement.style.setProperty("--app-height", Math.round(viewportHeight) + "px");
               };
               setAppHeight();
               window.addEventListener("resize", setAppHeight);
               window.addEventListener("orientationchange", setAppHeight);
               window.addEventListener("pageshow", setAppHeight);
+              if (window.visualViewport) {
+                window.visualViewport.addEventListener("resize", setAppHeight);
+                window.visualViewport.addEventListener("scroll", setAppHeight);
+              }
 
               if ("serviceWorker" in navigator) {
                 window.addEventListener("load", async () => {

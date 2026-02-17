@@ -94,6 +94,8 @@
   html, body {
     @apply text-foreground;
     height: 100%;
+    margin: 0;
+    padding: 0;
     overflow: hidden;
     overscroll-behavior: none;
   }
@@ -115,8 +117,8 @@
 
 /* iOS/PWA viewport fallback: prefer dvh, fallback to fill-available */
 .app-dvh {
-  height: var(--app-height, 100dvh);
-  min-height: var(--app-height, 100dvh);
+  height: calc(var(--app-height, 100dvh) + env(safe-area-inset-bottom, 0px));
+  min-height: calc(var(--app-height, 100dvh) + env(safe-area-inset-bottom, 0px));
 }
 
 /* Markdown content styles */
