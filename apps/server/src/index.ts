@@ -37,7 +37,7 @@ await app.register(cors, {
 
 // Rate limiting
 await app.register(rateLimit, {
-  max: 100,
+  max: 300,
   timeWindow: "1 minute",
   allowList: ["/health", "/ws", "/ws/agent"],
 });

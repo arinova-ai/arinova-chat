@@ -155,7 +155,12 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
               </div>
             )}
             {message.content ? (
-              <MarkdownContent content={message.content} />
+              <MarkdownContent content={
+                // Strip image/file markdown when attachments already render them
+                message.attachments?.length
+                  ? message.content.replace(/!?\[[^\]]*\]\([^)]+\/uploads\/[^)]+\)/g, "").trim()
+                  : message.content
+              } />
             ) : isStreaming ? (
               <StreamingCursor />
             ) : null}
