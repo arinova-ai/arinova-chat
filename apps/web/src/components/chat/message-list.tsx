@@ -24,6 +24,8 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   const [loadingDown, setLoadingDown] = useState(false);
   const [hasMoreUp, setHasMoreUp] = useState(true);
   const [hasMoreDown, setHasMoreDown] = useState(false);
+  const loadingUpRef = useRef(false);
+  const loadingDownRef = useRef(false);
   const highlightRef = useRef<HTMLDivElement>(null);
 
   const scrollRef = useAutoScroll<HTMLDivElement>([
@@ -40,9 +42,10 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   }, [highlightMessageId, messages]);
 
   const loadOlder = useCallback(async () => {
-    if (loadingUp || !hasMoreUp || !activeConversationId || messages.length === 0)
+    if (loadingUpRef.current || !hasMoreUp || !activeConversationId || messages.length === 0)
       return;
 
+    loadingUpRef.current = true;
     setLoadingUp(true);
     try {
       const firstMsg = messages[0];
@@ -75,14 +78,16 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
     } catch {
       // ignore
     } finally {
+      loadingUpRef.current = false;
       setLoadingUp(false);
     }
-  }, [loadingUp, hasMoreUp, activeConversationId, messages, scrollRef]);
+  }, [hasMoreUp, activeConversationId, messages, scrollRef]);
 
   const loadNewer = useCallback(async () => {
-    if (loadingDown || !hasMoreDown || !activeConversationId || messages.length === 0)
+    if (loadingDownRef.current || !hasMoreDown || !activeConversationId || messages.length === 0)
       return;
 
+    loadingDownRef.current = true;
     setLoadingDown(true);
     try {
       const lastMsg = messages[messages.length - 1];
@@ -105,23 +110,24 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
     } catch {
       // ignore
     } finally {
+      loadingDownRef.current = false;
       setLoadingDown(false);
     }
-  }, [loadingDown, hasMoreDown, activeConversationId, messages]);
+  }, [hasMoreDown, activeConversationId, messages]);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     // Load older when scrolled near top
-    if (el.scrollTop < 100 && hasMoreUp && !loadingUp) {
+    if (el.scrollTop < 100 && hasMoreUp && !loadingUpRef.current) {
       loadOlder();
     }
     // Load newer when scrolled near bottom
     const bottomDist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (bottomDist < 100 && hasMoreDown && !loadingDown) {
+    if (bottomDist < 100 && hasMoreDown && !loadingDownRef.current) {
       loadNewer();
     }
-  }, [hasMoreUp, hasMoreDown, loadingUp, loadingDown, loadOlder, loadNewer, scrollRef]);
+  }, [hasMoreUp, hasMoreDown, loadOlder, loadNewer, scrollRef]);
 
   return (
     <div

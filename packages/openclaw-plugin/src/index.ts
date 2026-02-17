@@ -11,7 +11,7 @@ const plugin: {
   configSchema: ReturnType<typeof emptyPluginConfigSchema>;
   register: (api: OpenClawPluginApi) => void;
 } = {
-  id: "openclaw-arinova-ai",
+  id: "arinova-chat",
   name: "Arinova Chat",
   description: "Arinova Chat channel plugin (A2A protocol with native streaming)",
   configSchema: emptyPluginConfigSchema(),
