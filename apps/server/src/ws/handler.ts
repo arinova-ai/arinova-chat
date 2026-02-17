@@ -131,10 +131,19 @@ export async function wsRoutes(app: FastifyInstance) {
   });
 }
 
-async function handleSendMessage(
+/**
+ * Trigger an agent response for a conversation.
+ * Creates a streaming agent message, sends the task to the agent,
+ * and streams chunks back to the user via WebSocket.
+ *
+ * Set `skipUserMessage` to true when the user message was already created
+ * (e.g. by the upload endpoint).
+ */
+export async function triggerAgentResponse(
   userId: string,
   conversationId: string,
-  content: string
+  content: string,
+  options?: { skipUserMessage?: boolean }
 ) {
   // Verify conversation belongs to user and get agent info
   const [conv] = await db
@@ -190,13 +199,15 @@ async function handleSendMessage(
     return;
   }
 
-  // Save user message
-  await db.insert(messages).values({
-    conversationId,
-    role: "user",
-    content,
-    status: "completed",
-  });
+  // Save user message (unless already created, e.g. by upload)
+  if (!options?.skipUserMessage) {
+    await db.insert(messages).values({
+      conversationId,
+      role: "user",
+      content,
+      status: "completed",
+    });
+  }
 
   // Create pending agent message
   const [agentMsg] = await db
@@ -268,4 +279,12 @@ async function handleSendMessage(
   });
 
   streamCancellers.set(agentMsg.id, { cancel });
+}
+
+async function handleSendMessage(
+  userId: string,
+  conversationId: string,
+  content: string
+) {
+  await triggerAgentResponse(userId, conversationId, content);
 }

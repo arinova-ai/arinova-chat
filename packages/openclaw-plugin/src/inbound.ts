@@ -2,7 +2,6 @@ import { createReplyPrefixOptions, type OpenClawConfig, type RuntimeEnv } from "
 import type { ResolvedArinovaChatAccount } from "./accounts.js";
 import type { ArinovaChatInboundMessage, CoreConfig } from "./types.js";
 import { getArinovaChatRuntime } from "./runtime.js";
-import { replaceImagePaths } from "./image-upload.js";
 
 const CHANNEL_ID = "arinova-chat" as const;
 
@@ -202,10 +201,6 @@ export async function handleArinovaChatInbound(params: {
         }
 
         if (!text.trim()) return;
-
-        // Upload local image files and replace paths with public URLs
-        const workDir = process.env.OPENCLAW_WORKSPACE ?? `${process.env.HOME}/.openclaw/workspace`;
-        text = await replaceImagePaths(text, workDir, (msg) => runtime.log?.(msg));
 
         finalText += (finalText ? "\n\n" : "") + text;
         statusSink?.({ lastOutboundAt: Date.now() });

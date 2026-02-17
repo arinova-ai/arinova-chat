@@ -52,6 +52,7 @@ export function ChatArea() {
         agentAvatarUrl={conversation.agentAvatarUrl}
         isOnline={conversation.type === "direct" ? isOnline : undefined}
         type={conversation.type}
+        conversationId={conversation.id}
         onClick={agent ? () => setManageOpen(true) : undefined}
       />
       <MessageList messages={messages} agentName={conversation.agentName} />

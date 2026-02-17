@@ -2,7 +2,7 @@
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Bot, Users } from "lucide-react";
+import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { BACKEND_URL } from "@/lib/config";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ interface ChatHeaderProps {
   agentAvatarUrl?: string | null;
   isOnline?: boolean;
   type?: ConversationType;
+  conversationId?: string;
   onClick?: () => void;
 }
 
@@ -23,9 +24,15 @@ export function ChatHeader({
   agentAvatarUrl,
   isOnline,
   type = "direct",
+  conversationId,
   onClick,
 }: ChatHeaderProps) {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const showTimestamps = useChatStore((s) => s.showTimestamps);
+  const toggleTimestamps = useChatStore((s) => s.toggleTimestamps);
+  const mutedConversations = useChatStore((s) => s.mutedConversations);
+  const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
+  const isMuted = conversationId ? mutedConversations[conversationId] : false;
 
   return (
     <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top,0px)]">
@@ -81,6 +88,38 @@ export function ChatHeader({
           )}
         </div>
       </button>
+
+      <div className="ml-auto flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("h-8 w-8", showTimestamps && "text-blue-400")}
+          onClick={toggleTimestamps}
+          title={showTimestamps ? "Hide timestamps" : "Show timestamps"}
+        >
+          <Clock className="h-4 w-4" />
+        </Button>
+        {conversationId && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", isMuted && "text-red-400")}
+            onClick={() => toggleMuteConversation(conversationId)}
+            title={isMuted ? "Unmute conversation" : "Mute conversation"}
+          >
+            {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground opacity-50 cursor-not-allowed"
+          disabled
+          title="Voice call (Coming Soon)"
+        >
+          <Phone className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

@@ -54,6 +54,8 @@ interface ChatState {
   unreadCounts: Record<string, number>;
   agentHealth: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }>;
   agentSkills: Record<string, AgentSkill[]>;
+  showTimestamps: boolean;
+  mutedConversations: Record<string, boolean>;
   ttsEnabled: boolean;
 
   // Actions
@@ -84,6 +86,8 @@ interface ChatState {
   insertSystemMessage: (content: string) => void;
   clearConversation: (conversationId: string) => Promise<void>;
   getConversationStatus: () => string;
+  toggleTimestamps: () => void;
+  toggleMuteConversation: (conversationId: string) => void;
   setTtsEnabled: (enabled: boolean) => void;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
@@ -105,6 +109,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
+  showTimestamps: typeof window !== "undefined"
+    ? localStorage.getItem("arinova_timestamps") === "true"
+    : false,
+  mutedConversations: typeof window !== "undefined"
+    ? JSON.parse(localStorage.getItem("arinova_muted") || "{}")
+    : {},
   ttsEnabled: typeof window !== "undefined"
     ? localStorage.getItem("arinova_tts") === "true"
     : false,
@@ -463,6 +473,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return lines.join("\n");
   },
 
+  toggleTimestamps: () => {
+    const next = !get().showTimestamps;
+    set({ showTimestamps: next });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("arinova_timestamps", String(next));
+    }
+  },
+
+  toggleMuteConversation: (conversationId) => {
+    const muted = { ...get().mutedConversations };
+    if (muted[conversationId]) {
+      delete muted[conversationId];
+    } else {
+      muted[conversationId] = true;
+    }
+    set({ mutedConversations: muted });
+    if (typeof window !== "undefined") {
+      localStorage.setItem("arinova_muted", JSON.stringify(muted));
+    }
+  },
+
   setTtsEnabled: (enabled) => {
     set({ ttsEnabled: enabled });
     if (typeof window !== "undefined") {
@@ -522,9 +553,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
               : m
           ),
         },
-        // Increment unread if not viewing this conversation
+        // Increment unread if not viewing this conversation (and not muted)
         unreadCounts:
-          conversationId !== activeConversationId
+          conversationId !== activeConversationId && !get().mutedConversations[conversationId]
             ? { ...unreadCounts, [conversationId]: (unreadCounts[conversationId] ?? 0) + 1 }
             : unreadCounts,
       });

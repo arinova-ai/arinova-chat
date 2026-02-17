@@ -3,6 +3,7 @@ import { db } from "../db/index.js";
 import { attachments, messages, conversations } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
+import { triggerAgentResponse } from "../ws/handler.js";
 import { env } from "../env.js";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
@@ -67,13 +68,27 @@ export async function uploadRoutes(app: FastifyInstance) {
       const filePath = path.join(uploadDir, storedName);
       await writeFile(filePath, buffer);
 
+      // Build the public URL for the file
+      const fileUrl = `/uploads/${storedName}`;
+      const publicUrl = `${env.BETTER_AUTH_URL}${fileUrl}`;
+
+      // Check for caption text in form fields
+      const caption = (data.fields as Record<string, { value?: string }>)?.caption?.value ?? "";
+
+      // Build content: image markdown or file link, with optional caption
+      const isImage = data.mimetype.startsWith("image/");
+      const fileMarkdown = isImage
+        ? `![${data.filename}](${publicUrl})`
+        : `[${data.filename}](${publicUrl})`;
+      const content = caption ? `${caption}\n\n${fileMarkdown}` : fileMarkdown;
+
       // Create a user message with this attachment
       const [msg] = await db
         .insert(messages)
         .values({
           conversationId: conv.id,
           role: "user",
-          content: "",
+          content,
           status: "completed",
         })
         .returning();
@@ -89,6 +104,11 @@ export async function uploadRoutes(app: FastifyInstance) {
         })
         .returning();
 
+      // Trigger agent response (non-blocking — streams via WS)
+      triggerAgentResponse(user.id, conv.id, content, { skipUserMessage: true }).catch(() => {
+        // Agent errors are handled via WS events
+      });
+
       return reply.send({
         message: {
           ...msg,
@@ -99,7 +119,7 @@ export async function uploadRoutes(app: FastifyInstance) {
               fileName: attachment.fileName,
               fileType: attachment.fileType,
               fileSize: attachment.fileSize,
-              url: `/uploads/${storedName}`,
+              url: fileUrl,
               createdAt: attachment.createdAt,
             },
           ],

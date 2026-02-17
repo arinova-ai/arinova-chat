@@ -27,6 +27,15 @@ interface MessageBubbleProps {
   agentName?: string;
 }
 
+function formatTimestamp(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return time;
+  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+}
+
 export function MessageBubble({ message, agentName }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isStreaming = message.status === "streaming";
@@ -36,6 +45,7 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const cancelStream = useChatStore((s) => s.cancelStream);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
+  const showTimestamps = useChatStore((s) => s.showTimestamps);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -151,6 +161,16 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
             ) : null}
             {isStreaming && message.content && <StreamingCursor />}
           </div>
+
+          {/* Timestamp */}
+          {showTimestamps && message.createdAt && (
+            <p className={cn(
+              "mt-1 text-[10px] text-muted-foreground/60",
+              isUser ? "text-right" : "text-left"
+            )}>
+              {formatTimestamp(message.createdAt)}
+            </p>
+          )}
 
           {/* Hover action buttons */}
           {!isStreaming && (

@@ -344,6 +344,12 @@ export function ChatInput() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
+      // Include text as caption so backend combines them into one message
+      const trimmed = value.trim();
+      if (trimmed) {
+        formData.append("caption", trimmed);
+      }
+
       const res = await fetch(
         `${BACKEND_URL}/api/conversations/${activeConversationId}/upload`,
         {
@@ -370,13 +376,7 @@ export function ChatInput() {
       });
 
       setSelectedFile(null);
-
-      // If there's also text, send it as a separate message
-      const trimmed = value.trim();
-      if (trimmed) {
-        sendMessage(trimmed);
-        clearInput();
-      }
+      clearInput();
     } catch (err) {
       console.error("Upload failed:", err);
     } finally {
