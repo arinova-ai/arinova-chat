@@ -19,15 +19,23 @@ const plugin: {
     setArinovaChatRuntime(api.runtime);
     api.registerChannel({ plugin: arinovaChatPlugin });
 
-    // CLI: openclaw arinova-setup <pairing-code> [--api-url <url>]
+    // CLI: openclaw arinova-setup [--token <bot-token>] [--code <pairing-code>] [--api-url <url>]
     api.registerCli(
       async (ctx) => {
         ctx.program
           .command("arinova-setup")
-          .description("Pair with an Arinova Chat bot using a pairing code")
-          .argument("<pairing-code>", "6-character pairing code from Arinova Chat web UI")
+          .description("Connect to an Arinova Chat bot using a bot token or pairing code")
+          .option("--token <bot-token>", "Permanent bot token (recommended, from bot settings)")
+          .option("--code <pairing-code>", "One-time 6-char pairing code (expires in 15 min)")
           .option("--api-url <url>", "Arinova Chat backend URL (reads from config if not provided)")
-          .action(async (pairingCode: string, opts: { apiUrl?: string }) => {
+          .action(async (opts: { token?: string; code?: string; apiUrl?: string }) => {
+            if (!opts.token && !opts.code) {
+              console.error("Error: Provide --token <bot-token> or --code <pairing-code>");
+              console.error("\n  Bot token (permanent):  openclaw arinova-setup --token ari_abc123...");
+              console.error("  Pairing code (one-time): openclaw arinova-setup --code JZPH79");
+              process.exit(1);
+            }
+
             const channelCfg = (ctx.config as Record<string, unknown>).channels as Record<string, unknown> | undefined;
             const arinovaCfg = (channelCfg?.["arinova-chat"] ?? {}) as Record<string, unknown>;
             const apiUrl = opts.apiUrl ?? (arinovaCfg.apiUrl as string | undefined);
@@ -37,34 +45,43 @@ const plugin: {
               process.exit(1);
             }
 
-            console.log(`Pairing with ${apiUrl} using code ${pairingCode}...`);
+            const method = opts.token ? "bot token" : "pairing code";
+            console.log(`Connecting to ${apiUrl} using ${method}...`);
 
             try {
-              const result = await exchangePairingCode({ apiUrl, pairingCode });
-              console.log(`Paired successfully! Agent: "${result.name}" (id: ${result.agentId})`);
+              const result = await exchangePairingCode({
+                apiUrl,
+                ...(opts.token ? { botToken: opts.token } : { pairingCode: opts.code! }),
+              });
+              console.log(`Connected! Agent: "${result.name}" (id: ${result.agentId})`);
 
               // Persist to config
+              const arinovaUpdate: Record<string, unknown> = {
+                ...arinovaCfg,
+                enabled: true,
+                apiUrl,
+                agentId: result.agentId,
+              };
+              // Keep botToken in config for reconnection, remove pairingCode
+              if (opts.token) {
+                arinovaUpdate.botToken = opts.token;
+              }
+              delete arinovaUpdate.pairingCode;
+
               const updatedCfg = {
                 ...ctx.config,
                 channels: {
                   ...channelCfg,
-                  "arinova-chat": {
-                    ...arinovaCfg,
-                    enabled: true,
-                    apiUrl,
-                    agentId: result.agentId,
-                  },
+                  "arinova-chat": arinovaUpdate,
                 },
               };
-              // Remove pairingCode from config since we now have agentId
-              delete (updatedCfg.channels as Record<string, Record<string, unknown>>)["arinova-chat"].pairingCode;
 
               await api.runtime.config.writeConfigFile(updatedCfg);
-              console.log("Config saved! agentId written, pairingCode removed.");
+              console.log("Config saved to openclaw.json");
               console.log("\nRestart the gateway to connect: openclaw gateway start");
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
-              console.error(`Pairing failed: ${msg}`);
+              console.error(`Connection failed: ${msg}`);
               process.exit(1);
             }
           });

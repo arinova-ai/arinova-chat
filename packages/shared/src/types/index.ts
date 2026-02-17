@@ -18,6 +18,7 @@ export interface Agent {
   a2aEndpoint: string | null;
   pairingCode: string | null;
   pairingCodeExpiresAt: string | Date | null;
+  secretToken: string | null;
   ownerId: string;
   isPublic: boolean;
   category: string | null;

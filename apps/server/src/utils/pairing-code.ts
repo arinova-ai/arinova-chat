@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomBytes } from "node:crypto";
 import { db } from "../db/index.js";
 import { agents } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -29,4 +29,9 @@ export async function generateUniquePairingCode(): Promise<string> {
     if (!existing) return code;
   }
   throw new Error("Failed to generate unique pairing code after 10 attempts");
+}
+
+/** Generate a permanent bot secret token: ari_ + 48 hex chars = 52 chars total */
+export function generateSecretToken(): string {
+  return `ari_${randomBytes(24).toString("hex")}`;
 }

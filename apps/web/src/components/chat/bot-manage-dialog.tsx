@@ -59,6 +59,7 @@ interface BotManageDialogProps {
     a2aEndpoint: string | null;
     pairingCode: string | null;
     pairingCodeExpiresAt: string | Date | null;
+    secretToken: string | null;
     isPublic: boolean;
     category: string | null;
     systemPrompt: string | null;
@@ -109,6 +110,12 @@ export function BotManageDialog({
   const [localPairingCode, setLocalPairingCode] = useState(agent.pairingCode);
   const [localExpiresAt, setLocalExpiresAt] = useState(agent.pairingCodeExpiresAt);
 
+  // Bot token
+  const [localToken, setLocalToken] = useState(agent.secretToken);
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [regeneratingToken, setRegeneratingToken] = useState(false);
+
   // UI state
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -146,6 +153,9 @@ export function BotManageDialog({
       setClearing(false);
       setLocalPairingCode(agent.pairingCode);
       setLocalExpiresAt(agent.pairingCodeExpiresAt);
+      setLocalToken(agent.secretToken);
+      setShowToken(false);
+      setRegeneratingToken(false);
       setNewQrLabel("");
       setNewQrMessage("");
 
@@ -284,7 +294,7 @@ export function BotManageDialog({
   };
 
   const health = agentHealth[agent.id];
-  const isConnected = agent.a2aEndpoint && health?.status === "online";
+  const isConnected = health?.status === "online";
 
   const formatLastActive = (date: string | null) => {
     if (!date) return "Never";
@@ -302,12 +312,12 @@ export function BotManageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Manage Bot</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="space-y-5 min-w-0">
           {error && (
             <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {error}
@@ -454,13 +464,13 @@ export function BotManageDialog({
                   value={newQrLabel}
                   onChange={(e) => setNewQrLabel(e.target.value)}
                   placeholder="Label"
-                  className="bg-neutral-800 border-none text-sm flex-[1]"
+                  className="bg-neutral-800 border-none text-sm flex-[1] min-w-0"
                 />
                 <Input
                   value={newQrMessage}
                   onChange={(e) => setNewQrMessage(e.target.value)}
-                  placeholder="Message to send"
-                  className="bg-neutral-800 border-none text-sm flex-[2]"
+                  placeholder="Message"
+                  className="bg-neutral-800 border-none text-sm flex-[2] min-w-0"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -584,16 +594,68 @@ export function BotManageDialog({
                   {isConnected ? "Connected" : "Not connected"}
                 </span>
               </div>
-              {agent.a2aEndpoint && (
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {agent.a2aEndpoint}
-                </p>
-              )}
             </div>
           </div>
 
-          {/* Pairing code (if not connected) */}
-          {!agent.a2aEndpoint && (() => {
+          {/* Bot Token (permanent, for reconnection) */}
+          {(() => {
+            const handleCopyToken = async () => {
+              if (!localToken) return;
+              await navigator.clipboard.writeText(localToken);
+              setTokenCopied(true);
+              setTimeout(() => setTokenCopied(false), 2000);
+            };
+
+            const handleRegenerateToken = async () => {
+              setRegeneratingToken(true);
+              setError("");
+              try {
+                const result = await api<{ secretToken: string }>(
+                  `/api/agents/${agent.id}/regenerate-token`,
+                  { method: "POST" }
+                );
+                setLocalToken(result.secretToken);
+                await useChatStore.getState().loadAgents();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to regenerate token");
+              } finally {
+                setRegeneratingToken(false);
+              }
+            };
+
+            return (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Bot Token</label>
+                {localToken ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <code className="min-w-0 flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-xs font-mono truncate select-all">
+                        {showToken ? localToken : "ari_" + "•".repeat(40)}
+                      </code>
+                      <Button variant="outline" size="icon" onClick={() => setShowToken(!showToken)} className="shrink-0">
+                        {showToken ? <Lock className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+                      </Button>
+                      <Button variant="outline" size="icon" onClick={handleCopyToken} className="shrink-0">
+                        {tokenCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Permanent token. Use in OpenClaw config to connect this bot.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={handleRegenerateToken} disabled={regeneratingToken} className="gap-2">
+                      {regeneratingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      Regenerate Token
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No token available.</p>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Pairing Code (one-time, for first-time setup) */}
+          {(() => {
             const isExpired = localExpiresAt
               ? new Date(localExpiresAt) < new Date()
               : !localPairingCode;
@@ -623,7 +685,7 @@ export function BotManageDialog({
                 {hasCode ? (
                   <>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-lg font-mono tracking-widest select-all">
+                      <code className="min-w-0 flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-lg font-mono tracking-widest select-all">
                         {localPairingCode}
                       </code>
                       <Button variant="outline" size="icon" onClick={handleCopyPairingCode} className="shrink-0">
@@ -631,7 +693,7 @@ export function BotManageDialog({
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Expires in 15 minutes. Use this code to connect your AI agent.
+                      Expires in 15 minutes. One-time use for first-time setup.
                     </p>
                   </>
                 ) : (
@@ -692,7 +754,7 @@ export function BotManageDialog({
           </div>
 
           {/* Danger zone */}
-          <div className="space-y-3 rounded-lg border border-destructive/30 p-4">
+          <div className="space-y-3 rounded-lg border border-destructive/30 p-3 sm:p-4">
             <p className="text-sm font-medium text-destructive">Danger Zone</p>
 
             {/* Clear History */}

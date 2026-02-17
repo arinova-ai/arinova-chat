@@ -71,6 +71,13 @@
       "when": 1771241446502,
       "tag": "0009_pretty_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1771298028238,
+      "tag": "0010_real_lady_bullseye",
+      "breakpoints": true
     }
   ]
 }

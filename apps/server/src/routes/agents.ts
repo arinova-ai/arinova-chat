@@ -11,50 +11,65 @@ import {
 import {
   generateUniquePairingCode,
   normalizePairingCode,
+  generateSecretToken,
 } from "../utils/pairing-code.js";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { env } from "../env.js";
 
 export async function agentRoutes(app: FastifyInstance) {
-  // Exchange pairing code for agent connection (public — no auth required)
+  // Exchange pairing code or bot token for agent connection (public — no auth required)
   // MUST be registered before /api/agents/:id to avoid route conflicts
   app.post("/api/agents/pair", async (request, reply) => {
     const body = pairingExchangeSchema.parse(request.body);
-    const code = normalizePairingCode(body.pairingCode);
 
-    const [agent] = await db
-      .select({
-        id: agents.id,
-        name: agents.name,
-        pairingCodeExpiresAt: agents.pairingCodeExpiresAt,
-      })
-      .from(agents)
-      .where(eq(agents.pairingCode, code));
+    let agent: { id: string; name: string; pairingCodeExpiresAt: Date | null } | undefined;
 
-    if (!agent) {
-      return reply.status(404).send({ error: "Invalid pairing code" });
+    if (body.botToken) {
+      // Token-based auth (permanent, never expires)
+      const [found] = await db
+        .select({ id: agents.id, name: agents.name, pairingCodeExpiresAt: agents.pairingCodeExpiresAt })
+        .from(agents)
+        .where(eq(agents.secretToken, body.botToken));
+
+      if (!found) {
+        return reply.status(404).send({ error: "Invalid bot token" });
+      }
+      agent = found;
+    } else if (body.pairingCode) {
+      // Pairing code auth (one-time, expires in 15 minutes)
+      const code = normalizePairingCode(body.pairingCode);
+      const [found] = await db
+        .select({ id: agents.id, name: agents.name, pairingCodeExpiresAt: agents.pairingCodeExpiresAt })
+        .from(agents)
+        .where(eq(agents.pairingCode, code));
+
+      if (!found) {
+        return reply.status(404).send({ error: "Invalid pairing code" });
+      }
+
+      if (found.pairingCodeExpiresAt && found.pairingCodeExpiresAt < new Date()) {
+        return reply.status(410).send({ error: "Pairing code has expired. Please generate a new one." });
+      }
+
+      // Clear the one-time code after use
+      await db
+        .update(agents)
+        .set({ pairingCode: null, pairingCodeExpiresAt: null, updatedAt: new Date() })
+        .where(eq(agents.id, found.id));
+
+      agent = found;
+    } else {
+      return reply.status(400).send({ error: "Either pairingCode or botToken is required" });
     }
 
-    // Check expiry
-    if (agent.pairingCodeExpiresAt && agent.pairingCodeExpiresAt < new Date()) {
-      return reply.status(410).send({ error: "Pairing code has expired. Please generate a new one." });
-    }
-
-    // Pair and clear the code (free it for reuse)
-    const updateFields: Record<string, unknown> = {
-      pairingCode: null,
-      pairingCodeExpiresAt: null,
-      updatedAt: new Date(),
-    };
+    // Update a2aEndpoint if provided
     if (body.a2aEndpoint) {
-      updateFields.a2aEndpoint = body.a2aEndpoint;
+      await db
+        .update(agents)
+        .set({ a2aEndpoint: body.a2aEndpoint, updatedAt: new Date() })
+        .where(eq(agents.id, agent.id));
     }
-
-    await db
-      .update(agents)
-      .set(updateFields)
-      .where(eq(agents.id, agent.id));
 
     // Build WS URL for the agent to connect back
     const host = request.headers.host ?? "localhost:3501";
@@ -71,6 +86,7 @@ export async function agentRoutes(app: FastifyInstance) {
 
     const pairingCode = await generateUniquePairingCode();
     const pairingCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const secretToken = generateSecretToken();
 
     const [agent] = await db
       .insert(agents)
@@ -80,6 +96,7 @@ export async function agentRoutes(app: FastifyInstance) {
         a2aEndpoint: body.a2aEndpoint ?? null,
         pairingCode,
         pairingCodeExpiresAt,
+        secretToken,
         ownerId: user.id,
       })
       .returning();
@@ -268,6 +285,32 @@ export async function agentRoutes(app: FastifyInstance) {
         pairingCode: updated.pairingCode,
         expiresAt: updated.pairingCodeExpiresAt,
       });
+    }
+  );
+
+  // Regenerate bot secret token (old token is immediately invalidated)
+  app.post<{ Params: { id: string } }>(
+    "/api/agents/:id/regenerate-token",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      const [agent] = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
+
+      if (!agent) {
+        return reply.status(404).send({ error: "Agent not found" });
+      }
+
+      const secretToken = generateSecretToken();
+
+      await db
+        .update(agents)
+        .set({ secretToken, updatedAt: new Date() })
+        .where(eq(agents.id, agent.id));
+
+      return reply.send({ secretToken });
     }
   );
 

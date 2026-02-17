@@ -78,12 +78,15 @@ export async function validateSession(params: {
  */
 export async function exchangePairingCode(params: {
   apiUrl: string;
-  pairingCode: string;
+  pairingCode?: string;
+  botToken?: string;
   a2aEndpoint?: string;
 }): Promise<{ agentId: string; name: string; wsUrl?: string }> {
-  const { apiUrl, pairingCode, a2aEndpoint } = params;
+  const { apiUrl, pairingCode, botToken, a2aEndpoint } = params;
 
-  const body: Record<string, string> = { pairingCode };
+  const body: Record<string, string> = {};
+  if (botToken) body.botToken = botToken;
+  else if (pairingCode) body.pairingCode = pairingCode;
   if (a2aEndpoint) body.a2aEndpoint = a2aEndpoint;
 
   const response = await fetch(`${apiUrl}/api/agents/pair`, {

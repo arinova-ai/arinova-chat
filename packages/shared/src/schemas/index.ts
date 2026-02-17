@@ -76,8 +76,11 @@ export const sendMessageSchema = z.object({
 
 // ===== Pairing =====
 export const pairingExchangeSchema = z.object({
-  pairingCode: z.string().min(6).max(6),
+  pairingCode: z.string().min(6).max(6).optional(),
+  botToken: z.string().min(1).optional(),
   a2aEndpoint: z.string().url().optional(),
+}).refine((data) => data.pairingCode || data.botToken, {
+  message: "Either pairingCode or botToken is required",
 });
 
 // ===== App Manifest =====
