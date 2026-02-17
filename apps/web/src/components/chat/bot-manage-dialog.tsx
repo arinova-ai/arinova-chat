@@ -295,7 +295,7 @@ export function BotManageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+      <DialogContent className="top-[calc(env(safe-area-inset-top,0px)+2.25rem)] translate-y-0 sm:top-[50%] sm:translate-y-[-50%] sm:max-w-md max-h-[calc(100dvh-env(safe-area-inset-top,0px)-3.25rem)] sm:max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Manage Bot</DialogTitle>
         </DialogHeader>
