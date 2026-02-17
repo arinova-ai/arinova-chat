@@ -10,6 +10,7 @@ export function ConversationList() {
   const updateConversation = useChatStore((s) => s.updateConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const unreadCounts = useChatStore((s) => s.unreadCounts);
+  const agentHealth = useChatStore((s) => s.agentHealth);
 
   return (
     <div className="flex-1 min-w-0 overflow-y-auto px-2 py-1">
@@ -35,6 +36,7 @@ export function ConversationList() {
               onRename={(title) => updateConversation(conv.id, { title })}
               onPin={(pinned) => updateConversation(conv.id, { pinned })}
               unreadCount={unreadCounts[conv.id] ?? 0}
+              isOnline={conv.agentId ? agentHealth[conv.agentId]?.status === "online" : false}
               onDelete={() => deleteConversation(conv.id)}
             />
           ))}

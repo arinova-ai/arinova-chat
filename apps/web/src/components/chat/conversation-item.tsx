@@ -39,6 +39,7 @@ interface ConversationItemProps {
   onRename: (title: string) => void;
   onPin: (pinned: boolean) => void;
   unreadCount?: number;
+  isOnline?: boolean;
   onDelete: () => void;
 }
 
@@ -75,6 +76,7 @@ export function ConversationItem({
   isActive,
   onClick,
   unreadCount = 0,
+  isOnline = false,
   onRename,
   onPin,
   onDelete,
@@ -138,22 +140,27 @@ export function ConversationItem({
           onClick={onClick}
           className="flex flex-1 min-w-0 items-center gap-3 text-left"
         >
-          <Avatar className="h-10 w-10 shrink-0">
-            {agentAvatarUrl && type === "direct" && (
-              <AvatarImage
-                src={`${BACKEND_URL}${agentAvatarUrl}`}
-                alt={agentName}
-                className="object-cover"
-              />
-            )}
-            <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">
-              {type === "group" ? (
-                <Users className="h-5 w-5" />
-              ) : (
-                <Bot className="h-5 w-5" />
+          <div className="relative shrink-0">
+            <Avatar className="h-10 w-10">
+              {agentAvatarUrl && type === "direct" && (
+                <AvatarImage
+                  src={`${BACKEND_URL}${agentAvatarUrl}`}
+                  alt={agentName}
+                  className="object-cover"
+                />
               )}
-            </AvatarFallback>
-          </Avatar>
+              <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">
+                {type === "group" ? (
+                  <Users className="h-5 w-5" />
+                ) : (
+                  <Bot className="h-5 w-5" />
+                )}
+              </AvatarFallback>
+            </Avatar>
+            {isOnline && (
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-neutral-900 bg-green-500" />
+            )}
+          </div>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">

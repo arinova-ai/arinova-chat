@@ -9,14 +9,23 @@ export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const loadAgents = useChatStore((s) => s.loadAgents);
   const loadConversations = useChatStore((s) => s.loadConversations);
+  const loadAgentHealth = useChatStore((s) => s.loadAgentHealth);
   const initWS = useChatStore((s) => s.initWS);
 
   useEffect(() => {
     loadAgents();
     loadConversations();
+    loadAgentHealth();
     const cleanup = initWS();
-    return cleanup;
-  }, [loadAgents, loadConversations, initWS]);
+
+    // Refresh agent health every 30s
+    const healthInterval = setInterval(loadAgentHealth, 30_000);
+
+    return () => {
+      cleanup();
+      clearInterval(healthInterval);
+    };
+  }, [loadAgents, loadConversations, loadAgentHealth, initWS]);
 
   return (
     <div className="flex h-dvh overflow-hidden">
