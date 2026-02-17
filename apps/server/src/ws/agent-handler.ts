@@ -131,15 +131,21 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (event.type === "agent_auth") {
           clearTimeout(authTimer);
 
-          // Verify agentId exists in DB
+          // Verify agentId exists in DB and secretToken matches
           const [agent] = await db
-            .select({ id: agents.id, name: agents.name })
+            .select({ id: agents.id, name: agents.name, secretToken: agents.secretToken })
             .from(agents)
             .where(eq(agents.id, event.agentId));
 
           if (!agent) {
             sendToAgent(socket, { type: "auth_error", error: "Agent not found" });
             socket.close(4404, "Agent not found");
+            return;
+          }
+
+          if (!agent.secretToken || agent.secretToken !== event.secretToken) {
+            sendToAgent(socket, { type: "auth_error", error: "Invalid secret token" });
+            socket.close(4403, "Invalid secret token");
             return;
           }
 

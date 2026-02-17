@@ -212,6 +212,7 @@ export const agentWSClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("agent_auth"),
     agentId: z.string().uuid(),
+    secretToken: z.string().min(1),
   }),
   z.object({
     type: z.literal("agent_chunk"),

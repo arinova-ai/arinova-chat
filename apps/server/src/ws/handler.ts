@@ -16,7 +16,7 @@ const streamCancellers = new Map<string, { cancel: () => void }>();
 
 // Rate limiting: userId -> { count, resetAt }
 const wsRateLimits = new Map<string, { count: number; resetAt: number }>();
-const WS_RATE_LIMIT = 10; // messages per minute
+const WS_RATE_LIMIT = 60; // messages per minute
 const WS_RATE_WINDOW = 60000; // 1 minute
 
 function send(ws: WebSocket, event: WSServerEvent) {
