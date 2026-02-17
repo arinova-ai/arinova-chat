@@ -141,6 +141,10 @@ export async function handleArinovaChatInbound(params: {
         // Send only new tokens since last partial
         const delta = text.slice(lastSentLength);
         if (delta) {
+          // Debug: log streaming data to trace duplication
+          if (process.env.DEBUG_STREAM) {
+            runtime.log?.(`[stream] lastSent=${lastSentLength} textLen=${text.length} delta=${JSON.stringify(delta.slice(0, 80))}`);
+          }
           lastSentLength = text.length;
           sendChunk(delta);
         }
