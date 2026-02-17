@@ -28,7 +28,7 @@ export function ChatLayout() {
   }, [loadAgents, loadConversations, loadAgentHealth, initWS]);
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       {/* Desktop: always show sidebar */}
       <div className="hidden w-80 shrink-0 overflow-hidden border-r border-border md:block">
         <Sidebar />
