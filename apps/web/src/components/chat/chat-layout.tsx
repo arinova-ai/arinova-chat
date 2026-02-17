@@ -40,7 +40,7 @@ export function ChatLayout() {
       </div>
 
       {/* Chat area: always visible on desktop, only when conversation selected on mobile */}
-      <div className={`flex-1 min-w-0 ${activeConversationId ? "" : "hidden md:block"}`}>
+      <div className={`flex-1 min-w-0 bg-background ${activeConversationId ? "" : "hidden md:block"}`}>
         <ChatArea />
       </div>
     </div>

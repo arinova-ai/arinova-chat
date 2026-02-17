@@ -86,12 +86,20 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* Use card color on the canvas so any gap behind safe areas
+       (iOS PWA home indicator) blends with the sidebar/chat. */
+    background: var(--card);
+  }
   html, body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     overflow: hidden;
     overscroll-behavior: none;
     position: fixed;
     inset: 0;
+  }
+  body {
+    @apply bg-background;
   }
 }
 
