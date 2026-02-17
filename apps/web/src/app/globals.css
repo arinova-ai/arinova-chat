@@ -90,6 +90,7 @@
     /* Use card color on the canvas so any gap behind safe areas
        (iOS PWA home indicator) blends with the sidebar/chat. */
     background: var(--card);
+    height: -webkit-fill-available;
   }
   html, body {
     @apply text-foreground;
@@ -99,6 +100,8 @@
   }
   body {
     @apply bg-background;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
   }
 }
 
@@ -110,6 +113,17 @@
 
 .streaming-cursor {
   animation: blink 0.8s ease-in-out infinite;
+}
+
+/* iOS/PWA viewport fallback: prefer dvh, fallback to fill-available */
+.app-dvh {
+  height: 100dvh;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .app-dvh {
+    height: -webkit-fill-available;
+  }
 }
 
 /* Markdown content styles */
