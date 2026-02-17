@@ -2,7 +2,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 import { arinovaChatPlugin } from "./channel.js";
 import { setArinovaChatRuntime } from "./runtime.js";
-import { exchangePairingCode } from "./auth.js";
+import { exchangeBotToken } from "./auth.js";
 
 const plugin: {
   id: string;
@@ -19,39 +19,39 @@ const plugin: {
     setArinovaChatRuntime(api.runtime);
     api.registerChannel({ plugin: arinovaChatPlugin });
 
-    // CLI: openclaw arinova-setup [--token <bot-token>] [--code <pairing-code>] [--api-url <url>]
+    // Hint on gateway start if not configured
+    api.on("gateway_start", () => {
+      const channels = (api.config as Record<string, unknown>).channels as Record<string, unknown> | undefined;
+      const arinova = (channels?.["arinova-chat"] ?? {}) as Record<string, unknown>;
+      const hasAgent = Boolean(arinova.agentId || arinova.botToken);
+      const hasUrl = Boolean(arinova.apiUrl);
+
+      if (!hasUrl || !hasAgent) {
+        api.logger.warn("[arinova-chat] Not configured yet.");
+        api.logger.warn("[arinova-chat] 1. Create a bot at https://chat.arinova.ai and copy the Bot Token from bot settings");
+        api.logger.warn("[arinova-chat] 2. Run:  openclaw arinova-setup --token <bot-token> --api-url https://api.chat.arinova.ai");
+      }
+    });
+
+    // CLI: openclaw arinova-setup --token <bot-token> [--api-url <url>]
     api.registerCli(
       async (ctx) => {
         ctx.program
           .command("arinova-setup")
-          .description("Connect to an Arinova Chat bot using a bot token or pairing code")
-          .option("--token <bot-token>", "Permanent bot token (recommended, from bot settings)")
-          .option("--code <pairing-code>", "One-time 6-char pairing code (expires in 15 min)")
-          .option("--api-url <url>", "Arinova Chat backend URL (reads from config if not provided)")
-          .action(async (opts: { token?: string; code?: string; apiUrl?: string }) => {
-            if (!opts.token && !opts.code) {
-              console.error("Error: Provide --token <bot-token> or --code <pairing-code>");
-              console.error("\n  Bot token (permanent):  openclaw arinova-setup --token ari_abc123...");
-              console.error("  Pairing code (one-time): openclaw arinova-setup --code JZPH79");
-              process.exit(1);
-            }
-
+          .description("Connect to an Arinova Chat bot using a bot token")
+          .requiredOption("--token <bot-token>", "Bot token from Arinova Chat bot settings (ari_...)")
+          .option("--api-url <url>", "Arinova Chat backend URL (default: https://api.chat.arinova.ai)")
+          .action(async (opts: { token: string; apiUrl?: string }) => {
             const channelCfg = (ctx.config as Record<string, unknown>).channels as Record<string, unknown> | undefined;
             const arinovaCfg = (channelCfg?.["arinova-chat"] ?? {}) as Record<string, unknown>;
-            const apiUrl = opts.apiUrl ?? (arinovaCfg.apiUrl as string | undefined);
+            const apiUrl = opts.apiUrl ?? (arinovaCfg.apiUrl as string | undefined) ?? "https://api.chat.arinova.ai";
 
-            if (!apiUrl) {
-              console.error("Error: No API URL found. Either set channels.arinova-chat.apiUrl in config or use --api-url <url>");
-              process.exit(1);
-            }
-
-            const method = opts.token ? "bot token" : "pairing code";
-            console.log(`Connecting to ${apiUrl} using ${method}...`);
+            console.log(`Connecting to ${apiUrl} using bot token...`);
 
             try {
-              const result = await exchangePairingCode({
+              const result = await exchangeBotToken({
                 apiUrl,
-                ...(opts.token ? { botToken: opts.token } : { pairingCode: opts.code! }),
+                botToken: opts.token,
               });
               console.log(`Connected! Agent: "${result.name}" (id: ${result.agentId})`);
 
@@ -61,12 +61,8 @@ const plugin: {
                 enabled: true,
                 apiUrl,
                 agentId: result.agentId,
+                botToken: opts.token,
               };
-              // Keep botToken in config for reconnection, remove pairingCode
-              if (opts.token) {
-                arinovaUpdate.botToken = opts.token;
-              }
-              delete arinovaUpdate.pairingCode;
 
               const updatedCfg = {
                 ...ctx.config,

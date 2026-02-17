@@ -8,59 +8,24 @@ import {
   updateAgentSchema,
   pairingExchangeSchema,
 } from "@arinova/shared/schemas";
-import {
-  generateUniquePairingCode,
-  normalizePairingCode,
-  generateSecretToken,
-} from "../utils/pairing-code.js";
+import { generateSecretToken } from "../utils/pairing-code.js";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { env } from "../env.js";
 
 export async function agentRoutes(app: FastifyInstance) {
-  // Exchange pairing code or bot token for agent connection (public — no auth required)
+  // Exchange bot token for agent connection (public — no auth required)
   // MUST be registered before /api/agents/:id to avoid route conflicts
   app.post("/api/agents/pair", async (request, reply) => {
     const body = pairingExchangeSchema.parse(request.body);
 
-    let agent: { id: string; name: string; pairingCodeExpiresAt: Date | null } | undefined;
+    const [agent] = await db
+      .select({ id: agents.id, name: agents.name })
+      .from(agents)
+      .where(eq(agents.secretToken, body.botToken));
 
-    if (body.botToken) {
-      // Token-based auth (permanent, never expires)
-      const [found] = await db
-        .select({ id: agents.id, name: agents.name, pairingCodeExpiresAt: agents.pairingCodeExpiresAt })
-        .from(agents)
-        .where(eq(agents.secretToken, body.botToken));
-
-      if (!found) {
-        return reply.status(404).send({ error: "Invalid bot token" });
-      }
-      agent = found;
-    } else if (body.pairingCode) {
-      // Pairing code auth (one-time, expires in 15 minutes)
-      const code = normalizePairingCode(body.pairingCode);
-      const [found] = await db
-        .select({ id: agents.id, name: agents.name, pairingCodeExpiresAt: agents.pairingCodeExpiresAt })
-        .from(agents)
-        .where(eq(agents.pairingCode, code));
-
-      if (!found) {
-        return reply.status(404).send({ error: "Invalid pairing code" });
-      }
-
-      if (found.pairingCodeExpiresAt && found.pairingCodeExpiresAt < new Date()) {
-        return reply.status(410).send({ error: "Pairing code has expired. Please generate a new one." });
-      }
-
-      // Clear the one-time code after use
-      await db
-        .update(agents)
-        .set({ pairingCode: null, pairingCodeExpiresAt: null, updatedAt: new Date() })
-        .where(eq(agents.id, found.id));
-
-      agent = found;
-    } else {
-      return reply.status(400).send({ error: "Either pairingCode or botToken is required" });
+    if (!agent) {
+      return reply.status(404).send({ error: "Invalid bot token" });
     }
 
     // Update a2aEndpoint if provided
@@ -84,8 +49,6 @@ export async function agentRoutes(app: FastifyInstance) {
     const user = await requireAuth(request, reply);
     const body = createAgentSchema.parse(request.body);
 
-    const pairingCode = await generateUniquePairingCode();
-    const pairingCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     const secretToken = generateSecretToken();
 
     const [agent] = await db
@@ -94,8 +57,6 @@ export async function agentRoutes(app: FastifyInstance) {
         name: body.name,
         description: body.description ?? null,
         a2aEndpoint: body.a2aEndpoint ?? null,
-        pairingCode,
-        pairingCodeExpiresAt,
         secretToken,
         ownerId: user.id,
       })
@@ -254,37 +215,6 @@ export async function agentRoutes(app: FastifyInstance) {
         .returning();
 
       return reply.send({ avatarUrl: updated.avatarUrl });
-    }
-  );
-
-  // Regenerate pairing code (10-minute expiry)
-  app.post<{ Params: { id: string } }>(
-    "/api/agents/:id/regenerate-code",
-    async (request, reply) => {
-      const user = await requireAuth(request, reply);
-
-      const [agent] = await db
-        .select({ id: agents.id })
-        .from(agents)
-        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
-
-      if (!agent) {
-        return reply.status(404).send({ error: "Agent not found" });
-      }
-
-      const pairingCode = await generateUniquePairingCode();
-      const pairingCodeExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-      const [updated] = await db
-        .update(agents)
-        .set({ pairingCode, pairingCodeExpiresAt, updatedAt: new Date() })
-        .where(eq(agents.id, agent.id))
-        .returning();
-
-      return reply.send({
-        pairingCode: updated.pairingCode,
-        expiresAt: updated.pairingCodeExpiresAt,
-      });
     }
   );
 

@@ -6,7 +6,6 @@ export type ResolvedArinovaChatAccount = {
   enabled: boolean;
   name?: string;
   apiUrl: string;
-  pairingCode: string;
   botToken: string;
   agentId: string;
   sessionToken: string;
@@ -81,7 +80,6 @@ export function resolveArinovaChatAccount(params: {
     enabled: baseEnabled && accountEnabled,
     name: merged.name?.trim() || undefined,
     apiUrl: merged.apiUrl?.trim()?.replace(/\/$/, "") ?? "",
-    pairingCode: merged.pairingCode?.trim() ?? "",
     botToken: merged.botToken?.trim() ?? "",
     agentId: merged.agentId ?? "",
     sessionToken: merged.sessionToken ?? "",

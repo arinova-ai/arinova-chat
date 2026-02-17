@@ -156,7 +156,6 @@ async function handleSendMessage(
   const [agent] = await db
     .select({
       name: agents.name,
-      pairingCode: agents.pairingCode,
     })
     .from(agents)
     .where(eq(agents.id, conv.agentId));
@@ -165,23 +164,14 @@ async function handleSendMessage(
 
   // Check if agent is connected via WebSocket
   if (!isAgentConnected(conv.agentId)) {
-    const configJson = JSON.stringify({
-      channels: { "arinova-chat": { agentId: conv.agentId } },
-    }, null, 2);
-
-    const codeHint = agent.pairingCode
-      ? `**Option 1 — Pairing code (recommended):**\nAdd to your OpenClaw config:\n\`\`\`json\n${JSON.stringify({ channels: { "arinova-chat": { pairingCode: agent.pairingCode } } }, null, 2)}\n\`\`\`\n\n**Option 2 — Agent ID:**\nAdd to your OpenClaw config:\n\`\`\`json\n${configJson}\n\`\`\``
-      : `Add to your OpenClaw config:\n\`\`\`json\n${configJson}\n\`\`\``;
-    const shortHint = agent.pairingCode
-      ? `Use pairing code: ${agent.pairingCode}`
-      : `Set channels.arinova-chat.agentId to ${conv.agentId}`;
+    const hint = `Copy the **Bot Token** from bot settings, then run:\n\`\`\`\nopenclaw arinova-setup --token <bot-token>\n\`\`\``;
 
     const [errMsg] = await db
       .insert(messages)
       .values({
         conversationId,
         role: "agent",
-        content: `**${agent.name}** is not connected yet. An AI agent needs to connect to this bot before it can respond.\n\n${codeHint}`,
+        content: `**${agent.name}** is not connected yet. An AI agent needs to connect to this bot before it can respond.\n\n${hint}`,
         status: "error",
       })
       .returning();
@@ -195,7 +185,7 @@ async function handleSendMessage(
       type: "stream_error",
       conversationId,
       messageId: errMsg.id,
-      error: `${agent.name} is not connected. ${shortHint}`,
+      error: `${agent.name} is not connected. Copy the Bot Token from bot settings and run: openclaw arinova-setup --token <bot-token>`,
     });
     return;
   }

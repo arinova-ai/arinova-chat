@@ -72,21 +72,18 @@ export async function validateSession(params: {
 }
 
 /**
- * Exchange a 6-char pairing code for the agent ID (no auth required).
+ * Exchange a bot token for the agent ID.
  * Also registers the A2A endpoint with Arinova so the backend knows
  * where to forward messages.
  */
-export async function exchangePairingCode(params: {
+export async function exchangeBotToken(params: {
   apiUrl: string;
-  pairingCode?: string;
-  botToken?: string;
+  botToken: string;
   a2aEndpoint?: string;
 }): Promise<{ agentId: string; name: string; wsUrl?: string }> {
-  const { apiUrl, pairingCode, botToken, a2aEndpoint } = params;
+  const { apiUrl, botToken, a2aEndpoint } = params;
 
-  const body: Record<string, string> = {};
-  if (botToken) body.botToken = botToken;
-  else if (pairingCode) body.pairingCode = pairingCode;
+  const body: Record<string, string> = { botToken };
   if (a2aEndpoint) body.a2aEndpoint = a2aEndpoint;
 
   const response = await fetch(`${apiUrl}/api/agents/pair`, {

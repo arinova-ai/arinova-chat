@@ -57,8 +57,6 @@ interface BotManageDialogProps {
     description: string | null;
     avatarUrl: string | null;
     a2aEndpoint: string | null;
-    pairingCode: string | null;
-    pairingCodeExpiresAt: string | Date | null;
     secretToken: string | null;
     isPublic: boolean;
     category: string | null;
@@ -104,12 +102,6 @@ export function BotManageDialog({
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Pairing code
-  const [copied, setCopied] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [localPairingCode, setLocalPairingCode] = useState(agent.pairingCode);
-  const [localExpiresAt, setLocalExpiresAt] = useState(agent.pairingCodeExpiresAt);
-
   // Bot token
   const [localToken, setLocalToken] = useState(agent.secretToken);
   const [tokenCopied, setTokenCopied] = useState(false);
@@ -151,8 +143,6 @@ export function BotManageDialog({
       setClearConfirm(false);
       setDeleting(false);
       setClearing(false);
-      setLocalPairingCode(agent.pairingCode);
-      setLocalExpiresAt(agent.pairingCodeExpiresAt);
       setLocalToken(agent.secretToken);
       setShowToken(false);
       setRegeneratingToken(false);
@@ -272,13 +262,6 @@ export function BotManageDialog({
     } finally {
       setExporting(false);
     }
-  };
-
-  const handleCopyPairingCode = async () => {
-    if (!localPairingCode) return;
-    await navigator.clipboard.writeText(localPairingCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const addQuickReply = () => {
@@ -649,63 +632,6 @@ export function BotManageDialog({
                   </>
                 ) : (
                   <p className="text-xs text-muted-foreground">No token available.</p>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Pairing Code (one-time, for first-time setup) */}
-          {(() => {
-            const isExpired = localExpiresAt
-              ? new Date(localExpiresAt) < new Date()
-              : !localPairingCode;
-            const hasCode = !!localPairingCode && !isExpired;
-
-            const handleRegenerate = async () => {
-              setRegenerating(true);
-              setError("");
-              try {
-                const result = await api<{ pairingCode: string; expiresAt: string }>(
-                  `/api/agents/${agent.id}/regenerate-code`,
-                  { method: "POST" }
-                );
-                setLocalPairingCode(result.pairingCode);
-                setLocalExpiresAt(result.expiresAt);
-                await useChatStore.getState().loadAgents();
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to regenerate code");
-              } finally {
-                setRegenerating(false);
-              }
-            };
-
-            return (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Pairing Code</label>
-                {hasCode ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <code className="min-w-0 flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-lg font-mono tracking-widest select-all">
-                        {localPairingCode}
-                      </code>
-                      <Button variant="outline" size="icon" onClick={handleCopyPairingCode} className="shrink-0">
-                        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Expires in 15 minutes. One-time use for first-time setup.
-                    </p>
-                  </>
-                ) : (
-                  <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-center">
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {isExpired ? "Pairing code expired." : "No active pairing code."}
-                    </p>
-                    <Button variant="outline" size="sm" onClick={handleRegenerate} disabled={regenerating} className="gap-2">
-                      {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      Generate New Code
-                    </Button>
-                  </div>
                 )}
               </div>
             );

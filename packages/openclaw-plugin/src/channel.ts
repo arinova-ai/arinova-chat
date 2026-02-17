@@ -23,7 +23,7 @@ import {
 } from "./normalize.js";
 import { getArinovaChatRuntime } from "./runtime.js";
 import { sendMessageArinovaChat } from "./send.js";
-import { exchangePairingCode } from "./auth.js";
+import { exchangeBotToken } from "./auth.js";
 import { createWSClient } from "./ws-client.js";
 import { handleArinovaChatInbound } from "./inbound.js";
 
@@ -68,7 +68,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
     isConfigured: (account) =>
       Boolean(
         account.apiUrl?.trim() &&
-          (account.agentId?.trim() || account.botToken?.trim() || account.pairingCode?.trim()),
+          (account.agentId?.trim() || account.botToken?.trim()),
       ),
     describeAccount: (account) => ({
       accountId: account.accountId,
@@ -76,11 +76,10 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       enabled: account.enabled,
       configured: Boolean(
         account.apiUrl?.trim() &&
-          (account.agentId?.trim() || account.botToken?.trim() || account.pairingCode?.trim()),
+          (account.agentId?.trim() || account.botToken?.trim()),
       ),
       apiUrl: account.apiUrl ? "[set]" : "[missing]",
       botToken: account.botToken ? "[set]" : "[not set]",
-      pairingCode: account.pairingCode ? "[set]" : "[not set]",
       agentId: account.agentId ? "[set]" : "[missing]",
     }),
     resolveAllowFrom: ({ cfg, accountId }) =>
@@ -214,7 +213,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
     buildAccountSnapshot: ({ account, runtime }) => {
       const configured = Boolean(
         account.apiUrl?.trim() &&
-          (account.agentId?.trim() || account.botToken?.trim() || account.pairingCode?.trim()),
+          (account.agentId?.trim() || account.botToken?.trim()),
       );
       return {
         accountId: account.accountId,
@@ -241,9 +240,9 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           `Arinova Chat not configured for account "${account.accountId}" (missing apiUrl)`,
         );
       }
-      if (!account.agentId && !account.botToken && !account.pairingCode) {
+      if (!account.agentId && !account.botToken) {
         throw new Error(
-          `Arinova Chat not configured for account "${account.accountId}" (missing agentId, botToken, or pairingCode)`,
+          `Arinova Chat not configured for account "${account.accountId}" (missing agentId or botToken)`,
         );
       }
 
@@ -264,23 +263,20 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       // Derive WebSocket URL from apiUrl
       const wsUrl = account.apiUrl.replace(/^http/, "ws") + "/ws/agent";
 
-      // Resolve agentId from botToken or pairingCode if not already set
-      if (!account.agentId && (account.botToken || account.pairingCode)) {
-        const method = account.botToken ? "bot token" : "pairing code";
-        logger.info(`[${account.accountId}] exchanging ${method}...`);
+      // Resolve agentId from botToken if not already set
+      if (!account.agentId && account.botToken) {
+        logger.info(`[${account.accountId}] exchanging bot token...`);
         try {
-          const result = await exchangePairingCode({
+          const result = await exchangeBotToken({
             apiUrl: account.apiUrl,
-            ...(account.botToken
-              ? { botToken: account.botToken }
-              : { pairingCode: account.pairingCode! }),
+            botToken: account.botToken,
           });
           account.agentId = result.agentId;
           logger.info(
-            `[${account.accountId}] paired via ${method} — agentId=${result.agentId} name="${result.name}"`,
+            `[${account.accountId}] paired via bot token — agentId=${result.agentId} name="${result.name}"`,
           );
 
-          // Persist agentId to config (remove pairingCode if used, keep botToken)
+          // Persist agentId to config
           try {
             const isDefault = account.accountId === DEFAULT_ACCOUNT_ID;
             const channelCfg = (ctx.cfg as Record<string, unknown>).channels as Record<string, unknown> | undefined;
@@ -288,12 +284,10 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
 
             if (isDefault) {
               arinovaCfg.agentId = result.agentId;
-              if (!account.botToken) delete arinovaCfg.pairingCode;
             } else {
               const accounts = { ...(arinovaCfg.accounts as Record<string, unknown> ?? {}) };
               const acct = { ...(accounts[account.accountId] as Record<string, unknown> ?? {}) };
               acct.agentId = result.agentId;
-              if (!account.botToken) delete acct.pairingCode;
               accounts[account.accountId] = acct;
               arinovaCfg.accounts = accounts;
             }
@@ -312,7 +306,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`[${account.accountId}] ${method} exchange failed: ${errorMsg}`);
+          logger.error(`[${account.accountId}] bot token exchange failed: ${errorMsg}`);
           throw err;
         }
       }

@@ -342,7 +342,7 @@ function AddAgentDialog({
   const [createdAgent, setCreatedAgent] = useState<{
     id: string;
     name: string;
-    pairingCode: string | null;
+    secretToken: string | null;
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -356,7 +356,7 @@ function AddAgentDialog({
         description: description || undefined,
         a2aEndpoint: endpoint || undefined,
       });
-      setCreatedAgent({ id: agent.id, name: agent.name, pairingCode: agent.pairingCode });
+      setCreatedAgent({ id: agent.id, name: agent.name, secretToken: agent.secretToken });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create bot");
     } finally {
@@ -366,7 +366,7 @@ function AddAgentDialog({
 
   const handleCopy = async () => {
     if (!createdAgent) return;
-    await navigator.clipboard.writeText(createdAgent.pairingCode ?? createdAgent.id);
+    await navigator.clipboard.writeText(createdAgent.secretToken ?? createdAgent.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -389,10 +389,10 @@ function AddAgentDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Pairing Code</label>
+              <label className="text-sm font-medium">Bot Token</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-2xl font-mono tracking-widest select-all">
-                  {createdAgent.pairingCode ?? createdAgent.id}
+                <code className="min-w-0 flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-xs font-mono truncate select-all">
+                  {createdAgent.secretToken ?? createdAgent.id}
                 </code>
                 <Button
                   variant="outline"
@@ -412,22 +412,9 @@ function AddAgentDialog({
             <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
               <p className="font-medium text-foreground">Next steps:</p>
               <p>
-                Use this pairing code to connect your AI agent. Code expires in
-                15 minutes.
+                Use this bot token to connect your AI agent via OpenClaw.
               </p>
-              <details className="group">
-                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  OpenClaw config example
-                </summary>
-                <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
-  "channels": {
-    "arinova-chat": {
-      "apiUrl": "${typeof window !== "undefined" ? BACKEND_URL : "http://localhost:3501"}",
-      "pairingCode": "${createdAgent.pairingCode ?? ""}"
-    }
-  }
-}`}</pre>
-              </details>
+              <pre className="rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`openclaw arinova-setup --token ${createdAgent.secretToken ?? "<bot-token>"}`}</pre>
             </div>
 
             <Button
@@ -551,7 +538,7 @@ export function CreateBotDialog({
   const [createdAgent, setCreatedAgent] = useState<{
     id: string;
     name: string;
-    pairingCode: string | null;
+    secretToken: string | null;
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -581,7 +568,7 @@ export function CreateBotDialog({
         description: description || undefined,
         a2aEndpoint: endpoint || undefined,
       });
-      setCreatedAgent({ id: agent.id, name: agent.name, pairingCode: agent.pairingCode });
+      setCreatedAgent({ id: agent.id, name: agent.name, secretToken: agent.secretToken });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create bot");
     } finally {
@@ -591,7 +578,7 @@ export function CreateBotDialog({
 
   const handleCopy = async () => {
     if (!createdAgent) return;
-    await navigator.clipboard.writeText(createdAgent.pairingCode ?? createdAgent.id);
+    await navigator.clipboard.writeText(createdAgent.secretToken ?? createdAgent.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -613,10 +600,10 @@ export function CreateBotDialog({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Pairing Code</label>
+              <label className="text-sm font-medium">Bot Token</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-center text-2xl font-mono tracking-widest select-all">
-                  {createdAgent.pairingCode ?? createdAgent.id}
+                <code className="min-w-0 flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-xs font-mono truncate select-all">
+                  {createdAgent.secretToken ?? createdAgent.id}
                 </code>
                 <Button
                   variant="outline"
@@ -636,22 +623,9 @@ export function CreateBotDialog({
             <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
               <p className="font-medium text-foreground">Next steps:</p>
               <p>
-                Use this pairing code to connect your AI agent. Code expires in
-                15 minutes.
+                Use this bot token to connect your AI agent via OpenClaw.
               </p>
-              <details className="group">
-                <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  OpenClaw config example
-                </summary>
-                <pre className="mt-2 rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`{
-  "channels": {
-    "arinova-chat": {
-      "apiUrl": "${typeof window !== "undefined" ? BACKEND_URL : "http://localhost:3501"}",
-      "pairingCode": "${createdAgent.pairingCode ?? ""}"
-    }
-  }
-}`}</pre>
-              </details>
+              <pre className="rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`openclaw arinova-setup --token ${createdAgent.secretToken ?? "<bot-token>"}`}</pre>
             </div>
 
             <Button
