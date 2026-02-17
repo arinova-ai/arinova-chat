@@ -93,10 +93,9 @@
   }
   html, body {
     @apply text-foreground;
+    height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
-    position: fixed;
-    inset: 0;
   }
   body {
     @apply bg-background;
