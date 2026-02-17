@@ -20,6 +20,7 @@ Arinova Chat 目前的互動模式侷限在對話（direct / group conversations
 - `playground-runtime`: Playground 運行時 — 多用戶 + 多 agent 在同一空間的即時互動、狀態同步、事件處理。
 - `playground-management`: Playground 生命週期管理 — 瀏覽列表、搜尋、加入/離開、刪除、參與者管理。
 - `playground-ui`: 前端 UI — sidebar 入口、playground 列表頁、playground 內部互動介面。
+- `playground-economy`: 雙軌經濟系統 — 免費場用 Play Coins（每日發放），付費場用 Arinova Coins。Playground 創建者自定義經濟規則（入場費、回合下注、固定賠率等）。
 
 ### Modified Capabilities
 
@@ -33,3 +34,4 @@ _(none — playground 與現有功能完全獨立)_
 - **Shared types**: 新增 Playground、PlaygroundParticipant、PlaygroundState 等型別與 Zod schemas
 - **Documentation**: 編寫 playground 創建規範 md 檔案，定義 agent 如何結構化地創建 playground
 - **Demo playground**: 內建「狼人殺」示範 playground — 展示角色分配、資訊隔離、回合制、投票機制、多用戶多 agent 互動
+- **Economy**: 新增 `play_coin_balances` 表、Play Coins 每日發放機制、playground 經濟規則引擎、獎池結算邏輯

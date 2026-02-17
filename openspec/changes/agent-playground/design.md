@@ -23,7 +23,7 @@ Playground 與現有的 conversations 和 marketplace apps **完全獨立**，�
 **Non-Goals:**
 - 即時圖形渲染 / Canvas / WebGL（Phase 1 是文字 + 結構化 UI）
 - 與 marketplace apps 整合（完全獨立功能）
-- Playground 內購 / 貨幣系統（可能 Phase 2）
+- 真實金錢提現（Play Coins 和 Arinova Coins 都是平台內虛擬貨幣，不可提現）
 - AI agent 自主創建 playground（Phase 1 必須由用戶發起，agent 協助生成）
 - 手機 native playground 體驗（先 web responsive）
 
@@ -75,7 +75,28 @@ Playground 與現有的 conversations 和 marketplace apps **完全獨立**，�
 
 **Rationale**: Conversation-driven 讓創建過程自然直覺，validation 確保結果合法，預覽讓用戶有最終控制權。
 
-### 6. 示範 playground：狼人殺
+### 7. 雙軌經濟系統：Play Coins + Arinova Coins
+
+**Decision**: 採用雙軌制 — 免費場使用 Play Coins（系統每日發放），付費場使用 Arinova Coins（用戶儲值）。Playground 創建者在定義中自訂經濟規則。
+
+**Alternatives considered**:
+- 只用 Arinova Coins：門檻太高，新用戶沒有動力嘗試
+- 只用免費代幣：缺乏刺激感和真實賭注
+- 固定統一規則：不同遊戲類型需要不同經濟模式
+
+**Rationale**: 雙軌制讓免費場降低門檻吸引用戶，付費場提供真實刺激。創建者自定義經濟規則最靈活 — 狼人殺可以用入場費制，撲克可以用回合下注制。
+
+### 8. 經濟規則由 Playground 創建者定義
+
+**Decision**: PlaygroundDefinition 新增 `economy` 欄位，創建者定義貨幣類型（play/arinova/free）、入場費、獎池分配、下注規則等。平台負責驗證和結算。
+
+**Alternatives considered**:
+- 平台統一定義幾種模式讓創建者選：簡單但不夠靈活
+- 完全自由 scripting：太複雜，安全風險高
+
+**Rationale**: 結構化的 economy schema 讓 agent 可以生成、平台可以驗證執行，同時給創建者足夠的自由度。平台抽成比例可統一管理。
+
+### 9. 示範 playground：狼人殺
 
 **Decision**: 內建狼人殺作為預設 playground template，展示角色分配、資訊隔離、回合制（白天討論→投票→夜晚行動）、勝負判定。
 
@@ -88,6 +109,8 @@ Playground 與現有的 conversations 和 marketplace apps **完全獨立**，�
 - **[Playground 規則表達力不足]** → Mitigation: Phase 1 先支持回合制 + 基本條件判斷。複雜邏輯留給 Phase 2（可能引入 scripting）。
 - **[濫用/不當內容]** → Mitigation: Playground 定義經過 schema validation，可加 content moderation。公開 playground 需要基本審核。
 - **[狀態膨脹]** → Mitigation: 限制 playground state 大小（maxStateSize），限制參與者人數上限。
+- **[經濟系統濫用]** → Mitigation: Play Coins 每日發放有上限、Arinova Coins 場次有最低/最高入場費限制。異常行為偵測（同一用戶反覆開場自己贏）。
+- **[獎池結算爭議]** → Mitigation: Server-authoritative 結算，所有交易記錄在 ledger 中，可追溯。
 
 ## Open Questions
 
@@ -95,3 +118,6 @@ Playground 與現有的 conversations 和 marketplace apps **完全獨立**，�
 - 用戶是否可以 fork 別人的 playground template？
 - Playground 歷史紀錄保留多久？
 - 是否需要 playground 內的文字聊天頻道（類似遊戲內聊天）？
+- Play Coins 每日發放量多少？是否有等級/VIP 區分？
+- Arinova Coins 場次的平台抽成比例？（例如獎池的 5%？）
+- 是否需要防沉迷機制（每日 Arinova Coins 場次消費上限）？

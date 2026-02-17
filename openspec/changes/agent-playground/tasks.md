@@ -1,6 +1,6 @@
 ## 1. Playground Schema & Types
 
-- [ ] 1.1 Define `PlaygroundDefinition` TypeScript types in `packages/shared/src/types/` (metadata, roles, phases, actions, win conditions)
+- [ ] 1.1 Define `PlaygroundDefinition` TypeScript types in `packages/shared/src/types/` (metadata, roles, phases, actions, win conditions, economy)
 - [ ] 1.2 Define `Playground`, `PlaygroundSession`, `PlaygroundParticipant`, `PlaygroundState` types
 - [ ] 1.3 Create Zod validation schemas for PlaygroundDefinition in `packages/shared/src/schemas/`
 - [ ] 1.4 Write unit tests for playground schema validation
@@ -11,7 +11,8 @@
 - [ ] 2.2 Create `playground_sessions` table (id, playgroundId, status, state, currentPhase, startedAt, finishedAt)
 - [ ] 2.3 Create `playground_participants` table (id, sessionId, userId, agentId, role, controlMode, joinedAt)
 - [ ] 2.4 Create `playground_messages` table (id, sessionId, participantId, type, content, createdAt)
-- [ ] 2.5 Run Drizzle migrations for all new tables
+- [ ] 2.5 Create `play_coin_balances` table (userId, balance, lastGrantedAt) and `playground_transactions` table (id, userId, sessionId, type, currency, amount, createdAt)
+- [ ] 2.6 Run Drizzle migrations for all new tables
 
 ## 3. Playground CRUD API
 
@@ -23,7 +24,7 @@
 
 ## 4. Playground Session API
 
-- [ ] 4.1 Create `POST /api/playgrounds/:id/join` endpoint — join with selected agent, create participant
+- [ ] 4.1 Create `POST /api/playgrounds/:id/join` endpoint — join with selected agent, deduct entry fee if applicable, create participant
 - [ ] 4.2 Create `POST /api/playgrounds/:id/leave` endpoint — remove participant, handle active session
 - [ ] 4.3 Create `POST /api/playgrounds/:id/start` endpoint — host-only, validate player count, assign roles, start first phase
 - [ ] 4.4 Create `GET /api/playgrounds/:id/session` endpoint — get current session state (filtered by role)
@@ -100,3 +101,29 @@
 - [ ] 13.3 Write werewolf agent system prompts per role
 - [ ] 13.4 Test full game loop with multiple users and agents
 - [ ] 13.5 Seed werewolf template in database on first run
+
+## 14. Playground Economy — Play Coins
+
+- [ ] 14.1 Implement Play Coins daily grant API (`POST /api/playground/coins/claim`) — check lastGrantedAt, credit balance
+- [ ] 14.2 Implement Play Coins balance API (`GET /api/playground/coins/balance`) — return play coins and arinova coins balances
+- [ ] 14.3 Implement Play Coins balance display in frontend (wallet section or playground header)
+
+## 15. Playground Economy — Prize Pool & Settlement
+
+- [ ] 15.1 Implement entry fee collection on session join (deduct from balance, add to prize pool)
+- [ ] 15.2 Implement entry fee refund on session cancellation
+- [ ] 15.3 Implement prize distribution engine (winner-takes-all, ranked percentage split)
+- [ ] 15.4 Implement platform commission deduction for Arinova Coins sessions
+- [ ] 15.5 Implement automatic settlement on session finish (distribute prize pool to winners)
+
+## 16. Playground Economy — Betting
+
+- [ ] 16.1 Implement per-round betting action (validate min/max, deduct from balance, add to round pot)
+- [ ] 16.2 Implement round pot settlement (distribute to round winners)
+- [ ] 16.3 Add betting UI components (bet input, pot display, bet history)
+
+## 17. Playground Economy — Transaction Ledger
+
+- [ ] 17.1 Implement transaction ledger recording for all economy events (entry, bet, win, refund, commission)
+- [ ] 17.2 Implement transaction history API (`GET /api/playground/transactions`) with pagination
+- [ ] 17.3 Build transaction history UI in frontend
