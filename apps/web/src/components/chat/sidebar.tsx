@@ -33,7 +33,7 @@ export function Sidebar() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* Header */}
-      <div className="flex h-14 shrink-0 items-center justify-between px-4">
+      <div className="flex min-h-14 shrink-0 items-center justify-between px-4 pt-[env(safe-area-inset-top,0px)]">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="Arinova" className="h-6 w-6" />
           <h1 className="text-base font-bold">Arinova Chat</h1>
@@ -67,7 +67,7 @@ export function Sidebar() {
       <ConversationList />
 
       {/* Bottom buttons */}
-      <div className="shrink-0 space-y-2 p-3">
+      <div className="shrink-0 space-y-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0.75rem))]">
         <Button
           variant="secondary"
           className="w-full gap-2"

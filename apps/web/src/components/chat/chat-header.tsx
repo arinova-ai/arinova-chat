@@ -28,7 +28,7 @@ export function ChatHeader({
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+    <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top,0px)]">
       <Button
         variant="ghost"
         size="icon"

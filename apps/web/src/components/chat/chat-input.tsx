@@ -482,7 +482,7 @@ export function ChatInput() {
   let selectableCounter = 0;
 
   return (
-    <div className="shrink-0 border-t border-border p-4">
+    <div className="shrink-0 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]">
       <div className="relative mx-auto max-w-3xl">
         {/* Slash command popup */}
         {showSlashPopup && hasSelectableItems && (
