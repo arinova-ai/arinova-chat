@@ -28,14 +28,14 @@ export function ChatLayout() {
   }, [loadAgents, loadConversations, loadAgentHealth, initWS]);
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="fixed inset-0 flex overflow-hidden">
       {/* Desktop: always show sidebar */}
       <div className="hidden w-80 shrink-0 overflow-hidden border-r border-border md:block">
         <Sidebar />
       </div>
 
       {/* Mobile: sidebar fullscreen when no conversation, chat when selected */}
-      <div className={`md:hidden overflow-hidden ${activeConversationId ? "hidden" : "flex-1"}`}>
+      <div className={`md:hidden overflow-hidden bg-card ${activeConversationId ? "hidden" : "flex-1"}`}>
         <Sidebar />
       </div>
 
