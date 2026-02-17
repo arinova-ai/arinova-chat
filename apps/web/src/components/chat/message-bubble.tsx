@@ -125,7 +125,7 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
                       <img
                         src={`${BACKEND_URL}${att.url}`}
                         alt={att.fileName}
-                        className="max-h-64 rounded-lg object-contain"
+                        className="max-w-full max-h-64 rounded-lg object-contain"
                       />
                     </a>
                   ) : (

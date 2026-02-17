@@ -5,6 +5,78 @@ import { getArinovaChatRuntime } from "./runtime.js";
 
 const CHANNEL_ID = "arinova-chat" as const;
 
+// Known tool names from Claude Code CLI bridge
+const TOOL_LINE_RE = /^\[(Bash|Read|Write|Edit|Grep|Glob|WebFetch|WebSearch|Task|Skill|NotebookEdit)\]/;
+const RESULT_PREFIX = "📎";
+
+// MEDIA: token regex — matches lines like `MEDIA: https://example.com/img.png`
+const MEDIA_LINE_RE = /^\s*MEDIA:\s/i;
+
+/**
+ * Collapse consecutive tool blocks, keeping only the latest one.
+ * When Claude Code runs multiple tools in sequence, each [Tool] line + its
+ * 📎 result stacks up. Since the frontend replaces content (not appends),
+ * we can show only the most recent tool activity for a cleaner UX.
+ */
+function collapseToolBlocks(text: string): string {
+  const lines = text.split("\n");
+  const output: string[] = [];
+  let pendingTool: string[] | null = null;
+  let inResult = false;
+
+  for (const line of lines) {
+    if (TOOL_LINE_RE.test(line)) {
+      // New tool call — discard any previous pending tool block
+      pendingTool = [line];
+      inResult = false;
+    } else if (pendingTool !== null) {
+      if (line === "") {
+        pendingTool.push(line);
+        if (inResult) inResult = false; // blank line ends result section
+      } else if (line.startsWith(RESULT_PREFIX)) {
+        pendingTool.push(line);
+        inResult = true;
+      } else if (inResult) {
+        // Content line within result section
+        pendingTool.push(line);
+      } else {
+        // Non-tool content after tool block — flush pending tool, continue as text
+        output.push(...pendingTool);
+        pendingTool = null;
+        output.push(line);
+      }
+    } else {
+      output.push(line);
+    }
+  }
+
+  // Flush remaining pending tool block
+  if (pendingTool) {
+    output.push(...pendingTool);
+  }
+
+  return output.join("\n");
+}
+
+/**
+ * Strip MEDIA: lines from streaming text so the raw token doesn't flash on screen.
+ * OpenClaw parses these at block-completion time, but during streaming the raw lines
+ * are still present.
+ */
+function stripMediaLines(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !MEDIA_LINE_RE.test(line))
+    .join("\n");
+}
+
+/**
+ * Convert media URLs to markdown image syntax.
+ */
+function mediaUrlsToMarkdown(urls: string[]): string {
+  return urls.map((url) => `![](${url})`).join("\n");
+}
+
 /**
  * Handle an inbound message from the backend via WebSocket.
  * Streams the reply back using sendChunk/sendComplete/sendError callbacks.
@@ -119,7 +191,15 @@ export async function handleArinovaChatInbound(params: {
     dispatcherOptions: {
       ...prefixOptions,
       deliver: async (payload) => {
-        const text = (payload as { text?: string }).text ?? "";
+        const p = payload as { text?: string; mediaUrls?: string[] };
+        let text = p.text ?? "";
+
+        // Convert media URLs to markdown images
+        if (p.mediaUrls?.length) {
+          const md = mediaUrlsToMarkdown(p.mediaUrls);
+          text = text.trim() ? `${text}\n\n${md}` : md;
+        }
+
         if (!text.trim()) return;
         finalText += (finalText ? "\n\n" : "") + text;
         statusSink?.({ lastOutboundAt: Date.now() });
@@ -137,8 +217,11 @@ export async function handleArinovaChatInbound(params: {
         // so we prepend finalText (completed blocks) to avoid losing them.
         const text = (payload as { text?: string }).text ?? "";
         if (text) {
-          const fullMessage = finalText ? finalText + "\n\n" + text : text;
-          sendChunk(fullMessage);
+          // Strip MEDIA: lines so raw tokens don't flash during streaming
+          const cleaned = stripMediaLines(text);
+          if (!cleaned.trim() && !finalText) return;
+          const fullMessage = finalText ? finalText + "\n\n" + cleaned : cleaned;
+          sendChunk(collapseToolBlocks(fullMessage));
         }
       },
     },

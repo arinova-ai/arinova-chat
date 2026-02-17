@@ -187,7 +187,9 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       return { channel: "arinova-chat", messageId: result.messageId ?? "inline", ...result };
     },
     sendMedia: async ({ to, text, mediaUrl, accountId }) => {
-      const messageWithMedia = mediaUrl ? `${text}\n\nAttachment: ${mediaUrl}` : text;
+      // Convert media URL to markdown image so frontend renders it as <img>
+      const mediaMarkdown = mediaUrl ? `![](${mediaUrl})` : "";
+      const messageWithMedia = [text, mediaMarkdown].filter(Boolean).join("\n\n");
       const result = await sendMessageArinovaChat(to, messageWithMedia, {
         accountId: accountId ?? undefined,
       });

@@ -78,6 +78,13 @@
       "when": 1771298028238,
       "tag": "0010_real_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1771303992271,
+      "tag": "0011_strong_tarot",
+      "breakpoints": true
     }
   ]
 }
