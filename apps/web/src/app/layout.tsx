@@ -40,18 +40,23 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              const isTextInputFocused = () => {
+                const el = document.activeElement;
+                if (!el) return false;
+                const tag = el.tagName;
+                return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+              };
+
               const setAppHeight = () => {
-                const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-                document.documentElement.style.setProperty("--app-height", Math.round(viewportHeight) + "px");
+                document.documentElement.style.setProperty("--app-height", window.innerHeight + "px");
               };
               setAppHeight();
-              window.addEventListener("resize", setAppHeight);
               window.addEventListener("orientationchange", setAppHeight);
               window.addEventListener("pageshow", setAppHeight);
-              if (window.visualViewport) {
-                window.visualViewport.addEventListener("resize", setAppHeight);
-                window.visualViewport.addEventListener("scroll", setAppHeight);
-              }
+              window.addEventListener("resize", () => {
+                if (isTextInputFocused()) return;
+                setAppHeight();
+              });
 
               if ("serviceWorker" in navigator) {
                 window.addEventListener("load", async () => {
