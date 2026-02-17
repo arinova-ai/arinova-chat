@@ -60,7 +60,7 @@ export function ChatLayout() {
   }, [setActiveConversation]);
 
   return (
-    <div className="app-dvh flex min-h-0 overflow-hidden">
+    <div className={`app-dvh flex min-h-0 overflow-hidden ${activeConversationId ? "bg-background" : "bg-card md:bg-background"}`}>
       {/* Desktop: always show sidebar */}
       <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
         <Sidebar />

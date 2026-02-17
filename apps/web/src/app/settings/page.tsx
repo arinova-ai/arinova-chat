@@ -106,12 +106,12 @@ function SettingsContent() {
   };
 
   return (
-    <div className="min-h-dvh bg-background">
-      <div className="mx-auto max-w-lg px-4 py-8">
+    <div className="app-dvh overflow-y-auto bg-background">
+      <div className="mx-auto max-w-lg px-4 pb-[max(2rem,env(safe-area-inset-bottom,2rem))] pt-[max(1.25rem,env(safe-area-inset-top,1.25rem))]">
         {/* Header */}
         <div className="mb-8 flex items-center gap-3">
           <Link href="/">
-            <Button variant="ghost" size="icon" className="h-9 w-9">
+            <Button variant="ghost" size="icon" className="h-10 w-10">
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
