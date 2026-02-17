@@ -100,7 +100,7 @@
     overscroll-behavior: none;
   }
   body {
-    @apply bg-background;
+    @apply bg-card;
     min-height: 100%;
   }
 }

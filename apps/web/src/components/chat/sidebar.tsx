@@ -86,7 +86,7 @@ export function Sidebar() {
         </Button>
         <Button
           variant="ghost"
-          className="w-full gap-2 text-muted-foreground"
+          className="w-full gap-2 border border-red-900/60 text-red-200 hover:border-red-800/70 hover:bg-red-950/30"
           onClick={handleSignOut}
         >
           <LogOut className="h-4 w-4" />
