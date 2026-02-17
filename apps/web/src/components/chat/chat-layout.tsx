@@ -60,19 +60,19 @@ export function ChatLayout() {
   }, [setActiveConversation]);
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden">
+    <div className="app-dvh flex min-h-0 overflow-hidden">
       {/* Desktop: always show sidebar */}
-      <div className="hidden w-80 shrink-0 overflow-hidden border-r border-border md:block">
+      <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
         <Sidebar />
       </div>
 
       {/* Mobile: sidebar fullscreen when no conversation, chat when selected */}
-      <div className={`md:hidden overflow-hidden bg-card ${activeConversationId ? "hidden" : "flex-1"}`}>
+      <div className={`md:hidden h-full overflow-hidden bg-card ${activeConversationId ? "hidden" : "flex-1"}`}>
         <Sidebar />
       </div>
 
       {/* Chat area: always visible on desktop, only when conversation selected on mobile */}
-      <div className={`flex-1 min-w-0 bg-background ${activeConversationId ? "" : "hidden md:block"}`}>
+      <div className={`h-full flex-1 min-w-0 bg-background ${activeConversationId ? "" : "hidden md:block"}`}>
         <ChatArea />
       </div>
     </div>

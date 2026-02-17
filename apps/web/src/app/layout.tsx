@@ -40,6 +40,14 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              const setAppHeight = () => {
+                document.documentElement.style.setProperty("--app-height", window.innerHeight + "px");
+              };
+              setAppHeight();
+              window.addEventListener("resize", setAppHeight);
+              window.addEventListener("orientationchange", setAppHeight);
+              window.addEventListener("pageshow", setAppHeight);
+
               if ("serviceWorker" in navigator) {
                 window.addEventListener("load", async () => {
                   const reg = await navigator.serviceWorker.register("/sw.js");
