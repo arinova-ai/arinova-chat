@@ -2,6 +2,7 @@ import { createReplyPrefixOptions, type OpenClawConfig, type RuntimeEnv } from "
 import type { ResolvedArinovaChatAccount } from "./accounts.js";
 import type { ArinovaChatInboundMessage, CoreConfig } from "./types.js";
 import { getArinovaChatRuntime } from "./runtime.js";
+import { replaceImagePaths } from "./image-upload.js";
 
 const CHANNEL_ID = "arinova-chat" as const;
 
@@ -201,6 +202,11 @@ export async function handleArinovaChatInbound(params: {
         }
 
         if (!text.trim()) return;
+
+        // Upload local image files and replace paths with public URLs
+        const workDir = process.env.OPENCLAW_WORKSPACE ?? `${process.env.HOME}/.openclaw/workspace`;
+        text = await replaceImagePaths(text, workDir, (msg) => runtime.log?.(msg));
+
         finalText += (finalText ? "\n\n" : "") + text;
         statusSink?.({ lastOutboundAt: Date.now() });
       },
@@ -212,16 +218,14 @@ export async function handleArinovaChatInbound(params: {
       onModelSelected,
       disableBlockStreaming: false,
       onPartialReply: (payload) => {
-        // Send full message text (completed blocks + current partial)
-        // onPartialReply only gives the current block's accumulated text,
-        // so we prepend finalText (completed blocks) to avoid losing them.
+        // onPartialReply gives the FULL accumulated text across ALL blocks,
+        // so we must NOT prepend finalText — that would duplicate completed blocks.
         const text = (payload as { text?: string }).text ?? "";
         if (text) {
           // Strip MEDIA: lines so raw tokens don't flash during streaming
           const cleaned = stripMediaLines(text);
-          if (!cleaned.trim() && !finalText) return;
-          const fullMessage = finalText ? finalText + "\n\n" + cleaned : cleaned;
-          sendChunk(collapseToolBlocks(fullMessage));
+          if (!cleaned.trim()) return;
+          sendChunk(collapseToolBlocks(cleaned));
         }
       },
     },
