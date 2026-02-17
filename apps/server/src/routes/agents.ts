@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { agents, conversations, messages } from "../db/schema.js";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { agents, conversations, conversationMembers, messages, channels } from "../db/schema.js";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import {
   createAgentSchema,
@@ -413,14 +413,39 @@ export async function agentRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const user = await requireAuth(request, reply);
 
+      // Verify ownership first
       const [agent] = await db
-        .delete(agents)
-        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)))
-        .returning();
+        .select({ id: agents.id })
+        .from(agents)
+        .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
 
       if (!agent) {
         return reply.status(404).send({ error: "Agent not found" });
       }
+
+      const agentId = agent.id;
+
+      // Clean up all references before deleting the agent:
+      // 1. Remove from group conversation members
+      await db.delete(conversationMembers).where(eq(conversationMembers.agentId, agentId));
+
+      // 2. Delete messages in direct conversations with this agent, then the conversations
+      const directConvos = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(eq(conversations.agentId, agentId));
+
+      if (directConvos.length > 0) {
+        const convIds = directConvos.map((c) => c.id);
+        await db.delete(messages).where(inArray(messages.conversationId, convIds));
+        await db.delete(conversations).where(inArray(conversations.id, convIds));
+      }
+
+      // 3. Unlink from community channels (nullable FK, set to null)
+      await db.update(channels).set({ agentId: null }).where(eq(channels.agentId, agentId));
+
+      // 4. Delete the agent
+      await db.delete(agents).where(eq(agents.id, agentId));
 
       return reply.status(204).send();
     }
