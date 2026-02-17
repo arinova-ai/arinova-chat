@@ -263,7 +263,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       // Derive WebSocket URL from apiUrl
       const wsUrl = account.apiUrl.replace(/^http/, "ws") + "/ws/agent";
 
-      // Pairing code flow: exchange code for agentId (no a2aEndpoint needed now)
+      // Pairing code flow: exchange code for agentId, then persist to config
       if (account.pairingCode && !account.agentId) {
         logger.info(`[${account.accountId}] exchanging pairing code...`);
         try {
@@ -275,6 +275,38 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           logger.info(
             `[${account.accountId}] paired successfully — agentId=${result.agentId} name="${result.name}"`,
           );
+
+          // Persist agentId to config so pairing code isn't needed on restart
+          try {
+            const isDefault = account.accountId === DEFAULT_ACCOUNT_ID;
+            const channelCfg = (ctx.cfg as Record<string, unknown>).channels as Record<string, unknown> | undefined;
+            const arinovaCfg = { ...(channelCfg?.["arinova-chat"] as Record<string, unknown> ?? {}) };
+
+            if (isDefault) {
+              arinovaCfg.agentId = result.agentId;
+              delete arinovaCfg.pairingCode;
+            } else {
+              const accounts = { ...(arinovaCfg.accounts as Record<string, unknown> ?? {}) };
+              const acct = { ...(accounts[account.accountId] as Record<string, unknown> ?? {}) };
+              acct.agentId = result.agentId;
+              delete acct.pairingCode;
+              accounts[account.accountId] = acct;
+              arinovaCfg.accounts = accounts;
+            }
+
+            const updatedCfg = {
+              ...ctx.cfg,
+              channels: {
+                ...channelCfg,
+                "arinova-chat": arinovaCfg,
+              },
+            };
+            await core.config.writeConfigFile(updatedCfg);
+            logger.info(`[${account.accountId}] agentId persisted to config (pairingCode removed)`);
+          } catch (persistErr) {
+            // Non-fatal: agentId is in memory, WS connection will still work this session
+            logger.error(`[${account.accountId}] failed to persist agentId to config: ${String(persistErr)}`);
+          }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           logger.error(`[${account.accountId}] pairing failed: ${errorMsg}`);

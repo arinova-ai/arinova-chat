@@ -165,12 +165,16 @@ async function handleSendMessage(
 
   // Check if agent is connected via WebSocket
   if (!isAgentConnected(conv.agentId)) {
+    const configJson = JSON.stringify({
+      channels: { "arinova-chat": { agentId: conv.agentId } },
+    }, null, 2);
+
     const codeHint = agent.pairingCode
-      ? `Use pairing code: \`${agent.pairingCode}\``
-      : `Configure your AI agent with this bot's ID: \`${conv.agentId}\``;
+      ? `**Option 1 — Pairing code (recommended):**\nAdd to your OpenClaw config:\n\`\`\`json\n${JSON.stringify({ channels: { "arinova-chat": { pairingCode: agent.pairingCode } } }, null, 2)}\n\`\`\`\n\n**Option 2 — Agent ID:**\nAdd to your OpenClaw config:\n\`\`\`json\n${configJson}\n\`\`\``
+      : `Add to your OpenClaw config:\n\`\`\`json\n${configJson}\n\`\`\``;
     const shortHint = agent.pairingCode
       ? `Use pairing code: ${agent.pairingCode}`
-      : `Configure your AI agent with bot ID: ${conv.agentId}`;
+      : `Set channels.arinova-chat.agentId to ${conv.agentId}`;
 
     const [errMsg] = await db
       .insert(messages)

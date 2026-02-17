@@ -112,8 +112,6 @@ export async function handleArinovaChatInbound(params: {
 
   // Track final content from block delivery
   let finalText = "";
-  // Track how much of onPartialReply text has already been sent as chunks
-  let lastSentLength = 0;
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -134,19 +132,13 @@ export async function handleArinovaChatInbound(params: {
       onModelSelected,
       disableBlockStreaming: false,
       onPartialReply: (payload) => {
-        // Token-level streaming — text is the full accumulated reply so far
+        // Send full message text (completed blocks + current partial)
+        // onPartialReply only gives the current block's accumulated text,
+        // so we prepend finalText (completed blocks) to avoid losing them.
         const text = (payload as { text?: string }).text ?? "";
-        if (!text) return;
-
-        // Send only new tokens since last partial
-        const delta = text.slice(lastSentLength);
-        if (delta) {
-          // Debug: log streaming data to trace duplication
-          if (process.env.DEBUG_STREAM) {
-            runtime.log?.(`[stream] lastSent=${lastSentLength} textLen=${text.length} delta=${JSON.stringify(delta.slice(0, 80))}`);
-          }
-          lastSentLength = text.length;
-          sendChunk(delta);
+        if (text) {
+          const fullMessage = finalText ? finalText + "\n\n" + text : text;
+          sendChunk(fullMessage);
         }
       },
     },

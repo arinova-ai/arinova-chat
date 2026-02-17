@@ -12,7 +12,6 @@ const agentConnections = new Map<string, WebSocket>();
 // Pending tasks: taskId -> handler callbacks
 interface PendingTask {
   agentId: string;
-  accumulated: string; // tracks text already forwarded as chunks
   onChunk: (chunk: string) => void;
   onComplete: (content: string) => void;
   onError: (error: string) => void;
@@ -70,7 +69,6 @@ export function sendTaskToAgent(params: {
 
   pendingTasks.set(taskId, {
     agentId,
-    accumulated: "",
     onChunk: (chunk) => {
       resetIdleTimeout();
       onChunk(chunk);
@@ -167,18 +165,8 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (event.type === "agent_chunk") {
           const task = pendingTasks.get(event.taskId);
           if (task && task.agentId === authenticatedAgentId) {
-            let delta = event.chunk;
-
-            // If the chunk starts with our accumulated text, it's full text — extract delta
-            if (delta.length > task.accumulated.length && task.accumulated && delta.startsWith(task.accumulated)) {
-              delta = delta.slice(task.accumulated.length);
-            }
-
-            if (delta) {
-              task.accumulated += delta;
-              // Send full accumulated text (frontend replaces, like TUI/Telegram pattern)
-              task.onChunk(task.accumulated);
-            }
+            // Forward full text directly — frontend replaces content (not appends)
+            task.onChunk(event.chunk);
           }
           return;
         }
