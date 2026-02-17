@@ -14,6 +14,12 @@ const envSchema = z.object({
   GITHUB_CLIENT_SECRET: z.string().default(""),
   UPLOAD_DIR: z.string().default("./uploads"),
   MAX_FILE_SIZE: z.coerce.number().default(10 * 1024 * 1024), // 10MB
+  // Cloudflare R2 (optional — falls back to local disk if not set)
+  R2_ENDPOINT: z.string().default(""),
+  R2_ACCESS_KEY_ID: z.string().default(""),
+  R2_SECRET_ACCESS_KEY: z.string().default(""),
+  R2_BUCKET: z.string().default("arinova-uploads"),
+  R2_PUBLIC_URL: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users } from "lucide-react";
 import type { ConversationType } from "@arinova/shared/types";
-import { BACKEND_URL } from "@/lib/config";
+import { assetUrl } from "@/lib/config";
 
 interface ConversationItemProps {
   id: string;
@@ -144,7 +144,7 @@ export function ConversationItem({
             <Avatar className="h-10 w-10">
               {agentAvatarUrl && type === "direct" && (
                 <AvatarImage
-                  src={`${BACKEND_URL}${agentAvatarUrl}`}
+                  src={assetUrl(agentAvatarUrl)}
                   alt={agentName}
                   className="object-cover"
                 />

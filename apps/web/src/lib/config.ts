@@ -23,3 +23,9 @@ function getWsUrl(): string {
 
 export const BACKEND_URL = getBackendUrl();
 export const WS_URL = getWsUrl();
+
+/** Resolve a URL that may be absolute (R2) or relative (/uploads/...) */
+export function assetUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${BACKEND_URL}${url}`;
+}

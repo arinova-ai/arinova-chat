@@ -3,6 +3,8 @@ import { db } from "../db/index.js";
 import { messages, conversations, attachments, agents } from "../db/schema.js";
 import { eq, and, lt, gt, desc, asc, inArray, ilike, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
+import { isR2Configured } from "../lib/r2.js";
+import { env } from "../env.js";
 
 /** Attach attachment data to a list of messages */
 async function withAttachments(items: (typeof messages.$inferSelect)[]) {
@@ -30,7 +32,9 @@ async function withAttachments(items: (typeof messages.$inferSelect)[]) {
         fileName: a.fileName,
         fileType: a.fileType,
         fileSize: a.fileSize,
-        url: `/uploads/${a.storagePath}`,
+        url: isR2Configured
+          ? `${env.R2_PUBLIC_URL}/${a.storagePath}`
+          : `/uploads/${a.storagePath}`,
         createdAt: a.createdAt,
       })),
     };

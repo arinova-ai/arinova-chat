@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
-import { BACKEND_URL } from "@/lib/config";
+import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import type { ConversationType } from "@arinova/shared/types";
 
@@ -56,7 +56,7 @@ export function ChatHeader({
           <Avatar className="h-8 w-8">
             {agentAvatarUrl ? (
               <img
-                src={`${BACKEND_URL}${agentAvatarUrl}`}
+                src={assetUrl(agentAvatarUrl)}
                 alt={agentName}
                 className="h-full w-full object-cover"
               />

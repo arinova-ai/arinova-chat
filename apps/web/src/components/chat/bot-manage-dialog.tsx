@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { BACKEND_URL } from "@/lib/config";
+import { BACKEND_URL, assetUrl } from "@/lib/config";
 
 const CATEGORIES = [
   { value: "assistant", label: "AI Assistant" },
@@ -317,7 +317,7 @@ export function BotManageDialog({
             >
               {avatarUrl ? (
                 <img
-                  src={`${BACKEND_URL}${avatarUrl}`}
+                  src={assetUrl(avatarUrl)}
                   alt={name}
                   className="h-full w-full object-cover"
                 />

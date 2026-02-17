@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bot, Loader2, SearchX } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
-import { BACKEND_URL } from "@/lib/config";
+import { assetUrl } from "@/lib/config";
 
 /** Highlight keyword matches in text, returning React elements */
 function HighlightedSnippet({
@@ -108,7 +108,7 @@ export function SearchResults() {
                 <Avatar className="mt-0.5 h-9 w-9 shrink-0">
                   {result.agentAvatarUrl ? (
                     <img
-                      src={`${BACKEND_URL}${result.agentAvatarUrl}`}
+                      src={assetUrl(result.agentAvatarUrl)}
                       alt={result.agentName ?? ""}
                       className="h-full w-full object-cover"
                     />

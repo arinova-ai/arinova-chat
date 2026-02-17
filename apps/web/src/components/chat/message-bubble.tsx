@@ -20,7 +20,7 @@ import {
   Download,
   Square,
 } from "lucide-react";
-import { BACKEND_URL } from "@/lib/config";
+import { assetUrl } from "@/lib/config";
 
 interface MessageBubbleProps {
   message: Message;
@@ -128,12 +128,12 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
                   att.fileType.startsWith("image/") ? (
                     <a
                       key={att.id}
-                      href={`${BACKEND_URL}${att.url}`}
+                      href={assetUrl(att.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       <img
-                        src={`${BACKEND_URL}${att.url}`}
+                        src={assetUrl(att.url)}
                         alt={att.fileName}
                         className="max-w-full max-h-64 rounded-lg object-contain"
                       />
@@ -141,7 +141,7 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
                   ) : (
                     <a
                       key={att.id}
-                      href={`${BACKEND_URL}${att.url}`}
+                      href={assetUrl(att.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 rounded-lg bg-neutral-700/50 px-3 py-2 text-xs hover:bg-neutral-700"

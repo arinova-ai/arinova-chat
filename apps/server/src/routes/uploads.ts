@@ -4,6 +4,7 @@ import { attachments, messages, conversations } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { triggerAgentResponse } from "../ws/handler.js";
+import { uploadToR2, isR2Configured } from "../lib/r2.js";
 import { env } from "../env.js";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
@@ -60,17 +61,25 @@ export async function uploadRoutes(app: FastifyInstance) {
       // Generate unique filename
       const ext = path.extname(data.filename) || "";
       const storedName = `${randomUUID()}${ext}`;
-      const uploadDir = path.resolve(env.UPLOAD_DIR);
 
-      // Ensure upload directory exists
-      await mkdir(uploadDir, { recursive: true });
+      // Upload to R2 if configured, otherwise fall back to local disk
+      let publicUrl: string;
+      let fileUrl: string;
 
-      const filePath = path.join(uploadDir, storedName);
-      await writeFile(filePath, buffer);
+      const r2Url = await uploadToR2(storedName, buffer, data.mimetype);
 
-      // Build the public URL for the file
-      const fileUrl = `/uploads/${storedName}`;
-      const publicUrl = `${env.BETTER_AUTH_URL}${fileUrl}`;
+      if (r2Url) {
+        // R2: public URL is the CDN domain
+        publicUrl = r2Url;
+        fileUrl = r2Url;
+      } else {
+        // Local fallback
+        const uploadDir = path.resolve(env.UPLOAD_DIR);
+        await mkdir(uploadDir, { recursive: true });
+        await writeFile(path.join(uploadDir, storedName), buffer);
+        fileUrl = `/uploads/${storedName}`;
+        publicUrl = `${env.BETTER_AUTH_URL}${fileUrl}`;
+      }
 
       // Check for caption text in form fields
       const caption = (data.fields as Record<string, { value?: string }>)?.caption?.value ?? "";
@@ -162,13 +171,18 @@ export async function uploadRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Attachment not found" });
       }
 
+      // Return R2 URL or local path
+      const url = isR2Configured
+        ? `${env.R2_PUBLIC_URL}/${attachment.storagePath}`
+        : `/uploads/${attachment.storagePath}`;
+
       return reply.send({
         id: attachment.id,
         messageId: attachment.messageId,
         fileName: attachment.fileName,
         fileType: attachment.fileType,
         fileSize: attachment.fileSize,
-        url: `/uploads/${attachment.storagePath}`,
+        url,
         createdAt: attachment.createdAt,
       });
     }

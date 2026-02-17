@@ -14,7 +14,7 @@ import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp, Settings
 import { cn } from "@/lib/utils";
 import { BotManageDialog } from "./bot-manage-dialog";
 import type { Agent } from "@arinova/shared/types";
-import { BACKEND_URL } from "@/lib/config";
+import { assetUrl } from "@/lib/config";
 
 interface NewChatDialogProps {
   open: boolean;
@@ -100,7 +100,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                 >
                   {agent.avatarUrl ? (
                     <img
-                      src={`${BACKEND_URL}${agent.avatarUrl}`}
+                      src={assetUrl(agent.avatarUrl)}
                       alt={agent.name}
                       className="h-10 w-10 shrink-0 rounded-full object-cover"
                     />
@@ -274,7 +274,7 @@ function CreateGroupDialog({
                 >
                   {agent.avatarUrl ? (
                     <img
-                      src={`${BACKEND_URL}${agent.avatarUrl}`}
+                      src={assetUrl(agent.avatarUrl)}
                       alt={agent.name}
                       className="h-8 w-8 shrink-0 rounded-full object-cover"
                     />

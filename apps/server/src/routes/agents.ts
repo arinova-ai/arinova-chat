@@ -12,6 +12,7 @@ import { generateSecretToken } from "../utils/pairing-code.js";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { env } from "../env.js";
+import { uploadToR2 } from "../lib/r2.js";
 
 export async function agentRoutes(app: FastifyInstance) {
   // Exchange bot token for agent connection (public — no auth required)
@@ -201,11 +202,20 @@ export async function agentRoutes(app: FastifyInstance) {
       // Save file
       const ext = data.filename.split(".").pop() ?? "jpg";
       const filename = `avatar_${agent.id}_${Date.now()}.${ext}`;
-      const avatarDir = path.resolve(env.UPLOAD_DIR, "avatars");
-      await mkdir(avatarDir, { recursive: true });
-      await writeFile(path.join(avatarDir, filename), buffer);
+      const r2Key = `avatars/${filename}`;
 
-      const avatarUrl = `/uploads/avatars/${filename}`;
+      // Upload to R2 if configured, otherwise local disk
+      const r2Url = await uploadToR2(r2Key, buffer, data.mimetype);
+      let avatarUrl: string;
+
+      if (r2Url) {
+        avatarUrl = r2Url;
+      } else {
+        const avatarDir = path.resolve(env.UPLOAD_DIR, "avatars");
+        await mkdir(avatarDir, { recursive: true });
+        await writeFile(path.join(avatarDir, filename), buffer);
+        avatarUrl = `/uploads/avatars/${filename}`;
+      }
 
       // Update agent
       const [updated] = await db
