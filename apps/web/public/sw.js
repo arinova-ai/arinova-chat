@@ -1,4 +1,4 @@
-const CACHE_NAME = "arinova-v1";
+const CACHE_NAME = "arinova-v2";
 const PRECACHE_URLS = ["/", "/login", "/register"];
 
 self.addEventListener("install", (event) => {
@@ -19,6 +19,12 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
