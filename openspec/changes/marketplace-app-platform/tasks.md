@@ -2,7 +2,7 @@
 
 - [x] 1.1 Define TypeScript types for `manifest.json` schema in `packages/shared/src/types/`
 - [x] 1.2 Implement manifest JSON Schema validator (validate required fields, enums, JSON Schema for state/actions)
-- [ ] 1.3 Write unit tests for manifest validation (valid manifest, missing fields, invalid enums, static vs dynamic mode)
+- [x] 1.3 Write unit tests for manifest validation (valid manifest, missing fields, invalid enums, static vs dynamic mode)
 
 ## 2. Database Schema
 
@@ -24,13 +24,13 @@
 
 - [x] 4.1 Implement JS static scanner — detect `eval()`, `new Function()`, `import()`, `document.cookie`, `top.location`, `parent.location`, `window.open`, `setTimeout("string"`
 - [x] 4.2 Integrate scanner into submission pipeline (auto-reject on forbidden API detection)
-- [ ] 4.3 Write tests for scanner (clean code passes, each forbidden pattern detected)
+- [x] 4.3 Write tests for scanner (clean code passes, each forbidden pattern detected)
 
 ## 5. App Review Pipeline
 
 - [x] 5.1 Implement permission-tier classification (Tier 0/1/2 based on manifest permissions)
 - [x] 5.2 Auto-publish flow for Tier 0/1 apps after passing scan
-- [ ] 5.3 Create admin review queue UI for Tier 2 apps (network whitelist review)
+- [x] 5.3 Create admin review queue UI for Tier 2 apps (network whitelist review)
 - [x] 5.4 Implement app status lifecycle: submitted → scanning → in_review → published / rejected
 - [x] 5.5 Implement app suspension endpoint and "app suspended" display
 
