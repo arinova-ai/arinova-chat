@@ -115,6 +115,17 @@
   animation: blink 0.8s ease-in-out infinite;
 }
 
+/* Search result highlight animation */
+@keyframes search-flash {
+  0% { background: oklch(0.6 0.15 85 / 30%); }
+  100% { background: transparent; }
+}
+
+.search-highlight {
+  animation: search-flash 2s ease-out forwards;
+  border-radius: var(--radius);
+}
+
 /* iOS/PWA viewport fallback: prefer dvh, fallback to fill-available */
 .app-dvh {
   height: calc(var(--app-height, 100dvh) + env(safe-area-inset-bottom, 0px));

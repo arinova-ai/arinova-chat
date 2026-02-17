@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import rehypeHighlight from "rehype-highlight";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { Copy, Check } from "lucide-react";
@@ -83,7 +84,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
   return (
     <div className="markdown-content text-sm leading-relaxed">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[
           rehypeHighlight,
           [rehypeSanitize, sanitizeSchema],

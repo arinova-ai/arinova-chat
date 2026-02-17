@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -12,11 +12,20 @@ import { ConversationList } from "./conversation-list";
 import { NewChatDialog, CreateBotDialog } from "./new-chat-dialog";
 
 export function Sidebar() {
-  const searchQuery = useChatStore((s) => s.searchQuery);
-  const setSearchQuery = useChatStore((s) => s.setSearchQuery);
+  const searchMessages = useChatStore((s) => s.searchMessages);
+  const storeSearchQuery = useChatStore((s) => s.searchQuery);
+  const [localQuery, setLocalQuery] = useState("");
+  const composingRef = useRef(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [createBotOpen, setCreateBotOpen] = useState(false);
   const router = useRouter();
+
+  // Sync local input when store search is cleared (e.g. back from results)
+  useEffect(() => {
+    if (!storeSearchQuery && localQuery) {
+      setLocalQuery("");
+    }
+  }, [storeSearchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for platform command "/new" to open the new chat dialog
   useEffect(() => {
@@ -55,9 +64,16 @@ export function Sidebar() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search conversations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search messages..."
+            value={localQuery}
+            onChange={(e) => setLocalQuery(e.target.value)}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={() => { composingRef.current = false; }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !composingRef.current && localQuery.trim()) {
+                searchMessages(localQuery.trim());
+              }
+            }}
             className="pl-9 bg-neutral-800 border-none"
           />
         </div>

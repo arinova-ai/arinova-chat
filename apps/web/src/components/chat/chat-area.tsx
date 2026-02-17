@@ -7,15 +7,21 @@ import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
+import { SearchResults } from "./search-results";
 
 export function ChatArea() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const searchActive = useChatStore((s) => s.searchActive);
   const conversations = useChatStore((s) => s.conversations);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const agents = useChatStore((s) => s.agents);
   const agentHealth = useChatStore((s) => s.agentHealth);
 
   const [manageOpen, setManageOpen] = useState(false);
+
+  if (searchActive) {
+    return <SearchResults />;
+  }
 
   if (!activeConversationId) {
     return <EmptyState />;

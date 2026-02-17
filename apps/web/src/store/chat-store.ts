@@ -27,6 +27,17 @@ interface AgentSkill {
   description: string;
 }
 
+interface SearchResult {
+  messageId: string;
+  conversationId: string;
+  content: string;
+  role: string;
+  createdAt: string;
+  conversationTitle: string | null;
+  agentName: string | null;
+  agentAvatarUrl: string | null;
+}
+
 interface ChatState {
   agents: Agent[];
   conversations: ConversationWithAgent[];
@@ -34,6 +45,11 @@ interface ChatState {
   activeConversationId: string | null;
   sidebarOpen: boolean;
   searchQuery: string;
+  searchResults: SearchResult[];
+  searchTotal: number;
+  searchLoading: boolean;
+  searchActive: boolean;
+  highlightMessageId: string | null;
   loading: boolean;
   unreadCounts: Record<string, number>;
   agentHealth: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }>;
@@ -44,6 +60,9 @@ interface ChatState {
   setActiveConversation: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
+  searchMessages: (query: string) => Promise<void>;
+  clearSearch: () => void;
+  jumpToMessage: (conversationId: string, messageId: string) => Promise<void>;
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
@@ -77,6 +96,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeConversationId: null,
   sidebarOpen: false,
   searchQuery: "",
+  searchResults: [],
+  searchTotal: 0,
+  searchLoading: false,
+  searchActive: false,
+  highlightMessageId: null,
   loading: false,
   unreadCounts: {},
   agentHealth: {},
@@ -93,6 +117,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       activeConversationId: id,
       sidebarOpen: false,
+      searchActive: false,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
     });
     get().loadMessages(id);
@@ -102,7 +127,61 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setSearchQuery: (query) => {
     set({ searchQuery: query });
-    get().loadConversations(query || undefined);
+  },
+
+  searchMessages: async (query) => {
+    if (!query.trim()) return;
+    set({ searchQuery: query, searchLoading: true, searchActive: true, activeConversationId: null });
+    try {
+      const data = await api<{ results: SearchResult[]; total: number }>(
+        `/api/messages/search?q=${encodeURIComponent(query)}&limit=30`
+      );
+      set({ searchResults: data.results, searchTotal: data.total });
+    } catch {
+      set({ searchResults: [], searchTotal: 0 });
+    } finally {
+      set({ searchLoading: false });
+    }
+  },
+
+  clearSearch: () => {
+    set({
+      searchQuery: "",
+      searchResults: [],
+      searchTotal: 0,
+      searchActive: false,
+      searchLoading: false,
+      highlightMessageId: null,
+    });
+  },
+
+  jumpToMessage: async (conversationId, messageId) => {
+    // Clear search UI, load messages around target
+    set({
+      searchActive: false,
+      activeConversationId: conversationId,
+      sidebarOpen: false,
+      highlightMessageId: messageId,
+      unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
+    });
+
+    // Load messages centered around the target
+    const data = await api<{ messages: Message[]; hasMoreUp: boolean; hasMoreDown: boolean }>(
+      `/api/conversations/${conversationId}/messages?around=${messageId}&limit=50`
+    );
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [conversationId]: data.messages,
+      },
+    });
+
+    // Clear highlight after 3 seconds
+    setTimeout(() => {
+      if (get().highlightMessageId === messageId) {
+        set({ highlightMessageId: null });
+      }
+    }, 3000);
   },
 
   loadAgents: async () => {

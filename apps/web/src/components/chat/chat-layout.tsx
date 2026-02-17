@@ -7,6 +7,7 @@ import { useChatStore } from "@/store/chat-store";
 
 export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const searchActive = useChatStore((s) => s.searchActive);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const loadAgents = useChatStore((s) => s.loadAgents);
   const loadConversations = useChatStore((s) => s.loadConversations);
@@ -34,25 +35,25 @@ export function ChatLayout() {
     const isMobile = window.matchMedia("(max-width: 767px)").matches;
     if (!isMobile) return;
 
-    if (activeConversationId && !prevConvRef.current) {
-      // Entering a conversation → push history entry
+    if ((activeConversationId || searchActive) && !prevConvRef.current) {
+      // Entering a conversation or search → push history entry
       history.pushState({ arinovaChat: true }, "");
-    } else if (!activeConversationId && prevConvRef.current) {
-      // Leaving a conversation via UI (back button) — no action needed
     }
-    prevConvRef.current = activeConversationId;
-  }, [activeConversationId]);
+    prevConvRef.current = activeConversationId || (searchActive ? "__search__" : null);
+  }, [activeConversationId, searchActive]);
 
   useEffect(() => {
     const handler = (e: PopStateEvent) => {
       const isMobile = window.matchMedia("(max-width: 767px)").matches;
       if (!isMobile) return;
 
-      const current = useChatStore.getState().activeConversationId;
-      if (current) {
-        // Intercept back navigation: go to chat list instead of leaving the page
+      const state = useChatStore.getState();
+      if (state.activeConversationId) {
         e.preventDefault();
         setActiveConversation(null);
+      } else if (state.searchActive) {
+        e.preventDefault();
+        state.clearSearch();
       }
     };
     window.addEventListener("popstate", handler);
@@ -60,19 +61,19 @@ export function ChatLayout() {
   }, [setActiveConversation]);
 
   return (
-    <div className={`app-dvh flex min-h-0 overflow-hidden ${activeConversationId ? "bg-background" : "bg-card md:bg-background"}`}>
+    <div className={`app-dvh flex min-h-0 overflow-hidden ${(activeConversationId || searchActive) ? "bg-background" : "bg-card md:bg-background"}`}>
       {/* Desktop: always show sidebar */}
       <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
         <Sidebar />
       </div>
 
-      {/* Mobile: sidebar fullscreen when no conversation, chat when selected */}
-      <div className={`md:hidden h-full overflow-hidden bg-card ${activeConversationId ? "hidden" : "flex-1"}`}>
+      {/* Mobile: sidebar fullscreen when no conversation/search, chat when selected */}
+      <div className={`md:hidden h-full overflow-hidden bg-card ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
         <Sidebar />
       </div>
 
-      {/* Chat area: always visible on desktop, only when conversation selected on mobile */}
-      <div className={`h-full flex-1 min-w-0 bg-background ${activeConversationId ? "" : "hidden md:block"}`}>
+      {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
+      <div className={`h-full flex-1 min-w-0 bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
         <ChatArea />
       </div>
     </div>
