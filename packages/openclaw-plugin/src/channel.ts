@@ -28,11 +28,11 @@ import { createWSClient } from "./ws-client.js";
 import { handleArinovaChatInbound } from "./inbound.js";
 
 const meta = {
-  id: "arinova-chat",
+  id: "openclaw-arinova-ai",
   label: "Arinova Chat",
   selectionLabel: "Arinova Chat (A2A streaming)",
-  docsPath: "/channels/arinova-chat",
-  docsLabel: "arinova-chat",
+  docsPath: "/channels/openclaw-arinova-ai",
+  docsLabel: "openclaw-arinova-ai",
   blurb: "Human-to-AI messaging via Arinova Chat with native streaming.",
   aliases: ["arinova"],
   order: 70,
@@ -40,14 +40,14 @@ const meta = {
 };
 
 export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
-  id: "arinova-chat",
+  id: "openclaw-arinova-ai",
   meta,
   pairing: {
     idLabel: "arinovaUserId",
     normalizeAllowEntry: (entry) =>
-      entry.replace(/^(arinova-chat|arinova):/i, "").toLowerCase(),
+      entry.replace(/^(openclaw-arinova-ai|arinova):/i, "").toLowerCase(),
     notifyApproval: async ({ id }) => {
-      console.log(`[arinova-chat] User ${id} approved for pairing`);
+      console.log(`[openclaw-arinova-ai] User ${id} approved for pairing`);
     },
   },
   capabilities: {
@@ -58,7 +58,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
     nativeCommands: false,
     blockStreaming: false,
   },
-  reload: { configPrefixes: ["channels.arinova-chat"] },
+  reload: { configPrefixes: ["channels.openclaw-arinova-ai"] },
   configSchema: buildChannelConfigSchema(ArinovaChatConfigSchema),
   config: {
     listAccountIds: (cfg) => listArinovaChatAccountIds(cfg as CoreConfig),
@@ -90,25 +90,25 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       allowFrom
         .map((entry) => String(entry).trim())
         .filter(Boolean)
-        .map((entry) => entry.replace(/^(arinova-chat|arinova):/i, ""))
+        .map((entry) => entry.replace(/^(openclaw-arinova-ai|arinova):/i, ""))
         .map((entry) => entry.toLowerCase()),
   },
   security: {
     resolveDmPolicy: ({ cfg, accountId, account }) => {
       const resolvedAccountId = accountId ?? account.accountId ?? DEFAULT_ACCOUNT_ID;
       const useAccountPath = Boolean(
-        cfg.channels?.["arinova-chat"]?.accounts?.[resolvedAccountId],
+        cfg.channels?.["openclaw-arinova-ai"]?.accounts?.[resolvedAccountId],
       );
       const basePath = useAccountPath
-        ? `channels.arinova-chat.accounts.${resolvedAccountId}.`
-        : "channels.arinova-chat.";
+        ? `channels.openclaw-arinova-ai.accounts.${resolvedAccountId}.`
+        : "channels.openclaw-arinova-ai.";
       return {
         policy: account.config.dmPolicy ?? "open",
         allowFrom: account.config.allowFrom ?? [],
         policyPath: `${basePath}dmPolicy`,
         allowFromPath: basePath,
-        approveHint: formatPairingApproveHint("arinova-chat"),
-        normalizeEntry: (raw) => raw.replace(/^(arinova-chat|arinova):/i, "").toLowerCase(),
+        approveHint: formatPairingApproveHint("openclaw-arinova-ai"),
+        normalizeEntry: (raw) => raw.replace(/^(openclaw-arinova-ai|arinova):/i, "").toLowerCase(),
       };
     },
     collectWarnings: () => [],
@@ -125,7 +125,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
     applyAccountName: ({ cfg, accountId, name }) =>
       applyAccountNameToChannelSection({
         cfg,
-        channelKey: "arinova-chat",
+        channelKey: "openclaw-arinova-ai",
         accountId,
         name,
       }),
@@ -136,7 +136,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       };
       const namedConfig = applyAccountNameToChannelSection({
         cfg,
-        channelKey: "arinova-chat",
+        channelKey: "openclaw-arinova-ai",
         accountId,
         name: setupInput.name,
       });
@@ -145,8 +145,8 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           ...namedConfig,
           channels: {
             ...namedConfig.channels,
-            "arinova-chat": {
-              ...namedConfig.channels?.["arinova-chat"],
+            "openclaw-arinova-ai": {
+              ...namedConfig.channels?.["openclaw-arinova-ai"],
               enabled: true,
               apiUrl: setupInput.apiUrl,
               agentId: setupInput.agentId,
@@ -158,13 +158,13 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         ...namedConfig,
         channels: {
           ...namedConfig.channels,
-          "arinova-chat": {
-            ...namedConfig.channels?.["arinova-chat"],
+          "openclaw-arinova-ai": {
+            ...namedConfig.channels?.["openclaw-arinova-ai"],
             enabled: true,
             accounts: {
-              ...namedConfig.channels?.["arinova-chat"]?.accounts,
+              ...namedConfig.channels?.["openclaw-arinova-ai"]?.accounts,
               [accountId]: {
-                ...namedConfig.channels?.["arinova-chat"]?.accounts?.[accountId],
+                ...namedConfig.channels?.["openclaw-arinova-ai"]?.accounts?.[accountId],
                 enabled: true,
                 apiUrl: setupInput.apiUrl,
                 agentId: setupInput.agentId,
@@ -184,7 +184,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       const result = await sendMessageArinovaChat(to, text, {
         accountId: accountId ?? undefined,
       });
-      return { channel: "arinova-chat", messageId: result.messageId ?? "inline", ...result };
+      return { channel: "openclaw-arinova-ai", messageId: result.messageId ?? "inline", ...result };
     },
     sendMedia: async ({ to, text, mediaUrl, accountId }) => {
       // Convert media URL to markdown image so frontend renders it as <img>
@@ -193,7 +193,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       const result = await sendMessageArinovaChat(to, messageWithMedia, {
         accountId: accountId ?? undefined,
       });
-      return { channel: "arinova-chat", messageId: result.messageId ?? "inline", ...result };
+      return { channel: "openclaw-arinova-ai", messageId: result.messageId ?? "inline", ...result };
     },
   },
   status: {
@@ -251,7 +251,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       const core = getArinovaChatRuntime();
       const cfg = ctx.cfg as CoreConfig;
       const logger = core.logging.getChildLogger({
-        channel: "arinova-chat",
+        channel: "openclaw-arinova-ai",
         accountId: account.accountId,
       });
       const runtime: RuntimeEnv = ctx.runtime ?? {
@@ -282,7 +282,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           try {
             const isDefault = account.accountId === DEFAULT_ACCOUNT_ID;
             const channelCfg = (ctx.cfg as Record<string, unknown>).channels as Record<string, unknown> | undefined;
-            const arinovaCfg = { ...(channelCfg?.["arinova-chat"] as Record<string, unknown> ?? {}) };
+            const arinovaCfg = { ...(channelCfg?.["openclaw-arinova-ai"] as Record<string, unknown> ?? {}) };
 
             if (isDefault) {
               arinovaCfg.agentId = result.agentId;
@@ -298,7 +298,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
               ...ctx.cfg,
               channels: {
                 ...channelCfg,
-                "arinova-chat": arinovaCfg,
+                "openclaw-arinova-ai": arinovaCfg,
               },
             };
             await core.config.writeConfigFile(updatedCfg);
@@ -325,9 +325,10 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       const client = createWSClient({
         wsUrl,
         agentId: account.agentId,
+        secretToken: account.botToken,
         onTask: async ({ taskId, conversationId, content, sendChunk, sendComplete, sendError }) => {
           core.channel.activity.record({
-            channel: "arinova-chat",
+            channel: "openclaw-arinova-ai",
             accountId: account.accountId,
             direction: "inbound",
             at: Date.now(),
@@ -345,13 +346,13 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           });
         },
         onConnected: () => {
-          logger.info(`[arinova-chat:${account.accountId}] WebSocket connected`);
+          logger.info(`[openclaw-arinova-ai:${account.accountId}] WebSocket connected`);
         },
         onDisconnected: () => {
-          logger.info(`[arinova-chat:${account.accountId}] WebSocket disconnected, will reconnect...`);
+          logger.info(`[openclaw-arinova-ai:${account.accountId}] WebSocket disconnected, will reconnect...`);
         },
         onError: (error) => {
-          logger.error(`[arinova-chat:${account.accountId}] WebSocket error: ${error.message}`);
+          logger.error(`[openclaw-arinova-ai:${account.accountId}] WebSocket error: ${error.message}`);
         },
         abortSignal: ctx.abortSignal,
       });

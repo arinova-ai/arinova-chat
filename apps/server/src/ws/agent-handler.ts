@@ -179,23 +179,26 @@ function cleanupAgentVoiceSessions(agentId: string) {
 export async function agentWsRoutes(app: FastifyInstance) {
   app.get("/ws/agent", { websocket: true }, async (socket, _request) => {
     let authenticatedAgentId: string | null = null;
+    app.log.info("Agent WS: new connection opened");
 
     // Auth timeout: agent must send agent_auth within 10 seconds
     const authTimer = setTimeout(() => {
       if (!authenticatedAgentId) {
+        app.log.warn("Agent WS: auth timeout — no agent_auth received in 10s");
         sendToAgent(socket, { type: "auth_error", error: "Authentication timeout" });
         socket.close(4408, "Authentication timeout");
       }
     }, AUTH_TIMEOUT_MS);
 
-    socket.on("message", async (data: RawData) => {
+    socket.on("message", async (data: RawData, isBinary: boolean) => {
       try {
         // Handle binary audio from agent (Task 4.3 — agent → server)
-        if (Buffer.isBuffer(data) && authenticatedAgentId) {
-          // Binary frame: first 36 bytes = sessionId (UUID), rest = audio data
+        // Use isBinary flag from ws library to distinguish real binary frames
+        // from text frames (ws delivers all as Buffer by default)
+        if (isBinary && authenticatedAgentId) {
           if (data.length > 36) {
-            const sessionId = data.subarray(0, 36).toString();
-            const audioData = data.subarray(36);
+            const sessionId = Buffer.from(data as Buffer).subarray(0, 36).toString();
+            const audioData = Buffer.from(data as Buffer).subarray(36);
             // Forward to voice handler for user playback (Task 3.4)
             import("./voice-handler.js").then(({ sendAudioToUser }) => {
               sendAudioToUser(sessionId, audioData);
@@ -298,7 +301,8 @@ export async function agentWsRoutes(app: FastifyInstance) {
       }
     });
 
-    socket.on("close", () => {
+    socket.on("close", (code, reason) => {
+      app.log.info(`Agent WS: connection closed (code=${code}, reason=${reason?.toString() ?? ''}, authenticated=${!!authenticatedAgentId})`);
       clearTimeout(authTimer);
       if (authenticatedAgentId) {
         // Only remove if this socket is still the registered one

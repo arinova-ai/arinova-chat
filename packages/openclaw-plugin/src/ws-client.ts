@@ -6,6 +6,7 @@
 export type AgentWSClientOptions = {
   wsUrl: string;
   agentId: string;
+  secretToken: string;
   onTask: (params: {
     taskId: string;
     conversationId: string;
@@ -29,7 +30,7 @@ const RECONNECT_INTERVAL_MS = 5_000;
 const PING_INTERVAL_MS = 30_000;
 
 export function createWSClient(opts: AgentWSClientOptions): AgentWSClient {
-  const { wsUrl, agentId, onTask, onConnected, onDisconnected, onError, abortSignal } = opts;
+  const { wsUrl, agentId, secretToken, onTask, onConnected, onDisconnected, onError, abortSignal } = opts;
 
   let ws: WebSocket | null = null;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -78,7 +79,7 @@ export function createWSClient(opts: AgentWSClientOptions): AgentWSClient {
 
     ws.onopen = () => {
       // Authenticate immediately
-      send({ type: "agent_auth", agentId });
+      send({ type: "agent_auth", agentId, secretToken });
 
       // Start ping keepalive
       pingTimer = setInterval(() => {
