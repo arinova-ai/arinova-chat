@@ -13,8 +13,48 @@ import {
   joinPlaygroundSchema,
 } from "@arinova/shared/schemas";
 import type { PlaygroundDefinition } from "@arinova/shared/types";
+import {
+  BUILT_IN_TEMPLATES,
+  getTemplateList,
+} from "../lib/playground-templates.js";
 
 export async function playgroundRoutes(app: FastifyInstance) {
+  // ===== Templates =====
+
+  // List available templates
+  app.get("/api/playgrounds/templates", async (request, reply) => {
+    await requireAuth(request, reply);
+    return reply.send(getTemplateList());
+  });
+
+  // Deploy a template as a new playground
+  app.post<{ Params: { slug: string } }>(
+    "/api/playgrounds/templates/:slug/deploy",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+      const template = BUILT_IN_TEMPLATES[request.params.slug];
+
+      if (!template) {
+        return reply.status(404).send({ error: "Template not found" });
+      }
+
+      const [playground] = await db
+        .insert(playgrounds)
+        .values({
+          ownerId: user.id,
+          name: template.metadata.name,
+          description: template.metadata.description,
+          category: template.metadata.category,
+          tags: template.metadata.tags ?? [],
+          definition: template,
+          isPublic: true,
+        })
+        .returning();
+
+      return reply.status(201).send(playground);
+    }
+  );
+
   // ===== Playground CRUD =====
 
   // Create playground
