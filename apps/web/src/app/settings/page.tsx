@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
@@ -8,7 +8,9 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Loader2, User, Lock, LogOut } from "lucide-react";
+import { ArrowLeft, Loader2, User, Lock, LogOut, Bell, BellOff, Moon } from "lucide-react";
+import { api } from "@/lib/api";
+import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 
 function SettingsContent() {
   const router = useRouter();
@@ -250,6 +252,9 @@ function SettingsContent() {
             </Button>
           </form>
         </div>
+
+        {/* Notifications */}
+        <NotificationSettings />
 
         <Separator className="my-8" />
 

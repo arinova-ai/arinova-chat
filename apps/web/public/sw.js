@@ -27,6 +27,54 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// ===== Push Notifications =====
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: "Arinova Chat", body: event.data.text() };
+  }
+
+  const { title = "Arinova Chat", body = "", url, type, data } = payload;
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: type || "default",
+      data: { url, type, ...data },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const url = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Focus existing window if available
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin)) {
+          client.focus();
+          client.postMessage({ type: "NOTIFICATION_CLICK", url });
+          return;
+        }
+      }
+      // Otherwise open new window
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
+// ===== Fetch Caching =====
+
 self.addEventListener("fetch", (event) => {
   // Skip non-GET and API/WS requests
   if (

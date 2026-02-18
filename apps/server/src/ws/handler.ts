@@ -7,6 +7,8 @@ import { eq, and } from "drizzle-orm";
 import { wsClientEventSchema } from "@arinova/shared/schemas";
 import type { WSServerEvent } from "@arinova/shared/types";
 import { isAgentConnected, sendTaskToAgent } from "./agent-handler.js";
+import { sendPushToUser } from "../lib/push.js";
+import { shouldSendPush } from "../lib/push-trigger.js";
 
 // Active connections: userId -> Set of WebSockets
 const wsConnections = new Map<string, Set<WebSocket>>();
@@ -23,6 +25,11 @@ function send(ws: WebSocket, event: WSServerEvent) {
   if (ws.readyState === ws.OPEN) {
     ws.send(JSON.stringify(event));
   }
+}
+
+export function isUserOnline(userId: string): boolean {
+  const sockets = wsConnections.get(userId);
+  return Boolean(sockets && sockets.size > 0);
 }
 
 function sendToUser(userId: string, event: WSServerEvent) {
@@ -260,6 +267,22 @@ export async function triggerAgentResponse(
         conversationId,
         messageId: agentMsg.id,
       });
+
+      // Push notification if user is offline
+      if (!isUserOnline(userId)) {
+        const ok = await shouldSendPush(userId, "message");
+        if (ok) {
+          const preview = fullContent.length > 100
+            ? fullContent.slice(0, 100) + "…"
+            : fullContent;
+          sendPushToUser(userId, {
+            type: "message",
+            title: agent.name,
+            body: preview,
+            url: `/chat/${conversationId}`,
+          }).catch(() => {});
+        }
+      }
     },
     onError: async (error) => {
       streamCancellers.delete(agentMsg.id);

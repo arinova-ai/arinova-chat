@@ -22,6 +22,10 @@ const envSchema = z.object({
   R2_PUBLIC_URL: z.string().default(""),
   // Comma-separated list of admin email addresses
   ADMIN_EMAILS: z.string().default(""),
+  // Web Push (VAPID)
+  VAPID_PUBLIC_KEY: z.string().default(""),
+  VAPID_PRIVATE_KEY: z.string().default(""),
+  VAPID_SUBJECT: z.string().default("mailto:admin@arinova.ai"),
 });
 
 export const env = envSchema.parse(process.env);
