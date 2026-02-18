@@ -26,6 +26,15 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().default(""),
   VAPID_PRIVATE_KEY: z.string().default(""),
   VAPID_SUBJECT: z.string().default("mailto:admin@arinova.ai"),
+  // Voice / WebRTC (mediasoup)
+  MEDIASOUP_LISTEN_IP: z.string().default("0.0.0.0"),
+  MEDIASOUP_ANNOUNCED_IP: z.string().default(""),
+  MEDIASOUP_RTC_MIN_PORT: z.coerce.number().default(40000),
+  MEDIASOUP_RTC_MAX_PORT: z.coerce.number().default(49999),
+  STUN_SERVERS: z.string().default("stun:stun.l.google.com:19302"),
+  TURN_SERVERS: z.string().default(""),
+  TURN_USERNAME: z.string().default(""),
+  TURN_CREDENTIAL: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

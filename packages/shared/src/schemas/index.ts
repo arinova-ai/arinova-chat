@@ -30,6 +30,7 @@ export const updateAgentSchema = z.object({
     label: z.string().min(1).max(50),
     message: z.string().min(1).max(500),
   })).max(10).optional().nullable(),
+  voiceCapable: z.boolean().optional(),
   notificationsEnabled: z.boolean().optional(),
   isPublic: z.boolean().optional(),
   category: z.string().max(50).optional().nullable(),
@@ -343,9 +344,60 @@ export const agentWSClientEventSchema = z.discriminatedUnion("type", [
     error: z.string(),
   }),
   z.object({
+    type: z.literal("voice_call_end"),
+    sessionId: z.string().uuid(),
+    reason: z.string(),
+  }),
+  z.object({
     type: z.literal("ping"),
   }),
 ]);
+
+// ===== Voice Call =====
+const voiceAudioFormatSchema = z.enum(["opus", "pcm-16-16k-mono"]);
+
+export const voiceWSClientEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("voice_auth"),
+    conversationId: z.string().uuid(),
+    agentId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("voice_offer"),
+    sessionId: z.string().uuid(),
+    sdp: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("voice_answer"),
+    sessionId: z.string().uuid(),
+    sdp: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("voice_ice_candidate"),
+    sessionId: z.string().uuid(),
+    candidate: z.string(),
+    sdpMid: z.string().nullable(),
+    sdpMLineIndex: z.number().int().nullable(),
+  }),
+  z.object({
+    type: z.literal("voice_hangup"),
+    sessionId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("ping"),
+  }),
+]);
+
+export const voiceCallStartSchema = z.object({
+  sessionId: z.string().uuid(),
+  conversationId: z.string().uuid(),
+  audioFormat: voiceAudioFormatSchema,
+});
+
+export const voiceCallEndSchema = z.object({
+  sessionId: z.string().uuid(),
+  reason: z.string(),
+});
 
 // ===== Push Notifications =====
 

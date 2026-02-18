@@ -4,10 +4,15 @@ import { db } from "../db/index.js";
 import { agents } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { agentWSClientEventSchema } from "@arinova/shared/schemas";
-import type { AgentWSServerEvent } from "@arinova/shared/types";
+import type { AgentWSServerEvent, VoiceAudioFormat } from "@arinova/shared/types";
 
 // Active agent connections: agentId -> WebSocket
 const agentConnections = new Map<string, WebSocket>();
+
+// Active voice sessions per agent: agentId -> sessionId
+const agentVoiceSessions = new Map<string, string>();
+// sessionId -> agentId (reverse lookup)
+const sessionToAgent = new Map<string, string>();
 
 // Pending tasks: taskId -> handler callbacks
 interface PendingTask {
@@ -106,6 +111,71 @@ function cleanupAgentTasks(agentId: string) {
   }
 }
 
+// ===== Voice Protocol (Task 4) =====
+
+/** Send voice_call_start to agent (Task 4.1) */
+export function sendVoiceStartToAgent(
+  agentId: string,
+  params: { sessionId: string; conversationId: string; audioFormat: VoiceAudioFormat }
+) {
+  const ws = agentConnections.get(agentId);
+  if (!ws || ws.readyState !== ws.OPEN) return;
+
+  agentVoiceSessions.set(agentId, params.sessionId);
+  sessionToAgent.set(params.sessionId, agentId);
+
+  sendToAgent(ws, {
+    type: "voice_call_start",
+    sessionId: params.sessionId,
+    conversationId: params.conversationId,
+    audioFormat: params.audioFormat,
+  });
+}
+
+/** Send voice_call_end to agent (Task 4.4) */
+export function sendVoiceEndToAgent(
+  agentId: string,
+  params: { sessionId: string; reason: string }
+) {
+  const ws = agentConnections.get(agentId);
+  if (ws && ws.readyState === ws.OPEN) {
+    sendToAgent(ws, {
+      type: "voice_call_end",
+      sessionId: params.sessionId,
+      reason: params.reason,
+    });
+  }
+
+  agentVoiceSessions.delete(agentId);
+  sessionToAgent.delete(params.sessionId);
+}
+
+/** Send binary audio data to agent (Task 4.2 — server → agent) */
+export function sendVoiceAudioToAgent(sessionId: string, audioData: Buffer) {
+  const agentId = sessionToAgent.get(sessionId);
+  if (!agentId) return;
+
+  const ws = agentConnections.get(agentId);
+  if (ws && ws.readyState === ws.OPEN) {
+    // Prefix binary frame with 36-byte sessionId (UUID) for demuxing
+    const header = Buffer.from(sessionId);
+    const frame = Buffer.concat([header, audioData]);
+    ws.send(frame);
+  }
+}
+
+function cleanupAgentVoiceSessions(agentId: string) {
+  const sessionId = agentVoiceSessions.get(agentId);
+  if (sessionId) {
+    // Lazy-import to avoid circular dependency
+    import("./voice-handler.js").then(({ notifyVoiceEnded }) => {
+      notifyVoiceEnded(sessionId, "agent_disconnected");
+    });
+    agentVoiceSessions.delete(agentId);
+    sessionToAgent.delete(sessionId);
+  }
+}
+
 export async function agentWsRoutes(app: FastifyInstance) {
   app.get("/ws/agent", { websocket: true }, async (socket, _request) => {
     let authenticatedAgentId: string | null = null;
@@ -120,6 +190,20 @@ export async function agentWsRoutes(app: FastifyInstance) {
 
     socket.on("message", async (data: RawData) => {
       try {
+        // Handle binary audio from agent (Task 4.3 — agent → server)
+        if (Buffer.isBuffer(data) && authenticatedAgentId) {
+          // Binary frame: first 36 bytes = sessionId (UUID), rest = audio data
+          if (data.length > 36) {
+            const sessionId = data.subarray(0, 36).toString();
+            const audioData = data.subarray(36);
+            // Forward to voice handler for user playback (Task 3.4)
+            import("./voice-handler.js").then(({ sendAudioToUser }) => {
+              sendAudioToUser(sessionId, audioData);
+            });
+          }
+          return;
+        }
+
         const raw = JSON.parse(data.toString());
         const event = agentWSClientEventSchema.parse(raw);
 
@@ -196,6 +280,19 @@ export async function agentWsRoutes(app: FastifyInstance) {
           }
           return;
         }
+
+        // Voice call end from agent (Task 4.4)
+        if (event.type === "voice_call_end") {
+          const agentId = sessionToAgent.get(event.sessionId);
+          if (agentId && agentId === authenticatedAgentId) {
+            import("./voice-handler.js").then(({ notifyVoiceEnded }) => {
+              notifyVoiceEnded(event.sessionId, event.reason);
+            });
+            agentVoiceSessions.delete(agentId);
+            sessionToAgent.delete(event.sessionId);
+          }
+          return;
+        }
       } catch (err) {
         app.log.error(err, "Agent WS message error");
       }
@@ -208,6 +305,7 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (agentConnections.get(authenticatedAgentId) === socket) {
           agentConnections.delete(authenticatedAgentId);
           cleanupAgentTasks(authenticatedAgentId);
+          cleanupAgentVoiceSessions(authenticatedAgentId);
         }
         app.log.info(`Agent WS disconnected: agentId=${authenticatedAgentId}`);
       }

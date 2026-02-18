@@ -1,3 +1,78 @@
+// ===== Voice Call =====
+
+export type VoiceCallState = "idle" | "ringing" | "connected" | "ended";
+
+export type VoiceAudioFormat = "opus" | "pcm-16-16k-mono";
+
+export interface VoiceCapability {
+  voice: boolean;
+  tts: boolean;
+  stt: boolean;
+  realtimeVoice: boolean;
+}
+
+export interface VoiceCallSession {
+  sessionId: string;
+  conversationId: string;
+  agentId: string;
+  userId: string;
+  state: VoiceCallState;
+  audioFormat: VoiceAudioFormat;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface VoiceCall {
+  sessionId: string;
+  conversationId: string;
+  agentId: string;
+  state: VoiceCallState;
+  audioFormat: VoiceAudioFormat;
+  durationMs: number | null;
+}
+
+// ===== Voice Signaling WebSocket Events (User ↔ Backend) =====
+
+/** Events sent from Client → Server for voice signaling */
+export type VoiceWSClientEvent =
+  | { type: "voice_auth"; conversationId: string; agentId: string }
+  | { type: "voice_offer"; sessionId: string; sdp: string }
+  | { type: "voice_answer"; sessionId: string; sdp: string }
+  | { type: "voice_ice_candidate"; sessionId: string; candidate: string; sdpMid: string | null; sdpMLineIndex: number | null }
+  | { type: "voice_hangup"; sessionId: string }
+  | { type: "ping" };
+
+/** Events sent from Server → Client for voice signaling */
+export type VoiceWSServerEvent =
+  | { type: "voice_auth_ok"; sessionId: string }
+  | { type: "voice_auth_error"; error: string }
+  | { type: "voice_offer"; sessionId: string; sdp: string }
+  | { type: "voice_answer"; sessionId: string; sdp: string }
+  | { type: "voice_ice_candidate"; sessionId: string; candidate: string; sdpMid: string | null; sdpMLineIndex: number | null }
+  | { type: "voice_ringing"; sessionId: string }
+  | { type: "voice_connected"; sessionId: string }
+  | { type: "voice_ended"; sessionId: string; reason: string }
+  | { type: "voice_error"; sessionId: string; error: string }
+  | { type: "pong" };
+
+// ===== Agent Voice WebSocket Events (Agent ↔ Backend) =====
+
+export interface VoiceCallStartEvent {
+  type: "voice_call_start";
+  sessionId: string;
+  conversationId: string;
+  audioFormat: VoiceAudioFormat;
+}
+
+export interface VoiceCallEndEvent {
+  type: "voice_call_end";
+  sessionId: string;
+  reason: string;
+}
+
+// voice_audio_chunk is binary — not part of JSON event unions
+
 // ===== User (aligned with Better Auth) =====
 export interface User {
   id: string;
@@ -24,6 +99,7 @@ export interface Agent {
   systemPrompt: string | null;
   welcomeMessage: string | null;
   quickReplies: { label: string; message: string }[] | null;
+  voiceCapable: boolean;
   notificationsEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -512,6 +588,7 @@ export type AgentWSClientEvent =
   | { type: "agent_chunk"; taskId: string; chunk: string }
   | { type: "agent_complete"; taskId: string; content: string }
   | { type: "agent_error"; taskId: string; error: string }
+  | { type: "voice_call_end"; sessionId: string; reason: string }
   | { type: "ping" };
 
 /** Events sent from Backend → Agent */
@@ -519,6 +596,8 @@ export type AgentWSServerEvent =
   | { type: "auth_ok"; agentName: string }
   | { type: "auth_error"; error: string }
   | { type: "task"; taskId: string; conversationId: string; content: string }
+  | { type: "voice_call_start"; sessionId: string; conversationId: string; audioFormat: VoiceAudioFormat }
+  | { type: "voice_call_end"; sessionId: string; reason: string }
   | { type: "pong" };
 
 // ===== Push Notifications =====

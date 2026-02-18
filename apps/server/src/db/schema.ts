@@ -95,6 +95,7 @@ export const agents = pgTable("agents", {
   systemPrompt: text("system_prompt"),
   welcomeMessage: text("welcome_message"),
   quickReplies: jsonb("quick_replies").$type<{ label: string; message: string }[]>(),
+  voiceCapable: boolean("voice_capable").notNull().default(false),
   notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

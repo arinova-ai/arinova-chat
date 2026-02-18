@@ -1,12 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { useVoiceCallStore } from "@/store/voice-call-store";
 import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
+import { MicPermissionDialog } from "@/components/voice/mic-permission";
 import type { ConversationType } from "@arinova/shared/types";
+import type { VoiceMode } from "@/lib/voice-types";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -15,6 +19,8 @@ interface ChatHeaderProps {
   isOnline?: boolean;
   type?: ConversationType;
   conversationId?: string;
+  agentId?: string;
+  voiceCapable?: boolean;
   onClick?: () => void;
 }
 
@@ -25,6 +31,8 @@ export function ChatHeader({
   isOnline,
   type = "direct",
   conversationId,
+  agentId,
+  voiceCapable,
   onClick,
 }: ChatHeaderProps) {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -33,6 +41,24 @@ export function ChatHeader({
   const mutedConversations = useChatStore((s) => s.mutedConversations);
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
   const isMuted = conversationId ? mutedConversations[conversationId] : false;
+
+  const callState = useVoiceCallStore((s) => s.callState);
+  const startCall = useVoiceCallStore((s) => s.startCall);
+
+  const [micDialogOpen, setMicDialogOpen] = useState(false);
+
+  const canCall = voiceCapable && conversationId && agentId && type === "direct" && callState === "idle";
+
+  const handleStartCall = () => {
+    if (!conversationId || !agentId) return;
+
+    // Determine voice mode — for now default to full_fallback
+    // Backend will provide capability detection; use full_fallback as safe default
+    const voiceMode: VoiceMode = "full_fallback";
+
+    setMicDialogOpen(false);
+    startCall(conversationId, agentId, agentName, agentAvatarUrl ?? null, voiceMode);
+  };
 
   return (
     <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top,0px)]">
@@ -110,16 +136,34 @@ export function ChatHeader({
             {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground opacity-50 cursor-not-allowed"
-          disabled
-          title="Voice call (Coming Soon)"
-        >
-          <Phone className="h-4 w-4" />
-        </Button>
+        {canCall ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-green-400 hover:text-green-300"
+            onClick={() => setMicDialogOpen(true)}
+            title="語音通話"
+          >
+            <Phone className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground opacity-50 cursor-not-allowed"
+            disabled
+            title={callState !== "idle" ? "通話中" : "語音通話不可用"}
+          >
+            <Phone className="h-4 w-4" />
+          </Button>
+        )}
       </div>
+
+      <MicPermissionDialog
+        open={micDialogOpen}
+        onOpenChange={setMicDialogOpen}
+        onAllow={handleStartCall}
+      />
     </div>
   );
 }

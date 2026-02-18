@@ -22,6 +22,8 @@ import { notificationRoutes } from "./routes/notifications.js";
 import { playgroundRoutes } from "./routes/playgrounds.js";
 import { playgroundEconomyRoutes } from "./routes/playground-economy.js";
 import { playgroundWsRoutes } from "./ws/playground-handler.js";
+import { voiceRoutes } from "./routes/voice.js";
+import { voiceWsRoutes } from "./ws/voice-handler.js";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";
@@ -44,7 +46,7 @@ await app.register(cors, {
 await app.register(rateLimit, {
   max: 300,
   timeWindow: "1 minute",
-  allowList: ["/health", "/ws", "/ws/agent", "/ws/playground"],
+  allowList: ["/health", "/ws", "/ws/agent", "/ws/playground", "/ws/voice"],
 });
 
 // Multipart (file upload)
@@ -95,6 +97,8 @@ await app.register(notificationRoutes);
 await app.register(playgroundRoutes);
 await app.register(playgroundEconomyRoutes);
 await app.register(playgroundWsRoutes);
+await app.register(voiceRoutes);
+await app.register(voiceWsRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
 // await app.register(communityRoutes);

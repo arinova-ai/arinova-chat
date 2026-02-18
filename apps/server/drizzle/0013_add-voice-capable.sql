@@ -1,0 +1,1 @@
+ALTER TABLE "agents" ADD COLUMN "voice_capable" boolean DEFAULT false NOT NULL;

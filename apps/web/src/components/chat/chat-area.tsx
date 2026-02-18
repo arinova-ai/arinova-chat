@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useChatStore } from "@/store/chat-store";
+import { useVoiceCallStore } from "@/store/voice-call-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
+import { ActiveCall } from "@/components/voice/active-call";
 
 export function ChatArea() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -16,6 +18,9 @@ export function ChatArea() {
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const agents = useChatStore((s) => s.agents);
   const agentHealth = useChatStore((s) => s.agentHealth);
+
+  const callState = useVoiceCallStore((s) => s.callState);
+  const callConversationId = useVoiceCallStore((s) => s.conversationId);
 
   const [manageOpen, setManageOpen] = useState(false);
 
@@ -44,8 +49,11 @@ export function ChatArea() {
     : undefined;
   const isOnline = health?.status === "online";
 
+  const showCallOverlay =
+    callState !== "idle" && callConversationId === activeConversationId;
+
   return (
-    <div className="flex h-full min-w-0 flex-col">
+    <div className="relative flex h-full min-w-0 flex-col">
       <ChatHeader
         agentName={conversation.agentName}
         agentDescription={conversation.agentDescription}
@@ -53,10 +61,14 @@ export function ChatArea() {
         isOnline={conversation.type === "direct" ? isOnline : undefined}
         type={conversation.type}
         conversationId={conversation.id}
+        agentId={conversation.agentId ?? undefined}
+        voiceCapable={agent?.voiceCapable}
         onClick={agent ? () => setManageOpen(true) : undefined}
       />
       <MessageList messages={messages} agentName={conversation.agentName} />
       <ChatInput />
+
+      {showCallOverlay && <ActiveCall />}
 
       {agent && (
         <BotManageDialog

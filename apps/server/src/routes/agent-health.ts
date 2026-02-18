@@ -26,10 +26,14 @@ export async function agentHealthRoutes(app: FastifyInstance) {
 
       // WS connection is real-time — skip cache if connected
       if (isAgentConnected(agent.id)) {
+        // Query agent /status for voice capabilities
+        const voiceCapabilities = await checkAgentVoiceCapabilities(agent.a2aEndpoint);
         return reply.send({
           status: "online",
           mode: "websocket",
           latencyMs: 0,
+          voiceCapable: agent.voiceCapable,
+          voiceCapabilities,
           checkedAt: new Date().toISOString(),
         });
       }
@@ -42,10 +46,12 @@ export async function agentHealthRoutes(app: FastifyInstance) {
       }
 
       const result = await checkAgentHealth(agent.a2aEndpoint);
+      const voiceCapabilities = await checkAgentVoiceCapabilities(agent.a2aEndpoint);
+      const healthResult = { ...result, voiceCapable: agent.voiceCapable, voiceCapabilities };
 
-      await redis.setex(cacheKey, HEALTH_CACHE_TTL, JSON.stringify(result));
+      await redis.setex(cacheKey, HEALTH_CACHE_TTL, JSON.stringify(healthResult));
 
-      return reply.send(result);
+      return reply.send(healthResult);
     }
   );
 
@@ -62,11 +68,14 @@ export async function agentHealthRoutes(app: FastifyInstance) {
       userAgents.map(async (agent) => {
         // WS connection is real-time
         if (isAgentConnected(agent.id)) {
+          const voiceCapabilities = await checkAgentVoiceCapabilities(agent.a2aEndpoint);
           return {
             agentId: agent.id,
             status: "online",
             mode: "websocket",
             latencyMs: 0,
+            voiceCapable: agent.voiceCapable,
+            voiceCapabilities,
             checkedAt: new Date().toISOString(),
           };
         }
@@ -78,13 +87,56 @@ export async function agentHealthRoutes(app: FastifyInstance) {
         }
 
         const result = await checkAgentHealth(agent.a2aEndpoint);
-        await redis.setex(cacheKey, HEALTH_CACHE_TTL, JSON.stringify(result));
-        return { agentId: agent.id, ...result };
+        const voiceCapabilities = await checkAgentVoiceCapabilities(agent.a2aEndpoint);
+        const healthResult = { ...result, voiceCapable: agent.voiceCapable, voiceCapabilities };
+        await redis.setex(cacheKey, HEALTH_CACHE_TTL, JSON.stringify(healthResult));
+        return { agentId: agent.id, ...healthResult };
       })
     );
 
     return reply.send(results);
   });
+}
+
+async function checkAgentVoiceCapabilities(
+  endpoint: string | null
+): Promise<{ voice: boolean; tts: boolean; stt: boolean; realtimeVoice: boolean }> {
+  const empty = { voice: false, tts: false, stt: false, realtimeVoice: false };
+  if (!endpoint) return empty;
+
+  try {
+    // Derive /status URL from agent endpoint
+    const url = new URL(endpoint);
+    url.pathname = url.pathname.replace(/\/?$/, "").replace(/\/[^/]*$/, "/status");
+
+    const res = await fetch(url.toString(), {
+      method: "GET",
+      signal: AbortSignal.timeout(3000),
+    });
+
+    if (!res.ok) return empty;
+
+    const body = (await res.json()) as {
+      capabilities?: {
+        voice?: boolean;
+        tts?: boolean;
+        stt?: boolean;
+        realtimeVoice?: boolean;
+      };
+    };
+
+    const caps = body?.capabilities;
+    if (!caps) return empty;
+
+    return {
+      voice: caps.voice === true,
+      tts: caps.tts === true,
+      stt: caps.stt === true,
+      realtimeVoice: caps.realtimeVoice === true,
+    };
+  } catch {
+    return empty;
+  }
 }
 
 async function checkAgentHealth(endpoint: string | null): Promise<{

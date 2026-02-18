@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
+import { CallIndicator } from "@/components/voice/call-indicator";
 import { useChatStore } from "@/store/chat-store";
+import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 
 export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -20,12 +22,14 @@ export function ChatLayout() {
     loadConversations();
     loadAgentHealth();
     const cleanup = initWS();
+    const cleanupTTS = initVoiceTTSIntegration();
 
     // Refresh agent health every 30s
     const healthInterval = setInterval(loadAgentHealth, 30_000);
 
     return () => {
       cleanup();
+      cleanupTTS();
       clearInterval(healthInterval);
     };
   }, [loadAgents, loadConversations, loadAgentHealth, initWS]);
@@ -76,6 +80,9 @@ export function ChatLayout() {
       <div className={`h-full flex-1 min-w-0 bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
         <ChatArea />
       </div>
+
+      {/* Floating call indicator (visible when navigating away from active call) */}
+      <CallIndicator />
     </div>
   );
 }
