@@ -20,7 +20,7 @@ import { PlaygroundDefinitionPreview } from "./playground-definition-preview";
 import { WaitingRoom } from "./waiting-room";
 import { ActiveSession } from "./active-session";
 import { GameResult } from "./game-result";
-import { AgentSelectDialog } from "./agent-select-dialog";
+import { AgentSelectDialog, type JoinSelection } from "./agent-select-dialog";
 
 interface PlaygroundDetailPageProps {
   playgroundId: string;
@@ -92,24 +92,39 @@ export function PlaygroundDetailPage({ playgroundId }: PlaygroundDetailPageProps
   }, []);
 
   const handleAgentSelected = useCallback(
-    async (agentId: string | null, controlMode: "human" | "agent") => {
+    async (selections: JoinSelection[]) => {
       if (!activePlayground) return;
 
       if (agentDialogMode === "create") {
-        await createSession(
+        // First selection creates the session
+        const first = selections[0];
+        if (!first) return;
+        const session = await createSession(
           playgroundId,
-          agentId ?? undefined,
-          controlMode,
+          first.agentId ?? undefined,
+          first.controlMode,
         );
-        // Reload playground to get the active session
+        // Additional selections join the same session
+        for (let i = 1; i < selections.length; i++) {
+          const sel = selections[i];
+          if (!sel) continue;
+          await joinSession(
+            playgroundId,
+            session.id,
+            sel.agentId ?? undefined,
+            sel.controlMode,
+          );
+        }
         await loadPlayground(playgroundId);
       } else if (activePlayground.activeSession) {
-        await joinSession(
-          playgroundId,
-          activePlayground.activeSession.id,
-          agentId ?? undefined,
-          controlMode,
-        );
+        for (const sel of selections) {
+          await joinSession(
+            playgroundId,
+            activePlayground.activeSession.id,
+            sel.agentId ?? undefined,
+            sel.controlMode,
+          );
+        }
       }
     },
     [activePlayground, agentDialogMode, playgroundId, createSession, joinSession, loadPlayground],

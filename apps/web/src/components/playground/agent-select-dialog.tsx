@@ -15,10 +15,15 @@ import type { Agent } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import { assetUrl } from "@/lib/config";
 
+export interface JoinSelection {
+  agentId: string | null;
+  controlMode: "human" | "agent";
+}
+
 interface AgentSelectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (agentId: string | null, controlMode: "human" | "agent") => void;
+  onSelect: (selections: JoinSelection[]) => void;
 }
 
 export function AgentSelectDialog({
@@ -29,11 +34,13 @@ export function AgentSelectDialog({
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [alsoJoinAsHuman, setAlsoJoinAsHuman] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setSelectedAgentId(null);
+    setAlsoJoinAsHuman(false);
     api<Agent[]>("/api/agents")
       .then(setAgents)
       .catch(() => setAgents([]))
@@ -41,11 +48,16 @@ export function AgentSelectDialog({
   }, [open]);
 
   const handleJoin = () => {
+    const selections: JoinSelection[] = [];
     if (selectedAgentId) {
-      onSelect(selectedAgentId, "agent");
+      if (alsoJoinAsHuman) {
+        selections.push({ agentId: null, controlMode: "human" });
+      }
+      selections.push({ agentId: selectedAgentId, controlMode: "agent" });
     } else {
-      onSelect(null, "human");
+      selections.push({ agentId: null, controlMode: "human" });
     }
+    onSelect(selections);
     onOpenChange(false);
   };
 
@@ -124,12 +136,28 @@ export function AgentSelectDialog({
           </div>
         </ScrollArea>
 
+        {selectedAgentId && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={alsoJoinAsHuman}
+              onChange={(e) => setAlsoJoinAsHuman(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            <span className="text-sm">Also join as yourself</span>
+          </label>
+        )}
+
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={handleJoin}>
-            {selectedAgentId ? "Join with Agent" : "Join as Human"}
+            {selectedAgentId
+              ? alsoJoinAsHuman
+                ? "Join Both"
+                : "Join with Agent"
+              : "Join as Human"}
           </Button>
         </div>
       </DialogContent>
