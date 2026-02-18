@@ -19,6 +19,7 @@ import { sandboxRoutes } from "./routes/sandbox.js";
 import { groupRoutes } from "./routes/groups.js";
 import { pushRoutes } from "./routes/push.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { playgroundRoutes } from "./routes/playgrounds.js";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";
@@ -89,6 +90,7 @@ await app.register(agentHealthRoutes);
 await app.register(sandboxRoutes);
 await app.register(pushRoutes);
 await app.register(notificationRoutes);
+await app.register(playgroundRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
 // await app.register(communityRoutes);
