@@ -7,15 +7,19 @@
     "lint": "turbo lint",
     "clean": "turbo clean",
     "test": "turbo test",
-    "test:coverage": "turbo test -- --coverage"
+    "test:coverage": "turbo test -- --coverage",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@vitest/coverage-istanbul": "^4.0.18",
     "turbo": "^2",
     "vitest": "^4.0.18"
   },
   "packageManager": "pnpm@10.28.2",
   "pnpm": {
-    "onlyBuiltDependencies": ["mediasoup"]
+    "onlyBuiltDependencies": [
+      "mediasoup"
+    ]
   }
 }

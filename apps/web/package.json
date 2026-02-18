@@ -38,6 +38,7 @@
     "@types/node": "^22.19.11",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.1.4",
     "jsdom": "^27.4.0",
     "postcss": "^8",
     "shadcn": "^3.8.4",

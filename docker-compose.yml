@@ -11,6 +11,7 @@ services:
       - "5458:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
 
   redis:
     image: redis:7-alpine
@@ -21,6 +22,21 @@ services:
     volumes:
       - redis_data:/data
 
+  # Test-only database (docker compose --profile test up)
+  postgres-test:
+    image: postgres:17-alpine
+    container_name: arinova-postgres-test
+    profiles: ["test"]
+    environment:
+      POSTGRES_USER: arinova
+      POSTGRES_PASSWORD: arinova_dev
+      POSTGRES_DB: arinova_test
+    ports:
+      - "5459:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
 volumes:
   postgres_data:
   redis_data:
+  postgres_test_data:
