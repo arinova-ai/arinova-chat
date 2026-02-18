@@ -8,7 +8,7 @@ import {
   agents,
   user,
 } from "../db/schema.js";
-import { eq, and, desc, ilike, asc, sql } from "drizzle-orm";
+import { eq, and, ne, desc, ilike, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import {
   createCommunitySchema,
@@ -16,6 +16,9 @@ import {
   createChannelSchema,
   updateChannelSchema,
 } from "@arinova/shared/schemas";
+import { isUserOnline } from "../ws/handler.js";
+import { shouldSendPush } from "../lib/push-trigger.js";
+import { sendPushToUser } from "../lib/push.js";
 
 export async function communityRoutes(app: FastifyInstance) {
   // Create community
@@ -727,6 +730,51 @@ export async function communityRoutes(app: FastifyInstance) {
           status: "completed",
         })
         .returning();
+
+      // Push notifications to offline community members (fire-and-forget)
+      (async () => {
+        try {
+          const [community] = await db
+            .select({ name: communities.name })
+            .from(communities)
+            .where(eq(communities.id, request.params.id));
+
+          const members = await db
+            .select({ userId: communityMembers.userId })
+            .from(communityMembers)
+            .where(
+              and(
+                eq(communityMembers.communityId, request.params.id),
+                ne(communityMembers.userId, usr.id)
+              )
+            );
+
+          const preview =
+            content.trim().length > 100
+              ? content.trim().slice(0, 100) + "…"
+              : content.trim();
+
+          const title = community
+            ? `${usr.name} · ${community.name}`
+            : usr.name;
+
+          for (const member of members) {
+            if (!isUserOnline(member.userId)) {
+              const ok = await shouldSendPush(member.userId, "message");
+              if (ok) {
+                sendPushToUser(member.userId, {
+                  type: "message",
+                  title,
+                  body: preview,
+                  url: `/community/${request.params.id}/${request.params.channelId}`,
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch {
+          // Push is best-effort, don't crash
+        }
+      })();
 
       // Check if channel has an agent
       const [channel] = await db
