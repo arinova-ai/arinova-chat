@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
 import { CallIndicator } from "@/components/voice/call-indicator";
+import { NotificationBanner } from "@/components/notification-banner";
 import { useChatStore } from "@/store/chat-store";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 
@@ -77,8 +78,11 @@ export function ChatLayout() {
       </div>
 
       {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
-      <div className={`h-full flex-1 min-w-0 bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
-        <ChatArea />
+      <div className={`h-full flex-1 min-w-0 flex flex-col bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
+        <NotificationBanner />
+        <div className="flex-1 min-h-0">
+          <ChatArea />
+        </div>
       </div>
 
       {/* Floating call indicator (visible when navigating away from active call) */}

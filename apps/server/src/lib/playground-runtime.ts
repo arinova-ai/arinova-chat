@@ -25,6 +25,8 @@ import type {
   PlaygroundSessionStatus,
 } from "@arinova/shared/types";
 import { settleSession } from "./playground-economy.js";
+import { sendPushToUser } from "./push.js";
+import { shouldSendPush } from "./push-trigger.js";
 
 // ===== Types =====
 
@@ -391,6 +393,9 @@ async function transitionToNextPhase(
     state: newState,
   });
 
+  // Push turn notification to offline participants (fire-and-forget)
+  notifyParticipants(ctx.sessionId, "playground_turn", "Your turn!", `Phase changed to: ${nextPhaseName}`).catch(() => {});
+
   return { from, to: nextPhaseName };
 }
 
@@ -459,6 +464,12 @@ async function finishSession(
     winners: winners ?? [],
     prizeDistribution,
   });
+
+  // Push result notification to offline participants (fire-and-forget)
+  const resultBody = winners && winners.length > 0
+    ? `Winners: ${winners.join(", ")}`
+    : "Session has ended";
+  notifyParticipants(ctx.sessionId, "playground_result", "Session finished!", resultBody).catch(() => {});
 }
 
 // ===== Condition Evaluator =====
@@ -520,4 +531,39 @@ function getActionDefinition(
   actionName: string,
 ): PlaygroundActionDefinition | undefined {
   return def.actions.find((a) => a.name === actionName);
+}
+
+// ===== Push Notification Helpers =====
+
+async function notifyParticipants(
+  sessionId: string,
+  type: "playground_turn" | "playground_result",
+  title: string,
+  body: string,
+) {
+  const { isUserOnline } = await import("../ws/handler.js");
+
+  const participants = await db
+    .select({ userId: playgroundParticipants.userId })
+    .from(playgroundParticipants)
+    .where(eq(playgroundParticipants.sessionId, sessionId));
+
+  // Get playground info for the URL
+  const [session] = await db
+    .select({ playgroundId: playgroundSessions.playgroundId })
+    .from(playgroundSessions)
+    .where(eq(playgroundSessions.id, sessionId));
+
+  const url = session
+    ? `/playground/${session.playgroundId}/${sessionId}`
+    : undefined;
+
+  for (const p of participants) {
+    if (!isUserOnline(p.userId)) {
+      const ok = await shouldSendPush(p.userId, type);
+      if (ok) {
+        sendPushToUser(p.userId, { type, title, body, url }).catch(() => {});
+      }
+    }
+  }
 }

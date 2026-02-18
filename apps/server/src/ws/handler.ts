@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { WebSocket, RawData } from "ws";
 import { auth } from "../auth.js";
 import { db } from "../db/index.js";
-import { messages, conversations, agents } from "../db/schema.js";
+import { messages, conversations, conversationMembers, agents } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { wsClientEventSchema } from "@arinova/shared/schemas";
 import type { WSServerEvent } from "@arinova/shared/types";
@@ -166,7 +166,33 @@ export async function triggerAgentResponse(
       )
     );
 
-  if (!conv || !conv.agentId) return;
+  if (!conv) return;
+
+  // Group conversations: trigger each member agent and return
+  if (!conv.agentId) {
+    const members = await db
+      .select({ agentId: conversationMembers.agentId })
+      .from(conversationMembers)
+      .where(eq(conversationMembers.conversationId, conversationId));
+
+    if (members.length === 0) return;
+
+    // Save user message once
+    if (!options?.skipUserMessage) {
+      await db.insert(messages).values({
+        conversationId,
+        role: "user",
+        content,
+        status: "completed",
+      });
+    }
+
+    // Trigger each agent
+    for (const member of members) {
+      await triggerGroupAgentResponse(userId, conversationId, content, member.agentId);
+    }
+    return;
+  }
 
   // Get agent info
   const [agent] = await db
@@ -310,4 +336,103 @@ async function handleSendMessage(
   content: string
 ) {
   await triggerAgentResponse(userId, conversationId, content);
+}
+
+async function triggerGroupAgentResponse(
+  userId: string,
+  conversationId: string,
+  content: string,
+  agentId: string,
+) {
+  const [agent] = await db
+    .select({ name: agents.name })
+    .from(agents)
+    .where(eq(agents.id, agentId));
+
+  if (!agent) return;
+
+  if (!isAgentConnected(agentId)) return;
+
+  const [agentMsg] = await db
+    .insert(messages)
+    .values({
+      conversationId,
+      role: "agent",
+      content: "",
+      status: "streaming",
+    })
+    .returning();
+
+  await db
+    .update(conversations)
+    .set({ updatedAt: new Date() })
+    .where(eq(conversations.id, conversationId));
+
+  sendToUser(userId, {
+    type: "stream_start",
+    conversationId,
+    messageId: agentMsg.id,
+  });
+
+  const { cancel } = sendTaskToAgent({
+    agentId,
+    taskId: agentMsg.id,
+    conversationId,
+    content,
+    onChunk: (chunk) => {
+      sendToUser(userId, {
+        type: "stream_chunk",
+        conversationId,
+        messageId: agentMsg.id,
+        chunk,
+      });
+    },
+    onComplete: async (fullContent) => {
+      streamCancellers.delete(agentMsg.id);
+
+      await db
+        .update(messages)
+        .set({ content: fullContent, status: "completed", updatedAt: new Date() })
+        .where(eq(messages.id, agentMsg.id));
+
+      sendToUser(userId, {
+        type: "stream_end",
+        conversationId,
+        messageId: agentMsg.id,
+      });
+
+      // Push notification if user is offline
+      if (!isUserOnline(userId)) {
+        const ok = await shouldSendPush(userId, "message");
+        if (ok) {
+          const preview = fullContent.length > 100
+            ? fullContent.slice(0, 100) + "…"
+            : fullContent;
+          sendPushToUser(userId, {
+            type: "message",
+            title: agent.name,
+            body: preview,
+            url: `/chat/${conversationId}`,
+          }).catch(() => {});
+        }
+      }
+    },
+    onError: async (error) => {
+      streamCancellers.delete(agentMsg.id);
+
+      await db
+        .update(messages)
+        .set({ content: error, status: "error", updatedAt: new Date() })
+        .where(eq(messages.id, agentMsg.id));
+
+      sendToUser(userId, {
+        type: "stream_error",
+        conversationId,
+        messageId: agentMsg.id,
+        error,
+      });
+    },
+  });
+
+  streamCancellers.set(agentMsg.id, { cancel });
 }

@@ -7,10 +7,269 @@ import { AuthGuard } from "@/components/auth-guard";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Loader2, User, Lock, LogOut, Bell, BellOff, Moon } from "lucide-react";
+import { ArrowLeft, Loader2, User, Lock, LogOut, Bell, BellOff, Moon, Clock } from "lucide-react";
 import { api } from "@/lib/api";
 import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
+
+interface NotificationPrefs {
+  globalEnabled: boolean;
+  messageEnabled: boolean;
+  playgroundInviteEnabled: boolean;
+  playgroundTurnEnabled: boolean;
+  playgroundResultEnabled: boolean;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+}
+
+const DEFAULT_PREFS: NotificationPrefs = {
+  globalEnabled: true,
+  messageEnabled: true,
+  playgroundInviteEnabled: true,
+  playgroundTurnEnabled: true,
+  playgroundResultEnabled: true,
+  quietHoursStart: null,
+  quietHoursEnd: null,
+};
+
+function NotificationSettings() {
+  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [pushStatus, setPushStatus] = useState<{
+    supported: boolean;
+    permission: NotificationPermission | null;
+    subscribed: boolean;
+  }>({ supported: false, permission: null, subscribed: false });
+  const [pushLoading, setPushLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [prefsData, status] = await Promise.all([
+          api<NotificationPrefs>("/api/notifications/preferences", { silent: true }),
+          getPushStatus(),
+        ]);
+        setPrefs(prefsData);
+        setPushStatus(status);
+      } catch {
+        // Use defaults
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const savePrefs = useCallback(async (updated: NotificationPrefs) => {
+    setPrefs(updated);
+    setSaving(true);
+    try {
+      await api("/api/notifications/preferences", {
+        method: "PUT",
+        body: JSON.stringify(updated),
+      });
+    } catch {
+      // Revert on error handled by toast
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const handleToggle = (key: keyof NotificationPrefs) => (checked: boolean) => {
+    savePrefs({ ...prefs, [key]: checked });
+  };
+
+  const handlePushToggle = async () => {
+    setPushLoading(true);
+    try {
+      if (pushStatus.subscribed) {
+        await unsubscribeFromPush();
+        setPushStatus((s) => ({ ...s, subscribed: false, permission: "default" }));
+      } else {
+        const success = await subscribeToPush();
+        if (success) {
+          setPushStatus((s) => ({ ...s, subscribed: true, permission: "granted" }));
+        }
+      }
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const handleQuietHoursToggle = (enabled: boolean) => {
+    if (enabled) {
+      savePrefs({ ...prefs, quietHoursStart: "22:00", quietHoursEnd: "08:00" });
+    } else {
+      savePrefs({ ...prefs, quietHoursStart: null, quietHoursEnd: null });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="mb-8 rounded-lg border border-border bg-card p-6">
+        <div className="flex items-center gap-2">
+          <Bell className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Notifications</h2>
+        </div>
+        <div className="mt-4 flex justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  const quietHoursEnabled = prefs.quietHoursStart !== null && prefs.quietHoursEnd !== null;
+
+  return (
+    <div className="mb-8 rounded-lg border border-border bg-card p-6">
+      <div className="mb-4 flex items-center gap-2">
+        <Bell className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">Notifications</h2>
+      </div>
+
+      <div className="space-y-4">
+        {/* Push subscription toggle */}
+        {pushStatus.supported && (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Push Notifications</p>
+              <p className="text-xs text-muted-foreground">
+                {pushStatus.permission === "denied"
+                  ? "Blocked by browser — update in browser settings"
+                  : pushStatus.subscribed
+                    ? "Enabled on this device"
+                    : "Receive notifications on this device"}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePushToggle}
+              disabled={pushLoading || pushStatus.permission === "denied"}
+            >
+              {pushLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : pushStatus.subscribed ? (
+                "Disable"
+              ) : (
+                "Enable"
+              )}
+            </Button>
+          </div>
+        )}
+
+        <Separator />
+
+        {/* Global toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">All Notifications</p>
+            <p className="text-xs text-muted-foreground">Master switch for all notification types</p>
+          </div>
+          <Switch
+            checked={prefs.globalEnabled}
+            onCheckedChange={handleToggle("globalEnabled")}
+          />
+        </div>
+
+        {/* Per-type toggles (disabled when global is off) */}
+        <div className={prefs.globalEnabled ? "" : "pointer-events-none opacity-50"}>
+          <div className="space-y-3 pl-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm">Messages</p>
+                <p className="text-xs text-muted-foreground">Agent replies in conversations</p>
+              </div>
+              <Switch
+                checked={prefs.messageEnabled}
+                onCheckedChange={handleToggle("messageEnabled")}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm">Playground Invites</p>
+                <p className="text-xs text-muted-foreground">When someone joins your session</p>
+              </div>
+              <Switch
+                checked={prefs.playgroundInviteEnabled}
+                onCheckedChange={handleToggle("playgroundInviteEnabled")}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm">Turn Notifications</p>
+                <p className="text-xs text-muted-foreground">When a playground phase changes</p>
+              </div>
+              <Switch
+                checked={prefs.playgroundTurnEnabled}
+                onCheckedChange={handleToggle("playgroundTurnEnabled")}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm">Session Results</p>
+                <p className="text-xs text-muted-foreground">When a playground session finishes</p>
+              </div>
+              <Switch
+                checked={prefs.playgroundResultEnabled}
+                onCheckedChange={handleToggle("playgroundResultEnabled")}
+              />
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Quiet hours */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Quiet Hours</p>
+              <p className="text-xs text-muted-foreground">Pause notifications during set hours</p>
+            </div>
+          </div>
+          <Switch
+            checked={quietHoursEnabled}
+            onCheckedChange={handleQuietHoursToggle}
+          />
+        </div>
+
+        {quietHoursEnabled && (
+          <div className="flex items-center gap-3 pl-8">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">From</label>
+              <Input
+                type="time"
+                value={prefs.quietHoursStart ?? "22:00"}
+                onChange={(e) =>
+                  savePrefs({ ...prefs, quietHoursStart: e.target.value })
+                }
+                className="h-8 w-28 bg-neutral-800 border-none text-sm"
+              />
+            </div>
+            <span className="mt-4 text-muted-foreground">—</span>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">To</label>
+              <Input
+                type="time"
+                value={prefs.quietHoursEnd ?? "08:00"}
+                onChange={(e) =>
+                  savePrefs({ ...prefs, quietHoursEnd: e.target.value })
+                }
+                className="h-8 w-28 bg-neutral-800 border-none text-sm"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function SettingsContent() {
   const router = useRouter();

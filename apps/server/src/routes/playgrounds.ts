@@ -18,6 +18,9 @@ import {
   getTemplateList,
 } from "../lib/playground-templates.js";
 import { collectEntryFee, refundEntryFees } from "../lib/playground-economy.js";
+import { isUserOnline } from "../ws/handler.js";
+import { shouldSendPush } from "../lib/push-trigger.js";
+import { sendPushToUser } from "../lib/push.js";
 
 export async function playgroundRoutes(app: FastifyInstance) {
   // ===== Templates =====
@@ -372,6 +375,38 @@ export async function playgroundRoutes(app: FastifyInstance) {
           controlMode: body.controlMode ?? "human",
         })
         .returning();
+
+      // Push notification to existing participants about new player (fire-and-forget)
+      (async () => {
+        try {
+          const existing = await db
+            .select({ userId: playgroundParticipants.userId })
+            .from(playgroundParticipants)
+            .where(eq(playgroundParticipants.sessionId, session.id));
+
+          const [pg] = await db
+            .select({ name: playgrounds.name })
+            .from(playgrounds)
+            .where(eq(playgrounds.id, request.params.id));
+
+          for (const p of existing) {
+            if (p.userId === user.id) continue;
+            if (!isUserOnline(p.userId)) {
+              const ok = await shouldSendPush(p.userId, "playground_invite");
+              if (ok) {
+                sendPushToUser(p.userId, {
+                  type: "playground_invite",
+                  title: pg?.name ?? "Playground",
+                  body: `${user.name} joined the session`,
+                  url: `/playground/${request.params.id}/${session.id}`,
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch {
+          // Push is best-effort
+        }
+      })();
 
       return reply.status(201).send(participant);
     }

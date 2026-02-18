@@ -1,20 +1,10 @@
 import { db } from "../db/index.js";
 import { notificationPreferences } from "../db/schema.js";
 import { eq } from "drizzle-orm";
+import { redis } from "../db/redis.js";
 import type { NotificationType } from "@arinova/shared/types";
 
-// Deduplication: suppress same-type notifications within a time window
-// Key: "userId:type" → timestamp of last sent push
-const lastPushSent = new Map<string, number>();
-const DEDUP_WINDOW_MS = 30_000; // 30 seconds
-
-// Periodic cleanup to prevent memory leaks
-setInterval(() => {
-  const cutoff = Date.now() - DEDUP_WINDOW_MS * 2;
-  for (const [key, ts] of lastPushSent) {
-    if (ts < cutoff) lastPushSent.delete(key);
-  }
-}, 60_000);
+const DEDUP_WINDOW_SECONDS = 30;
 
 /**
  * Check whether a push notification should be sent to a user
@@ -23,6 +13,7 @@ setInterval(() => {
 export async function shouldSendPush(
   userId: string,
   type: NotificationType,
+  entityId?: string,
 ): Promise<boolean> {
   const [prefs] = await db
     .select()
@@ -31,7 +22,7 @@ export async function shouldSendPush(
 
   // No preferences saved yet — default is all enabled
   if (!prefs) {
-    return checkDedup(userId, type);
+    return checkDedup(userId, type, entityId);
   }
 
   // Global toggle
@@ -53,24 +44,24 @@ export async function shouldSendPush(
     }
   }
 
-  return checkDedup(userId, type);
+  return checkDedup(userId, type, entityId);
 }
 
 /**
- * Deduplication check: suppress same-type pushes within DEDUP_WINDOW_MS.
- * Records the timestamp when allowed.
+ * Redis-based deduplication: suppress same-type pushes within DEDUP_WINDOW_SECONDS.
+ * Uses SET with NX and EX for atomic check-and-set with TTL.
+ * Key format: push:dedup:{userId}:{type}:{entityId}
  */
-function checkDedup(userId: string, type: NotificationType): boolean {
-  const key = `${userId}:${type}`;
-  const now = Date.now();
-  const last = lastPushSent.get(key);
+async function checkDedup(
+  userId: string,
+  type: NotificationType,
+  entityId?: string,
+): Promise<boolean> {
+  const key = `push:dedup:${userId}:${type}:${entityId ?? "global"}`;
 
-  if (last && now - last < DEDUP_WINDOW_MS) {
-    return false;
-  }
-
-  lastPushSent.set(key, now);
-  return true;
+  // SET NX with TTL — returns "OK" if key was set (no duplicate), null if exists
+  const result = await redis.set(key, "1", "EX", DEDUP_WINDOW_SECONDS, "NX");
+  return result === "OK";
 }
 
 function isInQuietHours(start: string, end: string): boolean {
