@@ -24,6 +24,7 @@ import type {
   PlaygroundRoleDefinition,
   PlaygroundSessionStatus,
 } from "@arinova/shared/types";
+import { settleSession } from "./playground-economy.js";
 
 // ===== Types =====
 
@@ -428,6 +429,9 @@ async function finishSession(
     content: JSON.stringify({ event: "session_finished", winners }),
   });
 
+  // Settle economy — distribute prize pool to winners
+  await settleSession(ctx.sessionId, ctx.definition, winners);
+
   // Get participants for prize distribution info
   const participants = await db
     .select()
@@ -439,8 +443,14 @@ async function finishSession(
     const winningParticipants = participants.filter(
       (p) => p.role && winners.includes(p.role),
     );
+    const prizePool = ctx.definition.economy.entryFee > 0
+      ? ctx.definition.economy.entryFee * participants.length
+      : 0;
+    const perWinner = winningParticipants.length > 0
+      ? Math.floor(prizePool / winningParticipants.length)
+      : 0;
     for (const wp of winningParticipants) {
-      prizeDistribution[wp.id] = 1; // placeholder for economy system
+      prizeDistribution[wp.id] = perWinner;
     }
   }
 

@@ -17,6 +17,7 @@ import {
   BUILT_IN_TEMPLATES,
   getTemplateList,
 } from "../lib/playground-templates.js";
+import { collectEntryFee, refundEntryFees } from "../lib/playground-economy.js";
 
 export async function playgroundRoutes(app: FastifyInstance) {
   // ===== Templates =====
@@ -349,6 +350,19 @@ export async function playgroundRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: "Session is full" });
       }
 
+      // Collect entry fee if applicable
+      if (def.economy.entryFee > 0 && def.economy.currency !== "free") {
+        const feeResult = await collectEntryFee(
+          user.id,
+          session.id,
+          def.economy.entryFee,
+          def.economy.currency,
+        );
+        if (!feeResult.success) {
+          return reply.status(400).send({ error: feeResult.error });
+        }
+      }
+
       const [participant] = await db
         .insert(playgroundParticipants)
         .values({
@@ -388,6 +402,54 @@ export async function playgroundRoutes(app: FastifyInstance) {
         .where(eq(playgroundParticipants.id, participant.id));
 
       return reply.status(204).send();
+    }
+  );
+
+  // Cancel a session (host only) — refunds all entry fees
+  app.post<{ Params: { id: string; sessionId: string } }>(
+    "/api/playgrounds/:id/sessions/:sessionId/cancel",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      const [session] = await db
+        .select()
+        .from(playgroundSessions)
+        .where(
+          and(
+            eq(playgroundSessions.id, request.params.sessionId),
+            eq(playgroundSessions.playgroundId, request.params.id),
+          )
+        );
+
+      if (!session) {
+        return reply.status(404).send({ error: "Session not found" });
+      }
+
+      if (session.status !== "waiting") {
+        return reply.status(400).send({ error: "Only waiting sessions can be cancelled" });
+      }
+
+      // Verify host (first participant by joinedAt)
+      const participants = await db
+        .select()
+        .from(playgroundParticipants)
+        .where(eq(playgroundParticipants.sessionId, session.id))
+        .orderBy(playgroundParticipants.joinedAt);
+
+      if (participants.length === 0 || participants[0].userId !== user.id) {
+        return reply.status(403).send({ error: "Only the host can cancel the session" });
+      }
+
+      // Refund all entry fees
+      await refundEntryFees(session.id);
+
+      // Mark session as finished
+      await db
+        .update(playgroundSessions)
+        .set({ status: "finished", finishedAt: new Date() })
+        .where(eq(playgroundSessions.id, session.id));
+
+      return reply.send({ success: true });
     }
   );
 

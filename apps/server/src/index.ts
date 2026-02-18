@@ -20,6 +20,7 @@ import { groupRoutes } from "./routes/groups.js";
 import { pushRoutes } from "./routes/push.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { playgroundRoutes } from "./routes/playgrounds.js";
+import { playgroundEconomyRoutes } from "./routes/playground-economy.js";
 import { playgroundWsRoutes } from "./ws/playground-handler.js";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
@@ -92,6 +93,7 @@ await app.register(sandboxRoutes);
 await app.register(pushRoutes);
 await app.register(notificationRoutes);
 await app.register(playgroundRoutes);
+await app.register(playgroundEconomyRoutes);
 await app.register(playgroundWsRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);

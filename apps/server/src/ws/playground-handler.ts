@@ -8,8 +8,12 @@
 
 import type { FastifyInstance } from "fastify";
 import type { WebSocket, RawData } from "ws";
+import { randomUUID } from "node:crypto";
 import { auth } from "../auth.js";
 import { db } from "../db/index.js";
+import { redis } from "../db/redis.js";
+import Redis from "ioredis";
+import { env } from "../env.js";
 import {
   playgroundSessions,
   playgroundParticipants,
@@ -29,6 +33,54 @@ import {
   startPhaseTimer,
   clearPhaseTimer,
 } from "../lib/playground-runtime.js";
+
+// ===== Redis Pub/Sub for cross-instance broadcast =====
+
+const INSTANCE_ID = randomUUID();
+const PG_CHANNEL = "pg:broadcast";
+
+// Separate Redis connection for subscribing (ioredis requirement)
+const redisSub = new Redis(env.REDIS_URL);
+
+interface PgPubSubMessage {
+  instanceId: string;
+  sessionId: string;
+  event: PlaygroundWSServerEvent;
+  excludeParticipantId?: string;
+}
+
+function publishToRedis(
+  sessionId: string,
+  event: PlaygroundWSServerEvent,
+  excludeParticipantId?: string,
+) {
+  const msg: PgPubSubMessage = {
+    instanceId: INSTANCE_ID,
+    sessionId,
+    event,
+    excludeParticipantId,
+  };
+  redis.publish(PG_CHANNEL, JSON.stringify(msg));
+}
+
+// Subscribe and relay messages from other instances
+redisSub.subscribe(PG_CHANNEL);
+redisSub.on("message", (_channel: string, message: string) => {
+  try {
+    const msg = JSON.parse(message) as PgPubSubMessage;
+    // Skip messages from this instance (already broadcast locally)
+    if (msg.instanceId === INSTANCE_ID) return;
+
+    if (msg.event.type === "pg_state_update") {
+      // Each instance does its own role-filtered broadcast from DB
+      broadcastStateUpdate(msg.sessionId);
+    } else {
+      broadcastToSession(msg.sessionId, msg.event, msg.excludeParticipantId);
+    }
+  } catch {
+    // Ignore malformed messages
+  }
+});
 
 // Active connections: sessionId → Map<participantId, WebSocket>
 const sessionConnections = new Map<string, Map<string, WebSocket>>();
@@ -109,11 +161,14 @@ async function broadcastStateUpdate(sessionId: string) {
 // Register broadcast callback with runtime engine
 setBroadcastCallback(async (sessionId: string, event: Record<string, unknown>) => {
   if (event.type === "pg_state_update") {
-    // Use role-filtered broadcast
+    // Role-filtered broadcast — each instance reads DB independently
     await broadcastStateUpdate(sessionId);
+    // Notify other instances to do the same
+    publishToRedis(sessionId, { type: "pg_state_update" } as PlaygroundWSServerEvent);
   } else {
-    // Other events broadcast as-is
+    // Other events broadcast as-is to local + remote
     broadcastToSession(sessionId, event as PlaygroundWSServerEvent);
+    publishToRedis(sessionId, event as PlaygroundWSServerEvent);
   }
 });
 
