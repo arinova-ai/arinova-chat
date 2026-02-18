@@ -20,6 +20,7 @@ import { groupRoutes } from "./routes/groups.js";
 import { pushRoutes } from "./routes/push.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { playgroundRoutes } from "./routes/playgrounds.js";
+import { playgroundWsRoutes } from "./ws/playground-handler.js";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";
@@ -42,7 +43,7 @@ await app.register(cors, {
 await app.register(rateLimit, {
   max: 300,
   timeWindow: "1 minute",
-  allowList: ["/health", "/ws", "/ws/agent"],
+  allowList: ["/health", "/ws", "/ws/agent", "/ws/playground"],
 });
 
 // Multipart (file upload)
@@ -91,6 +92,7 @@ await app.register(sandboxRoutes);
 await app.register(pushRoutes);
 await app.register(notificationRoutes);
 await app.register(playgroundRoutes);
+await app.register(playgroundWsRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
 // await app.register(communityRoutes);
