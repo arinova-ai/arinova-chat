@@ -16,6 +16,14 @@ import {
   updateCommunitySchema,
   createChannelSchema,
   updateChannelSchema,
+  notificationTypeSchema,
+  pushSubscriptionSchema,
+  notificationPreferenceSchema,
+  playgroundDefinitionSchema,
+  createPlaygroundSchema,
+  joinPlaygroundSchema,
+  playgroundActionSchema,
+  playgroundWSClientEventSchema,
 } from "./index.js";
 
 // ---------------------------------------------------------------------------
@@ -769,5 +777,622 @@ describe("appManifestSchema", () => {
       permissions: ["storage", "audio"],
     });
     expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Push Notification schemas
+// ---------------------------------------------------------------------------
+
+describe("notificationTypeSchema", () => {
+  it("accepts valid notification types", () => {
+    for (const type of ["message", "playground_invite", "playground_turn", "playground_result"]) {
+      expect(notificationTypeSchema.safeParse(type).success).toBe(true);
+    }
+  });
+
+  it("rejects invalid type", () => {
+    expect(notificationTypeSchema.safeParse("email").success).toBe(false);
+  });
+});
+
+describe("pushSubscriptionSchema", () => {
+  const validSub = {
+    endpoint: "https://fcm.googleapis.com/fcm/send/abc123",
+    keys: {
+      p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8p8REfA04=",
+      auth: "tBHItJI5svbpC7htDNAl_A==",
+    },
+  };
+
+  it("accepts valid subscription", () => {
+    expect(pushSubscriptionSchema.safeParse(validSub).success).toBe(true);
+  });
+
+  it("accepts subscription with deviceInfo", () => {
+    expect(pushSubscriptionSchema.safeParse({ ...validSub, deviceInfo: "Chrome/120" }).success).toBe(true);
+  });
+
+  it("rejects invalid endpoint URL", () => {
+    expect(pushSubscriptionSchema.safeParse({ ...validSub, endpoint: "not-a-url" }).success).toBe(false);
+  });
+
+  it("rejects empty p256dh", () => {
+    expect(pushSubscriptionSchema.safeParse({ ...validSub, keys: { ...validSub.keys, p256dh: "" } }).success).toBe(false);
+  });
+
+  it("rejects empty auth", () => {
+    expect(pushSubscriptionSchema.safeParse({ ...validSub, keys: { ...validSub.keys, auth: "" } }).success).toBe(false);
+  });
+
+  it("rejects deviceInfo over 500 chars", () => {
+    expect(pushSubscriptionSchema.safeParse({ ...validSub, deviceInfo: "x".repeat(501) }).success).toBe(false);
+  });
+});
+
+describe("notificationPreferenceSchema", () => {
+  const validPrefs = {
+    globalEnabled: true,
+    messageEnabled: true,
+    playgroundInviteEnabled: true,
+    playgroundTurnEnabled: true,
+    playgroundResultEnabled: true,
+    quietHoursStart: null,
+    quietHoursEnd: null,
+  };
+
+  it("accepts valid preferences with null quiet hours", () => {
+    expect(notificationPreferenceSchema.safeParse(validPrefs).success).toBe(true);
+  });
+
+  it("accepts valid quiet hours", () => {
+    expect(notificationPreferenceSchema.safeParse({ ...validPrefs, quietHoursStart: "22:00", quietHoursEnd: "07:00" }).success).toBe(true);
+  });
+
+  it("rejects invalid quiet hours format", () => {
+    expect(notificationPreferenceSchema.safeParse({ ...validPrefs, quietHoursStart: "25:00" }).success).toBe(false);
+    expect(notificationPreferenceSchema.safeParse({ ...validPrefs, quietHoursStart: "9:00" }).success).toBe(false);
+    expect(notificationPreferenceSchema.safeParse({ ...validPrefs, quietHoursStart: "22:60" }).success).toBe(false);
+  });
+
+  it("rejects missing required boolean fields", () => {
+    const { globalEnabled, ...rest } = validPrefs;
+    expect(notificationPreferenceSchema.safeParse(rest).success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Playground schemas
+// ---------------------------------------------------------------------------
+
+const validPlaygroundDefinition = {
+  metadata: {
+    name: "狼人殺",
+    description: "經典狼人殺遊戲",
+    category: "game" as const,
+    minPlayers: 5,
+    maxPlayers: 12,
+    tags: ["狼人殺", "多人"],
+  },
+  roles: [
+    {
+      name: "villager",
+      description: "普通村民",
+      visibleState: ["alivePlayers", "currentPhase"],
+      availableActions: ["vote"],
+      systemPrompt: "你是一個村民，找出狼人並投票消滅他們。",
+    },
+    {
+      name: "werewolf",
+      description: "狼人",
+      visibleState: ["alivePlayers", "currentPhase", "werewolfTeam"],
+      availableActions: ["vote", "kill"],
+      systemPrompt: "你是狼人，在夜晚選擇一個村民殺害。",
+    },
+  ],
+  phases: [
+    {
+      name: "night",
+      description: "夜晚階段",
+      duration: 30,
+      allowedActions: ["kill"],
+      next: "day-discuss",
+    },
+    {
+      name: "day-discuss",
+      description: "白天討論",
+      duration: 60,
+      allowedActions: [],
+      next: "day-vote",
+    },
+    {
+      name: "day-vote",
+      description: "白天投票",
+      duration: 30,
+      allowedActions: ["vote"],
+      transitionCondition: "allPlayersVoted",
+      next: "night",
+    },
+  ],
+  actions: [
+    {
+      name: "vote",
+      description: "投票消滅一名玩家",
+      targetType: "player" as const,
+      phases: ["day-vote"],
+    },
+    {
+      name: "kill",
+      description: "狼人殺害一名玩家",
+      targetType: "player" as const,
+      phases: ["night"],
+      roles: ["werewolf"],
+    },
+  ],
+  winConditions: [
+    {
+      role: "villager",
+      condition: "allWerewolvesDead",
+      description: "所有狼人被消滅",
+    },
+    {
+      role: "werewolf",
+      condition: "werewolvesEqualVillagers",
+      description: "狼人數量 >= 村民數量",
+    },
+  ],
+  economy: {
+    currency: "free" as const,
+    entryFee: 0,
+    prizeDistribution: "winner-takes-all" as const,
+  },
+  initialState: {
+    alivePlayers: [],
+    eliminatedPlayers: [],
+    currentRound: 0,
+  },
+};
+
+describe("playgroundDefinitionSchema", () => {
+  it("accepts valid playground definition", () => {
+    const result = playgroundDefinitionSchema.safeParse(validPlaygroundDefinition);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts definition with maxStateSize", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      maxStateSize: 1048576,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts economy with percentage-based prize distribution", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      economy: {
+        currency: "play",
+        entryFee: 100,
+        prizeDistribution: { first: 60, second: 30, third: 10 },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts economy with betting config", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      economy: {
+        currency: "arinova",
+        entryFee: 50,
+        prizeDistribution: "winner-takes-all",
+        betting: { enabled: true, minBet: 10, maxBet: 500 },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // --- Missing required fields ---
+
+  it("rejects missing metadata", () => {
+    const { metadata, ...rest } = validPlaygroundDefinition;
+    expect(playgroundDefinitionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("rejects missing roles", () => {
+    const { roles, ...rest } = validPlaygroundDefinition;
+    expect(playgroundDefinitionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("rejects missing phases", () => {
+    const { phases, ...rest } = validPlaygroundDefinition;
+    expect(playgroundDefinitionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("rejects missing actions", () => {
+    const { actions, ...rest } = validPlaygroundDefinition;
+    expect(playgroundDefinitionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("rejects missing winConditions", () => {
+    const { winConditions, ...rest } = validPlaygroundDefinition;
+    expect(playgroundDefinitionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it("rejects missing economy", () => {
+    const { economy, ...rest } = validPlaygroundDefinition;
+    expect(playgroundDefinitionSchema.safeParse(rest).success).toBe(false);
+  });
+
+  // --- Empty arrays ---
+
+  it("rejects empty roles array", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      roles: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty phases array", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      phases: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty actions array", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      actions: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty winConditions array", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      winConditions: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // --- Metadata validation ---
+
+  it("rejects metadata with empty name", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      metadata: { ...validPlaygroundDefinition.metadata, name: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects metadata with name over 100 chars", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      metadata: { ...validPlaygroundDefinition.metadata, name: "x".repeat(101) },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects metadata with maxPlayers < minPlayers", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      metadata: { ...validPlaygroundDefinition.metadata, minPlayers: 8, maxPlayers: 4 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid category enum", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      metadata: { ...validPlaygroundDefinition.metadata, category: "adventure" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts all valid categories", () => {
+    for (const cat of ["game", "strategy", "social", "puzzle", "roleplay", "other"]) {
+      const result = playgroundDefinitionSchema.safeParse({
+        ...validPlaygroundDefinition,
+        metadata: { ...validPlaygroundDefinition.metadata, category: cat },
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects too many tags", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      metadata: { ...validPlaygroundDefinition.metadata, tags: Array(11).fill("tag") },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // --- Economy validation ---
+
+  it("rejects invalid currency enum", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      economy: { ...validPlaygroundDefinition.economy, currency: "bitcoin" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative entry fee", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      economy: { ...validPlaygroundDefinition.economy, entryFee: -10 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects betting with maxBet < minBet", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      economy: {
+        currency: "play",
+        entryFee: 0,
+        prizeDistribution: "winner-takes-all",
+        betting: { enabled: true, minBet: 100, maxBet: 50 },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // --- Role validation ---
+
+  it("rejects role with empty systemPrompt", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      roles: [{ ...validPlaygroundDefinition.roles[0], systemPrompt: "" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects role with systemPrompt over 4000 chars", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      roles: [{ ...validPlaygroundDefinition.roles[0], systemPrompt: "x".repeat(4001) }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // --- Phase validation ---
+
+  it("accepts phase without duration (condition-based)", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      phases: [
+        {
+          name: "vote",
+          description: "投票階段",
+          allowedActions: ["vote"],
+          transitionCondition: "allVoted",
+          next: null,
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts phase with next: null (terminal phase)", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      phases: [
+        {
+          name: "end",
+          description: "結束",
+          allowedActions: [],
+          next: null,
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // --- Action validation ---
+
+  it("accepts action with all optional fields", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      actions: [
+        {
+          name: "special",
+          description: "Special action",
+          params: { target: { type: "string" } },
+          targetType: "role",
+          phases: ["night"],
+          roles: ["seer"],
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects action with invalid targetType", () => {
+    const result = playgroundDefinitionSchema.safeParse({
+      ...validPlaygroundDefinition,
+      actions: [
+        {
+          name: "bad",
+          description: "Bad action",
+          targetType: "team",
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("createPlaygroundSchema", () => {
+  it("accepts valid create playground request", () => {
+    const result = createPlaygroundSchema.safeParse({
+      definition: validPlaygroundDefinition,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts with isPublic flag", () => {
+    const result = createPlaygroundSchema.safeParse({
+      definition: validPlaygroundDefinition,
+      isPublic: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing definition", () => {
+    const result = createPlaygroundSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid definition", () => {
+    const result = createPlaygroundSchema.safeParse({
+      definition: { metadata: { name: "bad" } },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("joinPlaygroundSchema", () => {
+  it("accepts empty object (all optional)", () => {
+    const result = joinPlaygroundSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts with agentId", () => {
+    const result = joinPlaygroundSchema.safeParse({
+      agentId: "550e8400-e29b-41d4-a716-446655440000",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts with controlMode", () => {
+    const result = joinPlaygroundSchema.safeParse({
+      controlMode: "agent",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid agentId (not UUID)", () => {
+    const result = joinPlaygroundSchema.safeParse({ agentId: "not-a-uuid" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid controlMode", () => {
+    const result = joinPlaygroundSchema.safeParse({ controlMode: "auto" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts all valid control modes", () => {
+    for (const mode of ["agent", "human", "copilot"]) {
+      expect(joinPlaygroundSchema.safeParse({ controlMode: mode }).success).toBe(true);
+    }
+  });
+});
+
+describe("playgroundActionSchema", () => {
+  it("accepts valid action", () => {
+    const result = playgroundActionSchema.safeParse({
+      actionName: "vote",
+      params: { target: "player-1" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts action without params", () => {
+    const result = playgroundActionSchema.safeParse({ actionName: "pass" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty actionName", () => {
+    const result = playgroundActionSchema.safeParse({ actionName: "" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("playgroundWSClientEventSchema", () => {
+  it("accepts pg_auth event", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_auth",
+      sessionId: "550e8400-e29b-41d4-a716-446655440000",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts pg_action event", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_action",
+      actionName: "vote",
+      params: { target: "player-1" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts pg_action without params", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_action",
+      actionName: "pass",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts pg_chat event", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_chat",
+      content: "Hello everyone!",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects pg_chat with empty content", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_chat",
+      content: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects pg_chat with content over 2000 chars", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_chat",
+      content: "x".repeat(2001),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts pg_control_mode event", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_control_mode",
+      mode: "agent",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects pg_control_mode with invalid mode", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_control_mode",
+      mode: "auto",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts ping event", () => {
+    const result = playgroundWSClientEventSchema.safeParse({ type: "ping" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown event type", () => {
+    const result = playgroundWSClientEventSchema.safeParse({ type: "pg_unknown" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects pg_auth with invalid sessionId", () => {
+    const result = playgroundWSClientEventSchema.safeParse({
+      type: "pg_auth",
+      sessionId: "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
   });
 });
