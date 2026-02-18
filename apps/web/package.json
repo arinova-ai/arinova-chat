@@ -7,7 +7,8 @@
     "dev": "next dev -p 3500",
     "build": "next build",
     "start": "next start -p 3500",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@arinova/shared": "workspace:*",

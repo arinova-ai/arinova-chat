@@ -317,3 +317,123 @@ export const appPurchases = pgTable("app_purchases", {
   status: purchaseStatusEnum().notNull().default("completed"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ===== Playground tables =====
+
+export const playgroundCategoryEnum = pgEnum("playground_category", [
+  "game",
+  "strategy",
+  "social",
+  "puzzle",
+  "roleplay",
+  "other",
+]);
+
+export const playgroundSessionStatusEnum = pgEnum("playground_session_status", [
+  "waiting",
+  "active",
+  "paused",
+  "finished",
+]);
+
+export const playgroundControlModeEnum = pgEnum("playground_control_mode", [
+  "agent",
+  "human",
+  "copilot",
+]);
+
+export const playgroundMessageTypeEnum = pgEnum("playground_message_type", [
+  "chat",
+  "action",
+  "system",
+  "phase_transition",
+]);
+
+export const playgroundCurrencyEnum = pgEnum("playground_currency", [
+  "free",
+  "play",
+  "arinova",
+]);
+
+export const playgroundTransactionTypeEnum = pgEnum("playground_transaction_type", [
+  "entry_fee",
+  "bet",
+  "win",
+  "refund",
+  "commission",
+]);
+
+export const playgrounds = pgTable("playgrounds", {
+  id: uuid().primaryKey().defaultRandom(),
+  ownerId: text("owner_id")
+    .notNull()
+    .references(() => user.id),
+  name: varchar({ length: 100 }).notNull(),
+  description: text().notNull(),
+  category: playgroundCategoryEnum().notNull(),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  definition: jsonb("definition").notNull(),
+  isPublic: boolean("is_public").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const playgroundSessions = pgTable("playground_sessions", {
+  id: uuid().primaryKey().defaultRandom(),
+  playgroundId: uuid("playground_id")
+    .notNull()
+    .references(() => playgrounds.id, { onDelete: "cascade" }),
+  status: playgroundSessionStatusEnum().notNull().default("waiting"),
+  state: jsonb("state").notNull().default({}),
+  currentPhase: varchar("current_phase", { length: 100 }),
+  prizePool: integer("prize_pool").notNull().default(0),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const playgroundParticipants = pgTable("playground_participants", {
+  id: uuid().primaryKey().defaultRandom(),
+  sessionId: uuid("session_id")
+    .notNull()
+    .references(() => playgroundSessions.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  agentId: uuid("agent_id").references(() => agents.id),
+  role: varchar({ length: 100 }),
+  controlMode: playgroundControlModeEnum().notNull().default("human"),
+  isConnected: boolean("is_connected").notNull().default(true),
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+});
+
+export const playgroundMessages = pgTable("playground_messages", {
+  id: uuid().primaryKey().defaultRandom(),
+  sessionId: uuid("session_id")
+    .notNull()
+    .references(() => playgroundSessions.id, { onDelete: "cascade" }),
+  participantId: uuid("participant_id").references(() => playgroundParticipants.id),
+  type: playgroundMessageTypeEnum().notNull(),
+  content: text().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const playCoinBalances = pgTable("play_coin_balances", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id),
+  balance: integer().notNull().default(0),
+  lastGrantedAt: timestamp("last_granted_at"),
+});
+
+export const playgroundTransactions = pgTable("playground_transactions", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  sessionId: uuid("session_id").references(() => playgroundSessions.id),
+  type: playgroundTransactionTypeEnum().notNull(),
+  currency: playgroundCurrencyEnum().notNull(),
+  amount: integer().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

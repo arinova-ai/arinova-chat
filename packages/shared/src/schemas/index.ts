@@ -190,6 +190,119 @@ export const appManifestSchema = z.object({
   "maxStateSize and maxActions are required for dynamic mode"
 );
 
+// ===== Playground =====
+const playgroundCategorySchema = z.enum(["game", "strategy", "social", "puzzle", "roleplay", "other"]);
+const playgroundCurrencySchema = z.enum(["free", "play", "arinova"]);
+const playgroundControlModeSchema = z.enum(["agent", "human", "copilot"]);
+
+const playgroundActionDefinitionSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().min(1).max(500),
+  params: z.record(z.unknown()).optional(),
+  targetType: z.enum(["player", "role", "global"]).optional(),
+  phases: z.array(z.string().min(1)).optional(),
+  roles: z.array(z.string().min(1)).optional(),
+});
+
+const playgroundPhaseDefinitionSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().min(1).max(500),
+  duration: z.number().int().positive().optional(),
+  allowedActions: z.array(z.string().min(1)),
+  transitionCondition: z.string().optional(),
+  next: z.string().nullable(),
+});
+
+const playgroundRoleDefinitionSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().min(1).max(500),
+  visibleState: z.array(z.string().min(1)),
+  availableActions: z.array(z.string().min(1)),
+  systemPrompt: z.string().min(1).max(4000),
+  minCount: z.number().int().min(0).optional(),
+  maxCount: z.number().int().min(1).optional(),
+});
+
+const playgroundWinConditionSchema = z.object({
+  role: z.string().min(1),
+  condition: z.string().min(1),
+  description: z.string().min(1).max(500),
+});
+
+const playgroundBettingConfigSchema = z.object({
+  enabled: z.boolean(),
+  minBet: z.number().int().min(0),
+  maxBet: z.number().int().positive(),
+}).refine((b) => b.maxBet >= b.minBet, "maxBet must be >= minBet");
+
+const playgroundEconomySchema = z.object({
+  currency: playgroundCurrencySchema,
+  entryFee: z.number().int().min(0),
+  prizeDistribution: z.union([
+    z.literal("winner-takes-all"),
+    z.record(z.number().int().min(0).max(100)),
+  ]),
+  betting: playgroundBettingConfigSchema.optional(),
+});
+
+export const playgroundDefinitionSchema = z.object({
+  metadata: z.object({
+    name: z.string().min(1).max(100),
+    description: z.string().min(1).max(1000),
+    category: playgroundCategorySchema,
+    minPlayers: z.number().int().min(1),
+    maxPlayers: z.number().int().min(1),
+    tags: z.array(z.string().min(1).max(50)).max(10).optional(),
+    thumbnailDescription: z.string().max(200).optional(),
+  }).refine((m) => m.maxPlayers >= m.minPlayers, "maxPlayers must be >= minPlayers"),
+  roles: z.array(playgroundRoleDefinitionSchema).min(1),
+  phases: z.array(playgroundPhaseDefinitionSchema).min(1),
+  actions: z.array(playgroundActionDefinitionSchema).min(1),
+  winConditions: z.array(playgroundWinConditionSchema).min(1),
+  economy: playgroundEconomySchema,
+  initialState: z.record(z.unknown()),
+  maxStateSize: z.number().int().positive().optional(),
+});
+
+export const createPlaygroundSchema = z.object({
+  definition: playgroundDefinitionSchema,
+  isPublic: z.boolean().optional(),
+});
+
+export const joinPlaygroundSchema = z.object({
+  agentId: z.string().uuid().optional(),
+  controlMode: playgroundControlModeSchema.optional(),
+});
+
+export const playgroundActionSchema = z.object({
+  actionName: z.string().min(1),
+  params: z.record(z.unknown()).optional(),
+});
+
+// ===== Playground WebSocket (Client → Server) =====
+export const playgroundWSClientEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("pg_auth"),
+    sessionId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("pg_action"),
+    actionName: z.string().min(1),
+    params: z.record(z.unknown()).optional(),
+  }),
+  z.object({
+    type: z.literal("pg_chat"),
+    content: z.string().min(1).max(2000),
+  }),
+  z.object({
+    type: z.literal("pg_control_mode"),
+    mode: playgroundControlModeSchema,
+  }),
+  z.object({
+    type: z.literal("ping"),
+  }),
+]);
+
 // ===== WebSocket (User ↔ Backend) =====
 export const wsClientEventSchema = z.discriminatedUnion("type", [
   z.object({

@@ -20,6 +20,8 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().default(""),
   R2_BUCKET: z.string().default("arinova-uploads"),
   R2_PUBLIC_URL: z.string().default(""),
+  // Comma-separated list of admin email addresses
+  ADMIN_EMAILS: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

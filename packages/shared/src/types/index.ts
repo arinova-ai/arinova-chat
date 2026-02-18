@@ -311,6 +311,168 @@ export interface AppPurchase {
   createdAt: Date;
 }
 
+// ===== Playground =====
+export type PlaygroundCategory = "game" | "strategy" | "social" | "puzzle" | "roleplay" | "other";
+export type PlaygroundSessionStatus = "waiting" | "active" | "paused" | "finished";
+export type PlaygroundCurrency = "free" | "play" | "arinova";
+export type PlaygroundPrizeDistribution = "winner-takes-all" | Record<string, number>; // e.g. { first: 60, second: 30, third: 10 }
+export type PlaygroundParticipantControlMode = "agent" | "human" | "copilot";
+export type PlaygroundMessageType = "chat" | "action" | "system" | "phase_transition";
+
+export interface PlaygroundActionDefinition {
+  name: string;
+  description: string;
+  params?: Record<string, unknown>; // JSON Schema
+  targetType?: "player" | "role" | "global";
+  phases?: string[]; // restrict to specific phases
+  roles?: string[]; // restrict to specific roles
+}
+
+export interface PlaygroundPhaseDefinition {
+  name: string;
+  description: string;
+  duration?: number; // seconds, optional for condition-based
+  allowedActions: string[];
+  transitionCondition?: string; // expression evaluated against state
+  next: string | null; // next phase name, null = end
+}
+
+export interface PlaygroundRoleDefinition {
+  name: string;
+  description: string;
+  visibleState: string[]; // state keys visible to this role
+  availableActions: string[];
+  systemPrompt: string;
+  minCount?: number;
+  maxCount?: number;
+}
+
+export interface PlaygroundWinCondition {
+  role: string; // winning role
+  condition: string; // expression evaluated against state
+  description: string;
+}
+
+export interface PlaygroundBettingConfig {
+  enabled: boolean;
+  minBet: number;
+  maxBet: number;
+}
+
+export interface PlaygroundEconomy {
+  currency: PlaygroundCurrency;
+  entryFee: number;
+  prizeDistribution: PlaygroundPrizeDistribution;
+  betting?: PlaygroundBettingConfig;
+}
+
+export interface PlaygroundDefinition {
+  metadata: {
+    name: string;
+    description: string;
+    category: PlaygroundCategory;
+    minPlayers: number;
+    maxPlayers: number;
+    tags?: string[];
+    thumbnailDescription?: string;
+  };
+  roles: PlaygroundRoleDefinition[];
+  phases: PlaygroundPhaseDefinition[];
+  actions: PlaygroundActionDefinition[];
+  winConditions: PlaygroundWinCondition[];
+  economy: PlaygroundEconomy;
+  initialState: Record<string, unknown>;
+  maxStateSize?: number; // bytes, default 1MB
+}
+
+export interface Playground {
+  id: string;
+  ownerId: string;
+  name: string;
+  description: string;
+  category: PlaygroundCategory;
+  tags: string[];
+  definition: PlaygroundDefinition;
+  isPublic: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PlaygroundSession {
+  id: string;
+  playgroundId: string;
+  status: PlaygroundSessionStatus;
+  state: Record<string, unknown>;
+  currentPhase: string | null;
+  prizePool: number;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface PlaygroundParticipant {
+  id: string;
+  sessionId: string;
+  userId: string;
+  agentId: string | null;
+  role: string | null; // assigned on session start
+  controlMode: PlaygroundParticipantControlMode;
+  isConnected: boolean;
+  joinedAt: Date;
+}
+
+export interface PlaygroundMessage {
+  id: string;
+  sessionId: string;
+  participantId: string | null;
+  type: PlaygroundMessageType;
+  content: string;
+  createdAt: Date;
+}
+
+export type PlaygroundTransactionType = "entry_fee" | "bet" | "win" | "refund" | "commission";
+
+export interface PlayCoinBalance {
+  userId: string;
+  balance: number;
+  lastGrantedAt: Date | null;
+}
+
+export interface PlaygroundTransaction {
+  id: string;
+  userId: string;
+  sessionId: string | null;
+  type: PlaygroundTransactionType;
+  currency: PlaygroundCurrency;
+  amount: number;
+  createdAt: Date;
+}
+
+// ===== Playground WebSocket Events =====
+
+/** Events sent from Client → Server */
+export type PlaygroundWSClientEvent =
+  | { type: "pg_auth"; sessionId: string }
+  | { type: "pg_action"; actionName: string; params?: Record<string, unknown> }
+  | { type: "pg_chat"; content: string }
+  | { type: "pg_control_mode"; mode: PlaygroundParticipantControlMode }
+  | { type: "ping" };
+
+/** Events sent from Server → Client */
+export type PlaygroundWSServerEvent =
+  | { type: "pg_auth_ok"; sessionId: string; participantId: string }
+  | { type: "pg_auth_error"; error: string }
+  | { type: "pg_state_update"; state: Record<string, unknown>; currentPhase: string | null }
+  | { type: "pg_action_result"; success: boolean; error?: string }
+  | { type: "pg_phase_transition"; from: string; to: string }
+  | { type: "pg_participant_joined"; participant: PlaygroundParticipant }
+  | { type: "pg_participant_left"; participantId: string }
+  | { type: "pg_session_started"; roles: Record<string, string>; phase: string }
+  | { type: "pg_session_finished"; winners: string[]; prizeDistribution: Record<string, number> }
+  | { type: "pg_chat"; participantId: string; content: string }
+  | { type: "pg_error"; error: string }
+  | { type: "pong" };
+
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
   | { type: "send_message"; conversationId: string; content: string }
