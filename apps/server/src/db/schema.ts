@@ -330,3 +330,32 @@ export const appPurchases = pgTable("app_purchases", {
   status: purchaseStatusEnum().notNull().default("completed"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ===== Push Notification tables =====
+
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  endpoint: text().notNull(),
+  p256dh: text().notNull(),
+  auth: text().notNull(),
+  deviceInfo: text("device_info"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id),
+  globalEnabled: boolean("global_enabled").notNull().default(true),
+  messageEnabled: boolean("message_enabled").notNull().default(true),
+  playgroundInviteEnabled: boolean("playground_invite_enabled").notNull().default(true),
+  playgroundTurnEnabled: boolean("playground_turn_enabled").notNull().default(true),
+  playgroundResultEnabled: boolean("playground_result_enabled").notNull().default(true),
+  quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
+  quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
+});

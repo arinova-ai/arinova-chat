@@ -22,6 +22,8 @@ import {
   getPendingEvents,
   clearPendingEvents,
 } from "../lib/pending-events.js";
+import { sendPushToUser } from "../lib/push.js";
+import { shouldSendPush } from "../lib/push-trigger.js";
 
 // Active connections: userId -> Set of WebSockets
 const wsConnections = new Map<string, Set<WebSocket>>();
@@ -49,6 +51,11 @@ function send(ws: WebSocket, event: WSServerEvent) {
   if (ws.readyState === ws.OPEN) {
     ws.send(JSON.stringify(event));
   }
+}
+
+export function isUserOnline(userId: string): boolean {
+  const sockets = wsConnections.get(userId);
+  return Boolean(sockets && sockets.size > 0);
 }
 
 function sendToUser(userId: string, event: WSServerEvent) {
@@ -555,6 +562,22 @@ async function doTriggerAgentResponse(
         messageId: agentMsg.id,
         seq: agentSeq,
       });
+
+      // Push notification if user is offline
+      if (!isUserOnline(userId)) {
+        const ok = await shouldSendPush(userId, "message");
+        if (ok) {
+          const preview = fullContent.length > 100
+            ? fullContent.slice(0, 100) + "…"
+            : fullContent;
+          sendPushToUser(userId, {
+            type: "message",
+            title: agent.name,
+            body: preview,
+            url: `/chat/${conversationId}`,
+          }).catch(() => {});
+        }
+      }
 
       // Dequeue next agent response
       activeStreams.delete(conversationId);

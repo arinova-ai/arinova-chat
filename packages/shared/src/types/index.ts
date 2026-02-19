@@ -392,3 +392,33 @@ export type AgentWSServerEvent =
   | { type: "auth_error"; error: string }
   | { type: "task"; taskId: string; conversationId: string; content: string }
   | { type: "pong" };
+
+// ===== Push Notifications =====
+
+export type NotificationType =
+  | "message"
+  | "playground_invite"
+  | "playground_turn"
+  | "playground_result";
+
+export interface PushSubscription {
+  id: string;
+  userId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  deviceInfo: string | null;
+  createdAt: Date;
+}
+
+export interface NotificationPreference {
+  id: string;
+  userId: string;
+  globalEnabled: boolean;
+  messageEnabled: boolean;
+  playgroundInviteEnabled: boolean;
+  playgroundTurnEnabled: boolean;
+  playgroundResultEnabled: boolean;
+  quietHoursStart: string | null; // HH:mm format
+  quietHoursEnd: string | null;   // HH:mm format
+}

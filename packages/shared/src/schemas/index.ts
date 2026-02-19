@@ -235,3 +235,37 @@ export const agentWSClientEventSchema = z.discriminatedUnion("type", [
     type: z.literal("ping"),
   }),
 ]);
+
+// ===== Push Notifications =====
+
+export const notificationTypeSchema = z.enum([
+  "message",
+  "playground_invite",
+  "playground_turn",
+  "playground_result",
+]);
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+  deviceInfo: z.string().max(500).optional(),
+});
+
+export const notificationPreferenceSchema = z.object({
+  globalEnabled: z.boolean(),
+  messageEnabled: z.boolean(),
+  playgroundInviteEnabled: z.boolean(),
+  playgroundTurnEnabled: z.boolean(),
+  playgroundResultEnabled: z.boolean(),
+  quietHoursStart: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:mm format")
+    .nullable(),
+  quietHoursEnd: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Must be HH:mm format")
+    .nullable(),
+});
