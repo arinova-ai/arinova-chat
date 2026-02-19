@@ -10,11 +10,17 @@ export function useAutoScroll<T extends HTMLElement>(
   const userScrolledUp = useRef(false);
   const prevConversationId = useRef(options?.conversationId);
 
-  // Reset scroll flag when conversation changes
+  // Reset scroll flag and force scroll to bottom when conversation changes
   useEffect(() => {
     if (options?.conversationId !== prevConversationId.current) {
       userScrolledUp.current = false;
       prevConversationId.current = options?.conversationId;
+      const el = ref.current;
+      if (el) {
+        requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight;
+        });
+      }
     }
   }, [options?.conversationId]);
 

@@ -55,7 +55,7 @@ export function ChatArea() {
         conversationId={conversation.id}
         onClick={agent ? () => setManageOpen(true) : undefined}
       />
-      <MessageList messages={messages} agentName={conversation.agentName} />
+      <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} />
       <ChatInput />
 
       {agent && (
