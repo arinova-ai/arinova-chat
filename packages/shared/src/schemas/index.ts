@@ -206,6 +206,10 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
     seq: z.number().int().min(0),
   }),
   z.object({
+    type: z.literal("focus"),
+    visible: z.boolean(),
+  }),
+  z.object({
     type: z.literal("ping"),
   }),
 ]);

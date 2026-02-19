@@ -28,6 +28,8 @@ import { redis } from "../db/redis.js";
 
 // Active connections: userId -> Set of WebSockets
 const wsConnections = new Map<string, Set<WebSocket>>();
+// Per-socket visibility state
+const socketVisible = new Map<WebSocket, boolean>();
 
 // Active stream cancellers: messageId -> { cancel }
 const streamCancellers = new Map<string, { cancel: () => void }>();
@@ -60,6 +62,13 @@ function send(ws: WebSocket, event: WSServerEvent) {
 export function isUserOnline(userId: string): boolean {
   const sockets = wsConnections.get(userId);
   return Boolean(sockets && sockets.size > 0);
+}
+
+// Track foreground state: userId -> count of visible tabs
+const foregroundCounts = new Map<string, number>();
+
+export function isUserForeground(userId: string): boolean {
+  return (foregroundCounts.get(userId) ?? 0) > 0;
 }
 
 function sendToUser(userId: string, event: WSServerEvent) {
@@ -225,6 +234,18 @@ export async function wsRoutes(app: FastifyInstance) {
           await handleMarkRead(userId, event.conversationId, event.seq);
           return;
         }
+
+        if (event.type === "focus") {
+          const prev = socketVisible.get(socket) ?? false;
+          socketVisible.set(socket, event.visible);
+          const count = foregroundCounts.get(userId) ?? 0;
+          if (event.visible && !prev) {
+            foregroundCounts.set(userId, count + 1);
+          } else if (!event.visible && prev) {
+            foregroundCounts.set(userId, Math.max(0, count - 1));
+          }
+          return;
+        }
       } catch (err) {
         app.log.error(err, "WS message error");
       }
@@ -239,11 +260,19 @@ export async function wsRoutes(app: FastifyInstance) {
 
     socket.on("close", () => {
       clearHeartbeat(socket);
+      // Clean up foreground tracking
+      if (socketVisible.get(socket)) {
+        const count = foregroundCounts.get(userId) ?? 0;
+        foregroundCounts.set(userId, Math.max(0, count - 1));
+      }
+      socketVisible.delete(socket);
+
       const sockets = wsConnections.get(userId);
       if (sockets) {
         sockets.delete(socket);
         if (sockets.size === 0) {
           wsConnections.delete(userId);
+          foregroundCounts.delete(userId);
         }
       }
       app.log.info(`WS disconnected: user=${userId}`);
@@ -617,7 +646,7 @@ async function doTriggerAgentResponse(
       });
 
       // Push notification if user is offline and conversation not muted
-      if (!isUserOnline(userId) && !(await isConversationMuted(userId, conversationId))) {
+      if (!isUserForeground(userId) && !(await isConversationMuted(userId, conversationId))) {
         const ok = await shouldSendPush(userId, "message");
         if (ok) {
           const preview = fullContent.length > 100

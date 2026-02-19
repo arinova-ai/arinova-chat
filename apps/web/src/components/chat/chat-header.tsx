@@ -1,11 +1,13 @@
 "use client";
 
+import { useCallback } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
+import { subscribeToPush, getPushStatus } from "@/lib/push";
 import type { ConversationType } from "@arinova/shared/types";
 
 interface ChatHeaderProps {
@@ -33,6 +35,20 @@ export function ChatHeader({
   const mutedConversations = useChatStore((s) => s.mutedConversations);
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
   const isMuted = conversationId ? mutedConversations[conversationId] : false;
+
+  const handleMuteToggle = useCallback(async () => {
+    if (!conversationId) return;
+    toggleMuteConversation(conversationId);
+    // When unmuting, check if push is enabled — if not, prompt to subscribe
+    if (isMuted) {
+      try {
+        const status = await getPushStatus();
+        if (status.supported && !status.subscribed && status.permission !== "denied") {
+          await subscribeToPush();
+        }
+      } catch {}
+    }
+  }, [conversationId, isMuted, toggleMuteConversation]);
 
   return (
     <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top,0px)]">
@@ -104,7 +120,7 @@ export function ChatHeader({
             variant="ghost"
             size="icon"
             className={cn("h-8 w-8", isMuted && "text-red-400")}
-            onClick={() => toggleMuteConversation(conversationId)}
+            onClick={handleMuteToggle}
             title={isMuted ? "Unmute conversation" : "Mute conversation"}
           >
             {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}

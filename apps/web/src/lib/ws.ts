@@ -48,6 +48,8 @@ class WebSocketManager {
         this.setStatus("syncing");
         this.reconnectDelay = 1000;
         this.startPing();
+        // Report foreground state
+        this.send({ type: "focus", visible: document.visibilityState === "visible" });
         // Send sync request with last known seqs
         this.sendSync();
       };
@@ -210,9 +212,11 @@ class WebSocketManager {
   private onlineHandler: (() => void) | null = null;
 
   setupVisibilityListeners() {
-    // Reconnect when tab becomes visible (mobile app switch)
+    // Report foreground state and reconnect when tab becomes visible
     this.visibilityHandler = () => {
-      if (document.visibilityState === "visible") {
+      const visible = document.visibilityState === "visible";
+      this.send({ type: "focus", visible });
+      if (visible) {
         this.reconnect();
       }
     };

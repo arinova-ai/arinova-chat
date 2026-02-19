@@ -318,6 +318,7 @@ export type WSClientEvent =
   | { type: "cancel_stream"; conversationId: string; messageId: string }
   | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
   | { type: "mark_read"; conversationId: string; seq: number }
+  | { type: "focus"; visible: boolean }
   | { type: "ping" };
 
 export interface SyncConversationSummary {
