@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "arinova-agent"
+name = "arinova-agent-sdk"
 version = "0.0.1"
 description = "SDK for connecting AI agents to Arinova Chat"
 readme = "README.md"
