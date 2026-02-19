@@ -1,6 +1,6 @@
 {
   "name": "@arinova-ai/openclaw-arinova-ai",
-  "version": "0.0.10",
+  "version": "0.0.14",
   "description": "OpenClaw channel plugin for Arinova Chat (A2A protocol with native streaming)",
   "type": "module",
   "main": "dist/index.js",
@@ -41,12 +41,11 @@
   "peerDependencies": {
     "openclaw": ">=2026"
   },
-  "dependencies": {
-    "zod": "^4"
-  },
   "devDependencies": {
+    "@arinova-ai/agent-sdk": "workspace:*",
     "openclaw": "latest",
     "tsup": "^8",
-    "typescript": "^5"
+    "typescript": "^5",
+    "zod": "^4"
   }
 }

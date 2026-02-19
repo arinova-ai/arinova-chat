@@ -180,14 +180,10 @@ importers:
         version: 5.9.3
 
   packages/openclaw-plugin:
-    dependencies:
+    devDependencies:
       '@arinova-ai/agent-sdk':
         specifier: workspace:*
         version: link:../agent-sdk
-      zod:
-        specifier: ^4
-        version: 4.3.6
-    devDependencies:
       openclaw:
         specifier: latest
         version: 2026.2.13(@modelcontextprotocol/sdk@1.26.0(zod@4.3.6))(@napi-rs/canvas@0.1.92)(@types/express@5.0.6)(hono@4.11.9)(node-llama-cpp@3.15.1(typescript@5.9.3))(signal-polyfill@0.2.2)
@@ -197,6 +193,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      zod:
+        specifier: ^4
+        version: 4.3.6
 
   packages/shared:
     dependencies:
