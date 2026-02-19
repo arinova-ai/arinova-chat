@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
+import { ConnectionBanner } from "./connection-banner";
 import { useChatStore } from "@/store/chat-store";
 
 export function ChatLayout() {
@@ -36,7 +37,6 @@ export function ChatLayout() {
     if (!isMobile) return;
 
     if ((activeConversationId || searchActive) && !prevConvRef.current) {
-      // Entering a conversation or search → push history entry
       history.pushState({ arinovaChat: true }, "");
     }
     prevConvRef.current = activeConversationId || (searchActive ? "__search__" : null);
@@ -61,20 +61,23 @@ export function ChatLayout() {
   }, [setActiveConversation]);
 
   return (
-    <div className={`app-dvh flex min-h-0 overflow-hidden ${(activeConversationId || searchActive) ? "bg-background" : "bg-card md:bg-background"}`}>
-      {/* Desktop: always show sidebar */}
-      <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
-        <Sidebar />
-      </div>
+    <div className={`app-dvh flex flex-col min-h-0 overflow-hidden ${(activeConversationId || searchActive) ? "bg-background" : "bg-card md:bg-background"}`}>
+      <ConnectionBanner />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Desktop: always show sidebar */}
+        <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
+          <Sidebar />
+        </div>
 
-      {/* Mobile: sidebar fullscreen when no conversation/search, chat when selected */}
-      <div className={`md:hidden h-full overflow-hidden bg-card ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
-        <Sidebar />
-      </div>
+        {/* Mobile: sidebar fullscreen when no conversation/search, chat when selected */}
+        <div className={`md:hidden h-full overflow-hidden bg-card ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
+          <Sidebar />
+        </div>
 
-      {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
-      <div className={`h-full flex-1 min-w-0 bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
-        <ChatArea />
+        {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
+        <div className={`h-full flex-1 min-w-0 bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
+          <ChatArea />
+        </div>
       </div>
     </div>
   );

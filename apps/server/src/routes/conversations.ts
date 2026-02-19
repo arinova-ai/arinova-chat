@@ -5,6 +5,7 @@ import {
   agents,
   messages,
   conversationMembers,
+  conversationReads,
 } from "../db/schema.js";
 import { eq, and, desc, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
@@ -228,6 +229,49 @@ export async function conversationRoutes(app: FastifyInstance) {
         .where(eq(messages.conversationId, request.params.id));
 
       return reply.send({ success: true, deleted: msgCount });
+    }
+  );
+
+  // Mark conversation as read
+  app.put<{ Params: { id: string } }>(
+    "/api/conversations/:id/read",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+
+      // Verify conversation belongs to user
+      const [conv] = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, request.params.id),
+            eq(conversations.userId, user.id)
+          )
+        );
+
+      if (!conv) {
+        return reply.status(404).send({ error: "Conversation not found" });
+      }
+
+      // Get max seq
+      const [{ maxSeq }] = await db
+        .select({
+          maxSeq: sql<number>`COALESCE(MAX(${messages.seq}), 0)`,
+        })
+        .from(messages)
+        .where(eq(messages.conversationId, conv.id));
+
+      // Upsert conversation_reads
+      await db.execute(sql`
+        INSERT INTO conversation_reads (id, user_id, conversation_id, last_read_seq, updated_at)
+        VALUES (gen_random_uuid(), ${user.id}, ${conv.id}, ${maxSeq}, NOW())
+        ON CONFLICT (user_id, conversation_id)
+        DO UPDATE SET
+          last_read_seq = GREATEST(conversation_reads.last_read_seq, EXCLUDED.last_read_seq),
+          updated_at = NOW()
+      `);
+
+      return reply.send({ lastReadSeq: maxSeq });
     }
   );
 

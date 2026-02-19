@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { triggerAgentResponse } from "../ws/handler.js";
 import { uploadToR2, isR2Configured } from "../lib/r2.js";
+import { getNextSeq } from "../lib/message-seq.js";
 import { env } from "../env.js";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
@@ -92,10 +93,12 @@ export async function uploadRoutes(app: FastifyInstance) {
       const content = caption ? `${caption}\n\n${fileMarkdown}` : fileMarkdown;
 
       // Create a user message with this attachment
+      const userSeq = await getNextSeq(conv.id);
       const [msg] = await db
         .insert(messages)
         .values({
           conversationId: conv.id,
+          seq: userSeq,
           role: "user",
           content,
           status: "completed",

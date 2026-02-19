@@ -64,6 +64,7 @@ export type MessageStatus =
 export interface Message {
   id: string;
   conversationId: string;
+  seq: number;
   role: MessageRole;
   content: string;
   status: MessageStatus;
@@ -315,30 +316,63 @@ export interface AppPurchase {
 export type WSClientEvent =
   | { type: "send_message"; conversationId: string; content: string }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
+  | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
+  | { type: "mark_read"; conversationId: string; seq: number }
   | { type: "ping" };
+
+export interface SyncConversationSummary {
+  conversationId: string;
+  unreadCount: number;
+  maxSeq: number;
+  lastMessage: {
+    content: string;
+    role: MessageRole;
+    status: MessageStatus;
+    createdAt: string;
+  } | null;
+}
+
+export interface SyncMissedMessage {
+  id: string;
+  conversationId: string;
+  seq: number;
+  role: MessageRole;
+  content: string;
+  status: MessageStatus;
+  createdAt: string;
+}
 
 export type WSServerEvent =
   | {
       type: "stream_start";
       conversationId: string;
       messageId: string;
+      seq: number;
     }
   | {
       type: "stream_chunk";
       conversationId: string;
       messageId: string;
+      seq: number;
       chunk: string;
     }
   | {
       type: "stream_end";
       conversationId: string;
       messageId: string;
+      seq: number;
     }
   | {
       type: "stream_error";
       conversationId: string;
       messageId: string;
+      seq: number;
       error: string;
+    }
+  | {
+      type: "sync_response";
+      conversations: SyncConversationSummary[];
+      missedMessages: SyncMissedMessage[];
     }
   | { type: "pong" };
 

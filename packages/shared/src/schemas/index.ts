@@ -203,6 +203,15 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
     messageId: z.string().uuid(),
   }),
   z.object({
+    type: z.literal("sync"),
+    conversations: z.record(z.string().uuid(), z.number().int().min(0)),
+  }),
+  z.object({
+    type: z.literal("mark_read"),
+    conversationId: z.string().uuid(),
+    seq: z.number().int().min(0),
+  }),
+  z.object({
     type: z.literal("ping"),
   }),
 ]);

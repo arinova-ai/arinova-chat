@@ -52,7 +52,10 @@ interface ChatState {
   highlightMessageId: string | null;
   loading: boolean;
   unreadCounts: Record<string, number>;
-  agentHealth: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }>;
+  agentHealth: Record<
+    string,
+    { status: "online" | "offline" | "error"; latencyMs: number | null }
+  >;
   agentSkills: Record<string, AgentSkill[]>;
   showTimestamps: boolean;
   mutedConversations: Record<string, boolean>;
@@ -70,16 +73,29 @@ interface ChatState {
   loadMessages: (conversationId: string) => Promise<void>;
   sendMessage: (content: string) => void;
   cancelStream: () => void;
-  createAgent: (data: { name: string; description?: string; a2aEndpoint?: string }) => Promise<Agent>;
+  createAgent: (data: {
+    name: string;
+    description?: string;
+    a2aEndpoint?: string;
+  }) => Promise<Agent>;
   updateAgent: (id: string, data: Record<string, unknown>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
-  createConversation: (agentId: string, title?: string) => Promise<Conversation>;
-  createGroupConversation: (agentIds: string[], title: string) => Promise<Conversation>;
+  createConversation: (
+    agentId: string,
+    title?: string
+  ) => Promise<Conversation>;
+  createGroupConversation: (
+    agentIds: string[],
+    title: string
+  ) => Promise<Conversation>;
   loadGroupMembers: (conversationId: string) => Promise<GroupMember[]>;
   addGroupMember: (conversationId: string, agentId: string) => Promise<void>;
   removeGroupMember: (conversationId: string, agentId: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
-  updateConversation: (id: string, data: { title?: string; pinned?: boolean }) => Promise<void>;
+  updateConversation: (
+    id: string,
+    data: { title?: string; pinned?: boolean }
+  ) => Promise<void>;
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
   loadAgentSkills: (agentId: string) => Promise<void>;
   loadAgentHealth: () => Promise<void>;
@@ -109,15 +125,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
-  showTimestamps: typeof window !== "undefined"
-    ? localStorage.getItem("arinova_timestamps") === "true"
-    : false,
-  mutedConversations: typeof window !== "undefined"
-    ? JSON.parse(localStorage.getItem("arinova_muted") || "{}")
-    : {},
-  ttsEnabled: typeof window !== "undefined"
-    ? localStorage.getItem("arinova_tts") === "true"
-    : false,
+  showTimestamps:
+    typeof window !== "undefined"
+      ? localStorage.getItem("arinova_timestamps") === "true"
+      : false,
+  mutedConversations:
+    typeof window !== "undefined"
+      ? JSON.parse(localStorage.getItem("arinova_muted") || "{}")
+      : {},
+  ttsEnabled:
+    typeof window !== "undefined"
+      ? localStorage.getItem("arinova_tts") === "true"
+      : false,
 
   setActiveConversation: (id) => {
     if (id === null) {
@@ -141,7 +160,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   searchMessages: async (query) => {
     if (!query.trim()) return;
-    set({ searchQuery: query, searchLoading: true, searchActive: true, activeConversationId: null });
+    set({
+      searchQuery: query,
+      searchLoading: true,
+      searchActive: true,
+      activeConversationId: null,
+    });
     try {
       const data = await api<{ results: SearchResult[]; total: number }>(
         `/api/messages/search?q=${encodeURIComponent(query)}&limit=30`
@@ -166,7 +190,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   jumpToMessage: async (conversationId, messageId) => {
-    // Clear search UI, load messages around target
     set({
       searchActive: false,
       activeConversationId: conversationId,
@@ -175,8 +198,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
     });
 
-    // Load messages centered around the target
-    const data = await api<{ messages: Message[]; hasMoreUp: boolean; hasMoreDown: boolean }>(
+    const data = await api<{
+      messages: Message[];
+      hasMoreUp: boolean;
+      hasMoreDown: boolean;
+    }>(
       `/api/conversations/${conversationId}/messages?around=${messageId}&limit=50`
     );
     set({
@@ -186,7 +212,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       },
     });
 
-    // Clear highlight after 3 seconds
     setTimeout(() => {
       if (get().highlightMessageId === messageId) {
         set({ highlightMessageId: null });
@@ -208,9 +233,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadMessages: async (conversationId) => {
-    const { messagesByConversation } = get();
-    if (messagesByConversation[conversationId]) return;
-
+    // Always load fresh messages (no cache guard)
     const data = await api<{ messages: Message[]; hasMore: boolean }>(
       `/api/conversations/${conversationId}/messages`
     );
@@ -220,6 +243,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: data.messages,
       },
     });
+
+    // Send mark_read with max seq from loaded messages
+    if (get().activeConversationId === conversationId) {
+      const maxSeq = data.messages.reduce(
+        (max, m) => Math.max(max, m.seq ?? 0),
+        0
+      );
+      if (maxSeq > 0) {
+        wsManager.send({
+          type: "mark_read",
+          conversationId,
+          seq: maxSeq,
+        });
+        wsManager.updateLastSeq(conversationId, maxSeq);
+      }
+    }
   },
 
   sendMessage: (content) => {
@@ -230,6 +269,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const userMsg: Message = {
       id: `temp-${Date.now()}`,
       conversationId: activeConversationId,
+      seq: 0,
       role: "user",
       content,
       status: "completed",
@@ -237,7 +277,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       updatedAt: new Date(),
     };
 
-    const current = get().messagesByConversation[activeConversationId] ?? [];
+    const current =
+      get().messagesByConversation[activeConversationId] ?? [];
     set({
       messagesByConversation: {
         ...get().messagesByConversation,
@@ -290,9 +331,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       method: "PUT",
       body: JSON.stringify(data),
     });
-    // Refresh agents list
     await get().loadAgents();
-    // Also refresh conversations (agent name may have changed)
     await get().loadConversations();
   },
 
@@ -320,7 +359,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadGroupMembers: async (conversationId) => {
-    return api<GroupMember[]>(`/api/conversations/${conversationId}/members`);
+    return api<GroupMember[]>(
+      `/api/conversations/${conversationId}/members`
+    );
   },
 
   addGroupMember: async (conversationId, agentId) => {
@@ -332,9 +373,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   removeGroupMember: async (conversationId, agentId) => {
-    await api(`/api/conversations/${conversationId}/members/${agentId}`, {
-      method: "DELETE",
-    });
+    await api(
+      `/api/conversations/${conversationId}/members/${agentId}`,
+      {
+        method: "DELETE",
+      }
+    );
     await get().loadConversations();
   },
 
@@ -345,7 +389,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     delete newMessages[id];
     set({
       conversations: get().conversations.filter((c) => c.id !== id),
-      activeConversationId: activeConversationId === id ? null : activeConversationId,
+      activeConversationId:
+        activeConversationId === id ? null : activeConversationId,
       messagesByConversation: newMessages,
     });
   },
@@ -359,11 +404,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   deleteMessage: async (conversationId, messageId) => {
-    // Optimistic messages (temp-*) only exist in UI, skip API call
     if (!messageId.startsWith("temp-")) {
-      await api(`/api/conversations/${conversationId}/messages/${messageId}`, {
-        method: "DELETE",
-      });
+      await api(
+        `/api/conversations/${conversationId}/messages/${messageId}`,
+        {
+          method: "DELETE",
+        }
+      );
     }
     const current = get().messagesByConversation[conversationId] ?? [];
     set({
@@ -377,7 +424,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadAgentSkills: async (agentId) => {
     if (get().agentSkills[agentId]) return;
     try {
-      const data = await api<{ skills: AgentSkill[] }>(`/api/agents/${agentId}/skills`);
+      const data = await api<{ skills: AgentSkill[] }>(
+        `/api/agents/${agentId}/skills`
+      );
       set({
         agentSkills: { ...get().agentSkills, [agentId]: data.skills },
       });
@@ -390,10 +439,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadAgentHealth: async () => {
     try {
-      const results = await api<{ agentId: string; status: "online" | "offline" | "error"; latencyMs: number | null }[]>(
-        "/api/agents/health"
-      );
-      const health: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }> = {};
+      const results = await api<
+        {
+          agentId: string;
+          status: "online" | "offline" | "error";
+          latencyMs: number | null;
+        }[]
+      >("/api/agents/health");
+      const health: Record<
+        string,
+        { status: "online" | "offline" | "error"; latencyMs: number | null }
+      > = {};
       for (const r of results) {
         health[r.agentId] = { status: r.status, latencyMs: r.latencyMs };
       }
@@ -410,6 +466,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const systemMsg: Message = {
       id: `system-${Date.now()}`,
       conversationId: activeConversationId,
+      seq: 0,
       role: "agent",
       content: `**[System]**\n\n${content}`,
       status: "completed",
@@ -417,7 +474,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       updatedAt: new Date(),
     };
 
-    const current = get().messagesByConversation[activeConversationId] ?? [];
+    const current =
+      get().messagesByConversation[activeConversationId] ?? [];
     set({
       messagesByConversation: {
         ...get().messagesByConversation,
@@ -432,7 +490,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         method: "DELETE",
       });
     } catch {
-      // If API fails (e.g., endpoint not implemented), still clear locally
+      // If API fails, still clear locally
     }
     set({
       messagesByConversation: {
@@ -443,10 +501,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   getConversationStatus: () => {
-    const { activeConversationId, conversations, agentHealth, messagesByConversation } = get();
+    const {
+      activeConversationId,
+      conversations,
+      agentHealth,
+      messagesByConversation,
+    } = get();
     if (!activeConversationId) return "No active conversation.";
 
-    const conv = conversations.find((c) => c.id === activeConversationId);
+    const conv = conversations.find(
+      (c) => c.id === activeConversationId
+    );
     if (!conv) return "Conversation not found.";
 
     const msgs = messagesByConversation[activeConversationId] ?? [];
@@ -462,13 +527,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const agentName = conv.agentName ?? "Unknown";
       const health = agentHealth[conv.agentId];
       const status = health?.status ?? "unknown";
-      const latency = health?.latencyMs != null ? `${health.latencyMs}ms` : "N/A";
+      const latency =
+        health?.latencyMs != null ? `${health.latencyMs}ms` : "N/A";
       lines.push(`**Agent:** ${agentName}`);
       lines.push(`**Agent Status:** ${status}`);
       lines.push(`**Latency:** ${latency}`);
     }
 
-    lines.push(`**WebSocket:** ${wsManager.isConnected() ? "Connected" : "Disconnected"}`);
+    lines.push(
+      `**WebSocket:** ${wsManager.isConnected() ? "Connected" : "Disconnected"}`
+    );
 
     return lines.join("\n");
   },
@@ -505,12 +573,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "pong") return;
 
     if (event.type === "stream_start") {
-      const { conversationId, messageId } = event;
-      const current = get().messagesByConversation[conversationId] ?? [];
-      // Add streaming agent message
+      const { conversationId, messageId, seq } = event;
+      const current =
+        get().messagesByConversation[conversationId] ?? [];
       const agentMsg: Message = {
         id: messageId,
         conversationId,
+        seq,
         role: "agent",
         content: "",
         status: "streaming",
@@ -522,13 +591,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...get().messagesByConversation,
           [conversationId]: [...current, agentMsg],
         },
+        // Update sidebar to show typing indicator
+        conversations: get().conversations.map((c) =>
+          c.id === conversationId
+            ? { ...c, lastMessage: agentMsg }
+            : c
+        ),
       });
       return;
     }
 
     if (event.type === "stream_chunk") {
       const { conversationId, messageId, chunk } = event;
-      const current = get().messagesByConversation[conversationId] ?? [];
+      const current =
+        get().messagesByConversation[conversationId] ?? [];
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
@@ -541,32 +617,70 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     if (event.type === "stream_end") {
-      const { conversationId, messageId } = event;
-      const current = get().messagesByConversation[conversationId] ?? [];
+      const { conversationId, messageId, seq } = event;
+      const current =
+        get().messagesByConversation[conversationId] ?? [];
       const { activeConversationId, unreadCounts } = get();
+
+      // Find the completed message content for sidebar preview
+      const completedMsg = current.find((m) => m.id === messageId);
+
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
           [conversationId]: current.map((m) =>
             m.id === messageId
-              ? { ...m, status: "completed" as const, updatedAt: new Date() }
+              ? {
+                  ...m,
+                  status: "completed" as const,
+                  updatedAt: new Date(),
+                }
               : m
           ),
         },
-        // Increment unread if not viewing this conversation (and not muted)
+        // Update sidebar lastMessage preview directly
+        conversations: get().conversations.map((c) =>
+          c.id === conversationId
+            ? {
+                ...c,
+                lastMessage: completedMsg
+                  ? {
+                      ...completedMsg,
+                      status: "completed" as const,
+                      updatedAt: new Date(),
+                    }
+                  : c.lastMessage,
+                updatedAt: new Date(),
+              }
+            : c
+        ),
+        // Increment unread if not viewing this conversation
         unreadCounts:
-          conversationId !== activeConversationId && !get().mutedConversations[conversationId]
-            ? { ...unreadCounts, [conversationId]: (unreadCounts[conversationId] ?? 0) + 1 }
+          conversationId !== activeConversationId &&
+          !get().mutedConversations[conversationId]
+            ? {
+                ...unreadCounts,
+                [conversationId]:
+                  (unreadCounts[conversationId] ?? 0) + 1,
+              }
             : unreadCounts,
       });
-      // Refresh conversation list to update last message
-      get().loadConversations();
+
+      // If viewing this conversation, mark as read
+      if (conversationId === activeConversationId && seq > 0) {
+        wsManager.send({
+          type: "mark_read",
+          conversationId,
+          seq,
+        });
+      }
       return;
     }
 
     if (event.type === "stream_error") {
       const { conversationId, messageId, error } = event;
-      const current = get().messagesByConversation[conversationId] ?? [];
+      const current =
+        get().messagesByConversation[conversationId] ?? [];
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
@@ -579,10 +693,101 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       return;
     }
+
+    if (event.type === "sync_response") {
+      const { conversations: convSummaries, missedMessages } = event;
+
+      // Update unread counts from server
+      const newUnreadCounts = { ...get().unreadCounts };
+      for (const summary of convSummaries) {
+        if (summary.conversationId !== get().activeConversationId) {
+          newUnreadCounts[summary.conversationId] = summary.unreadCount;
+        } else {
+          newUnreadCounts[summary.conversationId] = 0;
+        }
+      }
+
+      // Update conversation lastMessage from summaries
+      const convUpdates = new Map(
+        convSummaries.map((s) => [s.conversationId, s])
+      );
+      const updatedConversations = get().conversations.map((c) => {
+        const summary = convUpdates.get(c.id);
+        if (summary && summary.lastMessage) {
+          return {
+            ...c,
+            lastMessage: {
+              id: "",
+              conversationId: c.id,
+              seq: summary.maxSeq,
+              role: summary.lastMessage.role,
+              content: summary.lastMessage.content,
+              status: summary.lastMessage.status,
+              createdAt: new Date(summary.lastMessage.createdAt),
+              updatedAt: new Date(summary.lastMessage.createdAt),
+            } as Message,
+          };
+        }
+        return c;
+      });
+
+      // Merge missed messages into existing message arrays
+      const missedByConv = new Map<string, typeof missedMessages>();
+      for (const msg of missedMessages) {
+        const list = missedByConv.get(msg.conversationId) ?? [];
+        list.push(msg);
+        missedByConv.set(msg.conversationId, list);
+      }
+
+      const newMessagesByConv = { ...get().messagesByConversation };
+      for (const [convId, missed] of missedByConv) {
+        const existing = newMessagesByConv[convId] ?? [];
+        // Remove temp messages; keep real ones
+        const realMessages = existing.filter(
+          (m) => !m.id.startsWith("temp-")
+        );
+        const existingIds = new Set(realMessages.map((m) => m.id));
+
+        const newMessages = missed
+          .filter((m) => !existingIds.has(m.id))
+          .map(
+            (m) =>
+              ({
+                id: m.id,
+                conversationId: m.conversationId,
+                seq: m.seq,
+                role: m.role,
+                content: m.content,
+                status: m.status,
+                createdAt: new Date(m.createdAt),
+                updatedAt: new Date(m.createdAt),
+              }) as Message
+          );
+
+        newMessagesByConv[convId] = [
+          ...realMessages,
+          ...newMessages,
+        ].sort((a, b) => {
+          if (a.seq && b.seq) return a.seq - b.seq;
+          return (
+            new Date(a.createdAt).getTime() -
+            new Date(b.createdAt).getTime()
+          );
+        });
+      }
+
+      set({
+        conversations: updatedConversations,
+        messagesByConversation: newMessagesByConv,
+        unreadCounts: newUnreadCounts,
+      });
+      return;
+    }
   },
 
   initWS: () => {
     wsManager.connect();
+    wsManager.setupVisibilityListeners();
     const unsub = wsManager.subscribe((event) => {
       get().handleWSEvent(event);
     });

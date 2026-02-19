@@ -129,10 +129,23 @@ export const messages = pgTable("messages", {
   conversationId: uuid("conversation_id")
     .notNull()
     .references(() => conversations.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
   role: messageRoleEnum().notNull(),
   content: text().notNull().default(""),
   status: messageStatusEnum().notNull().default("pending"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const conversationReads = pgTable("conversation_reads", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  lastReadSeq: integer("last_read_seq").notNull().default(0),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
