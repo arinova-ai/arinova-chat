@@ -25,11 +25,11 @@
       "./dist/index.js"
     ],
     "channel": {
-      "id": "arinova-chat",
+      "id": "openclaw-arinova-ai",
       "label": "Arinova Chat",
       "selectionLabel": "Arinova Chat (A2A streaming)",
-      "docsPath": "/channels/arinova-chat",
-      "docsLabel": "arinova-chat",
+      "docsPath": "/channels/openclaw-arinova-ai",
+      "docsLabel": "openclaw-arinova-ai",
       "blurb": "Human-to-AI messaging via Arinova Chat with native streaming.",
       "aliases": [
         "arinova"

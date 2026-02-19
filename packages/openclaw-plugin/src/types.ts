@@ -31,7 +31,7 @@ export type ArinovaChatConfig = {
 
 export type CoreConfig = {
   channels?: {
-    "arinova-chat"?: ArinovaChatConfig;
+    "openclaw-arinova-ai"?: ArinovaChatConfig;
   };
   [key: string]: unknown;
 };

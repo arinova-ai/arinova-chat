@@ -29,7 +29,7 @@ export async function sendMessageArinovaChat(
 
   if (!account.apiUrl) {
     throw new Error(
-      `Arinova Chat apiUrl missing for account "${account.accountId}" (set channels.arinova-chat.apiUrl).`,
+      `Arinova Chat apiUrl missing for account "${account.accountId}" (set channels.openclaw-arinova-ai.apiUrl).`,
     );
   }
 
@@ -39,8 +39,8 @@ export async function sendMessageArinovaChat(
 
   // Strip channel prefix to get conversation ID
   let conversationId = to.trim();
-  if (conversationId.startsWith("arinova-chat:")) {
-    conversationId = conversationId.slice("arinova-chat:".length).trim();
+  if (conversationId.startsWith("openclaw-arinova-ai:")) {
+    conversationId = conversationId.slice("openclaw-arinova-ai:".length).trim();
   } else if (conversationId.startsWith("arinova:")) {
     conversationId = conversationId.slice("arinova:".length).trim();
   }
@@ -50,12 +50,12 @@ export async function sendMessageArinovaChat(
   }
 
   console.warn(
-    `[arinova-chat] Proactive outbound to ${conversationId} is not yet supported. ` +
+    `[openclaw-arinova-ai] Proactive outbound to ${conversationId} is not yet supported. ` +
       `Replies are delivered inline via A2A SSE.`,
   );
 
   getArinovaChatRuntime().channel.activity.record({
-    channel: "arinova-chat",
+    channel: "openclaw-arinova-ai",
     accountId: account.accountId,
     direction: "outbound",
   });

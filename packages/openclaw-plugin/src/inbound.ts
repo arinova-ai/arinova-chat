@@ -3,7 +3,7 @@ import type { ResolvedArinovaChatAccount } from "./accounts.js";
 import type { ArinovaChatInboundMessage, CoreConfig } from "./types.js";
 import { getArinovaChatRuntime } from "./runtime.js";
 
-const CHANNEL_ID = "arinova-chat" as const;
+const CHANNEL_ID = "openclaw-arinova-ai" as const;
 
 // Known tool names from Claude Code CLI bridge
 const TOOL_LINE_RE = /^\[(Bash|Read|Write|Edit|Grep|Glob|WebFetch|WebSearch|Task|Skill|NotebookEdit)\]/;
@@ -109,7 +109,7 @@ export async function handleArinovaChatInbound(params: {
   // DM policy check
   const dmPolicy = account.config.dmPolicy ?? "open";
   if (dmPolicy === "disabled") {
-    runtime.log?.(`arinova-chat: drop DM (dmPolicy=disabled)`);
+    runtime.log?.(`openclaw-arinova-ai: drop DM (dmPolicy=disabled)`);
     sendComplete("");
     return;
   }
@@ -149,8 +149,8 @@ export async function handleArinovaChatInbound(params: {
     BodyForAgent: rawBody,
     RawBody: rawBody,
     CommandBody: rawBody,
-    From: `arinova-chat:${senderId}`,
-    To: `arinova-chat:${account.agentId}`,
+    From: `openclaw-arinova-ai:${senderId}`,
+    To: `openclaw-arinova-ai:${account.agentId}`,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
     ChatType: "direct",
@@ -162,7 +162,7 @@ export async function handleArinovaChatInbound(params: {
     MessageSid: message.taskId,
     Timestamp: message.timestamp,
     OriginatingChannel: CHANNEL_ID,
-    OriginatingTo: `arinova-chat:${account.agentId}`,
+    OriginatingTo: `openclaw-arinova-ai:${account.agentId}`,
     CommandAuthorized: true,
   });
 
@@ -171,7 +171,7 @@ export async function handleArinovaChatInbound(params: {
     sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
     ctx: ctxPayload,
     onRecordError: (err) => {
-      runtime.error?.(`arinova-chat: failed updating session meta: ${String(err)}`);
+      runtime.error?.(`openclaw-arinova-ai: failed updating session meta: ${String(err)}`);
     },
   });
 
@@ -206,7 +206,7 @@ export async function handleArinovaChatInbound(params: {
         statusSink?.({ lastOutboundAt: Date.now() });
       },
       onError: (err, info) => {
-        runtime.error?.(`arinova-chat ${info.kind} reply failed: ${String(err)}`);
+        runtime.error?.(`openclaw-arinova-ai ${info.kind} reply failed: ${String(err)}`);
       },
     },
     replyOptions: {
