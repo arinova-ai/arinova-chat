@@ -226,6 +226,22 @@ export const economyAwardSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
+// ===== Spaces =====
+export const createSpaceSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().min(1).max(1000),
+  category: z.enum(["game", "strategy", "social", "puzzle", "roleplay", "other"]),
+  tags: z.array(z.string().max(50)).max(10).optional(),
+  definition: z.record(z.unknown()).optional(),
+  isPublic: z.boolean().optional(),
+});
+
+export const joinSpaceSessionSchema = z.object({
+  agentId: z.string().uuid().optional(),
+  role: z.string().max(100).optional(),
+  controlMode: z.enum(["agent", "human", "copilot"]).optional(),
+});
+
 // ===== WebSocket (User ↔ Backend) =====
 export const wsClientEventSchema = z.discriminatedUnion("type", [
   z.object({

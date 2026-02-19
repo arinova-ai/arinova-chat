@@ -25,6 +25,7 @@ import { agentProxyRoutes } from "./routes/agent-proxy.js";
 import { economyApiRoutes } from "./routes/economy-api.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { voiceWsRoutes } from "./ws/voice-handler.js";
+import { spaceRoutes } from "./routes/spaces.js";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";
@@ -101,6 +102,7 @@ await app.register(agentProxyRoutes);
 await app.register(economyApiRoutes);
 await app.register(voiceRoutes);
 await app.register(voiceWsRoutes);
+await app.register(spaceRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
 // await app.register(communityRoutes);
