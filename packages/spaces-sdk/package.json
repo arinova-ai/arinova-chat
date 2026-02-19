@@ -1,5 +1,5 @@
 {
-  "name": "@arinova/game-sdk",
+  "name": "@arinova-ai/spaces-sdk",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
