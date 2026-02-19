@@ -106,6 +106,18 @@ function checkRateLimit(userId: string): boolean {
 
 export async function wsRoutes(app: FastifyInstance) {
   app.get("/ws", { websocket: true }, async (socket, request) => {
+    // Buffer messages that arrive during async auth to avoid race condition
+    const earlyMessages: RawData[] = [];
+    let authed = false;
+
+    socket.on("message", (data: RawData) => {
+      if (!authed) {
+        earlyMessages.push(data);
+        return;
+      }
+      handleMessage(data);
+    });
+
     // Auth from cookie
     const headers = new Headers();
     for (const [key, value] of Object.entries(request.headers)) {
@@ -150,7 +162,8 @@ export async function wsRoutes(app: FastifyInstance) {
       app.log.error(err, "Failed to deliver pending events");
     }
 
-    socket.on("message", async (data: RawData) => {
+    // Define message handler before marking auth complete
+    const handleMessage = async (data: RawData) => {
       // Reset heartbeat on any message
       resetHeartbeat(socket);
 
@@ -204,7 +217,14 @@ export async function wsRoutes(app: FastifyInstance) {
       } catch (err) {
         app.log.error(err, "WS message error");
       }
-    });
+    }
+
+    // Mark auth complete and replay buffered messages
+    authed = true;
+    for (const msg of earlyMessages) {
+      handleMessage(msg);
+    }
+    earlyMessages.length = 0;
 
     socket.on("close", () => {
       clearHeartbeat(socket);
