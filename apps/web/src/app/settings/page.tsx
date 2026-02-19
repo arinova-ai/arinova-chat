@@ -16,9 +16,7 @@ import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push"
 interface NotificationPrefs {
   globalEnabled: boolean;
   messageEnabled: boolean;
-  playgroundInviteEnabled: boolean;
-  playgroundTurnEnabled: boolean;
-  playgroundResultEnabled: boolean;
+  appActivityEnabled: boolean;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
 }
@@ -26,9 +24,7 @@ interface NotificationPrefs {
 const DEFAULT_PREFS: NotificationPrefs = {
   globalEnabled: true,
   messageEnabled: true,
-  playgroundInviteEnabled: true,
-  playgroundTurnEnabled: true,
-  playgroundResultEnabled: true,
+  appActivityEnabled: true,
   quietHoursStart: null,
   quietHoursEnd: null,
 };
@@ -189,34 +185,12 @@ function NotificationSettings() {
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm">Playground Invites</p>
-                <p className="text-xs text-muted-foreground">When someone joins your session</p>
+                <p className="text-sm">App Activity</p>
+                <p className="text-xs text-muted-foreground">Updates from apps you use</p>
               </div>
               <Switch
-                checked={prefs.playgroundInviteEnabled}
-                onCheckedChange={handleToggle("playgroundInviteEnabled")}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm">Turn Notifications</p>
-                <p className="text-xs text-muted-foreground">When a playground phase changes</p>
-              </div>
-              <Switch
-                checked={prefs.playgroundTurnEnabled}
-                onCheckedChange={handleToggle("playgroundTurnEnabled")}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm">Session Results</p>
-                <p className="text-xs text-muted-foreground">When a playground session finishes</p>
-              </div>
-              <Switch
-                checked={prefs.playgroundResultEnabled}
-                onCheckedChange={handleToggle("playgroundResultEnabled")}
+                checked={prefs.appActivityEnabled}
+                onCheckedChange={handleToggle("appActivityEnabled")}
               />
             </div>
           </div>

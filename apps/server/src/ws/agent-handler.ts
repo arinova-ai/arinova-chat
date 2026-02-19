@@ -196,7 +196,7 @@ export async function agentWsRoutes(app: FastifyInstance) {
         // Use isBinary flag from ws library to distinguish real binary frames
         // from text frames (ws delivers all as Buffer by default)
         if (isBinary && authenticatedAgentId) {
-          if (data.length > 36) {
+          if ((data as Buffer).length > 36) {
             const sessionId = Buffer.from(data as Buffer).subarray(0, 36).toString();
             const audioData = Buffer.from(data as Buffer).subarray(36);
             // Forward to voice handler for user playback (Task 3.4)

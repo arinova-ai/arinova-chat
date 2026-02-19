@@ -57,10 +57,10 @@ describe("Sidebar", () => {
     expect(screen.getByTestId("conversation-list")).toBeInTheDocument();
   });
 
-  it("renders New Chat, Playground, Create Bot, and Sign Out buttons", () => {
+  it("renders New Chat, Apps, Create Bot, and Sign Out buttons", () => {
     render(<Sidebar />);
     expect(screen.getByText("New Chat")).toBeInTheDocument();
-    expect(screen.getByText("Playground")).toBeInTheDocument();
+    expect(screen.getByText("Apps")).toBeInTheDocument();
     expect(screen.getByText("Create Bot")).toBeInTheDocument();
     expect(screen.getByText("Sign Out")).toBeInTheDocument();
   });
@@ -79,10 +79,10 @@ describe("Sidebar", () => {
     expect(screen.getByTestId("create-bot-dialog")).toBeInTheDocument();
   });
 
-  it("navigates to /playground when Playground clicked", () => {
+  it("navigates to /apps when Apps clicked", () => {
     render(<Sidebar />);
-    fireEvent.click(screen.getByText("Playground"));
-    expect(mockPush).toHaveBeenCalledWith("/playground");
+    fireEvent.click(screen.getByText("Apps"));
+    expect(mockPush).toHaveBeenCalledWith("/apps");
   });
 
   it("navigates to /settings when settings button clicked", () => {

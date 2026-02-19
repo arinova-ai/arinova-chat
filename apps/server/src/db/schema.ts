@@ -256,18 +256,73 @@ export const developerAccounts = pgTable("developer_accounts", {
 
 export const apps = pgTable("apps", {
   id: uuid().primaryKey().defaultRandom(),
-  developerId: uuid("developer_id")
+  developerId: text("developer_id")
     .notNull()
-    .references(() => developerAccounts.id),
-  appId: varchar("app_id", { length: 100 }).notNull().unique(),
+    .references(() => user.id),
   name: varchar({ length: 100 }).notNull(),
   description: text().notNull(),
   category: varchar({ length: 50 }).notNull(),
-  icon: text().notNull(),
+  iconUrl: text("icon_url"),
+  externalUrl: text("external_url").notNull(),
   status: appStatusEnum().notNull().default("draft"),
-  currentVersionId: uuid("current_version_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const appOAuthClients = pgTable("app_oauth_clients", {
+  id: uuid().primaryKey().defaultRandom(),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => apps.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id", { length: 100 }).notNull().unique(),
+  clientSecret: text("client_secret").notNull(),
+  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const agentApiCalls = pgTable("agent_api_calls", {
+  id: uuid().primaryKey().defaultRandom(),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => apps.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  agentId: uuid("agent_id")
+    .notNull()
+    .references(() => agents.id),
+  tokenCount: integer("token_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// OAuth authorization codes (temporary, used during code exchange)
+export const oauthAuthorizationCodes = pgTable("oauth_authorization_codes", {
+  id: uuid().primaryKey().defaultRandom(),
+  code: varchar("code", { length: 128 }).notNull().unique(),
+  clientId: varchar("client_id", { length: 100 }).notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  redirectUri: text("redirect_uri").notNull(),
+  scope: text("scope").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// OAuth access tokens
+export const oauthAccessTokens = pgTable("oauth_access_tokens", {
+  id: uuid().primaryKey().defaultRandom(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  clientId: varchar("client_id", { length: 100 }).notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => apps.id),
+  scope: text("scope").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const appVersions = pgTable("app_versions", {

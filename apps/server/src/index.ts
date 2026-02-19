@@ -19,9 +19,10 @@ import { sandboxRoutes } from "./routes/sandbox.js";
 import { groupRoutes } from "./routes/groups.js";
 import { pushRoutes } from "./routes/push.js";
 import { notificationRoutes } from "./routes/notifications.js";
-import { playgroundRoutes } from "./routes/playgrounds.js";
-import { playgroundEconomyRoutes } from "./routes/playground-economy.js";
-import { playgroundWsRoutes } from "./ws/playground-handler.js";
+import { oauthRoutes } from "./routes/oauth.js";
+import { appRoutes } from "./routes/apps.js";
+import { agentProxyRoutes } from "./routes/agent-proxy.js";
+import { economyApiRoutes } from "./routes/economy-api.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { voiceWsRoutes } from "./ws/voice-handler.js";
 // Phase 2+ routes (on features/platform-extras branch)
@@ -46,7 +47,7 @@ await app.register(cors, {
 await app.register(rateLimit, {
   max: 300,
   timeWindow: "1 minute",
-  allowList: ["/health", "/ws", "/ws/agent", "/ws/playground", "/ws/voice"],
+  allowList: ["/health", "/ws", "/ws/agent", "/ws/voice"],
 });
 
 // Multipart (file upload)
@@ -94,9 +95,10 @@ await app.register(agentHealthRoutes);
 await app.register(sandboxRoutes);
 await app.register(pushRoutes);
 await app.register(notificationRoutes);
-await app.register(playgroundRoutes);
-await app.register(playgroundEconomyRoutes);
-await app.register(playgroundWsRoutes);
+await app.register(oauthRoutes);
+await app.register(appRoutes);
+await app.register(agentProxyRoutes);
+await app.register(economyApiRoutes);
 await app.register(voiceRoutes);
 await app.register(voiceWsRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
