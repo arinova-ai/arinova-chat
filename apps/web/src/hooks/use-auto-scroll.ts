@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useAutoScroll<T extends HTMLElement>(
   deps: unknown[],
@@ -9,11 +9,13 @@ export function useAutoScroll<T extends HTMLElement>(
   const ref = useRef<T>(null);
   const userScrolledUp = useRef(false);
   const prevConversationId = useRef(options?.conversationId);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Reset scroll flag and force scroll to bottom when conversation changes
   useEffect(() => {
     if (options?.conversationId !== prevConversationId.current) {
       userScrolledUp.current = false;
+      setShowScrollButton(false);
       prevConversationId.current = options?.conversationId;
       const el = ref.current;
       if (el) {
@@ -31,6 +33,7 @@ export function useAutoScroll<T extends HTMLElement>(
     const isNearBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
     userScrolledUp.current = !isNearBottom;
+    setShowScrollButton(!isNearBottom);
   }, []);
 
   useEffect(() => {
@@ -47,5 +50,13 @@ export function useAutoScroll<T extends HTMLElement>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  return ref;
+  const scrollToBottom = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    userScrolledUp.current = false;
+    setShowScrollButton(false);
+  }, []);
+
+  return { ref, showScrollButton, scrollToBottom };
 }

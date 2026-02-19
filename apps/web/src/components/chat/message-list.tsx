@@ -6,7 +6,7 @@ import { MessageBubble } from "./message-bubble";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { ArrowDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MessageListProps {
@@ -28,7 +28,7 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   const loadingDownRef = useRef(false);
   const highlightRef = useRef<HTMLDivElement>(null);
 
-  const scrollRef = useAutoScroll<HTMLDivElement>(
+  const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length],
     { conversationId: activeConversationId, skipScroll: !!highlightMessageId },
   );
@@ -129,38 +129,50 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   }, [hasMoreUp, hasMoreDown, loadOlder, loadNewer, scrollRef]);
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden py-4"
-      onScroll={handleScroll}
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-        {loadingUp && (
-          <div className="flex justify-center py-2">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        )}
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            ref={message.id === highlightMessageId ? highlightRef : undefined}
-            className={cn(
-              "transition-colors duration-1000",
-              message.id === highlightMessageId && "search-highlight"
-            )}
-          >
-            <MessageBubble
-              message={message}
-              agentName={message.role === "agent" ? agentName : undefined}
-            />
-          </div>
-        ))}
-        {loadingDown && (
-          <div className="flex justify-center py-2">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        )}
+    <div className="relative flex-1 overflow-hidden">
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto overflow-x-hidden py-4"
+        onScroll={handleScroll}
+      >
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          {loadingUp && (
+            <div className="flex justify-center py-2">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              ref={message.id === highlightMessageId ? highlightRef : undefined}
+              className={cn(
+                "transition-colors duration-1000",
+                message.id === highlightMessageId && "search-highlight"
+              )}
+            >
+              <MessageBubble
+                message={message}
+                agentName={message.role === "agent" ? agentName : undefined}
+              />
+            </div>
+          ))}
+          {loadingDown && (
+            <div className="flex justify-center py-2">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+        </div>
       </div>
+
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-opacity hover:bg-accent"
+          aria-label="Scroll to latest"
+        >
+          <ArrowDown className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
