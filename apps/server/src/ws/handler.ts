@@ -24,6 +24,7 @@ import {
 } from "../lib/pending-events.js";
 import { sendPushToUser } from "../lib/push.js";
 import { shouldSendPush, isConversationMuted } from "../lib/push-trigger.js";
+import { redis } from "../db/redis.js";
 
 // Active connections: userId -> Set of WebSockets
 const wsConnections = new Map<string, Set<WebSocket>>();
@@ -42,6 +43,9 @@ const heartbeatTimers = new Map<WebSocket, ReturnType<typeof setTimeout>>();
 
 // Per-conversation agent response queuing
 const activeStreams = new Set<string>(); // conversationIds with active streams
+export function hasActiveStream(conversationId: string): boolean {
+  return activeStreams.has(conversationId);
+}
 const agentResponseQueues = new Map<
   string,
   Array<{ userId: string; conversationId: string; content: string }>
@@ -283,7 +287,7 @@ async function handleSync(
         )
       );
     const readMap = new Map(
-      reads.map((r) => [r.conversationId, r.lastReadSeq])
+      reads.map((r) => [r.conversationId, { lastReadSeq: r.lastReadSeq, muted: r.muted }])
     );
 
     const summaries: SyncConversationSummary[] = [];
@@ -307,13 +311,15 @@ async function handleSync(
         .orderBy(desc(messages.seq))
         .limit(1);
 
-      const lastReadSeq = readMap.get(conv.id) ?? 0;
+      const readInfo = readMap.get(conv.id);
+      const lastReadSeq = readInfo?.lastReadSeq ?? 0;
       const unreadCount = Math.max(0, maxSeq - lastReadSeq);
 
       summaries.push({
         conversationId: conv.id,
         unreadCount,
         maxSeq,
+        muted: readInfo?.muted ?? false,
         lastMessage: lastMsg
           ? {
               content: lastMsg.content,
@@ -350,12 +356,21 @@ async function handleSync(
               .where(eq(messages.id, m.id));
           }
 
+          // For active streaming messages, fetch current content from Redis
+          let { content } = m;
+          if (status === "streaming") {
+            try {
+              const cached = await redis.get(`stream:${m.id}`);
+              if (cached) content = cached;
+            } catch {}
+          }
+
           missedMessages.push({
             id: m.id,
             conversationId: m.conversationId,
             seq: m.seq,
             role: m.role,
-            content: m.content,
+            content,
             status,
             createdAt: m.createdAt.toISOString(),
           });
@@ -368,6 +383,42 @@ async function handleSync(
       conversations: summaries,
       missedMessages,
     });
+
+    // Re-attach to active streams: send stream_start + current content
+    for (const conv of allConvs) {
+      if (!activeStreams.has(conv.id)) continue;
+      try {
+        const [streamingMsg] = await db
+          .select()
+          .from(messages)
+          .where(
+            and(
+              eq(messages.conversationId, conv.id),
+              eq(messages.status, "streaming")
+            )
+          )
+          .orderBy(desc(messages.createdAt))
+          .limit(1);
+        if (!streamingMsg) continue;
+
+        const cached = await redis.get(`stream:${streamingMsg.id}`);
+        sendToUser(userId, {
+          type: "stream_start",
+          conversationId: conv.id,
+          messageId: streamingMsg.id,
+          seq: streamingMsg.seq,
+        });
+        if (cached) {
+          sendToUser(userId, {
+            type: "stream_chunk",
+            conversationId: conv.id,
+            messageId: streamingMsg.id,
+            seq: streamingMsg.seq,
+            chunk: cached,
+          });
+        }
+      } catch {}
+    }
   } catch (err) {
     app.log.error(err, "Sync error");
   }
@@ -543,9 +594,11 @@ async function doTriggerAgentResponse(
         seq: agentSeq,
         chunk,
       });
+      redis.set(`stream:${agentMsg.id}`, chunk, "EX", 600).catch(() => {});
     },
     onComplete: async (fullContent) => {
       streamCancellers.delete(agentMsg.id);
+      redis.del(`stream:${agentMsg.id}`).catch(() => {});
 
       await db
         .update(messages)
@@ -585,6 +638,7 @@ async function doTriggerAgentResponse(
     },
     onError: async (error) => {
       streamCancellers.delete(agentMsg.id);
+      redis.del(`stream:${agentMsg.id}`).catch(() => {});
 
       await db
         .update(messages)

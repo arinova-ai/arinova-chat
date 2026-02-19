@@ -5,6 +5,8 @@ import { eq, and, lt, gt, desc, asc, inArray, ilike, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { isR2Configured } from "../lib/r2.js";
 import { env } from "../env.js";
+import { redis } from "../db/redis.js";
+import { hasActiveStream } from "../ws/handler.js";
 
 /** Attach attachment data to a list of messages */
 async function withAttachments(items: (typeof messages.$inferSelect)[]) {
@@ -38,6 +40,33 @@ async function withAttachments(items: (typeof messages.$inferSelect)[]) {
         createdAt: a.createdAt,
       })),
     };
+  });
+}
+
+/** Enrich streaming messages with current content from Redis */
+async function enrichStreaming<T extends { id: string; conversationId: string; status: string; content: string }>(
+  items: T[]
+): Promise<T[]> {
+  const streaming = items.filter(
+    (m) => m.status === "streaming" && hasActiveStream(m.conversationId)
+  );
+  if (streaming.length === 0) return items;
+
+  const results = await Promise.allSettled(
+    streaming.map((m) => redis.get(`stream:${m.id}`))
+  );
+  const contentMap = new Map<string, string>();
+  streaming.forEach((m, i) => {
+    const r = results[i];
+    if (r.status === "fulfilled" && r.value) {
+      contentMap.set(m.id, r.value);
+    }
+  });
+
+  if (contentMap.size === 0) return items;
+  return items.map((m) => {
+    const cached = contentMap.get(m.id);
+    return cached ? { ...m, content: cached } : m;
   });
 }
 
@@ -184,7 +213,7 @@ export async function messageRoutes(app: FastifyInstance) {
       const newerItems = newerRows.slice(0, half);
 
       const allItems = [...olderItems, targetMsg, ...newerItems];
-      const messagesWithAtts = await withAttachments(allItems);
+      const messagesWithAtts = await enrichStreaming(await withAttachments(allItems));
 
       return reply.send({
         messages: messagesWithAtts,
@@ -220,7 +249,7 @@ export async function messageRoutes(app: FastifyInstance) {
 
       const hasMoreDown = result.length > limit;
       const items = result.slice(0, limit);
-      const messagesWithAtts = await withAttachments(items);
+      const messagesWithAtts = await enrichStreaming(await withAttachments(items));
 
       return reply.send({
         messages: messagesWithAtts,
@@ -252,7 +281,7 @@ export async function messageRoutes(app: FastifyInstance) {
 
     const hasMore = result.length > limit;
     const items = result.slice(0, limit).reverse();
-    const messagesWithAtts = await withAttachments(items);
+    const messagesWithAtts = await enrichStreaming(await withAttachments(items));
 
     return reply.send({
       messages: messagesWithAtts,

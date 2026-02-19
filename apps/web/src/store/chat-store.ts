@@ -703,13 +703,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "sync_response") {
       const { conversations: convSummaries, missedMessages } = event;
 
-      // Update unread counts from server
+      // Update unread counts and muted state from server
       const newUnreadCounts = { ...get().unreadCounts };
+      const newMuted = { ...get().mutedConversations };
       for (const summary of convSummaries) {
         if (summary.conversationId !== get().activeConversationId) {
           newUnreadCounts[summary.conversationId] = summary.unreadCount;
         } else {
           newUnreadCounts[summary.conversationId] = 0;
+        }
+        if (summary.muted) {
+          newMuted[summary.conversationId] = true;
+        } else {
+          delete newMuted[summary.conversationId];
         }
       }
 
@@ -782,10 +788,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arinova_muted", JSON.stringify(newMuted));
+      }
       set({
         conversations: updatedConversations,
         messagesByConversation: newMessagesByConv,
         unreadCounts: newUnreadCounts,
+        mutedConversations: newMuted,
       });
       return;
     }

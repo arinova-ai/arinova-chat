@@ -324,6 +324,7 @@ export interface SyncConversationSummary {
   conversationId: string;
   unreadCount: number;
   maxSeq: number;
+  muted: boolean;
   lastMessage: {
     content: string;
     role: MessageRole;
