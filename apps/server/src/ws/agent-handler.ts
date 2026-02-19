@@ -9,6 +9,15 @@ import type { AgentWSServerEvent } from "@arinova/shared/types";
 // Active agent connections: agentId -> WebSocket
 const agentConnections = new Map<string, WebSocket>();
 
+// Agent skills declared at auth time: agentId -> skills
+interface AgentSkillEntry { id: string; name: string; description: string }
+const agentSkills = new Map<string, AgentSkillEntry[]>();
+
+/** Get the skills declared by a connected agent. Returns [] if offline. */
+export function getAgentSkills(agentId: string): AgentSkillEntry[] {
+  return agentSkills.get(agentId) ?? [];
+}
+
 // Pending tasks: taskId -> handler callbacks
 interface PendingTask {
   agentId: string;
@@ -151,8 +160,9 @@ export async function agentWsRoutes(app: FastifyInstance) {
 
           authenticatedAgentId = agent.id;
           agentConnections.set(agent.id, socket);
+          agentSkills.set(agent.id, event.skills ?? []);
           sendToAgent(socket, { type: "auth_ok", agentName: agent.name });
-          app.log.info(`Agent WS connected: agentId=${agent.id} name="${agent.name}"`);
+          app.log.info(`Agent WS connected: agentId=${agent.id} name="${agent.name}" skills=${(event.skills ?? []).length}`);
           return;
         }
 
@@ -201,6 +211,7 @@ export async function agentWsRoutes(app: FastifyInstance) {
         // Only remove if this socket is still the registered one
         if (agentConnections.get(authenticatedAgentId) === socket) {
           agentConnections.delete(authenticatedAgentId);
+          agentSkills.delete(authenticatedAgentId);
           cleanupAgentTasks(authenticatedAgentId);
         }
         app.log.info(`Agent WS disconnected: agentId=${authenticatedAgentId}`);

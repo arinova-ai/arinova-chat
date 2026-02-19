@@ -4,44 +4,15 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { SendHorizontal, Paperclip, X, FileText, ImageIcon } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
-import { useRouter } from "next/navigation";
-import {
-  PLATFORM_COMMANDS,
-  filterCommands,
-  CATEGORY_LABELS,
-  CATEGORY_ORDER,
-  buildHelpText,
-  type PlatformCommand,
-  type CommandCategory,
-} from "@/lib/platform-commands";
 import { BACKEND_URL } from "@/lib/config";
 
 // ---------- Popup item types ----------
 
-interface PopupHeaderItem {
-  type: "header";
-  id: string;
-  label: string;
-}
-
-interface PopupCommandItem {
-  type: "platform-command";
-  id: string;
-  label: string;
-  description: string;
-  args?: string;
-  category: CommandCategory;
-  command: PlatformCommand;
-}
-
-interface PopupSkillItem {
-  type: "agent-skill";
+interface SkillItem {
   id: string;
   label: string;
   description: string;
 }
-
-type PopupItem = PopupHeaderItem | PopupCommandItem | PopupSkillItem;
 
 // ---------- Component ----------
 
@@ -53,7 +24,6 @@ export function ChatInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
 
   const sendMessage = useChatStore((s) => s.sendMessage);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -61,13 +31,6 @@ export function ChatInput() {
   const agents = useChatStore((s) => s.agents);
   const agentSkills = useChatStore((s) => s.agentSkills);
   const loadAgentSkills = useChatStore((s) => s.loadAgentSkills);
-  const cancelStream = useChatStore((s) => s.cancelStream);
-  const insertSystemMessage = useChatStore((s) => s.insertSystemMessage);
-  const clearConversation = useChatStore((s) => s.clearConversation);
-  const getConversationStatus = useChatStore((s) => s.getConversationStatus);
-  const setSearchQuery = useChatStore((s) => s.setSearchQuery);
-  const ttsEnabled = useChatStore((s) => s.ttsEnabled);
-  const setTtsEnabled = useChatStore((s) => s.setTtsEnabled);
 
   // Get the active conversation's agentId (only for direct conversations)
   const activeConversation = conversations.find(
@@ -89,94 +52,37 @@ export function ChatInput() {
 
   // ---------- Slash popup logic ----------
 
-  // Extract the query part: text after `/` up to first space (for filtering)
-  // If input is "/he", query is "he"; if "/help foo", query is "help" (command already typed)
   const slashQuery = value.startsWith("/") ? value.slice(1).split(" ")[0] : null;
-  // Show popup when typing starts with `/` — no agentId restriction for platform commands
-  const showSlashPopup = slashQuery !== null && !value.includes(" ");
+  const showSlashPopup = slashQuery !== null && !value.includes(" ") && !!agentId;
 
-  // Build the merged popup items list
-  const popupItems = useMemo((): PopupItem[] => {
-    if (!showSlashPopup) return [];
+  // Build skill items for the popup
+  const skillItems = useMemo((): SkillItem[] => {
+    if (!showSlashPopup || !agentId) return [];
 
-    const query = slashQuery ?? "";
-    const items: PopupItem[] = [];
+    const skills = agentSkills[agentId] ?? [];
+    const q = (slashQuery ?? "").toLowerCase();
+    const filtered = q
+      ? skills.filter(
+          (s) =>
+            s.id.toLowerCase().includes(q) ||
+            s.name.toLowerCase().includes(q) ||
+            s.description.toLowerCase().includes(q)
+        )
+      : skills;
 
-    // Platform commands grouped by category
-    const filteredPlatform = filterCommands(PLATFORM_COMMANDS, query);
-
-    for (const category of CATEGORY_ORDER) {
-      const cmdsInCategory = filteredPlatform.filter((c) => c.category === category);
-      if (cmdsInCategory.length === 0) continue;
-
-      items.push({
-        type: "header",
-        id: `header-${category}`,
-        label: CATEGORY_LABELS[category],
-      });
-
-      for (const cmd of cmdsInCategory) {
-        items.push({
-          type: "platform-command",
-          id: cmd.id,
-          label: `/${cmd.id}`,
-          description: cmd.description,
-          args: cmd.args,
-          category: cmd.category,
-          command: cmd,
-        });
-      }
-    }
-
-    // Agent skills section (only if agentId present)
-    if (agentId) {
-      const skills = agentSkills[agentId] ?? [];
-      const q = query.toLowerCase();
-      const filteredSkills = q
-        ? skills.filter(
-            (s) =>
-              s.id.toLowerCase().includes(q) ||
-              s.name.toLowerCase().includes(q) ||
-              s.description.toLowerCase().includes(q)
-          )
-        : skills;
-
-      if (filteredSkills.length > 0) {
-        items.push({
-          type: "header",
-          id: "header-agent-skills",
-          label: "AGENT SKILLS",
-        });
-
-        for (const skill of filteredSkills) {
-          items.push({
-            type: "agent-skill",
-            id: `skill-${skill.id}`,
-            label: `/${skill.id}`,
-            description: skill.description,
-          });
-        }
-      }
-    }
-
-    return items;
+    return filtered.map((s) => ({
+      id: s.id,
+      label: `/${s.id}`,
+      description: s.description,
+    }));
   }, [showSlashPopup, slashQuery, agentId, agentSkills]);
 
-  // Selectable items (non-header) with their indices in the full list
-  const selectableIndices = useMemo(
-    () =>
-      popupItems
-        .map((item, i) => ({ item, index: i }))
-        .filter((entry) => entry.item.type !== "header"),
-    [popupItems]
-  );
+  const hasItems = skillItems.length > 0;
 
-  const hasSelectableItems = selectableIndices.length > 0;
-
-  // Reset selected index when popup items change
+  // Reset selected index when items change
   useEffect(() => {
     setSlashSelectedIndex(0);
-  }, [popupItems.length]);
+  }, [skillItems.length]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -185,7 +91,7 @@ export function ChatInput() {
     items[slashSelectedIndex]?.scrollIntoView({ block: "nearest" });
   }, [slashSelectedIndex, showSlashPopup]);
 
-  // ---------- Command execution ----------
+  // ---------- Helpers ----------
 
   const clearInput = useCallback(() => {
     setValue("");
@@ -194,144 +100,12 @@ export function ChatInput() {
     }
   }, []);
 
-  const executePlatformCommand = useCallback(
-    (cmd: PlatformCommand, fullInput: string) => {
-      // Extract args: everything after "/commandId "
-      const prefixLen = cmd.id.length + 1; // +1 for the leading "/"
-      const args = fullInput.length > prefixLen ? fullInput.slice(prefixLen).trim() : "";
-
-      switch (cmd.id) {
-        case "help": {
-          const currentSkills = agentId ? (agentSkills[agentId] ?? []) : [];
-          const helpText = buildHelpText(currentSkills);
-          insertSystemMessage(helpText);
-          break;
-        }
-        case "new": {
-          // Dispatch a custom event that the sidebar/dialog can listen to
-          window.dispatchEvent(new CustomEvent("arinova:new-chat"));
-          break;
-        }
-        case "clear": {
-          if (activeConversationId) {
-            clearConversation(activeConversationId);
-          }
-          break;
-        }
-        case "stop": {
-          cancelStream();
-          break;
-        }
-        case "status": {
-          const statusText = getConversationStatus();
-          insertSystemMessage(statusText);
-          break;
-        }
-        case "reset": {
-          if (activeConversationId) {
-            clearConversation(activeConversationId);
-          }
-          break;
-        }
-        case "tts": {
-          const on = args === "on" || (args !== "off" && !ttsEnabled);
-          setTtsEnabled(on);
-          insertSystemMessage(`Text-to-speech ${on ? "enabled" : "disabled"}.`);
-          break;
-        }
-        case "settings": {
-          router.push("/settings");
-          break;
-        }
-        case "search": {
-          if (args) {
-            setSearchQuery(args);
-          } else {
-            insertSystemMessage("Usage: `/search [query]`");
-          }
-          break;
-        }
-        case "whoami": {
-          insertSystemMessage("Use `/settings` to view your profile information.");
-          break;
-        }
-        // "forward" commands: send as message to agent
-        case "model":
-        case "think":
-        case "reasoning":
-        case "verbose":
-        case "compact": {
-          if (!agentId) {
-            insertSystemMessage(`Cannot use \`/${cmd.id}\` — no agent in this conversation.`);
-          } else {
-            sendMessage(`/${cmd.id}${args ? " " + args : ""}`);
-          }
-          break;
-        }
-      }
+  const selectSkill = useCallback(
+    (item: SkillItem) => {
+      sendMessage(`/${item.id}`);
+      clearInput();
     },
-    [
-      agentId,
-      agentSkills,
-      activeConversationId,
-      ttsEnabled,
-      insertSystemMessage,
-      clearConversation,
-      cancelStream,
-      getConversationStatus,
-      setSearchQuery,
-      setTtsEnabled,
-      sendMessage,
-      router,
-    ]
-  );
-
-  // Select an item from the popup
-  const selectPopupItem = useCallback(
-    (item: PopupItem) => {
-      if (item.type === "header") return;
-
-      if (item.type === "platform-command") {
-        const cmd = item.command;
-        // Commands that need args: set input so user can type args
-        if (cmd.args) {
-          setValue(`/${cmd.id} `);
-          textareaRef.current?.focus();
-          return;
-        }
-        // No args needed: execute immediately
-        executePlatformCommand(cmd, `/${cmd.id}`);
-        clearInput();
-        return;
-      }
-
-      if (item.type === "agent-skill") {
-        // Agent skill: strip the "skill-" prefix we added
-        const skillId = item.id.replace(/^skill-/, "");
-        sendMessage(`/${skillId}`);
-        clearInput();
-      }
-    },
-    [executePlatformCommand, sendMessage, clearInput]
-  );
-
-  // ---------- Intercept slash commands on send ----------
-
-  const tryExecuteSlashCommand = useCallback(
-    (text: string): boolean => {
-      if (!text.startsWith("/")) return false;
-
-      const withoutSlash = text.slice(1);
-      const spaceIdx = withoutSlash.indexOf(" ");
-      const cmdId = spaceIdx === -1 ? withoutSlash : withoutSlash.slice(0, spaceIdx);
-
-      const cmd = PLATFORM_COMMANDS.find((c) => c.id === cmdId.toLowerCase());
-      if (!cmd) return false; // Not a platform command — let it pass through
-
-      executePlatformCommand(cmd, text);
-      return true;
-    },
-    [executePlatformCommand]
+    [sendMessage, clearInput]
   );
 
   // ---------- Upload & Send ----------
@@ -344,7 +118,6 @@ export function ChatInput() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      // Include text as caption so backend combines them into one message
       const trimmed = value.trim();
       if (trimmed) {
         formData.append("caption", trimmed);
@@ -365,7 +138,6 @@ export function ChatInput() {
       }
 
       const data = await res.json();
-      // Add the uploaded message to the store
       const store = useChatStore.getState();
       const current = store.messagesByConversation[activeConversationId] ?? [];
       useChatStore.setState({
@@ -382,7 +154,7 @@ export function ChatInput() {
     } finally {
       setUploading(false);
     }
-  }, [selectedFile, activeConversationId, value, sendMessage, clearInput]);
+  }, [selectedFile, activeConversationId, value, clearInput]);
 
   const handleSend = useCallback(() => {
     if (selectedFile) {
@@ -393,40 +165,34 @@ export function ChatInput() {
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    // Intercept platform commands
-    if (tryExecuteSlashCommand(trimmed)) {
-      clearInput();
-      return;
-    }
-
     sendMessage(trimmed);
     clearInput();
-  }, [value, sendMessage, selectedFile, handleUpload, tryExecuteSlashCommand, clearInput]);
+  }, [value, sendMessage, selectedFile, handleUpload, clearInput]);
 
   // ---------- Keyboard handling ----------
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Slash popup keyboard navigation
-    if (showSlashPopup && hasSelectableItems) {
+    if (showSlashPopup && hasItems) {
       if (e.key === "ArrowUp") {
         e.preventDefault();
         setSlashSelectedIndex((prev) =>
-          prev <= 0 ? selectableIndices.length - 1 : prev - 1
+          prev <= 0 ? skillItems.length - 1 : prev - 1
         );
         return;
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSlashSelectedIndex((prev) =>
-          prev >= selectableIndices.length - 1 ? 0 : prev + 1
+          prev >= skillItems.length - 1 ? 0 : prev + 1
         );
         return;
       }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        const entry = selectableIndices[slashSelectedIndex];
-        if (entry) {
-          selectPopupItem(entry.item);
+        const item = skillItems[slashSelectedIndex];
+        if (item) {
+          selectSkill(item);
         }
         return;
       }
@@ -437,13 +203,9 @@ export function ChatInput() {
       }
       if (e.key === "Tab") {
         e.preventDefault();
-        const entry = selectableIndices[slashSelectedIndex];
-        if (entry && entry.item.type !== "header") {
-          const itemId =
-            entry.item.type === "agent-skill"
-              ? entry.item.id.replace(/^skill-/, "")
-              : entry.item.id;
-          setValue(`/${itemId}`);
+        const item = skillItems[slashSelectedIndex];
+        if (item) {
+          setValue(`/${item.id}`);
         }
         return;
       }
@@ -470,7 +232,6 @@ export function ChatInput() {
     if (file) {
       setSelectedFile(file);
     }
-    // Reset input so same file can be selected again
     e.target.value = "";
   };
 
@@ -478,69 +239,20 @@ export function ChatInput() {
 
   // ---------- Render ----------
 
-  // Track which selectable index each non-header item maps to
-  let selectableCounter = 0;
-
   return (
     <div className="shrink-0 border-t border-border p-4 pb-[max(1.125rem,calc(env(safe-area-inset-bottom,1rem)+2px))]">
       <div className="relative mx-auto max-w-3xl">
-        {/* Slash command popup */}
-        {showSlashPopup && hasSelectableItems && (
+        {/* Slash popup — agent skills only */}
+        {showSlashPopup && hasItems && (
           <div
             ref={popupRef}
             className="absolute bottom-full left-0 right-0 mb-2 max-h-60 overflow-y-auto rounded-xl border border-border bg-neutral-900 shadow-lg"
           >
-            {(() => {
-              selectableCounter = 0;
-              return null;
-            })()}
-            {popupItems.map((item) => {
-              if (item.type === "header") {
-                return (
-                  <div
-                    key={item.id}
-                    className="px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60"
-                  >
-                    {item.label}
-                  </div>
-                );
-              }
-
-              const currentSelectableIndex = selectableCounter;
-              selectableCounter++;
-              const isSelected = currentSelectableIndex === slashSelectedIndex;
-
-              if (item.type === "platform-command") {
-                return (
-                  <button
-                    key={item.id}
-                    data-slash-item
-                    type="button"
-                    className={`flex w-full items-start gap-3 px-4 py-2 text-left transition-colors ${
-                      isSelected
-                        ? "bg-neutral-800 text-foreground"
-                        : "text-muted-foreground hover:bg-neutral-800/50"
-                    }`}
-                    onMouseEnter={() => setSlashSelectedIndex(currentSelectableIndex)}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      selectPopupItem(item);
-                    }}
-                  >
-                    <span className="shrink-0 font-mono text-sm text-blue-400">
-                      /{item.id}
-                    </span>
-                    {item.args && (
-                      <span className="shrink-0 font-mono text-sm text-muted-foreground/50">
-                        {item.args}
-                      </span>
-                    )}
-                    <span className="truncate text-sm">{item.description}</span>
-                  </button>
-                );
-              }
-
-              // agent-skill
+            <div className="px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              AGENT SKILLS
+            </div>
+            {skillItems.map((item, i) => {
+              const isSelected = i === slashSelectedIndex;
               return (
                 <button
                   key={item.id}
@@ -551,10 +263,10 @@ export function ChatInput() {
                       ? "bg-neutral-800 text-foreground"
                       : "text-muted-foreground hover:bg-neutral-800/50"
                   }`}
-                  onMouseEnter={() => setSlashSelectedIndex(currentSelectableIndex)}
+                  onMouseEnter={() => setSlashSelectedIndex(i)}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    selectPopupItem(item);
+                    selectSkill(item);
                   }}
                 >
                   <span className="shrink-0 font-mono text-sm text-emerald-400">

@@ -376,11 +376,18 @@ export type WSServerEvent =
     }
   | { type: "pong" };
 
+// ===== Agent Skill =====
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description: string;
+}
+
 // ===== Agent WebSocket Events (Agent ↔ Backend) =====
 
 /** Events sent from Agent → Backend */
 export type AgentWSClientEvent =
-  | { type: "agent_auth"; botToken: string }
+  | { type: "agent_auth"; botToken: string; skills?: AgentSkill[] }
   | { type: "agent_chunk"; taskId: string; chunk: string }
   | { type: "agent_complete"; taskId: string; content: string }
   | { type: "agent_error"; taskId: string; error: string }

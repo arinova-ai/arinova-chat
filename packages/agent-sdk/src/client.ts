@@ -1,5 +1,6 @@
 import type {
   ArinovaAgentOptions,
+  AgentSkill,
   TaskContext,
   TaskHandler,
   AgentEvent,
@@ -12,6 +13,7 @@ const DEFAULT_PING_INTERVAL = 30_000;
 export class ArinovaAgent {
   private readonly serverUrl: string;
   private readonly botToken: string;
+  private readonly skills: AgentSkill[];
   private readonly reconnectInterval: number;
   private readonly pingInterval: number;
 
@@ -34,6 +36,7 @@ export class ArinovaAgent {
   constructor(options: ArinovaAgentOptions) {
     this.serverUrl = options.serverUrl.replace(/\/$/, "");
     this.botToken = options.botToken;
+    this.skills = options.skills ?? [];
     this.reconnectInterval = options.reconnectInterval ?? DEFAULT_RECONNECT_INTERVAL;
     this.pingInterval = options.pingInterval ?? DEFAULT_PING_INTERVAL;
   }
@@ -123,7 +126,11 @@ export class ArinovaAgent {
     }
 
     this.ws.onopen = () => {
-      this.send({ type: "agent_auth", botToken: this.botToken });
+      const authMsg: Record<string, unknown> = { type: "agent_auth", botToken: this.botToken };
+      if (this.skills.length > 0) {
+        authMsg.skills = this.skills;
+      }
+      this.send(authMsg);
 
       this.pingTimer = setInterval(() => {
         this.send({ type: "ping" });

@@ -8,6 +8,7 @@ import {
   updateAgentSchema,
 } from "@arinova/shared/schemas";
 import { generateSecretToken } from "../utils/pairing-code.js";
+import { getAgentSkills } from "../ws/agent-handler.js";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { env } from "../env.js";
@@ -88,14 +89,14 @@ export async function agentRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get agent skills from A2A card
+  // Get agent skills (from WS-declared skills in memory)
   app.get<{ Params: { id: string } }>(
     "/api/agents/:id/skills",
     async (request, reply) => {
       const user = await requireAuth(request, reply);
 
       const [agent] = await db
-        .select({ a2aEndpoint: agents.a2aEndpoint })
+        .select({ id: agents.id })
         .from(agents)
         .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
 
@@ -103,35 +104,8 @@ export async function agentRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Agent not found" });
       }
 
-      if (!agent.a2aEndpoint) {
-        return reply.send({ skills: [] });
-      }
-
-      try {
-        const cardUrl = agent.a2aEndpoint;
-        const res = await fetch(cardUrl, {
-          headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(5000),
-        });
-
-        if (!res.ok) {
-          return reply.send({ skills: [] });
-        }
-
-        const card = (await res.json()) as {
-          skills?: { id: string; name: string; description?: string }[];
-        };
-
-        const skills = (card.skills ?? []).map((s) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description ?? "",
-        }));
-
-        return reply.send({ skills });
-      } catch {
-        return reply.send({ skills: [] });
-      }
+      const skills = getAgentSkills(agent.id);
+      return reply.send({ skills });
     }
   );
 

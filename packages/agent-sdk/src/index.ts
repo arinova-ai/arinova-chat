@@ -1,6 +1,7 @@
 export { ArinovaAgent } from "./client.js";
 export type {
   ArinovaAgentOptions,
+  AgentSkill,
   TaskContext,
   TaskHandler,
   AgentEvent,

@@ -1,9 +1,21 @@
+/** Skill metadata declared by the agent. */
+export interface AgentSkill {
+  /** Unique skill identifier (used as slash command, e.g. "draw"). */
+  id: string;
+  /** Human-readable skill name. */
+  name: string;
+  /** Short description of what the skill does. */
+  description: string;
+}
+
 /** Options for creating an ArinovaAgent. */
 export interface ArinovaAgentOptions {
   /** WebSocket server URL (e.g. "wss://chat.arinova.ai" or "ws://localhost:3501"). */
   serverUrl: string;
   /** Bot token from the Arinova dashboard. */
   botToken: string;
+  /** Skills this agent supports — shown as slash commands to users. */
+  skills?: AgentSkill[];
   /** Reconnect interval in ms (default: 5000). */
   reconnectInterval?: number;
   /** Ping interval in ms (default: 30000). */
