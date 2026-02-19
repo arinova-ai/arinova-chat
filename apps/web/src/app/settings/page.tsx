@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AuthGuard } from "@/components/auth-guard";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -273,13 +272,27 @@ function NotificationSettings() {
 
 function SettingsContent() {
   const router = useRouter();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!sessionPending && !session) {
+      router.push("/login");
+    }
+  }, [sessionPending, session, router]);
 
   // Update name state
-  const [name, setName] = useState(session?.user?.name ?? "");
+  const [name, setName] = useState("");
   const [nameLoading, setNameLoading] = useState(false);
   const [nameSuccess, setNameSuccess] = useState("");
   const [nameError, setNameError] = useState("");
+
+  // Sync name from session once loaded
+  useEffect(() => {
+    if (session?.user?.name) {
+      setName(session.user.name);
+    }
+  }, [session?.user?.name]);
 
   // Change password state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -385,12 +398,19 @@ function SettingsContent() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white">
               <User className="h-6 w-6" />
             </div>
-            <div>
-              <p className="font-medium">{session?.user?.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {session?.user?.email}
-              </p>
-            </div>
+            {sessionPending ? (
+              <div className="space-y-2">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-36 animate-pulse rounded bg-muted" />
+              </div>
+            ) : (
+              <div>
+                <p className="font-medium">{session?.user?.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {session?.user?.email}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -537,9 +557,5 @@ function SettingsContent() {
 }
 
 export default function SettingsPage() {
-  return (
-    <AuthGuard>
-      <SettingsContent />
-    </AuthGuard>
-  );
+  return <SettingsContent />;
 }
