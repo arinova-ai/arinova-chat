@@ -275,6 +275,40 @@ export async function conversationRoutes(app: FastifyInstance) {
     }
   );
 
+  // Toggle mute on a conversation
+  app.put<{ Params: { id: string } }>(
+    "/api/conversations/:id/mute",
+    async (request, reply) => {
+      const user = await requireAuth(request, reply);
+      const { muted } = request.body as { muted: boolean };
+
+      // Verify conversation belongs to user
+      const [conv] = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, request.params.id),
+            eq(conversations.userId, user.id)
+          )
+        );
+
+      if (!conv) {
+        return reply.status(404).send({ error: "Conversation not found" });
+      }
+
+      // Upsert conversation_reads with muted flag
+      await db.execute(sql`
+        INSERT INTO conversation_reads (id, user_id, conversation_id, last_read_seq, muted, updated_at)
+        VALUES (gen_random_uuid(), ${user.id}, ${conv.id}, 0, ${muted}, NOW())
+        ON CONFLICT (user_id, conversation_id)
+        DO UPDATE SET muted = ${muted}, updated_at = NOW()
+      `);
+
+      return reply.send({ muted });
+    }
+  );
+
   // Get conversation status info (/status command)
   app.get<{ Params: { id: string } }>(
     "/api/conversations/:id/status",

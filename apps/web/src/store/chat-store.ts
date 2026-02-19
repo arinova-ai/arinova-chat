@@ -551,15 +551,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   toggleMuteConversation: (conversationId) => {
     const muted = { ...get().mutedConversations };
-    if (muted[conversationId]) {
-      delete muted[conversationId];
-    } else {
+    const newMuted = !muted[conversationId];
+    if (newMuted) {
       muted[conversationId] = true;
+    } else {
+      delete muted[conversationId];
     }
     set({ mutedConversations: muted });
     if (typeof window !== "undefined") {
       localStorage.setItem("arinova_muted", JSON.stringify(muted));
     }
+    // Persist to backend for push notification filtering
+    api(`/api/conversations/${conversationId}/mute`, {
+      method: "PUT",
+      body: JSON.stringify({ muted: newMuted }),
+    }).catch(() => {});
   },
 
   setTtsEnabled: (enabled) => {

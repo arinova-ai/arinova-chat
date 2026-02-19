@@ -1,6 +1,6 @@
 import { db } from "../db/index.js";
-import { notificationPreferences } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { notificationPreferences, conversationReads } from "../db/schema.js";
+import { eq, and } from "drizzle-orm";
 import type { NotificationType } from "@arinova/shared/types";
 
 // Deduplication: suppress same-type notifications within a time window
@@ -71,6 +71,27 @@ function checkDedup(userId: string, type: NotificationType): boolean {
 
   lastPushSent.set(key, now);
   return true;
+}
+
+/**
+ * Check if a conversation is muted for a user.
+ */
+export async function isConversationMuted(
+  userId: string,
+  conversationId: string,
+): Promise<boolean> {
+  const [read] = await db
+    .select({ muted: conversationReads.muted })
+    .from(conversationReads)
+    .where(
+      and(
+        eq(conversationReads.userId, userId),
+        eq(conversationReads.conversationId, conversationId),
+      )
+    )
+    .limit(1);
+
+  return read?.muted ?? false;
 }
 
 function isInQuietHours(start: string, end: string): boolean {

@@ -146,6 +146,7 @@ export const conversationReads = pgTable("conversation_reads", {
     .notNull()
     .references(() => conversations.id, { onDelete: "cascade" }),
   lastReadSeq: integer("last_read_seq").notNull().default(0),
+  muted: boolean().notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

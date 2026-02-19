@@ -23,7 +23,7 @@ import {
   clearPendingEvents,
 } from "../lib/pending-events.js";
 import { sendPushToUser } from "../lib/push.js";
-import { shouldSendPush } from "../lib/push-trigger.js";
+import { shouldSendPush, isConversationMuted } from "../lib/push-trigger.js";
 
 // Active connections: userId -> Set of WebSockets
 const wsConnections = new Map<string, Set<WebSocket>>();
@@ -563,8 +563,8 @@ async function doTriggerAgentResponse(
         seq: agentSeq,
       });
 
-      // Push notification if user is offline
-      if (!isUserOnline(userId)) {
+      // Push notification if user is offline and conversation not muted
+      if (!isUserOnline(userId) && !(await isConversationMuted(userId, conversationId))) {
         const ok = await shouldSendPush(userId, "message");
         if (ok) {
           const preview = fullContent.length > 100
