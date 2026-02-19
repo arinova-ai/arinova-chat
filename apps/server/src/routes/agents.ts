@@ -6,7 +6,6 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   createAgentSchema,
   updateAgentSchema,
-  pairingExchangeSchema,
 } from "@arinova/shared/schemas";
 import { generateSecretToken } from "../utils/pairing-code.js";
 import { mkdir, writeFile } from "fs/promises";
@@ -15,36 +14,6 @@ import { env } from "../env.js";
 import { uploadToR2 } from "../lib/r2.js";
 
 export async function agentRoutes(app: FastifyInstance) {
-  // Exchange bot token for agent connection (public — no auth required)
-  // MUST be registered before /api/agents/:id to avoid route conflicts
-  app.post("/api/agents/pair", async (request, reply) => {
-    const body = pairingExchangeSchema.parse(request.body);
-
-    const [agent] = await db
-      .select({ id: agents.id, name: agents.name })
-      .from(agents)
-      .where(eq(agents.secretToken, body.botToken));
-
-    if (!agent) {
-      return reply.status(404).send({ error: "Invalid bot token" });
-    }
-
-    // Update a2aEndpoint if provided
-    if (body.a2aEndpoint) {
-      await db
-        .update(agents)
-        .set({ a2aEndpoint: body.a2aEndpoint, updatedAt: new Date() })
-        .where(eq(agents.id, agent.id));
-    }
-
-    // Build WS URL for the agent to connect back
-    const host = request.headers.host ?? "localhost:3501";
-    const protocol = request.headers["x-forwarded-proto"] === "https" ? "wss" : "ws";
-    const wsUrl = `${protocol}://${host}/ws/agent`;
-
-    return reply.send({ agentId: agent.id, name: agent.name, wsUrl });
-  });
-
   // Create agent
   app.post("/api/agents", async (request, reply) => {
     const user = await requireAuth(request, reply);

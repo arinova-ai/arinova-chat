@@ -8,3 +8,6 @@ dist/
 *.log
 *.tsbuildinfo
 .claude/settings.local.json
+.venv/
+__pycache__/
+*.egg-info/

@@ -164,6 +164,12 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  packages/agent-sdk:
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   packages/app-sdk:
     devDependencies:
       tsup:
@@ -175,6 +181,9 @@ importers:
 
   packages/openclaw-plugin:
     dependencies:
+      '@arinova-ai/agent-sdk':
+        specifier: workspace:*
+        version: link:../agent-sdk
       zod:
         specifier: ^4
         version: 4.3.6

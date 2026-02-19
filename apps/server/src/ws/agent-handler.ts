@@ -131,28 +131,28 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (event.type === "agent_auth") {
           clearTimeout(authTimer);
 
-          // Verify agentId exists in DB
+          // Look up agent by botToken (secret_token)
           const [agent] = await db
             .select({ id: agents.id, name: agents.name })
             .from(agents)
-            .where(eq(agents.id, event.agentId));
+            .where(eq(agents.secretToken, event.botToken));
 
           if (!agent) {
-            sendToAgent(socket, { type: "auth_error", error: "Agent not found" });
-            socket.close(4404, "Agent not found");
+            sendToAgent(socket, { type: "auth_error", error: "Invalid bot token" });
+            socket.close(4404, "Invalid bot token");
             return;
           }
 
           // Close any existing connection for this agent
-          const existingWs = agentConnections.get(event.agentId);
+          const existingWs = agentConnections.get(agent.id);
           if (existingWs && existingWs !== socket) {
             existingWs.close(4409, "Replaced by new connection");
           }
 
-          authenticatedAgentId = event.agentId;
-          agentConnections.set(event.agentId, socket);
+          authenticatedAgentId = agent.id;
+          agentConnections.set(agent.id, socket);
           sendToAgent(socket, { type: "auth_ok", agentName: agent.name });
-          app.log.info(`Agent WS connected: agentId=${event.agentId} name="${agent.name}"`);
+          app.log.info(`Agent WS connected: agentId=${agent.id} name="${agent.name}"`);
           return;
         }
 

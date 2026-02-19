@@ -74,12 +74,6 @@ export const sendMessageSchema = z.object({
   content: z.string().min(1).max(32000),
 });
 
-// ===== Pairing (bot token only) =====
-export const pairingExchangeSchema = z.object({
-  botToken: z.string().min(1),
-  a2aEndpoint: z.string().url().optional(),
-});
-
 // ===== App Manifest =====
 const appCategorySchema = z.enum(["game", "shopping", "tool", "social", "other"]);
 const agentInterfaceModeSchema = z.enum(["static", "dynamic"]);
@@ -220,7 +214,7 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
 export const agentWSClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("agent_auth"),
-    agentId: z.string().uuid(),
+    botToken: z.string().min(1),
   }),
   z.object({
     type: z.literal("agent_chunk"),

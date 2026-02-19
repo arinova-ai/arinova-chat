@@ -2,8 +2,6 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 import { arinovaChatPlugin } from "./channel.js";
 import { setArinovaChatRuntime } from "./runtime.js";
-import { exchangeBotToken } from "./auth.js";
-
 const plugin: {
   id: string;
   name: string;
@@ -23,7 +21,7 @@ const plugin: {
     api.on("gateway_start", () => {
       const channels = (api.config as Record<string, unknown>).channels as Record<string, unknown> | undefined;
       const arinova = (channels?.["openclaw-arinova-ai"] ?? {}) as Record<string, unknown>;
-      const hasAgent = Boolean(arinova.agentId || arinova.botToken);
+      const hasAgent = Boolean(arinova.botToken);
       const hasUrl = Boolean(arinova.apiUrl);
 
       if (!hasUrl || !hasAgent) {
@@ -46,40 +44,25 @@ const plugin: {
             const arinovaCfg = (channelCfg?.["openclaw-arinova-ai"] ?? {}) as Record<string, unknown>;
             const apiUrl = opts.apiUrl ?? (arinovaCfg.apiUrl as string | undefined) ?? "https://api.chat.arinova.ai";
 
-            console.log(`Connecting to ${apiUrl} using bot token...`);
+            // Save botToken to config — auth happens on WS connect via SDK
+            const arinovaUpdate: Record<string, unknown> = {
+              ...arinovaCfg,
+              enabled: true,
+              apiUrl,
+              botToken: opts.token,
+            };
 
-            try {
-              const result = await exchangeBotToken({
-                apiUrl,
-                botToken: opts.token,
-              });
-              console.log(`Connected! Agent: "${result.name}" (id: ${result.agentId})`);
+            const updatedCfg = {
+              ...ctx.config,
+              channels: {
+                ...channelCfg,
+                "openclaw-arinova-ai": arinovaUpdate,
+              },
+            };
 
-              // Persist to config
-              const arinovaUpdate: Record<string, unknown> = {
-                ...arinovaCfg,
-                enabled: true,
-                apiUrl,
-                agentId: result.agentId,
-                botToken: opts.token,
-              };
-
-              const updatedCfg = {
-                ...ctx.config,
-                channels: {
-                  ...channelCfg,
-                  "openclaw-arinova-ai": arinovaUpdate,
-                },
-              };
-
-              await api.runtime.config.writeConfigFile(updatedCfg);
-              console.log("Config saved to openclaw.json");
-              console.log("\nRestart the gateway to connect: openclaw gateway start");
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              console.error(`Connection failed: ${msg}`);
-              process.exit(1);
-            }
+            await api.runtime.config.writeConfigFile(updatedCfg);
+            console.log(`Config saved! Bot token set for ${apiUrl}`);
+            console.log("\nRestart the gateway to connect: openclaw gateway start");
           });
       },
       { commands: ["arinova-setup"] },

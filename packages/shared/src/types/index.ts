@@ -380,7 +380,7 @@ export type WSServerEvent =
 
 /** Events sent from Agent → Backend */
 export type AgentWSClientEvent =
-  | { type: "agent_auth"; agentId: string }
+  | { type: "agent_auth"; botToken: string }
   | { type: "agent_chunk"; taskId: string; chunk: string }
   | { type: "agent_complete"; taskId: string; content: string }
   | { type: "agent_error"; taskId: string; error: string }
