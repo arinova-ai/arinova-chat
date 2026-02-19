@@ -89,14 +89,14 @@ export async function agentRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get agent skills (from WS-declared skills in memory)
+  // Get agent skills (WS-declared first, fallback to A2A card)
   app.get<{ Params: { id: string } }>(
     "/api/agents/:id/skills",
     async (request, reply) => {
       const user = await requireAuth(request, reply);
 
       const [agent] = await db
-        .select({ id: agents.id })
+        .select({ id: agents.id, a2aEndpoint: agents.a2aEndpoint })
         .from(agents)
         .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
 
@@ -104,8 +104,34 @@ export async function agentRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Agent not found" });
       }
 
-      const skills = getAgentSkills(agent.id);
-      return reply.send({ skills });
+      // Prefer WS-declared skills
+      const wsSkills = getAgentSkills(agent.id);
+      if (wsSkills.length > 0) {
+        return reply.send({ skills: wsSkills });
+      }
+
+      // Fallback: fetch from A2A card
+      if (agent.a2aEndpoint) {
+        try {
+          const res = await fetch(agent.a2aEndpoint, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (res.ok) {
+            const card = (await res.json()) as {
+              skills?: { id: string; name: string; description?: string }[];
+            };
+            const skills = (card.skills ?? []).map((s) => ({
+              id: s.id,
+              name: s.name,
+              description: s.description ?? "",
+            }));
+            return reply.send({ skills });
+          }
+        } catch {}
+      }
+
+      return reply.send({ skills: [] });
     }
   );
 
