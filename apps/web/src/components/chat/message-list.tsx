@@ -28,11 +28,10 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   const loadingDownRef = useRef(false);
   const highlightRef = useRef<HTMLDivElement>(null);
 
-  const scrollRef = useAutoScroll<HTMLDivElement>([
-    lastMessage?.content,
-    lastMessage?.status,
-    messages.length,
-  ]);
+  const scrollRef = useAutoScroll<HTMLDivElement>(
+    [lastMessage?.content, lastMessage?.status, messages.length],
+    { conversationId: activeConversationId, skipScroll: !!highlightMessageId },
+  );
 
   // Scroll to highlighted message when it appears
   useEffect(() => {

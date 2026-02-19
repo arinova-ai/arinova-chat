@@ -2,14 +2,25 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-export function useAutoScroll<T extends HTMLElement>(deps: unknown[]) {
+export function useAutoScroll<T extends HTMLElement>(
+  deps: unknown[],
+  options?: { conversationId?: string | null; skipScroll?: boolean },
+) {
   const ref = useRef<T>(null);
   const userScrolledUp = useRef(false);
+  const prevConversationId = useRef(options?.conversationId);
+
+  // Reset scroll flag when conversation changes
+  useEffect(() => {
+    if (options?.conversationId !== prevConversationId.current) {
+      userScrolledUp.current = false;
+      prevConversationId.current = options?.conversationId;
+    }
+  }, [options?.conversationId]);
 
   const handleScroll = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    // If user is within 100px of bottom, auto-scroll; otherwise don't force
     const threshold = 100;
     const isNearBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
@@ -25,7 +36,7 @@ export function useAutoScroll<T extends HTMLElement>(deps: unknown[]) {
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || userScrolledUp.current) return;
+    if (!el || userScrolledUp.current || options?.skipScroll) return;
     el.scrollTop = el.scrollHeight;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
