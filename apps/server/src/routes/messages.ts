@@ -43,7 +43,7 @@ async function withAttachments(items: (typeof messages.$inferSelect)[]) {
   });
 }
 
-/** Enrich streaming messages with current content from Redis */
+/** Enrich streaming messages with current content from Redis (batch mget) */
 async function enrichStreaming<T extends { id: string; conversationId: string; status: string; content: string }>(
   items: T[]
 ): Promise<T[]> {
@@ -52,22 +52,21 @@ async function enrichStreaming<T extends { id: string; conversationId: string; s
   );
   if (streaming.length === 0) return items;
 
-  const results = await Promise.allSettled(
-    streaming.map((m) => redis.get(`stream:${m.id}`))
-  );
-  const contentMap = new Map<string, string>();
-  streaming.forEach((m, i) => {
-    const r = results[i];
-    if (r.status === "fulfilled" && r.value) {
-      contentMap.set(m.id, r.value);
-    }
-  });
-
-  if (contentMap.size === 0) return items;
-  return items.map((m) => {
-    const cached = contentMap.get(m.id);
-    return cached ? { ...m, content: cached } : m;
-  });
+  try {
+    const keys = streaming.map((m) => `stream:${m.id}`);
+    const values = await redis.mget(...keys);
+    const contentMap = new Map<string, string>();
+    streaming.forEach((m, i) => {
+      if (values[i]) contentMap.set(m.id, values[i]!);
+    });
+    if (contentMap.size === 0) return items;
+    return items.map((m) => {
+      const cached = contentMap.get(m.id);
+      return cached ? { ...m, content: cached } : m;
+    });
+  } catch {
+    return items;
+  }
 }
 
 export async function messageRoutes(app: FastifyInstance) {

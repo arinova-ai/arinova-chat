@@ -99,6 +99,13 @@
       "when": 1771499753419,
       "tag": "0013_young_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1771605691621,
+      "tag": "0014_curly_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

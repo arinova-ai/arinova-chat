@@ -25,6 +25,9 @@ vi.mock("../db/index.js", () => {
     orderBy: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
     innerJoin: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
+    groupBy: vi.fn().mockReturnThis(),
+    as: vi.fn().mockReturnThis(),
     execute: vi.fn().mockResolvedValue(undefined),
     onConflictDoUpdate: vi.fn().mockReturnThis(),
   };
@@ -142,55 +145,36 @@ describe("Conversation Routes", () => {
 
   describe("GET /api/conversations", () => {
     it("returns 200 with array of enriched conversations", async () => {
-      const conv = mockConversation();
-      const agent = mockAgent();
-
-      // The route makes 3 db calls for a single direct conversation:
-      // 1. select().from(conversations).where().orderBy() → [conv]
-      // 2. select().from(agents).where() → [agent]  (inside map, direct conv)
-      // 3. select().from(messages).where().orderBy().limit() → []  (last message)
-      //
-      // All chain methods return `db` itself; only the terminal call resolves.
-      // Terminal calls in order: orderBy (1), where (2), limit (3).
+      // JOIN-based query: select → from → leftJoin (×3) → where → orderBy
+      // Returns rows with flattened conversation + agent + last message fields
+      const joinedRow = {
+        id: CONV_ID,
+        title: null,
+        type: "direct",
+        userId: USER_ID,
+        agentId: AGENT_ID,
+        pinnedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        agentName: "TestBot",
+        agentDescription: "A test bot",
+        agentAvatarUrl: null,
+        lastMsgId: null,
+        lastMsgSeq: null,
+        lastMsgRole: null,
+        lastMsgContent: null,
+        lastMsgStatus: null,
+        lastMsgCreatedAt: null,
+        lastMsgUpdatedAt: null,
+      };
 
       vi.mocked(db.select).mockReturnValue(db as any);
       vi.mocked(db.from).mockReturnValue(db as any);
+      vi.mocked(db.leftJoin).mockReturnValue(db as any);
       vi.mocked(db.where).mockReturnValue(db as any);
-      vi.mocked(db.orderBy).mockReturnValue(db as any);
-      vi.mocked(db.limit).mockReturnValue(db as any);
-
-      // Terminal resolutions in call order:
-      // Call 1: allConvs → orderBy is the terminal for the first query
-      // Call 2: agent lookup → where is terminal (no orderBy/limit)
-      // Call 3: lastMessage → limit is terminal
-      //
-      // Since all methods return `db`, we need to resolve on specific call counts.
-      // Use a counter approach: override the whole chain to resolve predictably.
-
-      // Simplest: make `where` resolve on the second call (agent lookup),
-      // `orderBy` resolve on the first call (allConvs), and `limit` resolve for lastMessage.
-      let orderByCallCount = 0;
-      vi.mocked(db.orderBy).mockImplementation((..._args: any[]) => {
-        orderByCallCount++;
-        if (orderByCallCount === 1) {
-          // allConvs query — this is a terminal call (no .limit after it)
-          return Promise.resolve([conv]) as any;
-        }
-        // lastMessage orderBy is NOT terminal; limit is called after it
-        return db as any;
-      });
-
-      let whereCallCount = 0;
-      vi.mocked(db.where).mockImplementation((..._args: any[]) => {
-        whereCallCount++;
-        if (whereCallCount === 2) {
-          // agent lookup for direct conv — terminal (no orderBy/limit after)
-          return Promise.resolve([agent]) as any;
-        }
-        return db as any;
-      });
-
-      vi.mocked(db.limit).mockResolvedValue([]); // lastMessage → no last message
+      vi.mocked(db.groupBy).mockReturnValue(db as any);
+      vi.mocked(db.as).mockReturnValue(db as any);
+      vi.mocked(db.orderBy).mockResolvedValue([joinedRow]);
 
       const res = await app.inject({
         method: "GET",
@@ -209,8 +193,10 @@ describe("Conversation Routes", () => {
     it("returns 200 with empty array when user has no conversations", async () => {
       vi.mocked(db.select).mockReturnValue(db as any);
       vi.mocked(db.from).mockReturnValue(db as any);
+      vi.mocked(db.leftJoin).mockReturnValue(db as any);
       vi.mocked(db.where).mockReturnValue(db as any);
-      // allConvs query terminates at orderBy → resolve with []
+      vi.mocked(db.groupBy).mockReturnValue(db as any);
+      vi.mocked(db.as).mockReturnValue(db as any);
       vi.mocked(db.orderBy).mockResolvedValue([]);
 
       const res = await app.inject({

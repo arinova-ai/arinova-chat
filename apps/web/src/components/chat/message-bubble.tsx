@@ -3,7 +3,12 @@
 import { useState, useCallback } from "react";
 import type { Message } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
-import { MarkdownContent } from "./markdown-content";
+import dynamic from "next/dynamic";
+
+const MarkdownContent = dynamic(
+  () => import("./markdown-content").then((m) => m.MarkdownContent),
+  { ssr: false, loading: () => <div className="text-sm opacity-50">...</div> }
+);
 import { StreamingCursor } from "./streaming-cursor";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,6 +26,7 @@ import {
   Square,
 } from "lucide-react";
 import { assetUrl } from "@/lib/config";
+import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 
 interface MessageBubbleProps {
   message: Message;
@@ -47,6 +53,8 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
   const cancelStream = useChatStore((s) => s.cancelStream);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const showTimestamps = useChatStore((s) => s.showTimestamps);
+  const toggleReaction = useChatStore((s) => s.toggleReaction);
+  const reactions = useChatStore((s) => s.reactionsByMessage[message.id] ?? {});
 
   const handleCopy = useCallback(async () => {
     try {
@@ -171,13 +179,22 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
             {isStreaming && message.content && <StreamingCursor />}
           </div>
 
-          {/* Timestamp */}
+          {/* Reaction badges */}
+          <ReactionBadges
+            reactions={reactions}
+            onToggle={(emoji) => toggleReaction(message.id, emoji)}
+          />
+
+          {/* Timestamp + Read receipt */}
           {showTimestamps && message.createdAt && (
             <p className={cn(
-              "mt-1 text-[10px] text-muted-foreground/60",
-              isUser ? "text-right" : "text-left"
+              "mt-1 text-[10px] text-muted-foreground/60 flex items-center gap-1",
+              isUser ? "justify-end" : "justify-start"
             )}>
               {formatTimestamp(message.createdAt)}
+              {isUser && message.status === "completed" && !message.id.startsWith("temp-") && (
+                <Check className="h-2.5 w-2.5 text-blue-400" />
+              )}
             </p>
           )}
 
@@ -202,6 +219,10 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
                   <Copy className="h-3 w-3" />
                 )}
               </Button>
+
+              <ReactionPicker
+                onSelect={(emoji) => toggleReaction(message.id, emoji)}
+              />
 
               <Button
                 variant="ghost"

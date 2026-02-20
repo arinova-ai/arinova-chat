@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -5,6 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import path from "path";
+import crypto from "crypto";
 import { env } from "./env.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
@@ -19,6 +21,7 @@ import { sandboxRoutes } from "./routes/sandbox.js";
 import { groupRoutes } from "./routes/groups.js";
 import { pushRoutes } from "./routes/push.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { reactionRoutes } from "./routes/reactions.js";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";
@@ -27,7 +30,22 @@ import { notificationRoutes } from "./routes/notifications.js";
 // import { walletRoutes } from "./routes/wallet.js";
 // import { developerRoutes } from "./routes/developer.js";
 
-const app = Fastify({ logger: true });
+// Initialize Sentry if DSN is configured
+if (env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? "development",
+    tracesSampleRate: 0.1,
+  });
+}
+
+const app = Fastify({
+  logger: {
+    level: process.env.NODE_ENV === "production" ? "info" : "debug",
+  },
+  genReqId: () => crypto.randomUUID(),
+  requestIdHeader: "x-request-id",
+});
 
 // CORS — support comma-separated origins; "*" allows all (dev mode)
 const corsOrigins = env.CORS_ORIGIN.split(",").map((s) => s.trim());
@@ -59,19 +77,24 @@ await app.register(fastifyStatic, {
 // WebSocket
 await app.register(websocket);
 
-// Global error handler
+// Global error handler — sanitized responses, full details only in logs
 app.setErrorHandler((error: Error & { validation?: unknown; statusCode?: number }, request, reply) => {
   if (error.validation) {
-    return reply.status(400).send({ error: "Validation error", details: error.message });
+    return reply.status(400).send({ error: "Validation error", code: "VALIDATION_ERROR", details: error.message });
   }
 
   if (error.statusCode === 429) {
-    return reply.status(429).send({ error: "Too many requests. Please try again later." });
+    return reply.status(429).send({ error: "Too many requests. Please try again later.", code: "RATE_LIMIT" });
   }
 
-  app.log.error(error);
-  return reply.status(error.statusCode ?? 500).send({
-    error: error.message ?? "Internal server error",
+  // Log full error details server-side only
+  request.log.error({ err: error, reqId: request.id }, "Unhandled error");
+  if (env.SENTRY_DSN) Sentry.captureException(error);
+
+  const statusCode = error.statusCode ?? 500;
+  return reply.status(statusCode).send({
+    error: statusCode >= 500 ? "Internal server error" : (error.message ?? "Error"),
+    code: "INTERNAL_ERROR",
   });
 });
 
@@ -89,6 +112,7 @@ await app.register(agentHealthRoutes);
 await app.register(sandboxRoutes);
 await app.register(pushRoutes);
 await app.register(notificationRoutes);
+await app.register(reactionRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
 // await app.register(communityRoutes);

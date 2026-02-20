@@ -10,6 +10,7 @@ import {
 } from "../db/schema.js";
 import { eq, and, gt, desc, asc, sql, inArray } from "drizzle-orm";
 import { wsClientEventSchema } from "@arinova/shared/schemas";
+import { z } from "zod";
 import type {
   WSServerEvent,
   SyncConversationSummary,
@@ -34,10 +35,10 @@ const socketVisible = new Map<WebSocket, boolean>();
 // Active stream cancellers: messageId -> { cancel }
 const streamCancellers = new Map<string, { cancel: () => void }>();
 
-// Rate limiting: userId -> { count, resetAt }
-const wsRateLimits = new Map<string, { count: number; resetAt: number }>();
+// Rate limiting constants
 const WS_RATE_LIMIT = 10; // messages per minute
-const WS_RATE_WINDOW = 60000; // 1 minute
+// In-memory fallback when Redis is unavailable
+const wsRateLimits = new Map<string, { count: number; resetAt: number }>();
 
 // Heartbeat timeout (45 seconds without any client message -> close)
 const HEARTBEAT_TIMEOUT = 45000;
@@ -107,21 +108,25 @@ function clearHeartbeat(ws: WebSocket) {
   }
 }
 
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const limit = wsRateLimits.get(userId);
-
-  if (!limit || now > limit.resetAt) {
-    wsRateLimits.set(userId, { count: 1, resetAt: now + WS_RATE_WINDOW });
+async function checkRateLimit(userId: string): Promise<boolean> {
+  const minute = Math.floor(Date.now() / 60000);
+  const key = `ws:rate:${userId}:${minute}`;
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 120); // TTL 2 minutes
+    return count <= WS_RATE_LIMIT;
+  } catch {
+    // Redis unavailable — fall back to in-memory
+    const now = Date.now();
+    const limit = wsRateLimits.get(userId);
+    if (!limit || now > limit.resetAt) {
+      wsRateLimits.set(userId, { count: 1, resetAt: now + 60000 });
+      return true;
+    }
+    if (limit.count >= WS_RATE_LIMIT) return false;
+    limit.count++;
     return true;
   }
-
-  if (limit.count >= WS_RATE_LIMIT) {
-    return false;
-  }
-
-  limit.count++;
-  return true;
 }
 
 export async function wsRoutes(app: FastifyInstance) {
@@ -187,8 +192,21 @@ export async function wsRoutes(app: FastifyInstance) {
       // Reset heartbeat on any message
       resetHeartbeat(socket);
 
+      // Max message size check (32KB)
+      const raw_str = data.toString();
+      if (raw_str.length > 32768) {
+        send(socket, {
+          type: "stream_error",
+          conversationId: "",
+          messageId: "",
+          seq: 0,
+          error: "Message too large",
+        });
+        return;
+      }
+
       try {
-        const raw = JSON.parse(data.toString());
+        const raw = JSON.parse(raw_str);
         const event = wsClientEventSchema.parse(raw);
 
         if (event.type === "ping") {
@@ -197,7 +215,7 @@ export async function wsRoutes(app: FastifyInstance) {
         }
 
         if (event.type === "send_message") {
-          if (!checkRateLimit(userId)) {
+          if (!(await checkRateLimit(userId))) {
             send(socket, {
               type: "stream_error",
               conversationId: event.conversationId,
@@ -247,7 +265,26 @@ export async function wsRoutes(app: FastifyInstance) {
           return;
         }
       } catch (err) {
-        app.log.error(err, "WS message error");
+        // Send structured error for parse/validation failures
+        if (err instanceof SyntaxError) {
+          send(socket, {
+            type: "stream_error",
+            conversationId: "",
+            messageId: "",
+            seq: 0,
+            error: "Invalid JSON",
+          });
+        } else if (err instanceof z.ZodError) {
+          send(socket, {
+            type: "stream_error",
+            conversationId: "",
+            messageId: "",
+            seq: 0,
+            error: "Invalid message format",
+          });
+        } else {
+          app.log.error(err, "WS message error");
+        }
       }
     }
 
@@ -543,7 +580,7 @@ async function doTriggerAgentResponse(
   content: string
 ) {
   const [agent] = await db
-    .select({ name: agents.name })
+    .select({ name: agents.name, systemPrompt: agents.systemPrompt })
     .from(agents)
     .where(eq(agents.id, agentId));
 
@@ -609,21 +646,30 @@ async function doTriggerAgentResponse(
     seq: agentSeq,
   });
 
+  // Accumulate full text for Redis storage (onChunk now receives delta only)
+  let streamAccumulated = "";
+
+  // Prepend system prompt if configured
+  const taskContent = agent.systemPrompt
+    ? `[System Prompt]\n${agent.systemPrompt}\n\n[User Message]\n${content}`
+    : content;
+
   // Send task to agent via WebSocket
   const { cancel } = sendTaskToAgent({
     agentId,
     taskId: agentMsg.id,
     conversationId,
-    content,
-    onChunk: (chunk) => {
+    content: taskContent,
+    onChunk: (delta) => {
+      streamAccumulated += delta;
       sendToUser(userId, {
         type: "stream_chunk",
         conversationId,
         messageId: agentMsg.id,
         seq: agentSeq,
-        chunk,
+        chunk: delta,
       });
-      redis.set(`stream:${agentMsg.id}`, chunk, "EX", 600).catch(() => {});
+      redis.set(`stream:${agentMsg.id}`, streamAccumulated, "EX", 600).catch(() => {});
     },
     onComplete: async (fullContent) => {
       streamCancellers.delete(agentMsg.id);
@@ -721,10 +767,22 @@ async function processNextInQueue(conversationId: string) {
   );
 }
 
+/** Strip potentially dangerous HTML tags from user-submitted content */
+function sanitizeContent(content: string): string {
+  return content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<\/script>/gi, "")
+    .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, "")
+    .replace(/<embed\b[^>]*\/?>/gi, "")
+    .replace(/<form\b[^>]*>[\s\S]*?<\/form>/gi, "")
+    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+}
+
 async function handleSendMessage(
   userId: string,
   conversationId: string,
   content: string
 ) {
-  await triggerAgentResponse(userId, conversationId, content);
+  await triggerAgentResponse(userId, conversationId, sanitizeContent(content));
 }

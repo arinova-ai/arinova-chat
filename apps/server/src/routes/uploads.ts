@@ -10,6 +10,7 @@ import { env } from "../env.js";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
+import { fileTypeFromBuffer } from "file-type";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -21,6 +22,9 @@ const ALLOWED_TYPES = [
   "text/csv",
   "application/json",
 ];
+
+// Text-based types that have no magic number — skip content validation
+const TEXT_TYPES = new Set(["text/plain", "text/csv", "application/json"]);
 
 export async function uploadRoutes(app: FastifyInstance) {
   // Upload file and attach to a message
@@ -57,6 +61,16 @@ export async function uploadRoutes(app: FastifyInstance) {
         return reply
           .status(400)
           .send({ error: `File exceeds maximum size of ${env.MAX_FILE_SIZE / 1024 / 1024}MB` });
+      }
+
+      // Validate file content matches declared MIME type (skip text-based types)
+      if (!TEXT_TYPES.has(data.mimetype)) {
+        const detected = await fileTypeFromBuffer(buffer);
+        if (!detected || !ALLOWED_TYPES.includes(detected.mime)) {
+          return reply
+            .status(400)
+            .send({ error: "File content does not match declared type" });
+        }
       }
 
       // Generate unique filename

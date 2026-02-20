@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 const mockDeleteMessage = vi.fn();
 const mockSendMessage = vi.fn();
 const mockCancelStream = vi.fn();
+const mockToggleReaction = vi.fn();
 
 vi.mock("@/store/chat-store", () => ({
   useChatStore: (selector: any) => {
@@ -12,8 +13,10 @@ vi.mock("@/store/chat-store", () => ({
       deleteMessage: mockDeleteMessage,
       sendMessage: mockSendMessage,
       cancelStream: mockCancelStream,
+      toggleReaction: mockToggleReaction,
       messagesByConversation: {},
       showTimestamps: false,
+      reactionsByMessage: {},
     };
     return selector(state);
   },
@@ -25,12 +28,29 @@ vi.mock("./markdown-content", () => ({
   ),
 }));
 
+// Mock next/dynamic to pass through the module
+vi.mock("next/dynamic", () => ({
+  default: (_loader: any, _opts?: any) => {
+    // In tests, return a simple component that uses the mocked MarkdownContent
+    return function DynamicMock(props: any) {
+      return <div data-testid="markdown-content">{props.content}</div>;
+    };
+  },
+}));
+
 vi.mock("./streaming-cursor", () => ({
   StreamingCursor: () => <div data-testid="streaming-cursor">Loading...</div>,
 }));
 
 vi.mock("@/lib/config", () => ({
   assetUrl: (url: string) => url,
+}));
+
+vi.mock("./reaction-picker", () => ({
+  ReactionPicker: ({ onSelect }: { onSelect: (emoji: string) => void }) => (
+    <button data-testid="reaction-picker" onClick={() => onSelect("👍")}>React</button>
+  ),
+  ReactionBadges: () => null,
 }));
 
 import { MessageBubble } from "./message-bubble";

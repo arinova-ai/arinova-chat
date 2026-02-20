@@ -1,86 +1,79 @@
-import { test, expect } from "@playwright/test";
-import { registerUser, loginUser } from "../helpers/auth";
+import { test, expect, type Page } from "@playwright/test";
+import { uniqueUser, registerUser } from "../helpers/auth";
+
+async function createBot(page: Page, botName: string) {
+  const createBotBtn = page.getByRole("button", { name: /create bot/i });
+  await createBotBtn.click();
+  await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5000 });
+
+  await page.fill('input[placeholder="e.g. CodeBot"]', botName);
+  await page.getByRole("button", { name: /create bot/i }).last().click();
+  await expect(page.getByRole("heading", { name: /bot created/i })).toBeVisible({ timeout: 10000 });
+
+  // Start chat to get back to main view
+  await page.getByRole("button", { name: /start chat/i }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5000 });
+}
 
 test.describe("Bot Management", () => {
   test.beforeEach(async ({ page }) => {
-    const user = await registerUser(page);
-    await loginUser(page, user);
+    const user = uniqueUser();
+    await registerUser(page, user);
+    await page.waitForURL("/", { timeout: 10000 });
   });
 
   test("create and edit a bot", async ({ page }) => {
-    // Open bot creation dialog
-    await page.click('button:has-text("Add Bot"), button:has-text("New Bot"), [data-testid="add-bot"]');
+    const botName = `EditBot-${Date.now()}`;
+    await createBot(page, botName);
 
-    // Fill in bot name
-    const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
-    await nameInput.fill("TestEditBot");
+    // The bot should appear in the sidebar conversation list
+    await expect(page.getByText(botName).first()).toBeVisible({ timeout: 5000 });
 
-    // Submit
-    await page.click('button:has-text("Create"), button:has-text("Add"), button[type="submit"]');
+    // Hover the conversation item to reveal the three-dot menu
+    const conversationItem = page.locator('[class*="group"]').filter({ hasText: new RegExp(botName) }).first();
+    await conversationItem.hover();
 
-    // Wait for bot to appear
-    await expect(page.locator("text=TestEditBot").first()).toBeVisible({ timeout: 10000 });
+    // Click the three-dot menu button
+    const moreBtn = conversationItem.getByRole("button").filter({ has: page.locator("svg") }).last();
+    await moreBtn.click();
 
-    // Navigate to bot settings / click on bot to edit
-    // Look for a settings or edit button near the bot
-    const botElement = page.locator("text=TestEditBot").first();
-    await botElement.click();
+    // Click "Rename" to edit the conversation name
+    await page.getByRole("menuitem", { name: /rename/i }).click();
 
-    // Look for edit/settings option
-    const editButton = page.locator(
-      'button:has-text("Edit"), button:has-text("Settings"), [data-testid="edit-bot"], button[title*="edit" i], button[title*="settings" i]'
-    ).first();
+    const newName = `Renamed-${Date.now()}`;
+    const renameInput = page.locator("input.h-6").first();
+    await renameInput.clear();
+    await renameInput.fill(newName);
+    await renameInput.press("Enter");
 
-    if (await editButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await editButton.click();
-
-      // Update name
-      const editNameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
-      await editNameInput.clear();
-      await editNameInput.fill("RenamedBot");
-
-      // Save
-      await page.click('button:has-text("Save"), button:has-text("Update"), button[type="submit"]');
-
-      // Verify rename
-      await expect(page.locator("text=RenamedBot").first()).toBeVisible({ timeout: 5000 });
-    }
+    // Verify the name updated
+    await expect(page.getByText(newName).first()).toBeVisible({ timeout: 5000 });
   });
 
   test("create and delete a bot", async ({ page }) => {
-    // Create a bot first
-    await page.click('button:has-text("Add Bot"), button:has-text("New Bot"), [data-testid="add-bot"]');
+    const botName = `DeleteBot-${Date.now()}`;
+    await createBot(page, botName);
 
-    const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
-    await nameInput.fill("DeleteMeBot");
+    // The bot should appear in the sidebar
+    await expect(page.getByText(botName).first()).toBeVisible({ timeout: 5000 });
 
-    await page.click('button:has-text("Create"), button:has-text("Add"), button[type="submit"]');
+    // Hover the conversation item to reveal the three-dot menu
+    const conversationItem = page.locator('[class*="group"]').filter({ hasText: new RegExp(botName) }).first();
+    await conversationItem.hover();
 
-    await expect(page.locator("text=DeleteMeBot").first()).toBeVisible({ timeout: 10000 });
+    // Click the three-dot menu button
+    const moreBtn = conversationItem.getByRole("button").filter({ has: page.locator("svg") }).last();
+    await moreBtn.click();
 
-    // Navigate to bot and look for delete option
-    const botElement = page.locator("text=DeleteMeBot").first();
-    await botElement.click();
+    // Click "Delete" in the dropdown
+    await page.getByRole("menuitem", { name: /delete/i }).click();
 
-    // Look for delete button (may be in settings or directly available)
-    const deleteButton = page.locator(
-      'button:has-text("Delete"), [data-testid="delete-bot"], button[title*="delete" i]'
-    ).first();
+    // Confirm in the delete dialog
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5000 });
+    await page.getByRole("button", { name: /^delete$/i }).click();
 
-    if (await deleteButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await deleteButton.click();
-
-      // Confirm deletion if there's a confirmation dialog
-      const confirmButton = page.locator(
-        'button:has-text("Confirm"), button:has-text("Yes"), button:has-text("Delete"):visible'
-      ).first();
-
-      if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmButton.click();
-      }
-
-      // Verify bot is gone
-      await expect(page.locator("text=DeleteMeBot")).toHaveCount(0, { timeout: 5000 });
-    }
+    // The conversation should be removed
+    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(new RegExp(botName))).not.toBeVisible({ timeout: 5000 });
   });
 });

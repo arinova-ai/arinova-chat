@@ -376,6 +376,20 @@ export type WSServerEvent =
       conversations: SyncConversationSummary[];
       missedMessages: SyncMissedMessage[];
     }
+  | {
+      type: "reaction_added";
+      messageId: string;
+      conversationId: string;
+      emoji: string;
+      userId: string;
+    }
+  | {
+      type: "reaction_removed";
+      messageId: string;
+      conversationId: string;
+      emoji: string;
+      userId: string;
+    }
   | { type: "pong" };
 
 // ===== Agent Skill =====

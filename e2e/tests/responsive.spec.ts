@@ -11,25 +11,8 @@ test.describe("Responsive Layout", () => {
   test("mobile viewport (375x667): only sidebar OR chat is visible, not both", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
 
-    // On mobile, when no conversation is active, only the sidebar is visible
-    // The chat area is hidden (has class "hidden" when no active conversation on mobile)
-    // The sidebar is shown fullscreen
-
-    // Wait for the layout to settle
-    await page.waitForTimeout(300);
-
-    // The sidebar should be visible (mobile sidebar is shown when no conversation active)
-    // The chat area panel should be hidden (has "hidden" class on mobile without an active conversation)
-    // We check by looking at the desktop-only sidebar (md:block hidden by default on mobile)
-    // and the mobile sidebar
-    const desktopSidebar = page.locator('.hidden.md\\:block').first();
-    const mobileSidebar = page.locator('.md\\:hidden').first();
-    const chatArea = page.locator('.hidden.md\\:block').last();
-
-    // On mobile without an active conversation:
-    // - Mobile sidebar container is flex-1 (visible)
-    // - Chat area is "hidden md:block" (hidden on mobile)
-    const mobileSidebarContainer = page.locator('[class*="md:hidden"]').filter({ has: page.locator('[class*="bg-card"]') }).first();
+    // On mobile without an active conversation, sidebar is shown fullscreen
+    // and chat area is hidden
 
     // Verify "New Chat" button is visible (it's in the sidebar)
     await expect(page.getByRole("button", { name: /new chat/i })).toBeVisible();
@@ -40,9 +23,6 @@ test.describe("Responsive Layout", () => {
 
   test("desktop viewport (1280x720): both sidebar and chat are visible side by side", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-
-    // Wait for the layout to settle
-    await page.waitForTimeout(300);
 
     // On desktop, the sidebar is always visible (w-80 hidden md:block)
     // The chat area is always visible too (flex-1 bg-background)

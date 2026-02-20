@@ -38,6 +38,11 @@ interface SearchResult {
   agentAvatarUrl: string | null;
 }
 
+interface ReactionInfo {
+  count: number;
+  userReacted: boolean;
+}
+
 interface ChatState {
   agents: Agent[];
   conversations: ConversationWithAgent[];
@@ -60,12 +65,14 @@ interface ChatState {
   showTimestamps: boolean;
   mutedConversations: Record<string, boolean>;
   ttsEnabled: boolean;
+  reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
 
   // Actions
   setActiveConversation: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
   searchMessages: (query: string) => Promise<void>;
+  searchMore: () => Promise<void>;
   clearSearch: () => void;
   jumpToMessage: (conversationId: string, messageId: string) => Promise<void>;
   loadAgents: () => Promise<void>;
@@ -105,6 +112,8 @@ interface ChatState {
   toggleTimestamps: () => void;
   toggleMuteConversation: (conversationId: string) => void;
   setTtsEnabled: (enabled: boolean) => void;
+  toggleReaction: (messageId: string, emoji: string) => Promise<void>;
+  loadReactions: (messageId: string) => Promise<void>;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -137,6 +146,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     typeof window !== "undefined"
       ? localStorage.getItem("arinova_tts") === "true"
       : false,
+  reactionsByMessage: {},
 
   setActiveConversation: (id) => {
     if (id === null) {
@@ -173,6 +183,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ searchResults: data.results, searchTotal: data.total });
     } catch {
       set({ searchResults: [], searchTotal: 0 });
+    } finally {
+      set({ searchLoading: false });
+    }
+  },
+
+  searchMore: async () => {
+    const { searchQuery, searchResults, searchTotal, searchLoading } = get();
+    if (!searchQuery || searchLoading || searchResults.length >= searchTotal) return;
+    set({ searchLoading: true });
+    try {
+      const offset = searchResults.length;
+      const data = await api<{ results: SearchResult[]; total: number }>(
+        `/api/messages/search?q=${encodeURIComponent(searchQuery)}&limit=30&offset=${offset}`
+      );
+      set({
+        searchResults: [...searchResults, ...data.results],
+        searchTotal: data.total,
+      });
+    } catch {
+      // ignore load more errors
     } finally {
       set({ searchLoading: false });
     }
@@ -576,6 +606,69 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  toggleReaction: async (messageId, emoji) => {
+    const reactions = { ...get().reactionsByMessage };
+    const msgReactions = { ...(reactions[messageId] ?? {}) };
+    const existing = msgReactions[emoji];
+
+    if (existing?.userReacted) {
+      // Remove reaction (optimistic)
+      if (existing.count <= 1) {
+        delete msgReactions[emoji];
+      } else {
+        msgReactions[emoji] = { count: existing.count - 1, userReacted: false };
+      }
+      reactions[messageId] = msgReactions;
+      set({ reactionsByMessage: reactions });
+
+      try {
+        await api(`/api/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+          method: "DELETE",
+        });
+      } catch {
+        // Revert on error
+        get().loadReactions(messageId);
+      }
+    } else {
+      // Add reaction (optimistic)
+      msgReactions[emoji] = {
+        count: (existing?.count ?? 0) + 1,
+        userReacted: true,
+      };
+      reactions[messageId] = msgReactions;
+      set({ reactionsByMessage: reactions });
+
+      try {
+        await api(`/api/messages/${messageId}/reactions`, {
+          method: "POST",
+          body: JSON.stringify({ emoji }),
+        });
+      } catch {
+        get().loadReactions(messageId);
+      }
+    }
+  },
+
+  loadReactions: async (messageId) => {
+    try {
+      const data = await api<{ emoji: string; count: number; userReacted: boolean }[]>(
+        `/api/messages/${messageId}/reactions`
+      );
+      const msgReactions: Record<string, ReactionInfo> = {};
+      for (const r of data) {
+        msgReactions[r.emoji] = { count: r.count, userReacted: r.userReacted };
+      }
+      set({
+        reactionsByMessage: {
+          ...get().reactionsByMessage,
+          [messageId]: msgReactions,
+        },
+      });
+    } catch {
+      // ignore
+    }
+  },
+
   handleWSEvent: (event) => {
     if (event.type === "pong") return;
 
@@ -616,7 +709,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messagesByConversation: {
           ...get().messagesByConversation,
           [conversationId]: current.map((m) =>
-            m.id === messageId ? { ...m, content: chunk } : m
+            m.id === messageId ? { ...m, content: m.content + chunk } : m
           ),
         },
       });
@@ -698,6 +791,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ),
         },
       });
+      return;
+    }
+
+    if (event.type === "reaction_added") {
+      const { messageId, emoji } = event;
+      const reactions = { ...get().reactionsByMessage };
+      const msgReactions = { ...(reactions[messageId] ?? {}) };
+      const existing = msgReactions[emoji];
+      msgReactions[emoji] = {
+        count: (existing?.count ?? 0) + 1,
+        userReacted: existing?.userReacted ?? false,
+      };
+      reactions[messageId] = msgReactions;
+      set({ reactionsByMessage: reactions });
+      return;
+    }
+
+    if (event.type === "reaction_removed") {
+      const { messageId, emoji } = event;
+      const reactions = { ...get().reactionsByMessage };
+      const msgReactions = { ...(reactions[messageId] ?? {}) };
+      const existing = msgReactions[emoji];
+      if (existing) {
+        if (existing.count <= 1) {
+          delete msgReactions[emoji];
+        } else {
+          msgReactions[emoji] = { ...existing, count: existing.count - 1 };
+        }
+        reactions[messageId] = msgReactions;
+        set({ reactionsByMessage: reactions });
+      }
       return;
     }
 

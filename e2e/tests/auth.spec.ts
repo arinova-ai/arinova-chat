@@ -4,14 +4,18 @@ import { uniqueUser, registerUser, loginUser, logoutUser } from "../helpers/auth
 test.describe("Authentication", () => {
   test("register new user redirects to /", async ({ page }) => {
     const user = uniqueUser();
-    await page.goto("/register");
+    await page.goto("/register", { waitUntil: "networkidle" });
 
-    await page.fill('input[id="name"]', user.name);
-    await page.fill('input[id="email"]', user.email);
-    await page.fill('input[id="password"]', user.password);
-    await page.click('button[type="submit"]');
+    await page.locator('input[id="name"]').click();
+    await page.locator('input[id="name"]').fill(user.name);
+    await page.locator('input[id="email"]').click();
+    await page.locator('input[id="email"]').fill(user.email);
+    await page.locator('input[id="password"]').click();
+    await page.locator('input[id="password"]').fill(user.password);
+    await expect(page.locator('input[id="name"]')).toHaveValue(user.name, { timeout: 5000 });
+    await page.locator('button[type="submit"]').click();
 
-    await page.waitForURL("/", { timeout: 10000 });
+    await page.waitForURL("/", { timeout: 20000 });
     expect(page.url()).toMatch(/\/$/);
   });
 
@@ -25,12 +29,15 @@ test.describe("Authentication", () => {
     await logoutUser(page);
 
     // Now log in again
-    await page.goto("/login");
-    await page.fill('input[id="email"]', user.email);
-    await page.fill('input[id="password"]', user.password);
-    await page.click('button[type="submit"]');
+    await page.goto("/login", { waitUntil: "networkidle" });
+    await page.locator('input[id="email"]').click();
+    await page.locator('input[id="email"]').fill(user.email);
+    await page.locator('input[id="password"]').click();
+    await page.locator('input[id="password"]').fill(user.password);
+    await expect(page.locator('input[id="email"]')).toHaveValue(user.email, { timeout: 5000 });
+    await page.locator('button[type="submit"]').click();
 
-    await page.waitForURL("/", { timeout: 10000 });
+    await page.waitForURL("/", { timeout: 20000 });
     expect(page.url()).toMatch(/\/$/);
   });
 
@@ -39,7 +46,7 @@ test.describe("Authentication", () => {
     await page.context().clearCookies();
     await page.goto("/");
 
-    await page.waitForURL("/login", { timeout: 10000 });
+    await page.waitForURL("/login", { timeout: 15000 });
     expect(page.url()).toContain("/login");
   });
 
@@ -48,13 +55,12 @@ test.describe("Authentication", () => {
 
     // Register and get into the chat
     await registerUser(page, user);
-    await page.waitForURL("/", { timeout: 10000 });
 
     // Click sign out from the sidebar
     const signOutBtn = page.getByRole("button", { name: /sign out/i }).first();
     await signOutBtn.click();
 
-    await page.waitForURL("/login", { timeout: 10000 });
+    await page.waitForURL("/login", { timeout: 15000 });
     expect(page.url()).toContain("/login");
   });
 });

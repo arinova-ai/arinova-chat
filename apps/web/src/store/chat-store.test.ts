@@ -147,7 +147,7 @@ describe("useChatStore", () => {
   // handleWSEvent — stream_chunk
   // -------------------------------------------------------------------------
   describe("handleWSEvent — stream_chunk", () => {
-    it("updates the message content when a stream_chunk event arrives", () => {
+    it("appends delta to message content when a stream_chunk event arrives", () => {
       const streamingMsg = makeMessage({
         id: "msg-stream",
         conversationId: "conv-1",
@@ -163,7 +163,7 @@ describe("useChatStore", () => {
         conversationId: "conv-1",
         messageId: "msg-stream",
         seq: 2,
-        chunk: "Hello world",
+        chunk: "lo world",
       });
 
       const messages = useChatStore.getState().messagesByConversation["conv-1"];

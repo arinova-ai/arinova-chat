@@ -26,6 +26,8 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().default(""),
   VAPID_PRIVATE_KEY: z.string().default(""),
   VAPID_SUBJECT: z.string().default("mailto:admin@arinova.ai"),
+  // Sentry error tracking (optional)
+  SENTRY_DSN: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);
