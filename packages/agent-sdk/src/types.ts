@@ -30,8 +30,8 @@ export interface TaskContext {
   conversationId: string;
   /** The user's message content. */
   content: string;
-  /** Send a streaming chunk to the user. */
-  sendChunk: (chunk: string) => void;
+  /** Send a streaming delta (new characters only) to the user. */
+  sendChunk: (delta: string) => void;
   /** Mark the task as complete with the full response content. */
   sendComplete: (content: string) => void;
   /** Mark the task as failed with an error message. */

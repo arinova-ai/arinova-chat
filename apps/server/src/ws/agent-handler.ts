@@ -21,7 +21,6 @@ export function getAgentSkills(agentId: string): AgentSkillEntry[] {
 // Pending tasks: taskId -> handler callbacks
 interface PendingTask {
   agentId: string;
-  accumulated: string; // accumulated full text from agent
   onChunk: (delta: string) => void;
   onComplete: (content: string) => void;
   onError: (error: string) => void;
@@ -79,7 +78,6 @@ export function sendTaskToAgent(params: {
 
   pendingTasks.set(taskId, {
     agentId,
-    accumulated: "",
     onChunk: (delta) => {
       resetIdleTimeout();
       onChunk(delta);
@@ -177,13 +175,8 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (event.type === "agent_chunk") {
           const task = pendingTasks.get(event.taskId);
           if (task && task.agentId === authenticatedAgentId) {
-            // Agent sends full accumulated text; compute delta and forward only new chars
-            const fullText = event.chunk;
-            const delta = fullText.slice(task.accumulated.length);
-            task.accumulated = fullText;
-            if (delta) {
-              task.onChunk(delta);
-            }
+            // Agent sends delta (new chars only); forward directly
+            task.onChunk(event.chunk);
           }
           return;
         }

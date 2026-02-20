@@ -198,7 +198,7 @@ export class ArinovaAgent {
       taskId,
       conversationId,
       content,
-      sendChunk: (chunk: string) => this.send({ type: "agent_chunk", taskId, chunk }),
+      sendChunk: (delta: string) => this.send({ type: "agent_chunk", taskId, chunk: delta }),
       sendComplete: (fullContent: string) => this.send({ type: "agent_complete", taskId, content: fullContent }),
       sendError: (error: string) => this.send({ type: "agent_error", taskId, error }),
     };

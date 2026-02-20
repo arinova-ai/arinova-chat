@@ -177,7 +177,7 @@ class ArinovaAgent:
             task_id=task_id,
             conversation_id=conversation_id,
             content=content,
-            send_chunk=lambda chunk: send_sync({"type": "agent_chunk", "taskId": task_id, "chunk": chunk}),
+            send_chunk=lambda delta: send_sync({"type": "agent_chunk", "taskId": task_id, "chunk": delta}),
             send_complete=lambda full: send_sync({"type": "agent_complete", "taskId": task_id, "content": full}),
             send_error=lambda error: send_sync({"type": "agent_error", "taskId": task_id, "error": error}),
         )
