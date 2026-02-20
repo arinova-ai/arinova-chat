@@ -21,6 +21,7 @@ export function getAgentSkills(agentId: string): AgentSkillEntry[] {
 // Pending tasks: taskId -> handler callbacks
 interface PendingTask {
   agentId: string;
+  accumulated: string; // tracks full text for auto-detecting accumulated vs delta mode
   onChunk: (delta: string) => void;
   onComplete: (content: string) => void;
   onError: (error: string) => void;
@@ -78,6 +79,7 @@ export function sendTaskToAgent(params: {
 
   pendingTasks.set(taskId, {
     agentId,
+    accumulated: "",
     onChunk: (delta) => {
       resetIdleTimeout();
       onChunk(delta);
@@ -175,8 +177,19 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (event.type === "agent_chunk") {
           const task = pendingTasks.get(event.taskId);
           if (task && task.agentId === authenticatedAgentId) {
-            // Agent sends delta (new chars only); forward directly
-            task.onChunk(event.chunk);
+            const incoming = event.chunk;
+            // Auto-detect: if incoming starts with accumulated text, agent is sending
+            // full accumulated content (old mode). Otherwise it's a delta (new mode).
+            if (task.accumulated.length > 0 && incoming.startsWith(task.accumulated)) {
+              // Accumulated mode: extract only the new portion
+              const delta = incoming.slice(task.accumulated.length);
+              task.accumulated = incoming;
+              if (delta) task.onChunk(delta);
+            } else {
+              // Delta mode: forward directly, track accumulated for detection
+              task.accumulated += incoming;
+              task.onChunk(incoming);
+            }
           }
           return;
         }
