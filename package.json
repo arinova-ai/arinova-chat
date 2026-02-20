@@ -5,9 +5,12 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "test": "turbo test",
+    "test:e2e": "npx playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "turbo": "^2"
   },
   "packageManager": "pnpm@10.28.2"
