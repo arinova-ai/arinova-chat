@@ -12,7 +12,9 @@ const MarkdownContent = dynamic(
 import { StreamingCursor } from "./streaming-cursor";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useChatStore } from "@/store/chat-store";
+import { useChatStore, type ReactionInfo } from "@/store/chat-store";
+
+const EMPTY_REACTIONS: Record<string, ReactionInfo> = {};
 import {
   Bot,
   User,
@@ -54,7 +56,8 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const showTimestamps = useChatStore((s) => s.showTimestamps);
   const toggleReaction = useChatStore((s) => s.toggleReaction);
-  const reactions = useChatStore((s) => s.reactionsByMessage[message.id] ?? {});
+  const reactionsByMessage = useChatStore((s) => s.reactionsByMessage);
+  const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
 
   const handleCopy = useCallback(async () => {
     try {

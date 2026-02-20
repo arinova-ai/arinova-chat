@@ -38,7 +38,7 @@ interface SearchResult {
   agentAvatarUrl: string | null;
 }
 
-interface ReactionInfo {
+export interface ReactionInfo {
   count: number;
   userReacted: boolean;
 }
