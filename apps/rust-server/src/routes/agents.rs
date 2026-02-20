@@ -19,15 +19,15 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/agents", post(create_agent).get(list_agents))
         .route(
-            "/api/agents/:id",
+            "/api/agents/{id}",
             get(get_agent).put(update_agent).delete(delete_agent),
         )
-        .route("/api/agents/:id/skills", get(get_skills))
-        .route("/api/agents/:id/avatar", post(upload_avatar))
-        .route("/api/agents/:id/regenerate-token", post(regenerate_token))
-        .route("/api/agents/:id/stats", get(get_stats))
-        .route("/api/agents/:id/history", delete(clear_history))
-        .route("/api/agents/:id/export", get(export_history))
+        .route("/api/agents/{id}/skills", get(get_skills))
+        .route("/api/agents/{id}/avatar", post(upload_avatar))
+        .route("/api/agents/{id}/regenerate-token", post(regenerate_token))
+        .route("/api/agents/{id}/stats", get(get_stats))
+        .route("/api/agents/{id}/history", delete(clear_history))
+        .route("/api/agents/{id}/export", get(export_history))
 }
 
 #[derive(Deserialize)]

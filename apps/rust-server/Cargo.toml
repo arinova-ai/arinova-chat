@@ -22,6 +22,7 @@ serde_json = "1"
 
 # Auth
 argon2 = "0.5"
+scrypt = "0.11"
 jsonwebtoken = "9"
 
 # HTTP client

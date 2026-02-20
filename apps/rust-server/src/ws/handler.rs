@@ -326,7 +326,7 @@ async fn handle_sync(
     redis: &deadpool_redis::Pool,
 ) {
     let conv_rows = sqlx::query_as::<_, (String,)>(
-        r#"SELECT id FROM conversations WHERE user_id = $1"#,
+        r#"SELECT id::text FROM conversations WHERE user_id = $1"#,
     )
     .bind(user_id)
     .fetch_all(db)
@@ -351,7 +351,7 @@ async fn handle_sync(
 
     // Get read positions
     let reads = sqlx::query_as::<_, (String, i32, bool)>(
-        r#"SELECT conversation_id, last_read_seq, muted
+        r#"SELECT conversation_id::text, last_read_seq, muted
            FROM conversation_reads
            WHERE user_id = $1"#,
     )
@@ -381,7 +381,7 @@ async fn handle_sync(
 
         // Get last message
         let last_msg = sqlx::query_as::<_, (String, String, String, chrono::NaiveDateTime)>(
-            r#"SELECT content, role, status, created_at
+            r#"SELECT content, role::text, status::text, created_at
                FROM messages WHERE conversation_id = $1
                ORDER BY seq DESC LIMIT 1"#,
         )
@@ -419,7 +419,7 @@ async fn handle_sync(
             let client_last_seq = client_last_seq as i32;
             if client_last_seq < max_seq {
                 let missed = sqlx::query_as::<_, (String, String, i32, String, String, String, chrono::NaiveDateTime)>(
-                    r#"SELECT id, conversation_id, seq, role, content, status, created_at
+                    r#"SELECT id::text, conversation_id::text, seq, role::text, content, status::text, created_at
                        FROM messages
                        WHERE conversation_id = $1 AND seq > $2
                        ORDER BY seq ASC LIMIT 100"#,
@@ -439,7 +439,7 @@ async fn handle_sync(
                             "error".to_string()
                         };
                         let _ = sqlx::query(
-                            r#"UPDATE messages SET status = $1, updated_at = NOW() WHERE id = $2"#,
+                            r#"UPDATE messages SET status = $1::message_status, updated_at = NOW() WHERE id = $2::uuid"#,
                         )
                         .bind(&status)
                         .bind(&id)
@@ -485,7 +485,7 @@ async fn handle_sync(
         }
 
         let streaming_msg = sqlx::query_as::<_, (String, i32)>(
-            r#"SELECT id, seq FROM messages
+            r#"SELECT id::text, seq FROM messages
                WHERE conversation_id = $1 AND status = 'streaming'
                ORDER BY created_at DESC LIMIT 1"#,
         )
@@ -546,7 +546,7 @@ pub async fn trigger_agent_response(
 ) {
     // Verify conversation belongs to user and get agent info
     let conv = sqlx::query_as::<_, (String, Option<String>)>(
-        r#"SELECT id, agent_id FROM conversations
+        r#"SELECT id::text, agent_id::text FROM conversations
            WHERE id = $1 AND user_id = $2"#,
     )
     .bind(conversation_id)
@@ -915,7 +915,7 @@ fn process_next_in_queue(
 
     tokio::spawn(async move {
         let conv = sqlx::query_as::<_, (Option<String>,)>(
-            r#"SELECT agent_id FROM conversations WHERE id = $1"#,
+            r#"SELECT agent_id::text FROM conversations WHERE id = $1"#,
         )
         .bind(&conversation_id)
         .fetch_optional(&db)

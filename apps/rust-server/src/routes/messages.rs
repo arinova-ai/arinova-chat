@@ -17,9 +17,9 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/messages/search", get(search_messages))
-        .route("/api/conversations/:id/messages", get(get_messages))
+        .route("/api/conversations/{id}/messages", get(get_messages))
         .route(
-            "/api/conversations/:conversationId/messages/:messageId",
+            "/api/conversations/{conversationId}/messages/{messageId}",
             delete(delete_message),
         )
 }
@@ -31,9 +31,9 @@ struct MessageRow {
     id: Uuid,
     conversation_id: Uuid,
     seq: i32,
-    role: String,
+    role: crate::db::models::MessageRole,
     content: String,
-    status: String,
+    status: crate::db::models::MessageStatus,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
 }
@@ -314,7 +314,7 @@ async fn search_messages(
              m.id AS message_id,
              m.conversation_id,
              m.content,
-             m.role,
+             m.role::text,
              m.created_at,
              c.title AS conversation_title,
              c.agent_id,
@@ -364,7 +364,7 @@ async fn search_messages(
     }
 }
 
-// ── 2. GET /api/conversations/:id/messages ─────────────────────────────
+// ── 2. GET /api/conversations/{id}/messages ─────────────────────────────
 
 #[derive(Deserialize)]
 struct MessagesQuery {
@@ -673,7 +673,7 @@ async fn load_default_messages(
     .into_response()
 }
 
-// ── 3. DELETE /api/conversations/:conversationId/messages/:messageId ───
+// ── 3. DELETE /api/conversations/{conversationId}/messages/:messageId ───
 
 #[derive(Deserialize)]
 struct DeleteMessagePath {

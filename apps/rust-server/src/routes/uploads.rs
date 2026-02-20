@@ -26,10 +26,10 @@ const ALLOWED_TYPES: &[&str] = &[
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
-            "/api/conversations/:conversationId/upload",
+            "/api/conversations/{conversationId}/upload",
             post(upload_file),
         )
-        .route("/api/attachments/:id", get(get_attachment))
+        .route("/api/attachments/{id}", get(get_attachment))
 }
 
 async fn upload_file(

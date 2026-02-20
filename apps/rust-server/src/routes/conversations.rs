@@ -22,18 +22,18 @@ pub fn router() -> Router<AppState> {
             get(list_conversations).post(create_conversation),
         )
         .route(
-            "/api/conversations/:id",
+            "/api/conversations/{id}",
             get(get_conversation)
                 .put(update_conversation)
                 .delete(delete_conversation),
         )
         .route(
-            "/api/conversations/:id/messages",
+            "/api/conversations/{id}/messages",
             delete(clear_messages),
         )
-        .route("/api/conversations/:id/read", put(mark_read))
-        .route("/api/conversations/:id/mute", put(toggle_mute))
-        .route("/api/conversations/:id/status", get(get_status))
+        .route("/api/conversations/{id}/read", put(mark_read))
+        .route("/api/conversations/{id}/mute", put(toggle_mute))
+        .route("/api/conversations/{id}/status", get(get_status))
 }
 
 // ===== Request / Response types =====
@@ -163,7 +163,7 @@ async fn list_conversations(
             r#"SELECT
                 c.id,
                 c.title,
-                c.type,
+                c.type::text,
                 c.user_id,
                 c.agent_id,
                 c.pinned_at,
@@ -174,9 +174,9 @@ async fn list_conversations(
                 a.avatar_url AS agent_avatar_url,
                 lm.id AS last_msg_id,
                 lm.seq AS last_msg_seq,
-                lm.role AS last_msg_role,
+                lm.role::text AS last_msg_role,
                 lm.content AS last_msg_content,
-                lm.status AS last_msg_status,
+                lm.status::text AS last_msg_status,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at
             FROM conversations c
@@ -201,7 +201,7 @@ async fn list_conversations(
             r#"SELECT
                 c.id,
                 c.title,
-                c.type,
+                c.type::text,
                 c.user_id,
                 c.agent_id,
                 c.pinned_at,
@@ -212,9 +212,9 @@ async fn list_conversations(
                 a.avatar_url AS agent_avatar_url,
                 lm.id AS last_msg_id,
                 lm.seq AS last_msg_seq,
-                lm.role AS last_msg_role,
+                lm.role::text AS last_msg_role,
                 lm.content AS last_msg_content,
-                lm.status AS last_msg_status,
+                lm.status::text AS last_msg_status,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at
             FROM conversations c
@@ -453,7 +453,7 @@ async fn delete_conversation(
     }
 }
 
-/// DELETE /api/conversations/:id/messages - Clear all messages in a conversation
+/// DELETE /api/conversations/{id}/messages - Clear all messages in a conversation
 async fn clear_messages(
     State(state): State<AppState>,
     user: AuthUser,
@@ -521,7 +521,7 @@ async fn clear_messages(
     Json(json!({"success": true, "deleted": msg_count})).into_response()
 }
 
-/// PUT /api/conversations/:id/read - Mark conversation as read
+/// PUT /api/conversations/{id}/read - Mark conversation as read
 async fn mark_read(
     State(state): State<AppState>,
     user: AuthUser,
@@ -555,8 +555,8 @@ async fn mark_read(
     }
 
     // Get max seq
-    let max_seq_result = sqlx::query_as::<_, (i64,)>(
-        "SELECT COALESCE(MAX(seq), 0) FROM messages WHERE conversation_id = $1",
+    let max_seq_result = sqlx::query_as::<_, (i32,)>(
+        "SELECT COALESCE(MAX(seq), 0)::int FROM messages WHERE conversation_id = $1",
     )
     .bind(id)
     .fetch_one(&state.db)
@@ -598,7 +598,7 @@ async fn mark_read(
     }
 }
 
-/// PUT /api/conversations/:id/mute - Toggle mute on a conversation
+/// PUT /api/conversations/{id}/mute - Toggle mute on a conversation
 async fn toggle_mute(
     State(state): State<AppState>,
     user: AuthUser,
@@ -655,7 +655,7 @@ async fn toggle_mute(
     }
 }
 
-/// GET /api/conversations/:id/status - Get conversation status info
+/// GET /api/conversations/{id}/status - Get conversation status info
 async fn get_status(
     State(state): State<AppState>,
     user: AuthUser,

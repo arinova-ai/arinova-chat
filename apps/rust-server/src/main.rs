@@ -50,16 +50,24 @@ async fn main() {
 
     // Build CORS layer
     let cors_origins: Vec<String> = config.cors_origins();
-    let origins: Vec<axum::http::HeaderValue> = cors_origins
-        .iter()
-        .filter_map(|o| o.parse().ok())
-        .collect();
+    let is_wildcard = cors_origins.len() == 1 && cors_origins[0] == "*";
 
-    let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::list(origins))
-        .allow_methods(AllowMethods::any())
-        .allow_headers(AllowHeaders::any())
-        .allow_credentials(true);
+    let cors = if is_wildcard {
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::any())
+            .allow_methods(AllowMethods::any())
+            .allow_headers(AllowHeaders::any())
+    } else {
+        let origins: Vec<axum::http::HeaderValue> = cors_origins
+            .iter()
+            .filter_map(|o| o.parse().ok())
+            .collect();
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(origins))
+            .allow_methods(AllowMethods::any())
+            .allow_headers(AllowHeaders::any())
+            .allow_credentials(true)
+    };
 
     // Build router
     let app = Router::new()

@@ -83,11 +83,11 @@
 
 - [x] 14.1 Create `Dockerfile` — multi-stage Rust build, minimal runtime image (debian-slim)
 - [x] 14.2 Create `.env.example` with all environment variables documented
-- [ ] 14.3 Verify SQLx offline mode — run `cargo sqlx prepare` to generate compile-time query metadata for CI builds without DB
+- [x] 14.3 Verify SQLx offline mode — N/A: using runtime queries (`sqlx::query`), not compile-time (`sqlx::query!`). No offline metadata needed.
 
 ## 15. Integration Verification
 
-- [x] 15.1 Unit tests pass — auth, config, pairing code, WS state, sanitization (12 tests)
-- [ ] 15.2 Test auth compatibility — verify existing user can log in with password hashed by Better Auth
+- [x] 15.1 Unit tests pass — auth, config, pairing code, WS state, sanitization (13 tests including scrypt)
+- [x] 15.2 Test auth compatibility — verified: user created by TS Better Auth (scrypt) can log in via Rust server
 - [ ] 15.3 Test WebSocket protocol — verify frontend connects and can send/receive messages with streaming
 - [ ] 15.4 Test agent SDK compatibility — verify TS agent SDK connects, authenticates, receives tasks, and streams responses

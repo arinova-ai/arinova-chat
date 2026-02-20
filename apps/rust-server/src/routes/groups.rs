@@ -16,11 +16,11 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/conversations/group", post(create_group))
         .route(
-            "/api/conversations/:id/members",
+            "/api/conversations/{id}/members",
             get(list_members).post(add_member),
         )
         .route(
-            "/api/conversations/:id/members/:agentId",
+            "/api/conversations/{id}/members/{agentId}",
             delete(remove_member),
         )
 }
@@ -198,7 +198,7 @@ async fn add_member(
 ) -> Response {
     // Verify the user owns this conversation and it's a group
     let conv = sqlx::query_as::<_, (Uuid, String)>(
-        r#"SELECT id, "type" FROM conversations WHERE id = $1 AND user_id = $2"#,
+        r#"SELECT id, "type"::text FROM conversations WHERE id = $1 AND user_id = $2"#,
     )
     .bind(id)
     .bind(&user.id)

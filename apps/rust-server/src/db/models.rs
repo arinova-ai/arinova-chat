@@ -3,6 +3,65 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+// ===== PostgreSQL enum types =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "conversation_type", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ConversationType {
+    Direct,
+    Group,
+}
+
+impl std::fmt::Display for ConversationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Direct => write!(f, "direct"),
+            Self::Group => write!(f, "group"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "message_role", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum MessageRole {
+    User,
+    Agent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "message_status", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum MessageStatus {
+    Pending,
+    Streaming,
+    Completed,
+    Cancelled,
+    Error,
+}
+
+impl std::fmt::Display for MessageStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pending => write!(f, "pending"),
+            Self::Streaming => write!(f, "streaming"),
+            Self::Completed => write!(f, "completed"),
+            Self::Cancelled => write!(f, "cancelled"),
+            Self::Error => write!(f, "error"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "community_role", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum CommunityRole {
+    Owner,
+    Admin,
+    Member,
+}
+
 // ===== Auth tables (Better Auth compatible) =====
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -73,7 +132,7 @@ pub struct Conversation {
     pub title: Option<String>,
     #[sqlx(rename = "type")]
     #[serde(rename = "type")]
-    pub conv_type: String,
+    pub conv_type: ConversationType,
     pub user_id: String,
     pub agent_id: Option<Uuid>,
     pub pinned_at: Option<NaiveDateTime>,
@@ -94,9 +153,9 @@ pub struct Message {
     pub id: Uuid,
     pub conversation_id: Uuid,
     pub seq: i32,
-    pub role: String,
+    pub role: MessageRole,
     pub content: String,
-    pub status: String,
+    pub status: MessageStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

@@ -15,11 +15,11 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
-            "/api/messages/:messageId/reactions",
+            "/api/messages/{messageId}/reactions",
             post(add_reaction).get(get_reactions),
         )
         .route(
-            "/api/messages/:messageId/reactions/:emoji",
+            "/api/messages/{messageId}/reactions/{emoji}",
             delete(remove_reaction),
         )
 }
