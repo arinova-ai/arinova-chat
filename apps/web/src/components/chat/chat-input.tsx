@@ -21,6 +21,7 @@ export function ChatInput() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const isKeyboardNav = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -176,6 +177,7 @@ export function ChatInput() {
     if (showSlashPopup && hasItems) {
       if (e.key === "ArrowUp") {
         e.preventDefault();
+        isKeyboardNav.current = true;
         setSlashSelectedIndex((prev) =>
           prev <= 0 ? skillItems.length - 1 : prev - 1
         );
@@ -183,6 +185,7 @@ export function ChatInput() {
       }
       if (e.key === "ArrowDown") {
         e.preventDefault();
+        isKeyboardNav.current = true;
         setSlashSelectedIndex((prev) =>
           prev >= skillItems.length - 1 ? 0 : prev + 1
         );
@@ -263,7 +266,13 @@ export function ChatInput() {
                       ? "bg-neutral-800 text-foreground"
                       : "text-muted-foreground hover:bg-neutral-800/50"
                   }`}
-                  onMouseEnter={() => setSlashSelectedIndex(i)}
+                  onMouseMove={() => {
+                    isKeyboardNav.current = false;
+                    setSlashSelectedIndex(i);
+                  }}
+                  onMouseEnter={() => {
+                    if (!isKeyboardNav.current) setSlashSelectedIndex(i);
+                  }}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     selectSkill(item);
