@@ -12,19 +12,22 @@ export function useAutoScroll<T extends HTMLElement>(
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Reset scroll flag and force scroll to bottom when conversation changes
+  // (skip when jumpToMessage sets a highlight target — it handles its own scroll)
   useEffect(() => {
     if (options?.conversationId !== prevConversationId.current) {
       userScrolledUp.current = false;
       setShowScrollButton(false);
       prevConversationId.current = options?.conversationId;
-      const el = ref.current;
-      if (el) {
-        requestAnimationFrame(() => {
-          el.scrollTop = el.scrollHeight;
-        });
+      if (!options?.skipScroll) {
+        const el = ref.current;
+        if (el) {
+          requestAnimationFrame(() => {
+            el.scrollTop = el.scrollHeight;
+          });
+        }
       }
     }
-  }, [options?.conversationId]);
+  }, [options?.conversationId, options?.skipScroll]);
 
   const handleScroll = useCallback(() => {
     const el = ref.current;

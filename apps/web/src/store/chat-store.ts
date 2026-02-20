@@ -190,14 +190,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   jumpToMessage: async (conversationId, messageId) => {
-    set({
-      searchActive: false,
-      activeConversationId: conversationId,
-      sidebarOpen: false,
-      highlightMessageId: messageId,
-      unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
-    });
-
+    // Fetch around-cursor messages FIRST, before switching conversation,
+    // so MessageList mounts with correct messages already in store.
     const data = await api<{
       messages: Message[];
       hasMoreUp: boolean;
@@ -205,7 +199,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }>(
       `/api/conversations/${conversationId}/messages?around=${messageId}&limit=50`
     );
+
+    // Set everything atomically — conversation, messages, and highlight together
     set({
+      searchActive: false,
+      activeConversationId: conversationId,
+      sidebarOpen: false,
+      highlightMessageId: messageId,
+      unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,
         [conversationId]: data.messages,
@@ -216,7 +217,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (get().highlightMessageId === messageId) {
         set({ highlightMessageId: null });
       }
-    }, 3000);
+    }, 8000);
   },
 
   loadAgents: async () => {

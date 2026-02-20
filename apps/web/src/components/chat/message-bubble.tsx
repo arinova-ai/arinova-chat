@@ -25,6 +25,7 @@ import { assetUrl } from "@/lib/config";
 interface MessageBubbleProps {
   message: Message;
   agentName?: string;
+  highlightQuery?: string;
 }
 
 function formatTimestamp(date: Date | string): string {
@@ -36,7 +37,7 @@ function formatTimestamp(date: Date | string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
-export function MessageBubble({ message, agentName }: MessageBubbleProps) {
+export function MessageBubble({ message, agentName, highlightQuery }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
@@ -155,12 +156,15 @@ export function MessageBubble({ message, agentName }: MessageBubbleProps) {
               </div>
             )}
             {message.content ? (
-              <MarkdownContent content={
-                // Strip image/file markdown when attachments already render them
-                message.attachments?.length
-                  ? message.content.replace(/!?\[[^\]]*\]\([^)]+\/uploads\/[^)]+\)/g, "").trim()
-                  : message.content
-              } />
+              <MarkdownContent
+                content={
+                  // Strip image/file markdown when attachments already render them
+                  message.attachments?.length
+                    ? message.content.replace(/!?\[[^\]]*\]\([^)]+\/uploads\/[^)]+\)/g, "").trim()
+                    : message.content
+                }
+                highlightQuery={highlightQuery}
+              />
             ) : isStreaming ? (
               <StreamingCursor />
             ) : null}

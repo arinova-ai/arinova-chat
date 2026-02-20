@@ -20,6 +20,7 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   const lastMessage = messages[messages.length - 1];
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);
+  const searchQuery = useChatStore((s) => s.searchQuery);
   const [loadingUp, setLoadingUp] = useState(false);
   const [loadingDown, setLoadingDown] = useState(false);
   const [hasMoreUp, setHasMoreUp] = useState(true);
@@ -33,12 +34,44 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
     { conversationId: activeConversationId, skipScroll: !!highlightMessageId },
   );
 
-  // Scroll to highlighted message when it appears
+  // Scroll to highlighted message (and matching text within it) when it appears
   useEffect(() => {
-    if (highlightMessageId && highlightRef.current) {
-      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [highlightMessageId, messages]);
+    if (!highlightMessageId || !highlightRef.current) return;
+
+    requestAnimationFrame(() => {
+      const el = highlightRef.current;
+      const container = scrollRef.current;
+      if (!el || !container) return;
+
+      const query = useChatStore.getState().searchQuery?.toLowerCase();
+
+      // Try to find the matching text node inside the message
+      if (query) {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+          const idx = node.textContent?.toLowerCase().indexOf(query) ?? -1;
+          if (idx >= 0) {
+            // Found — get bounding rect of the matched text and center it
+            const range = document.createRange();
+            range.setStart(node, idx);
+            range.setEnd(node, idx + query.length);
+            const rect = range.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const offset = rect.top - containerRect.top + container.scrollTop;
+            container.scrollTo({
+              top: offset - containerRect.height / 2,
+              behavior: "smooth",
+            });
+            return;
+          }
+        }
+      }
+
+      // Fallback: center the whole message
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [highlightMessageId, messages, scrollRef]);
 
   const loadOlder = useCallback(async () => {
     if (loadingUpRef.current || !hasMoreUp || !activeConversationId || messages.length === 0)
@@ -153,6 +186,7 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
               <MessageBubble
                 message={message}
                 agentName={message.role === "agent" ? agentName : undefined}
+                highlightQuery={message.id === highlightMessageId ? searchQuery : undefined}
               />
             </div>
           ))}

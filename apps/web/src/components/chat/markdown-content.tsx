@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -23,6 +23,7 @@ const sanitizeSchema = {
 
 interface MarkdownContentProps {
   content: string;
+  highlightQuery?: string;
 }
 
 function CodeBlockCopyButton({ code }: { code: string }) {
@@ -80,9 +81,54 @@ function extractLanguageFromChildren(children: React.ReactNode): string | null {
 
 const JS_LANGUAGES = new Set(["javascript", "js"]);
 
-export function MarkdownContent({ content }: MarkdownContentProps) {
+export function MarkdownContent({ content, highlightQuery }: MarkdownContentProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Highlight matching search text in the DOM after render
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!highlightQuery || !el) return;
+
+    const lowerQ = highlightQuery.toLowerCase();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const matches: { node: Text; start: number; end: number }[] = [];
+    let textNode: Text | null;
+    while ((textNode = walker.nextNode() as Text | null)) {
+      const text = textNode.textContent ?? "";
+      let idx = text.toLowerCase().indexOf(lowerQ);
+      while (idx >= 0) {
+        matches.push({ node: textNode, start: idx, end: idx + highlightQuery.length });
+        idx = text.toLowerCase().indexOf(lowerQ, idx + 1);
+      }
+    }
+
+    // Wrap matches in <mark> (reverse order to keep offsets valid)
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const { node, start, end } = matches[i];
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      const mark = document.createElement("mark");
+      mark.className = "search-keyword-highlight";
+      range.surroundContents(mark);
+    }
+
+    return () => {
+      // Clean up marks before next render / unmount
+      if (!contentRef.current) return;
+      const marks = contentRef.current.querySelectorAll("mark.search-keyword-highlight");
+      marks.forEach((m) => {
+        const parent = m.parentNode;
+        if (parent) {
+          parent.replaceChild(document.createTextNode(m.textContent ?? ""), m);
+          parent.normalize();
+        }
+      });
+    };
+  }, [highlightQuery, content]);
+
   return (
-    <div className="markdown-content text-sm leading-relaxed">
+    <div ref={contentRef} className="markdown-content text-sm leading-relaxed">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[
