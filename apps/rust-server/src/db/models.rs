@@ -1,0 +1,278 @@
+use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use uuid::Uuid;
+
+// ===== Auth tables (Better Auth compatible) =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct User {
+    pub id: String,
+    pub name: String,
+    pub email: String,
+    pub email_verified: bool,
+    pub image: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Session {
+    pub id: String,
+    pub user_id: String,
+    pub token: String,
+    pub expires_at: NaiveDateTime,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Account {
+    pub id: String,
+    pub user_id: String,
+    pub account_id: String,
+    pub provider_id: String,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub access_token_expires_at: Option<NaiveDateTime>,
+    pub refresh_token_expires_at: Option<NaiveDateTime>,
+    pub scope: Option<String>,
+    pub id_token: Option<String>,
+    pub password: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ===== Business tables =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Agent {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub a2a_endpoint: Option<String>,
+    pub secret_token: Option<String>,
+    pub owner_id: String,
+    pub is_public: bool,
+    pub category: Option<String>,
+    pub usage_count: i32,
+    pub system_prompt: Option<String>,
+    pub welcome_message: Option<String>,
+    pub quick_replies: Option<serde_json::Value>,
+    pub notifications_enabled: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Conversation {
+    pub id: Uuid,
+    pub title: Option<String>,
+    #[sqlx(rename = "type")]
+    #[serde(rename = "type")]
+    pub conv_type: String,
+    pub user_id: String,
+    pub agent_id: Option<Uuid>,
+    pub pinned_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ConversationMember {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub agent_id: Uuid,
+    pub added_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Message {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub seq: i32,
+    pub role: String,
+    pub content: String,
+    pub status: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ConversationRead {
+    pub id: Uuid,
+    pub user_id: String,
+    pub conversation_id: Uuid,
+    pub last_read_seq: i32,
+    pub muted: bool,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct MessageReaction {
+    pub id: Uuid,
+    pub message_id: Uuid,
+    pub user_id: String,
+    pub emoji: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Attachment {
+    pub id: Uuid,
+    pub message_id: Uuid,
+    pub file_name: String,
+    pub file_type: String,
+    pub file_size: i32,
+    pub storage_path: String,
+    pub created_at: NaiveDateTime,
+}
+
+// ===== Push Notification tables =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PushSubscription {
+    pub id: Uuid,
+    pub user_id: String,
+    pub endpoint: String,
+    pub p256dh: String,
+    pub auth: String,
+    pub device_info: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct NotificationPreference {
+    pub id: Uuid,
+    pub user_id: String,
+    pub global_enabled: bool,
+    pub message_enabled: bool,
+    pub playground_invite_enabled: bool,
+    pub playground_turn_enabled: bool,
+    pub playground_result_enabled: bool,
+    pub quiet_hours_start: Option<String>,
+    pub quiet_hours_end: Option<String>,
+}
+
+// ===== Community tables =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Community {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub owner_id: String,
+    pub is_public: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Channel {
+    pub id: Uuid,
+    pub community_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub agent_id: Option<Uuid>,
+    pub position: i32,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CommunityMember {
+    pub id: Uuid,
+    pub community_id: Uuid,
+    pub user_id: String,
+    pub role: String,
+    pub joined_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ChannelMessage {
+    pub id: Uuid,
+    pub channel_id: Uuid,
+    pub user_id: Option<String>,
+    pub role: String,
+    pub content: String,
+    pub status: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ===== Marketplace tables =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct DeveloperAccount {
+    pub id: Uuid,
+    pub user_id: String,
+    pub display_name: String,
+    pub contact_email: String,
+    pub payout_info: Option<String>,
+    pub terms_accepted_at: NaiveDateTime,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct App {
+    pub id: Uuid,
+    pub developer_id: Uuid,
+    pub app_id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub icon: String,
+    pub status: String,
+    pub current_version_id: Option<Uuid>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct AppVersion {
+    pub id: Uuid,
+    pub app_id: Uuid,
+    pub version: String,
+    pub manifest_json: serde_json::Value,
+    pub package_path: String,
+    pub status: String,
+    pub review_notes: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CoinBalance {
+    pub user_id: String,
+    pub balance: i32,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CoinTransaction {
+    pub id: Uuid,
+    pub user_id: String,
+    #[sqlx(rename = "type")]
+    #[serde(rename = "type")]
+    pub tx_type: String,
+    pub amount: i32,
+    pub related_app_id: Option<Uuid>,
+    pub related_product_id: Option<String>,
+    pub receipt_id: Option<String>,
+    pub description: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct AppPurchase {
+    pub id: Uuid,
+    pub user_id: String,
+    pub app_version_id: Uuid,
+    pub product_id: String,
+    pub amount: i32,
+    pub status: String,
+    pub created_at: NaiveDateTime,
+}
