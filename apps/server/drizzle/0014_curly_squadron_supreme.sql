@@ -13,4 +13,5 @@ CREATE INDEX "message_reactions_message_id_idx" ON "message_reactions" USING btr
 CREATE UNIQUE INDEX "conversation_reads_user_conv_idx" ON "conversation_reads" USING btree ("user_id","conversation_id");--> statement-breakpoint
 CREATE INDEX "conversations_user_id_idx" ON "conversations" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "messages_conversation_id_idx" ON "messages" USING btree ("conversation_id");--> statement-breakpoint
+DROP INDEX IF EXISTS "messages_conversation_seq_idx";--> statement-breakpoint
 CREATE INDEX "messages_conversation_seq_idx" ON "messages" USING btree ("conversation_id","seq");
