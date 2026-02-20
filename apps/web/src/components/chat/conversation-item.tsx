@@ -217,7 +217,7 @@ export function ConversationItem({
               variant="ghost"
               size="icon-xs"
               className={cn(
-                "shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100",
+                "shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 [@media(hover:none)]:opacity-100",
                 menuOpen && "opacity-100"
               )}
               onClick={(e) => e.stopPropagation()}

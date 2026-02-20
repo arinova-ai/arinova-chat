@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { assetUrl } from "@/lib/config";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
+import { MessageActionSheet } from "./message-action-sheet";
+import { useLongPress } from "@/hooks/use-long-press";
 
 interface MessageBubbleProps {
   message: Message;
@@ -58,6 +60,11 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
   const toggleReaction = useChatStore((s) => s.toggleReaction);
   const reactionsByMessage = useChatStore((s) => s.reactionsByMessage);
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
+
+  const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  const longPressHandlers = useLongPress(() => {
+    if (!isStreaming) setActionSheetOpen(true);
+  });
 
   const handleCopy = useCallback(async () => {
     try {
@@ -112,10 +119,10 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
       </Avatar>
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0">
+        <div className="relative min-w-0" {...longPressHandlers}>
           <div
             className={cn(
-              "rounded-2xl px-4 py-2.5 overflow-hidden",
+              "rounded-2xl px-4 py-2.5 overflow-hidden select-none touch-none [@media(hover:hover)]:select-auto [@media(hover:hover)]:touch-auto",
               isUser
                 ? "bg-blue-600 text-white"
                 : "bg-neutral-800 text-neutral-100",
@@ -265,6 +272,16 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
           </Button>
         )}
       </div>
+
+      <MessageActionSheet
+        message={message}
+        open={actionSheetOpen}
+        onOpenChange={setActionSheetOpen}
+        onCopy={handleCopy}
+        onDelete={handleDelete}
+        onRetry={handleRetry}
+        onReact={(emoji) => toggleReaction(message.id, emoji)}
+      />
     </div>
   );
 }
