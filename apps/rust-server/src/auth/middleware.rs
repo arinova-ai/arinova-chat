@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::auth::session::validate_session;
 use crate::AppState;
@@ -12,6 +13,13 @@ use crate::AppState;
 pub struct AuthUser {
     pub id: String,
     pub email: String,
+    pub name: String,
+}
+
+/// Authenticated agent extracted from `Authorization: Bearer <botToken>` header.
+#[derive(Debug, Clone, Serialize)]
+pub struct AuthAgent {
+    pub id: Uuid,
     pub name: String,
 }
 
@@ -52,6 +60,52 @@ where
             }),
             _ => Err(reject()),
         }
+    }
+}
+
+impl<S> FromRequestParts<S> for AuthAgent
+where
+    S: Send + Sync,
+    AppState: FromRef<S>,
+{
+    type Rejection = (StatusCode, Json<serde_json::Value>);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let app_state = AppState::from_ref(state);
+        let reject = || {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "Unauthorized"})),
+            )
+        };
+
+        // Extract Bearer token from Authorization header
+        let auth_header = parts
+            .headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        let token = auth_header
+            .strip_prefix("Bearer ")
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .ok_or_else(reject)?;
+
+        // Look up agent by secret_token
+        let agent = sqlx::query_as::<_, (Uuid, String)>(
+            "SELECT id, name FROM agents WHERE secret_token = $1",
+        )
+        .bind(token)
+        .fetch_optional(&app_state.db)
+        .await
+        .map_err(|_| reject())?
+        .ok_or_else(reject)?;
+
+        Ok(AuthAgent {
+            id: agent.0,
+            name: agent.1,
+        })
     }
 }
 

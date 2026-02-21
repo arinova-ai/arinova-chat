@@ -5,8 +5,9 @@ import json
 import logging
 import signal
 from threading import Event
-from typing import Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict
 
+import aiohttp
 import websockets
 from websockets.asyncio.client import ClientConnection
 
@@ -103,6 +104,47 @@ class ArinovaAgent:
         self._stopped = True
         if self._ws:
             await self._ws.close()
+
+    async def upload_file(
+        self,
+        conversation_id: str,
+        file_data: bytes,
+        file_name: str,
+        file_type: str | None = None,
+    ) -> Dict[str, Any]:
+        """Upload a file to R2 storage via the agent upload endpoint.
+
+        Args:
+            conversation_id: The conversation this upload belongs to.
+            file_data: Raw file bytes.
+            file_name: Original file name.
+            file_type: Optional MIME type.
+
+        Returns:
+            Dict with url, fileName, fileType, fileSize.
+        """
+        # Derive HTTP URL from WebSocket URL
+        http_url = self.server_url.replace("ws://", "http://").replace("wss://", "https://")
+
+        form = aiohttp.FormData()
+        form.add_field("conversationId", conversation_id)
+        form.add_field(
+            "file",
+            file_data,
+            filename=file_name,
+            content_type=file_type or "application/octet-stream",
+        )
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{http_url}/api/agent/upload",
+                data=form,
+                headers={"Authorization": f"Bearer {self.bot_token}"},
+            ) as resp:
+                if resp.status >= 400:
+                    body = await resp.text()
+                    raise Exception(f"Upload failed ({resp.status}): {body}")
+                return await resp.json()
 
     async def _connect_once(self, is_first: bool) -> None:
         ws_url = f"{self.server_url}/ws/agent"
@@ -215,6 +257,9 @@ class ArinovaAgent:
             members=[MemberInfo(agent_id=m["agentId"], agent_name=m["agentName"]) for m in members] if members else None,
             reply_to=ReplyContext(role=reply_to["role"], content=reply_to["content"], sender_agent_name=reply_to.get("senderAgentName")) if reply_to else None,
             cancelled=cancelled,
+            upload_file=lambda file_data, file_name, file_type=None: self.upload_file(
+                conversation_id, file_data, file_name, file_type
+            ),
         )
 
         if not self._task_handler:

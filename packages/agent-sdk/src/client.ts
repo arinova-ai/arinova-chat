@@ -5,6 +5,7 @@ import type {
   TaskHandler,
   AgentEvent,
   AgentEventListener,
+  UploadResult,
 } from "./types.js";
 
 const DEFAULT_RECONNECT_INTERVAL = 5_000;
@@ -202,6 +203,45 @@ export class ArinovaAgent {
     };
   }
 
+  /**
+   * Upload a file to R2 storage via the agent upload endpoint.
+   * @param conversationId - The conversation this upload belongs to.
+   * @param file - File data as Buffer or Uint8Array.
+   * @param fileName - Original file name (used for extension detection).
+   * @param fileType - Optional MIME type (derived from extension if omitted).
+   */
+  async uploadFile(
+    conversationId: string,
+    file: Buffer | Uint8Array,
+    fileName: string,
+    fileType?: string,
+  ): Promise<UploadResult> {
+    // Derive HTTP URL from WebSocket URL
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const formData = new FormData();
+    formData.append("conversationId", conversationId);
+    const blob = new Blob([file], { type: fileType });
+    formData.append("file", blob, fileName);
+
+    const res = await fetch(`${httpUrl}/api/agent/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Upload failed (${res.status}): ${body}`);
+    }
+
+    return res.json() as Promise<UploadResult>;
+  }
+
   private handleTask(data: Record<string, unknown>): void {
     if (!this.taskHandler) return;
 
@@ -226,6 +266,8 @@ export class ArinovaAgent {
         this.send({ type: "agent_error", taskId, error });
       },
       signal: abortController.signal,
+      uploadFile: (file, fileName, fileType?) =>
+        this.uploadFile(data.conversationId as string, file, fileName, fileType),
     };
 
     Promise.resolve(this.taskHandler(ctx)).catch((err) => {

@@ -44,6 +44,20 @@ export interface TaskContext {
   sendError: (error: string) => void;
   /** AbortSignal that fires when the user cancels the stream. Check signal.aborted or listen to signal.addEventListener('abort', ...) to stop generation early. */
   signal: AbortSignal;
+  /** Upload a file to R2 storage. Returns the public URL and file metadata. */
+  uploadFile: (
+    file: Buffer | Uint8Array,
+    fileName: string,
+    fileType?: string,
+  ) => Promise<UploadResult>;
+}
+
+/** Result from uploading a file. */
+export interface UploadResult {
+  url: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
 }
 
 /** Task handler function. */

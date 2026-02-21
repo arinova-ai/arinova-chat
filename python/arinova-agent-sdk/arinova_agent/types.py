@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Event
-from typing import Callable, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 
 @dataclass
@@ -51,3 +51,5 @@ class Task:
     """The message being replied to, if this is a reply."""
     cancelled: Event = field(default_factory=Event)
     """Event that is set when the user cancels the stream. Check task.cancelled.is_set() to stop generation early."""
+    upload_file: Optional[Callable[..., Awaitable[Dict[str, Any]]]] = None
+    """Upload a file to R2 storage. Call as: await task.upload_file(file_data, file_name, file_type=None). Returns {"url", "fileName", "fileType", "fileSize"}."""
