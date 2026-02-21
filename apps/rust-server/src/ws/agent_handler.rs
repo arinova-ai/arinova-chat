@@ -89,6 +89,27 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                         state.ws.agent_connections.insert(agent_id.clone(), tx.clone());
                         state.ws.agent_skills.insert(agent_id.clone(), skills.clone());
 
+                        // Clean up stale streaming messages for this agent
+                        // Match by sender_agent_id (group) or conversation.agent_id (direct)
+                        let cleanup = sqlx::query(
+                            r#"UPDATE messages m SET status = 'error',
+                                content = CASE WHEN m.content = '' THEN 'Agent reconnected' ELSE m.content END,
+                                updated_at = NOW()
+                               FROM conversations c
+                               WHERE m.conversation_id = c.id
+                                 AND m.status = 'streaming'
+                                 AND m.role = 'agent'
+                                 AND (m.sender_agent_id = $1::uuid OR (c.type = 'direct' AND c.agent_id = $1::uuid))"#,
+                        )
+                        .bind(&agent_id)
+                        .execute(&state.db)
+                        .await;
+                        if let Ok(result) = cleanup {
+                            if result.rows_affected() > 0 {
+                                tracing::info!("Cleaned up {} stale streaming messages for agent {}", result.rows_affected(), agent_id);
+                            }
+                        }
+
                         let _ = tx.send(serde_json::to_string(&json!({
                             "type": "auth_ok",
                             "agentName": agent_name
@@ -256,8 +277,7 @@ pub fn send_task_to_agent(
     ws_state: &WsState,
     agent_id: &str,
     task_id: &str,
-    conversation_id: &str,
-    content: &str,
+    task_payload: &Value,
 ) -> Option<mpsc::UnboundedReceiver<AgentEvent>> {
     if !ws_state.is_agent_connected(agent_id) {
         return None;
@@ -283,13 +303,8 @@ pub fn send_task_to_agent(
         },
     );
 
-    // Send task to agent
-    ws_state.send_to_agent(agent_id, &json!({
-        "type": "task",
-        "taskId": task_id,
-        "conversationId": conversation_id,
-        "content": content
-    }));
+    // Send full task payload to agent
+    ws_state.send_to_agent(agent_id, task_payload);
 
     Some(event_rx)
 }

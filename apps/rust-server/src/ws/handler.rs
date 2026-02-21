@@ -210,6 +210,11 @@ async fn handle_message(
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
             let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let reply_to_id = event.get("replyToId").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let mentions: Vec<String> = event
+                .get("mentions")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
 
             if conversation_id.is_empty() || content.is_empty() {
                 return;
@@ -234,6 +239,7 @@ async fn handle_message(
                 &content,
                 false,
                 reply_to_id,
+                &mentions,
                 ws_state,
                 db,
                 redis,
@@ -544,6 +550,7 @@ pub async fn trigger_agent_response(
     content: &str,
     skip_user_message: bool,
     reply_to_id: Option<String>,
+    mentions: &[String],
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
@@ -587,36 +594,17 @@ pub async fn trigger_agent_response(
         return;
     }
 
-    // Filter agent_ids by @mention when mention_only is true for group conversations
+    // Filter agent_ids by mentions when mention_only is true for group conversations
     let dispatch_ids = if mention_only && conv_type == "group" {
-        // Check for @all (case-insensitive)
-        let content_lower = content.to_lowercase();
-        if content_lower.contains("@all") {
-            // Broadcast to all — keep agent_ids as is
+        if mentions.contains(&"__all__".to_string()) {
+            // @all — broadcast to all agents
             agent_ids
+        } else if !mentions.is_empty() {
+            // Use structured mentions (agent IDs from frontend)
+            agent_ids.into_iter().filter(|id| mentions.contains(id)).collect()
         } else {
-            // Fetch agent names for members
-            let member_names = sqlx::query_as::<_, (String, String)>(
-                r#"SELECT cm.agent_id::text, a.name
-                   FROM conversation_members cm
-                   INNER JOIN agents a ON cm.agent_id = a.id
-                   WHERE cm.conversation_id = $1::uuid"#,
-            )
-            .bind(conversation_id)
-            .fetch_all(db)
-            .await
-            .unwrap_or_default();
-
-            // Match @AgentName patterns (case-insensitive)
-            let mut matched_ids: Vec<String> = Vec::new();
-            for (aid, name) in &member_names {
-                let mention = format!("@{}", name);
-                if content_lower.contains(&mention.to_lowercase()) {
-                    matched_ids.push(aid.clone());
-                }
-            }
-
-            matched_ids
+            // No mentions provided — nobody gets dispatched
+            vec![]
         }
     } else {
         agent_ids
@@ -846,7 +834,41 @@ async fn do_trigger_agent_response(
         }
     }
 
-    // Send task to agent via WebSocket (using raw payload instead of send_task_to_agent helper)
+    // Fetch recent conversation history (last 5 completed messages before current)
+    let history_rows = sqlx::query_as::<_, (String, String, String, Option<String>, chrono::NaiveDateTime)>(
+        r#"SELECT role::text, content,
+                  COALESCE(status::text, 'completed') as status,
+                  (SELECT name FROM agents WHERE id = m.sender_agent_id) as agent_name,
+                  m.created_at
+           FROM messages m
+           WHERE m.conversation_id = $1::uuid
+             AND m.status IN ('completed', 'error', 'cancelled')
+             AND m.id != $2::uuid
+           ORDER BY m.seq DESC
+           LIMIT 5"#,
+    )
+    .bind(conversation_id)
+    .bind(&agent_msg_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if !history_rows.is_empty() {
+        let history_json: Vec<Value> = history_rows.iter().rev().map(|(role, content, _status, agent_name, created_at)| {
+            let mut entry = json!({
+                "role": role,
+                "content": content,
+                "createdAt": created_at.to_string()
+            });
+            if let Some(name) = agent_name {
+                entry["senderAgentName"] = json!(name);
+            }
+            entry
+        }).collect();
+        task_payload["history"] = json!(history_json);
+    }
+
+    // Send full task payload to agent
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     ws_state
         .stream_cancellers
@@ -856,8 +878,7 @@ async fn do_trigger_agent_response(
         ws_state,
         agent_id,
         &agent_msg_id,
-        conversation_id,
-        &task_content,
+        &task_payload,
     );
 
     // Spawn task to handle streaming events

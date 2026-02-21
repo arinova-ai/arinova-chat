@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useAutoScroll<T extends HTMLElement>(
   deps: unknown[],
-  options?: { conversationId?: string | null; skipScroll?: boolean },
+  options?: { conversationId?: string | null; skipScroll?: boolean; messageCount?: number },
 ) {
   const ref = useRef<T>(null);
   const userScrolledUp = useRef(false);
   const prevConversationId = useRef<string | null | undefined>(undefined);
+  const prevMessageCount = useRef(options?.messageCount ?? 0);
   const prevScrollTopRef = useRef(0);
   const stickyTimerRef = useRef<number | null>(null);
   const stickyUntilRef = useRef(0);
@@ -85,7 +86,7 @@ export function useAutoScroll<T extends HTMLElement>(
     const currentTop = el.scrollTop;
     prevScrollTopRef.current = currentTop;
 
-    const movingUp = currentTop < prevTop;
+    const movingUp = currentTop < prevTop - 10; // 10px threshold to avoid false triggers from keyboard dismiss
     const pinThreshold = 24;
     const buttonThreshold = 100;
     const bottomDist = el.scrollHeight - currentTop - el.clientHeight;
@@ -110,6 +111,14 @@ export function useAutoScroll<T extends HTMLElement>(
   }, [handleScroll]);
 
   useEffect(() => {
+    // New message added — reset scroll lock so user sees it
+    const count = options?.messageCount ?? 0;
+    if (count > prevMessageCount.current) {
+      userScrolledUp.current = false;
+      setShowScrollButton(false);
+    }
+    prevMessageCount.current = count;
+
     if (userScrolledUp.current || options?.skipScroll) return;
     startStickyScroll(1200);
     // eslint-disable-next-line react-hooks/exhaustive-deps

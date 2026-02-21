@@ -75,6 +75,7 @@ export async function conversationRoutes(app: FastifyInstance) {
           type: conversations.type,
           userId: conversations.userId,
           agentId: conversations.agentId,
+          mentionOnly: conversations.mentionOnly,
           pinnedAt: conversations.pinnedAt,
           createdAt: conversations.createdAt,
           updatedAt: conversations.updatedAt,
@@ -140,6 +141,7 @@ export async function conversationRoutes(app: FastifyInstance) {
           type: row.type,
           userId: row.userId,
           agentId: row.agentId,
+          mentionOnly: row.mentionOnly,
           pinnedAt: row.pinnedAt,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -194,13 +196,14 @@ export async function conversationRoutes(app: FastifyInstance) {
     "/api/conversations/:id",
     async (request, reply) => {
       const user = await requireAuth(request, reply);
-      const body = request.body as { title?: string; pinned?: boolean };
+      const body = request.body as { title?: string; pinned?: boolean; mentionOnly?: boolean };
 
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (body.title !== undefined) updates.title = body.title;
       if (body.pinned !== undefined) {
         updates.pinnedAt = body.pinned ? new Date() : null;
       }
+      if (body.mentionOnly !== undefined) updates.mentionOnly = body.mentionOnly;
 
       const [conv] = await db
         .update(conversations)

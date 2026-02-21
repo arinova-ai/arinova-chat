@@ -81,7 +81,7 @@ interface ChatState {
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, mentions?: string[]) => void;
   cancelStream: (messageId?: string) => void;
   createAgent: (data: {
     name: string;
@@ -327,7 +327,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: (content) => {
+  sendMessage: (content, mentions) => {
     const { activeConversationId, replyingTo } = get();
     if (!activeConversationId) return;
 
@@ -361,6 +361,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ...get().messagesByConversation,
         [activeConversationId]: [...current, userMsg],
       },
+      // Update sidebar lastMessage preview
+      conversations: get().conversations.map((c) =>
+        c.id === activeConversationId
+          ? { ...c, lastMessage: userMsg, updatedAt: new Date() }
+          : c
+      ),
       replyingTo: null,
     });
 
@@ -370,6 +376,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversationId: activeConversationId,
       content,
       ...(replyingTo ? { replyToId: replyingTo.id } : {}),
+      ...(mentions && mentions.length > 0 ? { mentions } : {}),
     });
   },
 

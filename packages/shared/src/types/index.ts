@@ -323,7 +323,7 @@ export interface AppPurchase {
 
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
-  | { type: "send_message"; conversationId: string; content: string; replyToId?: string }
+  | { type: "send_message"; conversationId: string; content: string; replyToId?: string; mentions?: string[] }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
   | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
   | { type: "mark_read"; conversationId: string; seq: number }
@@ -432,6 +432,7 @@ export type AgentWSServerEvent =
       conversationType?: ConversationType;
       members?: { agentId: string; agentName: string }[];
       replyTo?: { role: MessageRole; content: string; senderAgentName?: string };
+      history?: { role: MessageRole; content: string; senderAgentName?: string; createdAt: string }[];
     }
   | { type: "cancel_task"; taskId: string }
   | { type: "pong" };

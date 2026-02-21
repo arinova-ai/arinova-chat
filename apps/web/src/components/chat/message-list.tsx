@@ -31,7 +31,7 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
 
   const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length],
-    { conversationId: activeConversationId, skipScroll: !!highlightMessageId },
+    { conversationId: activeConversationId, skipScroll: !!highlightMessageId, messageCount: messages.length },
   );
 
   // Scroll to highlighted message (and matching text within it) when it appears

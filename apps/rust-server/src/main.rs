@@ -26,6 +26,22 @@ async fn main() {
     let db = db::create_pool(&config.database_url).await;
     tracing::info!("PostgreSQL connected");
 
+    // Clean up stuck streaming messages from previous run
+    match sqlx::query(
+        r#"UPDATE messages SET status = 'error', content = CASE WHEN content = '' THEN 'Stream interrupted by server restart' ELSE content END, updated_at = NOW()
+           WHERE status = 'streaming'"#,
+    )
+    .execute(&db)
+    .await
+    {
+        Ok(result) => {
+            if result.rows_affected() > 0 {
+                tracing::info!("Cleaned up {} stuck streaming messages", result.rows_affected());
+            }
+        }
+        Err(e) => tracing::warn!("Failed to clean up stuck streaming messages: {}", e),
+    }
+
     // Initialize Redis pool
     let redis = db::redis::create_redis_pool(&config.redis_url);
     tracing::info!("Redis pool created");
@@ -53,10 +69,24 @@ async fn main() {
     let is_wildcard = cors_origins.len() == 1 && cors_origins[0] == "*";
 
     let cors = if is_wildcard {
+        // Mirror request origin so credentials (cookies) still work with any origin
         CorsLayer::new()
-            .allow_origin(AllowOrigin::any())
-            .allow_methods(AllowMethods::any())
-            .allow_headers(AllowHeaders::any())
+            .allow_origin(AllowOrigin::mirror_request())
+            .allow_methods(AllowMethods::list([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::PATCH,
+                axum::http::Method::OPTIONS,
+            ]))
+            .allow_headers(AllowHeaders::list([
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::AUTHORIZATION,
+                axum::http::header::ACCEPT,
+                axum::http::header::COOKIE,
+            ]))
+            .allow_credentials(true)
     } else {
         let origins: Vec<axum::http::HeaderValue> = cors_origins
             .iter()

@@ -26,6 +26,7 @@ export function ChatInput() {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [mentionStart, setMentionStart] = useState(-1);
+  const [mentionedIds, setMentionedIds] = useState<string[]>([]);
   const isKeyboardNav = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -142,6 +143,7 @@ export function ChatInput() {
 
   const clearInput = useCallback(() => {
     setValue("");
+    setMentionedIds([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -166,6 +168,10 @@ export function ChatInput() {
       setValue(newValue);
       setMentionQuery(null);
       setMentionStart(-1);
+      // Track mentioned agent ID (avoid duplicates)
+      if (!mentionedIds.includes(item.agentId)) {
+        setMentionedIds((prev) => [...prev, item.agentId]);
+      }
       const newCursorPos = mentionStart + mention.length;
       requestAnimationFrame(() => {
         if (textareaRef.current) {
@@ -175,7 +181,7 @@ export function ChatInput() {
         }
       });
     },
-    [value, mentionStart]
+    [value, mentionStart, mentionedIds]
   );
 
   // ---------- Upload & Send ----------
@@ -235,9 +241,9 @@ export function ChatInput() {
     const trimmed = value.trim();
     if (!trimmed) return;
 
-    sendMessage(trimmed);
+    sendMessage(trimmed, mentionedIds.length > 0 ? mentionedIds : undefined);
     clearInput();
-  }, [value, sendMessage, selectedFile, handleUpload, clearInput]);
+  }, [value, sendMessage, selectedFile, handleUpload, clearInput, mentionedIds]);
 
   // ---------- Keyboard handling ----------
 
@@ -325,13 +331,20 @@ export function ChatInput() {
     const newValue = e.target.value;
     setValue(newValue);
 
-    // Detect @mention trigger
+    // Detect @mention trigger — find last @ preceded by start or whitespace
     const cursorPos = e.target.selectionStart ?? newValue.length;
     const textBeforeCursor = newValue.slice(0, cursorPos);
-    const atMatch = textBeforeCursor.match(/(^|\s)@(\w*)$/);
+    const atMatch = textBeforeCursor.match(/(^|\s)@([^@]*)$/);
     if (atMatch && activeMembers.length > 0) {
-      setMentionQuery(atMatch[2]);
-      setMentionStart(cursorPos - atMatch[2].length - 1); // position of @
+      const query = atMatch[2];
+      // Close popup if query ends with two consecutive spaces (user moved on)
+      if (query.endsWith("  ")) {
+        setMentionQuery(null);
+        setMentionStart(-1);
+      } else {
+        setMentionQuery(query);
+        setMentionStart(cursorPos - query.length - 1); // position of @
+      }
     } else {
       setMentionQuery(null);
       setMentionStart(-1);

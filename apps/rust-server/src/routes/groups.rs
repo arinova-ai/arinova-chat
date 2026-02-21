@@ -171,12 +171,9 @@ async fn list_members(
                         "conversationId": r.1,
                         "agentId": r.2,
                         "addedAt": r.3,
-                        "agent": {
-                            "id": r.2,
-                            "name": r.4,
-                            "description": r.5,
-                            "avatarUrl": r.6,
-                        }
+                        "agentName": r.4,
+                        "agentDescription": r.5,
+                        "agentAvatarUrl": r.6,
                     })
                 })
                 .collect();

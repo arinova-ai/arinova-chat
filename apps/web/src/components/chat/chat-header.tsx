@@ -118,7 +118,7 @@ export function ChatHeader({
           <Button
             variant="ghost"
             size="icon"
-            className={cn("h-8 w-8", mentionOnly && "text-blue-400")}
+            className={cn("h-8 w-8", mentionOnly ? "text-blue-400" : "text-neutral-500")}
             onClick={handleMentionOnlyToggle}
             title={mentionOnly ? "Mention-only ON: only @mentioned agents respond" : "Mention-only OFF: all agents respond"}
           >
