@@ -221,9 +221,10 @@ export class ArinovaAgent {
       .replace(/^ws:/, "http:")
       .replace(/^wss:/, "https:");
 
+    const mime = fileType || mimeFromFileName(fileName);
     const formData = new FormData();
     formData.append("conversationId", conversationId);
-    const blob = new Blob([new Uint8Array(file) as unknown as ArrayBuffer], { type: fileType });
+    const blob = new Blob([new Uint8Array(file) as unknown as ArrayBuffer], { type: mime });
     formData.append("file", blob, fileName);
 
     const res = await fetch(`${httpUrl}/api/agent/upload`, {
@@ -276,4 +277,21 @@ export class ArinovaAgent {
       ctx.sendError(errorMsg);
     });
   }
+}
+
+const MIME_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  pdf: "application/pdf",
+  txt: "text/plain",
+  csv: "text/csv",
+  json: "application/json",
+};
+
+function mimeFromFileName(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_TYPES[ext] ?? "application/octet-stream";
 }
