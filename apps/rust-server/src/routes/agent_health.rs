@@ -23,7 +23,7 @@ async fn check_agent_health(
     Path(id): Path<String>,
 ) -> Response {
     let agent = sqlx::query_as::<_, (String, Option<String>)>(
-        "SELECT id, a2a_endpoint FROM agents WHERE id = $1 AND owner_id = $2",
+        "SELECT id::text, a2a_endpoint FROM agents WHERE id = $1::uuid AND owner_id = $2",
     )
     .bind(&id)
     .bind(&user.id)
@@ -57,7 +57,7 @@ async fn check_all_agents_health(
     user: AuthUser,
 ) -> Response {
     let agents = sqlx::query_as::<_, (String, String, Option<String>)>(
-        "SELECT id, name, a2a_endpoint FROM agents WHERE owner_id = $1 ORDER BY created_at",
+        "SELECT id::text, name, a2a_endpoint FROM agents WHERE owner_id = $1 ORDER BY created_at",
     )
     .bind(&user.id)
     .fetch_all(&state.db)
