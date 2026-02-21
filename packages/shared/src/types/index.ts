@@ -38,6 +38,7 @@ export interface Conversation {
   type: ConversationType;
   userId: string;
   agentId: string | null;
+  mentionOnly: boolean;
   pinnedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -68,6 +69,14 @@ export interface Message {
   role: MessageRole;
   content: string;
   status: MessageStatus;
+  senderAgentId?: string;
+  senderAgentName?: string;
+  replyToId?: string;
+  replyTo?: {
+    role: MessageRole;
+    content: string;
+    senderAgentName?: string;
+  };
   attachments?: Attachment[];
   createdAt: Date;
   updatedAt: Date;
@@ -314,7 +323,7 @@ export interface AppPurchase {
 
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
-  | { type: "send_message"; conversationId: string; content: string }
+  | { type: "send_message"; conversationId: string; content: string; replyToId?: string }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
   | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
   | { type: "mark_read"; conversationId: string; seq: number }
@@ -350,6 +359,8 @@ export type WSServerEvent =
       conversationId: string;
       messageId: string;
       seq: number;
+      senderAgentId?: string;
+      senderAgentName?: string;
     }
   | {
       type: "stream_chunk";
@@ -413,7 +424,15 @@ export type AgentWSClientEvent =
 export type AgentWSServerEvent =
   | { type: "auth_ok"; agentName: string }
   | { type: "auth_error"; error: string }
-  | { type: "task"; taskId: string; conversationId: string; content: string }
+  | {
+      type: "task";
+      taskId: string;
+      conversationId: string;
+      content: string;
+      conversationType?: ConversationType;
+      members?: { agentId: string; agentName: string }[];
+      replyTo?: { role: MessageRole; content: string; senderAgentName?: string };
+    }
   | { type: "pong" };
 
 // ===== Push Notifications =====

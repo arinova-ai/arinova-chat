@@ -26,6 +26,7 @@ import {
   FileText,
   Download,
   Square,
+  Reply,
 } from "lucide-react";
 import { assetUrl } from "@/lib/config";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
@@ -53,6 +54,10 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
   const isError = message.status === "error";
   const [copied, setCopied] = useState(false);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const setReplyingTo = useChatStore((s) => s.setReplyingTo);
+  const conversationMembers = useChatStore((s) => s.conversationMembers);
+  const members = conversationMembers[message.conversationId] ?? [];
+  const mentionNames = members.length > 0 ? members.map((m) => m.agentName) : undefined;
   const sendMessage = useChatStore((s) => s.sendMessage);
   const cancelStream = useChatStore((s) => s.cancelStream);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
@@ -98,6 +103,10 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
     }
   }, [messagesByConversation, message.conversationId, message.id, deleteMessage, sendMessage]);
 
+  const handleReply = useCallback(() => {
+    setReplyingTo(message);
+  }, [setReplyingTo, message]);
+
   return (
     <div
       className={cn(
@@ -129,15 +138,26 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
               isError && "border border-red-500/30"
             )}
           >
-            {!isUser && agentName && (
+            {!isUser && (message.senderAgentName || agentName) && (
               <p className="mb-1 text-xs font-medium text-blue-400">
-                {agentName}
+                {message.senderAgentName || agentName}
               </p>
             )}
             {isError && (
               <div className="mb-1 flex items-center gap-1 text-xs text-red-400">
                 <AlertCircle className="h-3 w-3" />
                 <span>Error</span>
+              </div>
+            )}
+            {/* Reply quote */}
+            {message.replyTo && (
+              <div className="mb-1.5 rounded-lg bg-white/5 px-3 py-1.5 border-l-2 border-blue-400/50">
+                <p className="text-[11px] font-medium text-blue-400/70">
+                  {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? "You" : agentName ?? "Agent")}
+                </p>
+                <p className="text-xs text-neutral-400 line-clamp-2">
+                  {message.replyTo.content}
+                </p>
               </div>
             )}
             {/* Attachments */}
@@ -182,6 +202,7 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
                     : message.content
                 }
                 highlightQuery={highlightQuery}
+                mentionNames={mentionNames}
               />
             ) : isStreaming ? (
               <StreamingCursor />
@@ -237,6 +258,16 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
               <Button
                 variant="ghost"
                 size="icon-xs"
+                onClick={handleReply}
+                className="h-6 w-6 text-neutral-400 hover:text-blue-400"
+                title="Reply"
+              >
+                <Reply className="h-3 w-3" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={handleDelete}
                 className="h-6 w-6 text-neutral-400 hover:text-red-400"
                 title="Delete message"
@@ -264,7 +295,7 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
           <Button
             variant="ghost"
             size="icon-xs"
-            onClick={cancelStream}
+            onClick={() => cancelStream(message.id)}
             className="mb-1 h-7 w-7 shrink-0 rounded-full border border-neutral-600 text-neutral-400 hover:border-red-500 hover:text-red-400"
             title="Stop generating"
           >
@@ -280,6 +311,7 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
         onCopy={handleCopy}
         onDelete={handleDelete}
         onRetry={handleRetry}
+        onReply={handleReply}
         onReact={(emoji) => toggleReaction(message.id, emoji)}
       />
     </div>

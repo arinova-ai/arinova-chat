@@ -66,8 +66,11 @@ interface ChatState {
   mutedConversations: Record<string, boolean>;
   ttsEnabled: boolean;
   reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
+  conversationMembers: Record<string, { agentId: string; agentName: string }[]>;
+  replyingTo: Message | null;
 
   // Actions
+  setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
@@ -79,7 +82,7 @@ interface ChatState {
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   sendMessage: (content: string) => void;
-  cancelStream: () => void;
+  cancelStream: (messageId?: string) => void;
   createAgent: (data: {
     name: string;
     description?: string;
@@ -101,7 +104,7 @@ interface ChatState {
   deleteConversation: (id: string) => Promise<void>;
   updateConversation: (
     id: string,
-    data: { title?: string; pinned?: boolean }
+    data: { title?: string; pinned?: boolean; mentionOnly?: boolean }
   ) => Promise<void>;
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
   loadAgentSkills: (agentId: string) => Promise<void>;
@@ -147,6 +150,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ? localStorage.getItem("arinova_tts") === "true"
       : false,
   reactionsByMessage: {},
+  conversationMembers: {},
+  replyingTo: null,
+
+  setReplyingTo: (message) => set({ replyingTo: message }),
 
   setActiveConversation: (id) => {
     if (id === null) {
@@ -160,6 +167,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
     });
     get().loadMessages(id);
+
+    // Load conversation members for @mention support
+    const conv = get().conversations.find((c) => c.id === id);
+    if (conv && !get().conversationMembers[id]) {
+      if (conv.type === "group") {
+        get()
+          .loadGroupMembers(id)
+          .then((members) => {
+            set({
+              conversationMembers: {
+                ...get().conversationMembers,
+                [id]: members.map((m) => ({
+                  agentId: m.agentId,
+                  agentName: m.agentName,
+                })),
+              },
+            });
+          })
+          .catch(() => {});
+      } else if (conv.agentId) {
+        set({
+          conversationMembers: {
+            ...get().conversationMembers,
+            [id]: [{ agentId: conv.agentId, agentName: conv.agentName }],
+          },
+        });
+      }
+    }
   },
 
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -293,7 +328,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: (content) => {
-    const { activeConversationId } = get();
+    const { activeConversationId, replyingTo } = get();
     if (!activeConversationId) return;
 
     // Optimistic: add user message to UI
@@ -304,6 +339,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: "user",
       content,
       status: "completed",
+      replyToId: replyingTo?.id,
+      replyTo: replyingTo
+        ? {
+            role: replyingTo.role,
+            content:
+              replyingTo.content.length > 200
+                ? replyingTo.content.slice(0, 200)
+                : replyingTo.content,
+            senderAgentName: replyingTo.senderAgentName,
+          }
+        : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -315,6 +361,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ...get().messagesByConversation,
         [activeConversationId]: [...current, userMsg],
       },
+      replyingTo: null,
     });
 
     // Send via WebSocket
@@ -322,14 +369,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       type: "send_message",
       conversationId: activeConversationId,
       content,
+      ...(replyingTo ? { replyToId: replyingTo.id } : {}),
     });
   },
 
-  cancelStream: () => {
+  cancelStream: (messageId?) => {
     const { activeConversationId, messagesByConversation } = get();
     if (!activeConversationId) return;
     const msgs = messagesByConversation[activeConversationId] ?? [];
-    const streamingMsg = msgs.find((m) => m.status === "streaming");
+    const streamingMsg = messageId
+      ? msgs.find((m) => m.id === messageId && m.status === "streaming")
+      : msgs.find((m) => m.status === "streaming");
     if (!streamingMsg) return;
     wsManager.send({
       type: "cancel_stream",
@@ -683,6 +733,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         role: "agent",
         content: "",
         status: "streaming",
+        senderAgentId: (event as Record<string, unknown>).senderAgentId as string | undefined,
+        senderAgentName: (event as Record<string, unknown>).senderAgentName as string | undefined,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

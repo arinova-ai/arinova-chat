@@ -9,7 +9,7 @@ from typing import Awaitable, Callable
 import websockets
 from websockets.asyncio.client import ClientConnection
 
-from .types import Task
+from .types import MemberInfo, ReplyContext, Task
 
 logger = logging.getLogger("arinova_agent")
 
@@ -141,7 +141,15 @@ class ArinovaAgent:
 
                     if msg.get("type") == "task":
                         asyncio.create_task(
-                            self._handle_task(ws, msg["taskId"], msg["conversationId"], msg["content"])
+                            self._handle_task(
+                                ws,
+                                msg["taskId"],
+                                msg["conversationId"],
+                                msg["content"],
+                                conversation_type=msg.get("conversationType"),
+                                members=msg.get("members"),
+                                reply_to=msg.get("replyTo"),
+                            )
                         )
             finally:
                 ping_task.cancel()
@@ -159,13 +167,16 @@ class ArinovaAgent:
             pass
 
     async def _handle_task(
-        self, ws: ClientConnection, task_id: str, conversation_id: str, content: str
+        self,
+        ws: ClientConnection,
+        task_id: str,
+        conversation_id: str,
+        content: str,
+        *,
+        conversation_type: str | None = None,
+        members: list[dict] | None = None,
+        reply_to: dict | None = None,
     ) -> None:
-        def _send(event: dict) -> None:
-            asyncio.get_event_loop().call_soon_threadsafe(
-                lambda: asyncio.ensure_future(ws.send(json.dumps(event)))
-            )
-
         def send_sync(event: dict) -> None:
             try:
                 loop = asyncio.get_running_loop()
@@ -180,6 +191,9 @@ class ArinovaAgent:
             send_chunk=lambda delta: send_sync({"type": "agent_chunk", "taskId": task_id, "chunk": delta}),
             send_complete=lambda full: send_sync({"type": "agent_complete", "taskId": task_id, "content": full}),
             send_error=lambda error: send_sync({"type": "agent_error", "taskId": task_id, "error": error}),
+            conversation_type=conversation_type,
+            members=[MemberInfo(agent_id=m["agentId"], agent_name=m["agentName"]) for m in members] if members else None,
+            reply_to=ReplyContext(role=reply_to["role"], content=reply_to["content"], sender_agent_name=reply_to.get("senderAgentName")) if reply_to else None,
         )
 
         if not self._task_handler:

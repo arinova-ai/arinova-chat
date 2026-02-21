@@ -6,7 +6,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Copy, Trash2, RotateCcw } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Reply } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🤔", "👀"];
@@ -18,6 +18,7 @@ interface MessageActionSheetProps {
   onCopy: () => void;
   onDelete: () => void;
   onRetry: () => void;
+  onReply: () => void;
   onReact: (emoji: string) => void;
 }
 
@@ -31,6 +32,7 @@ export function MessageActionSheet({
   onCopy,
   onDelete,
   onRetry,
+  onReply,
   onReact,
 }: MessageActionSheetProps) {
   if (!message) return null;
@@ -75,6 +77,10 @@ export function MessageActionSheet({
           <button className={ACTION_BUTTON} onClick={() => handle(onCopy)}>
             <Copy className="h-4 w-4 text-neutral-400" />
             Copy
+          </button>
+          <button className={ACTION_BUTTON} onClick={() => handle(onReply)}>
+            <Reply className="h-4 w-4 text-blue-400" />
+            <span className="text-blue-400">Reply</span>
           </button>
           {isError && (
             <button className={ACTION_BUTTON} onClick={() => handle(onRetry)}>

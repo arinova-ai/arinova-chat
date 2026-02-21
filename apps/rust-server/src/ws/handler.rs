@@ -209,6 +209,7 @@ async fn handle_message(
         "send_message" => {
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
             let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let reply_to_id = event.get("replyToId").and_then(|v| v.as_str()).map(|s| s.to_string());
 
             if conversation_id.is_empty() || content.is_empty() {
                 return;
@@ -232,6 +233,7 @@ async fn handle_message(
                 conversation_id,
                 &content,
                 false,
+                reply_to_id,
                 ws_state,
                 db,
                 redis,
@@ -534,19 +536,22 @@ async fn handle_mark_read(user_id: &str, conversation_id: &str, seq: i32, db: &P
 }
 
 /// Trigger an agent response for a conversation.
+/// For direct conversations, dispatches to the single agent.
+/// For group conversations, broadcasts to all agents in conversation_members.
 pub async fn trigger_agent_response(
     user_id: &str,
     conversation_id: &str,
     content: &str,
     skip_user_message: bool,
+    reply_to_id: Option<String>,
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
 ) {
-    // Verify conversation belongs to user and get agent info
-    let conv = sqlx::query_as::<_, (String, Option<String>)>(
-        r#"SELECT id::text, agent_id::text FROM conversations
+    // Verify conversation belongs to user and get type + agent info + mention_only flag
+    let conv = sqlx::query_as::<_, (String, Option<String>, String, bool)>(
+        r#"SELECT id::text, agent_id::text, type::text, mention_only FROM conversations
            WHERE id = $1::uuid AND user_id = $2"#,
     )
     .bind(conversation_id)
@@ -554,14 +559,67 @@ pub async fn trigger_agent_response(
     .fetch_optional(db)
     .await;
 
-    let (_, agent_id) = match conv {
+    let (_, agent_id, conv_type, mention_only) = match conv {
         Ok(Some(c)) => c,
         _ => return,
     };
 
-    let agent_id = match agent_id {
-        Some(id) => id,
-        None => return,
+    // Determine target agent(s)
+    let agent_ids: Vec<String> = if conv_type == "group" {
+        // Group: get all agents from conversation_members
+        let members = sqlx::query_as::<_, (String,)>(
+            r#"SELECT agent_id::text FROM conversation_members WHERE conversation_id = $1::uuid"#,
+        )
+        .bind(conversation_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default();
+        members.into_iter().map(|m| m.0).collect()
+    } else {
+        // Direct: single agent
+        match agent_id {
+            Some(id) => vec![id],
+            None => return,
+        }
+    };
+
+    if agent_ids.is_empty() {
+        return;
+    }
+
+    // Filter agent_ids by @mention when mention_only is true for group conversations
+    let dispatch_ids = if mention_only && conv_type == "group" {
+        // Check for @all (case-insensitive)
+        let content_lower = content.to_lowercase();
+        if content_lower.contains("@all") {
+            // Broadcast to all — keep agent_ids as is
+            agent_ids
+        } else {
+            // Fetch agent names for members
+            let member_names = sqlx::query_as::<_, (String, String)>(
+                r#"SELECT cm.agent_id::text, a.name
+                   FROM conversation_members cm
+                   INNER JOIN agents a ON cm.agent_id = a.id
+                   WHERE cm.conversation_id = $1::uuid"#,
+            )
+            .bind(conversation_id)
+            .fetch_all(db)
+            .await
+            .unwrap_or_default();
+
+            // Match @AgentName patterns (case-insensitive)
+            let mut matched_ids: Vec<String> = Vec::new();
+            for (aid, name) in &member_names {
+                let mention = format!("@{}", name);
+                if content_lower.contains(&mention.to_lowercase()) {
+                    matched_ids.push(aid.clone());
+                }
+            }
+
+            matched_ids
+        }
+    } else {
+        agent_ids
     };
 
     // Save user message immediately
@@ -572,12 +630,13 @@ pub async fn trigger_agent_response(
         };
 
         let _ = sqlx::query(
-            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
-               VALUES (gen_random_uuid(), $1::uuid, $2, 'user', $3, 'completed', NOW(), NOW())"#,
+            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, reply_to_id, created_at, updated_at)
+               VALUES (gen_random_uuid(), $1::uuid, $2, 'user', $3, 'completed', $4::uuid, NOW(), NOW())"#,
         )
         .bind(conversation_id)
         .bind(user_seq)
         .bind(content)
+        .bind(reply_to_id.as_deref())
         .execute(db)
         .await;
 
@@ -589,31 +648,39 @@ pub async fn trigger_agent_response(
         .await;
     }
 
-    // If there's an active stream, queue the agent response
-    if ws_state.has_active_stream(conversation_id) {
-        ws_state
-            .agent_response_queues
-            .entry(conversation_id.to_string())
-            .or_insert_with(std::collections::VecDeque::new)
-            .push_back(QueuedResponse {
-                user_id: user_id.to_string(),
-                conversation_id: conversation_id.to_string(),
-                content: content.to_string(),
-            });
-        return;
-    }
+    // Dispatch to each agent (may be empty if mention_only and no mentions matched)
+    for agent_id in &dispatch_ids {
+        // Per-agent queue: if this specific agent has an active stream, queue it
+        if ws_state.has_active_stream_for_agent(conversation_id, agent_id) {
+            let queue_key = format!("{}:{}", conversation_id, agent_id);
+            ws_state
+                .agent_response_queues
+                .entry(queue_key)
+                .or_insert_with(std::collections::VecDeque::new)
+                .push_back(QueuedResponse {
+                    user_id: user_id.to_string(),
+                    conversation_id: conversation_id.to_string(),
+                    agent_id: agent_id.clone(),
+                    content: content.to_string(),
+                    reply_to_id: reply_to_id.clone(),
+                });
+            continue;
+        }
 
-    do_trigger_agent_response(
-        user_id,
-        &agent_id,
-        conversation_id,
-        content,
-        ws_state,
-        db,
-        redis,
-        config,
-    )
-    .await;
+        do_trigger_agent_response(
+            user_id,
+            agent_id,
+            conversation_id,
+            content,
+            reply_to_id.as_deref(),
+            &conv_type,
+            ws_state,
+            db,
+            redis,
+            config,
+        )
+        .await;
+    }
 }
 
 /// Actually send the task to the agent and set up streaming callbacks.
@@ -622,6 +689,8 @@ async fn do_trigger_agent_response(
     agent_id: &str,
     conversation_id: &str,
     content: &str,
+    reply_to_id: Option<&str>,
+    conv_type: &str,
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
@@ -655,13 +724,14 @@ async fn do_trigger_agent_response(
 
         let err_msg_id = uuid::Uuid::new_v4().to_string();
         let _ = sqlx::query(
-            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
-               VALUES ($1::uuid, $2::uuid, $3, 'agent', $4, 'error', NOW(), NOW())"#,
+            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, created_at, updated_at)
+               VALUES ($1::uuid, $2::uuid, $3, 'agent', $4, 'error', $5::uuid, NOW(), NOW())"#,
         )
         .bind(&err_msg_id)
         .bind(conversation_id)
         .bind(err_seq)
         .bind(&err_content)
+        .bind(agent_id)
         .execute(db)
         .await;
 
@@ -669,7 +739,9 @@ async fn do_trigger_agent_response(
             "type": "stream_start",
             "conversationId": conversation_id,
             "messageId": err_msg_id,
-            "seq": err_seq
+            "seq": err_seq,
+            "senderAgentId": agent_id,
+            "senderAgentName": agent_name
         }), redis);
 
         ws_state.send_to_user_or_queue(user_id, &json!({
@@ -683,7 +755,7 @@ async fn do_trigger_agent_response(
         return;
     }
 
-    // Create pending agent message
+    // Create pending agent message with sender_agent_id
     let agent_seq = match get_next_seq(db, conversation_id).await {
         Ok(s) => s,
         Err(_) => return,
@@ -691,12 +763,13 @@ async fn do_trigger_agent_response(
 
     let agent_msg_id = uuid::Uuid::new_v4().to_string();
     let _ = sqlx::query(
-        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
-           VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', NOW(), NOW())"#,
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, created_at, updated_at)
+           VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', $4::uuid, NOW(), NOW())"#,
     )
     .bind(&agent_msg_id)
     .bind(conversation_id)
     .bind(agent_seq)
+    .bind(agent_id)
     .execute(db)
     .await;
 
@@ -705,14 +778,17 @@ async fn do_trigger_agent_response(
         .execute(db)
         .await;
 
-    // Mark conversation as having active stream
-    ws_state.active_streams.insert(conversation_id.to_string());
+    // Mark this agent as having active stream (keyed by conv:agent)
+    let stream_key = format!("{}:{}", conversation_id, agent_id);
+    ws_state.active_streams.insert(stream_key.clone());
 
     ws_state.send_to_user_or_queue(user_id, &json!({
         "type": "stream_start",
         "conversationId": conversation_id,
         "messageId": agent_msg_id,
-        "seq": agent_seq
+        "seq": agent_seq,
+        "senderAgentId": agent_id,
+        "senderAgentName": agent_name
     }), redis);
 
     // Prepend system prompt if configured
@@ -723,7 +799,54 @@ async fn do_trigger_agent_response(
         _ => content.to_string(),
     };
 
-    // Send task to agent via WebSocket
+    // Build task payload with group context and reply context
+    let mut task_payload = json!({
+        "type": "task",
+        "taskId": agent_msg_id,
+        "conversationId": conversation_id,
+        "content": task_content,
+        "conversationType": conv_type
+    });
+
+    // Add group members context
+    if conv_type == "group" {
+        let members = sqlx::query_as::<_, (String, String)>(
+            r#"SELECT a.id::text, a.name FROM conversation_members cm
+               JOIN agents a ON a.id = cm.agent_id
+               WHERE cm.conversation_id = $1::uuid"#,
+        )
+        .bind(conversation_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default();
+
+        let members_json: Vec<Value> = members.iter().map(|(id, name)| {
+            json!({"agentId": id, "agentName": name})
+        }).collect();
+        task_payload["members"] = json!(members_json);
+    }
+
+    // Add reply context
+    if let Some(ref_id) = reply_to_id {
+        let reply_msg = sqlx::query_as::<_, (String, String, Option<String>)>(
+            r#"SELECT role::text, content, (SELECT name FROM agents WHERE id = m.sender_agent_id) as agent_name
+               FROM messages m WHERE id = $1::uuid"#,
+        )
+        .bind(ref_id)
+        .fetch_optional(db)
+        .await;
+
+        if let Ok(Some((role, ref_content, agent_name_opt))) = reply_msg {
+            let preview = if ref_content.len() > 500 { &ref_content[..500] } else { &ref_content };
+            task_payload["replyTo"] = json!({
+                "role": role,
+                "content": preview,
+                "senderAgentName": agent_name_opt
+            });
+        }
+    }
+
+    // Send task to agent via WebSocket (using raw payload instead of send_task_to_agent helper)
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     ws_state
         .stream_cancellers
@@ -746,16 +869,16 @@ async fn do_trigger_agent_response(
     let conversation_id = conversation_id.to_string();
     let agent_msg_id_clone = agent_msg_id.clone();
     let agent_name = agent_name.clone();
+    let agent_id = agent_id.to_string();
 
     tokio::spawn(async move {
         let mut stream_accumulated = String::new();
         let mut event_rx = match agent_event_rx {
             Some(rx) => rx,
-            None => {
-                // Agent not connected error already handled
-                return;
-            }
+            None => return,
         };
+
+        let stream_key = format!("{}:{}", conversation_id, agent_id);
 
         loop {
             tokio::select! {
@@ -771,7 +894,6 @@ async fn do_trigger_agent_response(
                                 "chunk": delta
                             }), &redis);
 
-                            // Store accumulated in Redis
                             if let Ok(mut conn) = redis.get().await {
                                 let _: Result<(), _> = conn.set_ex(
                                     &format!("stream:{}", agent_msg_id_clone),
@@ -783,12 +905,10 @@ async fn do_trigger_agent_response(
                         Some(crate::ws::state::AgentEvent::Complete(full_content)) => {
                             ws_state.stream_cancellers.remove(&agent_msg_id_clone);
 
-                            // Delete stream cache
                             if let Ok(mut conn) = redis.get().await {
                                 let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
                             }
 
-                            // Update message in DB
                             let _ = sqlx::query(
                                 r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
                             )
@@ -829,9 +949,8 @@ async fn do_trigger_agent_response(
                                 }
                             }
 
-                            // Dequeue next
-                            ws_state.active_streams.remove(&conversation_id);
-                            process_next_in_queue(&conversation_id, &ws_state, &db, &redis, &config);
+                            ws_state.active_streams.remove(&stream_key);
+                            process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
                             break;
                         }
                         Some(crate::ws::state::AgentEvent::Error(error)) => {
@@ -857,21 +976,19 @@ async fn do_trigger_agent_response(
                                 "error": error
                             }), &redis);
 
-                            ws_state.active_streams.remove(&conversation_id);
-                            process_next_in_queue(&conversation_id, &ws_state, &db, &redis, &config);
+                            ws_state.active_streams.remove(&stream_key);
+                            process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
                             break;
                         }
                         None => {
-                            // Channel closed - agent disconnected
-                            ws_state.active_streams.remove(&conversation_id);
-                            process_next_in_queue(&conversation_id, &ws_state, &db, &redis, &config);
+                            ws_state.active_streams.remove(&stream_key);
+                            process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
                             break;
                         }
                     }
                 }
                 _ = cancel_rx.changed() => {
                     if *cancel_rx.borrow() {
-                        // Stream was cancelled
                         break;
                     }
                 }
@@ -880,24 +997,24 @@ async fn do_trigger_agent_response(
     });
 }
 
-/// Process the next queued agent response for a conversation.
-/// Spawns a new task to avoid recursive async Send issues.
+/// Process the next queued agent response.
+/// queue_key is "{conversation_id}:{agent_id}".
 fn process_next_in_queue(
-    conversation_id: &str,
+    queue_key: &str,
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
 ) {
     let next = {
-        let mut queue = match ws_state.agent_response_queues.get_mut(conversation_id) {
+        let mut queue = match ws_state.agent_response_queues.get_mut(queue_key) {
             Some(q) => q,
             None => return,
         };
         let item = queue.pop_front();
         if queue.is_empty() {
             drop(queue);
-            ws_state.agent_response_queues.remove(conversation_id);
+            ws_state.agent_response_queues.remove(queue_key);
         }
         item
     };
@@ -911,26 +1028,27 @@ fn process_next_in_queue(
     let db = db.clone();
     let redis = redis.clone();
     let config = config.clone();
-    let conversation_id = conversation_id.to_string();
 
     tokio::spawn(async move {
-        let conv = sqlx::query_as::<_, (Option<String>,)>(
-            r#"SELECT agent_id::text FROM conversations WHERE id = $1::uuid"#,
+        // Get conversation type
+        let conv_type = sqlx::query_as::<_, (String,)>(
+            r#"SELECT type::text FROM conversations WHERE id = $1::uuid"#,
         )
-        .bind(&conversation_id)
+        .bind(&next.conversation_id)
         .fetch_optional(&db)
-        .await;
-
-        let agent_id = match conv {
-            Ok(Some((Some(id),))) => id,
-            _ => return,
-        };
+        .await
+        .ok()
+        .flatten()
+        .map(|r| r.0)
+        .unwrap_or_else(|| "direct".to_string());
 
         do_trigger_agent_response(
             &next.user_id,
-            &agent_id,
-            &conversation_id,
+            &next.agent_id,
+            &next.conversation_id,
             &next.content,
+            next.reply_to_id.as_deref(),
+            &conv_type,
             &ws_state,
             &db,
             &redis,

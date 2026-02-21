@@ -24,6 +24,7 @@ const sanitizeSchema = {
 interface MarkdownContentProps {
   content: string;
   highlightQuery?: string;
+  mentionNames?: string[];
 }
 
 function CodeBlockCopyButton({ code }: { code: string }) {
@@ -81,7 +82,7 @@ function extractLanguageFromChildren(children: React.ReactNode): string | null {
 
 const JS_LANGUAGES = new Set(["javascript", "js"]);
 
-export function MarkdownContent({ content, highlightQuery }: MarkdownContentProps) {
+export function MarkdownContent({ content, highlightQuery, mentionNames }: MarkdownContentProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Highlight matching search text in the DOM after render
@@ -126,6 +127,61 @@ export function MarkdownContent({ content, highlightQuery }: MarkdownContentProp
       });
     };
   }, [highlightQuery, content]);
+
+  // Highlight @mentions in the DOM after render
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || !mentionNames?.length) return;
+
+    const escapedNames = mentionNames.map((n) =>
+      n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    );
+    const pattern = new RegExp(`@(${escapedNames.join("|")})(?:\\b|$)`);
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const matches: { node: Text; start: number; end: number }[] = [];
+    let textNode: Text | null;
+    while ((textNode = walker.nextNode() as Text | null)) {
+      const text = textNode.textContent ?? "";
+      let offset = 0;
+      while (offset < text.length) {
+        const sub = text.slice(offset);
+        const match = sub.match(pattern);
+        if (!match || match.index === undefined) break;
+        matches.push({
+          node: textNode,
+          start: offset + match.index,
+          end: offset + match.index + match[0].length,
+        });
+        offset += match.index + match[0].length;
+      }
+    }
+
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const { node, start, end } = matches[i];
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      const span = document.createElement("span");
+      span.setAttribute("data-mention", "true");
+      span.className = "font-semibold text-blue-400";
+      range.surroundContents(span);
+    }
+
+    return () => {
+      if (!contentRef.current) return;
+      const spans = contentRef.current.querySelectorAll("[data-mention]");
+      spans.forEach((s) => {
+        const parent = s.parentNode;
+        if (parent) {
+          parent.replaceChild(
+            document.createTextNode(s.textContent ?? ""),
+            s
+          );
+          parent.normalize();
+        }
+      });
+    };
+  }, [mentionNames, content]);
 
   return (
     <div ref={contentRef} className="markdown-content text-sm leading-relaxed">

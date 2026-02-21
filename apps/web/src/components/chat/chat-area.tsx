@@ -53,6 +53,7 @@ export function ChatArea() {
         isOnline={conversation.type === "direct" ? isOnline : undefined}
         type={conversation.type}
         conversationId={conversation.id}
+        mentionOnly={conversation.mentionOnly}
         onClick={agent ? () => setManageOpen(true) : undefined}
       />
       <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} />

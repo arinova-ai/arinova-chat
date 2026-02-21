@@ -54,6 +54,8 @@ struct ListQuery {
 struct UpdateConversationBody {
     title: Option<String>,
     pinned: Option<bool>,
+    #[serde(rename = "mentionOnly")]
+    mention_only: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +73,7 @@ struct ConversationListRow {
     conv_type: String,
     user_id: String,
     agent_id: Option<Uuid>,
+    mention_only: bool,
     pinned_at: Option<NaiveDateTime>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
@@ -166,6 +169,7 @@ async fn list_conversations(
                 c.type::text,
                 c.user_id,
                 c.agent_id,
+                c.mention_only,
                 c.pinned_at,
                 c.created_at,
                 c.updated_at,
@@ -204,6 +208,7 @@ async fn list_conversations(
                 c.type::text,
                 c.user_id,
                 c.agent_id,
+                c.mention_only,
                 c.pinned_at,
                 c.created_at,
                 c.updated_at,
@@ -333,6 +338,7 @@ async fn list_conversations(
                 "type": row.conv_type,
                 "userId": row.user_id,
                 "agentId": row.agent_id,
+                "mentionOnly": row.mention_only,
                 "pinnedAt": row.pinned_at,
                 "createdAt": row.created_at,
                 "updatedAt": row.updated_at,
@@ -396,6 +402,7 @@ async fn update_conversation(
                 WHEN $5::boolean AND NOT $6::boolean THEN NULL
                 ELSE pinned_at
             END,
+            mention_only = CASE WHEN $7::boolean THEN $8 ELSE mention_only END,
             updated_at = NOW()
            WHERE id = $1 AND user_id = $2
            RETURNING *"#,
@@ -406,6 +413,8 @@ async fn update_conversation(
     .bind(&body.title)             // $4: the new title value
     .bind(body.pinned.is_some())   // $5: whether pinned was provided
     .bind(body.pinned.unwrap_or(false)) // $6: the pinned value
+    .bind(body.mention_only.is_some()) // $7: whether mention_only was provided
+    .bind(body.mention_only.unwrap_or(true)) // $8: the mention_only value
     .fetch_optional(&state.db)
     .await;
 

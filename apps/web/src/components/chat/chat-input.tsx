@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { SendHorizontal, Paperclip, X, FileText, ImageIcon } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { BACKEND_URL } from "@/lib/config";
+import { ReplyPreview } from "./reply-preview";
+import { MentionPopup, type MentionItem } from "./mention-popup";
 
 // ---------- Popup item types ----------
 
@@ -21,6 +23,9 @@ export function ChatInput() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionStart, setMentionStart] = useState(-1);
   const isKeyboardNav = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,11 +37,20 @@ export function ChatInput() {
   const agents = useChatStore((s) => s.agents);
   const agentSkills = useChatStore((s) => s.agentSkills);
   const loadAgentSkills = useChatStore((s) => s.loadAgentSkills);
+  const conversationMembers = useChatStore((s) => s.conversationMembers);
 
-  // Get the active conversation's agentId (only for direct conversations)
+  // Get the active conversation
   const activeConversation = conversations.find(
     (c) => c.id === activeConversationId
   );
+
+  // Dynamic placeholder based on mentionOnly setting
+  const placeholder =
+    activeConversation?.type === "group" && activeConversation.mentionOnly
+      ? "@mention an agent..."
+      : "Type a message...";
+
+  // Get the active conversation's agentId (only for direct conversations)
   const agentId =
     activeConversation?.type === "direct" ? activeConversation.agentId : null;
 
@@ -92,6 +106,38 @@ export function ChatInput() {
     items[slashSelectedIndex]?.scrollIntoView({ block: "nearest" });
   }, [slashSelectedIndex, showSlashPopup]);
 
+  // ---------- @Mention popup logic ----------
+
+  const activeMembers = activeConversationId
+    ? conversationMembers[activeConversationId] ?? []
+    : [];
+
+  const isMentionOnly =
+    activeConversation?.type === "group" && activeConversation.mentionOnly;
+
+  const mentionItems = useMemo((): MentionItem[] => {
+    if (mentionQuery === null || activeMembers.length === 0) return [];
+    const q = mentionQuery.toLowerCase();
+
+    // Add @all as first item when mentionOnly is ON
+    const allItem: MentionItem = { agentId: "__all__", agentName: "all" };
+    const filtered = q
+      ? activeMembers.filter((m) => m.agentName.toLowerCase().includes(q))
+      : activeMembers;
+
+    if (isMentionOnly) {
+      const allMatches = !q || "all".includes(q);
+      return allMatches ? [allItem, ...filtered] : filtered;
+    }
+    return filtered;
+  }, [mentionQuery, activeMembers, isMentionOnly]);
+
+  const showMentionPopup = mentionQuery !== null && mentionItems.length > 0;
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionItems.length]);
+
   // ---------- Helpers ----------
 
   const clearInput = useCallback(() => {
@@ -107,6 +153,29 @@ export function ChatInput() {
       clearInput();
     },
     [sendMessage, clearInput]
+  );
+
+  const selectMention = useCallback(
+    (item: MentionItem) => {
+      if (mentionStart < 0) return;
+      const cursorPos = textareaRef.current?.selectionStart ?? value.length;
+      const before = value.slice(0, mentionStart);
+      const after = value.slice(cursorPos);
+      const mention = `@${item.agentName} `;
+      const newValue = `${before}${mention}${after}`;
+      setValue(newValue);
+      setMentionQuery(null);
+      setMentionStart(-1);
+      const newCursorPos = mentionStart + mention.length;
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = newCursorPos;
+          textareaRef.current.selectionEnd = newCursorPos;
+          textareaRef.current.focus();
+        }
+      });
+    },
+    [value, mentionStart]
   );
 
   // ---------- Upload & Send ----------
@@ -173,6 +242,35 @@ export function ChatInput() {
   // ---------- Keyboard handling ----------
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // @Mention popup keyboard navigation
+    if (showMentionPopup) {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((prev) =>
+          prev <= 0 ? mentionItems.length - 1 : prev - 1
+        );
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((prev) =>
+          prev >= mentionItems.length - 1 ? 0 : prev + 1
+        );
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const item = mentionItems[mentionIndex];
+        if (item) selectMention(item);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+
     // Slash popup keyboard navigation
     if (showSlashPopup && hasItems) {
       if (e.key === "ArrowUp") {
@@ -224,7 +322,21 @@ export function ChatInput() {
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(e.target.value);
+    const newValue = e.target.value;
+    setValue(newValue);
+
+    // Detect @mention trigger
+    const cursorPos = e.target.selectionStart ?? newValue.length;
+    const textBeforeCursor = newValue.slice(0, cursorPos);
+    const atMatch = textBeforeCursor.match(/(^|\s)@(\w*)$/);
+    if (atMatch && activeMembers.length > 0) {
+      setMentionQuery(atMatch[2]);
+      setMentionStart(cursorPos - atMatch[2].length - 1); // position of @
+    } else {
+      setMentionQuery(null);
+      setMentionStart(-1);
+    }
+
     const el = e.target;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
@@ -287,6 +399,19 @@ export function ChatInput() {
             })}
           </div>
         )}
+
+        {/* @Mention popup */}
+        {showMentionPopup && (
+          <MentionPopup
+            items={mentionItems}
+            selectedIndex={mentionIndex}
+            onSelect={selectMention}
+            onHover={setMentionIndex}
+          />
+        )}
+
+        {/* Reply preview */}
+        <ReplyPreview />
 
         {/* Quick reply buttons */}
         {quickReplies.length > 0 && (
@@ -353,7 +478,7 @@ export function ChatInput() {
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder={placeholder}
             rows={1}
             className="flex-1 resize-none rounded-xl border border-input bg-neutral-800 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />

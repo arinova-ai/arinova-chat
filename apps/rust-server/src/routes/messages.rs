@@ -34,6 +34,8 @@ struct MessageRow {
     role: crate::db::models::MessageRole,
     content: String,
     status: crate::db::models::MessageStatus,
+    sender_agent_id: Option<Uuid>,
+    reply_to_id: Option<Uuid>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
 }
@@ -110,6 +112,41 @@ async fn with_attachments(
 
     let is_r2 = config.is_r2_configured();
 
+    // Fetch sender agent names for agent messages
+    let agent_ids: Vec<Uuid> = items.iter().filter_map(|m| m.sender_agent_id).collect();
+    let agent_names: std::collections::HashMap<Uuid, String> = if !agent_ids.is_empty() {
+        sqlx::query_as::<_, (Uuid, String)>(
+            "SELECT id, name FROM agents WHERE id = ANY($1)",
+        )
+        .bind(&agent_ids)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    // Fetch reply-to message data
+    let reply_ids: Vec<Uuid> = items.iter().filter_map(|m| m.reply_to_id).collect();
+    let reply_data: std::collections::HashMap<Uuid, (String, String, Option<String>)> = if !reply_ids.is_empty() {
+        sqlx::query_as::<_, (Uuid, String, String, Option<String>)>(
+            r#"SELECT m.id, m.role::text, m.content,
+                      (SELECT name FROM agents WHERE id = m.sender_agent_id) as agent_name
+               FROM messages m WHERE m.id = ANY($1)"#,
+        )
+        .bind(&reply_ids)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, role, content, name)| (id, (role, content, name)))
+        .collect()
+    } else {
+        std::collections::HashMap::new()
+    };
+
     items
         .iter()
         .map(|m| {
@@ -134,6 +171,19 @@ async fn with_attachments(
                 })
                 .collect();
 
+            let sender_agent_name = m.sender_agent_id.and_then(|id| agent_names.get(&id).cloned());
+
+            let reply_to = m.reply_to_id.and_then(|rid| {
+                reply_data.get(&rid).map(|(role, content, agent_name)| {
+                    let preview = if content.len() > 200 { &content[..200] } else { content.as_str() };
+                    json!({
+                        "role": role,
+                        "content": preview,
+                        "senderAgentName": agent_name,
+                    })
+                })
+            });
+
             json!({
                 "id": m.id,
                 "conversationId": m.conversation_id,
@@ -141,6 +191,10 @@ async fn with_attachments(
                 "role": m.role,
                 "content": m.content,
                 "status": m.status,
+                "senderAgentId": m.sender_agent_id,
+                "senderAgentName": sender_agent_name,
+                "replyToId": m.reply_to_id,
+                "replyTo": reply_to,
                 "createdAt": m.created_at,
                 "updatedAt": m.updated_at,
                 "attachments": att_json,
@@ -748,6 +802,8 @@ fn clone_message_row(m: &MessageRow) -> MessageRow {
         role: m.role.clone(),
         content: m.content.clone(),
         status: m.status.clone(),
+        sender_agent_id: m.sender_agent_id,
+        reply_to_id: m.reply_to_id,
         created_at: m.created_at,
         updated_at: m.updated_at,
     }

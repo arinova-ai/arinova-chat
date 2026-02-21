@@ -33,7 +33,9 @@ pub enum AgentEvent {
 pub struct QueuedResponse {
     pub user_id: String,
     pub conversation_id: String,
+    pub agent_id: String,
     pub content: String,
+    pub reply_to_id: Option<String>,
 }
 
 /// Shared WebSocket state across all connections
@@ -165,9 +167,15 @@ impl WsState {
         }
     }
 
-    /// Check if a conversation has an active stream
+    /// Check if an agent has an active stream in a conversation
+    pub fn has_active_stream_for_agent(&self, conversation_id: &str, agent_id: &str) -> bool {
+        self.active_streams.contains(&format!("{}:{}", conversation_id, agent_id))
+    }
+
+    /// Check if a conversation has any active stream (for sync/reconnection)
     pub fn has_active_stream(&self, conversation_id: &str) -> bool {
-        self.active_streams.contains(conversation_id)
+        let prefix = format!("{}:", conversation_id);
+        self.active_streams.iter().any(|key| key.starts_with(&prefix))
     }
 
     /// Get agent skills

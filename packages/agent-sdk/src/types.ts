@@ -30,6 +30,12 @@ export interface TaskContext {
   conversationId: string;
   /** The user's message content. */
   content: string;
+  /** Conversation type: "direct" or "group". */
+  conversationType?: string;
+  /** Other agents in the conversation (for group conversations). */
+  members?: { agentId: string; agentName: string }[];
+  /** The message being replied to, if this is a reply. */
+  replyTo?: { role: string; content: string; senderAgentName?: string };
   /** Send a streaming delta (new characters only) to the user. */
   sendChunk: (delta: string) => void;
   /** Mark the task as complete with the full response content. */

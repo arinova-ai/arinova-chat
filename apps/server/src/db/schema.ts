@@ -110,6 +110,7 @@ export const conversations = pgTable("conversations", {
     .notNull()
     .references(() => user.id),
   agentId: uuid("agent_id").references(() => agents.id),
+  mentionOnly: boolean("mention_only").notNull().default(true),
   pinnedAt: timestamp("pinned_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -137,6 +138,8 @@ export const messages = pgTable("messages", {
   role: messageRoleEnum().notNull(),
   content: text().notNull().default(""),
   status: messageStatusEnum().notNull().default("pending"),
+  senderAgentId: uuid("sender_agent_id").references(() => agents.id, { onDelete: "set null" }),
+  replyToId: uuid("reply_to_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [

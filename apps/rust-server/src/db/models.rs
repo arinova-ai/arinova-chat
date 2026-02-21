@@ -135,6 +135,8 @@ pub struct Conversation {
     pub conv_type: ConversationType,
     pub user_id: String,
     pub agent_id: Option<Uuid>,
+    #[serde(rename = "mentionOnly")]
+    pub mention_only: bool,
     pub pinned_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -156,6 +158,8 @@ pub struct Message {
     pub role: MessageRole,
     pub content: String,
     pub status: MessageStatus,
+    pub sender_agent_id: Option<Uuid>,
+    pub reply_to_id: Option<Uuid>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

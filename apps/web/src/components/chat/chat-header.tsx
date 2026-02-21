@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone } from "lucide-react";
+import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone, AtSign } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ interface ChatHeaderProps {
   isOnline?: boolean;
   type?: ConversationType;
   conversationId?: string;
+  mentionOnly?: boolean;
   onClick?: () => void;
 }
 
@@ -27,6 +28,7 @@ export function ChatHeader({
   isOnline,
   type = "direct",
   conversationId,
+  mentionOnly,
   onClick,
 }: ChatHeaderProps) {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -34,7 +36,13 @@ export function ChatHeader({
   const toggleTimestamps = useChatStore((s) => s.toggleTimestamps);
   const mutedConversations = useChatStore((s) => s.mutedConversations);
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
+  const updateConversation = useChatStore((s) => s.updateConversation);
   const isMuted = conversationId ? mutedConversations[conversationId] : false;
+
+  const handleMentionOnlyToggle = useCallback(() => {
+    if (!conversationId) return;
+    updateConversation(conversationId, { mentionOnly: !mentionOnly });
+  }, [conversationId, mentionOnly, updateConversation]);
 
   const handleMuteToggle = useCallback(async () => {
     if (!conversationId) return;
@@ -106,6 +114,17 @@ export function ChatHeader({
       </button>
 
       <div className="ml-auto flex items-center gap-1">
+        {type === "group" && conversationId && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", mentionOnly && "text-blue-400")}
+            onClick={handleMentionOnlyToggle}
+            title={mentionOnly ? "Mention-only ON: only @mentioned agents respond" : "Mention-only OFF: all agents respond"}
+          >
+            <AtSign className="h-4 w-4" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
