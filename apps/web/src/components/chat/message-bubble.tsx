@@ -31,7 +31,7 @@ import {
 import { assetUrl } from "@/lib/config";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
-import { useLongPress } from "@/hooks/use-long-press";
+import { useDoubleTap } from "@/hooks/use-double-tap";
 
 interface MessageBubbleProps {
   message: Message;
@@ -68,7 +68,7 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
 
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
-  const longPressHandlers = useLongPress(() => {
+  const doubleTapHandlers = useDoubleTap(() => {
     if (!isStreaming) setActionSheetOpen(true);
   });
 
@@ -129,10 +129,10 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
       </Avatar>
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0" {...longPressHandlers}>
+        <div className="relative min-w-0" {...doubleTapHandlers}>
           <div
             className={cn(
-              "rounded-2xl px-4 py-2.5 overflow-hidden select-none touch-none [@media(hover:hover)]:select-auto [@media(hover:hover)]:touch-auto",
+              "rounded-2xl px-4 py-2.5 overflow-hidden",
               isUser
                 ? "bg-blue-600 text-white"
                 : "bg-neutral-800 text-neutral-100",
