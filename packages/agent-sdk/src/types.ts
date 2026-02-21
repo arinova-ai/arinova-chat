@@ -36,6 +36,8 @@ export interface TaskContext {
   members?: { agentId: string; agentName: string }[];
   /** The message being replied to, if this is a reply. */
   replyTo?: { role: string; content: string; senderAgentName?: string };
+  /** Recent conversation history (up to 5 messages before the current one). */
+  history?: { role: string; content: string; senderAgentName?: string; createdAt: string }[];
   /** Send a streaming delta (new characters only) to the user. */
   sendChunk: (delta: string) => void;
   /** Mark the task as complete with the full response content. */
