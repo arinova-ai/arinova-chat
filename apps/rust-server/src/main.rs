@@ -1,3 +1,4 @@
+use axum::extract::DefaultBodyLimit;
 use axum::Router;
 use std::net::SocketAddr;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
@@ -105,6 +106,7 @@ async fn main() {
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)
+        .layer(DefaultBodyLimit::max(config.max_file_size))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
