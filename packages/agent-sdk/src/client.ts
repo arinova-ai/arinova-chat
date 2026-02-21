@@ -212,7 +212,7 @@ export class ArinovaAgent {
    */
   async uploadFile(
     conversationId: string,
-    file: Buffer | Uint8Array,
+    file: Uint8Array,
     fileName: string,
     fileType?: string,
   ): Promise<UploadResult> {
@@ -223,7 +223,7 @@ export class ArinovaAgent {
 
     const formData = new FormData();
     formData.append("conversationId", conversationId);
-    const blob = new Blob([file], { type: fileType });
+    const blob = new Blob([new Uint8Array(file) as unknown as ArrayBuffer], { type: fileType });
     formData.append("file", blob, fileName);
 
     const res = await fetch(`${httpUrl}/api/agent/upload`, {

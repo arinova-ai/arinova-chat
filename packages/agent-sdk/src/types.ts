@@ -46,7 +46,7 @@ export interface TaskContext {
   signal: AbortSignal;
   /** Upload a file to R2 storage. Returns the public URL and file metadata. */
   uploadFile: (
-    file: Buffer | Uint8Array,
+    file: Uint8Array,
     fileName: string,
     fileType?: string,
   ) => Promise<UploadResult>;
