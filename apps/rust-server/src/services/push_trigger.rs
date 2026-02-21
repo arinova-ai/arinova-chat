@@ -94,7 +94,7 @@ pub async fn is_conversation_muted(
 ) -> Result<bool, sqlx::Error> {
     let row = sqlx::query_as::<_, (bool,)>(
         r#"SELECT muted FROM conversation_reads
-           WHERE user_id = $1 AND conversation_id = $2
+           WHERE user_id = $1 AND conversation_id = $2::uuid
            LIMIT 1"#,
     )
     .bind(user_id)

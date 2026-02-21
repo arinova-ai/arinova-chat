@@ -89,5 +89,5 @@
 
 - [x] 15.1 Unit tests pass — auth, config, pairing code, WS state, sanitization (13 tests including scrypt)
 - [x] 15.2 Test auth compatibility — verified: user created by TS Better Auth (scrypt) can log in via Rust server
-- [ ] 15.3 Test WebSocket protocol — verify frontend connects and can send/receive messages with streaming
-- [ ] 15.4 Test agent SDK compatibility — verify TS agent SDK connects, authenticates, receives tasks, and streams responses
+- [x] 15.3 Test WebSocket protocol — verify frontend connects and can send/receive messages with streaming
+- [x] 15.4 Test agent SDK compatibility — verify TS agent SDK connects, authenticates, receives tasks, and streams responses

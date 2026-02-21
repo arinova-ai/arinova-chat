@@ -371,7 +371,7 @@ async fn handle_sync(
     for conv_id in &conv_ids {
         // Get max seq
         let max_seq_row = sqlx::query_as::<_, (Option<i32>,)>(
-            r#"SELECT MAX(seq) FROM messages WHERE conversation_id = $1"#,
+            r#"SELECT MAX(seq) FROM messages WHERE conversation_id = $1::uuid"#,
         )
         .bind(conv_id)
         .fetch_one(db)
@@ -382,7 +382,7 @@ async fn handle_sync(
         // Get last message
         let last_msg = sqlx::query_as::<_, (String, String, String, chrono::NaiveDateTime)>(
             r#"SELECT content, role::text, status::text, created_at
-               FROM messages WHERE conversation_id = $1
+               FROM messages WHERE conversation_id = $1::uuid
                ORDER BY seq DESC LIMIT 1"#,
         )
         .bind(conv_id)
@@ -421,7 +421,7 @@ async fn handle_sync(
                 let missed = sqlx::query_as::<_, (String, String, i32, String, String, String, chrono::NaiveDateTime)>(
                     r#"SELECT id::text, conversation_id::text, seq, role::text, content, status::text, created_at
                        FROM messages
-                       WHERE conversation_id = $1 AND seq > $2
+                       WHERE conversation_id = $1::uuid AND seq > $2
                        ORDER BY seq ASC LIMIT 100"#,
                 )
                 .bind(conv_id)
@@ -486,7 +486,7 @@ async fn handle_sync(
 
         let streaming_msg = sqlx::query_as::<_, (String, i32)>(
             r#"SELECT id::text, seq FROM messages
-               WHERE conversation_id = $1 AND status = 'streaming'
+               WHERE conversation_id = $1::uuid AND status = 'streaming'
                ORDER BY created_at DESC LIMIT 1"#,
         )
         .bind(conv_id)
@@ -520,7 +520,7 @@ async fn handle_sync(
 async fn handle_mark_read(user_id: &str, conversation_id: &str, seq: i32, db: &PgPool) {
     let _ = sqlx::query(
         r#"INSERT INTO conversation_reads (id, user_id, conversation_id, last_read_seq, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, NOW())
+           VALUES (gen_random_uuid(), $1, $2::uuid, $3, NOW())
            ON CONFLICT (user_id, conversation_id)
            DO UPDATE SET
              last_read_seq = GREATEST(conversation_reads.last_read_seq, EXCLUDED.last_read_seq),
@@ -547,7 +547,7 @@ pub async fn trigger_agent_response(
     // Verify conversation belongs to user and get agent info
     let conv = sqlx::query_as::<_, (String, Option<String>)>(
         r#"SELECT id::text, agent_id::text FROM conversations
-           WHERE id = $1 AND user_id = $2"#,
+           WHERE id = $1::uuid AND user_id = $2"#,
     )
     .bind(conversation_id)
     .bind(user_id)
@@ -573,7 +573,7 @@ pub async fn trigger_agent_response(
 
         let _ = sqlx::query(
             r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
-               VALUES (gen_random_uuid(), $1, $2, 'user', $3, 'completed', NOW(), NOW())"#,
+               VALUES (gen_random_uuid(), $1::uuid, $2, 'user', $3, 'completed', NOW(), NOW())"#,
         )
         .bind(conversation_id)
         .bind(user_seq)
@@ -582,7 +582,7 @@ pub async fn trigger_agent_response(
         .await;
 
         let _ = sqlx::query(
-            r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1"#,
+            r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
         )
         .bind(conversation_id)
         .execute(db)
@@ -628,7 +628,7 @@ async fn do_trigger_agent_response(
     config: &crate::config::Config,
 ) {
     let agent = sqlx::query_as::<_, (String, Option<String>)>(
-        r#"SELECT name, system_prompt FROM agents WHERE id = $1"#,
+        r#"SELECT name, system_prompt FROM agents WHERE id = $1::uuid"#,
     )
     .bind(agent_id)
     .fetch_optional(db)
@@ -656,7 +656,7 @@ async fn do_trigger_agent_response(
         let err_msg_id = uuid::Uuid::new_v4().to_string();
         let _ = sqlx::query(
             r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
-               VALUES ($1, $2, $3, 'agent', $4, 'error', NOW(), NOW())"#,
+               VALUES ($1::uuid, $2::uuid, $3, 'agent', $4, 'error', NOW(), NOW())"#,
         )
         .bind(&err_msg_id)
         .bind(conversation_id)
@@ -692,7 +692,7 @@ async fn do_trigger_agent_response(
     let agent_msg_id = uuid::Uuid::new_v4().to_string();
     let _ = sqlx::query(
         r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
-           VALUES ($1, $2, $3, 'agent', '', 'streaming', NOW(), NOW())"#,
+           VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', NOW(), NOW())"#,
     )
     .bind(&agent_msg_id)
     .bind(conversation_id)
@@ -700,7 +700,7 @@ async fn do_trigger_agent_response(
     .execute(db)
     .await;
 
-    let _ = sqlx::query(r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1"#)
+    let _ = sqlx::query(r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#)
         .bind(conversation_id)
         .execute(db)
         .await;
@@ -790,7 +790,7 @@ async fn do_trigger_agent_response(
 
                             // Update message in DB
                             let _ = sqlx::query(
-                                r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2"#,
+                                r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
                             )
                             .bind(&full_content)
                             .bind(&agent_msg_id_clone)
@@ -842,7 +842,7 @@ async fn do_trigger_agent_response(
                             }
 
                             let _ = sqlx::query(
-                                r#"UPDATE messages SET content = $1, status = 'error', updated_at = NOW() WHERE id = $2"#,
+                                r#"UPDATE messages SET content = $1, status = 'error', updated_at = NOW() WHERE id = $2::uuid"#,
                             )
                             .bind(&error)
                             .bind(&agent_msg_id_clone)
@@ -915,7 +915,7 @@ fn process_next_in_queue(
 
     tokio::spawn(async move {
         let conv = sqlx::query_as::<_, (Option<String>,)>(
-            r#"SELECT agent_id::text FROM conversations WHERE id = $1"#,
+            r#"SELECT agent_id::text FROM conversations WHERE id = $1::uuid"#,
         )
         .bind(&conversation_id)
         .fetch_optional(&db)

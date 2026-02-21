@@ -66,7 +66,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
 
                 // Look up agent by botToken (secret_token)
                 let agent = sqlx::query_as::<_, (String, String)>(
-                    r#"SELECT id, name FROM agents WHERE secret_token = $1"#,
+                    r#"SELECT id::text, name FROM agents WHERE secret_token = $1"#,
                 )
                 .bind(bot_token)
                 .fetch_optional(&state.db)
