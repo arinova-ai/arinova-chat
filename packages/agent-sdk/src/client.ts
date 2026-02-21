@@ -22,6 +22,7 @@ export class ArinovaAgent {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   private taskHandler: TaskHandler | null = null;
+  private taskAbortControllers: Map<string, AbortController> = new Map();
 
   private listeners: Record<string, Array<(...args: unknown[]) => void>> = {
     connected: [],
@@ -175,6 +176,16 @@ export class ArinovaAgent {
           this.handleTask(data);
           return;
         }
+
+        if (data.type === "cancel_task") {
+          const taskId = data.taskId as string;
+          const controller = this.taskAbortControllers.get(taskId);
+          if (controller) {
+            controller.abort();
+            this.taskAbortControllers.delete(taskId);
+          }
+          return;
+        }
       } catch (err) {
         this.emit("error", err instanceof Error ? err : new Error(String(err)));
       }
@@ -195,6 +206,9 @@ export class ArinovaAgent {
     if (!this.taskHandler) return;
 
     const taskId = data.taskId as string;
+    const abortController = new AbortController();
+    this.taskAbortControllers.set(taskId, abortController);
+
     const ctx: TaskContext = {
       taskId,
       conversationId: data.conversationId as string,
@@ -203,8 +217,15 @@ export class ArinovaAgent {
       members: data.members as { agentId: string; agentName: string }[] | undefined,
       replyTo: data.replyTo as { role: string; content: string; senderAgentName?: string } | undefined,
       sendChunk: (delta: string) => this.send({ type: "agent_chunk", taskId, chunk: delta }),
-      sendComplete: (fullContent: string) => this.send({ type: "agent_complete", taskId, content: fullContent }),
-      sendError: (error: string) => this.send({ type: "agent_error", taskId, error }),
+      sendComplete: (fullContent: string) => {
+        this.taskAbortControllers.delete(taskId);
+        this.send({ type: "agent_complete", taskId, content: fullContent });
+      },
+      sendError: (error: string) => {
+        this.taskAbortControllers.delete(taskId);
+        this.send({ type: "agent_error", taskId, error });
+      },
+      signal: abortController.signal,
     };
 
     Promise.resolve(this.taskHandler(ctx)).catch((err) => {

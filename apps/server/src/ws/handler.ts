@@ -16,7 +16,7 @@ import type {
   SyncConversationSummary,
   SyncMissedMessage,
 } from "@arinova/shared/types";
-import { isAgentConnected, sendTaskToAgent } from "./agent-handler.js";
+import { isAgentConnected, sendTaskToAgent, cancelAgentTask } from "./agent-handler.js";
 import { getNextSeq } from "../lib/message-seq.js";
 import {
   pushEvent,
@@ -32,8 +32,16 @@ const wsConnections = new Map<string, Set<WebSocket>>();
 // Per-socket visibility state
 const socketVisible = new Map<WebSocket, boolean>();
 
-// Active stream cancellers: messageId -> { cancel }
-const streamCancellers = new Map<string, { cancel: () => void }>();
+// Active stream cancellers: messageId -> { cancel, context }
+const streamCancellers = new Map<
+  string,
+  {
+    cancel: () => void;
+    conversationId: string;
+    userId: string;
+    seq: number;
+  }
+>();
 
 // Rate limiting constants
 const WS_RATE_LIMIT = 10; // messages per minute
@@ -235,10 +243,38 @@ export async function wsRoutes(app: FastifyInstance) {
         }
 
         if (event.type === "cancel_stream") {
-          const canceller = streamCancellers.get(event.messageId);
-          if (canceller) {
-            canceller.cancel();
+          const info = streamCancellers.get(event.messageId);
+          if (info) {
             streamCancellers.delete(event.messageId);
+
+            // Cancel agent task silently (no onError) + notify agent to stop
+            cancelAgentTask(event.messageId);
+
+            // Preserve accumulated content from Redis, then clean up
+            const accumulated = await redis.get(`stream:${event.messageId}`);
+            redis.del(`stream:${event.messageId}`).catch(() => {});
+
+            // Update DB: keep content, set status to cancelled
+            await db
+              .update(messages)
+              .set({
+                content: accumulated || "",
+                status: "cancelled",
+                updatedAt: new Date(),
+              })
+              .where(eq(messages.id, event.messageId));
+
+            // Tell frontend the stream ended
+            sendToUser(info.userId, {
+              type: "stream_end",
+              conversationId: info.conversationId,
+              messageId: event.messageId,
+              seq: info.seq,
+            });
+
+            // Release active stream lock and process queue
+            activeStreams.delete(info.conversationId);
+            processNextInQueue(info.conversationId);
           }
           return;
         }
@@ -734,7 +770,12 @@ async function doTriggerAgentResponse(
     },
   });
 
-  streamCancellers.set(agentMsg.id, { cancel });
+  streamCancellers.set(agentMsg.id, {
+    cancel,
+    conversationId,
+    userId,
+    seq: agentSeq,
+  });
 }
 
 /**

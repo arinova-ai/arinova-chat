@@ -989,6 +989,48 @@ async fn do_trigger_agent_response(
                 }
                 _ = cancel_rx.changed() => {
                     if *cancel_rx.borrow() {
+                        // User cancelled the stream — clean up everything
+
+                        // 1. Remove stream canceller
+                        ws_state.stream_cancellers.remove(&agent_msg_id_clone);
+
+                        // 2. Clean up Redis stream cache
+                        if let Ok(mut conn) = redis.get().await {
+                            let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
+                        }
+
+                        // 3. Update message status to 'cancelled' in DB with accumulated content
+                        let _ = sqlx::query(
+                            r#"UPDATE messages SET content = $1, status = 'cancelled', updated_at = NOW() WHERE id = $2::uuid"#,
+                        )
+                        .bind(&stream_accumulated)
+                        .bind(&agent_msg_id_clone)
+                        .execute(&db)
+                        .await;
+
+                        // 4. Notify user that stream was cancelled
+                        ws_state.send_to_user_or_queue(&user_id, &json!({
+                            "type": "stream_end",
+                            "conversationId": &conversation_id,
+                            "messageId": &agent_msg_id_clone,
+                            "seq": agent_seq
+                        }), &redis);
+
+                        // 5. Send cancel_task to agent so it can stop generating
+                        ws_state.send_to_agent(&agent_id, &json!({
+                            "type": "cancel_task",
+                            "taskId": &agent_msg_id_clone
+                        }));
+
+                        // 6. Remove pending task so agent chunks are silently dropped
+                        if let Some((_, task)) = ws_state.pending_tasks.remove(&agent_msg_id_clone) {
+                            task.timeout_handle.abort();
+                        }
+
+                        // 7. Clean up active stream and process queue
+                        ws_state.active_streams.remove(&stream_key);
+                        process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
+
                         break;
                     }
                 }

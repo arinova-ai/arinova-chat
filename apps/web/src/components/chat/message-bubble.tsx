@@ -52,6 +52,7 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
   const isUser = message.role === "user";
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
+  const isCancelled = message.status === "cancelled";
   const [copied, setCopied] = useState(false);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
@@ -135,7 +136,8 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
               isUser
                 ? "bg-blue-600 text-white"
                 : "bg-neutral-800 text-neutral-100",
-              isError && "border border-red-500/30"
+              isError && "border border-red-500/30",
+              isCancelled && "border border-neutral-500/30"
             )}
           >
             {!isUser && (message.senderAgentName || agentName) && (
@@ -147,6 +149,12 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
               <div className="mb-1 flex items-center gap-1 text-xs text-red-400">
                 <AlertCircle className="h-3 w-3" />
                 <span>Error</span>
+              </div>
+            )}
+            {isCancelled && (
+              <div className="mb-1 flex items-center gap-1 text-xs text-neutral-400">
+                <Square className="h-2.5 w-2.5 fill-current" />
+                <span>Stopped</span>
               </div>
             )}
             {/* Reply quote */}

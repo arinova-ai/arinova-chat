@@ -433,6 +433,7 @@ export type AgentWSServerEvent =
       members?: { agentId: string; agentName: string }[];
       replyTo?: { role: MessageRole; content: string; senderAgentName?: string };
     }
+  | { type: "cancel_task"; taskId: string }
   | { type: "pong" };
 
 // ===== Push Notifications =====

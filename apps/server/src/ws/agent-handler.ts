@@ -109,6 +109,20 @@ function cleanupTask(taskId: string, errorMessage?: string) {
   }
 }
 
+/** Cancel a pending task silently (no onError/onComplete) and notify the agent to stop. */
+export function cancelAgentTask(taskId: string): void {
+  const task = pendingTasks.get(taskId);
+  if (!task) return;
+  clearTimeout(task.timeout);
+  pendingTasks.delete(taskId);
+
+  // Notify agent to stop generating
+  const ws = agentConnections.get(task.agentId);
+  if (ws && ws.readyState === ws.OPEN) {
+    sendToAgent(ws, { type: "cancel_task", taskId });
+  }
+}
+
 function cleanupAgentTasks(agentId: string) {
   for (const [taskId, task] of pendingTasks) {
     if (task.agentId === agentId) {

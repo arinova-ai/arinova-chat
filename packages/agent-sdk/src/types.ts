@@ -42,6 +42,8 @@ export interface TaskContext {
   sendComplete: (content: string) => void;
   /** Mark the task as failed with an error message. */
   sendError: (error: string) => void;
+  /** AbortSignal that fires when the user cancels the stream. Check signal.aborted or listen to signal.addEventListener('abort', ...) to stop generation early. */
+  signal: AbortSignal;
 }
 
 /** Task handler function. */

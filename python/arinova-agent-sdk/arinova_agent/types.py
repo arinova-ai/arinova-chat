@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from threading import Event
 from typing import Callable, List, Optional
 
 
@@ -48,3 +49,5 @@ class Task:
     """Other agents in the conversation (for group conversations)."""
     reply_to: Optional[ReplyContext] = None
     """The message being replied to, if this is a reply."""
+    cancelled: Event = field(default_factory=Event)
+    """Event that is set when the user cancels the stream. Check task.cancelled.is_set() to stop generation early."""

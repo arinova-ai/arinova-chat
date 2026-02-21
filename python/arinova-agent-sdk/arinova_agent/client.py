@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import signal
-from typing import Awaitable, Callable
+from threading import Event
+from typing import Awaitable, Callable, Dict
 
 import websockets
 from websockets.asyncio.client import ClientConnection
@@ -41,6 +42,7 @@ class ArinovaAgent:
         self._on_error: Callable[[Exception], None] | None = None
         self._stopped = False
         self._ws: ClientConnection | None = None
+        self._active_tasks: Dict[str, Event] = {}
 
     def on_task(self, handler: TaskHandler) -> TaskHandler:
         """Register task handler. Can be used as a decorator."""
@@ -139,6 +141,13 @@ class ArinovaAgent:
                     if msg.get("type") == "pong":
                         continue
 
+                    if msg.get("type") == "cancel_task":
+                        task_id = msg.get("taskId", "")
+                        cancel_event = self._active_tasks.get(task_id)
+                        if cancel_event:
+                            cancel_event.set()
+                        continue
+
                     if msg.get("type") == "task":
                         asyncio.create_task(
                             self._handle_task(
@@ -177,6 +186,9 @@ class ArinovaAgent:
         members: list[dict] | None = None,
         reply_to: dict | None = None,
     ) -> None:
+        cancelled = Event()
+        self._active_tasks[task_id] = cancelled
+
         def send_sync(event: dict) -> None:
             try:
                 loop = asyncio.get_running_loop()
@@ -184,16 +196,25 @@ class ArinovaAgent:
             except RuntimeError:
                 pass
 
+        def on_complete(full: str) -> None:
+            self._active_tasks.pop(task_id, None)
+            send_sync({"type": "agent_complete", "taskId": task_id, "content": full})
+
+        def on_error(error: str) -> None:
+            self._active_tasks.pop(task_id, None)
+            send_sync({"type": "agent_error", "taskId": task_id, "error": error})
+
         task = Task(
             task_id=task_id,
             conversation_id=conversation_id,
             content=content,
             send_chunk=lambda delta: send_sync({"type": "agent_chunk", "taskId": task_id, "chunk": delta}),
-            send_complete=lambda full: send_sync({"type": "agent_complete", "taskId": task_id, "content": full}),
-            send_error=lambda error: send_sync({"type": "agent_error", "taskId": task_id, "error": error}),
+            send_complete=on_complete,
+            send_error=on_error,
             conversation_type=conversation_type,
             members=[MemberInfo(agent_id=m["agentId"], agent_name=m["agentName"]) for m in members] if members else None,
             reply_to=ReplyContext(role=reply_to["role"], content=reply_to["content"], sender_agent_name=reply_to.get("senderAgentName")) if reply_to else None,
+            cancelled=cancelled,
         )
 
         if not self._task_handler:
@@ -208,3 +229,5 @@ class ArinovaAgent:
             task.send_error(str(exc))
             if self._on_error:
                 self._on_error(exc)
+        finally:
+            self._active_tasks.pop(task_id, None)

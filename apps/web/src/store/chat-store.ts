@@ -784,7 +784,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             m.id === messageId
               ? {
                   ...m,
-                  status: "completed" as const,
+                  // Keep 'cancelled' status if user already cancelled
+                  status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
                   updatedAt: new Date(),
                 }
               : m
