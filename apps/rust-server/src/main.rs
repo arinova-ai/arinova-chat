@@ -69,23 +69,11 @@ async fn main() {
     let is_wildcard = cors_origins.len() == 1 && cors_origins[0] == "*";
 
     let cors = if is_wildcard {
-        // Mirror request origin so credentials (cookies) still work with any origin
+        // Mirror everything back so credentials (cookies) work with any origin
         CorsLayer::new()
             .allow_origin(AllowOrigin::mirror_request())
-            .allow_methods(AllowMethods::list([
-                axum::http::Method::GET,
-                axum::http::Method::POST,
-                axum::http::Method::PUT,
-                axum::http::Method::DELETE,
-                axum::http::Method::PATCH,
-                axum::http::Method::OPTIONS,
-            ]))
-            .allow_headers(AllowHeaders::list([
-                axum::http::header::CONTENT_TYPE,
-                axum::http::header::AUTHORIZATION,
-                axum::http::header::ACCEPT,
-                axum::http::header::COOKIE,
-            ]))
+            .allow_methods(AllowMethods::mirror_request())
+            .allow_headers(AllowHeaders::mirror_request())
             .allow_credentials(true)
     } else {
         let origins: Vec<axum::http::HeaderValue> = cors_origins
@@ -94,20 +82,8 @@ async fn main() {
             .collect();
         CorsLayer::new()
             .allow_origin(AllowOrigin::list(origins))
-            .allow_methods(AllowMethods::list([
-                axum::http::Method::GET,
-                axum::http::Method::POST,
-                axum::http::Method::PUT,
-                axum::http::Method::DELETE,
-                axum::http::Method::PATCH,
-                axum::http::Method::OPTIONS,
-            ]))
-            .allow_headers(AllowHeaders::list([
-                axum::http::header::CONTENT_TYPE,
-                axum::http::header::AUTHORIZATION,
-                axum::http::header::ACCEPT,
-                axum::http::header::COOKIE,
-            ]))
+            .allow_methods(AllowMethods::mirror_request())
+            .allow_headers(AllowHeaders::mirror_request())
             .allow_credentials(true)
     };
 
