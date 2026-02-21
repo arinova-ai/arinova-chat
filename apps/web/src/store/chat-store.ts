@@ -784,6 +784,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Find the completed message content for sidebar preview
       const completedMsg = current.find((m) => m.id === messageId);
 
+      // If server sent final content (e.g. agent replaced local paths with URLs),
+      // use it instead of the accumulated stream chunks
+      const finalContent = event.content;
+
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
@@ -791,6 +795,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             m.id === messageId
               ? {
                   ...m,
+                  ...(finalContent !== undefined ? { content: finalContent } : {}),
                   // Keep 'cancelled' status if user already cancelled
                   status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
                   updatedAt: new Date(),
@@ -806,6 +811,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 lastMessage: completedMsg
                   ? {
                       ...completedMsg,
+                      ...(finalContent !== undefined ? { content: finalContent } : {}),
                       status: "completed" as const,
                       updatedAt: new Date(),
                     }

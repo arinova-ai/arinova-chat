@@ -374,6 +374,7 @@ export type WSServerEvent =
       conversationId: string;
       messageId: string;
       seq: number;
+      content?: string;
     }
   | {
       type: "stream_error";

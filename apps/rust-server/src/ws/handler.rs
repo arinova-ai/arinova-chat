@@ -942,7 +942,8 @@ async fn do_trigger_agent_response(
                                 "type": "stream_end",
                                 "conversationId": &conversation_id,
                                 "messageId": &agent_msg_id_clone,
-                                "seq": agent_seq
+                                "seq": agent_seq,
+                                "content": &full_content
                             }), &redis);
 
                             // Push notification
