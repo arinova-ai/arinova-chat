@@ -8,6 +8,7 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { Copy, Check } from "lucide-react";
 import { CodeExecutor } from "./code-executor";
+import { ImageLightbox } from "./image-lightbox";
 import type { ComponentProps } from "react";
 
 // Allow className on code/span/pre for syntax highlighting
@@ -194,6 +195,11 @@ export function MarkdownContent({ content, highlightQuery, mentionNames, streami
           [rehypeSanitize, sanitizeSchema],
         ]}
         components={{
+          img(props: ComponentProps<"img">) {
+            const { src, alt } = props;
+            if (!src || typeof src !== "string") return null;
+            return <ImageLightbox src={src} alt={typeof alt === "string" ? alt : undefined} />;
+          },
           table(props: ComponentProps<"table">) {
             return (
               <div className="overflow-x-auto">

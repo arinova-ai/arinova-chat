@@ -13,6 +13,7 @@ import { StreamingCursor } from "./streaming-cursor";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useChatStore, type ReactionInfo } from "@/store/chat-store";
+import { ImageLightbox } from "./image-lightbox";
 
 const EMPTY_REACTIONS: Record<string, ReactionInfo> = {};
 import {
@@ -173,18 +174,12 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
               <div className="mb-1 space-y-1">
                 {message.attachments.map((att) =>
                   att.fileType.startsWith("image/") ? (
-                    <a
+                    <ImageLightbox
                       key={att.id}
-                      href={assetUrl(att.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <img
-                        src={assetUrl(att.url)}
-                        alt={att.fileName}
-                        className="max-w-full max-h-64 rounded-lg object-contain"
-                      />
-                    </a>
+                      src={assetUrl(att.url)}
+                      alt={att.fileName}
+                      className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
+                    />
                   ) : (
                     <a
                       key={att.id}
