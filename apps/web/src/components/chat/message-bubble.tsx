@@ -211,6 +211,7 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
                 }
                 highlightQuery={highlightQuery}
                 mentionNames={mentionNames}
+                streaming={isStreaming}
               />
             ) : isStreaming ? (
               <StreamingCursor />

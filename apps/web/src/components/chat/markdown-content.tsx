@@ -25,6 +25,8 @@ interface MarkdownContentProps {
   content: string;
   highlightQuery?: string;
   mentionNames?: string[];
+  /** When true, skip DOM-based highlighting to avoid React reconciliation crashes during rapid updates. */
+  streaming?: boolean;
 }
 
 function CodeBlockCopyButton({ code }: { code: string }) {
@@ -82,13 +84,13 @@ function extractLanguageFromChildren(children: React.ReactNode): string | null {
 
 const JS_LANGUAGES = new Set(["javascript", "js"]);
 
-export function MarkdownContent({ content, highlightQuery, mentionNames }: MarkdownContentProps) {
+export function MarkdownContent({ content, highlightQuery, mentionNames, streaming }: MarkdownContentProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Highlight matching search text in the DOM after render
   useEffect(() => {
     const el = contentRef.current;
-    if (!highlightQuery || !el) return;
+    if (!highlightQuery || !el || streaming) return;
 
     const lowerQ = highlightQuery.toLowerCase();
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -126,12 +128,12 @@ export function MarkdownContent({ content, highlightQuery, mentionNames }: Markd
         }
       });
     };
-  }, [highlightQuery, content]);
+  }, [highlightQuery, content, streaming]);
 
   // Highlight @mentions in the DOM after render
   useEffect(() => {
     const el = contentRef.current;
-    if (!el || !mentionNames?.length) return;
+    if (!el || !mentionNames?.length || streaming) return;
 
     const escapedNames = mentionNames.map((n) =>
       n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -181,7 +183,7 @@ export function MarkdownContent({ content, highlightQuery, mentionNames }: Markd
         }
       });
     };
-  }, [mentionNames, content]);
+  }, [mentionNames, content, streaming]);
 
   return (
     <div ref={contentRef} className="markdown-content text-sm leading-relaxed">
