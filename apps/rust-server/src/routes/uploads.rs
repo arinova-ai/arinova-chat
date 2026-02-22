@@ -13,16 +13,14 @@ use crate::services::message_seq::get_next_seq;
 use crate::ws::handler::trigger_agent_response;
 use crate::AppState;
 
-/// Allowed MIME types for file uploads.
-pub const ALLOWED_TYPES: &[&str] = &[
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "application/pdf",
-    "text/plain",
-    "text/csv",
-    "application/json",
+/// Blocked MIME types — executables and scripts that could be dangerous if downloaded and run.
+const BLOCKED_TYPES: &[&str] = &[
+    "application/x-executable",
+    "application/x-msdos-program",
+    "application/x-msdownload",
+    "application/x-sh",
+    "application/x-bat",
+    "application/x-csh",
 ];
 
 pub fn router() -> Router<AppState> {
@@ -74,15 +72,11 @@ async fn upload_file(
         // Treat any other field as the file
         let content_type = field.content_type().unwrap_or("").to_string();
 
-        if !ALLOWED_TYPES.contains(&content_type.as_str()) {
+        if BLOCKED_TYPES.contains(&content_type.as_str()) {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({
-                    "error": format!(
-                        "File type '{}' is not allowed. Allowed types: {}",
-                        content_type,
-                        ALLOWED_TYPES.join(", ")
-                    )
+                    "error": format!("File type '{}' is not allowed", content_type)
                 })),
             )
                 .into_response();

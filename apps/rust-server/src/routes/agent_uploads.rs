@@ -11,16 +11,14 @@ use uuid::Uuid;
 use crate::auth::middleware::AuthAgent;
 use crate::AppState;
 
-/// Allowed MIME types for agent file uploads.
-const ALLOWED_TYPES: &[&str] = &[
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "application/pdf",
-    "text/plain",
-    "text/csv",
-    "application/json",
+/// Blocked MIME types — executables and scripts that could be dangerous.
+const BLOCKED_TYPES: &[&str] = &[
+    "application/x-executable",
+    "application/x-msdos-program",
+    "application/x-msdownload",
+    "application/x-sh",
+    "application/x-bat",
+    "application/x-csh",
 ];
 
 pub fn router() -> Router<AppState> {
@@ -51,15 +49,11 @@ async fn agent_upload(
             let file_name = field.file_name().unwrap_or("upload").to_string();
 
             // Validate MIME type
-            if !ALLOWED_TYPES.contains(&content_type.as_str()) {
+            if BLOCKED_TYPES.contains(&content_type.as_str()) {
                 return (
                     StatusCode::BAD_REQUEST,
                     Json(json!({
-                        "error": format!(
-                            "File type '{}' is not allowed. Allowed types: {}",
-                            content_type,
-                            ALLOWED_TYPES.join(", ")
-                        )
+                        "error": format!("File type '{}' is not allowed", content_type)
                     })),
                 )
                     .into_response();
