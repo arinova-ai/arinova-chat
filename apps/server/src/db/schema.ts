@@ -111,13 +111,10 @@ export const conversations = pgTable("conversations", {
     .notNull()
     .references(() => user.id),
   agentId: uuid("agent_id").references(() => agents.id),
-  mentionOnly: boolean("mention_only").notNull().default(true),
   pinnedAt: timestamp("pinned_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [
-  index("conversations_user_id_idx").on(t.userId),
-]);
+});
 
 export const conversationMembers = pgTable("conversation_members", {
   id: uuid().primaryKey().defaultRandom(),
@@ -161,6 +158,21 @@ export const conversationReads = pgTable("conversation_reads", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("conversation_reads_user_conv_idx").on(t.userId, t.conversationId),
+]);
+
+export const messageReactions = pgTable("message_reactions", {
+  id: uuid().primaryKey().defaultRandom(),
+  messageId: uuid("message_id")
+    .notNull()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  emoji: varchar("emoji", { length: 32 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("message_reactions_user_msg_emoji_idx").on(t.messageId, t.userId, t.emoji),
+  index("message_reactions_message_id_idx").on(t.messageId),
 ]);
 
 // ===== Community tables =====
@@ -222,21 +234,6 @@ export const channelMessages = pgTable("channel_messages", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const messageReactions = pgTable("message_reactions", {
-  id: uuid().primaryKey().defaultRandom(),
-  messageId: uuid("message_id")
-    .notNull()
-    .references(() => messages.id, { onDelete: "cascade" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id),
-  emoji: varchar("emoji", { length: 32 }).notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (t) => [
-  uniqueIndex("message_reactions_user_msg_emoji_idx").on(t.messageId, t.userId, t.emoji),
-  index("message_reactions_message_id_idx").on(t.messageId),
-]);
-
 export const attachments = pgTable("attachments", {
   id: uuid().primaryKey().defaultRandom(),
   messageId: uuid("message_id")
@@ -297,18 +294,73 @@ export const developerAccounts = pgTable("developer_accounts", {
 
 export const apps = pgTable("apps", {
   id: uuid().primaryKey().defaultRandom(),
-  developerId: uuid("developer_id")
+  developerId: text("developer_id")
     .notNull()
-    .references(() => developerAccounts.id),
-  appId: varchar("app_id", { length: 100 }).notNull().unique(),
+    .references(() => user.id),
   name: varchar({ length: 100 }).notNull(),
   description: text().notNull(),
   category: varchar({ length: 50 }).notNull(),
-  icon: text().notNull(),
+  iconUrl: text("icon_url"),
+  externalUrl: text("external_url").notNull(),
   status: appStatusEnum().notNull().default("draft"),
-  currentVersionId: uuid("current_version_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const appOAuthClients = pgTable("app_oauth_clients", {
+  id: uuid().primaryKey().defaultRandom(),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => apps.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id", { length: 100 }).notNull().unique(),
+  clientSecret: text("client_secret").notNull(),
+  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const agentApiCalls = pgTable("agent_api_calls", {
+  id: uuid().primaryKey().defaultRandom(),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => apps.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  agentId: uuid("agent_id")
+    .notNull()
+    .references(() => agents.id),
+  tokenCount: integer("token_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// OAuth authorization codes (temporary, used during code exchange)
+export const oauthAuthorizationCodes = pgTable("oauth_authorization_codes", {
+  id: uuid().primaryKey().defaultRandom(),
+  code: varchar("code", { length: 128 }).notNull().unique(),
+  clientId: varchar("client_id", { length: 100 }).notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  redirectUri: text("redirect_uri").notNull(),
+  scope: text("scope").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// OAuth access tokens
+export const oauthAccessTokens = pgTable("oauth_access_tokens", {
+  id: uuid().primaryKey().defaultRandom(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  clientId: varchar("client_id", { length: 100 }).notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  appId: uuid("app_id")
+    .notNull()
+    .references(() => apps.id),
+  scope: text("scope").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const appVersions = pgTable("app_versions", {
@@ -388,7 +440,6 @@ export const notificationPreferences = pgTable("notification_preferences", {
   quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
   quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
 });
-
 
 // ===== Playground tables =====
 

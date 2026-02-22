@@ -5,7 +5,7 @@ import {
   appVersions,
   developerAccounts,
 } from "../db/schema.js";
-import { eq, and, ilike, sql, desc } from "drizzle-orm";
+import { eq, and, ilike, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 
 export async function appMarketplaceRoutes(app: FastifyInstance) {
@@ -37,12 +37,11 @@ export async function appMarketplaceRoutes(app: FastifyInstance) {
     const results = await db
       .select({
         id: apps.id,
-        appId: apps.appId,
         name: apps.name,
         description: apps.description,
         category: apps.category,
-        icon: apps.icon,
-        currentVersionId: apps.currentVersionId,
+        iconUrl: apps.iconUrl,
+        externalUrl: apps.externalUrl,
         createdAt: apps.createdAt,
       })
       .from(apps)
@@ -51,37 +50,7 @@ export async function appMarketplaceRoutes(app: FastifyInstance) {
       .limit(limit)
       .offset(offset);
 
-    // Task 6.5: Platform-aware filtering (post-query filter on manifest)
-    let filtered = results;
-    if (request.query.platform) {
-      const platform = request.query.platform;
-      const versionIds = results
-        .map((r) => r.currentVersionId)
-        .filter((id): id is string => id !== null);
-
-      if (versionIds.length > 0) {
-        const versions = await db
-          .select({ id: appVersions.id, manifestJson: appVersions.manifestJson })
-          .from(appVersions)
-          .where(sql`${appVersions.id} = ANY(${versionIds})`);
-
-        const platformApps = new Set(
-          versions
-            .filter((v) => {
-              const m = v.manifestJson as Record<string, unknown>;
-              const platforms = m.platforms as Record<string, boolean> | undefined;
-              return platforms?.[platform] === true;
-            })
-            .map((v) => v.id)
-        );
-
-        filtered = results.filter(
-          (r) => r.currentVersionId && platformApps.has(r.currentVersionId)
-        );
-      }
-    }
-
-    return reply.send({ apps: filtered, total: filtered.length });
+    return reply.send({ apps: results, total: results.length });
   });
 
   // Task 6.2: App detail page data
@@ -105,26 +74,26 @@ export async function appMarketplaceRoutes(app: FastifyInstance) {
         .from(developerAccounts)
         .where(eq(developerAccounts.id, appRecord.developerId));
 
-      // Get current version manifest
+      // Get latest published version manifest
       let manifest = null;
-      if (appRecord.currentVersionId) {
-        const [version] = await db
-          .select()
-          .from(appVersions)
-          .where(eq(appVersions.id, appRecord.currentVersionId));
-        if (version) {
-          manifest = version.manifestJson;
-        }
+      const [latestVersion] = await db
+        .select()
+        .from(appVersions)
+        .where(and(eq(appVersions.appId, appRecord.id), eq(appVersions.status, "published")))
+        .orderBy(desc(appVersions.createdAt))
+        .limit(1);
+      if (latestVersion) {
+        manifest = latestVersion.manifestJson;
       }
 
       return reply.send({
         app: {
           id: appRecord.id,
-          appId: appRecord.appId,
           name: appRecord.name,
           description: appRecord.description,
           category: appRecord.category,
-          icon: appRecord.icon,
+          iconUrl: appRecord.iconUrl,
+          externalUrl: appRecord.externalUrl,
           developer: developer?.displayName ?? "Unknown",
           manifest,
           createdAt: appRecord.createdAt,

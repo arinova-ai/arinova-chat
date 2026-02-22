@@ -8,5 +8,4 @@ export default defineConfig({
   sourcemap: true,
   target: "node22",
   external: ["openclaw", "openclaw/plugin-sdk"],
-  noExternal: ["@arinova-ai/agent-sdk", "zod"],
 });

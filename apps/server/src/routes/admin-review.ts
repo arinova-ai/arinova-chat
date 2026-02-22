@@ -37,11 +37,10 @@ export async function adminReviewRoutes(app: FastifyInstance) {
     return reply.send({
       apps: results.map((r) => ({
         id: r.app.id,
-        appId: r.app.appId,
         name: r.app.name,
         description: r.app.description,
         category: r.app.category,
-        icon: r.app.icon,
+        iconUrl: r.app.iconUrl,
         status: r.app.status,
         createdAt: r.app.createdAt,
         version: {
@@ -109,7 +108,6 @@ export async function adminReviewRoutes(app: FastifyInstance) {
         .update(apps)
         .set({
           status: "published",
-          currentVersionId: version.id,
           updatedAt: new Date(),
         })
         .where(eq(apps.id, appRecord.id));

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
 import { apps, appVersions, developerAccounts } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { env } from "../env.js";
 import { randomUUID } from "crypto";
@@ -144,11 +144,11 @@ export async function appSubmissionRoutes(app: FastifyInstance) {
     const packagePath = path.join(packageDir, storedName);
     await writeFile(packagePath, buffer);
 
-    // Create or update app record
+    // Check if an app with the same name by this developer exists
     const [existingApp] = await db
       .select()
       .from(apps)
-      .where(eq(apps.appId, manifest.id));
+      .where(and(eq(apps.name, manifest.name), eq(apps.developerId, developer.id)));
 
     let appRecord: typeof apps.$inferSelect;
 
@@ -165,7 +165,7 @@ export async function appSubmissionRoutes(app: FastifyInstance) {
           name: manifest.name,
           description: manifest.description,
           category: manifest.category,
-          icon: manifest.icon,
+          iconUrl: manifest.icon,
           status: needsReview ? "in_review" : "published",
           updatedAt: new Date(),
         })
@@ -177,11 +177,11 @@ export async function appSubmissionRoutes(app: FastifyInstance) {
         .insert(apps)
         .values({
           developerId: developer.id,
-          appId: manifest.id,
           name: manifest.name,
           description: manifest.description,
           category: manifest.category,
-          icon: manifest.icon,
+          iconUrl: manifest.icon,
+          externalUrl: "",
           status: needsReview ? "in_review" : "published",
         })
         .returning();
@@ -201,18 +201,9 @@ export async function appSubmissionRoutes(app: FastifyInstance) {
       })
       .returning();
 
-    // Update current version pointer if auto-published
-    if (!needsReview) {
-      await db
-        .update(apps)
-        .set({ currentVersionId: version.id })
-        .where(eq(apps.id, appRecord.id));
-    }
-
     return reply.status(201).send({
       app: {
         id: appRecord.id,
-        appId: appRecord.appId,
         name: appRecord.name,
         status: appRecord.status,
       },
@@ -283,7 +274,15 @@ export async function appSubmissionRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "App not found" });
       }
 
-      if (!appRecord.currentVersionId) {
+      // Check that at least one published version exists
+      const [publishedVersion] = await db
+        .select({ id: appVersions.id })
+        .from(appVersions)
+        .where(and(eq(appVersions.appId, appRecord.id), eq(appVersions.status, "published")))
+        .orderBy(desc(appVersions.createdAt))
+        .limit(1);
+
+      if (!publishedVersion) {
         return reply.status(400).send({ error: "No published version available" });
       }
 

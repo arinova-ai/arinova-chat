@@ -15,28 +15,29 @@ class WebSocketManager {
   private maxReconnectDelay = 30000;
   private _status: ConnectionStatus = "disconnected";
 
-  // Track last known seq per conversation for sync protocol
-  private lastSeqs: Record<string, number> = {};
-
   get status(): ConnectionStatus {
     return this._status;
   }
 
-  private setStatus(status: ConnectionStatus) {
-    if (this._status === status) return;
-    this._status = status;
+  private setStatus(newStatus: ConnectionStatus) {
+    if (this._status === newStatus) return;
+    this._status = newStatus;
     for (const handler of this.statusHandlers) {
-      handler(status);
+      handler(newStatus);
     }
   }
 
-  connect() {
-    if (
-      this.ws?.readyState === WebSocket.OPEN ||
-      this.ws?.readyState === WebSocket.CONNECTING
-    )
-      return;
+  onStatusChange(handler: StatusChangeHandler) {
+    this.statusHandlers.add(handler);
+    return () => {
+      this.statusHandlers.delete(handler);
+    };
+  }
 
+  connect() {
+    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return;
+
+    // Close any lingering socket before creating a new one
     this.cleanupSocket();
 
     try {
@@ -44,44 +45,16 @@ class WebSocketManager {
       this.ws = ws;
 
       ws.onopen = () => {
-        if (this.ws !== ws) return;
-        this.setStatus("syncing");
+        if (this.ws !== ws) return; // stale reference guard
+        this.setStatus("connected");
         this.reconnectDelay = 1000;
         this.startPing();
-        // Report foreground state
-        this.send({ type: "focus", visible: document.visibilityState === "visible" });
-        // Send sync request with last known seqs
-        this.sendSync();
       };
 
       ws.onmessage = (event) => {
-        if (this.ws !== ws) return;
+        if (this.ws !== ws) return; // stale reference guard
         try {
           const data = JSON.parse(event.data) as WSServerEvent;
-
-          // Track seq from stream events
-          if (
-            data.type === "stream_start" ||
-            data.type === "stream_chunk" ||
-            data.type === "stream_end" ||
-            data.type === "stream_error"
-          ) {
-            if (data.seq > 0) {
-              this.updateLastSeq(data.conversationId, data.seq);
-            }
-          }
-
-          // Update lastSeqs from sync_response
-          if (data.type === "sync_response") {
-            for (const conv of data.conversations) {
-              this.updateLastSeq(conv.conversationId, conv.maxSeq);
-            }
-            for (const msg of data.missedMessages) {
-              this.updateLastSeq(msg.conversationId, msg.seq);
-            }
-            this.setStatus("connected");
-          }
-
           for (const handler of this.handlers) {
             handler(data);
           }
@@ -91,7 +64,7 @@ class WebSocketManager {
       };
 
       ws.onclose = () => {
-        if (this.ws !== ws) return;
+        if (this.ws !== ws) return; // stale reference guard
         this.setStatus("disconnected");
         this.scheduleReconnect();
       };
@@ -111,7 +84,6 @@ class WebSocketManager {
     }
     this.cleanupSocket();
     this.setStatus("disconnected");
-    this.removeVisibilityListeners();
   }
 
   private cleanupSocket() {
@@ -142,47 +114,8 @@ class WebSocketManager {
     };
   }
 
-  onStatusChange(handler: StatusChangeHandler) {
-    this.statusHandlers.add(handler);
-    return () => {
-      this.statusHandlers.delete(handler);
-    };
-  }
-
   isConnected() {
     return this._status === "connected";
-  }
-
-  /** Update tracked lastSeq for a conversation */
-  updateLastSeq(conversationId: string, seq: number) {
-    if (seq > (this.lastSeqs[conversationId] ?? 0)) {
-      this.lastSeqs[conversationId] = seq;
-    }
-  }
-
-  /** Send sync request with current conversation seq positions */
-  private sendSync() {
-    this.send({
-      type: "sync",
-      conversations: { ...this.lastSeqs },
-    });
-  }
-
-  /** Force reconnect or re-sync if already connected */
-  reconnect() {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      // Already connected, just re-sync
-      this.setStatus("syncing");
-      this.sendSync();
-      return;
-    }
-    // Cancel any pending reconnect and connect immediately
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    this.reconnectDelay = 1000;
-    this.connect();
   }
 
   private scheduleReconnect() {
@@ -204,40 +137,6 @@ class WebSocketManager {
     this.pingInterval = setInterval(() => {
       this.send({ type: "ping" });
     }, 30000);
-  }
-
-  // --- Visibility and online event listeners ---
-
-  private visibilityHandler: (() => void) | null = null;
-  private onlineHandler: (() => void) | null = null;
-
-  setupVisibilityListeners() {
-    // Report foreground state and reconnect when tab becomes visible
-    this.visibilityHandler = () => {
-      const visible = document.visibilityState === "visible";
-      this.send({ type: "focus", visible });
-      if (visible) {
-        this.reconnect();
-      }
-    };
-    document.addEventListener("visibilitychange", this.visibilityHandler);
-
-    // Reconnect when network comes back online
-    this.onlineHandler = () => {
-      this.reconnect();
-    };
-    window.addEventListener("online", this.onlineHandler);
-  }
-
-  private removeVisibilityListeners() {
-    if (this.visibilityHandler) {
-      document.removeEventListener("visibilitychange", this.visibilityHandler);
-      this.visibilityHandler = null;
-    }
-    if (this.onlineHandler) {
-      window.removeEventListener("online", this.onlineHandler);
-      this.onlineHandler = null;
-    }
   }
 }
 

@@ -8,7 +8,7 @@
     "clean": "turbo clean",
     "test": "turbo test",
     "test:coverage": "turbo test -- --coverage",
-    "test:e2e": "npx playwright test --config e2e/playwright.config.ts"
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

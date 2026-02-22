@@ -5,6 +5,7 @@ import {
   coinTransactions,
   appPurchases,
   apps,
+  appVersions,
   developerAccounts,
 } from "../db/schema.js";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
@@ -99,8 +100,20 @@ export async function walletRoutes(app: FastifyInstance) {
         .from(apps)
         .where(and(eq(apps.id, request.params.id), eq(apps.status, "published")));
 
-      if (!appRecord || !appRecord.currentVersionId) {
+      if (!appRecord) {
         return reply.status(404).send({ error: "App not found" });
+      }
+
+      // Get latest published version
+      const [latestVersion] = await db
+        .select({ id: appVersions.id })
+        .from(appVersions)
+        .where(and(eq(appVersions.appId, appRecord.id), eq(appVersions.status, "published")))
+        .orderBy(desc(appVersions.createdAt))
+        .limit(1);
+
+      if (!latestVersion) {
+        return reply.status(404).send({ error: "No published version available" });
       }
 
       // Check balance
@@ -137,7 +150,7 @@ export async function walletRoutes(app: FastifyInstance) {
         .insert(appPurchases)
         .values({
           userId: user.id,
-          appVersionId: appRecord.currentVersionId,
+          appVersionId: latestVersion.id,
           productId: body.productId,
           amount: body.amount,
         })

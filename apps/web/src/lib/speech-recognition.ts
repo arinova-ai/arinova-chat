@@ -7,6 +7,8 @@ type ResultHandler = (text: string, isFinal: boolean) => void;
 type ErrorHandler = (error: string) => void;
 
 // Browser vendor-prefixed SpeechRecognition
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpeechRecognitionInstance = any;
 const SpeechRecognitionAPI =
   typeof window !== "undefined"
     ? (window as unknown as Record<string, unknown>).SpeechRecognition ??
@@ -14,8 +16,7 @@ const SpeechRecognitionAPI =
     : undefined;
 
 class BrowserSpeechRecognition {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private recognition: any = null;
+  private recognition: SpeechRecognitionInstance | null = null;
   private _onResult: ResultHandler | null = null;
   private _onError: ErrorHandler | null = null;
   private _running = false;
@@ -41,14 +42,12 @@ class BrowserSpeechRecognition {
 
     if (this._running) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Recognition = SpeechRecognitionAPI as any;
+    const Recognition = SpeechRecognitionAPI as new () => SpeechRecognitionInstance;
     this.recognition = new Recognition();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
     this.recognition.lang = lang;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.recognition.onresult = (event: any) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -58,7 +57,6 @@ class BrowserSpeechRecognition {
       }
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.recognition.onerror = (event: any) => {
       // "no-speech" and "aborted" are not real errors
       if (event.error === "no-speech" || event.error === "aborted") return;

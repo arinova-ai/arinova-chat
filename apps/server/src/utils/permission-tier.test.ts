@@ -1,14 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { classifyPermissionTier, requiresManualReview } from "./permission-tier.js";
+import { classifyPermissionTier, requiresManualReview } from "./permission-tier";
 
 describe("classifyPermissionTier", () => {
-  it("returns tier 0 for an empty permissions array", () => {
+  it("returns tier 0 for empty permissions", () => {
     expect(classifyPermissionTier([])).toBe(0);
   });
 
-  it("returns tier 0 for permissions that are all innocuous / unknown", () => {
-    // Permissions that don't fall into tier 1 or 2 should still give tier 0
-    expect(classifyPermissionTier(["theme", "locale"])).toBe(0);
+  it("returns tier 0 for unknown permissions", () => {
+    expect(classifyPermissionTier(["unknown"])).toBe(0);
   });
 
   it("returns tier 1 for storage permission", () => {
@@ -19,21 +18,16 @@ describe("classifyPermissionTier", () => {
     expect(classifyPermissionTier(["audio"])).toBe(1);
   });
 
-  it("returns tier 1 for a combination of tier-1 permissions", () => {
-    expect(classifyPermissionTier(["storage", "audio"])).toBe(1);
-  });
-
   it("returns tier 2 for network permission", () => {
     expect(classifyPermissionTier(["network"])).toBe(2);
   });
 
-  it("returns tier 2 when network is combined with tier-1 permissions", () => {
-    expect(classifyPermissionTier(["storage", "audio", "network"])).toBe(2);
+  it("returns highest tier when mixed (storage + network → tier 2)", () => {
+    expect(classifyPermissionTier(["storage", "network"])).toBe(2);
   });
 
-  it("returns the highest applicable tier when multiple tiers are present", () => {
-    // network alone should already push to tier 2
-    expect(classifyPermissionTier(["network", "storage"])).toBe(2);
+  it("returns tier 1 for storage + audio", () => {
+    expect(classifyPermissionTier(["storage", "audio"])).toBe(1);
   });
 });
 

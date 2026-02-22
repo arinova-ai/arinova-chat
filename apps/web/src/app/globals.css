@@ -122,15 +122,8 @@
 }
 
 .search-highlight {
-  animation: search-flash 8s ease-out forwards;
+  animation: search-flash 2s ease-out forwards;
   border-radius: var(--radius);
-}
-
-.search-keyword-highlight {
-  background: oklch(0.75 0.15 85 / 40%);
-  color: inherit;
-  border-radius: 2px;
-  padding: 0 2px;
 }
 
 /* iOS/PWA viewport fallback: prefer dvh, fallback to fill-available */

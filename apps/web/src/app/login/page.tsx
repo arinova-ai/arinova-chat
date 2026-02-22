@@ -52,17 +52,11 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const attempt = () =>
-      authClient.signIn.email({ email, password });
-
     try {
-      let result = await attempt();
-
-      // Retry once on transient failures (e.g. cold start, network hiccup)
-      if (result.error) {
-        await new Promise((r) => setTimeout(r, 1000));
-        result = await attempt();
-      }
+      const result = await authClient.signIn.email({
+        email,
+        password,
+      });
 
       if (result.error) {
         setError(result.error.message ?? "Login failed");

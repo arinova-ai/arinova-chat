@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/node";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -6,7 +5,6 @@ import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import path from "path";
-import crypto from "crypto";
 import { env } from "./env.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
@@ -21,12 +19,12 @@ import { sandboxRoutes } from "./routes/sandbox.js";
 import { groupRoutes } from "./routes/groups.js";
 import { pushRoutes } from "./routes/push.js";
 import { notificationRoutes } from "./routes/notifications.js";
-import { playgroundRoutes } from "./routes/playgrounds.js";
-import { playgroundEconomyRoutes } from "./routes/playground-economy.js";
-import { playgroundWsRoutes } from "./ws/playground-handler.js";
+import { oauthRoutes } from "./routes/oauth.js";
+import { appRoutes } from "./routes/apps.js";
+import { agentProxyRoutes } from "./routes/agent-proxy.js";
+import { economyApiRoutes } from "./routes/economy-api.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { voiceWsRoutes } from "./ws/voice-handler.js";
-import { reactionRoutes } from "./routes/reactions.js";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";
@@ -35,22 +33,7 @@ import { reactionRoutes } from "./routes/reactions.js";
 // import { walletRoutes } from "./routes/wallet.js";
 // import { developerRoutes } from "./routes/developer.js";
 
-// Initialize Sentry if DSN is configured
-if (env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: env.SENTRY_DSN,
-    environment: process.env.NODE_ENV ?? "development",
-    tracesSampleRate: 0.1,
-  });
-}
-
-const app = Fastify({
-  logger: {
-    level: process.env.NODE_ENV === "production" ? "info" : "debug",
-  },
-  genReqId: () => crypto.randomUUID(),
-  requestIdHeader: "x-request-id",
-});
+const app = Fastify({ logger: true });
 
 // CORS — support comma-separated origins; "*" allows all (dev mode)
 const corsOrigins = env.CORS_ORIGIN.split(",").map((s) => s.trim());
@@ -64,7 +47,7 @@ await app.register(cors, {
 await app.register(rateLimit, {
   max: 300,
   timeWindow: "1 minute",
-  allowList: ["/health", "/ws", "/ws/agent", "/ws/playground", "/ws/voice"],
+  allowList: ["/health", "/ws", "/ws/agent", "/ws/voice"],
 });
 
 // Multipart (file upload)
@@ -82,24 +65,19 @@ await app.register(fastifyStatic, {
 // WebSocket
 await app.register(websocket);
 
-// Global error handler — sanitized responses, full details only in logs
+// Global error handler
 app.setErrorHandler((error: Error & { validation?: unknown; statusCode?: number }, request, reply) => {
   if (error.validation) {
-    return reply.status(400).send({ error: "Validation error", code: "VALIDATION_ERROR", details: error.message });
+    return reply.status(400).send({ error: "Validation error", details: error.message });
   }
 
   if (error.statusCode === 429) {
-    return reply.status(429).send({ error: "Too many requests. Please try again later.", code: "RATE_LIMIT" });
+    return reply.status(429).send({ error: "Too many requests. Please try again later." });
   }
 
-  // Log full error details server-side only
-  request.log.error({ err: error, reqId: request.id }, "Unhandled error");
-  if (env.SENTRY_DSN) Sentry.captureException(error);
-
-  const statusCode = error.statusCode ?? 500;
-  return reply.status(statusCode).send({
-    error: statusCode >= 500 ? "Internal server error" : (error.message ?? "Error"),
-    code: "INTERNAL_ERROR",
+  app.log.error(error);
+  return reply.status(error.statusCode ?? 500).send({
+    error: error.message ?? "Internal server error",
   });
 });
 
@@ -117,12 +95,12 @@ await app.register(agentHealthRoutes);
 await app.register(sandboxRoutes);
 await app.register(pushRoutes);
 await app.register(notificationRoutes);
-await app.register(playgroundRoutes);
-await app.register(playgroundEconomyRoutes);
-await app.register(playgroundWsRoutes);
+await app.register(oauthRoutes);
+await app.register(appRoutes);
+await app.register(agentProxyRoutes);
+await app.register(economyApiRoutes);
 await app.register(voiceRoutes);
 await app.register(voiceWsRoutes);
-await app.register(reactionRoutes);
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
 // await app.register(communityRoutes);

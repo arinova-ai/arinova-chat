@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users, Loader2 } from "lucide-react";
+import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users } from "lucide-react";
 import type { ConversationType } from "@arinova/shared/types";
 import { assetUrl } from "@/lib/config";
 
@@ -89,7 +89,6 @@ export function ConversationItem({
   const [renameValue, setRenameValue] = useState(title ?? agentName);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -120,14 +119,9 @@ export function ConversationItem({
     [handleRenameSubmit, title, agentName]
   );
 
-  const handleConfirmDelete = useCallback(async () => {
-    setActionLoading(true);
-    try {
-      await onDelete();
-    } finally {
-      setActionLoading(false);
-      setDeleteConfirmOpen(false);
-    }
+  const handleConfirmDelete = useCallback(() => {
+    onDelete();
+    setDeleteConfirmOpen(false);
   }, [onDelete]);
 
   const isPinned = pinnedAt !== null;
@@ -217,7 +211,7 @@ export function ConversationItem({
               variant="ghost"
               size="icon-xs"
               className={cn(
-                "shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 [@media(hover:none)]:opacity-100",
+                "shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100",
                 menuOpen && "opacity-100"
               )}
               onClick={(e) => e.stopPropagation()}
@@ -286,8 +280,7 @@ export function ConversationItem({
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={actionLoading}>
-              {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            <Button variant="destructive" onClick={handleConfirmDelete}>
               Delete
             </Button>
           </DialogFooter>

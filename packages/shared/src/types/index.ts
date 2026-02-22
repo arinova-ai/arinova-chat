@@ -114,7 +114,6 @@ export interface Conversation {
   type: ConversationType;
   userId: string;
   agentId: string | null;
-  mentionOnly: boolean;
   pinnedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -141,7 +140,7 @@ export type MessageStatus =
 export interface Message {
   id: string;
   conversationId: string;
-  seq: number;
+  seq?: number;
   role: MessageRole;
   content: string;
   status: MessageStatus;
@@ -397,263 +396,76 @@ export interface AppPurchase {
   createdAt: Date;
 }
 
-// ===== Playground =====
-export type PlaygroundCategory = "game" | "strategy" | "social" | "puzzle" | "roleplay" | "other";
-export type PlaygroundSessionStatus = "waiting" | "active" | "paused" | "finished";
-export type PlaygroundCurrency = "free" | "play" | "arinova";
-export type PlaygroundPrizeDistribution = "winner-takes-all" | Record<string, number>; // e.g. { first: 60, second: 30, third: 10 }
-export type PlaygroundParticipantControlMode = "agent" | "human" | "copilot";
-export type PlaygroundMessageType = "chat" | "action" | "system" | "phase_transition";
+// ===== Platform App =====
+export type PlatformAppCategory = "game" | "strategy" | "social" | "puzzle" | "tool" | "other";
 
-export interface PlaygroundActionDefinition {
-  name: string;
-  description: string;
-  params?: Record<string, unknown>; // JSON Schema
-  targetType?: "player" | "role" | "global";
-  phases?: string[]; // restrict to specific phases
-  roles?: string[]; // restrict to specific roles
-}
-
-export interface PlaygroundPhaseDefinition {
-  name: string;
-  description: string;
-  duration?: number; // seconds, optional for condition-based
-  allowedActions: string[];
-  transitionCondition?: string; // expression evaluated against state
-  next: string | null; // next phase name, null = end
-}
-
-export interface PlaygroundRoleDefinition {
-  name: string;
-  description: string;
-  visibleState: string[]; // state keys visible to this role
-  availableActions: string[];
-  systemPrompt: string;
-  minCount?: number;
-  maxCount?: number;
-}
-
-export interface PlaygroundWinCondition {
-  role: string; // winning role
-  condition: string; // expression evaluated against state
-  description: string;
-}
-
-export interface PlaygroundBettingConfig {
-  enabled: boolean;
-  minBet: number;
-  maxBet: number;
-}
-
-export interface PlaygroundEconomy {
-  currency: PlaygroundCurrency;
-  entryFee: number;
-  prizeDistribution: PlaygroundPrizeDistribution;
-  betting?: PlaygroundBettingConfig;
-}
-
-export interface PlaygroundDefinition {
-  metadata: {
-    name: string;
-    description: string;
-    category: PlaygroundCategory;
-    minPlayers: number;
-    maxPlayers: number;
-    tags?: string[];
-    thumbnailDescription?: string;
-  };
-  roles: PlaygroundRoleDefinition[];
-  phases: PlaygroundPhaseDefinition[];
-  actions: PlaygroundActionDefinition[];
-  winConditions: PlaygroundWinCondition[];
-  economy: PlaygroundEconomy;
-  initialState: Record<string, unknown>;
-  maxStateSize?: number; // bytes, default 1MB
-}
-
-export interface Playground {
+export interface PlatformApp {
   id: string;
-  ownerId: string;
+  developerId: string;
   name: string;
   description: string;
-  category: PlaygroundCategory;
-  tags: string[];
-  definition: PlaygroundDefinition;
-  isPublic: boolean;
+  category: PlatformAppCategory;
+  iconUrl: string | null;
+  externalUrl: string;
+  status: AppStatus;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface PlaygroundSession {
+export interface AppOAuthClient {
   id: string;
-  playgroundId: string;
-  status: PlaygroundSessionStatus;
-  state: Record<string, unknown>;
-  currentPhase: string | null;
-  prizePool: number;
-  startedAt: Date | null;
-  finishedAt: Date | null;
+  appId: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUris: string[];
   createdAt: Date;
 }
 
-export interface PlaygroundParticipant {
+export interface AgentApiCall {
   id: string;
-  sessionId: string;
+  appId: string;
   userId: string;
-  agentId: string | null;
-  role: string | null; // assigned on session start
-  controlMode: PlaygroundParticipantControlMode;
-  isConnected: boolean;
-  joinedAt: Date;
-}
-
-export interface PlaygroundMessage {
-  id: string;
-  sessionId: string;
-  participantId: string | null;
-  type: PlaygroundMessageType;
-  content: string;
+  agentId: string;
+  tokenCount: number;
   createdAt: Date;
 }
-
-export type PlaygroundTransactionType = "entry_fee" | "bet" | "win" | "refund" | "commission";
-
-export interface PlayCoinBalance {
-  userId: string;
-  balance: number;
-  lastGrantedAt: Date | null;
-}
-
-export interface PlaygroundTransaction {
-  id: string;
-  userId: string;
-  sessionId: string | null;
-  type: PlaygroundTransactionType;
-  currency: PlaygroundCurrency;
-  amount: number;
-  createdAt: Date;
-}
-
-// ===== Playground WebSocket Events =====
-
-/** Events sent from Client → Server */
-export type PlaygroundWSClientEvent =
-  | { type: "pg_auth"; sessionId: string }
-  | { type: "pg_action"; actionName: string; params?: Record<string, unknown> }
-  | { type: "pg_chat"; content: string }
-  | { type: "pg_control_mode"; mode: PlaygroundParticipantControlMode }
-  | { type: "ping" };
-
-/** Events sent from Server → Client */
-export type PlaygroundWSServerEvent =
-  | { type: "pg_auth_ok"; sessionId: string; participantId: string }
-  | { type: "pg_auth_error"; error: string }
-  | { type: "pg_state_update"; state: Record<string, unknown>; currentPhase: string | null }
-  | { type: "pg_action_result"; success: boolean; error?: string }
-  | { type: "pg_phase_transition"; from: string; to: string }
-  | { type: "pg_participant_joined"; participant: PlaygroundParticipant }
-  | { type: "pg_participant_left"; participantId: string }
-  | { type: "pg_session_started"; roles: Record<string, string>; phase: string }
-  | { type: "pg_session_finished"; winners: string[]; prizeDistribution: Record<string, number> }
-  | { type: "pg_chat"; participantId: string; content: string }
-  | { type: "pg_error"; error: string }
-  | { type: "pong" };
 
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
-  | { type: "send_message"; conversationId: string; content: string; replyToId?: string; mentions?: string[] }
+  | { type: "send_message"; conversationId: string; content: string }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
-  | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
-  | { type: "mark_read"; conversationId: string; seq: number }
-  | { type: "focus"; visible: boolean }
   | { type: "ping" };
-
-export interface SyncConversationSummary {
-  conversationId: string;
-  unreadCount: number;
-  maxSeq: number;
-  muted: boolean;
-  lastMessage: {
-    content: string;
-    role: MessageRole;
-    status: MessageStatus;
-    createdAt: string;
-  } | null;
-}
-
-export interface SyncMissedMessage {
-  id: string;
-  conversationId: string;
-  seq: number;
-  role: MessageRole;
-  content: string;
-  status: MessageStatus;
-  createdAt: string;
-}
 
 export type WSServerEvent =
   | {
       type: "stream_start";
       conversationId: string;
       messageId: string;
-      seq: number;
-      senderAgentId?: string;
-      senderAgentName?: string;
     }
   | {
       type: "stream_chunk";
       conversationId: string;
       messageId: string;
-      seq: number;
       chunk: string;
     }
   | {
       type: "stream_end";
       conversationId: string;
       messageId: string;
-      seq: number;
-      content?: string;
     }
   | {
       type: "stream_error";
       conversationId: string;
       messageId: string;
-      seq: number;
       error: string;
     }
-  | {
-      type: "sync_response";
-      conversations: SyncConversationSummary[];
-      missedMessages: SyncMissedMessage[];
-    }
-  | {
-      type: "reaction_added";
-      messageId: string;
-      conversationId: string;
-      emoji: string;
-      userId: string;
-    }
-  | {
-      type: "reaction_removed";
-      messageId: string;
-      conversationId: string;
-      emoji: string;
-      userId: string;
-    }
   | { type: "pong" };
-
-// ===== Agent Skill =====
-export interface AgentSkill {
-  id: string;
-  name: string;
-  description: string;
-}
 
 // ===== Agent WebSocket Events (Agent ↔ Backend) =====
 
 /** Events sent from Agent → Backend */
 export type AgentWSClientEvent =
-  | { type: "agent_auth"; botToken: string; skills?: AgentSkill[] }
+  | { type: "agent_auth"; agentId: string; secretToken: string }
   | { type: "agent_chunk"; taskId: string; chunk: string }
   | { type: "agent_complete"; taskId: string; content: string }
   | { type: "agent_error"; taskId: string; error: string }
@@ -664,18 +476,7 @@ export type AgentWSClientEvent =
 export type AgentWSServerEvent =
   | { type: "auth_ok"; agentName: string }
   | { type: "auth_error"; error: string }
-  | {
-      type: "task";
-      taskId: string;
-      conversationId: string;
-      content: string;
-      conversationType?: ConversationType;
-      members?: { agentId: string; agentName: string }[];
-      replyTo?: { role: MessageRole; content: string; senderAgentName?: string };
-      history?: { role: MessageRole; content: string; senderAgentName?: string; createdAt: string }[];
-      attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
-    }
-  | { type: "cancel_task"; taskId: string }
+  | { type: "task"; taskId: string; conversationId: string; content: string }
   | { type: "voice_call_start"; sessionId: string; conversationId: string; audioFormat: VoiceAudioFormat }
   | { type: "voice_call_end"; sessionId: string; reason: string }
   | { type: "pong" };

@@ -14,10 +14,6 @@ export const auth = betterAuth({
   trustedOrigins: env.CORS_ORIGIN === "*"
     ? ["*"]
     : env.CORS_ORIGIN.split(",").map((s) => s.trim()),
-  session: {
-    expiresIn: 60 * 60 * 24 * 30, // 30 days
-    updateAge: 60 * 60 * 24, // refresh session if older than 1 day
-  },
   emailAndPassword: {
     enabled: true,
   },

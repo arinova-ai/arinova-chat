@@ -18,7 +18,7 @@ async function getVapidKey(): Promise<string | null> {
 /**
  * Convert VAPID key from URL-safe base64 to Uint8Array for PushManager.
  */
-function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
@@ -26,7 +26,7 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   for (let i = 0; i < raw.length; i++) {
     arr[i] = raw.charCodeAt(i);
   }
-  return arr.buffer as ArrayBuffer;
+  return arr;
 }
 
 /**
@@ -48,7 +48,7 @@ export async function subscribeToPush(): Promise<boolean> {
   const registration = await navigator.serviceWorker.ready;
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
   });
 
   const json = subscription.toJSON();

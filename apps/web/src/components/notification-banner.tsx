@@ -94,7 +94,7 @@ export function NotificationBanner() {
     <div className="relative mx-2 mt-2 flex items-center gap-3 rounded-lg border border-border bg-card p-3">
       <Bell className="h-5 w-5 shrink-0 text-blue-400" />
       <p className="flex-1 text-sm">
-        Enable notifications to stay updated on messages and playground activity.
+        Enable notifications to stay updated on messages and app activity.
       </p>
       <div className="flex shrink-0 gap-2">
         <Button variant="ghost" size="sm" onClick={handleLater}>

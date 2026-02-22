@@ -3,9 +3,5 @@ import postgres from "postgres";
 import { env } from "../env.js";
 import * as schema from "./schema.js";
 
-const client = postgres(env.DATABASE_URL, {
-  max: 20,
-  idle_timeout: 30,
-  connect_timeout: 10,
-});
+const client = postgres(env.DATABASE_URL);
 export const db = drizzle(client, { schema });

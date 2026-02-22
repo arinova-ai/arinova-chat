@@ -6,15 +6,45 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   createAgentSchema,
   updateAgentSchema,
+  pairingExchangeSchema,
 } from "@arinova/shared/schemas";
 import { generateSecretToken } from "../utils/pairing-code.js";
-import { getAgentSkills } from "../ws/agent-handler.js";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { env } from "../env.js";
 import { uploadToR2 } from "../lib/r2.js";
 
 export async function agentRoutes(app: FastifyInstance) {
+  // Exchange bot token for agent connection (public — no auth required)
+  // MUST be registered before /api/agents/:id to avoid route conflicts
+  app.post("/api/agents/pair", async (request, reply) => {
+    const body = pairingExchangeSchema.parse(request.body);
+
+    const [agent] = await db
+      .select({ id: agents.id, name: agents.name })
+      .from(agents)
+      .where(eq(agents.secretToken, body.botToken));
+
+    if (!agent) {
+      return reply.status(404).send({ error: "Invalid bot token" });
+    }
+
+    // Update a2aEndpoint if provided
+    if (body.a2aEndpoint) {
+      await db
+        .update(agents)
+        .set({ a2aEndpoint: body.a2aEndpoint, updatedAt: new Date() })
+        .where(eq(agents.id, agent.id));
+    }
+
+    // Build WS URL for the agent to connect back
+    const host = request.headers.host ?? "localhost:3501";
+    const protocol = request.headers["x-forwarded-proto"] === "https" ? "wss" : "ws";
+    const wsUrl = `${protocol}://${host}/ws/agent`;
+
+    return reply.send({ agentId: agent.id, name: agent.name, wsUrl });
+  });
+
   // Create agent
   app.post("/api/agents", async (request, reply) => {
     const user = await requireAuth(request, reply);
@@ -89,14 +119,14 @@ export async function agentRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get agent skills (WS-declared first, fallback to A2A card)
+  // Get agent skills from A2A card
   app.get<{ Params: { id: string } }>(
     "/api/agents/:id/skills",
     async (request, reply) => {
       const user = await requireAuth(request, reply);
 
       const [agent] = await db
-        .select({ id: agents.id, a2aEndpoint: agents.a2aEndpoint })
+        .select({ a2aEndpoint: agents.a2aEndpoint })
         .from(agents)
         .where(and(eq(agents.id, request.params.id), eq(agents.ownerId, user.id)));
 
@@ -104,34 +134,35 @@ export async function agentRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: "Agent not found" });
       }
 
-      // Prefer WS-declared skills
-      const wsSkills = getAgentSkills(agent.id);
-      if (wsSkills.length > 0) {
-        return reply.send({ skills: wsSkills });
+      if (!agent.a2aEndpoint) {
+        return reply.send({ skills: [] });
       }
 
-      // Fallback: fetch from A2A card
-      if (agent.a2aEndpoint) {
-        try {
-          const res = await fetch(agent.a2aEndpoint, {
-            headers: { Accept: "application/json" },
-            signal: AbortSignal.timeout(5000),
-          });
-          if (res.ok) {
-            const card = (await res.json()) as {
-              skills?: { id: string; name: string; description?: string }[];
-            };
-            const skills = (card.skills ?? []).map((s) => ({
-              id: s.id,
-              name: s.name,
-              description: s.description ?? "",
-            }));
-            return reply.send({ skills });
-          }
-        } catch {}
-      }
+      try {
+        const cardUrl = agent.a2aEndpoint;
+        const res = await fetch(cardUrl, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(5000),
+        });
 
-      return reply.send({ skills: [] });
+        if (!res.ok) {
+          return reply.send({ skills: [] });
+        }
+
+        const card = (await res.json()) as {
+          skills?: { id: string; name: string; description?: string }[];
+        };
+
+        const skills = (card.skills ?? []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          description: s.description ?? "",
+        }));
+
+        return reply.send({ skills });
+      } catch {
+        return reply.send({ skills: [] });
+      }
     }
   );
 

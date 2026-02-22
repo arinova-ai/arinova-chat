@@ -1,135 +1,171 @@
 import { describe, it, expect } from "vitest";
-import { scanFileContent, isScannable } from "./app-scanner.js";
+import { scanFileContent, isScannable } from "./app-scanner";
 
-describe("scanFileContent", () => {
-  it("returns an empty array for clean code with no forbidden patterns", () => {
-    const code = `
-function add(a, b) {
-  return a + b;
-}
-const result = add(1, 2);
-console.log(result);
-`.trim();
+describe("app-scanner", () => {
+  describe("isScannable", () => {
+    it("accepts .js files", () => {
+      expect(isScannable("app.js")).toBe(true);
+    });
 
-    const violations = scanFileContent("clean.js", code);
-    expect(violations).toEqual([]);
+    it("accepts .ts files", () => {
+      expect(isScannable("app.ts")).toBe(true);
+    });
+
+    it("accepts .jsx files", () => {
+      expect(isScannable("component.jsx")).toBe(true);
+    });
+
+    it("accepts .tsx files", () => {
+      expect(isScannable("component.tsx")).toBe(true);
+    });
+
+    it("accepts .mjs files", () => {
+      expect(isScannable("module.mjs")).toBe(true);
+    });
+
+    it("accepts .cjs files", () => {
+      expect(isScannable("module.cjs")).toBe(true);
+    });
+
+    it("rejects .html files", () => {
+      expect(isScannable("index.html")).toBe(false);
+    });
+
+    it("rejects .css files", () => {
+      expect(isScannable("styles.css")).toBe(false);
+    });
+
+    it("rejects .json files", () => {
+      expect(isScannable("manifest.json")).toBe(false);
+    });
+
+    it("rejects .png files", () => {
+      expect(isScannable("icon.png")).toBe(false);
+    });
+
+    it("is case insensitive", () => {
+      expect(isScannable("app.JS")).toBe(true);
+      expect(isScannable("app.Ts")).toBe(true);
+    });
   });
 
-  it("detects eval() usage", () => {
-    const code = `const result = eval("1 + 1");`;
-    const violations = scanFileContent("evil.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    const patterns = violations.map((v) => v.pattern);
-    expect(patterns.some((p) => /eval/i.test(p))).toBe(true);
-  });
+  describe("scanFileContent", () => {
+    it("returns no violations for clean code", () => {
+      const code = `
+        const x = 1;
+        function hello() { return "world"; }
+        setTimeout(() => console.log("hi"), 1000);
+        setInterval(() => tick(), 500);
+      `;
+      const violations = scanFileContent("clean.js", code);
+      expect(violations).toHaveLength(0);
+    });
 
-  it("includes the correct file name, line number, and snippet in the violation", () => {
-    const code = `// first line\nconst x = eval("bad");`;
-    const violations = scanFileContent("test-file.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    const v = violations[0];
-    expect(v.file).toBe("test-file.js");
-    expect(v.line).toBe(2);
-    expect(v.snippet).toContain("eval");
-  });
+    it("detects eval()", () => {
+      const code = `const result = eval("1 + 2");`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("eval()");
+      expect(violations[0].line).toBe(1);
+      expect(violations[0].file).toBe("bad.js");
+    });
 
-  it("detects new Function() usage", () => {
-    const code = `const fn = new Function("return 1");`;
-    const violations = scanFileContent("fn.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /Function/i.test(v.pattern))).toBe(true);
-  });
+    it("detects new Function()", () => {
+      const code = `const fn = new Function("return 42");`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("new Function()");
+    });
 
-  it("detects dynamic import() usage", () => {
-    const code = `const mod = await import("some-module");`;
-    const violations = scanFileContent("dyn.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /import/i.test(v.pattern))).toBe(true);
-  });
+    it("detects dynamic import()", () => {
+      const code = `const mod = import("./secret-module");`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("import()");
+    });
 
-  it("detects document.cookie access", () => {
-    const code = `const cookies = document.cookie;`;
-    const violations = scanFileContent("cookies.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /document\.cookie/i.test(v.pattern))).toBe(true);
-  });
+    it("detects document.cookie", () => {
+      const code = `const cookies = document.cookie;`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("document.cookie");
+    });
 
-  it("detects top.location usage", () => {
-    const code = `top.location.href = "https://evil.com";`;
-    const violations = scanFileContent("redirect.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /top\.location/i.test(v.pattern))).toBe(true);
-  });
+    it("detects top.location", () => {
+      const code = `top.location = "https://evil.com";`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("top.location");
+    });
 
-  it("detects parent.location usage", () => {
-    const code = `parent.location = "https://evil.com";`;
-    const violations = scanFileContent("redirect2.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /parent\.location/i.test(v.pattern))).toBe(true);
-  });
+    it("detects parent.location", () => {
+      const code = `parent.location.href = "https://evil.com";`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("parent.location");
+    });
 
-  it("detects window.open() usage", () => {
-    const code = `window.open("https://ads.example.com");`;
-    const violations = scanFileContent("popup.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /window\.open/i.test(v.pattern))).toBe(true);
-  });
+    it("detects window.open()", () => {
+      const code = `window.open("https://evil.com");`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("window.open()");
+    });
 
-  it("detects setTimeout with a string argument", () => {
-    const code = `setTimeout("alert(1)", 1000);`;
-    const violations = scanFileContent("timer.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /setTimeout/i.test(v.pattern))).toBe(true);
-  });
+    it("detects setTimeout with string argument", () => {
+      const code = `setTimeout("alert('xss')", 1000);`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("setTimeout");
+    });
 
-  it("detects setInterval with a string argument", () => {
-    const code = `setInterval("doEvil()", 500);`;
-    const violations = scanFileContent("interval.js", code);
-    expect(violations.length).toBeGreaterThan(0);
-    expect(violations.some((v) => /setInterval/i.test(v.pattern))).toBe(true);
-  });
+    it("detects setInterval with string argument", () => {
+      const code = `setInterval("doEvil()", 500);`;
+      const violations = scanFileContent("bad.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].pattern).toContain("setInterval");
+    });
 
-  it("can detect multiple violations in a single file", () => {
-    const code = `eval("bad");\ndocument.cookie = "x=1";`;
-    const violations = scanFileContent("multi.js", code);
-    expect(violations.length).toBeGreaterThanOrEqual(2);
-  });
-});
+    it("detects multiple violations in one file", () => {
+      const code = `
+        eval("bad");
+        const fn = new Function("worse");
+        document.cookie = "stolen";
+      `;
+      const violations = scanFileContent("multi.js", code);
+      expect(violations).toHaveLength(3);
+    });
 
-describe("isScannable", () => {
-  it("returns true for .js files", () => {
-    expect(isScannable("index.js")).toBe(true);
-  });
+    it("detects multiple violations on same line", () => {
+      const code = `eval("x"); document.cookie;`;
+      const violations = scanFileContent("same-line.js", code);
+      expect(violations).toHaveLength(2);
+    });
 
-  it("returns true for .ts files", () => {
-    expect(isScannable("utils.ts")).toBe(true);
-  });
+    it("reports correct line numbers", () => {
+      const code = `const ok = 1;\nconst bad = eval("2");\nconst fine = 3;`;
+      const violations = scanFileContent("lines.js", code);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].line).toBe(2);
+    });
 
-  it("returns true for .tsx files", () => {
-    expect(isScannable("Component.tsx")).toBe(true);
-  });
+    it("truncates long snippets to 120 chars", () => {
+      const longLine = `eval(${"a".repeat(200)});`;
+      const violations = scanFileContent("long.js", longLine);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].snippet.length).toBeLessThanOrEqual(120);
+    });
 
-  it("returns true for .mjs files", () => {
-    expect(isScannable("module.mjs")).toBe(true);
-  });
+    it("allows setTimeout with function argument", () => {
+      const code = `setTimeout(() => console.log("ok"), 1000);`;
+      const violations = scanFileContent("ok.js", code);
+      expect(violations).toHaveLength(0);
+    });
 
-  it("returns true for .cjs files", () => {
-    expect(isScannable("legacy.cjs")).toBe(true);
-  });
-
-  it("returns false for .css files", () => {
-    expect(isScannable("styles.css")).toBe(false);
-  });
-
-  it("returns false for .json files", () => {
-    expect(isScannable("config.json")).toBe(false);
-  });
-
-  it("returns false for .md files", () => {
-    expect(isScannable("README.md")).toBe(false);
-  });
-
-  it("returns false for .png files", () => {
-    expect(isScannable("image.png")).toBe(false);
+    it("allows setInterval with function argument", () => {
+      const code = `setInterval(tick, 500);`;
+      const violations = scanFileContent("ok.js", code);
+      expect(violations).toHaveLength(0);
+    });
   });
 });

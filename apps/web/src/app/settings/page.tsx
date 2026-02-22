@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { AuthGuard } from "@/components/auth-guard";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +16,7 @@ import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push"
 interface NotificationPrefs {
   globalEnabled: boolean;
   messageEnabled: boolean;
-  playgroundInviteEnabled: boolean;
-  playgroundTurnEnabled: boolean;
-  playgroundResultEnabled: boolean;
+  appActivityEnabled: boolean;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
 }
@@ -25,9 +24,7 @@ interface NotificationPrefs {
 const DEFAULT_PREFS: NotificationPrefs = {
   globalEnabled: true,
   messageEnabled: true,
-  playgroundInviteEnabled: true,
-  playgroundTurnEnabled: true,
-  playgroundResultEnabled: true,
+  appActivityEnabled: true,
   quietHoursStart: null,
   quietHoursEnd: null,
 };
@@ -188,34 +185,12 @@ function NotificationSettings() {
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm">Space Invites</p>
-                <p className="text-xs text-muted-foreground">When someone joins your session</p>
+                <p className="text-sm">App Activity</p>
+                <p className="text-xs text-muted-foreground">Updates from apps you use</p>
               </div>
               <Switch
-                checked={prefs.playgroundInviteEnabled}
-                onCheckedChange={handleToggle("playgroundInviteEnabled")}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm">Turn Notifications</p>
-                <p className="text-xs text-muted-foreground">When a space phase changes</p>
-              </div>
-              <Switch
-                checked={prefs.playgroundTurnEnabled}
-                onCheckedChange={handleToggle("playgroundTurnEnabled")}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm">Session Results</p>
-                <p className="text-xs text-muted-foreground">When a space session finishes</p>
-              </div>
-              <Switch
-                checked={prefs.playgroundResultEnabled}
-                onCheckedChange={handleToggle("playgroundResultEnabled")}
+                checked={prefs.appActivityEnabled}
+                onCheckedChange={handleToggle("appActivityEnabled")}
               />
             </div>
           </div>
@@ -272,27 +247,13 @@ function NotificationSettings() {
 
 function SettingsContent() {
   const router = useRouter();
-  const { data: session, isPending: sessionPending } = authClient.useSession();
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!sessionPending && !session) {
-      router.push("/login");
-    }
-  }, [sessionPending, session, router]);
+  const { data: session } = authClient.useSession();
 
   // Update name state
-  const [name, setName] = useState("");
+  const [name, setName] = useState(session?.user?.name ?? "");
   const [nameLoading, setNameLoading] = useState(false);
   const [nameSuccess, setNameSuccess] = useState("");
   const [nameError, setNameError] = useState("");
-
-  // Sync name from session once loaded
-  useEffect(() => {
-    if (session?.user?.name) {
-      setName(session.user.name);
-    }
-  }, [session?.user?.name]);
 
   // Change password state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -398,19 +359,12 @@ function SettingsContent() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white">
               <User className="h-6 w-6" />
             </div>
-            {sessionPending ? (
-              <div className="space-y-2">
-                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-                <div className="h-3 w-36 animate-pulse rounded bg-muted" />
-              </div>
-            ) : (
-              <div>
-                <p className="font-medium">{session?.user?.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {session?.user?.email}
-                </p>
-              </div>
-            )}
+            <div>
+              <p className="font-medium">{session?.user?.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {session?.user?.email}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -557,5 +511,9 @@ function SettingsContent() {
 }
 
 export default function SettingsPage() {
-  return <SettingsContent />;
+  return (
+    <AuthGuard>
+      <SettingsContent />
+    </AuthGuard>
+  );
 }

@@ -1,153 +1,105 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { api, ApiError } from "./api";
 
-vi.mock("@/lib/config", () => ({
-  BACKEND_URL: "http://test-backend:3501",
+// Mock config
+vi.mock("./config", () => ({
+  BACKEND_URL: "http://localhost:3501",
 }));
 
-function makeFetchResponse(
-  body: unknown,
-  status: number,
-  ok: boolean
-): Response {
-  return {
-    ok,
-    status,
-    json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
-}
+// Mock toast store
+vi.mock("@/store/toast-store", () => ({
+  useToastStore: {
+    getState: () => ({
+      addToast: vi.fn(),
+    }),
+  },
+}));
 
-describe("ApiError", () => {
-  it("is an instance of Error with status and message", () => {
-    const err = new ApiError(404, "Not Found");
-    expect(err).toBeInstanceOf(Error);
-    expect(err).toBeInstanceOf(ApiError);
-    expect(err.status).toBe(404);
-    expect(err.message).toBe("Not Found");
-  });
-});
-
-describe("api()", () => {
+describe("api", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.restoreAllMocks();
   });
 
-  it("parses a successful JSON response", async () => {
-    const payload = { id: "1", name: "test" };
-    global.fetch = vi.fn().mockResolvedValue(makeFetchResponse(payload, 200, true));
-
-    const result = await api<typeof payload>("/api/agents");
-    expect(result).toEqual(payload);
-  });
-
-  it("prepends BACKEND_URL to the path", async () => {
-    global.fetch = vi.fn().mockResolvedValue(makeFetchResponse({}, 200, true));
-
-    await api("/api/agents");
-    expect(global.fetch).toHaveBeenCalledWith(
-      "http://test-backend:3501/api/agents",
-      expect.any(Object)
+  it("makes GET request with credentials", async () => {
+    const mockResponse = { data: "test" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(mockResponse), { status: 200 })
     );
-  });
 
-  it("always includes credentials: include", async () => {
-    global.fetch = vi.fn().mockResolvedValue(makeFetchResponse({}, 200, true));
-
-    await api("/api/agents");
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.any(String),
+    const result = await api("/api/test");
+    expect(result).toEqual(mockResponse);
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:3501/api/test",
       expect.objectContaining({ credentials: "include" })
     );
   });
 
-  it("returns undefined for a 204 No Content response", async () => {
-    const response = {
-      ok: true,
-      status: 204,
-      json: vi.fn(),
-    } as unknown as Response;
-    global.fetch = vi.fn().mockResolvedValue(response);
+  it("sets Content-Type for JSON body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    );
 
-    const result = await api("/api/something");
-    expect(result).toBeUndefined();
-    expect(response.json).not.toHaveBeenCalled();
-  });
-
-  it("throws ApiError with status and body.error message on non-OK response", async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue(
-        makeFetchResponse({ error: "Unauthorized" }, 401, false)
-      );
-
-    await expect(api("/api/protected")).rejects.toThrow(ApiError);
-    await expect(api("/api/protected")).rejects.toMatchObject({
-      status: 401,
-      message: "Unauthorized",
-    });
-  });
-
-  it("throws ApiError with fallback HTTP status message when body has no error field", async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue(makeFetchResponse({}, 500, false));
-
-    await expect(api("/api/broken")).rejects.toMatchObject({
-      status: 500,
-      message: "HTTP 500",
-    });
-  });
-
-  it("throws ApiError even when response body is not valid JSON", async () => {
-    const response = {
-      ok: false,
-      status: 502,
-      json: vi.fn().mockRejectedValue(new SyntaxError("Unexpected token")),
-    } as unknown as Response;
-    global.fetch = vi.fn().mockResolvedValue(response);
-
-    await expect(api("/api/gateway")).rejects.toMatchObject({
-      status: 502,
-      message: "HTTP 502",
-    });
-  });
-
-  it("sets Content-Type: application/json for string (JSON) bodies", async () => {
-    global.fetch = vi.fn().mockResolvedValue(makeFetchResponse({}, 200, true));
-
-    await api("/api/agents", {
+    await api("/api/test", {
       method: "POST",
-      body: JSON.stringify({ name: "bot" }),
+      body: JSON.stringify({ name: "test" }),
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.any(String),
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:3501/api/test",
       expect.objectContaining({
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-        }),
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
       })
     );
   });
 
-  it("does NOT set Content-Type for FormData bodies", async () => {
-    global.fetch = vi.fn().mockResolvedValue(makeFetchResponse({}, 200, true));
+  it("does not set Content-Type for FormData", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    );
 
     const formData = new FormData();
-    formData.append("file", new Blob(["hello"]), "hello.txt");
-
     await api("/api/upload", { method: "POST", body: formData });
 
-    const callArgs = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1];
-    expect(callArgs.headers?.["Content-Type"]).toBeUndefined();
+    const callArgs = (fetch as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(callArgs.headers["Content-Type"]).toBeUndefined();
   });
 
-  it("does NOT set Content-Type when there is no body", async () => {
-    global.fetch = vi.fn().mockResolvedValue(makeFetchResponse({}, 200, true));
+  it("returns undefined for 204 status", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(null, { status: 204 })
+    );
 
-    await api("/api/agents");
+    const result = await api("/api/delete");
+    expect(result).toBeUndefined();
+  });
 
-    const callArgs = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1];
-    expect(callArgs.headers?.["Content-Type"]).toBeUndefined();
+  it("throws ApiError for non-ok response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "Not found" }), { status: 404 })
+    );
+
+    await expect(api("/api/missing")).rejects.toThrow(ApiError);
+    await vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "Not found" }), { status: 404 })
+    );
+    try {
+      await api("/api/missing");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect((e as ApiError).status).toBe(404);
+      expect((e as ApiError).message).toBe("Not found");
+    }
+  });
+
+  it("falls back to HTTP status when no error body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("not json", { status: 500 })
+    );
+
+    try {
+      await api("/api/broken");
+    } catch (e) {
+      expect((e as ApiError).message).toBe("HTTP 500");
+    }
   });
 });

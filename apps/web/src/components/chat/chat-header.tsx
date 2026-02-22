@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone, AtSign } from "lucide-react";
+import { ArrowLeft, Bot, Users, Clock, Bell, BellOff, Phone } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useVoiceCallStore } from "@/store/voice-call-store";
 import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { MicPermissionDialog } from "@/components/voice/mic-permission";
-import { subscribeToPush, getPushStatus } from "@/lib/push";
 import type { ConversationType } from "@arinova/shared/types";
 import type { VoiceMode } from "@/lib/voice-types";
 
@@ -22,7 +21,6 @@ interface ChatHeaderProps {
   conversationId?: string;
   agentId?: string;
   voiceCapable?: boolean;
-  mentionOnly?: boolean;
   onClick?: () => void;
 }
 
@@ -35,7 +33,6 @@ export function ChatHeader({
   conversationId,
   agentId,
   voiceCapable,
-  mentionOnly,
   onClick,
 }: ChatHeaderProps) {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -43,7 +40,6 @@ export function ChatHeader({
   const toggleTimestamps = useChatStore((s) => s.toggleTimestamps);
   const mutedConversations = useChatStore((s) => s.mutedConversations);
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
-  const updateConversation = useChatStore((s) => s.updateConversation);
   const isMuted = conversationId ? mutedConversations[conversationId] : false;
 
   const callState = useVoiceCallStore((s) => s.callState);
@@ -63,25 +59,6 @@ export function ChatHeader({
     setMicDialogOpen(false);
     startCall(conversationId, agentId, agentName, agentAvatarUrl ?? null, voiceMode);
   };
-
-  const handleMentionOnlyToggle = useCallback(() => {
-    if (!conversationId) return;
-    updateConversation(conversationId, { mentionOnly: !mentionOnly });
-  }, [conversationId, mentionOnly, updateConversation]);
-
-  const handleMuteToggle = useCallback(async () => {
-    if (!conversationId) return;
-    toggleMuteConversation(conversationId);
-    // When unmuting, check if push is enabled — if not, prompt to subscribe
-    if (isMuted) {
-      try {
-        const status = await getPushStatus();
-        if (status.supported && !status.subscribed && status.permission !== "denied") {
-          await subscribeToPush();
-        }
-      } catch {}
-    }
-  }, [conversationId, isMuted, toggleMuteConversation]);
 
   return (
     <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top,0px)]">
@@ -139,17 +116,6 @@ export function ChatHeader({
       </button>
 
       <div className="ml-auto flex items-center gap-1">
-        {type === "group" && conversationId && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", mentionOnly ? "text-blue-400" : "text-neutral-500")}
-            onClick={handleMentionOnlyToggle}
-            title={mentionOnly ? "Mention-only ON: only @mentioned agents respond" : "Mention-only OFF: all agents respond"}
-          >
-            <AtSign className="h-4 w-4" />
-          </Button>
-        )}
         <Button
           variant="ghost"
           size="icon"
@@ -164,7 +130,7 @@ export function ChatHeader({
             variant="ghost"
             size="icon"
             className={cn("h-8 w-8", isMuted && "text-red-400")}
-            onClick={handleMuteToggle}
+            onClick={() => toggleMuteConversation(conversationId)}
             title={isMuted ? "Unmute conversation" : "Mute conversation"}
           >
             {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
@@ -176,7 +142,7 @@ export function ChatHeader({
             size="icon"
             className="h-8 w-8 text-green-400 hover:text-green-300"
             onClick={() => setMicDialogOpen(true)}
-            title="Voice call"
+            title="語音通話"
           >
             <Phone className="h-4 w-4" />
           </Button>
@@ -186,7 +152,7 @@ export function ChatHeader({
             size="icon"
             className="h-8 w-8 text-muted-foreground opacity-50 cursor-not-allowed"
             disabled
-            title={callState !== "idle" ? "In call" : "Voice call unavailable"}
+            title={callState !== "idle" ? "通話中" : "語音通話不可用"}
           >
             <Phone className="h-4 w-4" />
           </Button>
