@@ -209,11 +209,16 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                 "agent_complete" => {
                     let task_id = event.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
                     let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                    let mentions: Vec<String> = event
+                        .get("mentions")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .unwrap_or_default();
 
                     if let Some((_, task)) = ws_state.pending_tasks.remove(task_id) {
                         if task.agent_id == agent_id_clone {
                             task.timeout_handle.abort();
-                            let _ = task.chunk_tx.send(AgentEvent::Complete(content.to_string()));
+                            let _ = task.chunk_tx.send(AgentEvent::Complete(content.to_string(), mentions));
                         }
                     }
                 }

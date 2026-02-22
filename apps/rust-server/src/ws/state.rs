@@ -25,7 +25,7 @@ pub struct PendingTask {
 #[derive(Debug)]
 pub enum AgentEvent {
     Chunk(String),
-    Complete(String),
+    Complete(String, Vec<String>),
     Error(String),
 }
 

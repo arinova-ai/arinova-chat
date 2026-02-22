@@ -43,7 +43,7 @@ export interface TaskContext {
   /** Send a streaming delta (new characters only) to the user. */
   sendChunk: (delta: string) => void;
   /** Mark the task as complete with the full response content. */
-  sendComplete: (content: string) => void;
+  sendComplete: (content: string, options?: { mentions?: string[] }) => void;
   /** Mark the task as failed with an error message. */
   sendError: (error: string) => void;
   /** AbortSignal that fires when the user cancels the stream. Check signal.aborted or listen to signal.addEventListener('abort', ...) to stop generation early. */

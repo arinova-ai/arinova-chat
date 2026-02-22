@@ -919,10 +919,12 @@ async fn do_trigger_agent_response(
     let agent_msg_id_clone = agent_msg_id.clone();
     let agent_name = agent_name.clone();
     let agent_id = agent_id.to_string();
+    let conv_type = conv_type.to_string();
 
     tokio::spawn(async move {
         let mut stream_accumulated = String::new();
         let stream_key = format!("{}:{}", conversation_id, agent_id);
+        let mut pending_mentions: Option<(Vec<String>, String)> = None;
         let mut event_rx = match agent_event_rx {
             Some(rx) => rx,
             None => {
@@ -956,7 +958,7 @@ async fn do_trigger_agent_response(
                                 ).await;
                             }
                         }
-                        Some(crate::ws::state::AgentEvent::Complete(full_content)) => {
+                        Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
                             ws_state.stream_cancellers.remove(&agent_msg_id_clone);
 
                             if let Ok(mut conn) = redis.get().await {
@@ -1006,6 +1008,12 @@ async fn do_trigger_agent_response(
 
                             ws_state.active_streams.remove(&stream_key);
                             process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
+
+                            // Save mentions for dispatch after the select loop
+                            if !mentions.is_empty() && conv_type == "group" {
+                                pending_mentions = Some((mentions, full_content.clone()));
+                            }
+
                             break;
                         }
                         Some(crate::ws::state::AgentEvent::Error(error)) => {
@@ -1091,6 +1099,61 @@ async fn do_trigger_agent_response(
                 }
             }
         }
+
+        // Dispatch to agents mentioned by the completing agent
+        if let Some((mentions, content)) = pending_mentions {
+            for mentioned_id in mentions {
+                if mentioned_id == agent_id {
+                    continue;
+                }
+                spawn_mention_dispatch(
+                    &user_id, &mentioned_id, &conversation_id, &content,
+                    &agent_msg_id_clone, &conv_type,
+                    &ws_state, &db, &redis, &config,
+                );
+            }
+        }
+    });
+}
+
+/// Spawn a task to dispatch a single agent mention.
+fn spawn_mention_dispatch(
+    user_id: &str,
+    mentioned_id: &str,
+    conversation_id: &str,
+    content: &str,
+    reply_to_id: &str,
+    conv_type: &str,
+    ws_state: &WsState,
+    db: &PgPool,
+    redis: &deadpool_redis::Pool,
+    config: &crate::config::Config,
+) {
+    let user_id = user_id.to_string();
+    let mentioned_id = mentioned_id.to_string();
+    let conversation_id = conversation_id.to_string();
+    let content = content.to_string();
+    let reply_to_id = reply_to_id.to_string();
+    let conv_type = conv_type.to_string();
+    let ws_state = ws_state.clone();
+    let db = db.clone();
+    let redis = redis.clone();
+    let config = config.clone();
+
+    tokio::spawn(async move {
+        do_trigger_agent_response(
+            &user_id,
+            &mentioned_id,
+            &conversation_id,
+            &content,
+            Some(&reply_to_id),
+            &conv_type,
+            &ws_state,
+            &db,
+            &redis,
+            &config,
+        )
+        .await;
     });
 }
 
