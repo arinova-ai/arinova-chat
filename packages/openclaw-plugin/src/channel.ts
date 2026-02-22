@@ -262,7 +262,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         botToken: account.botToken,
       });
 
-      agent.onTask(async ({ taskId, content, sendChunk, sendComplete, sendError }) => {
+      agent.onTask(async (task) => {
         core.channel.activity.record({
           channel: "openclaw-arinova-ai",
           accountId: account.accountId,
@@ -271,10 +271,21 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         });
 
         await handleArinovaChatInbound({
-          message: { taskId, text: content, timestamp: Date.now() },
-          sendChunk,
-          sendComplete,
-          sendError,
+          message: {
+            taskId: task.taskId,
+            text: task.content,
+            timestamp: Date.now(),
+            conversationId: task.conversationId,
+            conversationType: task.conversationType,
+            members: task.members,
+            replyTo: task.replyTo,
+            history: task.history,
+            attachments: task.attachments,
+          },
+          sendChunk: task.sendChunk,
+          sendComplete: task.sendComplete,
+          sendError: task.sendError,
+          signal: task.signal,
           account,
           config: cfg,
           runtime,

@@ -86,16 +86,23 @@ export async function handleArinovaChatInbound(params: {
   sendChunk: (chunk: string) => void;
   sendComplete: (content: string) => void;
   sendError: (error: string) => void;
+  signal?: AbortSignal;
   account: ResolvedArinovaChatAccount;
   config: CoreConfig;
   runtime: RuntimeEnv;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
 }): Promise<void> {
-  const { message, sendChunk, sendComplete, sendError, account, config, runtime, statusSink } = params;
+  const { message, sendChunk, sendComplete, sendError, signal, account, config, runtime, statusSink } = params;
   const core = getArinovaChatRuntime();
 
   const rawBody = message.text.trim();
   if (!rawBody) {
+    sendComplete("");
+    return;
+  }
+
+  // If already cancelled before we start, bail out
+  if (signal?.aborted) {
     sendComplete("");
     return;
   }
@@ -105,6 +112,7 @@ export async function handleArinovaChatInbound(params: {
   // The sender is the Arinova backend on behalf of the user.
   const senderId = "arinova-user";
   const senderName = "Arinova User";
+  const chatType = message.conversationType ?? "direct";
 
   // DM policy check
   const dmPolicy = account.config.dmPolicy ?? "open";
@@ -135,6 +143,10 @@ export async function handleArinovaChatInbound(params: {
     storePath,
     sessionKey: route.sessionKey,
   });
+
+  // Build enriched body for the LLM with context sections
+  const bodyForAgent = buildEnrichedBody(rawBody, message);
+
   const body = core.channel.reply.formatAgentEnvelope({
     channel: "Arinova Chat",
     from: fromLabel,
@@ -146,14 +158,14 @@ export async function handleArinovaChatInbound(params: {
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
-    BodyForAgent: rawBody,
+    BodyForAgent: bodyForAgent,
     RawBody: rawBody,
     CommandBody: rawBody,
     From: `openclaw-arinova-ai:${senderId}`,
     To: `openclaw-arinova-ai:${account.agentId}`,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
-    ChatType: "direct",
+    ChatType: chatType,
     ConversationLabel: fromLabel,
     SenderName: senderName,
     SenderId: senderId,
@@ -184,6 +196,12 @@ export async function handleArinovaChatInbound(params: {
 
   // Track final content from block delivery
   let finalText = "";
+  let aborted = false;
+
+  // Wire abort signal to stop generation early
+  if (signal) {
+    signal.addEventListener("abort", () => { aborted = true; }, { once: true });
+  }
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -191,6 +209,7 @@ export async function handleArinovaChatInbound(params: {
     dispatcherOptions: {
       ...prefixOptions,
       deliver: async (payload) => {
+        if (aborted) return;
         const p = payload as { text?: string; mediaUrls?: string[] };
         let text = p.text ?? "";
 
@@ -213,6 +232,7 @@ export async function handleArinovaChatInbound(params: {
       onModelSelected,
       disableBlockStreaming: false,
       onPartialReply: (payload) => {
+        if (aborted) return;
         // onPartialReply gives the FULL accumulated text across ALL blocks,
         // so we must NOT prepend finalText — that would duplicate completed blocks.
         const text = (payload as { text?: string }).text ?? "";
@@ -227,5 +247,60 @@ export async function handleArinovaChatInbound(params: {
   });
 
   // Send final completed event
-  sendComplete(finalText);
+  sendComplete(aborted ? finalText || "" : finalText);
+}
+
+/**
+ * Build an enriched body for the LLM by prepending context sections
+ * (members, attachments, replyTo, history) before the raw user message.
+ */
+function buildEnrichedBody(
+  rawBody: string,
+  message: ArinovaChatInboundMessage,
+): string {
+  const sections: string[] = [];
+
+  // Group members context
+  if (message.conversationType === "group" && message.members?.length) {
+    const names = message.members.map((m) => m.agentName).join(", ");
+    sections.push(`[Group: ${names}]`);
+  }
+
+  // Attachments
+  if (message.attachments?.length) {
+    const lines = message.attachments.map((a) => {
+      const size = formatFileSize(a.fileSize);
+      return `- ${a.fileName} (${a.fileType}, ${size}) ${a.url}`;
+    });
+    sections.push(`[Attachments]\n${lines.join("\n")}`);
+  }
+
+  // Reply context
+  if (message.replyTo) {
+    const sender = message.replyTo.senderAgentName ?? message.replyTo.role;
+    const quoted = message.replyTo.content
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
+    sections.push(`> Replying to ${sender}:\n${quoted}`);
+  }
+
+  // Conversation history
+  if (message.history?.length) {
+    const historyLines = message.history.map((h) => {
+      const sender = h.senderAgentName ?? h.role;
+      return `[${sender}]: ${h.content}`;
+    });
+    sections.push(`[History]\n${historyLines.join("\n")}`);
+  }
+
+  if (sections.length === 0) return rawBody;
+  return sections.join("\n\n") + "\n\n" + rawBody;
+}
+
+/** Format bytes to human-readable size. */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
