@@ -138,13 +138,10 @@ async fn sign_up_email(
     }
 
     // Create session
+    let secure = is_secure_context(&state.config);
     match session::create_session(&state.db, &user_id, None, None).await {
         Ok(session_data) => {
-            let cookie = format!(
-                "better-auth.session_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-                session_data.token,
-                60 * 60 * 24 * 30
-            );
+            let cookie = build_session_cookie(&session_data.token, secure);
             let mut resp = Json(json!({
                 "user": {
                     "id": user_id,
@@ -234,13 +231,10 @@ async fn sign_in_email(
     }
 
     // Create session
+    let secure = is_secure_context(&state.config);
     match session::create_session(&state.db, &user_id, None, None).await {
         Ok(session_data) => {
-            let cookie = format!(
-                "better-auth.session_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-                session_data.token,
-                60 * 60 * 24 * 30
-            );
+            let cookie = build_session_cookie(&session_data.token, secure);
             let mut resp = Json(json!({
                 "user": {
                     "id": user_id,
@@ -277,7 +271,12 @@ async fn sign_out(State(state): State<AppState>, headers: axum::http::HeaderMap)
         let _ = session::delete_session(&state.db, &token).await;
     }
 
-    let clear_cookie = "better-auth.session_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
+    let secure = is_secure_context(&state.config);
+    let clear_cookie = if secure {
+        "better-auth.session_token=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0"
+    } else {
+        "better-auth.session_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
+    };
     let mut resp = Json(json!({"success": true})).into_response();
     resp.headers_mut()
         .insert("set-cookie", clear_cookie.parse().unwrap());
@@ -346,11 +345,8 @@ async fn google_callback(
     match oauth::handle_google_callback(&state.db, &state.config, &query.code, &callback_url).await
     {
         Ok(session_data) => {
-            let cookie = format!(
-                "better-auth.session_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-                session_data.token,
-                60 * 60 * 24 * 30
-            );
+            let secure = is_secure_context(&state.config);
+            let cookie = build_session_cookie(&session_data.token, secure);
             // Redirect to frontend after successful OAuth
             let frontend_url = state.config.cors_origins().first().cloned().unwrap_or_else(|| "http://localhost:3500".to_string());
             let mut resp = Redirect::temporary(&frontend_url).into_response();
@@ -375,11 +371,8 @@ async fn github_callback(
 ) -> Response {
     match oauth::handle_github_callback(&state.db, &state.config, &query.code).await {
         Ok(session_data) => {
-            let cookie = format!(
-                "better-auth.session_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-                session_data.token,
-                60 * 60 * 24 * 30
-            );
+            let secure = is_secure_context(&state.config);
+            let cookie = build_session_cookie(&session_data.token, secure);
             let frontend_url = state.config.cors_origins().first().cloned().unwrap_or_else(|| "http://localhost:3500".to_string());
             let mut resp = Redirect::temporary(&frontend_url).into_response();
             resp.headers_mut()
@@ -394,6 +387,26 @@ async fn github_callback(
             )
                 .into_response()
         }
+    }
+}
+
+fn is_secure_context(config: &crate::config::Config) -> bool {
+    config.better_auth_url.starts_with("https://")
+}
+
+fn build_session_cookie(token: &str, is_production: bool) -> String {
+    if is_production {
+        format!(
+            "better-auth.session_token={}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age={}",
+            token,
+            60 * 60 * 24 * 30
+        )
+    } else {
+        format!(
+            "better-auth.session_token={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
+            token,
+            60 * 60 * 24 * 30
+        )
     }
 }
 
