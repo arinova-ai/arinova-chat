@@ -38,6 +38,8 @@ export interface TaskContext {
   replyTo?: { role: string; content: string; senderAgentName?: string };
   /** Recent conversation history (up to 5 messages before the current one). */
   history?: { role: string; content: string; senderAgentName?: string; createdAt: string }[];
+  /** Attachments from the user's message (images, files). Use the url to download. */
+  attachments?: TaskAttachment[];
   /** Send a streaming delta (new characters only) to the user. */
   sendChunk: (delta: string) => void;
   /** Mark the task as complete with the full response content. */
@@ -52,6 +54,16 @@ export interface TaskContext {
     fileName: string,
     fileType?: string,
   ) => Promise<UploadResult>;
+}
+
+/** An attachment from the user's message. */
+export interface TaskAttachment {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  /** Public URL to download the attachment. */
+  url: string;
 }
 
 /** Result from uploading a file. */

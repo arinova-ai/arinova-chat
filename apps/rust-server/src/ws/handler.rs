@@ -868,6 +868,34 @@ async fn do_trigger_agent_response(
         task_payload["history"] = json!(history_json);
     }
 
+    // Fetch attachments from the latest user message in this conversation
+    let attachments = sqlx::query_as::<_, (String, String, String, i32, String)>(
+        r#"SELECT a.id::text, a.file_name, a.file_type, a.file_size, a.storage_path
+           FROM attachments a
+           WHERE a.message_id = (
+             SELECT id FROM messages
+             WHERE conversation_id = $1::uuid AND role = 'user'
+             ORDER BY seq DESC LIMIT 1
+           )"#,
+    )
+    .bind(conversation_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if !attachments.is_empty() {
+        let att_json: Vec<Value> = attachments.iter().map(|(id, name, ftype, fsize, url)| {
+            json!({
+                "id": id,
+                "fileName": name,
+                "fileType": ftype,
+                "fileSize": fsize,
+                "url": url
+            })
+        }).collect();
+        task_payload["attachments"] = json!(att_json);
+    }
+
     // Send full task payload to agent
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     ws_state

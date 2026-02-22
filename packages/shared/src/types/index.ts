@@ -434,6 +434,7 @@ export type AgentWSServerEvent =
       members?: { agentId: string; agentName: string }[];
       replyTo?: { role: MessageRole; content: string; senderAgentName?: string };
       history?: { role: MessageRole; content: string; senderAgentName?: string; createdAt: string }[];
+      attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
     }
   | { type: "cancel_task"; taskId: string }
   | { type: "pong" };
