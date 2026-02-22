@@ -515,12 +515,12 @@ async fn export_history(
         result.push(json!({
             "conversationId": convo.id,
             "title": convo.title,
-            "createdAt": convo.created_at,
+            "createdAt": convo.created_at.and_utc().to_rfc3339(),
             "messages": msgs.iter().map(|m| json!({
                 "role": m.role,
                 "content": m.content,
                 "status": m.status,
-                "createdAt": m.created_at,
+                "createdAt": m.created_at.and_utc().to_rfc3339(),
             })).collect::<Vec<_>>(),
         }));
     }

@@ -298,8 +298,8 @@ async fn upload_file(
                 "role": message.role,
                 "content": message.content,
                 "status": message.status,
-                "createdAt": message.created_at,
-                "updatedAt": message.updated_at,
+                "createdAt": message.created_at.and_utc().to_rfc3339(),
+                "updatedAt": message.updated_at.and_utc().to_rfc3339(),
                 "attachments": [{
                     "id": attachment.id,
                     "messageId": attachment.message_id,
@@ -307,7 +307,7 @@ async fn upload_file(
                     "fileType": attachment.file_type,
                     "fileSize": attachment.file_size,
                     "url": attachment.storage_path,
-                    "createdAt": attachment.created_at,
+                    "createdAt": attachment.created_at.and_utc().to_rfc3339(),
                 }]
             }
         })),
@@ -340,7 +340,7 @@ async fn get_attachment(
             "fileType": a.file_type,
             "fileSize": a.file_size,
             "storagePath": a.storage_path,
-            "createdAt": a.created_at,
+            "createdAt": a.created_at.and_utc().to_rfc3339(),
         }))
         .into_response(),
         Ok(None) => (

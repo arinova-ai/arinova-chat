@@ -325,8 +325,8 @@ async fn list_conversations(
                     "role": row.last_msg_role,
                     "content": row.last_msg_content,
                     "status": row.last_msg_status,
-                    "createdAt": row.last_msg_created_at,
-                    "updatedAt": row.last_msg_updated_at,
+                    "createdAt": row.last_msg_created_at.map(|t| t.and_utc().to_rfc3339()),
+                    "updatedAt": row.last_msg_updated_at.map(|t| t.and_utc().to_rfc3339()),
                 })
             } else {
                 serde_json::Value::Null
@@ -339,9 +339,9 @@ async fn list_conversations(
                 "userId": row.user_id,
                 "agentId": row.agent_id,
                 "mentionOnly": row.mention_only,
-                "pinnedAt": row.pinned_at,
-                "createdAt": row.created_at,
-                "updatedAt": row.updated_at,
+                "pinnedAt": row.pinned_at.map(|t| t.and_utc().to_rfc3339()),
+                "createdAt": row.created_at.and_utc().to_rfc3339(),
+                "updatedAt": row.updated_at.and_utc().to_rfc3339(),
                 "agentName": agent_name,
                 "agentDescription": agent_description,
                 "agentAvatarUrl": row.agent_avatar_url,
@@ -768,7 +768,7 @@ async fn get_status(
             "id": conv.id,
             "title": conv.title,
             "type": conv.conv_type,
-            "createdAt": conv.created_at,
+            "createdAt": conv.created_at.and_utc().to_rfc3339(),
             "messageCount": msg_count,
         },
         "agent": agent_info,

@@ -169,7 +169,7 @@ async fn with_attachments(
                         "fileType": a.file_type,
                         "fileSize": a.file_size,
                         "url": url,
-                        "createdAt": a.created_at,
+                        "createdAt": a.created_at.and_utc().to_rfc3339(),
                     })
                 })
                 .collect();
@@ -198,8 +198,8 @@ async fn with_attachments(
                 "senderAgentName": sender_agent_name,
                 "replyToId": m.reply_to_id,
                 "replyTo": reply_to,
-                "createdAt": m.created_at,
-                "updatedAt": m.updated_at,
+                "createdAt": m.created_at.and_utc().to_rfc3339(),
+                "updatedAt": m.updated_at.and_utc().to_rfc3339(),
                 "attachments": att_json,
             })
         })
@@ -403,7 +403,7 @@ async fn search_messages(
                         "conversationId": r.conversation_id,
                         "content": r.content,
                         "role": r.role,
-                        "createdAt": r.created_at,
+                        "createdAt": r.created_at.and_utc().to_rfc3339(),
                         "conversationTitle": r.conversation_title,
                         "agentId": r.agent_id,
                         "agentName": r.agent_name,
