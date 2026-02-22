@@ -1,7 +1,6 @@
 import { readFile, access } from "node:fs/promises";
 import { basename, resolve, isAbsolute } from "node:path";
 
-const CATBOX_URL = "https://catbox.moe/user/api.php";
 const IMAGE_EXT = /\.(?:png|jpe?g|gif|webp)$/i;
 
 /**
@@ -10,22 +9,20 @@ const IMAGE_EXT = /\.(?:png|jpe?g|gif|webp)$/i;
  */
 const PATH_RE = /(?:(?:\/[\w.@~ -]+)+|(?:[\w.-]+\/)+[\w.-]+)\.(?:png|jpe?g|gif|webp)\b/gi;
 
-async function uploadToCatbox(filePath: string): Promise<string | null> {
-  try {
-    const data = await readFile(filePath);
-    const form = new FormData();
-    form.append("reqtype", "fileupload");
-    form.append("fileToUpload", new Blob([data]), basename(filePath));
+const MIME_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+};
 
-    const res = await fetch(CATBOX_URL, { method: "POST", body: form });
-    if (!res.ok) return null;
-
-    const url = (await res.text()).trim();
-    return url.startsWith("https://") ? url : null;
-  } catch {
-    return null;
-  }
-}
+/** Upload function signature matching agent SDK's uploadFile. */
+export type UploadFn = (
+  file: Uint8Array,
+  fileName: string,
+  fileType?: string,
+) => Promise<{ url: string }>;
 
 async function fileExists(p: string): Promise<boolean> {
   try {
@@ -37,12 +34,13 @@ async function fileExists(p: string): Promise<boolean> {
 }
 
 /**
- * Scan text for local image file paths, upload each to catbox.moe,
- * and replace the path with the public URL.
+ * Scan text for local image file paths, upload each via the provided
+ * upload function (R2 storage), and replace the path with the public URL.
  */
 export async function replaceImagePaths(
   text: string,
   workDir: string,
+  uploadFn: UploadFn,
   log?: (msg: string) => void,
 ): Promise<string> {
   const matches = text.match(PATH_RE);
@@ -55,14 +53,19 @@ export async function replaceImagePaths(
       const absPath = isAbsolute(rawPath) ? rawPath : resolve(workDir, rawPath);
       if (!IMAGE_EXT.test(absPath) || !(await fileExists(absPath))) return null;
 
-      log?.(`image-upload: uploading ${absPath}`);
-      const url = await uploadToCatbox(absPath);
-      if (url) {
-        log?.(`image-upload: → ${url}`);
-        return { rawPath, url };
+      try {
+        log?.(`image-upload: uploading ${absPath}`);
+        const data = await readFile(absPath);
+        const fileName = basename(absPath);
+        const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+        const fileType = MIME_TYPES[ext] ?? "application/octet-stream";
+        const result = await uploadFn(new Uint8Array(data), fileName, fileType);
+        log?.(`image-upload: → ${result.url}`);
+        return { rawPath, url: result.url };
+      } catch (err) {
+        log?.(`image-upload: failed for ${absPath}: ${err}`);
+        return null;
       }
-      log?.(`image-upload: failed for ${absPath}`);
-      return null;
     }),
   );
 

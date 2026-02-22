@@ -2,6 +2,7 @@ import { createReplyPrefixOptions, type OpenClawConfig, type RuntimeEnv } from "
 import type { ResolvedArinovaChatAccount } from "./accounts.js";
 import type { ArinovaChatInboundMessage, CoreConfig } from "./types.js";
 import { getArinovaChatRuntime } from "./runtime.js";
+import { replaceImagePaths, type UploadFn } from "./image-upload.js";
 
 const CHANNEL_ID = "openclaw-arinova-ai" as const;
 
@@ -90,9 +91,10 @@ export async function handleArinovaChatInbound(params: {
   account: ResolvedArinovaChatAccount;
   config: CoreConfig;
   runtime: RuntimeEnv;
+  uploadFile?: UploadFn;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
 }): Promise<void> {
-  const { message, sendChunk, sendComplete, sendError, signal, account, config, runtime, statusSink } = params;
+  const { message, sendChunk, sendComplete, sendError, signal, account, config, runtime, uploadFile, statusSink } = params;
   const core = getArinovaChatRuntime();
 
   const rawBody = message.text.trim();
@@ -246,8 +248,17 @@ export async function handleArinovaChatInbound(params: {
     },
   });
 
-  // Resolve @mentions from the LLM output to agent IDs
-  const completedText = aborted ? finalText || "" : finalText;
+  // Post-process completed text: upload local images → R2, resolve @mentions
+  let completedText = aborted ? finalText || "" : finalText;
+
+  if (uploadFile && completedText) {
+    try {
+      completedText = await replaceImagePaths(completedText, process.cwd(), uploadFile, runtime.log);
+    } catch (err) {
+      runtime.error?.(`openclaw-arinova-ai: image upload post-process failed: ${String(err)}`);
+    }
+  }
+
   const mentionedIds = resolveMentions(completedText, message.members);
   sendComplete(completedText, mentionedIds.length ? { mentions: mentionedIds } : undefined);
 }

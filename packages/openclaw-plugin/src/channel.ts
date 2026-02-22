@@ -289,6 +289,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           account,
           config: cfg,
           runtime,
+          uploadFile: task.uploadFile,
           statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
         });
       });
