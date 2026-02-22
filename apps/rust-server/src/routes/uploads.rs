@@ -9,6 +9,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::services::message_seq::get_next_seq;
 use crate::AppState;
 
 /// Allowed MIME types for file uploads.
@@ -56,8 +57,16 @@ async fn upload_file(
     }
 
     let max_size = state.config.max_file_size;
+    let mut caption = String::new();
 
     while let Ok(Some(field)) = multipart.next_field().await {
+        // Capture the caption text field
+        let field_name = field.name().unwrap_or("").to_string();
+        if field_name == "caption" {
+            caption = field.text().await.unwrap_or_default();
+            continue;
+        }
+
         let content_type = field.content_type().unwrap_or("").to_string();
 
         // Validate MIME type
@@ -158,44 +167,105 @@ async fn upload_file(
                 )
             };
 
-        // We need a message_id to associate with. For now, create with a placeholder.
-        // The caller should link this attachment to a message after creation.
-        // Use a nil UUID as placeholder for message_id; the caller will update it.
-        let placeholder_message_id = Uuid::nil();
+        let file_size = data.len() as i32;
 
-        let result = sqlx::query_as::<_, crate::db::models::Attachment>(
+        // 1. Create user message first (so we have a valid message_id for the attachment FK)
+        let conv_id_str = conversation_id.to_string();
+        let seq = match get_next_seq(&state.db, &conv_id_str).await {
+            Ok(s) => s,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to get sequence: {}", e)})),
+                )
+                    .into_response();
+            }
+        };
+
+        let message_id = Uuid::new_v4();
+        let msg_result = sqlx::query_as::<_, crate::db::models::Message>(
+            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
+               VALUES ($1, $2, $3, 'user', $4, 'completed', NOW(), NOW())
+               RETURNING *"#,
+        )
+        .bind(message_id)
+        .bind(conversation_id)
+        .bind(seq)
+        .bind(&caption)
+        .fetch_one(&state.db)
+        .await;
+
+        let message = match msg_result {
+            Ok(m) => m,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to create message: {}", e)})),
+                )
+                    .into_response();
+            }
+        };
+
+        // 2. Create attachment linked to the message
+        let att_result = sqlx::query_as::<_, crate::db::models::Attachment>(
             r#"INSERT INTO attachments (id, message_id, file_name, file_type, file_size, storage_path)
                VALUES ($1, $2, $3, $4, $5, $6)
                RETURNING *"#,
         )
         .bind(attachment_id)
-        .bind(placeholder_message_id)
+        .bind(message_id)
         .bind(&file_name)
         .bind(&content_type)
-        .bind(data.len() as i32)
+        .bind(file_size)
         .bind(&storage_path)
         .fetch_one(&state.db)
         .await;
 
-        return match result {
-            Ok(attachment) => (
-                StatusCode::CREATED,
-                Json(json!({
-                    "id": attachment.id,
-                    "fileName": attachment.file_name,
-                    "fileType": attachment.file_type,
-                    "fileSize": attachment.file_size,
-                    "storagePath": attachment.storage_path,
-                    "createdAt": attachment.created_at,
-                })),
-            )
-                .into_response(),
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response(),
+        let attachment = match att_result {
+            Ok(a) => a,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to create attachment: {}", e)})),
+                )
+                    .into_response();
+            }
         };
+
+        // 3. Update conversation timestamp
+        let _ = sqlx::query(
+            r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1"#,
+        )
+        .bind(conversation_id)
+        .execute(&state.db)
+        .await;
+
+        // 4. Return message with embedded attachments
+        return (
+            StatusCode::CREATED,
+            Json(json!({
+                "message": {
+                    "id": message.id,
+                    "conversationId": message.conversation_id,
+                    "seq": message.seq,
+                    "role": message.role,
+                    "content": message.content,
+                    "status": message.status,
+                    "createdAt": message.created_at,
+                    "updatedAt": message.updated_at,
+                    "attachments": [{
+                        "id": attachment.id,
+                        "messageId": attachment.message_id,
+                        "fileName": attachment.file_name,
+                        "fileType": attachment.file_type,
+                        "fileSize": attachment.file_size,
+                        "url": attachment.storage_path,
+                        "createdAt": attachment.created_at,
+                    }]
+                }
+            })),
+        )
+            .into_response();
     }
 
     (
