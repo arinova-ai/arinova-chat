@@ -922,12 +922,17 @@ async fn do_trigger_agent_response(
 
     tokio::spawn(async move {
         let mut stream_accumulated = String::new();
+        let stream_key = format!("{}:{}", conversation_id, agent_id);
         let mut event_rx = match agent_event_rx {
             Some(rx) => rx,
-            None => return,
+            None => {
+                // Agent disconnected between check and send — clean up the stuck stream
+                // so queued messages aren't permanently blocked.
+                ws_state.active_streams.remove(&stream_key);
+                process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
+                return;
+            }
         };
-
-        let stream_key = format!("{}:{}", conversation_id, agent_id);
 
         loop {
             tokio::select! {
