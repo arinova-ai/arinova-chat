@@ -84,7 +84,7 @@ function mediaUrlsToMarkdown(urls: string[]): string {
 export async function handleArinovaChatInbound(params: {
   message: ArinovaChatInboundMessage;
   sendChunk: (chunk: string) => void;
-  sendComplete: (content: string) => void;
+  sendComplete: (content: string, options?: { mentions?: string[] }) => void;
   sendError: (error: string) => void;
   signal?: AbortSignal;
   account: ResolvedArinovaChatAccount;
@@ -246,8 +246,10 @@ export async function handleArinovaChatInbound(params: {
     },
   });
 
-  // Send final completed event
-  sendComplete(aborted ? finalText || "" : finalText);
+  // Resolve @mentions from the LLM output to agent IDs
+  const completedText = aborted ? finalText || "" : finalText;
+  const mentionedIds = resolveMentions(completedText, message.members);
+  sendComplete(completedText, mentionedIds.length ? { mentions: mentionedIds } : undefined);
 }
 
 /**
@@ -296,6 +298,29 @@ function buildEnrichedBody(
 
   if (sections.length === 0) return rawBody;
   return sections.join("\n\n") + "\n\n" + rawBody;
+}
+
+/**
+ * Extract @mentions from text and resolve them to agent IDs.
+ * Matches @Name patterns against the members list (case-insensitive).
+ */
+function resolveMentions(
+  text: string,
+  members?: { agentId: string; agentName: string }[],
+): string[] {
+  if (!members?.length) return [];
+  const mentionPattern = /@(\w+)/g;
+  const ids = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const name = match[1].toLowerCase();
+    for (const m of members) {
+      if (m.agentName.toLowerCase() === name) {
+        ids.add(m.agentId);
+      }
+    }
+  }
+  return [...ids];
 }
 
 /** Format bytes to human-readable size. */
