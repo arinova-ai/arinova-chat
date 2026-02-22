@@ -8,6 +8,8 @@ import {
   integer,
   pgEnum,
   jsonb,
+  index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ===== Better Auth tables =====
@@ -109,10 +111,13 @@ export const conversations = pgTable("conversations", {
     .notNull()
     .references(() => user.id),
   agentId: uuid("agent_id").references(() => agents.id),
+  mentionOnly: boolean("mention_only").notNull().default(true),
   pinnedAt: timestamp("pinned_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("conversations_user_id_idx").on(t.userId),
+]);
 
 export const conversationMembers = pgTable("conversation_members", {
   id: uuid().primaryKey().defaultRandom(),
@@ -130,12 +135,33 @@ export const messages = pgTable("messages", {
   conversationId: uuid("conversation_id")
     .notNull()
     .references(() => conversations.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
   role: messageRoleEnum().notNull(),
   content: text().notNull().default(""),
   status: messageStatusEnum().notNull().default("pending"),
+  senderAgentId: uuid("sender_agent_id").references(() => agents.id, { onDelete: "set null" }),
+  replyToId: uuid("reply_to_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("messages_conversation_id_idx").on(t.conversationId),
+  index("messages_conversation_seq_idx").on(t.conversationId, t.seq),
+]);
+
+export const conversationReads = pgTable("conversation_reads", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  lastReadSeq: integer("last_read_seq").notNull().default(0),
+  muted: boolean().notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("conversation_reads_user_conv_idx").on(t.userId, t.conversationId),
+]);
 
 // ===== Community tables =====
 
@@ -195,6 +221,21 @@ export const channelMessages = pgTable("channel_messages", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const messageReactions = pgTable("message_reactions", {
+  id: uuid().primaryKey().defaultRandom(),
+  messageId: uuid("message_id")
+    .notNull()
+    .references(() => messages.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  emoji: varchar("emoji", { length: 32 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("message_reactions_user_msg_emoji_idx").on(t.messageId, t.userId, t.emoji),
+  index("message_reactions_message_id_idx").on(t.messageId),
+]);
 
 export const attachments = pgTable("attachments", {
   id: uuid().primaryKey().defaultRandom(),
@@ -347,6 +388,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
   quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
 });
+
 
 // ===== Playground tables =====
 

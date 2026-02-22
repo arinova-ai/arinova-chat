@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@arinova/shared": "workspace:*",
@@ -21,10 +22,12 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.0.0",
     "@fastify/websocket": "^11",
+    "@sentry/node": "^10.39.0",
     "better-auth": "^1.4.18",
     "dotenv": "^16",
     "drizzle-orm": "^0.44",
     "fastify": "^5",
+    "file-type": "^21.3.0",
     "ioredis": "^5",
     "mediasoup": "^3.19.17",
     "postgres": "^3",
@@ -37,9 +40,11 @@
     "@types/node": "^22",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.0.18",
     "adm-zip": "^0.5.16",
     "drizzle-kit": "^0.31",
     "tsx": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

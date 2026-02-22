@@ -5,10 +5,12 @@ import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { triggerAgentResponse } from "../ws/handler.js";
 import { uploadToR2, isR2Configured } from "../lib/r2.js";
+import { getNextSeq } from "../lib/message-seq.js";
 import { env } from "../env.js";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
+import { fileTypeFromBuffer } from "file-type";
 
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -20,6 +22,9 @@ const ALLOWED_TYPES = [
   "text/csv",
   "application/json",
 ];
+
+// Text-based types that have no magic number — skip content validation
+const TEXT_TYPES = new Set(["text/plain", "text/csv", "application/json"]);
 
 export async function uploadRoutes(app: FastifyInstance) {
   // Upload file and attach to a message
@@ -58,6 +63,16 @@ export async function uploadRoutes(app: FastifyInstance) {
           .send({ error: `File exceeds maximum size of ${env.MAX_FILE_SIZE / 1024 / 1024}MB` });
       }
 
+      // Validate file content matches declared MIME type (skip text-based types)
+      if (!TEXT_TYPES.has(data.mimetype)) {
+        const detected = await fileTypeFromBuffer(buffer);
+        if (!detected || !ALLOWED_TYPES.includes(detected.mime)) {
+          return reply
+            .status(400)
+            .send({ error: "File content does not match declared type" });
+        }
+      }
+
       // Generate unique filename
       const ext = path.extname(data.filename) || "";
       const storedName = `${randomUUID()}${ext}`;
@@ -92,10 +107,12 @@ export async function uploadRoutes(app: FastifyInstance) {
       const content = caption ? `${caption}\n\n${fileMarkdown}` : fileMarkdown;
 
       // Create a user message with this attachment
+      const userSeq = await getNextSeq(conv.id);
       const [msg] = await db
         .insert(messages)
         .values({
           conversationId: conv.id,
+          seq: userSeq,
           role: "user",
           content,
           status: "completed",

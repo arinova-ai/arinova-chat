@@ -63,9 +63,10 @@ export function ChatArea() {
         conversationId={conversation.id}
         agentId={conversation.agentId ?? undefined}
         voiceCapable={agent?.voiceCapable}
+        mentionOnly={conversation.mentionOnly}
         onClick={agent ? () => setManageOpen(true) : undefined}
       />
-      <MessageList messages={messages} agentName={conversation.agentName} />
+      <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} />
       <ChatInput />
 
       {showCallOverlay && <ActiveCall />}

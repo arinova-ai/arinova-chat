@@ -114,6 +114,7 @@ export interface Conversation {
   type: ConversationType;
   userId: string;
   agentId: string | null;
+  mentionOnly: boolean;
   pinnedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -140,9 +141,18 @@ export type MessageStatus =
 export interface Message {
   id: string;
   conversationId: string;
+  seq: number;
   role: MessageRole;
   content: string;
   status: MessageStatus;
+  senderAgentId?: string;
+  senderAgentName?: string;
+  replyToId?: string;
+  replyTo?: {
+    role: MessageRole;
+    content: string;
+    senderAgentName?: string;
+  };
   attachments?: Attachment[];
   createdAt: Date;
   updatedAt: Date;
@@ -551,40 +561,99 @@ export type PlaygroundWSServerEvent =
 
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
-  | { type: "send_message"; conversationId: string; content: string }
+  | { type: "send_message"; conversationId: string; content: string; replyToId?: string; mentions?: string[] }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
+  | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
+  | { type: "mark_read"; conversationId: string; seq: number }
+  | { type: "focus"; visible: boolean }
   | { type: "ping" };
+
+export interface SyncConversationSummary {
+  conversationId: string;
+  unreadCount: number;
+  maxSeq: number;
+  muted: boolean;
+  lastMessage: {
+    content: string;
+    role: MessageRole;
+    status: MessageStatus;
+    createdAt: string;
+  } | null;
+}
+
+export interface SyncMissedMessage {
+  id: string;
+  conversationId: string;
+  seq: number;
+  role: MessageRole;
+  content: string;
+  status: MessageStatus;
+  createdAt: string;
+}
 
 export type WSServerEvent =
   | {
       type: "stream_start";
       conversationId: string;
       messageId: string;
+      seq: number;
+      senderAgentId?: string;
+      senderAgentName?: string;
     }
   | {
       type: "stream_chunk";
       conversationId: string;
       messageId: string;
+      seq: number;
       chunk: string;
     }
   | {
       type: "stream_end";
       conversationId: string;
       messageId: string;
+      seq: number;
+      content?: string;
     }
   | {
       type: "stream_error";
       conversationId: string;
       messageId: string;
+      seq: number;
       error: string;
     }
+  | {
+      type: "sync_response";
+      conversations: SyncConversationSummary[];
+      missedMessages: SyncMissedMessage[];
+    }
+  | {
+      type: "reaction_added";
+      messageId: string;
+      conversationId: string;
+      emoji: string;
+      userId: string;
+    }
+  | {
+      type: "reaction_removed";
+      messageId: string;
+      conversationId: string;
+      emoji: string;
+      userId: string;
+    }
   | { type: "pong" };
+
+// ===== Agent Skill =====
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description: string;
+}
 
 // ===== Agent WebSocket Events (Agent ↔ Backend) =====
 
 /** Events sent from Agent → Backend */
 export type AgentWSClientEvent =
-  | { type: "agent_auth"; agentId: string; secretToken: string }
+  | { type: "agent_auth"; botToken: string; skills?: AgentSkill[] }
   | { type: "agent_chunk"; taskId: string; chunk: string }
   | { type: "agent_complete"; taskId: string; content: string }
   | { type: "agent_error"; taskId: string; error: string }
@@ -595,7 +664,18 @@ export type AgentWSClientEvent =
 export type AgentWSServerEvent =
   | { type: "auth_ok"; agentName: string }
   | { type: "auth_error"; error: string }
-  | { type: "task"; taskId: string; conversationId: string; content: string }
+  | {
+      type: "task";
+      taskId: string;
+      conversationId: string;
+      content: string;
+      conversationType?: ConversationType;
+      members?: { agentId: string; agentName: string }[];
+      replyTo?: { role: MessageRole; content: string; senderAgentName?: string };
+      history?: { role: MessageRole; content: string; senderAgentName?: string; createdAt: string }[];
+      attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
+    }
+  | { type: "cancel_task"; taskId: string }
   | { type: "voice_call_start"; sessionId: string; conversationId: string; audioFormat: VoiceAudioFormat }
   | { type: "voice_call_end"; sessionId: string; reason: string }
   | { type: "pong" };

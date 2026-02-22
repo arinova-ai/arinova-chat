@@ -24,7 +24,7 @@ export const ArinovaChatAccountSchema = ArinovaChatAccountSchemaBase.superRefine
     ctx,
     path: ["allowFrom"],
     message:
-      'channels.arinova-chat.dmPolicy="open" requires channels.arinova-chat.allowFrom to include "*"',
+      'channels.openclaw-arinova-ai.dmPolicy="open" requires channels.openclaw-arinova-ai.allowFrom to include "*"',
   });
 });
 
@@ -37,6 +37,6 @@ export const ArinovaChatConfigSchema = ArinovaChatAccountSchemaBase.extend({
     ctx,
     path: ["allowFrom"],
     message:
-      'channels.arinova-chat.dmPolicy="open" requires channels.arinova-chat.allowFrom to include "*"',
+      'channels.openclaw-arinova-ai.dmPolicy="open" requires channels.openclaw-arinova-ai.allowFrom to include "*"',
   });
 });

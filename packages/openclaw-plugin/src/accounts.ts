@@ -13,7 +13,7 @@ export type ResolvedArinovaChatAccount = {
 };
 
 function listConfiguredAccountIds(cfg: CoreConfig): string[] {
-  const accounts = cfg.channels?.["arinova-chat"]?.accounts;
+  const accounts = cfg.channels?.["openclaw-arinova-ai"]?.accounts;
   if (!accounts || typeof accounts !== "object") {
     return [];
   }
@@ -45,7 +45,7 @@ function resolveAccountConfig(
   cfg: CoreConfig,
   accountId: string,
 ): ArinovaChatAccountConfig | undefined {
-  const accounts = cfg.channels?.["arinova-chat"]?.accounts;
+  const accounts = cfg.channels?.["openclaw-arinova-ai"]?.accounts;
   if (!accounts || typeof accounts !== "object") {
     return undefined;
   }
@@ -60,7 +60,7 @@ function mergeArinovaChatAccountConfig(
   cfg: CoreConfig,
   accountId: string,
 ): ArinovaChatAccountConfig {
-  const { accounts: _ignored, ...base } = (cfg.channels?.["arinova-chat"] ??
+  const { accounts: _ignored, ...base } = (cfg.channels?.["openclaw-arinova-ai"] ??
     {}) as ArinovaChatAccountConfig & { accounts?: unknown };
   const account = resolveAccountConfig(cfg, accountId) ?? {};
   return { ...base, ...account };
@@ -72,7 +72,7 @@ export function resolveArinovaChatAccount(params: {
 }): ResolvedArinovaChatAccount {
   const normalized = normalizeAccountId(params.accountId);
   const merged = mergeArinovaChatAccountConfig(params.cfg, normalized);
-  const baseEnabled = params.cfg.channels?.["arinova-chat"]?.enabled !== false;
+  const baseEnabled = params.cfg.channels?.["openclaw-arinova-ai"]?.enabled !== false;
   const accountEnabled = merged.enabled !== false;
 
   return {

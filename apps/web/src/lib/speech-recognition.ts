@@ -14,7 +14,8 @@ const SpeechRecognitionAPI =
     : undefined;
 
 class BrowserSpeechRecognition {
-  private recognition: SpeechRecognition | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private recognition: any = null;
   private _onResult: ResultHandler | null = null;
   private _onError: ErrorHandler | null = null;
   private _running = false;
@@ -40,13 +41,15 @@ class BrowserSpeechRecognition {
 
     if (this._running) return;
 
-    const Recognition = SpeechRecognitionAPI as new () => SpeechRecognition;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Recognition = SpeechRecognitionAPI as any;
     this.recognition = new Recognition();
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
     this.recognition.lang = lang;
 
-    this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.recognition.onresult = (event: any) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result && result[0]) {
@@ -55,7 +58,8 @@ class BrowserSpeechRecognition {
       }
     };
 
-    this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.recognition.onerror = (event: any) => {
       // "no-speech" and "aborted" are not real errors
       if (event.error === "no-speech" || event.error === "aborted") return;
       this._onError?.(event.error);

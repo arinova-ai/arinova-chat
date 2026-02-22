@@ -71,37 +71,6 @@ export async function validateSession(params: {
   }
 }
 
-/**
- * Exchange a bot token for the agent ID.
- * Also registers the A2A endpoint with Arinova so the backend knows
- * where to forward messages.
- */
-export async function exchangeBotToken(params: {
-  apiUrl: string;
-  botToken: string;
-  a2aEndpoint?: string;
-}): Promise<{ agentId: string; name: string; wsUrl?: string }> {
-  const { apiUrl, botToken, a2aEndpoint } = params;
-
-  const body: Record<string, string> = { botToken };
-  if (a2aEndpoint) body.a2aEndpoint = a2aEndpoint;
-
-  const response = await fetch(`${apiUrl}/api/agents/pair`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(
-      `Pairing code exchange failed (${response.status}): ${body || "invalid code"}`,
-    );
-  }
-
-  return (await response.json()) as { agentId: string; name: string; wsUrl?: string };
-}
-
 function extractSessionCookie(setCookieHeaders: string[]): string | undefined {
   for (const header of setCookieHeaders) {
     if (header.includes("better-auth.session_token=")) {

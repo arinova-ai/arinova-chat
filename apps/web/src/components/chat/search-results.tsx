@@ -64,6 +64,8 @@ export function SearchResults() {
   const searchQuery = useChatStore((s) => s.searchQuery);
   const clearSearch = useChatStore((s) => s.clearSearch);
   const jumpToMessage = useChatStore((s) => s.jumpToMessage);
+  const searchMore = useChatStore((s) => s.searchMore);
+  const hasMoreResults = searchResults.length < searchTotal;
 
   return (
     <div className="flex h-full flex-col">
@@ -138,6 +140,19 @@ export function SearchResults() {
                 </div>
               </button>
             ))}
+            {hasMoreResults && (
+              <button
+                type="button"
+                className="flex items-center justify-center gap-2 px-4 py-4 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                onClick={searchMore}
+                disabled={searchLoading}
+              >
+                {searchLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                Load more results ({searchResults.length} of {searchTotal})
+              </button>
+            )}
           </div>
         )}
       </div>

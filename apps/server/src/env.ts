@@ -35,6 +35,8 @@ const envSchema = z.object({
   TURN_SERVERS: z.string().default(""),
   TURN_USERNAME: z.string().default(""),
   TURN_CREDENTIAL: z.string().default(""),
+  // Sentry error tracking (optional)
+  SENTRY_DSN: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

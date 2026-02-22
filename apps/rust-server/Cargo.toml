@@ -1,0 +1,80 @@
+[package]
+name = "arinova-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["ws", "multipart", "macros"] }
+axum-extra = { version = "0.10", features = ["typed-header", "cookie"] }
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["limit", "timeout"] }
+tower-http = { version = "0.6", features = ["cors", "fs", "limit", "trace"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json"] }
+deadpool-redis = "0.18"
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager", "tokio-rustls-comp"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Auth
+argon2 = "0.5"
+scrypt = "0.11"
+jsonwebtoken = "9"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Crypto & IDs
+uuid = { version = "1", features = ["v4", "serde"] }
+rand = "0.8"
+hex = "0.4"
+sha2 = "0.10"
+hmac = "0.12"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Environment
+dotenvy = "0.15"
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# AWS S3 (for R2)
+aws-sdk-s3 = "1"
+aws-config = "1"
+aws-credential-types = "1"
+
+# Web Push
+p256 = { version = "0.13", features = ["ecdsa", "jwk"] }
+base64 = "0.22"
+ece = "2"
+hyper = { version = "1", features = ["client"] }
+
+# Concurrent data structures
+dashmap = "6"
+
+# Utilities
+futures = "0.3"
+tokio-stream = "0.1"
+bytes = "1"
+mime = "0.3"
+mime_guess = "2"
+infer = "0.16"
+thiserror = "2"
+anyhow = "1"
+regex-lite = "0.1"
+url = "2"
+
+# Sentry
+sentry = { version = "0.35", features = ["tower", "tracing"] }
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = true

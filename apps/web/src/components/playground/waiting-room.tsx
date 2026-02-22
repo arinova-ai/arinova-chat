@@ -99,7 +99,7 @@ export function WaitingRoom({
               </p>
             </div>
             {i === 0 && (
-              <Crown className="h-4 w-4 text-amber-400" title="Host" />
+              <Crown className="h-4 w-4 text-amber-400" aria-label="Host" />
             )}
             {p.isConnected && (
               <span className="h-2 w-2 rounded-full bg-green-400" title="Online" />

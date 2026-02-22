@@ -5,6 +5,8 @@ import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
 import { CallIndicator } from "@/components/voice/call-indicator";
 import { NotificationBanner } from "@/components/notification-banner";
+import { ConnectionBanner } from "./connection-banner";
+import { ErrorBoundary } from "./error-boundary";
 import { useChatStore } from "@/store/chat-store";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 
@@ -41,7 +43,6 @@ export function ChatLayout() {
     if (!isMobile) return;
 
     if ((activeConversationId || searchActive) && !prevConvRef.current) {
-      // Entering a conversation or search → push history entry
       history.pushState({ arinovaChat: true }, "");
     }
     prevConvRef.current = activeConversationId || (searchActive ? "__search__" : null);
@@ -66,27 +67,32 @@ export function ChatLayout() {
   }, [setActiveConversation]);
 
   return (
-    <div className={`app-dvh flex min-h-0 overflow-hidden ${(activeConversationId || searchActive) ? "bg-background" : "bg-card md:bg-background"}`}>
-      {/* Desktop: always show sidebar */}
-      <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
-        <Sidebar />
-      </div>
+    <ErrorBoundary>
+      <div className={`app-dvh flex flex-col min-h-0 overflow-hidden ${(activeConversationId || searchActive) ? "bg-background" : "bg-card md:bg-background"}`}>
+        <ConnectionBanner />
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* Desktop: always show sidebar */}
+          <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
+            <Sidebar />
+          </div>
 
-      {/* Mobile: sidebar fullscreen when no conversation/search, chat when selected */}
-      <div className={`md:hidden h-full overflow-hidden bg-card ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
-        <Sidebar />
-      </div>
+          {/* Mobile: sidebar fullscreen when no conversation/search, chat when selected */}
+          <div className={`md:hidden h-full overflow-hidden bg-card ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
+            <Sidebar />
+          </div>
 
-      {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
-      <div className={`h-full flex-1 min-w-0 flex flex-col bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
-        <NotificationBanner />
-        <div className="flex-1 min-h-0">
-          <ChatArea />
+          {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
+          <div className={`h-full flex-1 min-w-0 flex flex-col bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
+            <NotificationBanner />
+            <div className="flex-1 min-h-0">
+              <ChatArea />
+            </div>
+          </div>
+
+          {/* Floating call indicator (visible when navigating away from active call) */}
+          <CallIndicator />
         </div>
       </div>
-
-      {/* Floating call indicator (visible when navigating away from active call) */}
-      <CallIndicator />
-    </div>
+    </ErrorBoundary>
   );
 }

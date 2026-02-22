@@ -14,10 +14,20 @@ const agentVoiceSessions = new Map<string, string>();
 // sessionId -> agentId (reverse lookup)
 const sessionToAgent = new Map<string, string>();
 
+// Agent skills declared at auth time: agentId -> skills
+interface AgentSkillEntry { id: string; name: string; description: string }
+const agentSkills = new Map<string, AgentSkillEntry[]>();
+
+/** Get the skills declared by a connected agent. Returns [] if offline. */
+export function getAgentSkills(agentId: string): AgentSkillEntry[] {
+  return agentSkills.get(agentId) ?? [];
+}
+
 // Pending tasks: taskId -> handler callbacks
 interface PendingTask {
   agentId: string;
-  onChunk: (chunk: string) => void;
+  accumulated: string; // tracks full text for auto-detecting accumulated vs delta mode
+  onChunk: (delta: string) => void;
   onComplete: (content: string) => void;
   onError: (error: string) => void;
   timeout: ReturnType<typeof setTimeout>;
@@ -74,9 +84,10 @@ export function sendTaskToAgent(params: {
 
   pendingTasks.set(taskId, {
     agentId,
-    onChunk: (chunk) => {
+    accumulated: "",
+    onChunk: (delta) => {
       resetIdleTimeout();
-      onChunk(chunk);
+      onChunk(delta);
     },
     onComplete,
     onError,
@@ -100,6 +111,20 @@ function cleanupTask(taskId: string, errorMessage?: string) {
   pendingTasks.delete(taskId);
   if (errorMessage) {
     task.onError(errorMessage);
+  }
+}
+
+/** Cancel a pending task silently (no onError/onComplete) and notify the agent to stop. */
+export function cancelAgentTask(taskId: string): void {
+  const task = pendingTasks.get(taskId);
+  if (!task) return;
+  clearTimeout(task.timeout);
+  pendingTasks.delete(taskId);
+
+  // Notify agent to stop generating
+  const ws = agentConnections.get(task.agentId);
+  if (ws && ws.readyState === ws.OPEN) {
+    sendToAgent(ws, { type: "cancel_task", taskId });
   }
 }
 
@@ -215,34 +240,29 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (event.type === "agent_auth") {
           clearTimeout(authTimer);
 
-          // Verify agentId exists in DB and secretToken matches
+          // Look up agent by botToken (secret_token)
           const [agent] = await db
             .select({ id: agents.id, name: agents.name, secretToken: agents.secretToken })
             .from(agents)
-            .where(eq(agents.id, event.agentId));
+            .where(eq(agents.secretToken, event.botToken));
 
           if (!agent) {
-            sendToAgent(socket, { type: "auth_error", error: "Agent not found" });
-            socket.close(4404, "Agent not found");
-            return;
-          }
-
-          if (!agent.secretToken || agent.secretToken !== event.secretToken) {
-            sendToAgent(socket, { type: "auth_error", error: "Invalid secret token" });
-            socket.close(4403, "Invalid secret token");
+            sendToAgent(socket, { type: "auth_error", error: "Invalid bot token" });
+            socket.close(4404, "Invalid bot token");
             return;
           }
 
           // Close any existing connection for this agent
-          const existingWs = agentConnections.get(event.agentId);
+          const existingWs = agentConnections.get(agent.id);
           if (existingWs && existingWs !== socket) {
             existingWs.close(4409, "Replaced by new connection");
           }
 
-          authenticatedAgentId = event.agentId;
-          agentConnections.set(event.agentId, socket);
+          authenticatedAgentId = agent.id;
+          agentConnections.set(agent.id, socket);
+          agentSkills.set(agent.id, event.skills ?? []);
           sendToAgent(socket, { type: "auth_ok", agentName: agent.name });
-          app.log.info(`Agent WS connected: agentId=${event.agentId} name="${agent.name}"`);
+          app.log.info(`Agent WS connected: agentId=${agent.id} name="${agent.name}" skills=${(event.skills ?? []).length}`);
           return;
         }
 
@@ -255,8 +275,19 @@ export async function agentWsRoutes(app: FastifyInstance) {
         if (event.type === "agent_chunk") {
           const task = pendingTasks.get(event.taskId);
           if (task && task.agentId === authenticatedAgentId) {
-            // Forward full text directly — frontend replaces content (not appends)
-            task.onChunk(event.chunk);
+            const incoming = event.chunk;
+            // Auto-detect: if incoming starts with accumulated text, agent is sending
+            // full accumulated content (old mode). Otherwise it's a delta (new mode).
+            if (task.accumulated.length > 0 && incoming.startsWith(task.accumulated)) {
+              // Accumulated mode: extract only the new portion
+              const delta = incoming.slice(task.accumulated.length);
+              task.accumulated = incoming;
+              if (delta) task.onChunk(delta);
+            } else {
+              // Delta mode: forward directly, track accumulated for detection
+              task.accumulated += incoming;
+              task.onChunk(incoming);
+            }
           }
           return;
         }
@@ -304,6 +335,7 @@ export async function agentWsRoutes(app: FastifyInstance) {
         // Only remove if this socket is still the registered one
         if (agentConnections.get(authenticatedAgentId) === socket) {
           agentConnections.delete(authenticatedAgentId);
+          agentSkills.delete(authenticatedAgentId);
           cleanupAgentTasks(authenticatedAgentId);
           cleanupAgentVoiceSessions(authenticatedAgentId);
         }

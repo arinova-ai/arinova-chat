@@ -6,22 +6,22 @@ export function normalizeArinovaChatMessagingTarget(raw: string): string | undef
 
   let normalized = trimmed;
 
-  if (normalized.startsWith("arinova-chat:")) {
-    normalized = normalized.slice("arinova-chat:".length).trim();
+  if (normalized.startsWith("openclaw-arinova-ai:")) {
+    normalized = normalized.slice("openclaw-arinova-ai:".length).trim();
   } else if (normalized.startsWith("arinova:")) {
     normalized = normalized.slice("arinova:".length).trim();
   }
 
   if (!normalized) return undefined;
 
-  return `arinova-chat:${normalized}`.toLowerCase();
+  return `openclaw-arinova-ai:${normalized}`.toLowerCase();
 }
 
 export function looksLikeArinovaChatTargetId(raw: string): boolean {
   const trimmed = raw.trim();
   if (!trimmed) return false;
 
-  if (/^(arinova-chat|arinova):/i.test(trimmed)) {
+  if (/^(openclaw-arinova-ai|arinova):/i.test(trimmed)) {
     return true;
   }
 

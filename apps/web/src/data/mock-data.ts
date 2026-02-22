@@ -16,6 +16,7 @@ export const mockAgents: Agent[] = [
     systemPrompt: null,
     welcomeMessage: null,
     quickReplies: null,
+    voiceCapable: false,
     notificationsEnabled: true,
     createdAt: new Date("2025-01-15"),
     updatedAt: new Date("2025-01-15"),
@@ -34,6 +35,7 @@ export const mockAgents: Agent[] = [
     systemPrompt: null,
     welcomeMessage: null,
     quickReplies: null,
+    voiceCapable: false,
     notificationsEnabled: true,
     createdAt: new Date("2025-02-01"),
     updatedAt: new Date("2025-02-01"),
@@ -52,6 +54,7 @@ export const mockAgents: Agent[] = [
     systemPrompt: null,
     welcomeMessage: null,
     quickReplies: null,
+    voiceCapable: false,
     notificationsEnabled: true,
     createdAt: new Date("2025-02-10"),
     updatedAt: new Date("2025-02-10"),
@@ -66,6 +69,7 @@ export const mockConversations: Conversation[] = [
     userId: "user-1",
     agentId: "agent-1",
     type: "direct",
+    mentionOnly: true,
     pinnedAt: null,
     createdAt: new Date("2025-03-01T10:00:00"),
     updatedAt: new Date("2025-03-01T10:30:00"),
@@ -76,6 +80,7 @@ export const mockConversations: Conversation[] = [
     userId: "user-1",
     agentId: "agent-2",
     type: "direct",
+    mentionOnly: true,
     pinnedAt: null,
     createdAt: new Date("2025-03-02T14:00:00"),
     updatedAt: new Date("2025-03-02T15:00:00"),
@@ -86,6 +91,7 @@ export const mockConversations: Conversation[] = [
     userId: "user-1",
     agentId: "agent-3",
     type: "direct",
+    mentionOnly: true,
     pinnedAt: null,
     createdAt: new Date("2025-03-03T09:00:00"),
     updatedAt: new Date("2025-03-03T09:45:00"),
@@ -96,6 +102,7 @@ export const mockConversations: Conversation[] = [
     userId: "user-1",
     agentId: "agent-1",
     type: "direct",
+    mentionOnly: true,
     pinnedAt: null,
     createdAt: new Date("2025-03-04T16:00:00"),
     updatedAt: new Date("2025-03-04T16:20:00"),
@@ -108,6 +115,7 @@ export const mockMessages: Record<string, Message[]> = {
     {
       id: "msg-1-1",
       conversationId: "conv-1",
+      seq: 1,
       role: "user",
       content: "How do I create a custom React hook for debouncing?",
       status: "completed",
@@ -117,6 +125,7 @@ export const mockMessages: Record<string, Message[]> = {
     {
       id: "msg-1-2",
       conversationId: "conv-1",
+      seq: 2,
       role: "agent",
       content: `Here's a clean **useDebounce** hook implementation:
 
@@ -166,6 +175,7 @@ Key points:
     {
       id: "msg-1-3",
       conversationId: "conv-1",
+      seq: 3,
       role: "user",
       content: "Can you also show a useDebouncedCallback version?",
       status: "completed",
@@ -175,6 +185,7 @@ Key points:
     {
       id: "msg-1-4",
       conversationId: "conv-1",
+      seq: 4,
       role: "agent",
       content: `Sure! Here's **useDebouncedCallback** — useful when you want to debounce a function call instead of a value:
 
@@ -207,6 +218,7 @@ This is better for **event handlers** where you want to debounce the action, not
     {
       id: "msg-2-1",
       conversationId: "conv-2",
+      seq: 1,
       role: "user",
       content: "I have a CSV with monthly sales data. How should I start analyzing it?",
       status: "completed",
@@ -216,6 +228,7 @@ This is better for **event handlers** where you want to debounce the action, not
     {
       id: "msg-2-2",
       conversationId: "conv-2",
+      seq: 2,
       role: "agent",
       content: `Great question! Here's a structured approach for sales data analysis:
 
@@ -243,6 +256,7 @@ Would you like me to write the analysis code in Python or help with a specific p
     {
       id: "msg-2-3",
       conversationId: "conv-2",
+      seq: 3,
       role: "user",
       content: "Show me Python code for the trend analysis part.",
       status: "completed",
@@ -252,6 +266,7 @@ Would you like me to write the analysis code in Python or help with a specific p
     {
       id: "msg-2-4",
       conversationId: "conv-2",
+      seq: 4,
       role: "agent",
       content: `Here's the trend analysis code:
 
@@ -289,6 +304,7 @@ The **3-month moving average** smooths out noise and reveals the underlying tren
     {
       id: "msg-3-1",
       conversationId: "conv-3",
+      seq: 1,
       role: "user",
       content: "Help me write an intro paragraph for a blog about AI agents in everyday life.",
       status: "completed",
@@ -298,6 +314,7 @@ The **3-month moving average** smooths out noise and reveals the underlying tren
     {
       id: "msg-3-2",
       conversationId: "conv-3",
+      seq: 2,
       role: "agent",
       content: `Here's a draft intro:
 
@@ -311,6 +328,7 @@ Want me to adjust the **tone** (more formal/casual) or **focus** (technical audi
     {
       id: "msg-3-3",
       conversationId: "conv-3",
+      seq: 3,
       role: "user",
       content: "Make it more casual and add a hook at the beginning.",
       status: "completed",
@@ -320,6 +338,7 @@ Want me to adjust the **tone** (more formal/casual) or **focus** (technical audi
     {
       id: "msg-3-4",
       conversationId: "conv-3",
+      seq: 4,
       role: "agent",
       content: `Here's the revised version with a stronger hook:
 
@@ -341,6 +360,7 @@ Changes made:
     {
       id: "msg-4-1",
       conversationId: "conv-4",
+      seq: 1,
       role: "user",
       content: "I'm getting a 403 error when calling my API endpoint. Here's the error:\n\n```\nFetch failed: 403 Forbidden\nHeaders: { 'content-type': 'application/json' }\n```",
       status: "completed",
@@ -350,6 +370,7 @@ Changes made:
     {
       id: "msg-4-2",
       conversationId: "conv-4",
+      seq: 2,
       role: "agent",
       content: `A **403 Forbidden** typically means authentication/authorization issues. Let's debug step by step:
 
@@ -383,6 +404,7 @@ Can you share your **fetch call code** and **server-side auth middleware**?`,
     {
       id: "msg-4-3",
       conversationId: "conv-4",
+      seq: 3,
       role: "user",
       content: "Ah, I forgot to include the Authorization header. Let me fix that. Thanks!",
       status: "completed",

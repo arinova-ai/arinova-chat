@@ -1,6 +1,6 @@
 {
-  "id": "arinova-chat",
-  "channels": ["arinova-chat"],
+  "id": "openclaw-arinova-ai",
+  "channels": ["openclaw-arinova-ai"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

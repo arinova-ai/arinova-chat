@@ -75,12 +75,6 @@ export const sendMessageSchema = z.object({
   content: z.string().min(1).max(32000),
 });
 
-// ===== Pairing (bot token only) =====
-export const pairingExchangeSchema = z.object({
-  botToken: z.string().min(1),
-  a2aEndpoint: z.string().url().optional(),
-});
-
 // ===== App Manifest =====
 const appCategorySchema = z.enum(["game", "shopping", "tool", "social", "other"]);
 const agentInterfaceModeSchema = z.enum(["static", "dynamic"]);
@@ -317,6 +311,19 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
     messageId: z.string().uuid(),
   }),
   z.object({
+    type: z.literal("sync"),
+    conversations: z.record(z.string().uuid(), z.number().int().min(0)),
+  }),
+  z.object({
+    type: z.literal("mark_read"),
+    conversationId: z.string().uuid(),
+    seq: z.number().int().min(0),
+  }),
+  z.object({
+    type: z.literal("focus"),
+    visible: z.boolean(),
+  }),
+  z.object({
     type: z.literal("ping"),
   }),
 ]);
@@ -325,8 +332,12 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
 export const agentWSClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("agent_auth"),
-    agentId: z.string().uuid(),
-    secretToken: z.string().min(1),
+    botToken: z.string().min(1),
+    skills: z.array(z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string(),
+    })).optional(),
   }),
   z.object({
     type: z.literal("agent_chunk"),
@@ -398,6 +409,7 @@ export const voiceCallEndSchema = z.object({
   sessionId: z.string().uuid(),
   reason: z.string(),
 });
+
 
 // ===== Push Notifications =====
 

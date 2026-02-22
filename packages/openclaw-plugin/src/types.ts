@@ -31,7 +31,7 @@ export type ArinovaChatConfig = {
 
 export type CoreConfig = {
   channels?: {
-    "arinova-chat"?: ArinovaChatConfig;
+    "openclaw-arinova-ai"?: ArinovaChatConfig;
   };
   [key: string]: unknown;
 };
@@ -44,6 +44,18 @@ export type ArinovaChatInboundMessage = {
   text: string;
   /** Timestamp of receipt. */
   timestamp: number;
+  /** Conversation ID this message belongs to. */
+  conversationId?: string;
+  /** Conversation type: "direct" or "group". */
+  conversationType?: string;
+  /** Other agents in the conversation (for group chats). */
+  members?: { agentId: string; agentName: string }[];
+  /** The message being replied to, if this is a reply. */
+  replyTo?: { role: string; content: string; senderAgentName?: string };
+  /** Recent conversation history (up to 5 messages before the current one). */
+  history?: { role: string; content: string; senderAgentName?: string; createdAt: string }[];
+  /** Attachments from the user's message. */
+  attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
 };
 
 /** Result from sending a message via Arinova REST API. */
