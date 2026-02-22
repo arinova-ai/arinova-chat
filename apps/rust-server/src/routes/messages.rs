@@ -154,7 +154,10 @@ async fn with_attachments(
             let att_json: Vec<serde_json::Value> = atts
                 .iter()
                 .map(|a| {
-                    let url = if is_r2 {
+                    let url = if a.storage_path.starts_with("http://") || a.storage_path.starts_with("https://") {
+                        // Already a full URL (R2 uploads store the complete URL)
+                        a.storage_path.clone()
+                    } else if is_r2 {
                         format!("{}/{}", config.r2_public_url, a.storage_path)
                     } else {
                         format!("/uploads/{}", a.storage_path)
