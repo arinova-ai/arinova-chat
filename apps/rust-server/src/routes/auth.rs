@@ -306,6 +306,7 @@ async fn get_session(State(state): State<AppState>, headers: axum::http::HeaderM
             },
             "session": {
                 "token": token,
+                "expiresAt": s.expires_at.to_string(),
             }
         }))
         .into_response(),

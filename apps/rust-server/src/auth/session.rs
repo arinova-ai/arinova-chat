@@ -76,6 +76,7 @@ pub struct ValidatedSession {
     pub name: String,
     pub image: Option<String>,
     pub session_id: String,
+    pub expires_at: NaiveDateTime,
 }
 
 /// Validate a session token. Returns user info if valid.
@@ -134,6 +135,7 @@ pub async fn validate_session(
             name,
             image,
             session_id,
+            expires_at,
         })),
         None => Ok(None),
     }
