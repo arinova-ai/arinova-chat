@@ -107,6 +107,7 @@ pub struct Account {
 // ===== Business tables =====
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct Agent {
     pub id: Uuid,
     pub name: String,
