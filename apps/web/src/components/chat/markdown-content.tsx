@@ -85,6 +85,51 @@ function extractLanguageFromChildren(children: React.ReactNode): string | null {
 
 const JS_LANGUAGES = new Set(["javascript", "js"]);
 
+// Stable plugin arrays — avoid re-creating on every render
+const remarkPluginList = [remarkGfm, remarkBreaks];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rehypePluginList: any[] = [rehypeHighlight, [rehypeSanitize, sanitizeSchema]];
+
+// Stable components object — prevents React from unmounting/remounting
+// markdown elements on every render (which causes image flicker during streaming).
+const markdownComponents = {
+  img(props: ComponentProps<"img">) {
+    const { src, alt } = props;
+    if (!src || typeof src !== "string") return null;
+    return <ImageLightbox src={src} alt={typeof alt === "string" ? alt : undefined} />;
+  },
+  table(props: ComponentProps<"table">) {
+    return (
+      <div className="overflow-x-auto">
+        <table {...props} />
+      </div>
+    );
+  },
+  pre(props: ComponentProps<"pre">) {
+    const { children, ...rest } = props;
+    const codeText = extractTextFromChildren(children).trim();
+    const language = extractLanguageFromChildren(children);
+    const isExecutable = language !== null && JS_LANGUAGES.has(language);
+
+    const codeBlock = (
+      <div className="group/code relative">
+        <pre {...rest}>{children}</pre>
+        {codeText && <CodeBlockCopyButton code={codeText} />}
+      </div>
+    );
+
+    if (isExecutable && codeText) {
+      return (
+        <CodeExecutor code={codeText}>
+          {codeBlock}
+        </CodeExecutor>
+      );
+    }
+
+    return codeBlock;
+  },
+};
+
 export function MarkdownContent({ content, highlightQuery, mentionNames, streaming }: MarkdownContentProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -189,48 +234,9 @@ export function MarkdownContent({ content, highlightQuery, mentionNames, streami
   return (
     <div ref={contentRef} className="markdown-content text-sm leading-relaxed">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        rehypePlugins={[
-          rehypeHighlight,
-          [rehypeSanitize, sanitizeSchema],
-        ]}
-        components={{
-          img(props: ComponentProps<"img">) {
-            const { src, alt } = props;
-            if (!src || typeof src !== "string") return null;
-            return <ImageLightbox src={src} alt={typeof alt === "string" ? alt : undefined} />;
-          },
-          table(props: ComponentProps<"table">) {
-            return (
-              <div className="overflow-x-auto">
-                <table {...props} />
-              </div>
-            );
-          },
-          pre(props: ComponentProps<"pre">) {
-            const { children, ...rest } = props;
-            const codeText = extractTextFromChildren(children).trim();
-            const language = extractLanguageFromChildren(children);
-            const isExecutable = language !== null && JS_LANGUAGES.has(language);
-
-            const codeBlock = (
-              <div className="group/code relative">
-                <pre {...rest}>{children}</pre>
-                {codeText && <CodeBlockCopyButton code={codeText} />}
-              </div>
-            );
-
-            if (isExecutable && codeText) {
-              return (
-                <CodeExecutor code={codeText}>
-                  {codeBlock}
-                </CodeExecutor>
-              );
-            }
-
-            return codeBlock;
-          },
-        }}
+        remarkPlugins={remarkPluginList}
+        rehypePlugins={rehypePluginList}
+        components={markdownComponents}
       >
         {content}
       </ReactMarkdown>
