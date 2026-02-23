@@ -124,14 +124,16 @@ export async function handleArinovaChatInbound(params: {
     return;
   }
 
-  // Resolve agent route
+  // Resolve agent route — use conversationId as peer id so each conversation
+  // gets its own session (critical for groups where multiple convos exist).
+  const peerId = message.conversationId ?? senderId;
   const route = core.channel.routing.resolveAgentRoute({
     cfg: config as OpenClawConfig,
     channel: CHANNEL_ID,
     accountId: account.accountId,
     peer: {
-      kind: "direct",
-      id: senderId,
+      kind: chatType === "group" ? "group" : "direct",
+      id: peerId,
     },
   });
 
@@ -163,14 +165,14 @@ export async function handleArinovaChatInbound(params: {
     BodyForAgent: bodyForAgent,
     RawBody: rawBody,
     CommandBody: rawBody,
-    From: `openclaw-arinova-ai:${senderId}`,
+    From: `openclaw-arinova-ai:${peerId}`,
     To: `openclaw-arinova-ai:${account.agentId}`,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
     ChatType: chatType,
     ConversationLabel: fromLabel,
     SenderName: senderName,
-    SenderId: senderId,
+    SenderId: peerId,
     Provider: CHANNEL_ID,
     Surface: CHANNEL_ID,
     MessageSid: message.taskId,
