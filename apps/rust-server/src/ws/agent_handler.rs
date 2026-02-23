@@ -236,6 +236,22 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                         }
                     }
                 }
+                "agent_heartbeat" => {
+                    let task_id = event.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+
+                    if let Some(mut task) = ws_state.pending_tasks.get_mut(task_id) {
+                        if task.agent_id == agent_id_clone {
+                            // Reset idle timeout — agent is still working
+                            task.timeout_handle.abort();
+                            let ws_state_clone = ws_state.clone();
+                            let task_id_str = task_id.to_string();
+                            task.timeout_handle = tokio::spawn(async move {
+                                tokio::time::sleep(TASK_IDLE_TIMEOUT).await;
+                                cleanup_task(&ws_state_clone, &task_id_str, Some("Task timed out (idle for 600s)"));
+                            });
+                        }
+                    }
+                }
                 "agent_send" => {
                     let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
                     let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
