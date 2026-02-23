@@ -740,13 +740,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "pong") return;
 
     if (event.type === "stream_start") {
-      const { conversationId, messageId, seq } = event;
-      const agentId = (event as Record<string, unknown>).senderAgentId as string | undefined;
-      const agentName = (event as Record<string, unknown>).senderAgentName as string | undefined;
+      const { conversationId, messageId, seq, senderAgentId, senderAgentName } = event;
       const thinking: ThinkingAgent = {
         messageId,
-        agentId: agentId ?? "",
-        agentName: agentName ?? "Agent",
+        agentId: senderAgentId ?? "",
+        agentName: senderAgentName ?? "Agent",
         seq,
         startedAt: new Date(),
       };
