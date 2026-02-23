@@ -930,6 +930,22 @@ async fn do_trigger_agent_response(
             None => {
                 // Agent disconnected between check and send — clean up the stuck stream
                 // so queued messages aren't permanently blocked.
+                let _ = sqlx::query(
+                    r#"UPDATE messages SET content = $1, status = 'error', updated_at = NOW() WHERE id = $2::uuid"#,
+                )
+                .bind("Agent is not connected")
+                .bind(&agent_msg_id_clone)
+                .execute(&db)
+                .await;
+
+                ws_state.send_to_user_or_queue(&user_id, &json!({
+                    "type": "stream_error",
+                    "conversationId": &conversation_id,
+                    "messageId": &agent_msg_id_clone,
+                    "seq": agent_seq,
+                    "error": "Agent is not connected"
+                }), &redis);
+
                 ws_state.active_streams.remove(&stream_key);
                 process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
                 return;
@@ -1044,6 +1060,45 @@ async fn do_trigger_agent_response(
                             break;
                         }
                         None => {
+                            ws_state.stream_cancellers.remove(&agent_msg_id_clone);
+
+                            if let Ok(mut conn) = redis.get().await {
+                                let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
+                            }
+
+                            if stream_accumulated.is_empty() {
+                                let _ = sqlx::query(
+                                    r#"UPDATE messages SET content = 'Agent disconnected', status = 'error', updated_at = NOW() WHERE id = $1::uuid"#,
+                                )
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+
+                                ws_state.send_to_user_or_queue(&user_id, &json!({
+                                    "type": "stream_error",
+                                    "conversationId": &conversation_id,
+                                    "messageId": &agent_msg_id_clone,
+                                    "seq": agent_seq,
+                                    "error": "Agent disconnected"
+                                }), &redis);
+                            } else {
+                                let _ = sqlx::query(
+                                    r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
+                                )
+                                .bind(&stream_accumulated)
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+
+                                ws_state.send_to_user_or_queue(&user_id, &json!({
+                                    "type": "stream_end",
+                                    "conversationId": &conversation_id,
+                                    "messageId": &agent_msg_id_clone,
+                                    "seq": agent_seq,
+                                    "content": &stream_accumulated
+                                }), &redis);
+                            }
+
                             ws_state.active_streams.remove(&stream_key);
                             process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
                             break;

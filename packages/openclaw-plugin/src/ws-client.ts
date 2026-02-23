@@ -3,6 +3,8 @@
  * The agent connects OUT to the backend, so it doesn't need to expose any port.
  */
 
+import type { UploadFn } from "./image-upload.js";
+
 export type AgentWSClientOptions = {
   wsUrl: string;
   agentId: string;
@@ -10,10 +12,17 @@ export type AgentWSClientOptions = {
   onTask: (params: {
     taskId: string;
     conversationId: string;
+    conversationType?: string;
     content: string;
+    members?: { agentId: string; agentName: string }[];
+    replyTo?: { role: string; content: string; senderAgentName?: string };
+    history?: { role: string; content: string; senderAgentName?: string; createdAt: string }[];
+    attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
     sendChunk: (chunk: string) => void;
-    sendComplete: (content: string) => void;
+    sendComplete: (content: string, options?: { mentions?: string[] }) => void;
     sendError: (error: string) => void;
+    signal: AbortSignal;
+    uploadFile?: UploadFn;
   }) => void | Promise<void>;
   onConnected?: () => void;
   onDisconnected?: () => void;
@@ -109,14 +118,35 @@ export function createWSClient(opts: AgentWSClientOptions): AgentWSClient {
         }
 
         if (data.type === "task") {
-          const { taskId, conversationId, content } = data;
+          const { taskId, conversationId, conversationType, content, members, replyTo, history, attachments } = data;
+          const taskAbortController = new AbortController();
           const sendChunk = (chunk: string) => send({ type: "agent_chunk", taskId, chunk });
-          const sendComplete = (finalContent: string) => send({ type: "agent_complete", taskId, content: finalContent });
-          const sendError = (error: string) => send({ type: "agent_error", taskId, error });
+          const sendComplete = (finalContent: string, options?: { mentions?: string[] }) => {
+            const msg: Record<string, unknown> = { type: "agent_complete", taskId, content: finalContent };
+            if (options?.mentions?.length) msg.mentions = options.mentions;
+            send(msg);
+          };
+          const sendError = (error: string) => {
+            send({ type: "agent_error", taskId, error });
+            taskAbortController.abort();
+          };
 
           // Fire and forget — errors are caught inside
           Promise.resolve(
-            onTask({ taskId, conversationId, content, sendChunk, sendComplete, sendError })
+            onTask({
+              taskId,
+              conversationId,
+              conversationType,
+              content,
+              members,
+              replyTo,
+              history,
+              attachments,
+              sendChunk,
+              sendComplete,
+              sendError,
+              signal: taskAbortController.signal,
+            })
           ).catch((err) => {
             const errorMsg = err instanceof Error ? err.message : String(err);
             sendError(errorMsg);
