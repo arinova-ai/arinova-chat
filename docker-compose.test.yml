@@ -64,6 +64,8 @@ services:
       OPENCLAW_GATEWAY_PORT: "18789"
       OPENCLAW_GATEWAY_BIND: lan
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-test-openclaw-token}
+      OFFICE_FORWARD_URL: http://server:3501/api/office/event
+      OFFICE_EVENT_TOKEN: ${OFFICE_EVENT_TOKEN:-test-office-token}
     volumes:
       - openclaw_data:/home/node/.openclaw
     healthcheck:
@@ -90,6 +92,7 @@ services:
       BETTER_AUTH_URL: http://localhost:21001
       UPLOAD_DIR: /app/uploads
       OPENCLAW_GATEWAY_URL: ws://openclaw:18789
+      OFFICE_EVENT_TOKEN: ${OFFICE_EVENT_TOKEN:-test-office-token}
     volumes:
       - test_uploads_data:/app/uploads
     depends_on:

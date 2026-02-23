@@ -154,8 +154,31 @@ export function registerHooks(api: OpenClawPluginApi): void {
   });
 }
 
+/** Forward URL + token for HTTP POST to Rust server */
+let forwardUrl: string | null = null;
+let forwardToken: string | null = null;
+
+export function setForwardTarget(url: string, token: string): void {
+  forwardUrl = url;
+  forwardToken = token;
+}
+
 function emit(event: InternalEvent): void {
   officeState.ingest(event);
+
+  // Forward to Rust server if configured
+  if (forwardUrl && forwardToken) {
+    fetch(forwardUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${forwardToken}`,
+      },
+      body: JSON.stringify(event),
+    }).catch(() => {
+      // Swallow — server may be temporarily unavailable
+    });
+  }
 }
 
 /**

@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,8 @@ const IDLE_TIMEOUT_MS: i64 = 60_000;
 const BLOCKED_LINGER_MS: i64 = 120_000;
 const OFFLINE_REMOVE_MS: i64 = 300_000;
 const BROADCAST_CAPACITY: usize = 64;
+/// How long (ms) without any inbound event before is_healthy() returns false.
+const HEALTHY_TIMEOUT_MS: i64 = 300_000;
 
 // ── Public types (match frontend JSON expectations) ──────────
 
@@ -77,6 +80,8 @@ struct OfficeStateInner {
     subagent_links: Mutex<Vec<SubagentLink>>,
     session_to_agent: DashMap<String, String>,
     tx: broadcast::Sender<OfficeStatusEvent>,
+    /// Timestamp (ms) of the last ingested event. 0 = no events received yet.
+    last_event_at: AtomicI64,
 }
 
 impl OfficeState {
@@ -88,6 +93,7 @@ impl OfficeState {
                 subagent_links: Mutex::new(Vec::new()),
                 session_to_agent: DashMap::new(),
                 tx,
+                last_event_at: AtomicI64::new(0),
             }),
         }
     }
@@ -113,13 +119,19 @@ impl OfficeState {
         }
     }
 
-    /// Returns true if the state store is active (always true once constructed).
+    /// Returns true if we have received at least one event within the last 5 minutes.
     pub fn is_healthy(&self) -> bool {
-        true
+        let last = self.inner.last_event_at.load(Ordering::Relaxed);
+        if last == 0 {
+            return false; // Never received any event
+        }
+        (now_ms() - last) < HEALTHY_TIMEOUT_MS
     }
 
     /// Ingest a hook event from the OpenClaw plugin.
     pub fn ingest(&self, event: InternalEvent) {
+        self.inner.last_event_at.store(now_ms(), Ordering::Relaxed);
+
         // Track session → agent mapping
         if !event.agent_id.is_empty()
             && event.agent_id != "unknown"

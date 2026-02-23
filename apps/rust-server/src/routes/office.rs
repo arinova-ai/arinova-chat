@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Json, Response,
@@ -28,14 +28,11 @@ pub fn router() -> Router<AppState> {
 /// GET /api/office/status — returns current snapshot of all online agents.
 async fn office_status(State(state): State<AppState>, _user: AuthUser) -> Response {
     if !state.office.is_healthy() {
-        return (
-            StatusCode::OK,
-            Json(json!({
-                "connected": false,
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            })),
-        )
-            .into_response();
+        return Json(json!({
+            "connected": false,
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }))
+        .into_response();
     }
 
     let snapshot = state.office.snapshot();
@@ -48,10 +45,15 @@ async fn office_status(State(state): State<AppState>, _user: AuthUser) -> Respon
 }
 
 /// GET /api/office/stream — SSE endpoint streaming real-time agent status.
-async fn office_stream(
-    State(state): State<AppState>,
-    _user: AuthUser,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+async fn office_stream(State(state): State<AppState>, _user: AuthUser) -> Response {
+    if !state.office.is_healthy() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error": "Office plugin not connected"})),
+        )
+            .into_response();
+    }
+
     let rx = state.office.subscribe();
 
     // Send initial snapshot, then stream updates
@@ -59,28 +61,55 @@ async fn office_stream(
     let initial_event = Event::default()
         .data(serde_json::to_string(&initial).unwrap_or_default());
 
-    let updates = BroadcastStream::new(rx).filter_map(|result| {
-        match result {
-            Ok(event) => {
-                let data = serde_json::to_string(&event).unwrap_or_default();
-                Some(Ok(Event::default().data(data)))
-            }
-            Err(_) => None, // Lagged — skip
+    let updates = BroadcastStream::new(rx).filter_map(|result| match result {
+        Ok(event) => {
+            let data = serde_json::to_string(&event).unwrap_or_default();
+            Some(Ok(Event::default().data(data)))
         }
+        Err(_) => None, // Lagged — skip
     });
 
     let stream =
         futures::stream::once(async move { Ok::<_, Infallible>(initial_event) }).chain(updates);
 
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 /// POST /api/office/event — receive hook events from the OpenClaw plugin.
+/// Authenticated via `Authorization: Bearer <OFFICE_EVENT_TOKEN>`.
 async fn office_ingest(
     State(state): State<AppState>,
-    _user: AuthUser,
+    headers: HeaderMap,
     Json(event): Json<InternalEvent>,
 ) -> Response {
+    let expected = &state.config.office_event_token;
+
+    // Require a non-empty token to be configured
+    if expected.is_empty() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error": "OFFICE_EVENT_TOKEN not configured"})),
+        )
+            .into_response();
+    }
+
+    // Validate bearer token
+    let provided = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or("");
+
+    if provided != expected {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "Invalid token"})),
+        )
+            .into_response();
+    }
+
     state.office.ingest(event);
     StatusCode::NO_CONTENT.into_response()
 }
