@@ -16,7 +16,8 @@ COPY packages/game-sdk/package.json ./packages/game-sdk/
 COPY packages/openclaw-plugin/package.json ./packages/openclaw-plugin/
 COPY packages/openclaw-office-plugin/package.json ./packages/openclaw-office-plugin/
 
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts: skip mediasoup native build (server-only dep, not needed for web)
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Stage 2: Build
 FROM node:22-alpine AS builder
