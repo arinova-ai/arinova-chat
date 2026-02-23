@@ -20,9 +20,18 @@ use crate::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/api/office/health", get(office_health))
         .route("/api/office/status", get(office_status))
         .route("/api/office/stream", get(office_stream))
         .route("/api/office/event", post(office_ingest))
+}
+
+/// GET /api/office/health — lightweight health check (no auth required).
+async fn office_health(State(state): State<AppState>) -> Json<serde_json::Value> {
+    Json(json!({
+        "connected": state.office.is_healthy(),
+        "timestamp": chrono::Utc::now().to_rfc3339()
+    }))
 }
 
 /// GET /api/office/status — returns current snapshot of all online agents.

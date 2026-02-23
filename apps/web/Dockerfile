@@ -10,6 +10,11 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.js
 COPY apps/web/package.json ./apps/web/
 COPY apps/server/package.json ./apps/server/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/agent-sdk/package.json ./packages/agent-sdk/
+COPY packages/app-sdk/package.json ./packages/app-sdk/
+COPY packages/game-sdk/package.json ./packages/game-sdk/
+COPY packages/openclaw-plugin/package.json ./packages/openclaw-plugin/
+COPY packages/openclaw-office-plugin/package.json ./packages/openclaw-office-plugin/
 
 RUN pnpm install --frozen-lockfile
 
@@ -26,7 +31,6 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 
 # Copy source
