@@ -48,7 +48,14 @@ export async function sendMessageArinovaChat(
 
   const agent = getAgentInstance(account.accountId);
   if (agent) {
+    console.log(
+      `[openclaw-arinova-ai] sendMessage accountId=${account.accountId} conversationId=${conversationId} textLen=${text.length}`,
+    );
     agent.sendMessage(conversationId, text);
+  } else {
+    console.warn(
+      `[openclaw-arinova-ai] No agent instance for accountId="${account.accountId}" — message dropped`,
+    );
   }
 
   getArinovaChatRuntime().channel.activity.record({

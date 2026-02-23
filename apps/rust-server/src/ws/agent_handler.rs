@@ -260,8 +260,11 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                     let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
 
                     if conversation_id.is_empty() || content.trim().is_empty() {
+                        tracing::warn!("agent_send: empty conversationId or content from agent {}", agent_id_clone);
                         continue;
                     }
+
+                    tracing::info!("agent_send: agentId={} conversationId={} contentLen={}", agent_id_clone, conversation_id, content.len());
 
                     // Validate agent belongs to this conversation and get user_id
                     let membership = sqlx::query_as::<_, (String, String)>(
@@ -283,7 +286,14 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
 
                     let (user_id, _conv_type) = match membership {
                         Ok(Some(m)) => m,
-                        _ => continue, // silently drop if not a member
+                        Ok(None) => {
+                            tracing::warn!("agent_send: agent {} is not a member of conversation {}", agent_id_clone, conversation_id);
+                            continue;
+                        }
+                        Err(e) => {
+                            tracing::error!("agent_send: DB error checking membership: {}", e);
+                            continue;
+                        }
                     };
 
                     // Get agent name
@@ -323,6 +333,8 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                     .bind(conversation_id)
                     .execute(&db)
                     .await;
+
+                    tracing::info!("agent_send: delivered msgId={} seq={} to user {}", msg_id, seq, user_id);
 
                     // Deliver to user via stream_start + stream_end
                     ws_state.send_to_user_or_queue(&user_id, &json!({
