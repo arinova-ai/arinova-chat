@@ -33,6 +33,9 @@ async fn agent_ws_upgrade(
 async fn handle_agent_ws(socket: WebSocket, state: AppState) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
+    // Unique ID for this connection — used to avoid cleanup race conditions on reconnect
+    let conn_id = uuid::Uuid::new_v4().to_string();
+
     // Create channel for sending messages to this WebSocket
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
@@ -76,7 +79,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                 match agent {
                     Ok(Some((agent_id, agent_name))) => {
                         // Close any existing connection for this agent
-                        if let Some((_, old_sender)) = state.ws.agent_connections.remove(&agent_id) {
+                        if let Some((_, (_, old_sender))) = state.ws.agent_connections.remove(&agent_id) {
                             // The old connection will close when sender is dropped
                             drop(old_sender);
                         }
@@ -87,7 +90,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                             .and_then(|v| serde_json::from_value(v.clone()).ok())
                             .unwrap_or_default();
 
-                        state.ws.agent_connections.insert(agent_id.clone(), tx.clone());
+                        state.ws.agent_connections.insert(agent_id.clone(), (conn_id.clone(), tx.clone()));
                         state.ws.agent_skills.insert(agent_id.clone(), skills.clone());
 
                         // Clean up stale streaming messages for this agent
@@ -350,14 +353,21 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
         _ = recv_task => {},
     }
 
-    // Cleanup
+    // Cleanup — only if this is still the registered connection (not superseded by a reconnect)
     if let Some(agent_id) = authenticated_agent_id {
-        // Only remove if this is still the registered connection
-        // (check by seeing if the sender matches)
-        state.ws.agent_connections.remove(&agent_id);
-        state.ws.agent_skills.remove(&agent_id);
-        cleanup_agent_tasks(&state.ws, &agent_id);
-        tracing::info!("Agent WS disconnected: agentId={}", agent_id);
+        let is_current = state.ws.agent_connections
+            .get(&agent_id)
+            .map(|entry| entry.0 == conn_id)
+            .unwrap_or(false);
+
+        if is_current {
+            state.ws.agent_connections.remove(&agent_id);
+            state.ws.agent_skills.remove(&agent_id);
+            cleanup_agent_tasks(&state.ws, &agent_id);
+            tracing::info!("Agent WS disconnected: agentId={}", agent_id);
+        } else {
+            tracing::info!("Agent WS closed (superseded by reconnect): agentId={}", agent_id);
+        }
     }
 }
 

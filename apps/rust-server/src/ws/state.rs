@@ -59,8 +59,8 @@ pub struct WsState {
     /// Per-conversation agent response queues
     pub agent_response_queues: Arc<DashMap<String, VecDeque<QueuedResponse>>>,
 
-    /// Agent connections: agentId -> sender
-    pub agent_connections: Arc<DashMap<String, WsSender>>,
+    /// Agent connections: agentId -> (connectionId, sender)
+    pub agent_connections: Arc<DashMap<String, (String, WsSender)>>,
 
     /// Agent skills: agentId -> skills
     pub agent_skills: Arc<DashMap<String, Vec<AgentSkill>>>,
@@ -159,9 +159,9 @@ impl WsState {
 
     /// Send a JSON event to a connected agent
     pub fn send_to_agent(&self, agent_id: &str, event: &Value) -> bool {
-        if let Some(sender) = self.agent_connections.get(agent_id) {
+        if let Some(entry) = self.agent_connections.get(agent_id) {
             let msg = serde_json::to_string(event).unwrap_or_default();
-            sender.send(msg).is_ok()
+            entry.1.send(msg).is_ok()
         } else {
             false
         }
