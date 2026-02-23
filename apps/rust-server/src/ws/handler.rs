@@ -249,6 +249,16 @@ async fn handle_message(
         }
         "cancel_stream" => {
             let message_id = event.get("messageId").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Immediately update DB so a refresh won't see stale 'streaming' status
+            let _ = sqlx::query(
+                r#"UPDATE messages SET status = 'cancelled', updated_at = NOW()
+                   WHERE id = $1::uuid AND status = 'streaming'"#,
+            )
+            .bind(message_id)
+            .execute(db)
+            .await;
+
             if let Some((_, cancel_tx)) = ws_state.stream_cancellers.remove(message_id) {
                 let _ = cancel_tx.send(true);
             }
