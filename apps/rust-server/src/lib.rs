@@ -16,4 +16,5 @@ pub struct AppState {
     pub config: config::Config,
     pub ws: ws::state::WsState,
     pub s3: Option<aws_sdk_s3::Client>,
+    pub office: services::office::OfficeState,
 }

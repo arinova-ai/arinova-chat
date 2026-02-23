@@ -3,7 +3,7 @@
 # Port range: 21000-22000
 #
 #   Web (Next.js)       → http://localhost:21000
-#   Server (Fastify)    → http://localhost:21001
+#   Server (Rust)       → http://localhost:21001
 #   OpenClaw Gateway    → ws://localhost:21002
 #   PostgreSQL          → localhost:21003
 #   Redis               → localhost:21004
@@ -75,15 +75,14 @@ services:
 
   server:
     build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+      context: apps/rust-server
+      dockerfile: Dockerfile
     container_name: arinova-test-server
     restart: unless-stopped
     ports:
       - "21001:3501"
     environment:
       PORT: 3501
-      NODE_ENV: test
       DATABASE_URL: postgres://arinova:arinova_test@postgres:5432/arinova_chat
       REDIS_URL: redis://redis:6379
       CORS_ORIGIN: http://localhost:21000

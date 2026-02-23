@@ -56,6 +56,20 @@ async fn main() {
     // Create WebSocket state
     let ws_state = ws::state::WsState::new();
 
+    // Create Office state + start periodic tick loop
+    let office_state = services::office::OfficeState::new();
+    {
+        let office = office_state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+            loop {
+                interval.tick().await;
+                office.tick();
+            }
+        });
+    }
+    tracing::info!("Office state initialized");
+
     // Build application state
     let state = AppState {
         db,
@@ -63,6 +77,7 @@ async fn main() {
         config: config.clone(),
         ws: ws_state,
         s3,
+        office: office_state,
     };
 
     // Build CORS layer
@@ -103,6 +118,7 @@ async fn main() {
         .merge(routes::sandbox::router())
         .merge(routes::agent_health::router())
         .merge(routes::agent_uploads::router())
+        .merge(routes::office::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

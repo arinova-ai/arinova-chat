@@ -5,6 +5,7 @@ pub mod groups;
 pub mod health;
 pub mod messages;
 pub mod notifications;
+pub mod office;
 pub mod push;
 pub mod reactions;
 pub mod sandbox;
@@ -30,5 +31,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(sandbox::router())
         .merge(agent_health::router())
         .merge(agent_uploads::router())
+        .merge(office::router())
         .with_state(state)
 }

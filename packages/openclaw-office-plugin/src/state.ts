@@ -44,11 +44,13 @@ class OfficeStateStore {
         this.handleSessionEnd(event);
         break;
       case "llm_output":
-      case "tool_call":
       case "tool_result":
       case "message_in":
       case "message_out":
         this.handleActivity(event);
+        break;
+      case "tool_call":
+        this.handleToolCall(event);
         break;
       case "agent_error":
         this.handleError(event);
@@ -86,6 +88,7 @@ class OfficeStateStore {
     agent.status = "idle";
     agent.online = false;
     agent.lastActivity = event.timestamp;
+    agent.currentTask = null;
     // Clean up subagent links involving this agent
     this.removeSubagentLinks(event.agentId);
     this.updateCollaborationStatus();
@@ -110,6 +113,22 @@ class OfficeStateStore {
     this.broadcast();
   }
 
+  private handleToolCall(event: InternalEvent): void {
+    const agent = this.ensureAgent(event.agentId, event.timestamp);
+
+    if (agent.status === "blocked" || agent.status === "idle") {
+      agent.status = "working";
+    }
+    agent.lastActivity = event.timestamp;
+    agent.online = true;
+    // Set currentTask from the tool name
+    const toolName = event.data.toolName as string | undefined;
+    if (toolName) {
+      agent.currentTask = toolName;
+    }
+    this.broadcast();
+  }
+
   private handleError(event: InternalEvent): void {
     const agent = this.ensureAgent(event.agentId, event.timestamp);
     agent.status = "blocked";
@@ -125,6 +144,7 @@ class OfficeStateStore {
       agent.status = "idle";
     }
     agent.lastActivity = event.timestamp;
+    agent.currentTask = null;
     this.broadcast();
   }
 
