@@ -21,10 +21,9 @@ import {
   looksLikeArinovaChatTargetId,
   normalizeArinovaChatMessagingTarget,
 } from "./normalize.js";
-import { getArinovaChatRuntime } from "./runtime.js";
+import { getArinovaChatRuntime, setAgentInstance } from "./runtime.js";
 import { sendMessageArinovaChat } from "./send.js";
-import { exchangeBotToken } from "./auth.js";
-import { createWSClient } from "./ws-client.js";
+import { ArinovaAgent } from "@arinova-ai/agent-sdk";
 import { handleArinovaChatInbound } from "./inbound.js";
 
 const meta = {
@@ -66,21 +65,14 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
       resolveArinovaChatAccount({ cfg: cfg as CoreConfig, accountId }),
     defaultAccountId: (cfg) => resolveDefaultArinovaChatAccountId(cfg as CoreConfig),
     isConfigured: (account) =>
-      Boolean(
-        account.apiUrl?.trim() &&
-          (account.agentId?.trim() || account.botToken?.trim()),
-      ),
+      Boolean(account.apiUrl?.trim() && account.botToken?.trim()),
     describeAccount: (account) => ({
       accountId: account.accountId,
       name: account.name,
       enabled: account.enabled,
-      configured: Boolean(
-        account.apiUrl?.trim() &&
-          (account.agentId?.trim() || account.botToken?.trim()),
-      ),
+      configured: Boolean(account.apiUrl?.trim() && account.botToken?.trim()),
       apiUrl: account.apiUrl ? "[set]" : "[missing]",
-      botToken: account.botToken ? "[set]" : "[not set]",
-      agentId: account.agentId ? "[set]" : "[missing]",
+      botToken: account.botToken ? "[set]" : "[missing]",
     }),
     resolveAllowFrom: ({ cfg, accountId }) =>
       (
@@ -214,8 +206,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
     }),
     buildAccountSnapshot: ({ account, runtime }) => {
       const configured = Boolean(
-        account.apiUrl?.trim() &&
-          (account.agentId?.trim() || account.botToken?.trim()),
+        account.apiUrl?.trim() && account.botToken?.trim(),
       );
       return {
         accountId: account.accountId,
@@ -223,7 +214,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         enabled: account.enabled,
         configured,
         apiUrl: account.apiUrl ? "[set]" : "[missing]",
-        agentId: account.agentId ? "[set]" : "[missing]",
+        botToken: account.botToken ? "[set]" : "[missing]",
         running: runtime?.running ?? false,
         lastStartAt: runtime?.lastStartAt ?? null,
         lastStopAt: runtime?.lastStopAt ?? null,
@@ -242,9 +233,9 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
           `Arinova Chat not configured for account "${account.accountId}" (missing apiUrl)`,
         );
       }
-      if (!account.agentId && !account.botToken) {
+      if (!account.botToken) {
         throw new Error(
-          `Arinova Chat not configured for account "${account.accountId}" (missing agentId or botToken)`,
+          `Arinova Chat not configured for account "${account.accountId}" (missing botToken)`,
         );
       }
 
@@ -262,117 +253,71 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         },
       };
 
-      // Derive WebSocket URL from apiUrl
-      const wsUrl = account.apiUrl.replace(/^http/, "ws") + "/ws/agent";
+      // Connect to backend via SDK (botToken auth, no pair step needed)
+      const serverUrl = account.apiUrl.replace(/^http/, "ws");
+      logger.info(`[${account.accountId}] connecting to backend: ${serverUrl}`);
 
-      // Resolve agentId from botToken if not already set
-      if (!account.agentId && account.botToken) {
-        logger.info(`[${account.accountId}] exchanging bot token...`);
-        try {
-          const result = await exchangeBotToken({
-            apiUrl: account.apiUrl,
-            botToken: account.botToken,
-          });
-          account.agentId = result.agentId;
-          logger.info(
-            `[${account.accountId}] paired via bot token — agentId=${result.agentId} name="${result.name}"`,
-          );
-
-          // Persist agentId to config
-          try {
-            const isDefault = account.accountId === DEFAULT_ACCOUNT_ID;
-            const channelCfg = (ctx.cfg as Record<string, unknown>).channels as Record<string, unknown> | undefined;
-            const arinovaCfg = { ...(channelCfg?.["openclaw-arinova-ai"] as Record<string, unknown> ?? {}) };
-
-            if (isDefault) {
-              arinovaCfg.agentId = result.agentId;
-            } else {
-              const accounts = { ...(arinovaCfg.accounts as Record<string, unknown> ?? {}) };
-              const acct = { ...(accounts[account.accountId] as Record<string, unknown> ?? {}) };
-              acct.agentId = result.agentId;
-              accounts[account.accountId] = acct;
-              arinovaCfg.accounts = accounts;
-            }
-
-            const updatedCfg = {
-              ...ctx.cfg,
-              channels: {
-                ...channelCfg,
-                "openclaw-arinova-ai": arinovaCfg,
-              },
-            };
-            await core.config.writeConfigFile(updatedCfg);
-            logger.info(`[${account.accountId}] agentId persisted to config`);
-          } catch (persistErr) {
-            logger.error(`[${account.accountId}] failed to persist agentId to config: ${String(persistErr)}`);
-          }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`[${account.accountId}] bot token exchange failed: ${errorMsg}`);
-          throw err;
-        }
-      }
-
-      if (!account.agentId) {
-        throw new Error(
-          `Arinova Chat: agentId not available for account "${account.accountId}" after pairing`,
-        );
-      }
-
-      // Connect to backend via WebSocket (Pull model)
-      logger.info(`[${account.accountId}] connecting to backend WS: ${wsUrl}`);
-
-      const client = createWSClient({
-        wsUrl,
-        agentId: account.agentId,
-        secretToken: account.botToken,
-        onTask: async ({ taskId, conversationId, conversationType, content, members, replyTo, history, attachments, sendChunk, sendComplete, sendError, signal }) => {
-          core.channel.activity.record({
-            channel: "openclaw-arinova-ai",
-            accountId: account.accountId,
-            direction: "inbound",
-            at: Date.now(),
-          });
-
-          await handleArinovaChatInbound({
-            message: {
-              taskId,
-              text: content,
-              timestamp: Date.now(),
-              conversationId,
-              conversationType,
-              members,
-              replyTo,
-              history,
-              attachments,
-            },
-            sendChunk,
-            sendComplete,
-            sendError,
-            signal,
-            account,
-            config: cfg,
-            runtime,
-            statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
-          });
-        },
-        onConnected: () => {
-          logger.info(`[openclaw-arinova-ai:${account.accountId}] WebSocket connected`);
-        },
-        onDisconnected: () => {
-          logger.info(`[openclaw-arinova-ai:${account.accountId}] WebSocket disconnected, will reconnect...`);
-        },
-        onError: (error) => {
-          logger.error(`[openclaw-arinova-ai:${account.accountId}] WebSocket error: ${error.message}`);
-        },
-        abortSignal: ctx.abortSignal,
+      const agent = new ArinovaAgent({
+        serverUrl: account.apiUrl,
+        botToken: account.botToken,
       });
 
-      client.connect();
+      setAgentInstance(account.accountId, agent);
+
+      agent.onTask(async (task) => {
+        core.channel.activity.record({
+          channel: "openclaw-arinova-ai",
+          accountId: account.accountId,
+          direction: "inbound",
+          at: Date.now(),
+        });
+
+        await handleArinovaChatInbound({
+          message: {
+            taskId: task.taskId,
+            text: task.content,
+            timestamp: Date.now(),
+            conversationId: task.conversationId,
+            conversationType: task.conversationType,
+            members: task.members,
+            replyTo: task.replyTo,
+            history: task.history,
+            attachments: task.attachments,
+          },
+          sendChunk: task.sendChunk,
+          sendComplete: task.sendComplete,
+          sendError: task.sendError,
+          signal: task.signal,
+          account,
+          config: cfg,
+          runtime,
+          uploadFile: task.uploadFile,
+          statusSink: (patch) => ctx.setStatus({ accountId: ctx.accountId, ...patch }),
+        });
+      });
+
+      agent.on("connected", () => {
+        logger.info(`[openclaw-arinova-ai:${account.accountId}] WebSocket connected`);
+      });
+      agent.on("disconnected", () => {
+        logger.info(`[openclaw-arinova-ai:${account.accountId}] WebSocket disconnected, will reconnect...`);
+      });
+      agent.on("error", (error) => {
+        logger.error(`[openclaw-arinova-ai:${account.accountId}] WebSocket error: ${error.message}`);
+      });
+
+      // Honor abort signal
+      if (ctx.abortSignal) {
+        ctx.abortSignal.addEventListener("abort", () => agent.disconnect(), { once: true });
+      }
+
+      agent.connect().catch((err) => {
+        logger.error(`[openclaw-arinova-ai:${account.accountId}] connection failed: ${err.message}`);
+      });
 
       return {
         stop: () => {
-          client.disconnect();
+          agent.disconnect();
         },
       };
     },
