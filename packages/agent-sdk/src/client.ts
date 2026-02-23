@@ -76,9 +76,35 @@ export class ArinovaAgent {
     this.cleanup();
   }
 
-  /** Send a proactive message to a conversation. Fire-and-forget; no-op if not connected. */
-  sendMessage(conversationId: string, content: string): void {
-    this.send({ type: "agent_send", conversationId, content });
+  /**
+   * Send a proactive message to a conversation.
+   * Uses WebSocket if connected, otherwise falls back to HTTP POST.
+   */
+  async sendMessage(conversationId: string, content: string): Promise<void> {
+    // Try WebSocket first
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.send({ type: "agent_send", conversationId, content });
+      return;
+    }
+
+    // Fallback to HTTP
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/send`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ conversationId, content }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`sendMessage failed (${res.status}): ${body}`);
+    }
   }
 
   private emit(event: "connected" | "disconnected"): void;

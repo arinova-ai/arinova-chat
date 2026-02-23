@@ -10,6 +10,7 @@ pub mod reactions;
 pub mod sandbox;
 pub mod uploads;
 pub mod agent_health;
+pub mod agent_send;
 pub mod agent_uploads;
 
 use axum::Router;
@@ -29,6 +30,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(notifications::router())
         .merge(sandbox::router())
         .merge(agent_health::router())
+        .merge(agent_send::router())
         .merge(agent_uploads::router())
         .with_state(state)
 }
