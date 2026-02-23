@@ -808,18 +808,66 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "stream_end") {
       const { conversationId, messageId, seq } = event;
       const { activeConversationId, unreadCounts } = get();
+      const finalContent = event.content;
 
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);
       if (stillThinking) {
-        // Remove from thinkingAgents, no bubble created
-        set({
-          thinkingAgents: {
-            ...get().thinkingAgents,
-            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
-          },
-        });
+        // No chunks arrived — if server sent final content, create the message
+        // directly from it (agent completed without streaming any deltas)
+        if (finalContent) {
+          const current = get().messagesByConversation[conversationId] ?? [];
+          const agentMsg: Message = {
+            id: messageId,
+            conversationId,
+            seq: stillThinking.seq,
+            role: "agent",
+            content: finalContent,
+            status: "completed",
+            senderAgentId: stillThinking.agentId || undefined,
+            senderAgentName: stillThinking.agentName,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: [...current, agentMsg],
+            },
+            thinkingAgents: {
+              ...get().thinkingAgents,
+              [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+            },
+            // Update sidebar lastMessage preview
+            conversations: get().conversations.map((c) =>
+              c.id === conversationId
+                ? { ...c, lastMessage: agentMsg, updatedAt: new Date() }
+                : c
+            ),
+            // Increment unread if not viewing this conversation
+            unreadCounts:
+              conversationId !== activeConversationId &&
+              !get().mutedConversations[conversationId]
+                ? {
+                    ...unreadCounts,
+                    [conversationId]:
+                      (unreadCounts[conversationId] ?? 0) + 1,
+                  }
+                : unreadCounts,
+          });
+          if (conversationId === activeConversationId && seq > 0) {
+            wsManager.send({ type: "mark_read", conversationId, seq });
+          }
+        } else {
+          // No content — just remove from thinkingAgents silently
+          set({
+            thinkingAgents: {
+              ...get().thinkingAgents,
+              [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+            },
+          });
+        }
         return;
       }
 
@@ -827,10 +875,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       // Find the completed message content for sidebar preview
       const completedMsg = current.find((m) => m.id === messageId);
-
-      // If server sent final content (e.g. agent replaced local paths with URLs),
-      // use it instead of the accumulated stream chunks
-      const finalContent = event.content;
 
       set({
         messagesByConversation: {
@@ -894,8 +938,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);
       if (stillThinking) {
-        // Remove from thinkingAgents, no bubble created
+        // Create error message bubble so user sees the error
+        const current = get().messagesByConversation[conversationId] ?? [];
+        const errorMsg: Message = {
+          id: messageId,
+          conversationId,
+          seq: stillThinking.seq,
+          role: "agent",
+          content: error,
+          status: "error",
+          senderAgentId: stillThinking.agentId || undefined,
+          senderAgentName: stillThinking.agentName,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
         set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: [...current, errorMsg],
+          },
           thinkingAgents: {
             ...get().thinkingAgents,
             [conversationId]: thinking.filter((t) => t.messageId !== messageId),

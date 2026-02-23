@@ -279,7 +279,7 @@ describe("useChatStore", () => {
   // handleWSEvent — stream_end
   // -------------------------------------------------------------------------
   describe("handleWSEvent — stream_end", () => {
-    it("removes from thinkingAgents without creating bubble when no chunks arrived", () => {
+    it("removes from thinkingAgents without creating bubble when no chunks arrived and no content", () => {
       useChatStore.setState({
         thinkingAgents: {
           "conv-1": [{
@@ -302,6 +302,36 @@ describe("useChatStore", () => {
       const state = useChatStore.getState();
       expect(state.thinkingAgents["conv-1"]).toHaveLength(0);
       expect(state.messagesByConversation["conv-1"] ?? []).toHaveLength(0);
+    });
+
+    it("creates completed message from content when no chunks arrived but stream_end has content", () => {
+      useChatStore.setState({
+        thinkingAgents: {
+          "conv-1": [{
+            messageId: "msg-stream",
+            agentId: "agent-1",
+            agentName: "Ron",
+            seq: 2,
+            startedAt: new Date(),
+          }],
+        },
+      });
+
+      useChatStore.getState().handleWSEvent({
+        type: "stream_end",
+        conversationId: "conv-1",
+        messageId: "msg-stream",
+        seq: 2,
+        content: "Full agent response",
+      });
+
+      const state = useChatStore.getState();
+      expect(state.thinkingAgents["conv-1"]).toHaveLength(0);
+      const messages = state.messagesByConversation["conv-1"];
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe("Full agent response");
+      expect(messages[0].status).toBe("completed");
+      expect(messages[0].senderAgentName).toBe("Ron");
     });
 
     it("marks the streaming message as completed on stream_end", () => {
@@ -382,7 +412,7 @@ describe("useChatStore", () => {
   // handleWSEvent — stream_error
   // -------------------------------------------------------------------------
   describe("handleWSEvent — stream_error", () => {
-    it("removes from thinkingAgents without creating bubble when no chunks arrived", () => {
+    it("creates error message from thinkingAgents when no chunks arrived", () => {
       useChatStore.setState({
         thinkingAgents: {
           "conv-1": [{
@@ -405,7 +435,10 @@ describe("useChatStore", () => {
 
       const state = useChatStore.getState();
       expect(state.thinkingAgents["conv-1"]).toHaveLength(0);
-      expect(state.messagesByConversation["conv-1"] ?? []).toHaveLength(0);
+      const messages = state.messagesByConversation["conv-1"] ?? [];
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe("Agent disconnected");
+      expect(messages[0].status).toBe("error");
     });
 
     it("updates existing message with error when chunks had arrived", () => {
