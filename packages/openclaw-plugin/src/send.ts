@@ -1,20 +1,17 @@
 import type { ArinovaChatSendResult, CoreConfig } from "./types.js";
 import { resolveArinovaChatAccount } from "./accounts.js";
-import { getArinovaChatRuntime } from "./runtime.js";
+import { getArinovaChatRuntime, getAgentInstance } from "./runtime.js";
 
 type ArinovaChatSendOpts = {
   accountId?: string;
 };
 
 /**
- * Send a text message via Arinova Chat.
+ * Send a proactive text message via Arinova Chat.
  *
- * Note: For most replies, the plugin responds inline via the A2A SSE stream.
- * This function is a fallback for proactive outbound messages outside of
- * an A2A request context (e.g. scheduled messages, notifications).
- *
- * Arinova Chat uses WebSocket for 1v1 message sending, so proactive outbound
- * is not yet fully supported. Replies are delivered inline via A2A SSE.
+ * Uses the Agent SDK's sendMessage method to deliver messages
+ * outside of an A2A request context (e.g. @mention responses,
+ * scheduled messages, notifications).
  */
 export async function sendMessageArinovaChat(
   to: string,
@@ -49,10 +46,10 @@ export async function sendMessageArinovaChat(
     throw new Error("Conversation ID is required for Arinova Chat sends");
   }
 
-  console.warn(
-    `[openclaw-arinova-ai] Proactive outbound to ${conversationId} is not yet supported. ` +
-      `Replies are delivered inline via A2A SSE.`,
-  );
+  const agent = getAgentInstance(account.accountId);
+  if (agent) {
+    agent.sendMessage(conversationId, text);
+  }
 
   getArinovaChatRuntime().channel.activity.record({
     channel: "openclaw-arinova-ai",

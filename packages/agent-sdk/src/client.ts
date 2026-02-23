@@ -75,6 +75,11 @@ export class ArinovaAgent {
     this.cleanup();
   }
 
+  /** Send a proactive message to a conversation. Fire-and-forget; no-op if not connected. */
+  sendMessage(conversationId: string, content: string): void {
+    this.send({ type: "agent_send", conversationId, content });
+  }
+
   private emit(event: "connected" | "disconnected"): void;
   private emit(event: "error", error: Error): void;
   private emit(event: string, ...args: unknown[]): void {

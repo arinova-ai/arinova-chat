@@ -21,7 +21,7 @@ import {
   looksLikeArinovaChatTargetId,
   normalizeArinovaChatMessagingTarget,
 } from "./normalize.js";
-import { getArinovaChatRuntime } from "./runtime.js";
+import { getArinovaChatRuntime, setAgentInstance } from "./runtime.js";
 import { sendMessageArinovaChat } from "./send.js";
 import { ArinovaAgent } from "@arinova-ai/agent-sdk";
 import { handleArinovaChatInbound } from "./inbound.js";
@@ -261,6 +261,8 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         serverUrl: account.apiUrl,
         botToken: account.botToken,
       });
+
+      setAgentInstance(account.accountId, agent);
 
       agent.onTask(async (task) => {
         core.channel.activity.record({

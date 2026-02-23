@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
+use crate::services::message_seq::get_next_seq;
 use crate::ws::state::{AgentEvent, AgentSkill, PendingTask, WsState};
 use crate::AppState;
 
@@ -152,6 +153,8 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
 
     // Process authenticated messages
     let ws_state = state.ws.clone();
+    let db = state.db.clone();
+    let redis = state.redis.clone();
     let agent_id_clone = agent_id.clone();
 
     let recv_task = tokio::spawn(async move {
@@ -232,6 +235,93 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                             let _ = task.chunk_tx.send(AgentEvent::Error(error.to_string()));
                         }
                     }
+                }
+                "agent_send" => {
+                    let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
+                    let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
+
+                    if conversation_id.is_empty() || content.trim().is_empty() {
+                        continue;
+                    }
+
+                    // Validate agent belongs to this conversation and get user_id
+                    let membership = sqlx::query_as::<_, (String, String)>(
+                        r#"SELECT c.user_id, c.type::text
+                           FROM conversations c
+                           WHERE c.id = $1::uuid
+                             AND (
+                               c.agent_id = $2::uuid
+                               OR EXISTS (
+                                 SELECT 1 FROM conversation_members cm
+                                 WHERE cm.conversation_id = c.id AND cm.agent_id = $2::uuid
+                               )
+                             )"#,
+                    )
+                    .bind(conversation_id)
+                    .bind(&agent_id_clone)
+                    .fetch_optional(&db)
+                    .await;
+
+                    let (user_id, _conv_type) = match membership {
+                        Ok(Some(m)) => m,
+                        _ => continue, // silently drop if not a member
+                    };
+
+                    // Get agent name
+                    let agent_name = sqlx::query_as::<_, (String,)>(
+                        r#"SELECT name FROM agents WHERE id = $1::uuid"#,
+                    )
+                    .bind(&agent_id_clone)
+                    .fetch_optional(&db)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|r| r.0)
+                    .unwrap_or_else(|| "Agent".to_string());
+
+                    // Create message in DB
+                    let seq = match get_next_seq(&db, conversation_id).await {
+                        Ok(s) => s,
+                        Err(_) => continue,
+                    };
+
+                    let msg_id = uuid::Uuid::new_v4().to_string();
+                    let _ = sqlx::query(
+                        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, created_at, updated_at)
+                           VALUES ($1::uuid, $2::uuid, $3, 'agent', $4, 'completed', $5::uuid, NOW(), NOW())"#,
+                    )
+                    .bind(&msg_id)
+                    .bind(conversation_id)
+                    .bind(seq)
+                    .bind(content)
+                    .bind(&agent_id_clone)
+                    .execute(&db)
+                    .await;
+
+                    let _ = sqlx::query(
+                        r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
+                    )
+                    .bind(conversation_id)
+                    .execute(&db)
+                    .await;
+
+                    // Deliver to user via stream_start + stream_end
+                    ws_state.send_to_user_or_queue(&user_id, &json!({
+                        "type": "stream_start",
+                        "conversationId": conversation_id,
+                        "messageId": msg_id,
+                        "seq": seq,
+                        "senderAgentId": &agent_id_clone,
+                        "senderAgentName": agent_name
+                    }), &redis);
+
+                    ws_state.send_to_user_or_queue(&user_id, &json!({
+                        "type": "stream_end",
+                        "conversationId": conversation_id,
+                        "messageId": msg_id,
+                        "seq": seq,
+                        "content": content
+                    }), &redis);
                 }
                 _ => {}
             }
