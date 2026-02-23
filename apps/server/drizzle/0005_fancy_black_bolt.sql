@@ -1,1 +1,0 @@
-ALTER TABLE "agents" ALTER COLUMN "a2a_endpoint" DROP NOT NULL;

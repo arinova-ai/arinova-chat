@@ -125,21 +125,8 @@ describe("ConversationItem", () => {
     expect(wrapper?.className).toContain("bg-accent");
   });
 
-  it("shows 'Typing...' when last message status is streaming", () => {
-    const props = {
-      ...defaultProps,
-      lastMessage: {
-        id: "msg-1",
-        conversationId: "conv-1",
-        seq: 1,
-        role: "agent" as const,
-        content: "partial content",
-        status: "streaming" as const,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    };
-    render(<ConversationItem {...props} />);
-    expect(screen.getByText("Typing...")).toBeInTheDocument();
+  it("shows 'Thinking...' when isThinking is true", () => {
+    render(<ConversationItem {...defaultProps} isThinking={true} />);
+    expect(screen.getByText("Thinking...")).toBeInTheDocument();
   });
 });

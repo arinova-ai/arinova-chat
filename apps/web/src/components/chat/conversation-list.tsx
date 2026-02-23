@@ -11,6 +11,7 @@ export function ConversationList() {
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const unreadCounts = useChatStore((s) => s.unreadCounts);
   const agentHealth = useChatStore((s) => s.agentHealth);
+  const thinkingAgents = useChatStore((s) => s.thinkingAgents);
 
   return (
     <div className="flex-1 min-w-0 overflow-y-auto px-2 py-1">
@@ -37,6 +38,7 @@ export function ConversationList() {
               onPin={(pinned) => updateConversation(conv.id, { pinned })}
               unreadCount={unreadCounts[conv.id] ?? 0}
               isOnline={conv.agentId ? agentHealth[conv.agentId]?.status === "online" : false}
+              isThinking={(thinkingAgents[conv.id]?.length ?? 0) > 0}
               onDelete={() => deleteConversation(conv.id)}
             />
           ))}

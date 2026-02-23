@@ -38,6 +38,19 @@ interface SearchResult {
   agentAvatarUrl: string | null;
 }
 
+export interface ReactionInfo {
+  count: number;
+  userReacted: boolean;
+}
+
+export interface ThinkingAgent {
+  messageId: string;
+  agentId: string;
+  agentName: string;
+  seq: number;
+  startedAt: Date;
+}
+
 interface ChatState {
   agents: Agent[];
   conversations: ConversationWithAgent[];
@@ -52,35 +65,56 @@ interface ChatState {
   highlightMessageId: string | null;
   loading: boolean;
   unreadCounts: Record<string, number>;
-  agentHealth: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }>;
+  agentHealth: Record<
+    string,
+    { status: "online" | "offline" | "error"; latencyMs: number | null }
+  >;
   agentSkills: Record<string, AgentSkill[]>;
   showTimestamps: boolean;
   mutedConversations: Record<string, boolean>;
   ttsEnabled: boolean;
+  reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
+  conversationMembers: Record<string, { agentId: string; agentName: string }[]>;
+  thinkingAgents: Record<string, ThinkingAgent[]>;
   replyingTo: Message | null;
 
   // Actions
+  setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
   searchMessages: (query: string) => Promise<void>;
+  searchMore: () => Promise<void>;
   clearSearch: () => void;
   jumpToMessage: (conversationId: string, messageId: string) => Promise<void>;
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
-  sendMessage: (content: string) => void;
-  cancelStream: () => void;
-  createAgent: (data: { name: string; description?: string; a2aEndpoint?: string }) => Promise<Agent>;
+  sendMessage: (content: string, mentions?: string[]) => void;
+  cancelStream: (messageId?: string) => void;
+  createAgent: (data: {
+    name: string;
+    description?: string;
+    a2aEndpoint?: string;
+  }) => Promise<Agent>;
   updateAgent: (id: string, data: Record<string, unknown>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
-  createConversation: (agentId: string, title?: string) => Promise<Conversation>;
-  createGroupConversation: (agentIds: string[], title: string) => Promise<Conversation>;
+  createConversation: (
+    agentId: string,
+    title?: string
+  ) => Promise<Conversation>;
+  createGroupConversation: (
+    agentIds: string[],
+    title: string
+  ) => Promise<Conversation>;
   loadGroupMembers: (conversationId: string) => Promise<GroupMember[]>;
   addGroupMember: (conversationId: string, agentId: string) => Promise<void>;
   removeGroupMember: (conversationId: string, agentId: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
-  updateConversation: (id: string, data: { title?: string; pinned?: boolean }) => Promise<void>;
+  updateConversation: (
+    id: string,
+    data: { title?: string; pinned?: boolean; mentionOnly?: boolean }
+  ) => Promise<void>;
   deleteMessage: (conversationId: string, messageId: string) => Promise<void>;
   loadAgentSkills: (agentId: string) => Promise<void>;
   loadAgentHealth: () => Promise<void>;
@@ -90,7 +124,8 @@ interface ChatState {
   toggleTimestamps: () => void;
   toggleMuteConversation: (conversationId: string) => void;
   setTtsEnabled: (enabled: boolean) => void;
-  setReplyingTo: (message: Message | null) => void;
+  toggleReaction: (messageId: string, emoji: string) => Promise<void>;
+  loadReactions: (messageId: string) => Promise<void>;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -111,16 +146,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
-  showTimestamps: typeof window !== "undefined"
-    ? localStorage.getItem("arinova_timestamps") === "true"
-    : false,
-  mutedConversations: typeof window !== "undefined"
-    ? JSON.parse(localStorage.getItem("arinova_muted") || "{}")
-    : {},
-  ttsEnabled: typeof window !== "undefined"
-    ? localStorage.getItem("arinova_tts") === "true"
-    : false,
+  showTimestamps:
+    typeof window !== "undefined"
+      ? localStorage.getItem("arinova_timestamps") === "true"
+      : false,
+  mutedConversations:
+    typeof window !== "undefined"
+      ? JSON.parse(localStorage.getItem("arinova_muted") || "{}")
+      : {},
+  ttsEnabled:
+    typeof window !== "undefined"
+      ? localStorage.getItem("arinova_tts") === "true"
+      : false,
+  reactionsByMessage: {},
+  conversationMembers: {},
+  thinkingAgents: {},
   replyingTo: null,
+
+  setReplyingTo: (message) => set({ replyingTo: message }),
 
   setActiveConversation: (id) => {
     if (id === null) {
@@ -134,6 +177,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
     });
     get().loadMessages(id);
+
+    // Load conversation members for @mention support
+    const conv = get().conversations.find((c) => c.id === id);
+    if (conv && !get().conversationMembers[id]) {
+      if (conv.type === "group") {
+        get()
+          .loadGroupMembers(id)
+          .then((members) => {
+            set({
+              conversationMembers: {
+                ...get().conversationMembers,
+                [id]: members.map((m) => ({
+                  agentId: m.agentId,
+                  agentName: m.agentName,
+                })),
+              },
+            });
+          })
+          .catch(() => {});
+      } else if (conv.agentId) {
+        set({
+          conversationMembers: {
+            ...get().conversationMembers,
+            [id]: [{ agentId: conv.agentId, agentName: conv.agentName }],
+          },
+        });
+      }
+    }
   },
 
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -144,7 +215,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   searchMessages: async (query) => {
     if (!query.trim()) return;
-    set({ searchQuery: query, searchLoading: true, searchActive: true, activeConversationId: null });
+    set({
+      searchQuery: query,
+      searchLoading: true,
+      searchActive: true,
+      activeConversationId: null,
+    });
     try {
       const data = await api<{ results: SearchResult[]; total: number }>(
         `/api/messages/search?q=${encodeURIComponent(query)}&limit=30`
@@ -152,6 +228,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ searchResults: data.results, searchTotal: data.total });
     } catch {
       set({ searchResults: [], searchTotal: 0 });
+    } finally {
+      set({ searchLoading: false });
+    }
+  },
+
+  searchMore: async () => {
+    const { searchQuery, searchResults, searchTotal, searchLoading } = get();
+    if (!searchQuery || searchLoading || searchResults.length >= searchTotal) return;
+    set({ searchLoading: true });
+    try {
+      const offset = searchResults.length;
+      const data = await api<{ results: SearchResult[]; total: number }>(
+        `/api/messages/search?q=${encodeURIComponent(searchQuery)}&limit=30&offset=${offset}`
+      );
+      set({
+        searchResults: [...searchResults, ...data.results],
+        searchTotal: data.total,
+      });
+    } catch {
+      // ignore load more errors
     } finally {
       set({ searchLoading: false });
     }
@@ -169,32 +265,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   jumpToMessage: async (conversationId, messageId) => {
-    // Clear search UI, load messages around target
+    // Fetch around-cursor messages FIRST, before switching conversation,
+    // so MessageList mounts with correct messages already in store.
+    const data = await api<{
+      messages: Message[];
+      hasMoreUp: boolean;
+      hasMoreDown: boolean;
+    }>(
+      `/api/conversations/${conversationId}/messages?around=${messageId}&limit=50`
+    );
+
+    // Set everything atomically — conversation, messages, and highlight together
     set({
       searchActive: false,
       activeConversationId: conversationId,
       sidebarOpen: false,
       highlightMessageId: messageId,
       unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
-    });
-
-    // Load messages centered around the target
-    const data = await api<{ messages: Message[]; hasMoreUp: boolean; hasMoreDown: boolean }>(
-      `/api/conversations/${conversationId}/messages?around=${messageId}&limit=50`
-    );
-    set({
       messagesByConversation: {
         ...get().messagesByConversation,
         [conversationId]: data.messages,
       },
     });
 
-    // Clear highlight after 3 seconds
     setTimeout(() => {
       if (get().highlightMessageId === messageId) {
         set({ highlightMessageId: null });
       }
-    }, 3000);
+    }, 8000);
   },
 
   loadAgents: async () => {
@@ -211,9 +309,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadMessages: async (conversationId) => {
-    const { messagesByConversation } = get();
-    if (messagesByConversation[conversationId]) return;
-
+    // Always load fresh messages (no cache guard)
     const data = await api<{ messages: Message[]; hasMore: boolean }>(
       `/api/conversations/${conversationId}/messages`
     );
@@ -223,29 +319,65 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: data.messages,
       },
     });
+
+    // Send mark_read with max seq from loaded messages
+    if (get().activeConversationId === conversationId) {
+      const maxSeq = data.messages.reduce(
+        (max, m) => Math.max(max, m.seq ?? 0),
+        0
+      );
+      if (maxSeq > 0) {
+        wsManager.send({
+          type: "mark_read",
+          conversationId,
+          seq: maxSeq,
+        });
+        wsManager.updateLastSeq(conversationId, maxSeq);
+      }
+    }
   },
 
-  sendMessage: (content) => {
-    const { activeConversationId } = get();
+  sendMessage: (content, mentions) => {
+    const { activeConversationId, replyingTo } = get();
     if (!activeConversationId) return;
 
     // Optimistic: add user message to UI
     const userMsg: Message = {
       id: `temp-${Date.now()}`,
       conversationId: activeConversationId,
+      seq: 0,
       role: "user",
       content,
       status: "completed",
+      replyToId: replyingTo?.id,
+      replyTo: replyingTo
+        ? {
+            role: replyingTo.role,
+            content:
+              replyingTo.content.length > 200
+                ? replyingTo.content.slice(0, 200)
+                : replyingTo.content,
+            senderAgentName: replyingTo.senderAgentName,
+          }
+        : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    const current = get().messagesByConversation[activeConversationId] ?? [];
+    const current =
+      get().messagesByConversation[activeConversationId] ?? [];
     set({
       messagesByConversation: {
         ...get().messagesByConversation,
         [activeConversationId]: [...current, userMsg],
       },
+      // Update sidebar lastMessage preview
+      conversations: get().conversations.map((c) =>
+        c.id === activeConversationId
+          ? { ...c, lastMessage: userMsg, updatedAt: new Date() }
+          : c
+      ),
+      replyingTo: null,
     });
 
     // Send via WebSocket
@@ -253,14 +385,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       type: "send_message",
       conversationId: activeConversationId,
       content,
+      ...(replyingTo ? { replyToId: replyingTo.id } : {}),
+      ...(mentions && mentions.length > 0 ? { mentions } : {}),
     });
   },
 
-  cancelStream: () => {
+  cancelStream: (messageId?) => {
     const { activeConversationId, messagesByConversation } = get();
     if (!activeConversationId) return;
     const msgs = messagesByConversation[activeConversationId] ?? [];
-    const streamingMsg = msgs.find((m) => m.status === "streaming");
+    const streamingMsg = messageId
+      ? msgs.find((m) => m.id === messageId && m.status === "streaming")
+      : msgs.find((m) => m.status === "streaming");
     if (!streamingMsg) return;
     wsManager.send({
       type: "cancel_stream",
@@ -293,9 +429,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       method: "PUT",
       body: JSON.stringify(data),
     });
-    // Refresh agents list
     await get().loadAgents();
-    // Also refresh conversations (agent name may have changed)
     await get().loadConversations();
   },
 
@@ -323,7 +457,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadGroupMembers: async (conversationId) => {
-    return api<GroupMember[]>(`/api/conversations/${conversationId}/members`);
+    return api<GroupMember[]>(
+      `/api/conversations/${conversationId}/members`
+    );
   },
 
   addGroupMember: async (conversationId, agentId) => {
@@ -335,9 +471,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   removeGroupMember: async (conversationId, agentId) => {
-    await api(`/api/conversations/${conversationId}/members/${agentId}`, {
-      method: "DELETE",
-    });
+    await api(
+      `/api/conversations/${conversationId}/members/${agentId}`,
+      {
+        method: "DELETE",
+      }
+    );
     await get().loadConversations();
   },
 
@@ -348,7 +487,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     delete newMessages[id];
     set({
       conversations: get().conversations.filter((c) => c.id !== id),
-      activeConversationId: activeConversationId === id ? null : activeConversationId,
+      activeConversationId:
+        activeConversationId === id ? null : activeConversationId,
       messagesByConversation: newMessages,
     });
   },
@@ -362,11 +502,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   deleteMessage: async (conversationId, messageId) => {
-    // Optimistic messages (temp-*) only exist in UI, skip API call
     if (!messageId.startsWith("temp-")) {
-      await api(`/api/conversations/${conversationId}/messages/${messageId}`, {
-        method: "DELETE",
-      });
+      await api(
+        `/api/conversations/${conversationId}/messages/${messageId}`,
+        {
+          method: "DELETE",
+        }
+      );
     }
     const current = get().messagesByConversation[conversationId] ?? [];
     set({
@@ -380,7 +522,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadAgentSkills: async (agentId) => {
     if (get().agentSkills[agentId]) return;
     try {
-      const data = await api<{ skills: AgentSkill[] }>(`/api/agents/${agentId}/skills`);
+      const data = await api<{ skills: AgentSkill[] }>(
+        `/api/agents/${agentId}/skills`
+      );
       set({
         agentSkills: { ...get().agentSkills, [agentId]: data.skills },
       });
@@ -393,10 +537,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadAgentHealth: async () => {
     try {
-      const results = await api<{ agentId: string; status: "online" | "offline" | "error"; latencyMs: number | null }[]>(
-        "/api/agents/health"
-      );
-      const health: Record<string, { status: "online" | "offline" | "error"; latencyMs: number | null }> = {};
+      const results = await api<
+        {
+          agentId: string;
+          status: "online" | "offline" | "error";
+          latencyMs: number | null;
+        }[]
+      >("/api/agents/health");
+      const health: Record<
+        string,
+        { status: "online" | "offline" | "error"; latencyMs: number | null }
+      > = {};
       for (const r of results) {
         health[r.agentId] = { status: r.status, latencyMs: r.latencyMs };
       }
@@ -413,6 +564,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const systemMsg: Message = {
       id: `system-${Date.now()}`,
       conversationId: activeConversationId,
+      seq: 0,
       role: "agent",
       content: `**[System]**\n\n${content}`,
       status: "completed",
@@ -420,7 +572,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       updatedAt: new Date(),
     };
 
-    const current = get().messagesByConversation[activeConversationId] ?? [];
+    const current =
+      get().messagesByConversation[activeConversationId] ?? [];
     set({
       messagesByConversation: {
         ...get().messagesByConversation,
@@ -435,7 +588,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         method: "DELETE",
       });
     } catch {
-      // If API fails (e.g., endpoint not implemented), still clear locally
+      // If API fails, still clear locally
     }
     set({
       messagesByConversation: {
@@ -446,10 +599,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   getConversationStatus: () => {
-    const { activeConversationId, conversations, agentHealth, messagesByConversation } = get();
+    const {
+      activeConversationId,
+      conversations,
+      agentHealth,
+      messagesByConversation,
+    } = get();
     if (!activeConversationId) return "No active conversation.";
 
-    const conv = conversations.find((c) => c.id === activeConversationId);
+    const conv = conversations.find(
+      (c) => c.id === activeConversationId
+    );
     if (!conv) return "Conversation not found.";
 
     const msgs = messagesByConversation[activeConversationId] ?? [];
@@ -465,13 +625,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const agentName = conv.agentName ?? "Unknown";
       const health = agentHealth[conv.agentId];
       const status = health?.status ?? "unknown";
-      const latency = health?.latencyMs != null ? `${health.latencyMs}ms` : "N/A";
+      const latency =
+        health?.latencyMs != null ? `${health.latencyMs}ms` : "N/A";
       lines.push(`**Agent:** ${agentName}`);
       lines.push(`**Agent Status:** ${status}`);
       lines.push(`**Latency:** ${latency}`);
     }
 
-    lines.push(`**WebSocket:** ${wsManager.isConnected() ? "Connected" : "Disconnected"}`);
+    lines.push(
+      `**WebSocket:** ${wsManager.isConnected() ? "Connected" : "Disconnected"}`
+    );
 
     return lines.join("\n");
   },
@@ -486,18 +649,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   toggleMuteConversation: (conversationId) => {
     const muted = { ...get().mutedConversations };
-    if (muted[conversationId]) {
-      delete muted[conversationId];
-    } else {
+    const newMuted = !muted[conversationId];
+    if (newMuted) {
       muted[conversationId] = true;
+    } else {
+      delete muted[conversationId];
     }
     set({ mutedConversations: muted });
     if (typeof window !== "undefined") {
       localStorage.setItem("arinova_muted", JSON.stringify(muted));
     }
+    // Persist to backend for push notification filtering
+    api(`/api/conversations/${conversationId}/mute`, {
+      method: "PUT",
+      body: JSON.stringify({ muted: newMuted }),
+    }).catch(() => {});
   },
-
-  setReplyingTo: (message) => set({ replyingTo: message }),
 
   setTtsEnabled: (enabled) => {
     set({ ttsEnabled: enabled });
@@ -506,26 +673,86 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  toggleReaction: async (messageId, emoji) => {
+    const reactions = { ...get().reactionsByMessage };
+    const msgReactions = { ...(reactions[messageId] ?? {}) };
+    const existing = msgReactions[emoji];
+
+    if (existing?.userReacted) {
+      // Remove reaction (optimistic)
+      if (existing.count <= 1) {
+        delete msgReactions[emoji];
+      } else {
+        msgReactions[emoji] = { count: existing.count - 1, userReacted: false };
+      }
+      reactions[messageId] = msgReactions;
+      set({ reactionsByMessage: reactions });
+
+      try {
+        await api(`/api/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+          method: "DELETE",
+        });
+      } catch {
+        // Revert on error
+        get().loadReactions(messageId);
+      }
+    } else {
+      // Add reaction (optimistic)
+      msgReactions[emoji] = {
+        count: (existing?.count ?? 0) + 1,
+        userReacted: true,
+      };
+      reactions[messageId] = msgReactions;
+      set({ reactionsByMessage: reactions });
+
+      try {
+        await api(`/api/messages/${messageId}/reactions`, {
+          method: "POST",
+          body: JSON.stringify({ emoji }),
+        });
+      } catch {
+        get().loadReactions(messageId);
+      }
+    }
+  },
+
+  loadReactions: async (messageId) => {
+    try {
+      const data = await api<{ emoji: string; count: number; userReacted: boolean }[]>(
+        `/api/messages/${messageId}/reactions`
+      );
+      const msgReactions: Record<string, ReactionInfo> = {};
+      for (const r of data) {
+        msgReactions[r.emoji] = { count: r.count, userReacted: r.userReacted };
+      }
+      set({
+        reactionsByMessage: {
+          ...get().reactionsByMessage,
+          [messageId]: msgReactions,
+        },
+      });
+    } catch {
+      // ignore
+    }
+  },
+
   handleWSEvent: (event) => {
     if (event.type === "pong") return;
 
     if (event.type === "stream_start") {
-      const { conversationId, messageId } = event;
-      const current = get().messagesByConversation[conversationId] ?? [];
-      // Add streaming agent message
-      const agentMsg: Message = {
-        id: messageId,
-        conversationId,
-        role: "agent",
-        content: "",
-        status: "streaming",
-        createdAt: new Date(),
-        updatedAt: new Date(),
+      const { conversationId, messageId, seq, senderAgentId, senderAgentName } = event;
+      const thinking: ThinkingAgent = {
+        messageId,
+        agentId: senderAgentId ?? "",
+        agentName: senderAgentName ?? "Agent",
+        seq,
+        startedAt: new Date(),
       };
+      const prev = get().thinkingAgents[conversationId] ?? [];
       set({
-        messagesByConversation: {
-          ...get().messagesByConversation,
-          [conversationId]: [...current, agentMsg],
+        thinkingAgents: {
+          ...get().thinkingAgents,
+          [conversationId]: [...prev, thinking],
         },
       });
       return;
@@ -533,44 +760,212 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_chunk") {
       const { conversationId, messageId, chunk } = event;
-      const current = get().messagesByConversation[conversationId] ?? [];
-      set({
-        messagesByConversation: {
-          ...get().messagesByConversation,
-          [conversationId]: current.map((m) =>
-            m.id === messageId ? { ...m, content: chunk } : m
-          ),
-        },
-      });
+
+      // Check if this is the first chunk (message still in thinkingAgents)
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const thinkingEntry = thinking.find((t) => t.messageId === messageId);
+
+      if (thinkingEntry) {
+        // First chunk: create message bubble and remove from thinkingAgents
+        const current = get().messagesByConversation[conversationId] ?? [];
+        const agentMsg: Message = {
+          id: messageId,
+          conversationId,
+          seq: thinkingEntry.seq,
+          role: "agent",
+          content: chunk,
+          status: "streaming",
+          senderAgentId: thinkingEntry.agentId || undefined,
+          senderAgentName: thinkingEntry.agentName,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: [...current, agentMsg],
+          },
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+          },
+        });
+      } else {
+        // Subsequent chunks: append to existing message
+        const current = get().messagesByConversation[conversationId] ?? [];
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: current.map((m) =>
+              m.id === messageId ? { ...m, content: m.content + chunk } : m
+            ),
+          },
+        });
+      }
       return;
     }
 
     if (event.type === "stream_end") {
-      const { conversationId, messageId } = event;
-      const current = get().messagesByConversation[conversationId] ?? [];
+      const { conversationId, messageId, seq } = event;
       const { activeConversationId, unreadCounts } = get();
+      const finalContent = event.content;
+
+      // Check if still in thinkingAgents (no chunks ever arrived)
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const stillThinking = thinking.find((t) => t.messageId === messageId);
+      if (stillThinking) {
+        // No chunks arrived — if server sent final content, create the message
+        // directly from it (agent completed without streaming any deltas)
+        if (finalContent) {
+          const current = get().messagesByConversation[conversationId] ?? [];
+          const agentMsg: Message = {
+            id: messageId,
+            conversationId,
+            seq: stillThinking.seq,
+            role: "agent",
+            content: finalContent,
+            status: "completed",
+            senderAgentId: stillThinking.agentId || undefined,
+            senderAgentName: stillThinking.agentName,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: [...current, agentMsg],
+            },
+            thinkingAgents: {
+              ...get().thinkingAgents,
+              [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+            },
+            // Update sidebar lastMessage preview
+            conversations: get().conversations.map((c) =>
+              c.id === conversationId
+                ? { ...c, lastMessage: agentMsg, updatedAt: new Date() }
+                : c
+            ),
+            // Increment unread if not viewing this conversation
+            unreadCounts:
+              conversationId !== activeConversationId &&
+              !get().mutedConversations[conversationId]
+                ? {
+                    ...unreadCounts,
+                    [conversationId]:
+                      (unreadCounts[conversationId] ?? 0) + 1,
+                  }
+                : unreadCounts,
+          });
+          if (conversationId === activeConversationId && seq > 0) {
+            wsManager.send({ type: "mark_read", conversationId, seq });
+          }
+        } else {
+          // No content — just remove from thinkingAgents silently
+          set({
+            thinkingAgents: {
+              ...get().thinkingAgents,
+              [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+            },
+          });
+        }
+        return;
+      }
+
+      const current = get().messagesByConversation[conversationId] ?? [];
+
+      // Find the completed message content for sidebar preview
+      const completedMsg = current.find((m) => m.id === messageId);
+
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
           [conversationId]: current.map((m) =>
             m.id === messageId
-              ? { ...m, status: "completed" as const, updatedAt: new Date() }
+              ? {
+                  ...m,
+                  ...(finalContent !== undefined ? { content: finalContent } : {}),
+                  // Keep 'cancelled' status if user already cancelled
+                  status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                  updatedAt: new Date(),
+                }
               : m
           ),
         },
-        // Increment unread if not viewing this conversation (and not muted)
+        // Update sidebar lastMessage preview directly
+        conversations: get().conversations.map((c) =>
+          c.id === conversationId
+            ? {
+                ...c,
+                lastMessage: completedMsg
+                  ? {
+                      ...completedMsg,
+                      ...(finalContent !== undefined ? { content: finalContent } : {}),
+                      status: "completed" as const,
+                      updatedAt: new Date(),
+                    }
+                  : c.lastMessage,
+                updatedAt: new Date(),
+              }
+            : c
+        ),
+        // Increment unread if not viewing this conversation
         unreadCounts:
-          conversationId !== activeConversationId && !get().mutedConversations[conversationId]
-            ? { ...unreadCounts, [conversationId]: (unreadCounts[conversationId] ?? 0) + 1 }
+          conversationId !== activeConversationId &&
+          !get().mutedConversations[conversationId]
+            ? {
+                ...unreadCounts,
+                [conversationId]:
+                  (unreadCounts[conversationId] ?? 0) + 1,
+              }
             : unreadCounts,
       });
-      // Refresh conversation list to update last message
-      get().loadConversations();
+
+      // If viewing this conversation, mark as read
+      if (conversationId === activeConversationId && seq > 0) {
+        wsManager.send({
+          type: "mark_read",
+          conversationId,
+          seq,
+        });
+      }
       return;
     }
 
     if (event.type === "stream_error") {
       const { conversationId, messageId, error } = event;
+
+      // Check if still in thinkingAgents (no chunks ever arrived)
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const stillThinking = thinking.find((t) => t.messageId === messageId);
+      if (stillThinking) {
+        // Create error message bubble so user sees the error
+        const current = get().messagesByConversation[conversationId] ?? [];
+        const errorMsg: Message = {
+          id: messageId,
+          conversationId,
+          seq: stillThinking.seq,
+          role: "agent",
+          content: error,
+          status: "error",
+          senderAgentId: stillThinking.agentId || undefined,
+          senderAgentName: stillThinking.agentName,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: [...current, errorMsg],
+          },
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+          },
+        });
+        return;
+      }
+
+      // Message exists: update with error
       const current = get().messagesByConversation[conversationId] ?? [];
       set({
         messagesByConversation: {
@@ -584,10 +979,142 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       return;
     }
+
+    if (event.type === "reaction_added") {
+      const { messageId, emoji } = event;
+      const reactions = { ...get().reactionsByMessage };
+      const msgReactions = { ...(reactions[messageId] ?? {}) };
+      const existing = msgReactions[emoji];
+      msgReactions[emoji] = {
+        count: (existing?.count ?? 0) + 1,
+        userReacted: existing?.userReacted ?? false,
+      };
+      reactions[messageId] = msgReactions;
+      set({ reactionsByMessage: reactions });
+      return;
+    }
+
+    if (event.type === "reaction_removed") {
+      const { messageId, emoji } = event;
+      const reactions = { ...get().reactionsByMessage };
+      const msgReactions = { ...(reactions[messageId] ?? {}) };
+      const existing = msgReactions[emoji];
+      if (existing) {
+        if (existing.count <= 1) {
+          delete msgReactions[emoji];
+        } else {
+          msgReactions[emoji] = { ...existing, count: existing.count - 1 };
+        }
+        reactions[messageId] = msgReactions;
+        set({ reactionsByMessage: reactions });
+      }
+      return;
+    }
+
+    if (event.type === "sync_response") {
+      const { conversations: convSummaries, missedMessages } = event;
+
+      // Update unread counts and muted state from server
+      const newUnreadCounts = { ...get().unreadCounts };
+      const newMuted = { ...get().mutedConversations };
+      for (const summary of convSummaries) {
+        if (summary.conversationId !== get().activeConversationId) {
+          newUnreadCounts[summary.conversationId] = summary.unreadCount;
+        } else {
+          newUnreadCounts[summary.conversationId] = 0;
+        }
+        if (summary.muted) {
+          newMuted[summary.conversationId] = true;
+        } else {
+          delete newMuted[summary.conversationId];
+        }
+      }
+
+      // Update conversation lastMessage from summaries
+      const convUpdates = new Map(
+        convSummaries.map((s) => [s.conversationId, s])
+      );
+      const updatedConversations = get().conversations.map((c) => {
+        const summary = convUpdates.get(c.id);
+        if (summary && summary.lastMessage) {
+          return {
+            ...c,
+            lastMessage: {
+              id: "",
+              conversationId: c.id,
+              seq: summary.maxSeq,
+              role: summary.lastMessage.role,
+              content: summary.lastMessage.content,
+              status: summary.lastMessage.status,
+              createdAt: new Date(summary.lastMessage.createdAt),
+              updatedAt: new Date(summary.lastMessage.createdAt),
+            } as Message,
+          };
+        }
+        return c;
+      });
+
+      // Merge missed messages into existing message arrays
+      const missedByConv = new Map<string, typeof missedMessages>();
+      for (const msg of missedMessages) {
+        const list = missedByConv.get(msg.conversationId) ?? [];
+        list.push(msg);
+        missedByConv.set(msg.conversationId, list);
+      }
+
+      const newMessagesByConv = { ...get().messagesByConversation };
+      for (const [convId, missed] of missedByConv) {
+        const existing = newMessagesByConv[convId] ?? [];
+        // Remove temp messages; keep real ones
+        const realMessages = existing.filter(
+          (m) => !m.id.startsWith("temp-")
+        );
+        const existingIds = new Set(realMessages.map((m) => m.id));
+
+        const newMessages = missed
+          .filter((m) => !existingIds.has(m.id))
+          .map(
+            (m) =>
+              ({
+                id: m.id,
+                conversationId: m.conversationId,
+                seq: m.seq,
+                role: m.role,
+                content: m.content,
+                status: m.status,
+                createdAt: new Date(m.createdAt),
+                updatedAt: new Date(m.createdAt),
+              }) as Message
+          );
+
+        newMessagesByConv[convId] = [
+          ...realMessages,
+          ...newMessages,
+        ].sort((a, b) => {
+          if (a.seq && b.seq) return a.seq - b.seq;
+          return (
+            new Date(a.createdAt).getTime() -
+            new Date(b.createdAt).getTime()
+          );
+        });
+      }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("arinova_muted", JSON.stringify(newMuted));
+      }
+      set({
+        conversations: updatedConversations,
+        messagesByConversation: newMessagesByConv,
+        unreadCounts: newUnreadCounts,
+        mutedConversations: newMuted,
+      });
+      return;
+    }
   },
 
   initWS: () => {
     wsManager.connect();
+    wsManager.setupVisibilityListeners();
     const unsub = wsManager.subscribe((event) => {
       get().handleWSEvent(event);
     });

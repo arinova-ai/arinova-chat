@@ -1,1 +1,0 @@
-ALTER TABLE "conversations" ADD COLUMN "mention_only" boolean DEFAULT true NOT NULL;
