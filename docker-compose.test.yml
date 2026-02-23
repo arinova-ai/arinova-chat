@@ -75,6 +75,19 @@ services:
       retries: 10
       start_period: 30s
 
+  db-migrate:
+    image: postgres:17-alpine
+    container_name: arinova-test-db-migrate
+    environment:
+      PGPASSWORD: arinova_test
+    volumes:
+      - ./scripts/docker-init-db.sh:/init.sh:ro
+      - ./apps/server/drizzle:/drizzle:ro
+    entrypoint: ["sh", "/init.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   server:
     build:
       context: apps/rust-server
@@ -96,8 +109,8 @@ services:
     volumes:
       - test_uploads_data:/app/uploads
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       openclaw:

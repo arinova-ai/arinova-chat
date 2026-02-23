@@ -99,6 +99,13 @@
       "when": 1771425170654,
       "tag": "0013_add-voice-capable",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1771843200000,
+      "tag": "0014_sync_main_schema",
+      "breakpoints": true
     }
   ]
 }
