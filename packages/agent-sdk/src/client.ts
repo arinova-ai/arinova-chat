@@ -11,6 +11,7 @@ import type {
 
 const DEFAULT_RECONNECT_INTERVAL = 5_000;
 const DEFAULT_PING_INTERVAL = 30_000;
+const TASK_HEARTBEAT_INTERVAL = 60_000;
 
 export class ArinovaAgent {
   private readonly serverUrl: string;
@@ -256,6 +257,12 @@ export class ArinovaAgent {
     const abortController = new AbortController();
     this.taskAbortControllers.set(taskId, abortController);
 
+    // Auto heartbeat: keep task alive while processing
+    const heartbeatTimer = setInterval(() => {
+      this.send({ type: "agent_heartbeat", taskId });
+    }, TASK_HEARTBEAT_INTERVAL);
+    const stopHeartbeat = () => clearInterval(heartbeatTimer);
+
     const ctx: TaskContext = {
       taskId,
       conversationId: data.conversationId as string,
@@ -267,6 +274,7 @@ export class ArinovaAgent {
       attachments: data.attachments as TaskAttachment[] | undefined,
       sendChunk: (delta: string) => this.send({ type: "agent_chunk", taskId, chunk: delta }),
       sendComplete: (fullContent: string, options?: { mentions?: string[] }) => {
+        stopHeartbeat();
         this.taskAbortControllers.delete(taskId);
         this.send({
           type: "agent_complete",
@@ -276,6 +284,7 @@ export class ArinovaAgent {
         });
       },
       sendError: (error: string) => {
+        stopHeartbeat();
         this.taskAbortControllers.delete(taskId);
         this.send({ type: "agent_error", taskId, error });
       },
@@ -283,6 +292,9 @@ export class ArinovaAgent {
       uploadFile: (file, fileName, fileType?) =>
         this.uploadFile(data.conversationId as string, file, fileName, fileType),
     };
+
+    // Stop heartbeat if task is aborted (user cancelled)
+    abortController.signal.addEventListener("abort", stopHeartbeat, { once: true });
 
     Promise.resolve(this.taskHandler(ctx)).catch((err) => {
       const errorMsg = err instanceof Error ? err.message : String(err);
