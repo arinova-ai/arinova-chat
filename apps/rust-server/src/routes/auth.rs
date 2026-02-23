@@ -58,6 +58,25 @@ async fn sign_up_email(
     State(state): State<AppState>,
     Json(body): Json<SignUpBody>,
 ) -> Response {
+    // Validate password length
+    if body.password.len() < 8 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Password must be at least 8 characters"})),
+        )
+            .into_response();
+    }
+
+    // Sanitize and validate display name
+    let name = sanitize_display_name(&body.name);
+    if name.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Name is required"})),
+        )
+            .into_response();
+    }
+
     // Check if user already exists
     let existing = sqlx::query_as::<_, (String,)>(r#"SELECT id FROM "user" WHERE email = $1"#)
         .bind(&body.email)
@@ -103,7 +122,7 @@ async fn sign_up_email(
            VALUES ($1, $2, $3, false, $4, $4)"#,
     )
     .bind(&user_id)
-    .bind(&body.name)
+    .bind(&name)
     .bind(&body.email)
     .bind(now)
     .execute(&state.db)
@@ -145,7 +164,7 @@ async fn sign_up_email(
             let mut resp = Json(json!({
                 "user": {
                     "id": user_id,
-                    "name": body.name,
+                    "name": name,
                     "email": body.email,
                     "emailVerified": false,
                     "image": null,
@@ -408,6 +427,26 @@ fn build_session_cookie(token: &str, is_production: bool) -> String {
             token,
             60 * 60 * 24 * 30
         )
+    }
+}
+
+/// Strip HTML tags and enforce max 50 characters for display names.
+fn sanitize_display_name(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut in_tag = false;
+    for ch in raw.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    let trimmed = out.trim();
+    if trimmed.len() > 50 {
+        trimmed.chars().take(50).collect::<String>().trim_end().to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 

@@ -100,7 +100,7 @@ services:
       PORT: 3501
       DATABASE_URL: postgres://arinova:arinova_test@postgres:5432/arinova_chat
       REDIS_URL: redis://redis:6379
-      CORS_ORIGIN: http://192.168.68.83:21000
+      CORS_ORIGIN: http://192.168.68.83:21000,http://localhost:21000
       BETTER_AUTH_SECRET: test-secret-do-not-use-in-production
       BETTER_AUTH_URL: http://192.168.68.83:21001
       UPLOAD_DIR: /app/uploads
