@@ -2,11 +2,11 @@
 # Arinova Chat — Test Environment
 # Port range: 21000-22000
 #
-#   Web (Next.js)       → http://localhost:21000
-#   Server (Rust)       → http://localhost:21001
-#   OpenClaw Gateway    → ws://localhost:21002
-#   PostgreSQL          → localhost:21003
-#   Redis               → localhost:21004
+#   Web (Next.js)       → http://192.168.68.83:21000
+#   Server (Rust)       → http://192.168.68.83:21001
+#   OpenClaw Gateway    → ws://192.168.68.83:21002
+#   PostgreSQL          → 192.168.68.83:21003
+#   Redis               → 192.168.68.83:21004
 #
 # Usage:
 #   docker compose -f docker-compose.test.yml up --build
@@ -100,9 +100,9 @@ services:
       PORT: 3501
       DATABASE_URL: postgres://arinova:arinova_test@postgres:5432/arinova_chat
       REDIS_URL: redis://redis:6379
-      CORS_ORIGIN: http://localhost:21000
+      CORS_ORIGIN: http://192.168.68.83:21000
       BETTER_AUTH_SECRET: test-secret-do-not-use-in-production
-      BETTER_AUTH_URL: http://localhost:21001
+      BETTER_AUTH_URL: http://192.168.68.83:21001
       UPLOAD_DIR: /app/uploads
       OPENCLAW_GATEWAY_URL: ws://openclaw:18789
       OFFICE_EVENT_TOKEN: ${OFFICE_EVENT_TOKEN:-test-office-token}
@@ -121,7 +121,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:21001
+        NEXT_PUBLIC_API_URL: http://192.168.68.83:21001
     container_name: arinova-test-web
     restart: unless-stopped
     ports:
