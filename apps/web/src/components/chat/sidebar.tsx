@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Search, Plus, LogOut, Settings, Bot, AppWindow } from "lucide-react";
+import { Search, Plus, LogOut, Settings, Bot, AppWindow, Building2 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
@@ -99,6 +99,14 @@ export function Sidebar() {
         >
           <AppWindow className="h-4 w-4" />
           Apps
+        </Button>
+        <Button
+          variant="secondary"
+          className="w-full gap-2"
+          onClick={() => router.push("/office")}
+        >
+          <Building2 className="h-4 w-4" />
+          Office
         </Button>
         <Button
           variant="secondary"

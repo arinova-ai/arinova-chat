@@ -10,6 +10,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.js
 COPY apps/web/package.json ./apps/web/
 COPY apps/server/package.json ./apps/server/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/openclaw-office-plugin/package.json ./packages/openclaw-office-plugin/
 
 RUN pnpm install --frozen-lockfile
 
@@ -24,10 +25,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/openclaw-office-plugin/node_modules ./packages/openclaw-office-plugin/node_modules
 
 # Copy source
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
 COPY packages/shared ./packages/shared
+COPY packages/openclaw-office-plugin ./packages/openclaw-office-plugin
 COPY apps/server ./apps/server
 
 # Build shared first, then server
@@ -47,6 +50,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/openclaw-office-plugin/package.json ./packages/openclaw-office-plugin/
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
@@ -54,6 +58,7 @@ RUN pnpm install --frozen-lockfile --prod
 # Copy built output
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
 COPY --from=builder /app/packages/shared ./packages/shared
+COPY --from=builder /app/packages/openclaw-office-plugin ./packages/openclaw-office-plugin
 
 # Copy drizzle migrations for auto-migrate on startup
 COPY apps/server/drizzle ./apps/server/drizzle

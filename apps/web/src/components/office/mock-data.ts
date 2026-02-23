@@ -1,0 +1,123 @@
+import type { Agent } from "./types";
+
+/** Mock agents for development/demo — will be replaced by SSE data */
+export const MOCK_AGENTS: Agent[] = [
+  {
+    id: "linda",
+    name: "Linda",
+    role: "PM",
+    emoji: "📋",
+    color: "#E8D5F5",
+    status: "collaborating",
+    collaboratingWith: ["casey"],
+    currentTask: {
+      title: "Sprint 2 進度管理",
+      priority: "P1",
+      due: "2026-03-07",
+      assignedBy: "Ripple",
+      progress: 60,
+      subtasks: [
+        { label: "派發任務給團隊", done: true },
+        { label: "追蹤 merge 進度", done: true },
+        { label: "確認概念設計", done: true },
+        { label: "追蹤 MVP 實作", done: false },
+        { label: "Sprint review", done: false },
+      ],
+    },
+    recentActivity: [
+      { time: "15:30", text: "派發 MVP 實作給 Ron" },
+      { time: "15:20", text: "確認 Alice 概念設計通過" },
+      { time: "14:50", text: "向 Ripple 報告進度" },
+    ],
+  },
+  {
+    id: "alice",
+    name: "Alice",
+    role: "UI/UX Designer",
+    emoji: "🎨",
+    color: "#D5E8F5",
+    status: "idle",
+    currentTask: {
+      title: "虛擬辦公室 Design Spec",
+      priority: "P2",
+      due: "2026-03-05",
+      assignedBy: "Linda",
+      progress: 0,
+      subtasks: [
+        { label: "等待 Ripple 確認概念設計", done: true },
+        { label: "產出 token 規格", done: false },
+        { label: "產出元件規格", done: false },
+      ],
+    },
+    recentActivity: [
+      { time: "15:00", text: "概念設計 v1 完成" },
+      { time: "14:30", text: "產出 wireframe" },
+    ],
+  },
+  {
+    id: "ron",
+    name: "Ron",
+    role: "Developer",
+    emoji: "⚡",
+    color: "#D5F5E0",
+    status: "working",
+    currentTask: {
+      title: "Virtual Office Sprint 2",
+      priority: "P1",
+      due: "2026-03-07",
+      assignedBy: "Linda",
+      progress: 55,
+      subtasks: [
+        { label: "Plugin scaffold", done: true },
+        { label: "Hook listeners", done: true },
+        { label: "State aggregator", done: true },
+        { label: "SSE API", done: true },
+        { label: "PixiJS migration", done: false },
+        { label: "Connect real-time data", done: false },
+      ],
+    },
+    recentActivity: [
+      { time: "16:00", text: "Migrating PixiJS into apps/web" },
+      { time: "15:40", text: "SSE endpoint wired" },
+      { time: "15:30", text: "Hook listeners + state aggregator done" },
+    ],
+  },
+  {
+    id: "casey",
+    name: "Casey",
+    role: "Code Reviewer",
+    emoji: "🔍",
+    color: "#F5E8D5",
+    status: "collaborating",
+    collaboratingWith: ["linda"],
+    currentTask: {
+      title: "架構審查",
+      priority: "P1",
+      due: "2026-02-28",
+      assignedBy: "Linda",
+      progress: 40,
+      subtasks: [
+        { label: "審查技術選型", done: true },
+        { label: "設計目錄結構", done: false },
+        { label: "元件拆分建議", done: false },
+        { label: "狀態管理方案", done: false },
+      ],
+    },
+    recentActivity: [
+      { time: "15:45", text: "開始架構審查" },
+      { time: "15:30", text: "收到 Linda 派任務" },
+    ],
+  },
+  {
+    id: "vivi",
+    name: "Vivi",
+    role: "QA Tester",
+    emoji: "🧪",
+    color: "#F5D5D5",
+    status: "idle",
+    recentActivity: [
+      { time: "14:00", text: "完成 merge 後的 smoke test" },
+      { time: "13:30", text: "等待新任務" },
+    ],
+  },
+];

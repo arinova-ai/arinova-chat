@@ -1,0 +1,125 @@
+# =============================================================================
+# Arinova Chat — Test Environment
+# Port range: 21000-22000
+#
+#   Web (Next.js)       → http://localhost:21000
+#   Server (Fastify)    → http://localhost:21001
+#   OpenClaw Gateway    → ws://localhost:21002
+#   PostgreSQL          → localhost:21003
+#   Redis               → localhost:21004
+#
+# Usage:
+#   docker compose -f docker-compose.test.yml up --build
+#
+# First run:
+#   The OpenClaw gateway starts in unconfigured mode.
+#   Set OPENCLAW_GATEWAY_TOKEN in .env.test or pass it inline:
+#     OPENCLAW_GATEWAY_TOKEN=my-secret docker compose -f docker-compose.test.yml up --build
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: arinova-test-postgres
+    restart: unless-stopped
+    ports:
+      - "21003:5432"
+    environment:
+      POSTGRES_USER: arinova
+      POSTGRES_PASSWORD: arinova_test
+      POSTGRES_DB: arinova_chat
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arinova -d arinova_chat"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: arinova-test-redis
+    restart: unless-stopped
+    ports:
+      - "21004:6379"
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  openclaw:
+    build:
+      context: docker/openclaw
+      dockerfile: Dockerfile
+    container_name: arinova-test-openclaw
+    restart: unless-stopped
+    ports:
+      - "21002:18789"
+    environment:
+      HOME: /home/node
+      NODE_ENV: production
+      OPENCLAW_GATEWAY_PORT: "18789"
+      OPENCLAW_GATEWAY_BIND: lan
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-test-openclaw-token}
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+    healthcheck:
+      test: ["CMD-SHELL", "openclaw health --token ${OPENCLAW_GATEWAY_TOKEN:-test-openclaw-token} 2>/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: arinova-test-server
+    restart: unless-stopped
+    ports:
+      - "21001:3501"
+    environment:
+      PORT: 3501
+      NODE_ENV: test
+      DATABASE_URL: postgres://arinova:arinova_test@postgres:5432/arinova_chat
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: http://localhost:21000
+      BETTER_AUTH_SECRET: test-secret-do-not-use-in-production
+      BETTER_AUTH_URL: http://localhost:21001
+      UPLOAD_DIR: /app/uploads
+      OPENCLAW_GATEWAY_URL: ws://openclaw:18789
+    volumes:
+      - test_uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      openclaw:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:21001
+    container_name: arinova-test-web
+    restart: unless-stopped
+    ports:
+      - "21000:3500"
+    environment:
+      PORT: 3500
+      HOSTNAME: 0.0.0.0
+      INTERNAL_API_URL: http://server:3501
+    depends_on:
+      - server
+
+volumes:
+  test_postgres_data:
+  test_redis_data:
+  test_uploads_data:
+  openclaw_data:
