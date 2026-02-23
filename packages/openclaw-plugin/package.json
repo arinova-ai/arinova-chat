@@ -1,6 +1,6 @@
 {
   "name": "@arinova-ai/openclaw-arinova-ai",
-  "version": "0.0.20",
+  "version": "0.0.22",
   "description": "OpenClaw channel plugin for Arinova Chat (A2A protocol with native streaming)",
   "type": "module",
   "main": "dist/index.js",

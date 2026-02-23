@@ -117,6 +117,7 @@ async fn main() {
         .merge(routes::notifications::router())
         .merge(routes::sandbox::router())
         .merge(routes::agent_health::router())
+        .merge(routes::agent_send::router())
         .merge(routes::agent_uploads::router())
         .merge(routes::office::router())
         .merge(ws::handler::router())

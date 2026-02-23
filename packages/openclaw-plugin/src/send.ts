@@ -1,6 +1,7 @@
 import type { ArinovaChatSendResult, CoreConfig } from "./types.js";
 import { resolveArinovaChatAccount } from "./accounts.js";
 import { getArinovaChatRuntime, getAgentInstance } from "./runtime.js";
+import { ArinovaAgent } from "@arinova-ai/agent-sdk";
 
 type ArinovaChatSendOpts = {
   accountId?: string;
@@ -48,7 +49,20 @@ export async function sendMessageArinovaChat(
 
   const agent = getAgentInstance(account.accountId);
   if (agent) {
-    agent.sendMessage(conversationId, text);
+    console.log(
+      `[openclaw-arinova-ai] sendMessage accountId=${account.accountId} conversationId=${conversationId} textLen=${text.length}`,
+    );
+    await agent.sendMessage(conversationId, text);
+  } else {
+    // No agent instance — use HTTP directly as fallback
+    console.log(
+      `[openclaw-arinova-ai] sendMessage via HTTP (no agent instance) accountId=${account.accountId} conversationId=${conversationId}`,
+    );
+    const tempAgent = new ArinovaAgent({
+      serverUrl: account.apiUrl,
+      botToken: account.botToken,
+    });
+    await tempAgent.sendMessage(conversationId, text);
   }
 
   getArinovaChatRuntime().channel.activity.record({
