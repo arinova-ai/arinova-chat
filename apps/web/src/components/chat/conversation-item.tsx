@@ -40,6 +40,7 @@ interface ConversationItemProps {
   onPin: (pinned: boolean) => void;
   unreadCount?: number;
   isOnline?: boolean;
+  isThinking?: boolean;
   onDelete: () => void;
 }
 
@@ -77,6 +78,7 @@ export function ConversationItem({
   onClick,
   unreadCount = 0,
   isOnline = false,
+  isThinking = false,
   onRename,
   onPin,
   onDelete,
@@ -200,8 +202,8 @@ export function ConversationItem({
               />
             ) : (
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {lastMessage?.status === "streaming" ? (
-                  <span className="text-blue-400">Typing...</span>
+                {isThinking ? (
+                  <span className="text-blue-400">Thinking...</span>
                 ) : (
                   preview
                 )}

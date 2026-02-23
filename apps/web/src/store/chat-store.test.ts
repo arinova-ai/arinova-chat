@@ -71,6 +71,7 @@ const INITIAL_STATE = {
   showTimestamps: false,
   mutedConversations: {},
   ttsEnabled: false,
+  thinkingAgents: {},
 };
 
 // ---------------------------------------------------------------------------
@@ -144,10 +145,88 @@ describe("useChatStore", () => {
   });
 
   // -------------------------------------------------------------------------
+  // handleWSEvent — stream_start (typing indicator)
+  // -------------------------------------------------------------------------
+  describe("handleWSEvent — stream_start", () => {
+    it("adds agent to thinkingAgents instead of creating a message", () => {
+      useChatStore.getState().handleWSEvent({
+        type: "stream_start",
+        conversationId: "conv-1",
+        messageId: "msg-stream",
+        seq: 2,
+        senderAgentId: "agent-1",
+        senderAgentName: "Ron",
+      } as never);
+
+      const state = useChatStore.getState();
+      // No message bubble created
+      expect(state.messagesByConversation["conv-1"] ?? []).toHaveLength(0);
+      // Agent is in thinkingAgents
+      expect(state.thinkingAgents["conv-1"]).toHaveLength(1);
+      expect(state.thinkingAgents["conv-1"][0].messageId).toBe("msg-stream");
+      expect(state.thinkingAgents["conv-1"][0].agentName).toBe("Ron");
+    });
+
+    it("supports multiple thinking agents in group conversations", () => {
+      useChatStore.getState().handleWSEvent({
+        type: "stream_start",
+        conversationId: "conv-1",
+        messageId: "msg-1",
+        seq: 2,
+        senderAgentId: "agent-1",
+        senderAgentName: "Ron",
+      } as never);
+      useChatStore.getState().handleWSEvent({
+        type: "stream_start",
+        conversationId: "conv-1",
+        messageId: "msg-2",
+        seq: 3,
+        senderAgentId: "agent-2",
+        senderAgentName: "Alice",
+      } as never);
+
+      expect(useChatStore.getState().thinkingAgents["conv-1"]).toHaveLength(2);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // handleWSEvent — stream_chunk
   // -------------------------------------------------------------------------
   describe("handleWSEvent — stream_chunk", () => {
-    it("appends delta to message content when a stream_chunk event arrives", () => {
+    it("creates message on first chunk and removes from thinkingAgents", () => {
+      // Set up thinkingAgents (from stream_start)
+      useChatStore.setState({
+        thinkingAgents: {
+          "conv-1": [{
+            messageId: "msg-stream",
+            agentId: "agent-1",
+            agentName: "Ron",
+            seq: 2,
+            startedAt: new Date(),
+          }],
+        },
+      });
+
+      useChatStore.getState().handleWSEvent({
+        type: "stream_chunk",
+        conversationId: "conv-1",
+        messageId: "msg-stream",
+        seq: 2,
+        chunk: "Hello",
+      });
+
+      const state = useChatStore.getState();
+      // Message should be created with chunk content
+      const messages = state.messagesByConversation["conv-1"];
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe("Hello");
+      expect(messages[0].status).toBe("streaming");
+      expect(messages[0].senderAgentName).toBe("Ron");
+      // Removed from thinkingAgents
+      expect(state.thinkingAgents["conv-1"]).toHaveLength(0);
+    });
+
+    it("appends delta to message content on subsequent chunks", () => {
       const streamingMsg = makeMessage({
         id: "msg-stream",
         conversationId: "conv-1",
@@ -200,6 +279,31 @@ describe("useChatStore", () => {
   // handleWSEvent — stream_end
   // -------------------------------------------------------------------------
   describe("handleWSEvent — stream_end", () => {
+    it("removes from thinkingAgents without creating bubble when no chunks arrived", () => {
+      useChatStore.setState({
+        thinkingAgents: {
+          "conv-1": [{
+            messageId: "msg-stream",
+            agentId: "agent-1",
+            agentName: "Ron",
+            seq: 2,
+            startedAt: new Date(),
+          }],
+        },
+      });
+
+      useChatStore.getState().handleWSEvent({
+        type: "stream_end",
+        conversationId: "conv-1",
+        messageId: "msg-stream",
+        seq: 2,
+      });
+
+      const state = useChatStore.getState();
+      expect(state.thinkingAgents["conv-1"]).toHaveLength(0);
+      expect(state.messagesByConversation["conv-1"] ?? []).toHaveLength(0);
+    });
+
     it("marks the streaming message as completed on stream_end", () => {
       const streamingMsg = makeMessage({
         id: "msg-stream",
@@ -271,6 +375,65 @@ describe("useChatStore", () => {
       });
 
       expect(useChatStore.getState().unreadCounts["conv-1"]).toBe(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // handleWSEvent — stream_error
+  // -------------------------------------------------------------------------
+  describe("handleWSEvent — stream_error", () => {
+    it("removes from thinkingAgents without creating bubble when no chunks arrived", () => {
+      useChatStore.setState({
+        thinkingAgents: {
+          "conv-1": [{
+            messageId: "msg-stream",
+            agentId: "agent-1",
+            agentName: "Ron",
+            seq: 2,
+            startedAt: new Date(),
+          }],
+        },
+      });
+
+      useChatStore.getState().handleWSEvent({
+        type: "stream_error",
+        conversationId: "conv-1",
+        messageId: "msg-stream",
+        seq: 2,
+        error: "Agent disconnected",
+      });
+
+      const state = useChatStore.getState();
+      expect(state.thinkingAgents["conv-1"]).toHaveLength(0);
+      expect(state.messagesByConversation["conv-1"] ?? []).toHaveLength(0);
+    });
+
+    it("updates existing message with error when chunks had arrived", () => {
+      useChatStore.setState({
+        messagesByConversation: {
+          "conv-1": [
+            makeMessage({
+              id: "msg-stream",
+              conversationId: "conv-1",
+              status: "streaming",
+              content: "partial",
+            }),
+          ],
+        },
+      });
+
+      useChatStore.getState().handleWSEvent({
+        type: "stream_error",
+        conversationId: "conv-1",
+        messageId: "msg-stream",
+        seq: 2,
+        error: "Agent crashed",
+      });
+
+      const messages = useChatStore.getState().messagesByConversation["conv-1"];
+      const msg = messages.find((m) => m.id === "msg-stream");
+      expect(msg?.status).toBe("error");
+      expect(msg?.content).toBe("Agent crashed");
     });
   });
 

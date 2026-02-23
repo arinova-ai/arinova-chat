@@ -8,6 +8,7 @@ import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
 import { ArrowDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TypingIndicator } from "./typing-indicator";
 
 interface MessageListProps {
   messages: Message[];
@@ -21,6 +22,7 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);
   const searchQuery = useChatStore((s) => s.searchQuery);
+  const thinkingCount = useChatStore((s) => activeConversationId ? (s.thinkingAgents[activeConversationId]?.length ?? 0) : 0);
   const [loadingUp, setLoadingUp] = useState(false);
   const [loadingDown, setLoadingDown] = useState(false);
   const [hasMoreUp, setHasMoreUp] = useState(true);
@@ -30,7 +32,7 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   const highlightRef = useRef<HTMLDivElement>(null);
 
   const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
-    [lastMessage?.content, lastMessage?.status, messages.length],
+    [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
     { conversationId: activeConversationId, skipScroll: !!highlightMessageId, messageCount: messages.length },
   );
 
@@ -194,6 +196,9 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
             <div className="flex justify-center py-2">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          )}
+          {activeConversationId && (
+            <TypingIndicator conversationId={activeConversationId} />
           )}
         </div>
       </div>

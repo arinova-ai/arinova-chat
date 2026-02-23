@@ -43,6 +43,14 @@ export interface ReactionInfo {
   userReacted: boolean;
 }
 
+export interface ThinkingAgent {
+  messageId: string;
+  agentId: string;
+  agentName: string;
+  seq: number;
+  startedAt: Date;
+}
+
 interface ChatState {
   agents: Agent[];
   conversations: ConversationWithAgent[];
@@ -67,6 +75,7 @@ interface ChatState {
   ttsEnabled: boolean;
   reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
   conversationMembers: Record<string, { agentId: string; agentName: string }[]>;
+  thinkingAgents: Record<string, ThinkingAgent[]>;
   replyingTo: Message | null;
 
   // Actions
@@ -151,6 +160,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       : false,
   reactionsByMessage: {},
   conversationMembers: {},
+  thinkingAgents: {},
   replyingTo: null,
 
   setReplyingTo: (message) => set({ replyingTo: message }),
@@ -731,55 +741,91 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_start") {
       const { conversationId, messageId, seq } = event;
-      const current =
-        get().messagesByConversation[conversationId] ?? [];
-      const agentMsg: Message = {
-        id: messageId,
-        conversationId,
+      const agentId = (event as Record<string, unknown>).senderAgentId as string | undefined;
+      const agentName = (event as Record<string, unknown>).senderAgentName as string | undefined;
+      const thinking: ThinkingAgent = {
+        messageId,
+        agentId: agentId ?? "",
+        agentName: agentName ?? "Agent",
         seq,
-        role: "agent",
-        content: "",
-        status: "streaming",
-        senderAgentId: (event as Record<string, unknown>).senderAgentId as string | undefined,
-        senderAgentName: (event as Record<string, unknown>).senderAgentName as string | undefined,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        startedAt: new Date(),
       };
+      const prev = get().thinkingAgents[conversationId] ?? [];
       set({
-        messagesByConversation: {
-          ...get().messagesByConversation,
-          [conversationId]: [...current, agentMsg],
+        thinkingAgents: {
+          ...get().thinkingAgents,
+          [conversationId]: [...prev, thinking],
         },
-        // Update sidebar to show typing indicator
-        conversations: get().conversations.map((c) =>
-          c.id === conversationId
-            ? { ...c, lastMessage: agentMsg }
-            : c
-        ),
       });
       return;
     }
 
     if (event.type === "stream_chunk") {
       const { conversationId, messageId, chunk } = event;
-      const current =
-        get().messagesByConversation[conversationId] ?? [];
-      set({
-        messagesByConversation: {
-          ...get().messagesByConversation,
-          [conversationId]: current.map((m) =>
-            m.id === messageId ? { ...m, content: m.content + chunk } : m
-          ),
-        },
-      });
+
+      // Check if this is the first chunk (message still in thinkingAgents)
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const thinkingEntry = thinking.find((t) => t.messageId === messageId);
+
+      if (thinkingEntry) {
+        // First chunk: create message bubble and remove from thinkingAgents
+        const current = get().messagesByConversation[conversationId] ?? [];
+        const agentMsg: Message = {
+          id: messageId,
+          conversationId,
+          seq: thinkingEntry.seq,
+          role: "agent",
+          content: chunk,
+          status: "streaming",
+          senderAgentId: thinkingEntry.agentId || undefined,
+          senderAgentName: thinkingEntry.agentName,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: [...current, agentMsg],
+          },
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+          },
+        });
+      } else {
+        // Subsequent chunks: append to existing message
+        const current = get().messagesByConversation[conversationId] ?? [];
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: current.map((m) =>
+              m.id === messageId ? { ...m, content: m.content + chunk } : m
+            ),
+          },
+        });
+      }
       return;
     }
 
     if (event.type === "stream_end") {
       const { conversationId, messageId, seq } = event;
-      const current =
-        get().messagesByConversation[conversationId] ?? [];
       const { activeConversationId, unreadCounts } = get();
+
+      // Check if still in thinkingAgents (no chunks ever arrived)
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const stillThinking = thinking.find((t) => t.messageId === messageId);
+      if (stillThinking) {
+        // Remove from thinkingAgents, no bubble created
+        set({
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+          },
+        });
+        return;
+      }
+
+      const current = get().messagesByConversation[conversationId] ?? [];
 
       // Find the completed message content for sidebar preview
       const completedMsg = current.find((m) => m.id === messageId);
@@ -845,8 +891,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_error") {
       const { conversationId, messageId, error } = event;
-      const current =
-        get().messagesByConversation[conversationId] ?? [];
+
+      // Check if still in thinkingAgents (no chunks ever arrived)
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const stillThinking = thinking.find((t) => t.messageId === messageId);
+      if (stillThinking) {
+        // Remove from thinkingAgents, no bubble created
+        set({
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+          },
+        });
+        return;
+      }
+
+      // Message exists: update with error
+      const current = get().messagesByConversation[conversationId] ?? [];
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
