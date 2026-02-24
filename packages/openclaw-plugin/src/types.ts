@@ -48,12 +48,16 @@ export type ArinovaChatInboundMessage = {
   conversationId?: string;
   /** Conversation type: "direct" or "group". */
   conversationType?: string;
+  /** User ID of the human who sent the message. */
+  senderUserId?: string;
+  /** Username of the human who sent the message. */
+  senderUsername?: string;
   /** Other agents in the conversation (for group chats). */
   members?: { agentId: string; agentName: string }[];
   /** The message being replied to, if this is a reply. */
   replyTo?: { role: string; content: string; senderAgentName?: string };
   /** Recent conversation history (up to 5 messages before the current one). */
-  history?: { role: string; content: string; senderAgentName?: string; createdAt: string }[];
+  history?: { role: string; content: string; senderAgentName?: string; senderUsername?: string; createdAt: string }[];
   /** Attachments from the user's message. */
   attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
 };

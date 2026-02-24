@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Bot, Users } from "lucide-react";
+import { Bot, User, Users } from "lucide-react";
 
 export interface MentionItem {
   agentId: string;
   agentName: string;
+  type?: "agent" | "user";
 }
 
 interface MentionPopupProps {
@@ -57,6 +58,8 @@ export function MentionPopup({
         >
           {item.agentId === "__all__" ? (
             <Users className="h-4 w-4 shrink-0 text-emerald-400" />
+          ) : item.type === "user" ? (
+            <User className="h-4 w-4 shrink-0 text-emerald-400" />
           ) : (
             <Bot className="h-4 w-4 shrink-0 text-blue-400" />
           )}

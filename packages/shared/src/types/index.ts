@@ -54,7 +54,7 @@ export interface ConversationMember {
 }
 
 // ===== Message =====
-export type MessageRole = "user" | "agent";
+export type MessageRole = "user" | "agent" | "system";
 
 export type MessageStatus =
   | "pending"
@@ -72,6 +72,9 @@ export interface Message {
   status: MessageStatus;
   senderAgentId?: string;
   senderAgentName?: string;
+  senderUserId?: string;
+  senderUsername?: string;
+  senderUserName?: string;
   replyToId?: string;
   replyTo?: {
     role: MessageRole;
@@ -403,6 +406,25 @@ export type WSServerEvent =
       emoji: string;
       userId: string;
     }
+  | {
+      type: "new_message";
+      conversationId: string;
+      message: {
+        id: string;
+        conversationId: string;
+        seq: number;
+        role: MessageRole;
+        content: string;
+        status: MessageStatus;
+        senderUserId?: string;
+        senderUserName?: string;
+        senderUsername?: string;
+        replyToId?: string | null;
+        createdAt: string;
+        updatedAt: string;
+      };
+    }
+  | { type: "kicked_from_group"; conversationId: string }
   | { type: "pong" };
 
 // ===== Agent Skill =====

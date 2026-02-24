@@ -13,9 +13,10 @@ import { TypingIndicator } from "./typing-indicator";
 interface MessageListProps {
   messages: Message[];
   agentName?: string;
+  isGroupConversation?: boolean;
 }
 
-export function MessageList({ messages: rawMessages, agentName }: MessageListProps) {
+export function MessageList({ messages: rawMessages, agentName, isGroupConversation }: MessageListProps) {
   // Deduplicate by ID (around-cursor + WS events can produce overlaps)
   const messages = rawMessages.filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
   const lastMessage = messages[messages.length - 1];
@@ -185,11 +186,20 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
                 message.id === highlightMessageId && "search-highlight"
               )}
             >
-              <MessageBubble
-                message={message}
-                agentName={message.role === "agent" ? agentName : undefined}
-                highlightQuery={message.id === highlightMessageId ? searchQuery : undefined}
-              />
+              {message.role === "system" ? (
+                <div className="flex justify-center py-1.5">
+                  <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
+                    {message.content}
+                  </span>
+                </div>
+              ) : (
+                <MessageBubble
+                  message={message}
+                  agentName={message.role === "agent" ? agentName : undefined}
+                  highlightQuery={message.id === highlightMessageId ? searchQuery : undefined}
+                  isGroupConversation={isGroupConversation}
+                />
+              )}
             </div>
           ))}
           {loadingDown && (

@@ -8,10 +8,12 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Loader2, User, Lock, LogOut, Bell, BellOff, Moon, Clock } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ArrowLeft, Loader2, User, Lock, LogOut, Bell, BellOff, Moon, Clock, ShieldBan } from "lucide-react";
 import { api } from "@/lib/api";
+import { assetUrl } from "@/lib/config";
 import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
+import { useChatStore } from "@/store/chat-store";
 
 interface NotificationPrefs {
   globalEnabled: boolean;
@@ -245,6 +247,98 @@ function NotificationSettings() {
   );
 }
 
+interface BlockedUser {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+}
+
+function BlockedUsersSettings() {
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const unblockUser = useChatStore((s) => s.unblockUser);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api<BlockedUser[]>("/api/users/blocked");
+        setBlockedUsers(data);
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleUnblock = async (userId: string) => {
+    setUnblockingId(userId);
+    try {
+      await unblockUser(userId);
+      setBlockedUsers((prev) => prev.filter((u) => u.id !== userId));
+    } catch {
+      // ignore
+    } finally {
+      setUnblockingId(null);
+    }
+  };
+
+  return (
+    <div className="mb-8 rounded-lg border border-border bg-card p-6">
+      <div className="mb-4 flex items-center gap-2">
+        <ShieldBan className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">Blocked Users</h2>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-4">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : blockedUsers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No blocked users</p>
+      ) : (
+        <div className="space-y-2">
+          {blockedUsers.map((user) => (
+            <div
+              key={user.id}
+              className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors"
+            >
+              <Avatar className="h-8 w-8 shrink-0">
+                {user.image ? (
+                  <AvatarImage src={assetUrl(user.image)} alt={user.username ?? user.name ?? ""} />
+                ) : null}
+                <AvatarFallback className="text-xs bg-neutral-700">
+                  {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{user.name ?? user.username ?? "Unknown"}</p>
+                {user.username && (
+                  <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleUnblock(user.id)}
+                disabled={unblockingId === user.id}
+              >
+                {unblockingId === user.id ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  "Unblock"
+                )}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsContent() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
@@ -359,12 +453,29 @@ function SettingsContent() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white">
               <User className="h-6 w-6" />
             </div>
-            <div>
-              <p className="font-medium">{session?.user?.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {session?.user?.email}
-              </p>
-            </div>
+            {sessionPending ? (
+              <div className="space-y-2">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-36 animate-pulse rounded bg-muted" />
+              </div>
+            ) : (
+              <div>
+                <p className="font-medium">{session?.user?.name}</p>
+                {typeof (session?.user as Record<string, unknown> | undefined)
+                  ?.username === "string" && (
+                  <p className="text-sm text-blue-400">
+                    @
+                    {
+                      (session?.user as Record<string, unknown>)
+                        ?.username as string
+                    }
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  {session?.user?.email}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -485,6 +596,9 @@ function SettingsContent() {
             </Button>
           </form>
         </div>
+
+        {/* Blocked Users */}
+        <BlockedUsersSettings />
 
         {/* Notifications */}
         <NotificationSettings />

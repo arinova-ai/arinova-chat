@@ -5,6 +5,9 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g openclaw@latest
 
+# Pre-create .openclaw directory with correct ownership for volume mount
+RUN mkdir -p /home/node/.openclaw && chown -R node:node /home/node/.openclaw
+
 USER node
 WORKDIR /home/node
 

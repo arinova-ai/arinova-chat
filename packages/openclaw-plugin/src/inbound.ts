@@ -111,9 +111,9 @@ export async function handleArinovaChatInbound(params: {
 
   statusSink?.({ lastInboundAt: message.timestamp });
 
-  // The sender is the Arinova backend on behalf of the user.
-  const senderId = "arinova-user";
-  const senderName = "Arinova User";
+  // Use actual sender identity from the task payload (multi-user support)
+  const senderId = message.senderUserId ?? "arinova-user";
+  const senderName = message.senderUsername ?? "Arinova User";
   const chatType = message.conversationType ?? "direct";
 
   // DM policy check
@@ -303,7 +303,7 @@ function buildEnrichedBody(
   // Conversation history
   if (message.history?.length) {
     const historyLines = message.history.map((h) => {
-      const sender = h.senderAgentName ?? h.role;
+      const sender = h.senderAgentName ?? h.senderUsername ?? h.role;
       return `[${sender}]: ${h.content}`;
     });
     sections.push(`[History]\n${historyLines.join("\n")}`);

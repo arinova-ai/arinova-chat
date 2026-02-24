@@ -14,6 +14,7 @@ pub struct AuthUser {
     pub id: String,
     pub email: String,
     pub name: String,
+    pub username: Option<String>,
 }
 
 /// Authenticated agent extracted from `Authorization: Bearer <botToken>` header.
@@ -53,11 +54,29 @@ where
         };
 
         match validate_session(&app_state.db, &token).await {
-            Ok(Some(session)) => Ok(AuthUser {
-                id: session.user_id,
-                email: session.email,
-                name: session.name,
-            }),
+            Ok(Some(session)) => {
+                let user = AuthUser {
+                    id: session.user_id,
+                    email: session.email,
+                    name: session.name,
+                    username: session.username.clone(),
+                };
+
+                // Require username for most API routes
+                if session.username.is_none() {
+                    let path = parts.uri.path();
+                    let exempt = path.starts_with("/api/users/username")
+                        || path.starts_with("/api/auth/");
+                    if !exempt {
+                        return Err((
+                            StatusCode::FORBIDDEN,
+                            Json(serde_json::json!({"error": "Username required", "code": "USERNAME_REQUIRED"})),
+                        ));
+                    }
+                }
+
+                Ok(user)
+            }
             _ => Err(reject()),
         }
     }

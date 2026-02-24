@@ -59,7 +59,7 @@ class WebSocketManager {
         try {
           const data = JSON.parse(event.data) as WSServerEvent;
 
-          // Track seq from stream events
+          // Track seq from stream events and new_message
           if (
             data.type === "stream_start" ||
             data.type === "stream_chunk" ||
@@ -69,6 +69,9 @@ class WebSocketManager {
             if (data.seq > 0) {
               this.updateLastSeq(data.conversationId, data.seq);
             }
+          }
+          if (data.type === "new_message" && data.message.seq > 0) {
+            this.updateLastSeq(data.conversationId, data.message.seq);
           }
 
           // Update lastSeqs from sync_response
