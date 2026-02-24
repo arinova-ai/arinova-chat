@@ -23,7 +23,7 @@ const defaultProps = {
   type: "direct" as const,
   lastMessage: null,
   pinnedAt: null,
-  updatedAt: new Date().toISOString(),
+  updatedAt: new Date(),
   isActive: false,
   onClick: vi.fn(),
   onRename: vi.fn(),

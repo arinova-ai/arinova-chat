@@ -57,14 +57,14 @@ export function UserProfileSheet({
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="rounded-t-2xl border-neutral-700 bg-neutral-800 px-4 pb-6 pt-3"
+        className="rounded-t-2xl border-border bg-secondary px-4 pb-6 pt-3"
       >
         <VisuallyHidden.Root>
           <SheetTitle>User profile</SheetTitle>
         </VisuallyHidden.Root>
 
         {/* Drag handle */}
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-neutral-600" />
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
 
         {/* User info */}
         <div className="flex items-center gap-3">
@@ -72,13 +72,13 @@ export function UserProfileSheet({
             {user.image ? (
               <AvatarImage src={assetUrl(user.image)} alt={user.name ?? user.username ?? ""} />
             ) : null}
-            <AvatarFallback className="text-lg bg-neutral-700">
+            <AvatarFallback className="text-lg bg-accent">
               {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="text-base font-semibold text-neutral-100 truncate">
+              <p className="text-base font-semibold text-foreground truncate">
                 {user.name}
               </p>
               <RoleBadge role={user.role} />
@@ -99,7 +99,7 @@ export function UserProfileSheet({
               {userAgents.map((agent) => (
                 <div
                   key={agent.agentId}
-                  className="flex items-center gap-2.5 rounded-lg px-2 py-2 bg-neutral-700/40"
+                  className="flex items-center gap-2.5 rounded-lg px-2 py-2 bg-accent/40"
                 >
                   {agent.agentAvatarUrl ? (
                     <img
@@ -108,12 +108,12 @@ export function UserProfileSheet({
                       className="h-8 w-8 shrink-0 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-600">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
                       <Bot className="h-4 w-4" />
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-neutral-100 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {agent.agentName}
                     </p>
                     {agent.agentDescription && (

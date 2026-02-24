@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { NewChatDialog, CreateBotDialog } from "./new-chat-dialog";
+import { NewChatDialog } from "./new-chat-dialog";
 
 // Mock store
 const mockCreateConversation = vi.fn().mockResolvedValue({ id: "conv-new" });
@@ -119,93 +119,3 @@ describe("NewChatDialog", () => {
   });
 });
 
-describe("CreateBotDialog", () => {
-  const mockOnOpenChange = vi.fn();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("renders bot creation form when open", () => {
-    render(
-      <CreateBotDialog open={true} onOpenChange={mockOnOpenChange} />
-    );
-    // Title and submit button both say "Create Bot"
-    expect(screen.getAllByText("Create Bot").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByPlaceholderText("e.g. CodeBot")).toBeInTheDocument();
-    expect(
-      screen.getByPlaceholderText("What does this agent do?")
-    ).toBeInTheDocument();
-  });
-
-  it("shows name field as required", () => {
-    render(
-      <CreateBotDialog open={true} onOpenChange={mockOnOpenChange} />
-    );
-    const nameInput = screen.getByPlaceholderText("e.g. CodeBot");
-    expect(nameInput).toBeRequired();
-  });
-
-  it("submits form and shows success state", async () => {
-    render(
-      <CreateBotDialog open={true} onOpenChange={mockOnOpenChange} />
-    );
-    const nameInput = screen.getByPlaceholderText("e.g. CodeBot");
-    fireEvent.change(nameInput, { target: { value: "TestBot" } });
-
-    const descInput = screen.getByPlaceholderText("What does this agent do?");
-    fireEvent.change(descInput, { target: { value: "A test bot" } });
-
-    // Find and submit the form
-    const submitButton = screen.getByRole("button", { name: "Create Bot" });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(mockCreateAgent).toHaveBeenCalledWith({
-        name: "TestBot",
-        description: "A test bot",
-        a2aEndpoint: undefined,
-      });
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("Bot Created")).toBeInTheDocument();
-    });
-  });
-
-  it("shows error on failed submission", async () => {
-    mockCreateAgent.mockRejectedValueOnce(new Error("Name taken"));
-    render(
-      <CreateBotDialog open={true} onOpenChange={mockOnOpenChange} />
-    );
-    fireEvent.change(screen.getByPlaceholderText("e.g. CodeBot"), {
-      target: { value: "TestBot" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Create Bot" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Name taken")).toBeInTheDocument();
-    });
-  });
-
-  it("toggles advanced endpoint field", () => {
-    render(
-      <CreateBotDialog open={true} onOpenChange={mockOnOpenChange} />
-    );
-    expect(
-      screen.queryByPlaceholderText(
-        "https://agent.example.com/.well-known/agent.json"
-      )
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByText("Advanced: Connect existing agent")
-    );
-
-    expect(
-      screen.getByPlaceholderText(
-        "https://agent.example.com/.well-known/agent.json"
-      )
-    ).toBeInTheDocument();
-  });
-});

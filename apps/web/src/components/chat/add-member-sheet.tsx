@@ -135,7 +135,7 @@ export function AddMemberSheet({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search friends or agents..."
-              className="bg-neutral-800 border-none text-sm pl-8 h-9"
+              className="bg-secondary border-none text-sm pl-8 h-9"
             />
           </div>
         </div>
@@ -170,7 +170,7 @@ export function AddMemberSheet({
                           {friend.image ? (
                             <AvatarImage src={assetUrl(friend.image)} alt={friend.name ?? ""} />
                           ) : null}
-                          <AvatarFallback className="text-xs bg-neutral-700">
+                          <AvatarFallback className="text-xs bg-accent">
                             {(friend.name ?? friend.username ?? "?").charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
@@ -219,7 +219,7 @@ export function AddMemberSheet({
                             className="h-8 w-8 shrink-0 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-700">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
                             <Bot className="h-4 w-4" />
                           </div>
                         )}

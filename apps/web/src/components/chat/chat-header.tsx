@@ -17,6 +17,7 @@ import {
   Bell,
   BellOff,
   Phone,
+  Video,
   Menu,
   UserPlus,
   UsersRound,
@@ -44,6 +45,7 @@ interface ChatHeaderProps {
   voiceCapable?: boolean;
   mentionOnly?: boolean;
   title?: string | null;
+  memberCount?: number;
   onClick?: () => void;
   onMembersClick?: () => void;
   onSettingsClick?: () => void;
@@ -60,6 +62,7 @@ export function ChatHeader({
   agentId,
   voiceCapable,
   title,
+  memberCount,
   onClick,
   onMembersClick,
   onSettingsClick,
@@ -116,7 +119,7 @@ export function ChatHeader({
         onClick={onClick}
         className={cn(
           "flex items-center gap-3 min-w-0 rounded-lg px-2 py-1 -ml-2 transition-colors",
-          onClick && "cursor-pointer hover:bg-neutral-800/60"
+          onClick && "cursor-pointer hover:bg-accent/60"
         )}
       >
         <div className="relative">
@@ -128,7 +131,7 @@ export function ChatHeader({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">
+              <AvatarFallback className="bg-accent text-foreground/80 text-xs">
                 {type === "group" ? (
                   <Users className="h-4 w-4" />
                 ) : (
@@ -141,44 +144,62 @@ export function ChatHeader({
             <span
               className={cn(
                 "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background",
-                isOnline ? "bg-green-500" : "bg-neutral-500"
+                isOnline ? "bg-green-500" : "bg-muted-foreground"
               )}
             />
           )}
         </div>
         <div className="min-w-0 text-left">
           <h2 className="text-sm font-semibold truncate">{displayName}</h2>
-          {agentDescription && (
+          {type === "group" ? (
+            <p className="text-xs text-muted-foreground truncate">
+              {memberCount ? `${memberCount} members` : "Group"}
+            </p>
+          ) : isOnline !== undefined ? (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span className={cn("inline-block h-1.5 w-1.5 rounded-full", isOnline ? "bg-green-500" : "bg-muted-foreground")} />
+              {isOnline ? "Online" : "Offline"}
+            </p>
+          ) : agentDescription ? (
             <p className="text-xs text-muted-foreground truncate">
               {agentDescription}
             </p>
-          )}
+          ) : null}
         </div>
       </button>
 
       <div className="ml-auto flex items-center gap-1">
         {type === "group" && conversationId ? (
           <>
-            {onAddMemberClick && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              disabled
+              title="Video call (coming soon)"
+            >
+              <Video className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              disabled
+              title="Voice call (coming soon)"
+            >
+              <Phone className="h-4 w-4" />
+            </Button>
+            {onMembersClick && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={onAddMemberClick}
-                title="Add member"
+                onClick={onMembersClick}
+                title="Members"
               >
-                <UserPlus className="h-4 w-4" />
+                <UsersRound className="h-4 w-4" />
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", isMuted && "text-red-400")}
-              onClick={handleMuteToggle}
-              title={isMuted ? "Unmute conversation" : "Mute conversation"}
-            >
-              {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

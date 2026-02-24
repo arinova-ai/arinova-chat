@@ -19,7 +19,7 @@ export function ReplyPreview() {
       : replyingTo.content;
 
   return (
-    <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-blue-400/50 bg-neutral-800 px-3 py-2">
+    <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-blue-400/50 bg-secondary px-3 py-2">
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-blue-400">{senderName}</p>
         <p className="truncate text-xs text-muted-foreground">{snippet}</p>

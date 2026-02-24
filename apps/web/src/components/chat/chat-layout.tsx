@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { IconRail } from "./icon-rail";
+import { MobileBottomNav } from "./mobile-bottom-nav";
 import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
 import { CallIndicator } from "@/components/voice/call-indicator";
@@ -67,14 +69,22 @@ export function ChatLayout() {
 
   return (
     <div className={`app-dvh flex min-h-0 overflow-hidden ${(activeConversationId || searchActive) ? "bg-background" : "bg-card md:bg-background"}`}>
-      {/* Desktop: always show sidebar */}
-      <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
+      {/* Desktop: Icon Rail */}
+      <div className="hidden h-full md:block">
+        <IconRail />
+      </div>
+
+      {/* Desktop: Conversation panel */}
+      <div className="hidden h-full w-72 shrink-0 overflow-hidden border-r border-border md:block">
         <Sidebar />
       </div>
 
-      {/* Mobile: sidebar fullscreen when no conversation/search, chat when selected */}
-      <div className={`md:hidden h-full overflow-hidden bg-card ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
-        <Sidebar />
+      {/* Mobile: sidebar + bottom nav when no conversation/search, chat when selected */}
+      <div className={`md:hidden h-full overflow-hidden bg-card flex flex-col ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Sidebar />
+        </div>
+        <MobileBottomNav />
       </div>
 
       {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}

@@ -23,7 +23,7 @@ interface MessageActionSheetProps {
 }
 
 const ACTION_BUTTON =
-  "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-neutral-100 active:bg-neutral-700";
+  "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-foreground active:bg-accent";
 
 export function MessageActionSheet({
   message,
@@ -49,14 +49,14 @@ export function MessageActionSheet({
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="rounded-t-2xl border-neutral-700 bg-neutral-800 px-2 pb-6 pt-3"
+        className="rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3"
       >
         <VisuallyHidden.Root>
           <SheetTitle>Message actions</SheetTitle>
         </VisuallyHidden.Root>
 
         {/* Drag handle */}
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-neutral-600" />
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
 
         {/* Quick emoji reactions */}
         <div className="mb-2 flex justify-center gap-2 px-2">
@@ -64,18 +64,18 @@ export function MessageActionSheet({
             <button
               key={emoji}
               onClick={() => handle(() => onReact(emoji))}
-              className="rounded-full p-2 text-xl active:bg-neutral-700"
+              className="rounded-full p-2 text-xl active:bg-accent"
             >
               {emoji}
             </button>
           ))}
         </div>
 
-        <div className="h-px bg-neutral-700" />
+        <div className="h-px bg-accent" />
 
         <div className="mt-1 flex flex-col">
           <button className={ACTION_BUTTON} onClick={() => handle(onCopy)}>
-            <Copy className="h-4 w-4 text-neutral-400" />
+            <Copy className="h-4 w-4 text-muted-foreground" />
             Copy
           </button>
           <button className={ACTION_BUTTON} onClick={() => handle(onReply)}>
