@@ -1,27 +1,24 @@
 import type { ThemeManifest } from "./theme-types";
 
+// Cache keyed by themeId — only keeps the latest version per theme
 const cache = new Map<string, ThemeManifest>();
 
 function themeUrl(themeId: string): string {
   return `/themes/${themeId}/theme.json`;
 }
 
-function cacheKey(themeId: string, version: string): string {
-  return `${themeId}:${version}`;
-}
-
-/** Check that a path is relative, contains no ".." traversal, and no protocol. */
+/** Check that a path is relative, contains no ".." traversal, and no protocol scheme. */
 function isSafePath(p: unknown): boolean {
   if (typeof p !== "string" || p.length === 0) return true; // empty/missing is fine
   if (p.startsWith("/") || p.startsWith("\\")) return false; // absolute
   if (p.includes("..")) return false; // traversal
-  if (/^[a-z]+:\/\//i.test(p)) return false; // protocol (http://, file://, etc.)
+  if (p.includes(":")) return false; // blocks all protocol schemes (http:, javascript:, data:, etc.)
   return true;
 }
 
 function assertSafePath(p: unknown, label: string): void {
   if (!isSafePath(p)) {
-    throw new Error(`Unsafe path in ${label}: "${p}" — must be relative with no ".." or protocol`);
+    throw new Error(`Unsafe path in ${label}: "${p}" — must be relative with no "..", ":" or absolute prefix`);
   }
 }
 
@@ -96,12 +93,11 @@ export function validateManifest(data: unknown): ThemeManifest {
 /**
  * Load and validate a theme manifest by ID.
  * Returns cached manifest if available. Fetches from /themes/{id}/theme.json.
+ * Cache is keyed by themeId — loading a new version overwrites the old entry.
  */
 export async function loadTheme(themeId: string): Promise<ThemeManifest> {
-  // Check cache — scan for any entry with matching themeId prefix
-  for (const [key, m] of cache) {
-    if (key.startsWith(`${themeId}:`)) return m;
-  }
+  const cached = cache.get(themeId);
+  if (cached) return cached;
 
   const url = themeUrl(themeId);
   const res = await fetch(url);
@@ -111,7 +107,7 @@ export async function loadTheme(themeId: string): Promise<ThemeManifest> {
 
   const raw = await res.json();
   const manifest = validateManifest(raw);
-  cache.set(cacheKey(themeId, manifest.version), manifest);
+  cache.set(themeId, manifest);
   return manifest;
 }
 
@@ -122,5 +118,5 @@ export function clearThemeCache(): void {
 
 /** Pre-seed cache with a manifest (for fallback/testing). */
 export function cacheTheme(manifest: ThemeManifest): void {
-  cache.set(cacheKey(manifest.id, manifest.version), manifest);
+  cache.set(manifest.id, manifest);
 }
