@@ -2,18 +2,30 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  MessageCircle,
-  Building2,
-  Settings,
-  Users,
-  Globe,
-  Store,
-} from "lucide-react";
-import Image from "next/image";
+import { Palette, Store, Globe } from "lucide-react";
 import { FriendsDialog } from "../friends/friends-dialog";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+/** SVG icon paths keyed by nav id — active/inactive variants */
+const NAV_ICONS: Record<string, { active: string; inactive: string }> = {
+  chat: {
+    active: "/assets/nav/icon-chat-active.svg",
+    inactive: "/assets/nav/icon-chat-inactive.svg",
+  },
+  office: {
+    active: "/assets/nav/icon-office-active.svg",
+    inactive: "/assets/nav/icon-office-inactive.svg",
+  },
+  friends: {
+    active: "/assets/nav/icon-friends-active.svg",
+    inactive: "/assets/nav/icon-friends-inactive.svg",
+  },
+  settings: {
+    active: "/assets/nav/icon-settings-active.svg",
+    inactive: "/assets/nav/icon-settings-inactive.svg",
+  },
+};
 
 export function MobileBottomNav() {
   const router = useRouter();
@@ -50,9 +62,13 @@ export function MobileBottomNav() {
   const activeId = getActiveId();
 
   const fanItems = [
-    { id: "spaces", icon: Globe, label: "Spaces", href: "/office" },
+    { id: "office-theme", icon: Palette, label: "Theme", href: "/office/themes" },
     { id: "marketplace", icon: Store, label: "Market", href: "/apps" },
+    { id: "spaces", icon: Globe, label: "Spaces", href: "/spaces" },
   ];
+
+  // 3 items: -45°, 0°, 45°
+  const fanAngles = [-45, 0, 45];
 
   return (
     <>
@@ -66,11 +82,10 @@ export function MobileBottomNav() {
 
       {/* Fan sub-buttons */}
       <div className="fixed bottom-14 left-1/2 z-50 -translate-x-1/2 pb-[env(safe-area-inset-bottom,0px)] md:hidden pointer-events-none">
-        <div className="relative h-28 w-40">
+        <div className="relative h-28 w-48">
           {fanItems.map((item, i) => {
             const Icon = item.icon;
-            // Fan out at angles: -40° and 40° from center
-            const angle = i === 0 ? -40 : 40;
+            const angle = fanAngles[i];
             const radian = (angle * Math.PI) / 180;
             const radius = 80;
             const x = Math.sin(radian) * radius;
@@ -113,11 +128,19 @@ export function MobileBottomNav() {
         </div>
       </div>
 
-      {/* Bottom nav bar */}
-      <nav className="relative flex h-14 shrink-0 items-center justify-around border-t border-border bg-card pb-[env(safe-area-inset-bottom,0px)] md:hidden">
+      {/* Bottom nav bar — glassmorphism */}
+      <nav
+        className="relative flex h-14 shrink-0 items-center justify-around pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+        style={{
+          background: "rgba(22, 29, 42, 0.85)",
+          backdropFilter: "blur(20px) saturate(1.2)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.2)",
+          borderTop: "1px solid rgba(37, 45, 61, 0.6)",
+        }}
+      >
         {/* Chat */}
         <NavButton
-          icon={MessageCircle}
+          iconId="chat"
           label="Chat"
           active={activeId === "chat"}
           onClick={() => router.push("/")}
@@ -125,7 +148,7 @@ export function MobileBottomNav() {
 
         {/* Office */}
         <NavButton
-          icon={Building2}
+          iconId="office"
           label="Office"
           active={activeId === "office"}
           onClick={() => router.push("/office")}
@@ -145,8 +168,9 @@ export function MobileBottomNav() {
             )}
             aria-label={fanOpen ? "Close menu" : "Open menu"}
           >
-            <Image
-              src="/assets/branding/arinova-logo-64.png"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/assets/nav/logo-arinova-white.svg"
               alt="Arinova"
               width={32}
               height={32}
@@ -161,7 +185,7 @@ export function MobileBottomNav() {
         {/* Friends */}
         <div className="relative">
           <NavButton
-            icon={Users}
+            iconId="friends"
             label="Friends"
             active={false}
             onClick={() => setFriendsOpen(true)}
@@ -175,7 +199,7 @@ export function MobileBottomNav() {
 
         {/* Settings */}
         <NavButton
-          icon={Settings}
+          iconId="settings"
           label="Settings"
           active={activeId === "settings"}
           onClick={() => router.push("/settings")}
@@ -188,16 +212,17 @@ export function MobileBottomNav() {
 }
 
 function NavButton({
-  icon: Icon,
+  iconId,
   label,
   active,
   onClick,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  iconId: string;
   label: string;
   active: boolean;
   onClick: () => void;
 }) {
+  const icons = NAV_ICONS[iconId];
   return (
     <button
       type="button"
@@ -207,7 +232,14 @@ function NavButton({
         active ? "text-brand-text" : "text-muted-foreground"
       )}
     >
-      <Icon className="h-5 w-5" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={active ? icons.active : icons.inactive}
+        alt={label}
+        width={20}
+        height={20}
+        className="h-5 w-5"
+      />
       <span>{label}</span>
     </button>
   );
