@@ -97,7 +97,7 @@ export function ChatLayout() {
           <button
             type="button"
             onClick={() => setNewChatOpen(true)}
-            className="absolute right-4 bottom-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.55_0.2_250)] to-[oklch(0.4_0.18_270)] shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
+            className="absolute right-4 bottom-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-gradient-end shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
             aria-label="New chat"
           >
             <Plus className="h-6 w-6 text-white" />

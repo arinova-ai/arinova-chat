@@ -22,8 +22,8 @@ function OfficeContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[oklch(0.55_0.2_250/15%)]">
-              <Globe className="h-5 w-5 text-[oklch(0.7_0.18_250)]" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/15">
+              <Globe className="h-5 w-5 text-brand-text" />
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold">Office</h1>

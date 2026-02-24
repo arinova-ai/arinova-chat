@@ -84,7 +84,7 @@ function AgentDetail({ agent, agents }: { agent: Agent; agents: Agent[] }) {
             <div className="flex items-center gap-2">
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
                 <div
-                  className="h-full rounded-full bg-[oklch(0.6_0.18_250)] transition-all duration-300"
+                  className="h-full rounded-full bg-brand-accent transition-all duration-300"
                   style={{ width: `${agent.currentTask.progress}%` }}
                 />
               </div>

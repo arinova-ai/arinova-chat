@@ -101,7 +101,7 @@ export function MobileBottomNav() {
                   transitionDelay: fanOpen ? `${i * 60}ms` : "0ms",
                 }}
               >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[oklch(0.35_0.05_250)] shadow-lg shadow-blue-500/20 border border-[oklch(0.45_0.1_250)]">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-dark shadow-lg shadow-blue-500/20 border border-brand-border">
                   <Icon className="h-5 w-5 text-white" />
                 </span>
                 <span className="text-[10px] font-medium text-white drop-shadow-md">
@@ -138,8 +138,8 @@ export function MobileBottomNav() {
             onClick={() => setFanOpen((v) => !v)}
             className={cn(
               "absolute -top-5 flex h-14 w-14 items-center justify-center rounded-full",
-              "bg-gradient-to-br from-[oklch(0.55_0.2_250)] to-[oklch(0.4_0.18_270)]",
-              "shadow-[0_0_16px_rgba(59,130,246,0.4)] border-2 border-[oklch(0.5_0.15_250)]",
+              "bg-gradient-to-br from-brand to-brand-gradient-end",
+              "shadow-[0_0_16px_rgba(59,130,246,0.4)] border-2 border-brand-border-strong",
               "transition-transform duration-300",
               fanOpen && "rotate-45"
             )}
@@ -204,7 +204,7 @@ function NavButton({
       onClick={onClick}
       className={cn(
         "flex flex-col items-center justify-center gap-0.5 px-3 py-1 text-[10px] transition-colors",
-        active ? "text-[oklch(0.7_0.18_250)]" : "text-muted-foreground"
+        active ? "text-brand-text" : "text-muted-foreground"
       )}
     >
       <Icon className="h-5 w-5" />
