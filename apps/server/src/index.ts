@@ -26,6 +26,7 @@ import { economyApiRoutes } from "./routes/economy-api.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { voiceWsRoutes } from "./ws/voice-handler.js";
 import { officeRoutes } from "./routes/office.js";
+import { userRoutes } from "./routes/users.js";
 import { initialize as initOfficePlugin } from "@arinova-ai/openclaw-office-plugin";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
@@ -104,6 +105,7 @@ await app.register(economyApiRoutes);
 await app.register(voiceRoutes);
 await app.register(voiceWsRoutes);
 await app.register(officeRoutes);
+await app.register(userRoutes);
 initOfficePlugin();
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
