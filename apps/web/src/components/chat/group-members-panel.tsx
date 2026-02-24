@@ -454,7 +454,7 @@ function UserMemberRow({
           {user.image ? (
             <AvatarImage src={assetUrl(user.image)} alt={user.username ?? user.name} />
           ) : null}
-          <AvatarFallback className="text-xs bg-neutral-700">
+          <AvatarFallback className="text-xs bg-accent">
             {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -594,7 +594,7 @@ function AgentMemberRow({
             className="h-8 w-8 shrink-0 rounded-full object-cover"
           />
         ) : (
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-700">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
             <Bot className="h-4 w-4" />
           </div>
         )}
@@ -694,7 +694,7 @@ function SettingsTab({
           <Input
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
-            className="bg-neutral-800 border-none text-sm"
+            className="bg-secondary border-none text-sm"
             placeholder="Group name"
           />
           <Button

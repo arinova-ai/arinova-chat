@@ -142,7 +142,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           onClick={() => setProfileOpen(true)}
         >
           <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback className="text-xs bg-neutral-700 text-neutral-200">
+            <AvatarFallback className="text-xs bg-accent text-foreground/80">
               {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
             </AvatarFallback>
           </Avatar>
@@ -154,7 +154,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               "text-xs",
               isUser
                 ? "bg-blue-600 text-white"
-                : "bg-neutral-700 text-neutral-200"
+                : "bg-accent text-foreground/80"
             )}
           >
             {isUser ? <User className="h-4 w-4" /> : message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
@@ -169,7 +169,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               "rounded-2xl px-4 py-2.5 overflow-hidden",
               isUser
                 ? "bg-blue-600 text-white"
-                : "bg-neutral-800 text-neutral-100",
+                : "bg-secondary text-foreground",
               isError && "border border-red-500/30",
               isCancelled && "border border-neutral-500/30"
             )}
@@ -196,7 +196,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               </div>
             )}
             {isCancelled && (
-              <div className="mb-1 flex items-center gap-1 text-xs text-neutral-400">
+              <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
                 <Square className="h-2.5 w-2.5 fill-current" />
                 <span>Stopped</span>
               </div>
@@ -207,7 +207,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 <p className="text-[11px] font-medium text-blue-400/70">
                   {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? "You" : agentName ?? "Agent")}
                 </p>
-                <p className="text-xs text-neutral-400 line-clamp-2">
+                <p className="text-xs text-muted-foreground line-clamp-2">
                   {message.replyTo.content}
                 </p>
               </div>
@@ -229,7 +229,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                       href={assetUrl(att.url)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-lg bg-neutral-700/50 px-3 py-2 text-xs hover:bg-neutral-700"
+                      className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 text-xs hover:bg-accent"
                     >
                       <FileText className="h-4 w-4 shrink-0" />
                       <span className="flex-1 truncate">{att.fileName}</span>
@@ -280,7 +280,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           {!isStreaming && (
             <div
               className={cn(
-                "absolute -top-8 flex items-center gap-0.5 rounded-lg border border-border bg-neutral-800 p-0.5 opacity-0 shadow-md transition-opacity group-hover:opacity-100",
+                "absolute -top-8 flex items-center gap-0.5 rounded-lg border border-border bg-secondary p-0.5 opacity-0 shadow-md transition-opacity group-hover:opacity-100",
                 isUser ? "right-0" : "left-0"
               )}
             >
@@ -288,7 +288,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 variant="ghost"
                 size="icon-xs"
                 onClick={handleCopy}
-                className="h-6 w-6 text-neutral-400 hover:text-neutral-100"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
                 title="Copy message"
               >
                 {copied ? (
@@ -306,7 +306,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 variant="ghost"
                 size="icon-xs"
                 onClick={handleReply}
-                className="h-6 w-6 text-neutral-400 hover:text-blue-400"
+                className="h-6 w-6 text-muted-foreground hover:text-blue-400"
                 title="Reply"
               >
                 <Reply className="h-3 w-3" />
@@ -316,7 +316,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 variant="ghost"
                 size="icon-xs"
                 onClick={handleDelete}
-                className="h-6 w-6 text-neutral-400 hover:text-red-400"
+                className="h-6 w-6 text-muted-foreground hover:text-red-400"
                 title="Delete message"
               >
                 <Trash2 className="h-3 w-3" />
@@ -327,7 +327,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                   variant="ghost"
                   size="icon-xs"
                   onClick={handleRetry}
-                  className="h-6 w-6 text-neutral-400 hover:text-blue-400"
+                  className="h-6 w-6 text-muted-foreground hover:text-blue-400"
                   title="Retry message"
                 >
                   <RotateCcw className="h-3 w-3" />
@@ -343,7 +343,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             variant="ghost"
             size="icon-xs"
             onClick={() => cancelStream(message.id)}
-            className="mb-1 h-7 w-7 shrink-0 rounded-full border border-neutral-600 text-neutral-400 hover:border-red-500 hover:text-red-400"
+            className="mb-1 h-7 w-7 shrink-0 rounded-full border border-neutral-600 text-muted-foreground hover:border-red-500 hover:text-red-400"
             title="Stop generating"
           >
             <Square className="h-3 w-3 fill-current" />

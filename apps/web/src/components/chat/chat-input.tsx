@@ -488,7 +488,7 @@ export function ChatInput() {
         {showSlashPopup && hasSelectableItems && (
           <div
             ref={popupRef}
-            className="absolute bottom-full left-0 right-0 mb-2 max-h-60 overflow-y-auto rounded-xl border border-border bg-neutral-900 shadow-lg"
+            className="absolute bottom-full left-0 right-0 mb-2 max-h-60 overflow-y-auto rounded-xl border border-border bg-card shadow-lg"
           >
             {(() => {
               selectableCounter = 0;
@@ -518,8 +518,8 @@ export function ChatInput() {
                     type="button"
                     className={`flex w-full items-start gap-3 px-4 py-2 text-left transition-colors ${
                       isSelected
-                        ? "bg-neutral-800 text-foreground"
-                        : "text-muted-foreground hover:bg-neutral-800/50"
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:bg-secondary/50"
                     }`}
                     onMouseEnter={() => setSlashSelectedIndex(currentSelectableIndex)}
                     onMouseDown={(e) => {
@@ -548,8 +548,8 @@ export function ChatInput() {
                   type="button"
                   className={`flex w-full items-start gap-3 px-4 py-2 text-left transition-colors ${
                     isSelected
-                      ? "bg-neutral-800 text-foreground"
-                      : "text-muted-foreground hover:bg-neutral-800/50"
+                      ? "bg-secondary text-foreground"
+                      : "text-muted-foreground hover:bg-secondary/50"
                   }`}
                   onMouseEnter={() => setSlashSelectedIndex(currentSelectableIndex)}
                   onMouseDown={(e) => {
@@ -577,7 +577,7 @@ export function ChatInput() {
                 onClick={() => {
                   sendMessage(qr.message);
                 }}
-                className="rounded-full border border-border bg-neutral-800 px-3 py-1 text-xs text-foreground transition-colors hover:bg-neutral-700"
+                className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground transition-colors hover:bg-accent"
               >
                 {qr.label}
               </button>
@@ -587,7 +587,7 @@ export function ChatInput() {
 
         {/* File preview */}
         {selectedFile && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2">
+          <div className="mb-2 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2">
             {isImage ? (
               <ImageIcon className="h-4 w-4 text-blue-400" />
             ) : (
@@ -634,13 +634,13 @@ export function ChatInput() {
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-input bg-neutral-800 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <Button
             size="icon"
             onClick={handleSend}
             disabled={(!value.trim() && !selectedFile) || uploading}
-            className="h-11 w-11 shrink-0 rounded-xl"
+            className="brand-gradient-btn h-11 w-11 shrink-0 rounded-xl"
           >
             <SendHorizontal className="h-5 w-5" />
           </Button>

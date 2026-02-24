@@ -125,7 +125,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                       className="h-10 w-10 shrink-0 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-700">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent">
                       <Bot className="h-5 w-5" />
                     </div>
                   )}
@@ -139,7 +139,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                             agentHealth[agent.id].status === "online" &&
                               "text-green-500",
                             agentHealth[agent.id].status === "offline" &&
-                              "text-neutral-500",
+                              "text-muted-foreground",
                             agentHealth[agent.id].status === "error" &&
                               "text-yellow-500"
                           )}
@@ -309,7 +309,7 @@ function CreateGroupDialog({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Dev Team"
               required
-              className="bg-neutral-800 border-none"
+              className="bg-secondary border-none"
             />
           </div>
           <div className="space-y-2">
@@ -336,7 +336,7 @@ function CreateGroupDialog({
                       className="h-8 w-8 shrink-0 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-700">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
                       <Bot className="h-4 w-4" />
                     </div>
                   )}
@@ -400,7 +400,7 @@ function CreateGroupDialog({
                           className="h-8 w-8 shrink-0 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-700 text-xs font-medium">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium">
                           {(friend.name ?? friend.username ?? "?").charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -515,7 +515,7 @@ function AddAgentDialog({
             <div className="space-y-2">
               <label className="text-sm font-medium">Bot Token</label>
               <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-xs font-mono truncate select-all">
+                <code className="min-w-0 flex-1 rounded-lg bg-secondary px-3 py-2 text-xs font-mono truncate select-all">
                   {createdAgent.secretToken ?? createdAgent.id}
                 </code>
                 <Button
@@ -533,12 +533,12 @@ function AddAgentDialog({
               </div>
             </div>
 
-            <div className="rounded-lg bg-neutral-800/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
+            <div className="rounded-lg bg-secondary/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
               <p className="font-medium text-foreground">Next steps:</p>
               <p>
                 Use this bot token to connect your AI agent via OpenClaw.
               </p>
-              <pre className="rounded-md bg-neutral-900 px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`openclaw arinova-setup --token ${createdAgent.secretToken ?? "<bot-token>"}`}</pre>
+              <pre className="rounded-md bg-card px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`openclaw arinova-setup --token ${createdAgent.secretToken ?? "<bot-token>"}`}</pre>
             </div>
 
             <Button
@@ -576,7 +576,7 @@ function AddAgentDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. CodeBot"
               required
-              className="bg-neutral-800 border-none"
+              className="bg-secondary border-none"
             />
           </div>
           <div className="space-y-2">
@@ -585,7 +585,7 @@ function AddAgentDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this agent do?"
-              className="bg-neutral-800 border-none"
+              className="bg-secondary border-none"
             />
           </div>
 
@@ -615,7 +615,7 @@ function AddAgentDialog({
                 onChange={(e) => setEndpoint(e.target.value)}
                 placeholder="https://agent.example.com/.well-known/agent.json"
                 type="url"
-                className="bg-neutral-800 border-none"
+                className="bg-secondary border-none"
               />
               <p className="text-xs text-muted-foreground">
                 Leave empty to create a bot first, then connect an agent later.
@@ -707,7 +707,7 @@ function FriendDmDialog({
                       className="h-10 w-10 shrink-0 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-700 text-sm font-medium">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-medium">
                       {(friend.name ?? friend.username ?? "?").charAt(0).toUpperCase()}
                     </div>
                   )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { IconRail } from "./icon-rail";
 import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
 import { CallIndicator } from "@/components/voice/call-indicator";
@@ -67,8 +68,13 @@ export function ChatLayout() {
 
   return (
     <div className={`app-dvh flex min-h-0 overflow-hidden ${(activeConversationId || searchActive) ? "bg-background" : "bg-card md:bg-background"}`}>
-      {/* Desktop: always show sidebar */}
-      <div className="hidden h-full w-80 shrink-0 overflow-hidden border-r border-border md:block">
+      {/* Desktop: Icon Rail */}
+      <div className="hidden h-full md:block">
+        <IconRail />
+      </div>
+
+      {/* Desktop: Conversation panel */}
+      <div className="hidden h-full w-72 shrink-0 overflow-hidden border-r border-border md:block">
         <Sidebar />
       </div>
 

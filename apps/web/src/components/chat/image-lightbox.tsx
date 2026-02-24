@@ -31,7 +31,7 @@ export function ImageLightbox({ src, alt, className }: { src: string; alt?: stri
             onClick={() => setOpen(false)}
           >
             <button
-              className="absolute top-4 right-4 rounded-full bg-neutral-800/80 p-2 text-white hover:bg-neutral-700 transition-colors"
+              className="absolute top-4 right-4 rounded-full bg-card/80 p-2 text-white hover:bg-accent transition-colors"
               onClick={(e) => { e.stopPropagation(); setOpen(false); }}
             >
               <X className="h-5 w-5" />

@@ -20,6 +20,7 @@ export function ChatArea() {
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const agents = useChatStore((s) => s.agents);
   const agentHealth = useChatStore((s) => s.agentHealth);
+  const conversationMembers = useChatStore((s) => s.conversationMembers);
 
   const callState = useVoiceCallStore((s) => s.callState);
   const callConversationId = useVoiceCallStore((s) => s.conversationId);
@@ -75,6 +76,7 @@ export function ChatArea() {
         voiceCapable={agent?.voiceCapable}
         mentionOnly={conversation.mentionOnly}
         title={conversation.title}
+        memberCount={conversation.type === "group" ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
         onClick={agent ? () => setManageOpen(true) : undefined}
         onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}

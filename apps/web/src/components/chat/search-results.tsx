@@ -101,7 +101,7 @@ export function SearchResults() {
               <button
                 key={result.messageId}
                 type="button"
-                className="flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-800/50 border-b border-border/50"
+                className="flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary/50 border-b border-border/50"
                 onClick={() => jumpToMessage(result.conversationId, result.messageId)}
               >
                 {/* Avatar */}
@@ -113,7 +113,7 @@ export function SearchResults() {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">
+                    <AvatarFallback className="bg-accent text-foreground/80 text-xs">
                       <Bot className="h-4 w-4" />
                     </AvatarFallback>
                   )}

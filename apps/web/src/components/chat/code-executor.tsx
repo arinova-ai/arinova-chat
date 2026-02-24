@@ -70,12 +70,12 @@ export function CodeExecutor({ code, children }: CodeExecutorProps) {
 
       {/* Output panel */}
       {result && (
-        <div className="mt-1 rounded-lg border border-neutral-700 bg-neutral-900">
-          <div className="flex items-center justify-between border-b border-neutral-700 px-3 py-1.5">
+        <div className="mt-1 rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-neutral-400">Output</span>
+              <span className="text-xs font-medium text-muted-foreground">Output</span>
               {result.executionTimeMs > 0 && (
-                <span className="flex items-center gap-1 text-xs text-neutral-500">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   {result.executionTimeMs}ms
                 </span>
@@ -83,7 +83,7 @@ export function CodeExecutor({ code, children }: CodeExecutorProps) {
             </div>
             <button
               onClick={handleClear}
-              className="rounded p-0.5 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300"
+              className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground/80"
               title="Clear output"
             >
               <X className="h-3.5 w-3.5" />
@@ -92,7 +92,7 @@ export function CodeExecutor({ code, children }: CodeExecutorProps) {
 
           <div className="max-h-64 overflow-auto p-3">
             {result.output && (
-              <pre className="whitespace-pre-wrap font-mono text-xs text-neutral-200">
+              <pre className="whitespace-pre-wrap font-mono text-xs text-foreground/80">
                 {result.output}
               </pre>
             )}
@@ -102,7 +102,7 @@ export function CodeExecutor({ code, children }: CodeExecutorProps) {
               </pre>
             )}
             {!result.output && !result.error && (
-              <span className="text-xs italic text-neutral-500">
+              <span className="text-xs italic text-muted-foreground">
                 No output
               </span>
             )}

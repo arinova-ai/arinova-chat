@@ -39,14 +39,14 @@ export function AgentProfileSheet({
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="rounded-t-2xl border-neutral-700 bg-neutral-800 px-4 pb-6 pt-3"
+        className="rounded-t-2xl border-border bg-secondary px-4 pb-6 pt-3"
       >
         <VisuallyHidden.Root>
           <SheetTitle>Agent profile</SheetTitle>
         </VisuallyHidden.Root>
 
         {/* Drag handle */}
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-neutral-600" />
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
 
         {/* Agent info */}
         <div className="flex items-center gap-3">
@@ -57,12 +57,12 @@ export function AgentProfileSheet({
               className="h-14 w-14 shrink-0 rounded-full object-cover"
             />
           ) : (
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-neutral-700">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent">
               <Bot className="h-7 w-7" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-neutral-100 truncate">
+            <p className="text-base font-semibold text-foreground truncate">
               {agent.agentName}
             </p>
             {agent.agentDescription && (
@@ -79,17 +79,17 @@ export function AgentProfileSheet({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
               Owner
             </p>
-            <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 bg-neutral-700/40">
+            <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 bg-accent/40">
               <Avatar className="h-8 w-8 shrink-0">
                 {owner.image ? (
                   <AvatarImage src={assetUrl(owner.image)} alt={owner.name ?? owner.username ?? ""} />
                 ) : null}
-                <AvatarFallback className="text-xs bg-neutral-600">
+                <AvatarFallback className="text-xs bg-muted">
                   {(owner.name ?? owner.username ?? "?").charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-neutral-100 truncate">
+                <p className="text-sm font-medium text-foreground truncate">
                   {owner.name}
                 </p>
                 {owner.username && (

@@ -46,7 +46,7 @@ function CodeBlockCopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="absolute right-2 top-2 rounded-md bg-neutral-700 p-1.5 text-neutral-400 opacity-0 transition-opacity hover:bg-neutral-600 hover:text-neutral-200 group-hover/code:opacity-100"
+      className="absolute right-2 top-2 rounded-md bg-accent p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground/80 group-hover/code:opacity-100"
       title="Copy code"
     >
       {copied ? (

@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, Loader2, User, Lock, LogOut, Bell, BellOff, Moon, Clock, ShieldBan } from "lucide-react";
 import { api } from "@/lib/api";
@@ -341,7 +342,7 @@ function BlockedUsersSettings() {
 
 function SettingsContent() {
   const router = useRouter();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
 
   // Update name state
   const [name, setName] = useState(session?.user?.name ?? "");
