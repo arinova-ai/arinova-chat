@@ -6,6 +6,41 @@ use uuid::Uuid;
 // ===== PostgreSQL enum types =====
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "friendship_status", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum FriendshipStatus {
+    Pending,
+    Accepted,
+    Blocked,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "conversation_user_role", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum ConversationUserRole {
+    Admin,
+    #[sqlx(rename = "vice_admin")]
+    #[serde(rename = "vice_admin")]
+    ViceAdmin,
+    Member,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
+#[sqlx(type_name = "agent_listen_mode", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum AgentListenMode {
+    #[sqlx(rename = "owner_only")]
+    #[serde(rename = "owner_only")]
+    OwnerOnly,
+    #[sqlx(rename = "allowed_users")]
+    #[serde(rename = "allowed_users")]
+    AllowedUsers,
+    #[sqlx(rename = "all_mentions")]
+    #[serde(rename = "all_mentions")]
+    AllMentions,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "conversation_type", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum ConversationType {
@@ -28,6 +63,7 @@ impl std::fmt::Display for ConversationType {
 pub enum MessageRole {
     User,
     Agent,
+    System,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
@@ -71,6 +107,7 @@ pub struct User {
     pub email: String,
     pub email_verified: bool,
     pub image: Option<String>,
+    pub username: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -148,6 +185,8 @@ pub struct ConversationMember {
     pub id: Uuid,
     pub conversation_id: Uuid,
     pub agent_id: Uuid,
+    pub owner_user_id: Option<String>,
+    pub listen_mode: AgentListenMode,
     pub added_at: NaiveDateTime,
 }
 
@@ -160,9 +199,44 @@ pub struct Message {
     pub content: String,
     pub status: MessageStatus,
     pub sender_agent_id: Option<Uuid>,
+    pub sender_user_id: Option<String>,
     pub reply_to_id: Option<Uuid>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+}
+
+// ===== Multi-user social tables =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Friendship {
+    pub id: Uuid,
+    pub requester_id: String,
+    pub addressee_id: String,
+    pub status: FriendshipStatus,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationUserMember {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub user_id: String,
+    pub role: ConversationUserRole,
+    pub joined_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupSettings {
+    pub conversation_id: Uuid,
+    pub history_visible: bool,
+    pub max_users: i32,
+    pub max_agents: i32,
+    pub invite_link: Option<String>,
+    pub invite_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

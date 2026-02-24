@@ -35,6 +35,7 @@ struct MessageRow {
     content: String,
     status: crate::db::models::MessageStatus,
     sender_agent_id: Option<Uuid>,
+    sender_user_id: Option<String>,
     reply_to_id: Option<Uuid>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
@@ -128,6 +129,23 @@ async fn with_attachments(
         std::collections::HashMap::new()
     };
 
+    // Fetch sender user names for user messages in groups
+    let sender_user_ids: Vec<String> = items.iter().filter_map(|m| m.sender_user_id.clone()).collect();
+    let sender_user_names: std::collections::HashMap<String, (String, Option<String>)> = if !sender_user_ids.is_empty() {
+        sqlx::query_as::<_, (String, String, Option<String>)>(
+            r#"SELECT id, name, username FROM "user" WHERE id = ANY($1)"#,
+        )
+        .bind(&sender_user_ids)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id, name, username)| (id, (name, username)))
+        .collect()
+    } else {
+        std::collections::HashMap::new()
+    };
+
     // Fetch reply-to message data
     let reply_ids: Vec<Uuid> = items.iter().filter_map(|m| m.reply_to_id).collect();
     let reply_data: std::collections::HashMap<Uuid, (String, String, Option<String>)> = if !reply_ids.is_empty() {
@@ -187,21 +205,29 @@ async fn with_attachments(
                 })
             });
 
-            json!({
-                "id": m.id,
-                "conversationId": m.conversation_id,
-                "seq": m.seq,
-                "role": m.role,
-                "content": m.content,
-                "status": m.status,
-                "senderAgentId": m.sender_agent_id,
-                "senderAgentName": sender_agent_name,
-                "replyToId": m.reply_to_id,
-                "replyTo": reply_to,
-                "createdAt": m.created_at.and_utc().to_rfc3339(),
-                "updatedAt": m.updated_at.and_utc().to_rfc3339(),
-                "attachments": att_json,
-            })
+            {
+                let sender_user_info = m.sender_user_id.as_ref().and_then(|uid| sender_user_names.get(uid));
+                let sender_username = sender_user_info.and_then(|(_, u)| u.clone());
+                let sender_user_name = sender_user_info.map(|(n, _)| n.clone());
+                json!({
+                    "id": m.id,
+                    "conversationId": m.conversation_id,
+                    "seq": m.seq,
+                    "role": m.role,
+                    "content": m.content,
+                    "status": m.status,
+                    "senderAgentId": m.sender_agent_id,
+                    "senderAgentName": sender_agent_name,
+                    "senderUserId": m.sender_user_id,
+                    "senderUsername": sender_username,
+                    "senderUserName": sender_user_name,
+                    "replyToId": m.reply_to_id,
+                    "replyTo": reply_to,
+                    "createdAt": m.created_at.and_utc().to_rfc3339(),
+                    "updatedAt": m.updated_at.and_utc().to_rfc3339(),
+                    "attachments": att_json,
+                })
+            }
         })
         .collect()
 }
@@ -444,9 +470,12 @@ async fn get_messages(
         .unwrap_or(50)
         .min(100);
 
-    // Verify conversation belongs to user
+    // Verify conversation access: user is owner OR member via conversation_user_members
     let conv = sqlx::query_as::<_, ConvCheck>(
-        "SELECT id FROM conversations WHERE id = $1 AND user_id = $2",
+        r#"SELECT id FROM conversations WHERE id = $1 AND (
+            user_id = $2
+            OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
+        )"#,
     )
     .bind(id)
     .bind(&user.id)
@@ -745,9 +774,12 @@ async fn delete_message(
     user: AuthUser,
     Path((conversation_id, message_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    // Verify conversation belongs to user
+    // Verify conversation access: user is owner OR member via conversation_user_members
     let conv = sqlx::query_as::<_, ConvCheck>(
-        "SELECT id FROM conversations WHERE id = $1 AND user_id = $2",
+        r#"SELECT id FROM conversations WHERE id = $1 AND (
+            user_id = $2
+            OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
+        )"#,
     )
     .bind(conversation_id)
     .bind(&user.id)
@@ -806,6 +838,7 @@ fn clone_message_row(m: &MessageRow) -> MessageRow {
         content: m.content.clone(),
         status: m.status.clone(),
         sender_agent_id: m.sender_agent_id,
+        sender_user_id: m.sender_user_id.clone(),
         reply_to_id: m.reply_to_id,
         created_at: m.created_at,
         updated_at: m.updated_at,

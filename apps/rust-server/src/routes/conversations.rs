@@ -41,7 +41,10 @@ pub fn router() -> Router<AppState> {
 #[derive(Deserialize)]
 struct CreateConversationBody {
     #[serde(rename = "agentId")]
-    agent_id: Uuid,
+    agent_id: Option<Uuid>,
+    /// For human-to-human direct conversations
+    #[serde(rename = "targetUserId")]
+    target_user_id: Option<String>,
     title: Option<String>,
 }
 
@@ -91,11 +94,18 @@ struct ConversationListRow {
     last_msg_updated_at: Option<NaiveDateTime>,
 }
 
-/// Row for group member names batch fetch.
+/// Row for group agent member names batch fetch.
 #[derive(Debug, FromRow)]
 struct GroupMemberRow {
     conversation_id: Uuid,
     name: String,
+}
+
+/// Row for group user member count batch fetch.
+#[derive(Debug, FromRow)]
+struct GroupUserCountRow {
+    conversation_id: Uuid,
+    user_count: i64,
 }
 
 // ===== Handlers =====
@@ -106,11 +116,28 @@ async fn create_conversation(
     user: AuthUser,
     Json(body): Json<CreateConversationBody>,
 ) -> Response {
+    // Human-to-human direct conversation
+    if let Some(ref target_user_id) = body.target_user_id {
+        return create_human_direct(&state, &user, target_user_id).await;
+    }
+
+    // Agent direct conversation (existing flow)
+    let agent_id = match body.agent_id {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "agentId or targetUserId is required"})),
+            )
+                .into_response();
+        }
+    };
+
     // Verify agent exists and belongs to user
     let agent = sqlx::query_as::<_, (Uuid,)>(
         "SELECT id FROM agents WHERE id = $1 AND owner_id = $2",
     )
-    .bind(body.agent_id)
+    .bind(agent_id)
     .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
@@ -134,13 +161,13 @@ async fn create_conversation(
     }
 
     let result = sqlx::query_as::<_, Conversation>(
-        r#"INSERT INTO conversations (title, type, user_id, agent_id)
-           VALUES ($1, 'direct', $2, $3)
+        r#"INSERT INTO conversations (title, type, user_id, agent_id, mention_only)
+           VALUES ($1, 'direct', $2, $3, FALSE)
            RETURNING *"#,
     )
     .bind(&body.title)
     .bind(&user.id)
-    .bind(body.agent_id)
+    .bind(agent_id)
     .fetch_one(&state.db)
     .await;
 
@@ -154,12 +181,115 @@ async fn create_conversation(
     }
 }
 
+/// Create human-to-human direct conversation (requires friendship)
+async fn create_human_direct(
+    state: &AppState,
+    user: &AuthUser,
+    target_user_id: &str,
+) -> Response {
+    if target_user_id == user.id {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Cannot create conversation with yourself"})),
+        )
+            .into_response();
+    }
+
+    // Check friendship (must be accepted)
+    let friendship = sqlx::query_as::<_, (Uuid,)>(
+        r#"SELECT id FROM friendships
+           WHERE status = 'accepted'
+             AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))"#,
+    )
+    .bind(&user.id)
+    .bind(target_user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    if !matches!(friendship, Ok(Some(_))) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "You must be friends to start a direct conversation"})),
+        )
+            .into_response();
+    }
+
+    // Check for existing direct conversation between these two users
+    let existing = sqlx::query_as::<_, (Uuid,)>(
+        r#"SELECT c.id FROM conversations c
+           JOIN conversation_user_members cum1 ON cum1.conversation_id = c.id AND cum1.user_id = $1
+           JOIN conversation_user_members cum2 ON cum2.conversation_id = c.id AND cum2.user_id = $2
+           WHERE c.type = 'direct' AND c.agent_id IS NULL
+           LIMIT 1"#,
+    )
+    .bind(&user.id)
+    .bind(target_user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    if let Ok(Some((existing_id,))) = existing {
+        // Return existing conversation
+        let conv = sqlx::query_as::<_, Conversation>(
+            "SELECT * FROM conversations WHERE id = $1",
+        )
+        .bind(existing_id)
+        .fetch_one(&state.db)
+        .await;
+
+        return match conv {
+            Ok(c) => Json(json!(c)).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
+        };
+    }
+
+    // Create new direct conversation
+    let conv_id = Uuid::new_v4();
+    let result = sqlx::query_as::<_, Conversation>(
+        r#"INSERT INTO conversations (id, type, user_id, mention_only)
+           VALUES ($1, 'direct', $2, FALSE)
+           RETURNING *"#,
+    )
+    .bind(conv_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await;
+
+    let conv = match result {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    // Add both users to conversation_user_members
+    let _ = sqlx::query(
+        r#"INSERT INTO conversation_user_members (conversation_id, user_id, role)
+           VALUES ($1, $2, 'member'), ($1, $3, 'member')"#,
+    )
+    .bind(conv_id)
+    .bind(&user.id)
+    .bind(target_user_id)
+    .execute(&state.db)
+    .await;
+
+    (StatusCode::CREATED, Json(json!(conv))).into_response()
+}
+
 /// GET /api/conversations - List conversations with last message preview and agent info
 async fn list_conversations(
     State(state): State<AppState>,
     user: AuthUser,
     Query(params): Query<ListQuery>,
 ) -> Response {
+    // Include conversations where user is owner OR member
     let rows = if let Some(ref q) = params.q {
         let pattern = format!("%{}%", q);
         sqlx::query_as::<_, ConversationListRow>(
@@ -192,8 +322,15 @@ async fn list_conversations(
                 ORDER BY m.created_at DESC
                 LIMIT 1
             ) lm ON true
-            WHERE c.user_id = $1
+            WHERE (c.user_id = $1 OR EXISTS (
+                SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
+            ))
               AND (c.title ILIKE $2 OR a.name ILIKE $2)
+              AND NOT EXISTS (
+                SELECT 1 FROM conversation_user_members h
+                WHERE h.conversation_id = c.id AND h.user_id = $1
+                  AND h.hidden_at IS NOT NULL AND h.hidden_at >= c.updated_at
+              )
             ORDER BY c.pinned_at DESC NULLS LAST, c.updated_at DESC"#,
         )
         .bind(&user.id)
@@ -231,7 +368,14 @@ async fn list_conversations(
                 ORDER BY m.created_at DESC
                 LIMIT 1
             ) lm ON true
-            WHERE c.user_id = $1
+            WHERE (c.user_id = $1 OR EXISTS (
+                SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
+            ))
+              AND NOT EXISTS (
+                SELECT 1 FROM conversation_user_members h
+                WHERE h.conversation_id = c.id AND h.user_id = $1
+                  AND h.hidden_at IS NOT NULL AND h.hidden_at >= c.updated_at
+              )
             ORDER BY c.pinned_at DESC NULLS LAST, c.updated_at DESC"#,
         )
         .bind(&user.id)
@@ -260,6 +404,9 @@ async fn list_conversations(
     let mut group_member_names: std::collections::HashMap<Uuid, Vec<String>> =
         std::collections::HashMap::new();
 
+    let mut group_user_counts: std::collections::HashMap<Uuid, i64> =
+        std::collections::HashMap::new();
+
     if !group_ids.is_empty() {
         // Build a parameterised IN clause
         let placeholders: Vec<String> = group_ids
@@ -267,6 +414,8 @@ async fn list_conversations(
             .enumerate()
             .map(|(i, _)| format!("${}", i + 1))
             .collect();
+
+        // Fetch agent member names
         let query_str = format!(
             r#"SELECT cm.conversation_id, a.name
                FROM conversation_members cm
@@ -288,6 +437,64 @@ async fn list_conversations(
                     .push(m.name);
             }
         }
+
+        // Fetch user member counts
+        let user_count_query = format!(
+            r#"SELECT conversation_id, count(*) AS user_count
+               FROM conversation_user_members
+               WHERE conversation_id IN ({})
+               GROUP BY conversation_id"#,
+            placeholders.join(", ")
+        );
+
+        let mut uq = sqlx::query_as::<_, GroupUserCountRow>(&user_count_query);
+        for gid in &group_ids {
+            uq = uq.bind(gid);
+        }
+
+        if let Ok(counts) = uq.fetch_all(&state.db).await {
+            for c in counts {
+                group_user_counts.insert(c.conversation_id, c.user_count);
+            }
+        }
+    }
+
+    // For human-to-human DMs (no agent), batch-fetch the peer user's name
+    let human_dm_ids: Vec<Uuid> = rows
+        .iter()
+        .filter(|r| r.conv_type == "direct" && r.agent_id.is_none())
+        .map(|r| r.id)
+        .collect();
+
+    let mut peer_user_names: std::collections::HashMap<Uuid, (String, Option<String>)> =
+        std::collections::HashMap::new();
+
+    if !human_dm_ids.is_empty() {
+        let placeholders: Vec<String> = human_dm_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", i + 1))
+            .collect();
+        let query_str = format!(
+            r#"SELECT cum.conversation_id, u.name, u.image
+               FROM conversation_user_members cum
+               JOIN "user" u ON u.id = cum.user_id
+               WHERE cum.conversation_id IN ({}) AND cum.user_id != ${}"#,
+            placeholders.join(", "),
+            human_dm_ids.len() + 1
+        );
+
+        let mut q = sqlx::query_as::<_, (Uuid, String, Option<String>)>(&query_str);
+        for gid in &human_dm_ids {
+            q = q.bind(gid);
+        }
+        q = q.bind(&user.id);
+
+        if let Ok(peers) = q.fetch_all(&state.db).await {
+            for (conv_id, name, image) in peers {
+                peer_user_names.insert(conv_id, (name, image));
+            }
+        }
     }
 
     // Build result JSON matching the TypeScript shape
@@ -295,21 +502,38 @@ async fn list_conversations(
         .iter()
         .map(|row| {
             let (agent_name, agent_description) = if row.conv_type == "group" {
-                let names = group_member_names
+                let agent_names = group_member_names
                     .get(&row.id)
                     .cloned()
                     .unwrap_or_default();
-                let name = if names.is_empty() {
-                    "Empty group".to_string()
+                let user_count = group_user_counts.get(&row.id).copied().unwrap_or(0);
+                let agent_count = agent_names.len();
+
+                // Title priority: custom title > agent names > "Group"
+                let name = if let Some(ref title) = row.title {
+                    title.clone()
+                } else if !agent_names.is_empty() {
+                    agent_names.join(", ")
                 } else {
-                    names.join(", ")
+                    "Group".to_string()
                 };
+
+                // Description: "N members, M agents"
                 let desc = format!(
-                    "{} agent{}",
-                    names.len(),
-                    if names.len() != 1 { "s" } else { "" }
+                    "{} member{}, {} agent{}",
+                    user_count,
+                    if user_count != 1 { "s" } else { "" },
+                    agent_count,
+                    if agent_count != 1 { "s" } else { "" }
                 );
                 (name, Some(desc))
+            } else if row.agent_id.is_none() {
+                // Human-to-human DM: show peer user's name
+                if let Some((peer_name, _)) = peer_user_names.get(&row.id) {
+                    (peer_name.clone(), None)
+                } else {
+                    ("Direct Message".to_string(), None)
+                }
             } else {
                 (
                     row.agent_name.clone().unwrap_or_else(|| "Unknown".to_string()),
@@ -332,6 +556,13 @@ async fn list_conversations(
                 serde_json::Value::Null
             };
 
+            // For human DMs, use peer's avatar; otherwise use agent's
+            let avatar_url = if row.agent_id.is_none() {
+                peer_user_names.get(&row.id).and_then(|(_, img)| img.clone())
+            } else {
+                row.agent_avatar_url.clone()
+            };
+
             json!({
                 "id": row.id,
                 "title": row.title,
@@ -344,7 +575,7 @@ async fn list_conversations(
                 "updatedAt": row.updated_at.and_utc().to_rfc3339(),
                 "agentName": agent_name,
                 "agentDescription": agent_description,
-                "agentAvatarUrl": row.agent_avatar_url,
+                "agentAvatarUrl": avatar_url,
                 "lastMessage": last_message,
             })
         })
@@ -439,21 +670,67 @@ async fn delete_conversation(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Response {
-    let result = sqlx::query_as::<_, Conversation>(
-        "DELETE FROM conversations WHERE id = $1 AND user_id = $2 RETURNING *",
+    // Check conversation access and type
+    let conv = sqlx::query_as::<_, (Uuid, Option<Uuid>, String)>(
+        r#"SELECT c.id, c.agent_id, c.type::text FROM conversations c
+           WHERE c.id = $1
+             AND (c.user_id = $2 OR EXISTS (
+                SELECT 1 FROM conversation_user_members cum
+                WHERE cum.conversation_id = c.id AND cum.user_id = $2
+             ))"#,
     )
     .bind(id)
     .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
 
-    match result {
-        Ok(Some(_)) => StatusCode::NO_CONTENT.into_response(),
-        Ok(None) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Conversation not found"})),
+    let (_, agent_id, conv_type) = match conv {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Conversation not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    // Human-to-human DM (no agent): soft-hide for this user only
+    if conv_type == "direct" && agent_id.is_none() {
+        let result = sqlx::query(
+            r#"UPDATE conversation_user_members SET hidden_at = NOW()
+               WHERE conversation_id = $1 AND user_id = $2"#,
         )
-            .into_response(),
+        .bind(id)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await;
+
+        return match result {
+            Ok(_) => StatusCode::NO_CONTENT.into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response(),
+        };
+    }
+
+    // Agent DMs and other types: hard delete the entire conversation
+    let result = sqlx::query("DELETE FROM conversations WHERE id = $1")
+        .bind(id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),

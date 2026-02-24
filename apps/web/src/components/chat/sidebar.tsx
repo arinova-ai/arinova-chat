@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Search, Plus, LogOut, Settings, Bot } from "lucide-react";
+import { Search, Plus, LogOut, Settings, Users } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
+import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { ConversationList } from "./conversation-list";
-import { NewChatDialog, CreateBotDialog } from "./new-chat-dialog";
+import { NewChatDialog } from "./new-chat-dialog";
+import { FriendsDialog } from "../friends/friends-dialog";
 
 export function Sidebar() {
   const searchMessages = useChatStore((s) => s.searchMessages);
@@ -17,8 +19,21 @@ export function Sidebar() {
   const [localQuery, setLocalQuery] = useState("");
   const composingRef = useRef(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
-  const [createBotOpen, setCreateBotOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const router = useRouter();
+
+  // Fetch pending friend request count on mount and periodically
+  useEffect(() => {
+    const fetchCount = () => {
+      api<{ incoming: unknown[] }>("/api/friends/requests")
+        .then((data) => setPendingRequestCount(data.incoming.length))
+        .catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Sync local input when store search is cleared (e.g. back from results)
   useEffect(() => {
@@ -47,15 +62,31 @@ export function Sidebar() {
           <img src="/logo.png" alt="Arinova" className="h-6 w-6" />
           <h1 className="text-base font-bold">Arinova Chat</h1>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push("/settings")}
-          className="h-8 w-8"
-          title="Settings"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setFriendsOpen(true)}
+            className="h-8 w-8 relative"
+            title="Friends"
+          >
+            <Users className="h-4 w-4" />
+            {pendingRequestCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white">
+                {pendingRequestCount}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push("/settings")}
+            className="h-8 w-8"
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <Separator />
 
@@ -93,14 +124,6 @@ export function Sidebar() {
           New Chat
         </Button>
         <Button
-          variant="secondary"
-          className="w-full gap-2"
-          onClick={() => setCreateBotOpen(true)}
-        >
-          <Bot className="h-4 w-4" />
-          Create Bot
-        </Button>
-        <Button
           variant="ghost"
           className="w-full gap-2 border border-red-900/60 text-red-200 hover:border-red-800/70 hover:bg-red-950/30"
           onClick={handleSignOut}
@@ -111,7 +134,7 @@ export function Sidebar() {
       </div>
 
       <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
-      <CreateBotDialog open={createBotOpen} onOpenChange={setCreateBotOpen} />
+      <FriendsDialog open={friendsOpen} onOpenChange={setFriendsOpen} />
     </div>
   );
 }

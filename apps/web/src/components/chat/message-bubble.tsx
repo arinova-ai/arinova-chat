@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { Message } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
@@ -30,14 +30,18 @@ import {
   Reply,
 } from "lucide-react";
 import { assetUrl } from "@/lib/config";
+import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
+import { UserProfileSheet } from "./user-profile-sheet";
+import { AgentProfileSheet } from "./agent-profile-sheet";
 import { useDoubleTap } from "@/hooks/use-double-tap";
 
 interface MessageBubbleProps {
   message: Message;
   agentName?: string;
   highlightQuery?: string;
+  isGroupConversation?: boolean;
 }
 
 function formatTimestamp(date: Date | string): string {
@@ -49,8 +53,13 @@ function formatTimestamp(date: Date | string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
-export function MessageBubble({ message, agentName, highlightQuery }: MessageBubbleProps) {
-  const isUser = message.role === "user";
+export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation }: MessageBubbleProps) {
+  const { data: session } = authClient.useSession();
+  const currentUserId = session?.user?.id;
+  // "isUser" means "is this MY message" — for human DMs both sides have role "user",
+  // so we check senderUserId to distinguish own vs other's messages
+  const isUser = message.role === "user" &&
+    (!message.senderUserId || message.senderUserId === currentUserId);
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
   const isCancelled = message.status === "cancelled";
@@ -69,6 +78,16 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
 
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const showUserProfile = useMemo(
+    () => isGroupConversation && !isUser && !!message.senderUserId,
+    [isGroupConversation, isUser, message.senderUserId]
+  );
+  const showAgentProfile = useMemo(
+    () => isGroupConversation && !isUser && message.role === "agent" && !!message.senderAgentId,
+    [isGroupConversation, isUser, message.role, message.senderAgentId]
+  );
+  const showProfileClick = showUserProfile || showAgentProfile;
   const doubleTapHandlers = useDoubleTap(() => {
     if (!isStreaming) setActionSheetOpen(true);
   });
@@ -116,18 +135,32 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
-      <Avatar className="h-8 w-8 shrink-0">
-        <AvatarFallback
-          className={cn(
-            "text-xs",
-            isUser
-              ? "bg-blue-600 text-white"
-              : "bg-neutral-700 text-neutral-200"
-          )}
+      {showProfileClick ? (
+        <button
+          type="button"
+          className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          onClick={() => setProfileOpen(true)}
         >
-          {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-        </AvatarFallback>
-      </Avatar>
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback className="text-xs bg-neutral-700 text-neutral-200">
+              {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+      ) : (
+        <Avatar className="h-8 w-8 shrink-0">
+          <AvatarFallback
+            className={cn(
+              "text-xs",
+              isUser
+                ? "bg-blue-600 text-white"
+                : "bg-neutral-700 text-neutral-200"
+            )}
+          >
+            {isUser ? <User className="h-4 w-4" /> : message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+          </AvatarFallback>
+        </Avatar>
+      )}
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
         <div className="relative min-w-0" {...doubleTapHandlers}>
@@ -144,6 +177,16 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
             {!isUser && (message.senderAgentName || agentName) && (
               <p className="mb-1 text-xs font-medium text-blue-400">
                 {message.senderAgentName || agentName}
+              </p>
+            )}
+            {!isUser && !message.senderAgentName && !agentName && message.senderUserId && (
+              <p className="mb-1 text-xs font-medium text-emerald-400">
+                {message.senderUserName || message.senderUsername || "User"}
+              </p>
+            )}
+            {isUser && isGroupConversation && message.senderUserId && (
+              <p className="mb-1 text-xs font-medium text-emerald-400">
+                {message.senderUserName || message.senderUsername || "User"}
               </p>
             )}
             {isError && (
@@ -318,6 +361,23 @@ export function MessageBubble({ message, agentName, highlightQuery }: MessageBub
         onReply={handleReply}
         onReact={(emoji) => toggleReaction(message.id, emoji)}
       />
+
+      {showUserProfile && message.senderUserId && (
+        <UserProfileSheet
+          userId={message.senderUserId}
+          conversationId={message.conversationId}
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+        />
+      )}
+      {showAgentProfile && message.senderAgentId && (
+        <AgentProfileSheet
+          agentId={message.senderAgentId}
+          conversationId={message.conversationId}
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+        />
+      )}
     </div>
   );
 }

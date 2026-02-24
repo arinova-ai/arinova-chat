@@ -8,6 +8,8 @@ import { ChatInput } from "./chat-input";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
+import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
+import { AddMemberSheet } from "./add-member-sheet";
 
 export function ChatArea() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -18,6 +20,9 @@ export function ChatArea() {
   const agentHealth = useChatStore((s) => s.agentHealth);
 
   const [manageOpen, setManageOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
 
   if (searchActive) {
     return <SearchResults />;
@@ -44,6 +49,11 @@ export function ChatArea() {
     : undefined;
   const isOnline = health?.status === "online";
 
+  const openMembersPanel = (tab: PanelTab = "members") => {
+    setMembersPanelTab(tab);
+    setMembersOpen(true);
+  };
+
   return (
     <div className="flex h-full min-w-0 flex-col">
       <ChatHeader
@@ -54,9 +64,13 @@ export function ChatArea() {
         type={conversation.type}
         conversationId={conversation.id}
         mentionOnly={conversation.mentionOnly}
+        title={conversation.title}
         onClick={agent ? () => setManageOpen(true) : undefined}
+        onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
+        onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
+        onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
       />
-      <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} />
+      <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
       <ChatInput />
 
       {agent && (
@@ -65,6 +79,22 @@ export function ChatArea() {
           open={manageOpen}
           onOpenChange={setManageOpen}
         />
+      )}
+
+      {conversation.type === "group" && (
+        <>
+          <GroupMembersPanel
+            open={membersOpen}
+            onOpenChange={setMembersOpen}
+            conversationId={conversation.id}
+            initialTab={membersPanelTab}
+          />
+          <AddMemberSheet
+            open={addMemberOpen}
+            onOpenChange={setAddMemberOpen}
+            conversationId={conversation.id}
+          />
+        </>
       )}
     </div>
   );

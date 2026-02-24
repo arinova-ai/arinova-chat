@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/auth/callback/google", get(google_callback))
         .route("/api/auth/callback/github", get(github_callback))
+        .route("/api/auth/update-user", post(update_user))
 }
 
 #[derive(Deserialize)]
@@ -303,6 +304,7 @@ async fn get_session(State(state): State<AppState>, headers: axum::http::HeaderM
                 "name": s.name,
                 "email": s.email,
                 "image": s.image,
+                "username": s.username,
             },
             "session": {
                 "token": token,
@@ -388,6 +390,81 @@ async fn github_callback(
             )
                 .into_response()
         }
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateUserBody {
+    name: Option<String>,
+    image: Option<String>,
+}
+
+async fn update_user(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<UpdateUserBody>,
+) -> Response {
+    let cookie_header = headers
+        .get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let token = match extract_session_token(cookie_header) {
+        Some(t) => t,
+        None => {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Not authenticated"}))).into_response();
+        }
+    };
+
+    let session = match validate_session(&state.db, &token).await {
+        Ok(Some(s)) => s,
+        _ => {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid session"}))).into_response();
+        }
+    };
+
+    let mut sets = vec!["updated_at = NOW()".to_string()];
+    let mut idx = 2u32; // $1 = user_id
+
+    if body.name.is_some() {
+        sets.push(format!("name = ${idx}"));
+        idx += 1;
+    }
+    if body.image.is_some() {
+        sets.push(format!("image = ${idx}"));
+    }
+
+    let query_str = format!(
+        r#"UPDATE "user" SET {} WHERE id = $1"#,
+        sets.join(", ")
+    );
+
+    let mut q = sqlx::query(&query_str).bind(&session.user_id);
+
+    if let Some(ref name) = body.name {
+        q = q.bind(name);
+    }
+    if let Some(ref image) = body.image {
+        q = q.bind(image);
+    }
+
+    match q.execute(&state.db).await {
+        Ok(_) => {
+            Json(json!({
+                "user": {
+                    "id": session.user_id,
+                    "name": body.name.as_deref().unwrap_or(&session.name),
+                    "email": session.email,
+                    "image": body.image.as_deref().or(session.image.as_deref()),
+                }
+            }))
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 

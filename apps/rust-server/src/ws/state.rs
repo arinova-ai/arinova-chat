@@ -70,6 +70,9 @@ pub struct WsState {
 
     /// Rate limits (fallback when Redis unavailable): userId -> (count, reset_at_ms)
     pub ws_rate_limits: Arc<DashMap<String, (i32, i64)>>,
+
+    /// Conversation member cache: conversationId -> (member_user_ids, cached_at)
+    pub conv_member_cache: Arc<DashMap<String, (Vec<String>, std::time::Instant)>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -92,6 +95,7 @@ impl WsState {
             agent_skills: Arc::new(DashMap::new()),
             pending_tasks: Arc::new(DashMap::new()),
             ws_rate_limits: Arc::new(DashMap::new()),
+            conv_member_cache: Arc::new(DashMap::new()),
         }
     }
 
@@ -176,6 +180,23 @@ impl WsState {
     pub fn has_active_stream(&self, conversation_id: &str) -> bool {
         let prefix = format!("{}:", conversation_id);
         self.active_streams.iter().any(|key| key.starts_with(&prefix))
+    }
+
+    /// Invalidate the conversation member cache for a conversation
+    pub fn invalidate_conv_member_cache(&self, conversation_id: &str) {
+        self.conv_member_cache.remove(conversation_id);
+    }
+
+    /// Broadcast event to a list of user IDs (with offline queue fallback)
+    pub fn broadcast_to_members(
+        &self,
+        member_ids: &[String],
+        event: &Value,
+        redis: &deadpool_redis::Pool,
+    ) {
+        for uid in member_ids {
+            self.send_to_user_or_queue(uid, event, redis);
+        }
     }
 
     /// Get agent skills

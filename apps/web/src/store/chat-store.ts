@@ -21,6 +21,32 @@ interface GroupMember {
   agentAvatarUrl: string | null;
 }
 
+export interface GroupAgentMember {
+  id: string;
+  agentId: string;
+  ownerUserId: string | null;
+  listenMode: string;
+  addedAt: string;
+  agentName: string;
+  agentDescription: string | null;
+  agentAvatarUrl: string | null;
+}
+
+export interface GroupUserMember {
+  id: string;
+  userId: string;
+  role: "admin" | "vice_admin" | "member";
+  joinedAt: string;
+  name: string;
+  image: string | null;
+  username: string | null;
+}
+
+export interface GroupMembers {
+  agents: GroupAgentMember[];
+  users: GroupUserMember[];
+}
+
 interface AgentSkill {
   id: string;
   name: string;
@@ -74,9 +100,11 @@ interface ChatState {
   mutedConversations: Record<string, boolean>;
   ttsEnabled: boolean;
   reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
-  conversationMembers: Record<string, { agentId: string; agentName: string }[]>;
+  conversationMembers: Record<string, { agentId: string; agentName: string; type?: "agent" | "user" }[]>;
+  groupMembersData: Record<string, GroupMembers>;
   thinkingAgents: Record<string, ThinkingAgent[]>;
   replyingTo: Message | null;
+  blockedUserIds: Set<string>;
 
   // Actions
   setReplyingTo: (message: Message | null) => void;
@@ -103,13 +131,28 @@ interface ChatState {
     agentId: string,
     title?: string
   ) => Promise<Conversation>;
+  createDirectConversation: (targetUserId: string) => Promise<Conversation>;
   createGroupConversation: (
     agentIds: string[],
-    title: string
+    title: string,
+    userIds?: string[]
   ) => Promise<Conversation>;
   loadGroupMembers: (conversationId: string) => Promise<GroupMember[]>;
+  loadGroupMembersV2: (conversationId: string) => Promise<GroupMembers>;
   addGroupMember: (conversationId: string, agentId: string) => Promise<void>;
+  addGroupUser: (conversationId: string, userId: string) => Promise<void>;
   removeGroupMember: (conversationId: string, agentId: string) => Promise<void>;
+  generateInviteLink: (conversationId: string) => Promise<string>;
+  joinViaInvite: (token: string) => Promise<string>;
+  kickUser: (conversationId: string, userId: string) => Promise<void>;
+  promoteUser: (conversationId: string, userId: string) => Promise<void>;
+  demoteUser: (conversationId: string, userId: string) => Promise<void>;
+  transferAdmin: (conversationId: string, userId: string) => Promise<void>;
+  leaveGroup: (conversationId: string) => Promise<void>;
+  updateGroupSettings: (conversationId: string, settings: { title?: string; inviteEnabled?: boolean; mentionOnly?: boolean }) => Promise<void>;
+  updateAgentListenMode: (conversationId: string, agentId: string, listenMode: string) => Promise<void>;
+  setAgentAllowedUsers: (conversationId: string, agentId: string, userIds: string[]) => Promise<void>;
+  withdrawAgent: (conversationId: string, agentId: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   updateConversation: (
     id: string,
@@ -126,6 +169,9 @@ interface ChatState {
   setTtsEnabled: (enabled: boolean) => void;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
   loadReactions: (messageId: string) => Promise<void>;
+  loadBlockedUsers: () => Promise<void>;
+  blockUser: (userId: string) => Promise<void>;
+  unblockUser: (userId: string) => Promise<void>;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -160,8 +206,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       : false,
   reactionsByMessage: {},
   conversationMembers: {},
+  groupMembersData: {},
   thinkingAgents: {},
   replyingTo: null,
+  blockedUserIds: new Set<string>(),
 
   setReplyingTo: (message) => set({ replyingTo: message }),
 
@@ -183,18 +231,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (conv && !get().conversationMembers[id]) {
       if (conv.type === "group") {
         get()
-          .loadGroupMembers(id)
-          .then((members) => {
-            set({
-              conversationMembers: {
-                ...get().conversationMembers,
-                [id]: members.map((m) => ({
-                  agentId: m.agentId,
-                  agentName: m.agentName,
-                })),
-              },
-            });
-          })
+          .loadGroupMembersV2(id)
           .catch(() => {});
       } else if (conv.agentId) {
         set({
@@ -447,10 +484,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return conv;
   },
 
-  createGroupConversation: async (agentIds, title) => {
+  createDirectConversation: async (targetUserId) => {
+    const conv = await api<Conversation>("/api/conversations", {
+      method: "POST",
+      body: JSON.stringify({ targetUserId }),
+    });
+    await get().loadConversations();
+    return conv;
+  },
+
+  createGroupConversation: async (agentIds, title, userIds) => {
     const conv = await api<Conversation>("/api/conversations/group", {
       method: "POST",
-      body: JSON.stringify({ agentIds, title }),
+      body: JSON.stringify({ agentIds, title, ...(userIds?.length ? { userIds } : {}) }),
     });
     await get().loadConversations();
     return conv;
@@ -470,6 +516,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await get().loadConversations();
   },
 
+  addGroupUser: async (conversationId, userId) => {
+    await api(`/api/groups/${conversationId}/add-user`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    await get().loadConversations();
+  },
+
   removeGroupMember: async (conversationId, agentId) => {
     await api(
       `/api/conversations/${conversationId}/members/${agentId}`,
@@ -478,6 +532,110 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     );
     await get().loadConversations();
+  },
+
+  loadGroupMembersV2: async (conversationId) => {
+    const data = await api<GroupMembers>(
+      `/api/conversations/${conversationId}/members`
+    );
+    set({
+      groupMembersData: {
+        ...get().groupMembersData,
+        [conversationId]: data,
+      },
+      conversationMembers: {
+        ...get().conversationMembers,
+        [conversationId]: [
+          ...data.agents.map((a) => ({
+            agentId: a.agentId,
+            agentName: a.agentName,
+            type: "agent" as const,
+          })),
+          ...data.users.map((u) => ({
+            agentId: `user:${u.userId}`,
+            agentName: u.name ?? u.username ?? "User",
+            type: "user" as const,
+          })),
+        ],
+      },
+    });
+    return data;
+  },
+
+  generateInviteLink: async (conversationId) => {
+    const data = await api<{ inviteLink: string }>(`/api/groups/${conversationId}/invite-link`, {
+      method: "POST",
+    });
+    return data.inviteLink;
+  },
+
+  joinViaInvite: async (token) => {
+    const data = await api<{ conversationId: string; joined: boolean }>(`/api/groups/join/${token}`, {
+      method: "POST",
+    });
+    await get().loadConversations();
+    return data.conversationId;
+  },
+
+  kickUser: async (conversationId, userId) => {
+    await api(`/api/groups/${conversationId}/kick/${userId}`, { method: "POST" });
+    await get().loadGroupMembersV2(conversationId);
+  },
+
+  promoteUser: async (conversationId, userId) => {
+    await api(`/api/groups/${conversationId}/promote/${userId}`, { method: "POST" });
+    await get().loadGroupMembersV2(conversationId);
+  },
+
+  demoteUser: async (conversationId, userId) => {
+    await api(`/api/groups/${conversationId}/demote/${userId}`, { method: "POST" });
+    await get().loadGroupMembersV2(conversationId);
+  },
+
+  transferAdmin: async (conversationId, userId) => {
+    await api(`/api/groups/${conversationId}/transfer-admin/${userId}`, { method: "POST" });
+    await get().loadGroupMembersV2(conversationId);
+  },
+
+  leaveGroup: async (conversationId) => {
+    await api(`/api/groups/${conversationId}/leave`, { method: "POST" });
+    const { activeConversationId, messagesByConversation } = get();
+    const newMessages = { ...messagesByConversation };
+    delete newMessages[conversationId];
+    set({
+      conversations: get().conversations.filter((c) => c.id !== conversationId),
+      activeConversationId:
+        activeConversationId === conversationId ? null : activeConversationId,
+      messagesByConversation: newMessages,
+    });
+  },
+
+  updateGroupSettings: async (conversationId, settings) => {
+    await api(`/api/groups/${conversationId}/settings`, {
+      method: "PATCH",
+      body: JSON.stringify(settings),
+    });
+    await get().loadConversations();
+  },
+
+  updateAgentListenMode: async (conversationId, agentId, listenMode) => {
+    await api(`/api/conversations/${conversationId}/agents/${agentId}/listen-mode`, {
+      method: "PATCH",
+      body: JSON.stringify({ listenMode }),
+    });
+    await get().loadGroupMembersV2(conversationId);
+  },
+
+  setAgentAllowedUsers: async (conversationId, agentId, userIds) => {
+    await api(`/api/conversations/${conversationId}/agents/${agentId}/allowed-users`, {
+      method: "PUT",
+      body: JSON.stringify({ userIds }),
+    });
+  },
+
+  withdrawAgent: async (conversationId, agentId) => {
+    await api(`/api/conversations/${conversationId}/agents/${agentId}/withdraw`, { method: "POST" });
+    await get().loadGroupMembersV2(conversationId);
   },
 
   deleteConversation: async (id) => {
@@ -736,8 +894,121 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  loadBlockedUsers: async () => {
+    try {
+      const data = await api<{ id: string; name: string; username: string; image: string | null }[]>(
+        "/api/users/blocked"
+      );
+      set({ blockedUserIds: new Set(data.map((u) => u.id)) });
+    } catch {
+      // ignore
+    }
+  },
+
+  blockUser: async (userId) => {
+    await api(`/api/users/${userId}/block`, { method: "POST" });
+    set({ blockedUserIds: new Set([...get().blockedUserIds, userId]) });
+  },
+
+  unblockUser: async (userId) => {
+    await api(`/api/users/${userId}/block`, { method: "DELETE" });
+    const next = new Set(get().blockedUserIds);
+    next.delete(userId);
+    set({ blockedUserIds: next });
+  },
+
   handleWSEvent: (event) => {
     if (event.type === "pong") return;
+
+    // If any event carries a conversationId not in our local store,
+    // re-fetch conversations (handles soft-hidden conversations reappearing)
+    if ("conversationId" in event && event.conversationId) {
+      const convId = event.conversationId;
+      const exists = get().conversations.some((c) => c.id === convId);
+      if (!exists) {
+        get().loadConversations();
+      }
+    }
+
+    if (event.type === "new_message") {
+      const { conversationId, message: msg } = event;
+      const { activeConversationId, unreadCounts } = get();
+
+      const newMsg: Message = {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        seq: msg.seq,
+        role: msg.role,
+        content: msg.content,
+        status: msg.status,
+        senderUserId: msg.senderUserId,
+        senderUserName: msg.senderUserName,
+        replyToId: msg.replyToId ?? undefined,
+        createdAt: new Date(msg.createdAt),
+        updatedAt: new Date(msg.updatedAt),
+      };
+
+      const current = get().messagesByConversation[conversationId] ?? [];
+      // Deduplicate: skip if message already exists (e.g. optimistic send)
+      const alreadyExists = current.some(
+        (m) => m.id === msg.id || (m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role)
+      );
+
+      if (alreadyExists) {
+        // Replace temp message with real one
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: current.map((m) =>
+              m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role
+                ? newMsg
+                : m
+            ),
+          },
+          conversations: get().conversations.map((c) =>
+            c.id === conversationId
+              ? { ...c, lastMessage: newMsg, updatedAt: new Date() }
+              : c
+          ),
+        });
+      } else {
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: [...current, newMsg],
+          },
+          conversations: get().conversations.map((c) =>
+            c.id === conversationId
+              ? { ...c, lastMessage: newMsg, updatedAt: new Date() }
+              : c
+          ),
+          unreadCounts:
+            conversationId !== activeConversationId &&
+            !get().mutedConversations[conversationId]
+              ? {
+                  ...unreadCounts,
+                  [conversationId]:
+                    (unreadCounts[conversationId] ?? 0) + 1,
+                }
+              : unreadCounts,
+        });
+      }
+
+      // When a system message arrives, refresh conversation members (for @mention)
+      if (msg.role === "system") {
+        const conv = get().conversations.find((c) => c.id === conversationId);
+        if (conv?.type === "group") {
+          get().loadGroupMembersV2(conversationId).catch(() => {});
+        }
+      }
+
+      // Mark as read if viewing this conversation
+      if (conversationId === activeConversationId && msg.seq > 0) {
+        wsManager.send({ type: "mark_read", conversationId, seq: msg.seq });
+        wsManager.updateLastSeq(conversationId, msg.seq);
+      }
+      return;
+    }
 
     if (event.type === "stream_start") {
       const { conversationId, messageId, seq, senderAgentId, senderAgentName } = event;
@@ -1008,6 +1279,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
         reactions[messageId] = msgReactions;
         set({ reactionsByMessage: reactions });
       }
+      return;
+    }
+
+    if (event.type === "kicked_from_group") {
+      const convId = event.conversationId;
+      const { activeConversationId, messagesByConversation } = get();
+      const newMessages = { ...messagesByConversation };
+      delete newMessages[convId];
+      set({
+        conversations: get().conversations.filter((c) => c.id !== convId),
+        activeConversationId:
+          activeConversationId === convId ? null : activeConversationId,
+        messagesByConversation: newMessages,
+      });
       return;
     }
 
