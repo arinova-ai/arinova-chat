@@ -409,8 +409,8 @@ fn cleanup_agent_tasks(ws_state: &WsState, agent_id: &str) {
     let stale_keys: Vec<String> = ws_state
         .active_streams
         .iter()
-        .filter(|key| key.ends_with(&suffix))
-        .map(|entry| entry.clone())
+        .filter(|entry| entry.key().ends_with(&suffix))
+        .map(|entry| entry.key().clone())
         .collect();
 
     for key in &stale_keys {

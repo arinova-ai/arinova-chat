@@ -973,6 +973,26 @@ pub async fn trigger_agent_response(
                     content: content.to_string(),
                     reply_to_id: reply_to_id.clone(),
                 });
+
+            // Notify the user that this agent's response is queued
+            let agent_name = sqlx::query_as::<_, (String,)>(
+                r#"SELECT name FROM agents WHERE id = $1::uuid"#,
+            )
+            .bind(agent_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+            .map(|(n,)| n)
+            .unwrap_or_else(|| "Agent".to_string());
+
+            ws_state.send_to_user(user_id, &json!({
+                "type": "stream_queued",
+                "conversationId": conversation_id,
+                "agentId": agent_id,
+                "agentName": agent_name,
+            }));
+
             continue;
         }
 
@@ -1106,7 +1126,7 @@ async fn do_trigger_agent_response(
 
     // Mark this agent as having active stream (keyed by conv:agent)
     let stream_key = format!("{}:{}", conversation_id, agent_id);
-    ws_state.active_streams.insert(stream_key.clone());
+    ws_state.active_streams.insert(stream_key.clone(), std::time::Instant::now());
 
     ws_state.broadcast_to_members(&member_ids, &json!({
         "type": "stream_start",
@@ -1256,7 +1276,7 @@ async fn do_trigger_agent_response(
     tracing::info!(
         "Stream dispatch: conv={} agent={} msgId={} active_streams={:?}",
         conversation_id, agent_id, agent_msg_id,
-        ws_state.active_streams.iter().map(|k| k.clone()).collect::<Vec<_>>()
+        ws_state.active_streams.iter().map(|e| format!("{}({}s)", e.key(), e.value().elapsed().as_secs())).collect::<Vec<_>>()
     );
 
     let agent_event_rx = send_task_to_agent(
