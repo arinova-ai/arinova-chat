@@ -1,8 +1,5 @@
 import type { ThemeManifest } from "./theme-types";
 
-// Cache keyed by themeId — only keeps the latest version per theme
-const cache = new Map<string, ThemeManifest>();
-
 function themeUrl(themeId: string): string {
   return `/themes/${themeId}/theme.json`;
 }
@@ -92,13 +89,10 @@ export function validateManifest(data: unknown): ThemeManifest {
 
 /**
  * Load and validate a theme manifest by ID.
- * Returns cached manifest if available. Fetches from /themes/{id}/theme.json.
- * Cache is keyed by themeId — loading a new version overwrites the old entry.
+ * Always fetches fresh from /themes/{id}/theme.json (manifest is small).
+ * No in-memory cache — avoids stale version issues on theme updates.
  */
 export async function loadTheme(themeId: string): Promise<ThemeManifest> {
-  const cached = cache.get(themeId);
-  if (cached) return cached;
-
   const url = themeUrl(themeId);
   const res = await fetch(url);
   if (!res.ok) {
@@ -106,17 +100,5 @@ export async function loadTheme(themeId: string): Promise<ThemeManifest> {
   }
 
   const raw = await res.json();
-  const manifest = validateManifest(raw);
-  cache.set(themeId, manifest);
-  return manifest;
-}
-
-/** Clear cached manifests. */
-export function clearThemeCache(): void {
-  cache.clear();
-}
-
-/** Pre-seed cache with a manifest (for fallback/testing). */
-export function cacheTheme(manifest: ThemeManifest): void {
-  cache.set(manifest.id, manifest);
+  return validateManifest(raw);
 }
