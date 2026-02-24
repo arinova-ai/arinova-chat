@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -10,11 +9,29 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ArrowLeft, Loader2, User, Lock, LogOut, Bell, BellOff, Moon, Clock, ShieldBan } from "lucide-react";
+import {
+  Loader2,
+  User,
+  Lock,
+  LogOut,
+  Bell,
+  Clock,
+  ShieldBan,
+  Camera,
+  Palette,
+  ChevronRight,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 import { useChatStore } from "@/store/chat-store";
+import { IconRail } from "@/components/chat/icon-rail";
+import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
+import { cn } from "@/lib/utils";
+
+// ───── Types ─────
+
+type SettingsSection = "profile" | "appearance" | "notifications" | "privacy";
 
 interface NotificationPrefs {
   globalEnabled: boolean;
@@ -32,10 +49,275 @@ const DEFAULT_PREFS: NotificationPrefs = {
   quietHoursEnd: null,
 };
 
-function NotificationSettings() {
+interface BlockedUser {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+}
+
+// ───── Sidebar Nav Items ─────
+
+const NAV_ITEMS: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
+  { id: "profile", label: "Profile", icon: <User className="h-4 w-4" /> },
+  { id: "appearance", label: "Appearance", icon: <Palette className="h-4 w-4" /> },
+  { id: "notifications", label: "Notifications", icon: <Bell className="h-4 w-4" /> },
+  { id: "privacy", label: "Privacy", icon: <ShieldBan className="h-4 w-4" /> },
+];
+
+// ───── Profile Panel ─────
+
+function ProfilePanel() {
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const [name, setName] = useState(session?.user?.name ?? "");
+  const [nameLoading, setNameLoading] = useState(false);
+  const [nameSuccess, setNameSuccess] = useState("");
+  const [nameError, setNameError] = useState("");
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  useEffect(() => {
+    if (session?.user?.name) setName(session.user.name);
+  }, [session?.user?.name]);
+
+  const handleUpdateName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNameError("");
+    setNameSuccess("");
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setNameError("Name cannot be empty");
+      return;
+    }
+    setNameLoading(true);
+    try {
+      const result = await authClient.updateUser({ name: trimmed });
+      if (result.error) {
+        setNameError(result.error.message ?? "Failed to update name");
+      } else {
+        setNameSuccess("Name updated successfully");
+        setTimeout(() => setNameSuccess(""), 3000);
+      }
+    } catch {
+      setNameError("An unexpected error occurred");
+    } finally {
+      setNameLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      const result = await authClient.changePassword({ currentPassword, newPassword });
+      if (result.error) {
+        setPasswordError(result.error.message ?? "Failed to change password");
+      } else {
+        setPasswordSuccess("Password changed successfully");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setTimeout(() => setPasswordSuccess(""), 3000);
+      }
+    } catch {
+      setPasswordError("An unexpected error occurred");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold">Profile</h2>
+        <p className="text-sm text-muted-foreground">Manage your personal information and preferences.</p>
+      </div>
+
+      {/* Avatar */}
+      <div className="flex items-center gap-6">
+        <div className="relative group">
+          <Avatar className="h-24 w-24 border-2 border-[oklch(0.55_0.2_250/30%)]">
+            {session?.user?.image ? (
+              <AvatarImage src={assetUrl(session.user.image)} alt={session?.user?.name ?? ""} />
+            ) : null}
+            <AvatarFallback className="bg-secondary text-2xl">
+              {sessionPending ? "" : (session?.user?.name ?? "?").charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 cursor-pointer">
+            <Camera className="h-6 w-6 text-white" />
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground">Change Avatar</p>
+      </div>
+
+      {/* Profile form */}
+      <form onSubmit={handleUpdateName} className="space-y-6">
+        {nameError && (
+          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{nameError}</div>
+        )}
+        {nameSuccess && (
+          <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-400">{nameSuccess}</div>
+        )}
+
+        <div className="space-y-2">
+          <label htmlFor="displayName" className="text-sm font-medium">Display Name</label>
+          <Input
+            id="displayName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter your display name"
+            required
+            className="bg-secondary border-border"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Email</label>
+          <Input
+            value={session?.user?.email ?? ""}
+            readOnly
+            className="bg-secondary border-border text-muted-foreground"
+            placeholder="user@example.com"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Bio</label>
+          <textarea
+            placeholder="Tell us a little about yourself..."
+            className="min-h-[100px] w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+          />
+        </div>
+
+        <Button type="submit" className="brand-gradient-btn w-full" disabled={nameLoading}>
+          {nameLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save Changes
+        </Button>
+      </form>
+
+      <Separator />
+
+      {/* Change Password */}
+      <div>
+        <div className="mb-4 flex items-center gap-2">
+          <Lock className="h-5 w-5 text-muted-foreground" />
+          <h3 className="text-lg font-semibold">Change Password</h3>
+        </div>
+
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          {passwordError && (
+            <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{passwordError}</div>
+          )}
+          {passwordSuccess && (
+            <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-400">{passwordSuccess}</div>
+          )}
+
+          <div className="space-y-2">
+            <label htmlFor="currentPassword" className="text-sm font-medium">Current Password</label>
+            <Input
+              id="currentPassword"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="********"
+              required
+              className="bg-secondary border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="newPassword" className="text-sm font-medium">New Password</label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              required
+              minLength={8}
+              className="bg-secondary border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm New Password</label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Repeat new password"
+              required
+              minLength={8}
+              className="bg-secondary border-border"
+            />
+          </div>
+
+          <Button type="submit" variant="secondary" disabled={passwordLoading}>
+            {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Change Password
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ───── Appearance Panel ─────
+
+function AppearancePanel() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold">Appearance</h2>
+        <p className="text-sm text-muted-foreground">Customize the look and feel of the app.</p>
+      </div>
+
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Theme</label>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Light</span>
+            <Switch checked={true} />
+            <span className="text-sm">Dark</span>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Language</label>
+          <select className="h-9 w-full rounded-md border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
+            <option value="en">English</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="ja">日本語</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───── Notification Panel ─────
+
+function NotificationPanel() {
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [pushStatus, setPushStatus] = useState<{
     supported: boolean;
     permission: NotificationPermission | null;
@@ -62,16 +344,13 @@ function NotificationSettings() {
 
   const savePrefs = useCallback(async (updated: NotificationPrefs) => {
     setPrefs(updated);
-    setSaving(true);
     try {
       await api("/api/notifications/preferences", {
         method: "PUT",
         body: JSON.stringify(updated),
       });
     } catch {
-      // Revert on error handled by toast
-    } finally {
-      setSaving(false);
+      // Revert handled by toast
     }
   }, []);
 
@@ -106,12 +385,12 @@ function NotificationSettings() {
 
   if (loading) {
     return (
-      <div className="mb-8 rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Notifications</h2>
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-2xl font-bold">Notifications</h2>
+          <p className="text-sm text-muted-foreground">Manage how you receive notifications.</p>
         </div>
-        <div className="mt-4 flex justify-center">
+        <div className="flex justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       </div>
@@ -121,46 +400,45 @@ function NotificationSettings() {
   const quietHoursEnabled = prefs.quietHoursStart !== null && prefs.quietHoursEnd !== null;
 
   return (
-    <div className="mb-8 rounded-lg border border-border bg-card p-6">
-      <div className="mb-4 flex items-center gap-2">
-        <Bell className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Notifications</h2>
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold">Notifications</h2>
+        <p className="text-sm text-muted-foreground">Manage how you receive notifications.</p>
       </div>
 
-      <div className="space-y-4">
-        {/* Push subscription toggle */}
+      <div className="space-y-5">
         {pushStatus.supported && (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Push Notifications</p>
-              <p className="text-xs text-muted-foreground">
-                {pushStatus.permission === "denied"
-                  ? "Blocked by browser — update in browser settings"
-                  : pushStatus.subscribed
-                    ? "Enabled on this device"
-                    : "Receive notifications on this device"}
-              </p>
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Push Notifications</p>
+                <p className="text-xs text-muted-foreground">
+                  {pushStatus.permission === "denied"
+                    ? "Blocked by browser \u2014 update in browser settings"
+                    : pushStatus.subscribed
+                      ? "Enabled on this device"
+                      : "Receive notifications on this device"}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePushToggle}
+                disabled={pushLoading || pushStatus.permission === "denied"}
+              >
+                {pushLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : pushStatus.subscribed ? (
+                  "Disable"
+                ) : (
+                  "Enable"
+                )}
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePushToggle}
-              disabled={pushLoading || pushStatus.permission === "denied"}
-            >
-              {pushLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : pushStatus.subscribed ? (
-                "Disable"
-              ) : (
-                "Enable"
-              )}
-            </Button>
-          </div>
+            <Separator />
+          </>
         )}
 
-        <Separator />
-
-        {/* Global toggle */}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">All Notifications</p>
@@ -172,9 +450,8 @@ function NotificationSettings() {
           />
         </div>
 
-        {/* Per-type toggles (disabled when global is off) */}
         <div className={prefs.globalEnabled ? "" : "pointer-events-none opacity-50"}>
-          <div className="space-y-3 pl-2">
+          <div className="space-y-4 pl-2">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm">Messages</p>
@@ -201,7 +478,6 @@ function NotificationSettings() {
 
         <Separator />
 
-        {/* Quiet hours */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -226,10 +502,10 @@ function NotificationSettings() {
                 onChange={(e) =>
                   savePrefs({ ...prefs, quietHoursStart: e.target.value })
                 }
-                className="h-8 w-28 bg-neutral-800 border-none text-sm"
+                className="h-8 w-28 bg-secondary border-border text-sm"
               />
             </div>
-            <span className="mt-4 text-muted-foreground">—</span>
+            <span className="mt-4 text-muted-foreground">&mdash;</span>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">To</label>
               <Input
@@ -238,7 +514,7 @@ function NotificationSettings() {
                 onChange={(e) =>
                   savePrefs({ ...prefs, quietHoursEnd: e.target.value })
                 }
-                className="h-8 w-28 bg-neutral-800 border-none text-sm"
+                className="h-8 w-28 bg-secondary border-border text-sm"
               />
             </div>
           </div>
@@ -248,14 +524,9 @@ function NotificationSettings() {
   );
 }
 
-interface BlockedUser {
-  id: string;
-  name: string | null;
-  username: string | null;
-  image: string | null;
-}
+// ───── Privacy Panel ─────
 
-function BlockedUsersSettings() {
+function PrivacyPanel() {
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
@@ -287,143 +558,72 @@ function BlockedUsersSettings() {
   };
 
   return (
-    <div className="mb-8 rounded-lg border border-border bg-card p-6">
-      <div className="mb-4 flex items-center gap-2">
-        <ShieldBan className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Blocked Users</h2>
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-2xl font-bold">Privacy</h2>
+        <p className="text-sm text-muted-foreground">Manage blocked users and privacy settings.</p>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : blockedUsers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No blocked users</p>
-      ) : (
-        <div className="space-y-2">
-          {blockedUsers.map((user) => (
-            <div
-              key={user.id}
-              className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors"
-            >
-              <Avatar className="h-8 w-8 shrink-0">
-                {user.image ? (
-                  <AvatarImage src={assetUrl(user.image)} alt={user.username ?? user.name ?? ""} />
-                ) : null}
-                <AvatarFallback className="text-xs bg-neutral-700">
-                  {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{user.name ?? user.username ?? "Unknown"}</p>
-                {user.username && (
-                  <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleUnblock(user.id)}
-                disabled={unblockingId === user.id}
+      <div>
+        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+          <ShieldBan className="h-5 w-5 text-muted-foreground" />
+          Blocked Users
+        </h3>
+
+        {loading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : blockedUsers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No blocked users</p>
+        ) : (
+          <div className="space-y-2">
+            {blockedUsers.map((user) => (
+              <div
+                key={user.id}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/50 transition-colors"
               >
-                {unblockingId === user.id ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  "Unblock"
-                )}
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
+                <Avatar className="h-8 w-8 shrink-0">
+                  {user.image ? (
+                    <AvatarImage src={assetUrl(user.image)} alt={user.username ?? user.name ?? ""} />
+                  ) : null}
+                  <AvatarFallback className="text-xs bg-secondary">
+                    {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{user.name ?? user.username ?? "Unknown"}</p>
+                  {user.username && (
+                    <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleUnblock(user.id)}
+                  disabled={unblockingId === user.id}
+                >
+                  {unblockingId === user.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    "Unblock"
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
+// ───── Settings Layout ─────
+
 function SettingsContent() {
   const router = useRouter();
-  const { data: session, isPending: sessionPending } = authClient.useSession();
-
-  // Update name state
-  const [name, setName] = useState(session?.user?.name ?? "");
-  const [nameLoading, setNameLoading] = useState(false);
-  const [nameSuccess, setNameSuccess] = useState("");
-  const [nameError, setNameError] = useState("");
-
-  // Change password state
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-
-  // Sign out state
+  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [signingOut, setSigningOut] = useState(false);
-
-  const handleUpdateName = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setNameError("");
-    setNameSuccess("");
-
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setNameError("Name cannot be empty");
-      return;
-    }
-
-    setNameLoading(true);
-    try {
-      const result = await authClient.updateUser({ name: trimmed });
-      if (result.error) {
-        setNameError(result.error.message ?? "Failed to update name");
-      } else {
-        setNameSuccess("Name updated successfully");
-        setTimeout(() => setNameSuccess(""), 3000);
-      }
-    } catch {
-      setNameError("An unexpected error occurred");
-    } finally {
-      setNameLoading(false);
-    }
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess("");
-
-    if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Passwords do not match");
-      return;
-    }
-
-    setPasswordLoading(true);
-    try {
-      const result = await authClient.changePassword({
-        currentPassword,
-        newPassword,
-      });
-      if (result.error) {
-        setPasswordError(result.error.message ?? "Failed to change password");
-      } else {
-        setPasswordSuccess("Password changed successfully");
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setTimeout(() => setPasswordSuccess(""), 3000);
-      }
-    } catch {
-      setPasswordError("An unexpected error occurred");
-    } finally {
-      setPasswordLoading(false);
-    }
-  };
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -435,191 +635,115 @@ function SettingsContent() {
     }
   };
 
+  const renderPanel = () => {
+    switch (activeSection) {
+      case "profile": return <ProfilePanel />;
+      case "appearance": return <AppearancePanel />;
+      case "notifications": return <NotificationPanel />;
+      case "privacy": return <PrivacyPanel />;
+    }
+  };
+
   return (
-    <div className="app-dvh overflow-y-auto bg-background">
-      <div className="mx-auto max-w-lg px-4 pb-[max(2rem,env(safe-area-inset-bottom,2rem))] pt-[max(1.25rem,env(safe-area-inset-top,1.25rem))]">
-        {/* Header */}
-        <div className="mb-8 flex items-center gap-3">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="h-10 w-10">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <h1 className="text-2xl font-bold">Settings</h1>
+    <div className="app-dvh flex bg-background">
+      {/* Desktop Icon Rail */}
+      <div className="hidden h-full md:block">
+        <IconRail />
+      </div>
+
+      {/* Settings Sidebar — desktop */}
+      <div className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
+        <div className="p-5">
+          <h1 className="text-lg font-bold">Settings</h1>
         </div>
 
-        {/* User info */}
-        <div className="mb-8 rounded-lg border border-border bg-card p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white">
-              <User className="h-6 w-6" />
-            </div>
-            {sessionPending ? (
-              <div className="space-y-2">
-                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-                <div className="h-3 w-36 animate-pulse rounded bg-muted" />
-              </div>
+        <nav className="flex-1 space-y-1 px-3">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
+                activeSection === item.id
+                  ? "bg-[oklch(0.55_0.2_250/15%)] text-[oklch(0.7_0.18_250)]"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              )}
+            >
+              {item.icon}
+              <span className="flex-1 text-left">{item.label}</span>
+              {activeSection === item.id && <ChevronRight className="h-4 w-4" />}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-3">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 text-red-400 hover:bg-red-950/30 hover:text-red-300"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <div>
-                <p className="font-medium">{session?.user?.name}</p>
-                {typeof (session?.user as Record<string, unknown> | undefined)
-                  ?.username === "string" && (
-                  <p className="text-sm text-blue-400">
-                    @
-                    {
-                      (session?.user as Record<string, unknown>)
-                        ?.username as string
-                    }
-                  </p>
-                )}
-                <p className="text-sm text-muted-foreground">
-                  {session?.user?.email}
-                </p>
-              </div>
+              <LogOut className="h-4 w-4" />
             )}
-          </div>
+            Sign Out
+          </Button>
+        </div>
+      </div>
+
+      {/* Content panel */}
+      <div className="flex flex-1 flex-col min-w-0">
+        {/* Mobile header */}
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3 md:hidden">
+          <h1 className="text-lg font-bold">Settings</h1>
         </div>
 
-        {/* Update name */}
-        <div className="mb-8 rounded-lg border border-border bg-card p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <User className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Update Name</h2>
-          </div>
-
-          <form onSubmit={handleUpdateName} className="space-y-4">
-            {nameError && (
-              <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                {nameError}
-              </div>
-            )}
-            {nameSuccess && (
-              <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-400">
-                {nameSuccess}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium">
-                Display Name
-              </label>
-              <Input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                required
-                className="bg-neutral-800 border-none"
-              />
-            </div>
-
-            <Button type="submit" disabled={nameLoading}>
-              {nameLoading && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        {/* Mobile nav tabs */}
+        <div className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2 md:hidden">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                activeSection === item.id
+                  ? "bg-[oklch(0.55_0.2_250)] text-white"
+                  : "bg-secondary text-muted-foreground"
               )}
-              Update Name
-            </Button>
-          </form>
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        {/* Change password */}
-        <div className="mb-8 rounded-lg border border-border bg-card p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <Lock className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Change Password</h2>
+        {/* Panel content */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8">
+          <div className="mx-auto max-w-xl">
+            {renderPanel()}
           </div>
-
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            {passwordError && (
-              <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                {passwordError}
-              </div>
-            )}
-            {passwordSuccess && (
-              <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-400">
-                {passwordSuccess}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label htmlFor="currentPassword" className="text-sm font-medium">
-                Current Password
-              </label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="********"
-                required
-                className="bg-neutral-800 border-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="newPassword" className="text-sm font-medium">
-                New Password
-              </label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="At least 8 characters"
-                required
-                minLength={8}
-                className="bg-neutral-800 border-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm New Password
-              </label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repeat new password"
-                required
-                minLength={8}
-                className="bg-neutral-800 border-none"
-              />
-            </div>
-
-            <Button type="submit" disabled={passwordLoading}>
-              {passwordLoading && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Change Password
-            </Button>
-          </form>
         </div>
 
-        {/* Blocked Users */}
-        <BlockedUsersSettings />
+        {/* Mobile sign out */}
+        <div className="border-t border-border p-4 md:hidden">
+          <Button
+            variant="ghost"
+            className="w-full justify-center gap-2 text-red-400 hover:bg-red-950/30 hover:text-red-300"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <LogOut className="h-4 w-4" />
+            )}
+            Sign Out
+          </Button>
+        </div>
 
-        {/* Notifications */}
-        <NotificationSettings />
-
-        <Separator className="my-8" />
-
-        {/* Sign out */}
-        <Button
-          variant="destructive"
-          className="w-full gap-2"
-          onClick={handleSignOut}
-          disabled={signingOut}
-        >
-          {signingOut ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <LogOut className="h-4 w-4" />
-          )}
-          Sign Out
-        </Button>
+        <MobileBottomNav />
       </div>
     </div>
   );

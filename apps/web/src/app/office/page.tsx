@@ -1,44 +1,50 @@
 "use client";
 
-import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Building2 } from "lucide-react";
+import { Globe } from "lucide-react";
 import { useOfficePlugin } from "@/hooks/use-office-plugin";
 import { OfficeInstallGuide } from "@/components/office/install-guide";
 import { OfficeView } from "@/components/office/office-view";
+import { IconRail } from "@/components/chat/icon-rail";
+import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
 function OfficeContent() {
   const { state, retry } = useOfficePlugin();
 
   return (
-    <div className="app-dvh flex flex-col bg-background">
-      {/* Header */}
-      <div className="shrink-0 px-4 pt-[max(1.25rem,env(safe-area-inset-top,1.25rem))]">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 pb-4">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="h-10 w-10">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Building2 className="h-6 w-6 text-blue-400" />
-            <h1 className="text-2xl font-bold">Virtual Office</h1>
-          </div>
-        </div>
+    <div className="app-dvh flex bg-background">
+      {/* Desktop Icon Rail */}
+      <div className="hidden h-full md:block">
+        <IconRail />
       </div>
 
-      {/* Body */}
-      <div className="flex-1 min-h-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom,1rem))]">
-        <div className="mx-auto h-full max-w-6xl">
+      {/* Main content */}
+      <div className="flex flex-1 flex-col min-w-0">
+        {/* Header */}
+        <div className="shrink-0 border-b border-border px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[oklch(0.55_0.2_250/15%)]">
+              <Globe className="h-5 w-5 text-[oklch(0.7_0.18_250)]" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Spaces</h1>
+              <p className="text-xs text-muted-foreground">Virtual Office & Team Collaboration</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-6">
           {state === "connected" ? (
             <OfficeView />
           ) : (
-            <div className="max-w-4xl">
+            <div className="mx-auto max-w-3xl">
               <OfficeInstallGuide state={state} onRetry={retry} />
             </div>
           )}
         </div>
+
+        <MobileBottomNav />
       </div>
     </div>
   );
