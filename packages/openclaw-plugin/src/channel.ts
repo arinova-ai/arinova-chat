@@ -306,20 +306,20 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
         logger.error(`[openclaw-arinova-ai:${account.accountId}] WebSocket error: ${error.message}`);
       });
 
-      // Honor abort signal
-      if (ctx.abortSignal) {
-        ctx.abortSignal.addEventListener("abort", () => agent.disconnect(), { once: true });
-      }
+      // Connect and keep the Promise pending for the lifetime of the connection.
+      // The gateway expects startAccount to return a Promise that stays open
+      // while the channel is running, and resolves/rejects when it stops.
+      await agent.connect();
+      logger.info(`[openclaw-arinova-ai:${account.accountId}] WebSocket connected and authenticated`);
 
-      agent.connect().catch((err) => {
-        logger.error(`[openclaw-arinova-ai:${account.accountId}] connection failed: ${err.message}`);
-      });
-
-      return {
-        stop: () => {
+      // Return a Promise that stays pending until the abort signal fires
+      // (gateway calls abort when stopping the channel)
+      return new Promise<void>((resolve) => {
+        ctx.abortSignal.addEventListener("abort", () => {
           agent.disconnect();
-        },
-      };
+          resolve();
+        }, { once: true });
+      });
     },
   },
 };
