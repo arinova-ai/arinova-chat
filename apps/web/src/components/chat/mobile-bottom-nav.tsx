@@ -5,7 +5,6 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   MessageCircle,
   Globe,
-  LayoutGrid,
   Settings,
   Users,
   Plus,

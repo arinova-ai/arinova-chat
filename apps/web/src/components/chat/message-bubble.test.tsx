@@ -37,9 +37,10 @@ function createMessage(overrides: Partial<Message> = {}): Message {
   return {
     id: "msg-1",
     conversationId: "conv-1",
+    seq: 1,
     role: "agent",
     content: "Hello world",
-    status: "delivered",
+    status: "completed",
     createdAt: new Date("2025-01-01T12:00:00Z"),
     updatedAt: new Date("2025-01-01T12:00:00Z"),
     ...overrides,
