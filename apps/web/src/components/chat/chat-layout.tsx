@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Plus } from "lucide-react";
 import { IconRail } from "./icon-rail";
 import { MobileBottomNav } from "./mobile-bottom-nav";
 import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
+import { NewChatDialog } from "./new-chat-dialog";
 import { CallIndicator } from "@/components/voice/call-indicator";
 import { NotificationBanner } from "@/components/notification-banner";
 import { useChatStore } from "@/store/chat-store";
@@ -14,6 +16,7 @@ export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const searchActive = useChatStore((s) => s.searchActive);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const [newChatOpen, setNewChatOpen] = useState(false);
   const loadAgents = useChatStore((s) => s.loadAgents);
   const loadConversations = useChatStore((s) => s.loadConversations);
   const loadAgentHealth = useChatStore((s) => s.loadAgentHealth);
@@ -36,6 +39,13 @@ export function ChatLayout() {
       clearInterval(healthInterval);
     };
   }, [loadAgents, loadConversations, loadAgentHealth, initWS]);
+
+  // Listen for global new-chat event (e.g. from sidebar header button)
+  useEffect(() => {
+    const handler = () => setNewChatOpen(true);
+    window.addEventListener("arinova:new-chat", handler);
+    return () => window.removeEventListener("arinova:new-chat", handler);
+  }, []);
 
   // Manage browser history for mobile back-swipe navigation
   useEffect(() => {
@@ -81,11 +91,22 @@ export function ChatLayout() {
 
       {/* Mobile: sidebar + bottom nav when no conversation/search, chat when selected */}
       <div className={`md:hidden h-full overflow-hidden bg-card flex flex-col ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="relative flex-1 min-h-0 overflow-hidden">
           <Sidebar />
+          {/* New Chat FAB — mobile only, chat list view */}
+          <button
+            type="button"
+            onClick={() => setNewChatOpen(true)}
+            className="absolute right-4 bottom-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.55_0.2_250)] to-[oklch(0.4_0.18_270)] shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
+            aria-label="New chat"
+          >
+            <Plus className="h-6 w-6 text-white" />
+          </button>
         </div>
         <MobileBottomNav />
       </div>
+
+      <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
 
       {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
       <div className={`h-full flex-1 min-w-0 flex flex-col bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
