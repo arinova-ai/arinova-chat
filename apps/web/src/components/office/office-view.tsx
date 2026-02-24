@@ -6,14 +6,15 @@ import StatusBar from "./status-bar";
 import { AgentModal } from "./agent-modal";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { MOCK_AGENTS } from "./mock-data";
+import { ThemeProvider, useTheme } from "./theme-context";
 
 // Dynamic import — PixiJS only works client-side
 const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 
-export function OfficeView() {
+function OfficeViewInner() {
   const stream = useOfficeStream();
-  // Use SSE agents when available, fall back to mock data for demo
   const agents = stream.agents.length > 0 ? stream.agents : MOCK_AGENTS;
+  const { manifest } = useTheme();
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -27,7 +28,6 @@ export function OfficeView() {
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
 
-  // Measure available space for the map
   useEffect(() => {
     const el = mapContainerRef.current;
     if (!el) return;
@@ -62,6 +62,7 @@ export function OfficeView() {
             onSelectAgent={selectAgent}
             width={mapSize.width}
             height={mapSize.height}
+            manifest={manifest}
           />
         )}
       </div>
@@ -69,5 +70,13 @@ export function OfficeView() {
       {/* Agent detail modal */}
       <AgentModal agent={selectedAgent} agents={agents} onClose={closeModal} />
     </div>
+  );
+}
+
+export function OfficeView() {
+  return (
+    <ThemeProvider>
+      <OfficeViewInner />
+    </ThemeProvider>
   );
 }
