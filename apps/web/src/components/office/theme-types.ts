@@ -12,7 +12,7 @@ export interface ThemeAuthor {
 // ── Canvas & Background ─────────────────────────────────────────
 
 export interface CanvasBackground {
-  image: string;
+  image: string | null;
   image2x?: string;
   mobile?: string;
   /** Hex fallback color as string, e.g. "0x0f172a" */
@@ -198,7 +198,7 @@ export interface ThemeManifest {
   description: string;
   tags: string[];
   preview: string;
-  license: string;
+  license: "standard" | "exclusive";
 
   canvas: CanvasConfig;
   viewport: ViewportConfig;

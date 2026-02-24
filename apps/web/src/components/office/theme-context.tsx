@@ -53,8 +53,8 @@ export function ThemeProvider({ children, initialThemeId = DEFAULT_THEME_ID }: T
         if (!cancelled) {
           console.error(`[ThemeProvider] Failed to load theme "${themeId}":`, err);
           setError(err instanceof Error ? err.message : String(err));
+          setManifest(null);
           setLoading(false);
-          // manifest stays null → OfficeMap uses fallback
         }
       });
 

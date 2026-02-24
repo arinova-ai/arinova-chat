@@ -44,19 +44,21 @@ const DOTS_STYLE = new TextStyle({ fontSize: 14, fill: 0x16a34a });
 
 // ── Manifest helpers ─────────────────────────────────────────────
 
-/** Parse hex color strings from manifest into numbers */
-function parseStatusColors(manifest: ThemeManifest): Record<AgentStatus, number> {
-  const c = manifest.characters.statusBadge.colors;
-  const parse = (hex: string, fallback: number) => {
+/** Parse hex color strings from manifest into numbers (null-safe) */
+function parseStatusColors(manifest: ThemeManifest | null): Record<AgentStatus, number> {
+  const c = manifest?.characters?.statusBadge?.colors;
+  if (!c) return { ...DEFAULT_STATUS_COLORS };
+  const parse = (hex: string | undefined, fallback: number) => {
+    if (!hex) return fallback;
     const cleaned = hex.replace("#", "");
     const n = parseInt(cleaned, 16);
     return isNaN(n) ? fallback : n;
   };
   return {
-    working: parse(c.working ?? "", DEFAULT_STATUS_COLORS.working),
-    idle: parse(c.idle ?? "", DEFAULT_STATUS_COLORS.idle),
-    blocked: parse(c.blocked ?? "", DEFAULT_STATUS_COLORS.blocked),
-    collaborating: parse(c.collaborating ?? "", DEFAULT_STATUS_COLORS.collaborating),
+    working: parse(c.working, DEFAULT_STATUS_COLORS.working),
+    idle: parse(c.idle, DEFAULT_STATUS_COLORS.idle),
+    blocked: parse(c.blocked, DEFAULT_STATUS_COLORS.blocked),
+    collaborating: parse(c.collaborating, DEFAULT_STATUS_COLORS.collaborating),
   };
 }
 
@@ -84,18 +86,23 @@ function statusToZoneType(status: AgentStatus): ZoneType {
   return "work";
 }
 
-/** Assign agents to specific seats from the manifest */
+/** Assign agents to specific seats from the manifest (defensive: skips zones with no seats) */
 function assignSeats(
   agents: Agent[],
   zones: ZoneDef[],
 ): Map<string, { x: number; y: number; seatId: string }> {
   const assignments = new Map<string, { x: number; y: number; seatId: string }>();
+  if (zones.length === 0) return assignments;
+
+  // Filter to zones that actually have seats
+  const usableZones = zones.filter((z) => z.seats.length > 0);
+  if (usableZones.length === 0) return assignments;
 
   // Group agents by target zone type
   const grouped = new Map<string, Agent[]>();
   for (const agent of agents) {
     const targetType = statusToZoneType(agent.status);
-    const zone = zones.find((z) => z.type === targetType) ?? zones[0];
+    const zone = usableZones.find((z) => z.type === targetType) ?? usableZones[0];
     const list = grouped.get(zone.id) ?? [];
     list.push(agent);
     grouped.set(zone.id, list);
@@ -103,7 +110,8 @@ function assignSeats(
 
   // Assign each agent to a seat (round-robin if overflow)
   for (const [zoneId, zoneAgents] of grouped) {
-    const zone = zones.find((z) => z.id === zoneId)!;
+    const zone = usableZones.find((z) => z.id === zoneId);
+    if (!zone || zone.seats.length === 0) continue;
     for (let i = 0; i < zoneAgents.length; i++) {
       const seat = zone.seats[i % zone.seats.length];
       assignments.set(zoneAgents[i].id, { x: seat.x, y: seat.y, seatId: seat.id });
@@ -322,7 +330,7 @@ export default function OfficeMap({
 
   // Update status colors when manifest changes
   useEffect(() => {
-    statusColorsRef.current = manifest ? parseStatusColors(manifest) : DEFAULT_STATUS_COLORS;
+    statusColorsRef.current = parseStatusColors(manifest);
   }, [manifest]);
 
   // ── Init PixiJS ──────────────────────────────────────────────

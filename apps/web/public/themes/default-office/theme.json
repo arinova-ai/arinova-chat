@@ -12,7 +12,7 @@
     "width": 1920,
     "height": 1080,
     "background": {
-      "image": "background.png",
+      "image": null,
       "color": "0x0f172a"
     }
   },
