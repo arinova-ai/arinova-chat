@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import StatusBar from "./status-bar";
-import DetailPanel from "./detail-panel";
+import { AgentModal } from "./agent-modal";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { MOCK_AGENTS } from "./mock-data";
 
@@ -22,10 +22,10 @@ export function OfficeView() {
   const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
 
   const selectAgent = useCallback((id: string | null) => {
-    setSelectedAgentId((prev) => (prev === id ? null : id));
+    setSelectedAgentId(id);
   }, []);
 
-  const handleClose = useCallback(() => selectAgent(null), [selectAgent]);
+  const closeModal = useCallback(() => setSelectedAgentId(null), []);
 
   // Measure available space for the map
   useEffect(() => {
@@ -53,31 +53,21 @@ export function OfficeView() {
         <StatusBar agents={agents} />
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-0 gap-3">
-        {/* Office map area */}
-        <div
-          ref={mapContainerRef}
-          className={`flex-1 min-h-0 ${selectedAgent ? "max-h-[60%]" : ""} transition-all duration-300`}
-        >
-          {mapSize.width > 0 && mapSize.height > 0 && (
-            <OfficeMap
-              agents={agents}
-              selectedAgentId={selectedAgentId}
-              onSelectAgent={selectAgent}
-              width={mapSize.width}
-              height={mapSize.height}
-            />
-          )}
-        </div>
-
-        {/* Detail panel */}
-        {selectedAgent && (
-          <div className="shrink-0 max-h-[40%] overflow-y-auto rounded-xl">
-            <DetailPanel agent={selectedAgent} agents={agents} onClose={handleClose} />
-          </div>
+      {/* Office map area — always takes full remaining space */}
+      <div ref={mapContainerRef} className="flex-1 min-h-0">
+        {mapSize.width > 0 && mapSize.height > 0 && (
+          <OfficeMap
+            agents={agents}
+            selectedAgentId={selectedAgentId}
+            onSelectAgent={selectAgent}
+            width={mapSize.width}
+            height={mapSize.height}
+          />
         )}
       </div>
+
+      {/* Agent detail modal */}
+      <AgentModal agent={selectedAgent} agents={agents} onClose={closeModal} />
     </div>
   );
 }

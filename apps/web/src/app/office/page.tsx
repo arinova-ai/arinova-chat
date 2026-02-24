@@ -1,15 +1,14 @@
 "use client";
 
 import { AuthGuard } from "@/components/auth-guard";
-import { Globe } from "lucide-react";
+import { Globe, Radio } from "lucide-react";
 import { useOfficePlugin } from "@/hooks/use-office-plugin";
-import { OfficeInstallGuide } from "@/components/office/install-guide";
 import { OfficeView } from "@/components/office/office-view";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
 function OfficeContent() {
-  const { state, retry } = useOfficePlugin();
+  const { state } = useOfficePlugin();
 
   return (
     <div className="app-dvh flex bg-background">
@@ -26,22 +25,22 @@ function OfficeContent() {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[oklch(0.55_0.2_250/15%)]">
               <Globe className="h-5 w-5 text-[oklch(0.7_0.18_250)]" />
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold">Spaces</h1>
               <p className="text-xs text-muted-foreground">Virtual Office & Team Collaboration</p>
             </div>
+            {state !== "connected" && state !== "loading" && (
+              <div className="flex items-center gap-1.5 rounded-full bg-yellow-500/10 px-3 py-1">
+                <Radio className="h-3 w-3 text-yellow-500" />
+                <span className="text-xs font-medium text-yellow-500">Demo</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-6">
-          {state === "connected" ? (
-            <OfficeView />
-          ) : (
-            <div className="mx-auto max-w-3xl">
-              <OfficeInstallGuide state={state} onRetry={retry} />
-            </div>
-          )}
+        {/* Body — always show OfficeView */}
+        <div className="flex-1 min-h-0 overflow-hidden p-3 md:p-4">
+          <OfficeView />
         </div>
 
         <MobileBottomNav />
