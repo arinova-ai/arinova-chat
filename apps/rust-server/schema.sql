@@ -129,6 +129,7 @@ CREATE TABLE conversation_user_members (
     user_id TEXT NOT NULL REFERENCES "user"(id),
     role conversation_user_role NOT NULL DEFAULT 'member',
     joined_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    hidden_at TIMESTAMP,
     UNIQUE(conversation_id, user_id)
 );
 
