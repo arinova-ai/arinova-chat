@@ -973,6 +973,26 @@ pub async fn trigger_agent_response(
                     content: content.to_string(),
                     reply_to_id: reply_to_id.clone(),
                 });
+
+            // Notify the user that this agent's response is queued
+            let agent_name = sqlx::query_as::<_, (String,)>(
+                r#"SELECT name FROM agents WHERE id = $1::uuid"#,
+            )
+            .bind(agent_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+            .map(|(n,)| n)
+            .unwrap_or_else(|| "Agent".to_string());
+
+            ws_state.send_to_user(user_id, &json!({
+                "type": "stream_queued",
+                "conversationId": conversation_id,
+                "agentId": agent_id,
+                "agentName": agent_name,
+            }));
+
             continue;
         }
 

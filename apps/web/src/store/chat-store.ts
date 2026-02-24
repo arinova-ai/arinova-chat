@@ -75,6 +75,7 @@ export interface ThinkingAgent {
   agentName: string;
   seq: number;
   startedAt: Date;
+  queued?: boolean;
 }
 
 interface ChatState {
@@ -1010,6 +1011,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    if (event.type === "stream_queued") {
+      const { conversationId, agentId, agentName } = event;
+      const queued: ThinkingAgent = {
+        messageId: "",
+        agentId: agentId ?? "",
+        agentName: agentName ?? "Agent",
+        seq: 0,
+        startedAt: new Date(),
+        queued: true,
+      };
+      const prev = get().thinkingAgents[conversationId] ?? [];
+      // Don't add duplicate queued entries for same agent
+      if (!prev.some((t) => t.queued && t.agentId === agentId)) {
+        set({
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: [...prev, queued],
+          },
+        });
+      }
+      return;
+    }
+
     if (event.type === "stream_start") {
       const { conversationId, messageId, seq, senderAgentId, senderAgentName } = event;
       const thinking: ThinkingAgent = {
@@ -1019,7 +1043,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         seq,
         startedAt: new Date(),
       };
-      const prev = get().thinkingAgents[conversationId] ?? [];
+      // Replace any queued entry for this agent with the actual thinking entry
+      const prev = (get().thinkingAgents[conversationId] ?? [])
+        .filter((t) => !(t.queued && t.agentId === (senderAgentId ?? "")));
       set({
         thinkingAgents: {
           ...get().thinkingAgents,

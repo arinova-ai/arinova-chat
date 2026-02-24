@@ -423,6 +423,12 @@ export type WSServerEvent =
         updatedAt: string;
       };
     }
+  | {
+      type: "stream_queued";
+      conversationId: string;
+      agentId: string;
+      agentName: string;
+    }
   | { type: "kicked_from_group"; conversationId: string }
   | { type: "pong" };
 
