@@ -403,6 +403,26 @@ fn cleanup_agent_tasks(ws_state: &WsState, agent_id: &str) {
     for task_id in task_ids {
         cleanup_task(ws_state, &task_id, Some("Agent disconnected"));
     }
+
+    // Clean up stale active_streams entries for this agent
+    let suffix = format!(":{}", agent_id);
+    let stale_keys: Vec<String> = ws_state
+        .active_streams
+        .iter()
+        .filter(|key| key.ends_with(&suffix))
+        .map(|entry| entry.clone())
+        .collect();
+
+    for key in &stale_keys {
+        ws_state.active_streams.remove(key);
+    }
+    if !stale_keys.is_empty() {
+        tracing::info!(
+            "Cleaned up {} stale active_streams for agent {}",
+            stale_keys.len(),
+            agent_id
+        );
+    }
 }
 
 /// Send a task to a connected agent. Returns a receiver for streaming events.
