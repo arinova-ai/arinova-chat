@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BACKEND_URL } from "@/lib/config";
+import { OFFICE_STREAM_URL } from "@/lib/office-config";
 import type { Agent } from "@/components/office/types";
 
 /** Shape of the SSE status event from the office plugin */
@@ -46,7 +46,7 @@ export function useOfficeStream() {
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    const url = `${BACKEND_URL}/api/office/stream`;
+    const url = OFFICE_STREAM_URL;
     const es = new EventSource(url, { withCredentials: true });
     esRef.current = es;
 

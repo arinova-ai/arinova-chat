@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { OFFICE_STATUS_PATH } from "@/lib/office-config";
 
 interface OfficeStatus {
   connected: boolean;
@@ -15,7 +16,7 @@ export function useOfficePlugin() {
 
   const check = useCallback(async () => {
     try {
-      const res = await api<OfficeStatus>("/api/office/status", { silent: true });
+      const res = await api<OfficeStatus>(OFFICE_STATUS_PATH, { silent: true });
       setState(res.connected ? "connected" : "disconnected");
     } catch {
       setState("error");
