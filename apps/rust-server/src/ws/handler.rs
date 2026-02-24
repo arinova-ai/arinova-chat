@@ -1106,7 +1106,7 @@ async fn do_trigger_agent_response(
 
     // Mark this agent as having active stream (keyed by conv:agent)
     let stream_key = format!("{}:{}", conversation_id, agent_id);
-    ws_state.active_streams.insert(stream_key.clone());
+    ws_state.active_streams.insert(stream_key.clone(), std::time::Instant::now());
 
     ws_state.broadcast_to_members(&member_ids, &json!({
         "type": "stream_start",
@@ -1256,7 +1256,7 @@ async fn do_trigger_agent_response(
     tracing::info!(
         "Stream dispatch: conv={} agent={} msgId={} active_streams={:?}",
         conversation_id, agent_id, agent_msg_id,
-        ws_state.active_streams.iter().map(|k| k.clone()).collect::<Vec<_>>()
+        ws_state.active_streams.iter().map(|e| format!("{}({}s)", e.key(), e.value().elapsed().as_secs())).collect::<Vec<_>>()
     );
 
     let agent_event_rx = send_task_to_agent(
