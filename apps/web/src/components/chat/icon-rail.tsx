@@ -6,7 +6,6 @@ import {
   MessageCircle,
   Globe,
   LayoutGrid,
-  ShoppingBag,
   Settings,
   Users,
   Plus,
@@ -53,7 +52,8 @@ export function IconRail() {
     { id: "chat", icon: <MessageCircle className="h-5 w-5" />, label: "Chat", href: "/" },
     { id: "spaces", icon: <Globe className="h-5 w-5" />, label: "Spaces", href: "/office" },
     { id: "apps", icon: <LayoutGrid className="h-5 w-5" />, label: "Apps", href: "/apps" },
-    { id: "market", icon: <ShoppingBag className="h-5 w-5" />, label: "Market" },
+    // TODO: Add Market item once Agent Marketplace feature is built
+    // { id: "market", icon: <ShoppingBag className="h-5 w-5" />, label: "Market", href: "/market" },
   ];
 
   const getActiveId = () => {

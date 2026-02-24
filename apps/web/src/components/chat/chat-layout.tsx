@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { IconRail } from "./icon-rail";
+import { MobileBottomNav } from "./mobile-bottom-nav";
 import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
 import { CallIndicator } from "@/components/voice/call-indicator";
@@ -78,9 +79,12 @@ export function ChatLayout() {
         <Sidebar />
       </div>
 
-      {/* Mobile: sidebar fullscreen when no conversation/search, chat when selected */}
-      <div className={`md:hidden h-full overflow-hidden bg-card ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
-        <Sidebar />
+      {/* Mobile: sidebar + bottom nav when no conversation/search, chat when selected */}
+      <div className={`md:hidden h-full overflow-hidden bg-card flex flex-col ${(activeConversationId || searchActive) ? "hidden" : "flex-1"}`}>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Sidebar />
+        </div>
+        <MobileBottomNav />
       </div>
 
       {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
