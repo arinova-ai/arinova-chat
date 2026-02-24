@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { IconRail } from "@/components/chat/icon-rail";
+import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
 interface App {
   id: string;
@@ -251,6 +252,8 @@ export function AppDirectoryPage() {
             </>
           )}
         </div>
+
+        <MobileBottomNav />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useOfficePlugin } from "@/hooks/use-office-plugin";
 import { OfficeInstallGuide } from "@/components/office/install-guide";
 import { OfficeView } from "@/components/office/office-view";
 import { IconRail } from "@/components/chat/icon-rail";
+import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
 function OfficeContent() {
   const { state, retry } = useOfficePlugin();
@@ -42,6 +43,8 @@ function OfficeContent() {
             </div>
           )}
         </div>
+
+        <MobileBottomNav />
       </div>
     </div>
   );

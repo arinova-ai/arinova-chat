@@ -26,6 +26,7 @@ import { assetUrl } from "@/lib/config";
 import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 import { useChatStore } from "@/store/chat-store";
 import { IconRail } from "@/components/chat/icon-rail";
+import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
 
 // ───── Types ─────
@@ -741,6 +742,8 @@ function SettingsContent() {
             Sign Out
           </Button>
         </div>
+
+        <MobileBottomNav />
       </div>
     </div>
   );
