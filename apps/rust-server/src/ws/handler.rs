@@ -960,6 +960,7 @@ pub async fn trigger_agent_response(
     for agent_id in &dispatch_ids {
         // Per-agent queue: if this specific agent has an active stream, queue it
         if ws_state.has_active_stream_for_agent(conversation_id, agent_id) {
+            tracing::info!("Agent queued (active stream): conv={} agent={}", conversation_id, agent_id);
             let queue_key = format!("{}:{}", conversation_id, agent_id);
             ws_state
                 .agent_response_queues
@@ -1252,6 +1253,12 @@ async fn do_trigger_agent_response(
         .stream_cancellers
         .insert(agent_msg_id.clone(), cancel_tx);
 
+    tracing::info!(
+        "Stream dispatch: conv={} agent={} msgId={} active_streams={:?}",
+        conversation_id, agent_id, agent_msg_id,
+        ws_state.active_streams.iter().map(|k| k.clone()).collect::<Vec<_>>()
+    );
+
     let agent_event_rx = send_task_to_agent(
         ws_state,
         agent_id,
@@ -1277,10 +1284,12 @@ async fn do_trigger_agent_response(
         let stream_key = format!("{}:{}", conversation_id, agent_id);
         let mut pending_mentions: Option<(Vec<String>, String)> = None;
         let mut event_rx = match agent_event_rx {
-            Some(rx) => rx,
+            Some(rx) => {
+                tracing::info!("Stream started: conv={} agent={} msgId={}", conversation_id, agent_id, agent_msg_id_clone);
+                rx
+            }
             None => {
-                // Agent disconnected between check and send — clean up the stuck stream
-                // so queued messages aren't permanently blocked.
+                tracing::warn!("Stream failed (agent gone): conv={} agent={} msgId={}", conversation_id, agent_id, agent_msg_id_clone);
                 let _ = sqlx::query(
                     r#"UPDATE messages SET content = $1, status = 'error', updated_at = NOW() WHERE id = $2::uuid"#,
                 )
@@ -1326,6 +1335,11 @@ async fn do_trigger_agent_response(
                             }
                         }
                         Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
+                            tracing::info!(
+                                "Stream complete: conv={} agent={} msgId={} content_len={} chunks_accumulated={}",
+                                conversation_id, agent_id, agent_msg_id_clone,
+                                full_content.len(), stream_accumulated.len()
+                            );
                             ws_state.stream_cancellers.remove(&agent_msg_id_clone);
 
                             if let Ok(mut conn) = redis.get().await {
@@ -1384,6 +1398,10 @@ async fn do_trigger_agent_response(
                             break;
                         }
                         Some(crate::ws::state::AgentEvent::Error(error)) => {
+                            tracing::warn!(
+                                "Stream error: conv={} agent={} msgId={} error={}",
+                                conversation_id, agent_id, agent_msg_id_clone, error
+                            );
                             ws_state.stream_cancellers.remove(&agent_msg_id_clone);
 
                             if let Ok(mut conn) = redis.get().await {
@@ -1411,6 +1429,10 @@ async fn do_trigger_agent_response(
                             break;
                         }
                         None => {
+                            tracing::warn!(
+                                "Stream channel closed (agent disconnect): conv={} agent={} msgId={} accumulated_len={}",
+                                conversation_id, agent_id, agent_msg_id_clone, stream_accumulated.len()
+                            );
                             ws_state.stream_cancellers.remove(&agent_msg_id_clone);
 
                             if let Ok(mut conn) = redis.get().await {
