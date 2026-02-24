@@ -26,7 +26,7 @@ function OfficeContent() {
               <Globe className="h-5 w-5 text-[oklch(0.7_0.18_250)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold">Spaces</h1>
+              <h1 className="text-xl font-bold">Office</h1>
               <p className="text-xs text-muted-foreground">Virtual Office & Team Collaboration</p>
             </div>
             {state !== "connected" && state !== "loading" && (
