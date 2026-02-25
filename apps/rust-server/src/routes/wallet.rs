@@ -69,16 +69,25 @@ async fn get_transactions(
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * limit;
 
-    let total = sqlx::query_scalar::<_, i64>(
+    let total = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM coin_transactions WHERE user_id = $1",
     )
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::error!("Count transactions failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to fetch transactions" })),
+            );
+        }
+    };
 
-    let rows = sqlx::query_as::<_, TxRow>(
-        r#"SELECT id, user_id, type, amount, related_app_id, description, created_at
+    let rows = match sqlx::query_as::<_, TxRow>(
+        r#"SELECT id, user_id, type::text, amount, related_app_id, description, created_at
            FROM coin_transactions
            WHERE user_id = $1
            ORDER BY created_at DESC
@@ -89,7 +98,16 @@ async fn get_transactions(
     .bind(offset)
     .fetch_all(&state.db)
     .await
-    .unwrap_or_default();
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!("Fetch transactions failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to fetch transactions" })),
+            );
+        }
+    };
 
     let transactions: Vec<Value> = rows
         .iter()
@@ -377,7 +395,7 @@ async fn refund(
 
     // SELECT FOR UPDATE locks the row to prevent concurrent refunds
     let purchase = sqlx::query_as::<_, (Uuid, String, i32, String, NaiveDateTime)>(
-        r#"SELECT id, user_id, amount, type, created_at
+        r#"SELECT id, user_id, amount, type::text, created_at
            FROM coin_transactions WHERE id = $1 FOR UPDATE"#,
     )
     .bind(purchase_id)
