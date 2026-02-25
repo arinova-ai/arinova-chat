@@ -2,9 +2,10 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{delete, get, post, put},
+    routing::{get, post},
     Router,
 };
+use chrono::NaiveDateTime;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -22,6 +23,168 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/marketplace/agents/{id}/manage", get(manage_detail))
         .route("/api/marketplace/manage", get(my_listings))
+}
+
+// ---------------------------------------------------------------------------
+// FromRow structs for sqlx (tuples limited to 16 fields)
+// ---------------------------------------------------------------------------
+
+/// Public listing fields — used for create/update RETURNING and my_listings.
+#[derive(sqlx::FromRow)]
+struct ListingRow {
+    id: Uuid,
+    agent_name: String,
+    description: String,
+    category: String,
+    avatar_url: Option<String>,
+    welcome_message: Option<String>,
+    model_provider: String,
+    model_id: String,
+    price_per_message: i32,
+    free_trial_messages: i32,
+    sales_count: i32,
+    status: String,
+    avg_rating: Option<f64>,
+    review_count: i32,
+    total_messages: i32,
+    total_revenue: i32,
+    example_conversations: Value,
+    created_at: NaiveDateTime,
+    updated_at: NaiveDateTime,
+}
+
+/// Public listing with creator info — used for browse and detail.
+#[derive(sqlx::FromRow)]
+struct ListingDetailRow {
+    id: Uuid,
+    creator_id: String,
+    agent_name: String,
+    description: String,
+    category: String,
+    avatar_url: Option<String>,
+    welcome_message: Option<String>,
+    model_provider: String,
+    model_id: String,
+    price_per_message: i32,
+    free_trial_messages: i32,
+    sales_count: i32,
+    status: String,
+    avg_rating: Option<f64>,
+    review_count: i32,
+    total_messages: i32,
+    total_revenue: i32,
+    example_conversations: Value,
+    created_at: NaiveDateTime,
+    updated_at: NaiveDateTime,
+    creator_name: Option<String>,
+    creator_username: Option<String>,
+}
+
+/// Creator manage view — includes system_prompt, no creator join.
+#[derive(sqlx::FromRow)]
+struct ManageListingRow {
+    id: Uuid,
+    creator_id: String,
+    agent_name: String,
+    description: String,
+    category: String,
+    avatar_url: Option<String>,
+    welcome_message: Option<String>,
+    model_provider: String,
+    model_id: String,
+    system_prompt: String,
+    price_per_message: i32,
+    free_trial_messages: i32,
+    sales_count: i32,
+    status: String,
+    avg_rating: Option<f64>,
+    review_count: i32,
+    total_messages: i32,
+    total_revenue: i32,
+    example_conversations: Value,
+    created_at: NaiveDateTime,
+    updated_at: NaiveDateTime,
+}
+
+// ---------------------------------------------------------------------------
+// JSON serialization helpers
+// ---------------------------------------------------------------------------
+
+fn listing_row_to_json(r: &ListingRow) -> Value {
+    json!({
+        "id": r.id,
+        "agentName": r.agent_name,
+        "description": r.description,
+        "category": r.category,
+        "avatarUrl": r.avatar_url,
+        "welcomeMessage": r.welcome_message,
+        "modelProvider": r.model_provider,
+        "modelId": r.model_id,
+        "pricePerMessage": r.price_per_message,
+        "freeTrialMessages": r.free_trial_messages,
+        "salesCount": r.sales_count,
+        "status": r.status,
+        "avgRating": r.avg_rating,
+        "reviewCount": r.review_count,
+        "totalMessages": r.total_messages,
+        "totalRevenue": r.total_revenue,
+        "exampleConversations": r.example_conversations,
+        "createdAt": r.created_at.and_utc().to_rfc3339(),
+        "updatedAt": r.updated_at.and_utc().to_rfc3339(),
+    })
+}
+
+fn detail_row_to_json(r: &ListingDetailRow) -> Value {
+    json!({
+        "id": r.id,
+        "creatorId": r.creator_id,
+        "agentName": r.agent_name,
+        "description": r.description,
+        "category": r.category,
+        "avatarUrl": r.avatar_url,
+        "welcomeMessage": r.welcome_message,
+        "modelProvider": r.model_provider,
+        "modelId": r.model_id,
+        "pricePerMessage": r.price_per_message,
+        "freeTrialMessages": r.free_trial_messages,
+        "salesCount": r.sales_count,
+        "status": r.status,
+        "avgRating": r.avg_rating,
+        "reviewCount": r.review_count,
+        "totalMessages": r.total_messages,
+        "totalRevenue": r.total_revenue,
+        "exampleConversations": r.example_conversations,
+        "createdAt": r.created_at.and_utc().to_rfc3339(),
+        "updatedAt": r.updated_at.and_utc().to_rfc3339(),
+        "creatorName": r.creator_name,
+        "creatorUsername": r.creator_username,
+    })
+}
+
+fn manage_row_to_json(r: &ManageListingRow) -> Value {
+    json!({
+        "id": r.id,
+        "creatorId": r.creator_id,
+        "agentName": r.agent_name,
+        "description": r.description,
+        "category": r.category,
+        "avatarUrl": r.avatar_url,
+        "welcomeMessage": r.welcome_message,
+        "modelProvider": r.model_provider,
+        "modelId": r.model_id,
+        "systemPrompt": r.system_prompt,
+        "pricePerMessage": r.price_per_message,
+        "freeTrialMessages": r.free_trial_messages,
+        "salesCount": r.sales_count,
+        "status": r.status,
+        "avgRating": r.avg_rating,
+        "reviewCount": r.review_count,
+        "totalMessages": r.total_messages,
+        "totalRevenue": r.total_revenue,
+        "exampleConversations": r.example_conversations,
+        "createdAt": r.created_at.and_utc().to_rfc3339(),
+        "updatedAt": r.updated_at.and_utc().to_rfc3339(),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +295,7 @@ async fn create_listing(
     let free_trial_messages = body.free_trial_messages.unwrap_or(3);
 
     // 4. INSERT
-    let row = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, Option<String>, String, String, i32, i32, i32, String, Option<f64>, i32, Value, chrono::NaiveDateTime, chrono::NaiveDateTime)>(
+    let row = sqlx::query_as::<_, ListingRow>(
         r#"INSERT INTO agent_listings
            (creator_id, agent_name, description, category, avatar_url, welcome_message,
             model_provider, model_id, price, price_per_message, free_trial_messages,
@@ -140,7 +303,8 @@ async fn create_listing(
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, 'active', $13)
            RETURNING id, agent_name, description, category, avatar_url, welcome_message,
                      model_provider, model_id, price_per_message, free_trial_messages,
-                     sales_count, status::text, avg_rating, review_count,
+                     sales_count, status::text AS status, avg_rating::float8 AS avg_rating,
+                     review_count, total_messages, total_revenue,
                      example_conversations, created_at, updated_at"#,
     )
     .bind(&user.id)
@@ -160,29 +324,11 @@ async fn create_listing(
     .await;
 
     match row {
-        Ok((id, name, desc, cat, avatar, wm, mp, mid, ppm, ftm, sc, status, avg_r, rc, ec, ca, ua)) => (
-            StatusCode::CREATED,
-            Json(json!({
-                "id": id,
-                "creatorId": user.id,
-                "agentName": name,
-                "description": desc,
-                "category": cat,
-                "avatarUrl": avatar,
-                "welcomeMessage": wm,
-                "modelProvider": mp,
-                "modelId": mid,
-                "pricePerMessage": ppm,
-                "freeTrialMessages": ftm,
-                "salesCount": sc,
-                "status": status,
-                "avgRating": avg_r,
-                "reviewCount": rc,
-                "exampleConversations": ec,
-                "createdAt": ca.and_utc().to_rfc3339(),
-                "updatedAt": ua.and_utc().to_rfc3339(),
-            })),
-        ),
+        Ok(r) => {
+            let mut j = listing_row_to_json(&r);
+            j["creatorId"] = json!(user.id);
+            (StatusCode::CREATED, Json(j))
+        }
         Err(e) => {
             tracing::error!("Create listing failed: {}", e);
             (
@@ -322,7 +468,7 @@ async fn update_listing(
     }
 
     // Build dynamic UPDATE
-    let result = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, Option<String>, String, String, i32, i32, i32, String, Option<f64>, i32, Value, chrono::NaiveDateTime, chrono::NaiveDateTime)>(
+    let result = sqlx::query_as::<_, ListingRow>(
         r#"UPDATE agent_listings SET
                agent_name = COALESCE($2, agent_name),
                description = COALESCE($3, description),
@@ -340,7 +486,8 @@ async fn update_listing(
            WHERE id = $1
            RETURNING id, agent_name, description, category, avatar_url, welcome_message,
                      model_provider, model_id, price_per_message, free_trial_messages,
-                     sales_count, status::text, avg_rating, review_count,
+                     sales_count, status::text AS status, avg_rating::float8 AS avg_rating,
+                     review_count, total_messages, total_revenue,
                      example_conversations, created_at, updated_at"#,
     )
     .bind(id)
@@ -360,28 +507,7 @@ async fn update_listing(
     .await;
 
     match result {
-        Ok((lid, name, desc, cat, avatar, wm, mp, mid, ppm, ftm, sc, status, avg_r, rc, ec, ca, ua)) => (
-            StatusCode::OK,
-            Json(json!({
-                "id": lid,
-                "agentName": name,
-                "description": desc,
-                "category": cat,
-                "avatarUrl": avatar,
-                "welcomeMessage": wm,
-                "modelProvider": mp,
-                "modelId": mid,
-                "pricePerMessage": ppm,
-                "freeTrialMessages": ftm,
-                "salesCount": sc,
-                "status": status,
-                "avgRating": avg_r,
-                "reviewCount": rc,
-                "exampleConversations": ec,
-                "createdAt": ca.and_utc().to_rfc3339(),
-                "updatedAt": ua.and_utc().to_rfc3339(),
-            })),
-        ),
+        Ok(r) => (StatusCode::OK, Json(listing_row_to_json(&r))),
         Err(e) => {
             tracing::error!("Update listing failed: {}", e);
             (
@@ -505,7 +631,8 @@ async fn browse(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
                   al.avatar_url, al.welcome_message, al.model_provider, al.model_id,
                   al.price_per_message, al.free_trial_messages,
-                  al.sales_count, al.status::text, al.avg_rating, al.review_count,
+                  al.sales_count, al.status::text AS status,
+                  al.avg_rating::float8 AS avg_rating, al.review_count,
                   al.total_messages, al.total_revenue,
                   al.example_conversations, al.created_at, al.updated_at,
                   u.name AS creator_name, u.username AS creator_username
@@ -516,15 +643,7 @@ async fn browse(
         where_clause, order_clause, limit_idx, offset_idx
     );
 
-    let mut data_query = sqlx::query_as::<_, (
-        Uuid, String, String, String, String,
-        Option<String>, Option<String>, String, String,
-        i32, i32,
-        i32, String, Option<f64>, i32,
-        i32, i32,
-        Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
-        Option<String>, Option<String>,
-    )>(&data_sql);
+    let mut data_query = sqlx::query_as::<_, ListingDetailRow>(&data_sql);
 
     if let Some(ref cat) = category_val {
         data_query = data_query.bind(cat);
@@ -545,35 +664,7 @@ async fn browse(
         }
     };
 
-    let listings: Vec<Value> = rows
-        .iter()
-        .map(|r| {
-            json!({
-                "id": r.0,
-                "creatorId": r.1,
-                "agentName": r.2,
-                "description": r.3,
-                "category": r.4,
-                "avatarUrl": r.5,
-                "welcomeMessage": r.6,
-                "modelProvider": r.7,
-                "modelId": r.8,
-                "pricePerMessage": r.9,
-                "freeTrialMessages": r.10,
-                "salesCount": r.11,
-                "status": r.12,
-                "avgRating": r.13,
-                "reviewCount": r.14,
-                "totalMessages": r.15,
-                "totalRevenue": r.16,
-                "exampleConversations": r.17,
-                "createdAt": r.18.and_utc().to_rfc3339(),
-                "updatedAt": r.19.and_utc().to_rfc3339(),
-                "creatorName": r.20,
-                "creatorUsername": r.21,
-            })
-        })
-        .collect();
+    let listings: Vec<Value> = rows.iter().map(detail_row_to_json).collect();
 
     (
         StatusCode::OK,
@@ -592,19 +683,12 @@ async fn get_detail(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
-    let row = sqlx::query_as::<_, (
-        Uuid, String, String, String, String,
-        Option<String>, Option<String>, String, String,
-        i32, i32,
-        i32, String, Option<f64>, i32,
-        i32, i32,
-        Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
-        Option<String>, Option<String>,
-    )>(
+    let row = sqlx::query_as::<_, ListingDetailRow>(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
                   al.avatar_url, al.welcome_message, al.model_provider, al.model_id,
                   al.price_per_message, al.free_trial_messages,
-                  al.sales_count, al.status::text, al.avg_rating, al.review_count,
+                  al.sales_count, al.status::text AS status,
+                  al.avg_rating::float8 AS avg_rating, al.review_count,
                   al.total_messages, al.total_revenue,
                   al.example_conversations, al.created_at, al.updated_at,
                   u.name AS creator_name, u.username AS creator_username
@@ -617,33 +701,7 @@ async fn get_detail(
     .await;
 
     match row {
-        Ok(Some(r)) => (
-            StatusCode::OK,
-            Json(json!({
-                "id": r.0,
-                "creatorId": r.1,
-                "agentName": r.2,
-                "description": r.3,
-                "category": r.4,
-                "avatarUrl": r.5,
-                "welcomeMessage": r.6,
-                "modelProvider": r.7,
-                "modelId": r.8,
-                "pricePerMessage": r.9,
-                "freeTrialMessages": r.10,
-                "salesCount": r.11,
-                "status": r.12,
-                "avgRating": r.13,
-                "reviewCount": r.14,
-                "totalMessages": r.15,
-                "totalRevenue": r.16,
-                "exampleConversations": r.17,
-                "createdAt": r.18.and_utc().to_rfc3339(),
-                "updatedAt": r.19.and_utc().to_rfc3339(),
-                "creatorName": r.20,
-                "creatorUsername": r.21,
-            })),
-        ),
+        Ok(Some(r)) => (StatusCode::OK, Json(detail_row_to_json(&r))),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({ "error": "Listing not found" })),
@@ -667,18 +725,12 @@ async fn manage_detail(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
-    let row = sqlx::query_as::<_, (
-        Uuid, String, String, String, String,
-        Option<String>, Option<String>, String, String,
-        String, i32, i32,
-        i32, String, Option<f64>, i32,
-        i32, i32,
-        Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
-    )>(
+    let row = sqlx::query_as::<_, ManageListingRow>(
         r#"SELECT id, creator_id, agent_name, description, category,
                   avatar_url, welcome_message, model_provider, model_id,
                   system_prompt, price_per_message, free_trial_messages,
-                  sales_count, status::text, avg_rating, review_count,
+                  sales_count, status::text AS status,
+                  avg_rating::float8 AS avg_rating, review_count,
                   total_messages, total_revenue,
                   example_conversations, created_at, updated_at
            FROM agent_listings
@@ -690,32 +742,7 @@ async fn manage_detail(
     .await;
 
     match row {
-        Ok(Some(r)) => (
-            StatusCode::OK,
-            Json(json!({
-                "id": r.0,
-                "creatorId": r.1,
-                "agentName": r.2,
-                "description": r.3,
-                "category": r.4,
-                "avatarUrl": r.5,
-                "welcomeMessage": r.6,
-                "modelProvider": r.7,
-                "modelId": r.8,
-                "systemPrompt": r.9,
-                "pricePerMessage": r.10,
-                "freeTrialMessages": r.11,
-                "salesCount": r.12,
-                "status": r.13,
-                "avgRating": r.14,
-                "reviewCount": r.15,
-                "totalMessages": r.16,
-                "totalRevenue": r.17,
-                "exampleConversations": r.18,
-                "createdAt": r.19.and_utc().to_rfc3339(),
-                "updatedAt": r.20.and_utc().to_rfc3339(),
-            })),
-        ),
+        Ok(Some(r)) => (StatusCode::OK, Json(manage_row_to_json(&r))),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({ "error": "Listing not found or not owned by you" })),
@@ -738,18 +765,12 @@ async fn my_listings(
     State(state): State<AppState>,
     user: AuthUser,
 ) -> (StatusCode, Json<Value>) {
-    let rows = sqlx::query_as::<_, (
-        Uuid, String, String, String,
-        Option<String>, Option<String>, String, String,
-        i32, i32,
-        i32, String, Option<f64>, i32,
-        i32, i32,
-        Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
-    )>(
+    let rows = sqlx::query_as::<_, ListingRow>(
         r#"SELECT id, agent_name, description, category,
                   avatar_url, welcome_message, model_provider, model_id,
                   price_per_message, free_trial_messages,
-                  sales_count, status::text, avg_rating, review_count,
+                  sales_count, status::text AS status,
+                  avg_rating::float8 AS avg_rating, review_count,
                   total_messages, total_revenue,
                   example_conversations, created_at, updated_at
            FROM agent_listings
@@ -762,33 +783,7 @@ async fn my_listings(
 
     match rows {
         Ok(rows) => {
-            let listings: Vec<Value> = rows
-                .iter()
-                .map(|r| {
-                    json!({
-                        "id": r.0,
-                        "agentName": r.1,
-                        "description": r.2,
-                        "category": r.3,
-                        "avatarUrl": r.4,
-                        "welcomeMessage": r.5,
-                        "modelProvider": r.6,
-                        "modelId": r.7,
-                        "pricePerMessage": r.8,
-                        "freeTrialMessages": r.9,
-                        "salesCount": r.10,
-                        "status": r.11,
-                        "avgRating": r.12,
-                        "reviewCount": r.13,
-                        "totalMessages": r.14,
-                        "totalRevenue": r.15,
-                        "exampleConversations": r.16,
-                        "createdAt": r.17.and_utc().to_rfc3339(),
-                        "updatedAt": r.18.and_utc().to_rfc3339(),
-                    })
-                })
-                .collect();
-
+            let listings: Vec<Value> = rows.iter().map(listing_row_to_json).collect();
             (
                 StatusCode::OK,
                 Json(json!({ "listings": listings })),
