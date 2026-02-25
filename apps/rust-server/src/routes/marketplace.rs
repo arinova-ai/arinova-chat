@@ -22,6 +22,10 @@ pub fn router() -> Router<AppState> {
             get(get_detail).put(update_listing).delete(archive_listing),
         )
         .route("/api/marketplace/agents/{id}/manage", get(manage_detail))
+        .route(
+            "/api/marketplace/agents/{id}/reviews",
+            post(create_review).get(list_reviews),
+        )
         .route("/api/marketplace/manage", get(my_listings))
 }
 
@@ -791,6 +795,218 @@ async fn my_listings(
         }
         Err(e) => {
             tracing::error!("My listings fetch failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/marketplace/agents/{id}/reviews — Create a review
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CreateReviewBody {
+    rating: i32,
+    comment: Option<String>,
+}
+
+async fn create_review(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(listing_id): Path<Uuid>,
+    Json(body): Json<CreateReviewBody>,
+) -> (StatusCode, Json<Value>) {
+    // Validate rating
+    if body.rating < 1 || body.rating > 5 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Rating must be 1-5" })),
+        );
+    }
+
+    // Validate comment length
+    if let Some(ref c) = body.comment {
+        if c.len() > 2000 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Comment must be 2000 characters or less" })),
+            );
+        }
+    }
+
+    // Verify listing exists and is active
+    let listing = sqlx::query_as::<_, ReviewListingCheck>(
+        "SELECT creator_id, status::text AS status FROM agent_listings WHERE id = $1",
+    )
+    .bind(listing_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match listing {
+        Ok(Some(ref l)) if l.status != "active" => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Listing is not active" })),
+            );
+        }
+        Ok(Some(ref l)) if l.creator_id == user.id => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Cannot review your own listing" })),
+            );
+        }
+        Ok(Some(_)) => {} // OK
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Listing not found" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("Create review: fetch listing failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    }
+
+    // Insert review (UNIQUE constraint catches duplicates)
+    let result = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO agent_reviews (listing_id, user_id, rating, comment)
+           VALUES ($1, $2, $3, $4) RETURNING id"#,
+    )
+    .bind(listing_id)
+    .bind(&user.id)
+    .bind(body.rating)
+    .bind(&body.comment)
+    .fetch_one(&state.db)
+    .await;
+
+    let review_id = match result {
+        Ok(id) => id,
+        Err(e) => {
+            if e.to_string().contains("unique")
+                || e.to_string().contains("duplicate")
+                || e.to_string().contains("23505")
+            {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({ "error": "You have already reviewed this listing" })),
+                );
+            }
+            tracing::error!("Create review: insert failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to create review" })),
+            );
+        }
+    };
+
+    // Recalculate avg_rating and review_count
+    if let Err(e) = sqlx::query(
+        r#"UPDATE agent_listings SET
+               avg_rating = (SELECT avg(rating)::float8 FROM agent_reviews WHERE listing_id = $1),
+               review_count = (SELECT count(*)::int FROM agent_reviews WHERE listing_id = $1),
+               updated_at = NOW()
+           WHERE id = $1"#,
+    )
+    .bind(listing_id)
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!("Create review: update avg_rating failed: {}", e);
+    }
+
+    (
+        StatusCode::CREATED,
+        Json(json!({ "id": review_id, "success": true })),
+    )
+}
+
+#[derive(sqlx::FromRow)]
+struct ReviewListingCheck {
+    creator_id: String,
+    status: String,
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/marketplace/agents/{id}/reviews — List reviews
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ReviewsQuery {
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+#[derive(sqlx::FromRow)]
+struct ReviewRow {
+    id: Uuid,
+    rating: i32,
+    comment: Option<String>,
+    created_at: NaiveDateTime,
+    user_name: String,
+    user_image: Option<String>,
+}
+
+async fn list_reviews(
+    State(state): State<AppState>,
+    Path(listing_id): Path<Uuid>,
+    Query(q): Query<ReviewsQuery>,
+) -> (StatusCode, Json<Value>) {
+    let limit = q.limit.unwrap_or(20).min(50);
+    let offset = q.offset.unwrap_or(0).max(0);
+
+    // Get total count
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM agent_reviews WHERE listing_id = $1",
+    )
+    .bind(listing_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let rows = sqlx::query_as::<_, ReviewRow>(
+        r#"SELECT r.id, r.rating, r.comment, r.created_at,
+                  u.name AS user_name, u.image AS user_image
+           FROM agent_reviews r
+           JOIN "user" u ON r.user_id = u.id
+           WHERE r.listing_id = $1
+           ORDER BY r.created_at DESC
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(listing_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let reviews: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    json!({
+                        "id": r.id,
+                        "rating": r.rating,
+                        "comment": r.comment,
+                        "createdAt": r.created_at.and_utc().to_rfc3339(),
+                        "userName": r.user_name,
+                        "userImage": r.user_image,
+                    })
+                })
+                .collect();
+            (
+                StatusCode::OK,
+                Json(json!({ "reviews": reviews, "total": total })),
+            )
+        }
+        Err(e) => {
+            tracing::error!("List reviews failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Database error" })),

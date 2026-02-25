@@ -16,6 +16,7 @@ pub mod users;
 pub mod agent_health;
 pub mod agent_send;
 pub mod agent_uploads;
+pub mod creator;
 pub mod marketplace;
 pub mod marketplace_chat;
 pub mod wallet;
@@ -46,5 +47,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(wallet::router())
         .merge(marketplace::router())
         .merge(marketplace_chat::router())
+        .merge(creator::router())
         .with_state(state)
 }
