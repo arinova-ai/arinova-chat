@@ -177,6 +177,13 @@ END $$;
 
 ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0;
 
+-- agent_reviews: rename agent_listing_id → listing_id
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_reviews' AND column_name='agent_listing_id') THEN
+    ALTER TABLE agent_reviews RENAME COLUMN agent_listing_id TO listing_id;
+  END IF;
+END $$;
+
 -- marketplace_conversations: rename agent_listing_id → listing_id, add title
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='marketplace_conversations' AND column_name='agent_listing_id') THEN

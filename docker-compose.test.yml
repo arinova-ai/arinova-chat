@@ -83,6 +83,7 @@ services:
     volumes:
       - ./apps/rust-server/schema.sql:/schema.sql:ro
       - ./apps/rust-server/migration.sql:/migration.sql:ro
+      - ./apps/rust-server/seed.sql:/seed.sql:ro
     entrypoint:
       - sh
       - -c
@@ -92,6 +93,8 @@ services:
         psql -h postgres -U arinova -d arinova_chat -f /schema.sql 2>/dev/null || true
         echo "Running migrations..."
         psql -h postgres -U arinova -d arinova_chat -f /migration.sql 2>/dev/null || true
+        echo "Seeding demo data..."
+        psql -h postgres -U arinova -d arinova_chat -f /seed.sql 2>/dev/null || true
         echo "Database ready."
     depends_on:
       postgres:
@@ -115,6 +118,7 @@ services:
       UPLOAD_DIR: /app/uploads
       OPENCLAW_GATEWAY_URL: ws://openclaw:18789
       OFFICE_EVENT_TOKEN: ${OFFICE_EVENT_TOKEN:-test-office-token}
+      ENCRYPTION_KEY: 02628ef0c59f0a0c75b2db8697bb3d82d7b5c9f9f2ccd14883af0aac89c12a48
     volumes:
       - test_uploads_data:/app/uploads
     depends_on:
