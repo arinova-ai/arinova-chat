@@ -33,11 +33,15 @@ export default function OfficeMap({
   const onSelectRef = useRef(onSelectAgent);
   onSelectRef.current = onSelectAgent;
 
-  // Keep latest data for post-init application
+  // Keep latest values accessible via refs for post-init application
   const pendingAgentsRef = useRef(agents);
   const pendingSelectionRef = useRef(selectedAgentId);
+  const widthRef = useRef(width);
+  const heightRef = useRef(height);
   pendingAgentsRef.current = agents;
   pendingSelectionRef.current = selectedAgentId;
+  widthRef.current = width;
+  heightRef.current = height;
 
   // ── Init / re-init when theme changes ──────────────────────
   useEffect(() => {
@@ -58,6 +62,9 @@ export default function OfficeMap({
         }
         rendererRef.current = renderer;
         readyRef.current = true;
+
+        // Catch up with latest size (may have changed during async init)
+        renderer.resize(widthRef.current, heightRef.current);
 
         // Apply latest state
         renderer.updateAgents(pendingAgentsRef.current);

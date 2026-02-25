@@ -90,17 +90,21 @@ export class ThreeJSRenderer implements OfficeRenderer {
   destroy(): void {
     cancelAnimationFrame(this.animId);
 
-    // Dispose agent meshes
-    for (const [, mesh] of this.agentMeshes) {
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+    // Traverse entire scene and dispose all GPU resources
+    if (this.scene) {
+      this.scene.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry?.dispose();
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m) => m.dispose());
+          } else {
+            (obj.material as THREE.Material)?.dispose();
+          }
+        }
+      });
     }
-    this.agentMeshes.clear();
 
-    for (const [, sprite] of this.agentLabels) {
-      sprite.material.map?.dispose();
-      sprite.material.dispose();
-    }
+    this.agentMeshes.clear();
     this.agentLabels.clear();
 
     // Dispose renderer
