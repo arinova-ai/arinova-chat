@@ -84,7 +84,11 @@ pub fn chunk_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> 
 /// All rfind operations return byte offsets that are inherently valid
 /// UTF-8 boundaries (they search for ASCII patterns).
 fn find_break_point(text: &str, start: usize, end: usize) -> usize {
-    let search_from = if end > start + 800 { end - 800 } else { start };
+    let mut search_from = if end > start + 800 { end - 800 } else { start };
+    // Align to a valid UTF-8 char boundary
+    while !text.is_char_boundary(search_from) && search_from > start {
+        search_from -= 1;
+    }
     let window = &text[search_from..end];
 
     // Prefer double newline (paragraph break)
