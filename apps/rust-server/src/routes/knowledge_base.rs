@@ -224,7 +224,7 @@ async fn upload_file(
 
     let total_chars = raw_content.len() as i32;
 
-    // 6. Deduct credits for KB upload
+    // 6. Deduct credits + record transaction + insert KB in single transaction
     let balance = sqlx::query_scalar::<_, i32>(
         "SELECT balance FROM coin_balances WHERE user_id = $1",
     )
@@ -249,6 +249,15 @@ async fn upload_file(
         ));
     }
 
+    let mut tx = state.db.begin().await.map_err(|e| {
+        tracing::error!("KB tx: begin failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        )
+    })?;
+
+    // 6a. Atomic deduction — only succeeds if balance >= fee
     let deducted = sqlx::query_scalar::<_, i32>(
         r#"UPDATE coin_balances
            SET balance = balance - $2, updated_at = NOW()
@@ -257,7 +266,7 @@ async fn upload_file(
     )
     .bind(&user.id)
     .bind(KB_UPLOAD_FEE)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| {
         tracing::error!("KB billing: deduct failed: {}", e);
@@ -276,21 +285,25 @@ async fn upload_file(
         ));
     }
 
-    // Record transaction
-    if let Err(e) = sqlx::query(
+    // 6b. Record transaction
+    sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, description)
            VALUES ($1, 'kb_upload', $2, $3)"#,
     )
     .bind(&user.id)
     .bind(-KB_UPLOAD_FEE)
     .bind(format!("Knowledge base file upload: {}", file_name))
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
-    {
+    .map_err(|e| {
         tracing::error!("KB billing: record transaction failed: {}", e);
-    }
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Failed to record transaction" })),
+        )
+    })?;
 
-    // 7. INSERT into agent_knowledge_bases
+    // 6c. INSERT into agent_knowledge_bases
     let row = sqlx::query_as::<_, KbRow>(
         r#"INSERT INTO agent_knowledge_bases
            (listing_id, creator_id, file_name, file_size, file_type, status, total_chars, raw_content)
@@ -305,63 +318,67 @@ async fn upload_file(
     .bind(file_type)
     .bind(total_chars)
     .bind(&raw_content)
-    .fetch_one(&state.db)
-    .await;
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| {
+        tracing::error!("KB insert error: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Failed to save knowledge base file" })),
+        )
+    })?;
 
-    match row {
-        Ok(r) => {
-            // Spawn background embedding task
-            let db = state.db.clone();
-            let config = state.config.clone();
-            let kb_id = r.id;
+    tx.commit().await.map_err(|e| {
+        tracing::error!("KB tx: commit failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        )
+    })?;
 
-            tokio::spawn(async move {
-                match crate::services::embedding::process_embedding(
-                    db.clone(),
-                    config,
-                    kb_id,
-                    &raw_content,
+    // 7. Spawn background embedding task (outside transaction)
+    let db = state.db.clone();
+    let config = state.config.clone();
+    let kb_id = row.id;
+
+    tokio::spawn(async move {
+        match crate::services::embedding::process_embedding(
+            db.clone(),
+            config,
+            kb_id,
+            &raw_content,
+        )
+        .await
+        {
+            Ok(chunk_count) => {
+                tracing::info!("KB {} embedding done: {} chunks", kb_id, chunk_count);
+                if let Err(e) = sqlx::query(
+                    "UPDATE agent_knowledge_bases SET status = 'ready', chunk_count = $1, updated_at = NOW() WHERE id = $2",
                 )
+                .bind(chunk_count as i32)
+                .bind(kb_id)
+                .execute(&db)
                 .await
                 {
-                    Ok(chunk_count) => {
-                        tracing::info!("KB {} embedding done: {} chunks", kb_id, chunk_count);
-                        if let Err(e) = sqlx::query(
-                            "UPDATE agent_knowledge_bases SET status = 'ready', chunk_count = $1, updated_at = NOW() WHERE id = $2",
-                        )
-                        .bind(chunk_count as i32)
-                        .bind(kb_id)
-                        .execute(&db)
-                        .await
-                        {
-                            tracing::error!("KB {} failed to update status to ready: {:?}", kb_id, e);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("KB {} embedding failed: {:?}", kb_id, e);
-                        if let Err(e) = sqlx::query(
-                            "UPDATE agent_knowledge_bases SET status = 'failed', updated_at = NOW() WHERE id = $1",
-                        )
-                        .bind(kb_id)
-                        .execute(&db)
-                        .await
-                        {
-                            tracing::error!("KB {} failed to update status to failed: {:?}", kb_id, e);
-                        }
-                    }
+                    tracing::error!("KB {} failed to update status to ready: {:?}", kb_id, e);
                 }
-            });
+            }
+            Err(e) => {
+                tracing::error!("KB {} embedding failed: {:?}", kb_id, e);
+                if let Err(e) = sqlx::query(
+                    "UPDATE agent_knowledge_bases SET status = 'failed', updated_at = NOW() WHERE id = $1",
+                )
+                .bind(kb_id)
+                .execute(&db)
+                .await
+                {
+                    tracing::error!("KB {} failed to update status to failed: {:?}", kb_id, e);
+                }
+            }
+        }
+    });
 
-            Ok((StatusCode::CREATED, Json(kb_to_json(&r))))
-        }
-        Err(e) => {
-            tracing::error!("KB insert error: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Failed to save knowledge base file" })),
-            ))
-        }
-    }
+    Ok((StatusCode::CREATED, Json(kb_to_json(&row))))
 }
 
 // ---------------------------------------------------------------------------

@@ -32,6 +32,9 @@ END $$;
 -- pgvector extension for RAG embeddings
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Add 'kb_upload' to coin_transaction_type (for KB file upload billing)
+ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'kb_upload';
+
 BEGIN;
 
 -- ===== 2. Alter Existing Tables =====

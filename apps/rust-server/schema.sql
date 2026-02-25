@@ -17,7 +17,7 @@ CREATE TYPE agent_listen_mode AS ENUM ('owner_only', 'allowed_users', 'all_menti
 -- App/Marketplace enums
 CREATE TYPE app_status AS ENUM ('draft', 'submitted', 'scanning', 'in_review', 'published', 'rejected', 'suspended');
 CREATE TYPE app_version_status AS ENUM ('submitted', 'scanning', 'in_review', 'published', 'rejected');
-CREATE TYPE coin_transaction_type AS ENUM ('topup', 'purchase', 'refund', 'payout', 'earning');
+CREATE TYPE coin_transaction_type AS ENUM ('topup', 'purchase', 'refund', 'payout', 'earning', 'kb_upload');
 CREATE TYPE purchase_status AS ENUM ('completed', 'refunded');
 
 -- Playground enums
