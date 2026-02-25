@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { AuthGuard } from "@/components/auth-guard";
@@ -60,36 +60,46 @@ function MarketplaceContent() {
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
-  const fetchListings = useCallback(async () => {
+  const fetchListings = useCallback(async (currentOffset: number) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (category !== "All") params.set("category", category.toLowerCase());
+      if (category !== "All") params.set("category", category);
       if (search.trim()) params.set("search", search.trim());
       params.set("sort", sort);
       params.set("limit", String(limit));
-      params.set("offset", String(offset));
+      params.set("offset", String(currentOffset));
 
       const data = await api<BrowseResponse>(
         `/api/marketplace/agents?${params.toString()}`
       );
-      setListings(data.listings);
+      setListings((prev) =>
+        currentOffset === 0 ? data.listings : [...prev, ...data.listings]
+      );
       setTotal(data.total);
     } catch {
       // auto-handled by api
     } finally {
       setLoading(false);
     }
-  }, [category, search, sort, offset]);
+  }, [category, search, sort]);
 
+  // Debounced fetch on filter changes
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    fetchListings();
-  }, [fetchListings]);
+    debounceRef.current = setTimeout(() => {
+      setOffset(0);
+      fetchListings(0);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [search, category, sort, fetchListings]);
 
-  const handleSearch = () => {
-    setOffset(0);
-    fetchListings();
-  };
+  // Load more (non-debounced)
+  useEffect(() => {
+    if (offset > 0) fetchListings(offset);
+  }, [offset, fetchListings]);
 
   return (
     <div className="flex h-dvh bg-background">
@@ -120,7 +130,7 @@ function MarketplaceContent() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSearch();
+                  if (e.key === "Enter") e.preventDefault();
                 }}
                 className="h-9 w-64 rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
@@ -136,7 +146,7 @@ function MarketplaceContent() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSearch();
+                  if (e.key === "Enter") e.preventDefault();
                 }}
                 className="h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />

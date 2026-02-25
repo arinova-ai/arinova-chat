@@ -42,6 +42,7 @@ function MarketplaceChatContent() {
   const conversationIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load agent info
   useEffect(() => {
@@ -59,6 +60,11 @@ function MarketplaceChatContent() {
     })();
   }, [agentListingId]);
 
+  // Abort streaming on unmount
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
   // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -67,6 +73,11 @@ function MarketplaceChatContent() {
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || streaming) return;
+
+    // Abort any previous streaming request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     setInput("");
     setError(null);
@@ -88,6 +99,7 @@ function MarketplaceChatContent() {
             message: text,
             conversationId: conversationIdRef.current ?? undefined,
           }),
+          signal: controller.signal,
         }
       );
 
@@ -134,6 +146,14 @@ function MarketplaceChatContent() {
               // done
             } else if (event.type === "error") {
               setError(event.error);
+              // Remove empty assistant placeholder
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant" && !last.content) {
+                  return prev.slice(0, -1);
+                }
+                return prev;
+              });
             }
           } catch {
             // skip malformed JSON
@@ -141,6 +161,7 @@ function MarketplaceChatContent() {
         }
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       const msg = err instanceof Error ? err.message : "Failed to send message";
       setError(msg);
       // Remove the empty assistant message
