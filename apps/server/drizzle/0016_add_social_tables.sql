@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS conversation_user_members (
     user_id TEXT NOT NULL REFERENCES "user"(id),
     role conversation_user_role NOT NULL DEFAULT 'member',
     joined_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    hidden_at TIMESTAMP,
     UNIQUE(conversation_id, user_id)
 );
 
@@ -68,3 +69,6 @@ CREATE INDEX IF NOT EXISTS idx_conversation_user_members_user ON conversation_us
 CREATE INDEX IF NOT EXISTS idx_conversation_members_conv ON conversation_members(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_status ON friendships(status);
+
+-- Backfill: add hidden_at if table was created without it
+ALTER TABLE conversation_user_members ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMP;

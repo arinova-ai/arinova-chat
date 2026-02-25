@@ -441,7 +441,7 @@ export default function OfficeMap({
     const bgColor = manifest ? parseBgColor(manifest) : 0x0f172a;
     const app = new Application();
     const destroyedRef = { current: false };
-    appRef.current = app;
+    appRef.current = null;
     setReady(false);
     frameSetsRef.current = undefined;
     bgLoadedRef.current = false;
@@ -467,6 +467,7 @@ export default function OfficeMap({
         }
 
         canvasRef.current.appendChild(app.canvas);
+        appRef.current = app;
         app.stage.eventMode = "static";
         app.stage.hitArea = new Rectangle(0, 0, width, height);
 
@@ -616,13 +617,15 @@ export default function OfficeMap({
   // ── Resize ─────────────────────────────────────────────────
   useEffect(() => {
     const app = appRef.current;
-    if (!app || !ready) return;
+    if (!app || !app.renderer || !ready) return;
     app.renderer.resize(width, height);
     if (app.canvas) {
       (app.canvas as HTMLCanvasElement).style.width = `${width}px`;
       (app.canvas as HTMLCanvasElement).style.height = `${height}px`;
     }
-    app.stage.hitArea = new Rectangle(0, 0, width, height);
+    if (app.stage) {
+      app.stage.hitArea = new Rectangle(0, 0, width, height);
+    }
 
     if (!useFallback && manifest && rootRef.current) {
       const { scale, offsetX, offsetY } = computeScale(
