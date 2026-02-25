@@ -457,8 +457,14 @@ export default function OfficeMap({
         autoDensity: true,
       })
       .then(async () => {
-        if (destroyedRef.current) return;
-        if (!canvasRef.current || !app.canvas) return;
+        if (destroyedRef.current) {
+          try { app.destroy(true, { children: true }); } catch { /* noop */ }
+          return;
+        }
+        if (!canvasRef.current || !app.canvas) {
+          try { app.destroy(true, { children: true }); } catch { /* noop */ }
+          return;
+        }
 
         canvasRef.current.appendChild(app.canvas);
         app.stage.eventMode = "static";
@@ -566,6 +572,9 @@ export default function OfficeMap({
         if (!destroyedRef.current) {
           setReady(true);
         }
+      })
+      .catch(() => {
+        try { app.destroy(true, { children: true }); } catch { /* noop */ }
       });
 
     return () => {
@@ -586,8 +595,8 @@ export default function OfficeMap({
       }
       loadedAssetUrlsRef.current = [];
 
-      // 3. Destroy PixiJS app (removes canvas from DOM)
-      try { app.destroy(true); } catch { /* noop */ }
+      // 3. Destroy PixiJS app (removes canvas from DOM + all children)
+      try { app.destroy(true, { children: true }); } catch { /* noop */ }
 
       // 4. Null out refs
       appRef.current = null;
