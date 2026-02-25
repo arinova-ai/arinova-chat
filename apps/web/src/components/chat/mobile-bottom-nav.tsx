@@ -172,8 +172,8 @@ export function MobileBottomNav() {
             <img
               src="/assets/nav/logo-arinova-white.svg"
               alt="Arinova"
-              width={32}
-              height={32}
+              width={28}
+              height={28}
               className={cn(
                 "transition-all duration-300 drop-shadow-[0_0_6px_rgba(147,197,253,0.6)]",
                 fanOpen && "brightness-125"
@@ -228,7 +228,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center gap-0.5 px-3 py-1 text-[10px] transition-colors",
+        "flex flex-col items-center justify-center gap-1 px-3 py-1.5 min-w-[64px] text-[10px] transition-colors",
         active ? "text-brand-text" : "text-muted-foreground"
       )}
     >
@@ -237,9 +237,9 @@ function NavButton({
         src={active ? icons.active : icons.inactive}
         alt=""
         aria-hidden="true"
-        width={20}
-        height={20}
-        className="h-5 w-5"
+        width={24}
+        height={24}
+        className="h-6 w-6"
       />
       <span>{label}</span>
     </button>
