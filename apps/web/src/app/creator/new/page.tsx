@@ -7,7 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Upload, X } from "lucide-react";
 
 const CATEGORIES = [
   "Productivity",
@@ -43,6 +43,7 @@ function NewAgentContent() {
   const [exampleConversations, setExampleConversations] = useState<
     { question: string; answer: string }[]
   >([]);
+  const [kbFiles, setKbFiles] = useState<File[]>([]);
 
   const addExample = () => {
     setExampleConversations([
@@ -65,11 +66,17 @@ function NewAgentContent() {
     setExampleConversations((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api("/api/marketplace/agents", {
+      const created = await api<{ id: string }>("/api/marketplace/agents", {
         method: "POST",
         body: JSON.stringify({
           name,
@@ -88,6 +95,23 @@ function NewAgentContent() {
           freeTrialMessages,
         }),
       });
+
+      // Upload KB files if any
+      if (kbFiles.length > 0 && created.id) {
+        for (const file of kbFiles) {
+          const fd = new FormData();
+          fd.append("file", file);
+          try {
+            await api(`/api/marketplace/agents/${created.id}/knowledge-base`, {
+              method: "POST",
+              body: fd,
+            });
+          } catch {
+            // continue uploading remaining files
+          }
+        }
+      }
+
       router.push("/creator");
     } catch {
       // auto-handled by api
@@ -249,6 +273,61 @@ function NewAgentContent() {
                   to call the LLM.
                 </p>
               </div>
+            </section>
+
+            {/* Knowledge Base */}
+            <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Knowledge Base
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Upload files to give your agent domain-specific knowledge via RAG.
+                Supported: .txt, .md, .csv, .json (max 5 MB each)
+              </p>
+
+              <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-6 cursor-pointer hover:border-muted-foreground transition-colors">
+                <Upload className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Click to select files
+                </span>
+                <input
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.csv,.json,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setKbFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+
+              {kbFiles.length > 0 && (
+                <div className="space-y-2">
+                  {kbFiles.map((f, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm truncate">{f.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatFileSize(f.size)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setKbFiles((prev) => prev.filter((_, j) => j !== i))}
+                        className="text-muted-foreground hover:text-foreground shrink-0 ml-2"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             {/* Pricing */}

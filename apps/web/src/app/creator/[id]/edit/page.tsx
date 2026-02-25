@@ -7,7 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 
 const CATEGORIES = [
   "Productivity",
@@ -23,6 +23,15 @@ const PROVIDERS = [
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic" },
 ];
+
+interface KbFile {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  status: string;
+  chunkCount: number;
+  createdAt: string;
+}
 
 interface AgentManage {
   id: string;
@@ -61,6 +70,9 @@ function EditAgentContent() {
   const [exampleConversations, setExampleConversations] = useState<
     { question: string; answer: string }[]
   >([]);
+  const [kbFiles, setKbFiles] = useState<KbFile[]>([]);
+  const [newKbFiles, setNewKbFiles] = useState<File[]>([]);
+  const [uploadingKb, setUploadingKb] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -79,6 +91,15 @@ function EditAgentContent() {
         setPricePerMessage(data.pricePerMessage);
         setFreeTrialMessages(data.freeTrialMessages);
         setExampleConversations(data.exampleConversations ?? []);
+        // Load KB files
+        try {
+          const kb = await api<{ files: KbFile[] }>(
+            `/api/marketplace/agents/${id}/knowledge-base`,
+          );
+          setKbFiles(kb.files);
+        } catch {
+          // KB may not exist yet
+        }
       } catch {
         // auto-handled
       } finally {
@@ -106,6 +127,59 @@ function EditAgentContent() {
 
   const removeExample = (idx: number) => {
     setExampleConversations((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case "ready":
+        return "bg-green-500/10 text-green-500";
+      case "processing":
+        return "bg-yellow-500/10 text-yellow-500";
+      case "failed":
+        return "bg-red-500/10 text-red-500";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
+  };
+
+  const handleDeleteKb = async (kbId: string) => {
+    try {
+      await api(`/api/marketplace/agents/${id}/knowledge-base/${kbId}`, {
+        method: "DELETE",
+      });
+      setKbFiles((prev) => prev.filter((f) => f.id !== kbId));
+    } catch {
+      // auto-handled
+    }
+  };
+
+  const handleUploadKb = async () => {
+    if (newKbFiles.length === 0) return;
+    setUploadingKb(true);
+    try {
+      for (const file of newKbFiles) {
+        const fd = new FormData();
+        fd.append("file", file);
+        try {
+          const uploaded = await api<KbFile>(
+            `/api/marketplace/agents/${id}/knowledge-base`,
+            { method: "POST", body: fd },
+          );
+          setKbFiles((prev) => [uploaded, ...prev]);
+        } catch {
+          // continue uploading remaining files
+        }
+      }
+      setNewKbFiles([]);
+    } finally {
+      setUploadingKb(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -292,6 +366,113 @@ function EditAgentContent() {
                   Only fill this in if you want to replace the existing key.
                 </p>
               </div>
+            </section>
+
+            {/* Knowledge Base */}
+            <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Knowledge Base
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Upload files to give your agent domain-specific knowledge via RAG.
+                Supported: .txt, .md, .csv, .json (max 5 MB each)
+              </p>
+
+              {/* Existing files */}
+              {kbFiles.length > 0 && (
+                <div className="space-y-2">
+                  {kbFiles.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm truncate">{f.fileName}</p>
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(f.status)}`}
+                          >
+                            {f.status}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatFileSize(f.fileSize)}
+                          {f.status === "ready" && f.chunkCount > 0 && (
+                            <> &middot; {f.chunkCount} chunks</>
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteKb(f.id)}
+                        className="text-muted-foreground hover:text-red-500 shrink-0 ml-2"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload new files */}
+              <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-6 cursor-pointer hover:border-muted-foreground transition-colors">
+                <Upload className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Click to select files
+                </span>
+                <input
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.csv,.json,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setNewKbFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+
+              {newKbFiles.length > 0 && (
+                <div className="space-y-2">
+                  {newKbFiles.map((f, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm truncate">{f.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatFileSize(f.size)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewKbFiles((prev) => prev.filter((_, j) => j !== i))}
+                        className="text-muted-foreground hover:text-foreground shrink-0 ml-2"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={uploadingKb}
+                    onClick={handleUploadKb}
+                    className="text-xs gap-1"
+                  >
+                    {uploadingKb ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    Upload {newKbFiles.length} file{newKbFiles.length !== 1 ? "s" : ""}
+                  </Button>
+                </div>
+              )}
             </section>
 
             {/* Pricing */}
