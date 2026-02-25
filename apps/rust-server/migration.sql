@@ -248,12 +248,25 @@ CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding ON knowledge_base_chunks
 
 -- ===== 8. Marketplace OpenRouter migration =====
 -- Replace per-creator API keys with platform-managed OpenRouter
+-- Re-entrant: safe to run multiple times
 
 -- Add model column (OpenRouter model ID format: 'provider/model-name')
 ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS model TEXT;
 
--- Backfill model from existing model_provider + model_id
-UPDATE agent_listings SET model = model_provider || '/' || model_id WHERE model IS NULL;
+-- Backfill model from existing model_provider + model_id (only if old columns still exist)
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'agent_listings' AND column_name = 'model_provider'
+  ) THEN
+    UPDATE agent_listings
+    SET model = model_provider || '/' || model_id
+    WHERE model IS NULL;
+  END IF;
+END $$;
+
+-- Fill any remaining NULLs with default (covers fresh installs or re-runs)
+UPDATE agent_listings SET model = 'openai/gpt-4o-mini' WHERE model IS NULL;
 
 -- Set NOT NULL + default after backfill
 ALTER TABLE agent_listings ALTER COLUMN model SET NOT NULL;

@@ -231,7 +231,9 @@ struct CreateListingBody {
     #[serde(rename = "exampleConversations")]
     example_conversations: Option<Value>,
     /// OpenRouter model ID, e.g. "openai/gpt-4o", "anthropic/claude-3-sonnet".
+    /// Must be non-empty. Defaults to "openai/gpt-4o-mini".
     model: Option<String>,
+    /// Max characters per user message. Must be 1..=20000. Defaults to 2000.
     #[serde(rename = "inputCharLimit")]
     input_char_limit: Option<i32>,
     #[serde(rename = "pricePerMessage")]
@@ -253,14 +255,29 @@ async fn create_listing(
         );
     }
 
+    // 2. Validate model + input_char_limit
     let model = body.model.as_deref().unwrap_or("openai/gpt-4o-mini");
-    let category = body.category.as_deref().unwrap_or("general");
+    if model.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "model is required" })),
+        );
+    }
+
     let input_char_limit = body.input_char_limit.unwrap_or(2000);
+    if !(1..=20_000).contains(&input_char_limit) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "inputCharLimit must be between 1 and 20000" })),
+        );
+    }
+
+    let category = body.category.as_deref().unwrap_or("general");
     let example_conversations = body.example_conversations.unwrap_or(json!([]));
     let price_per_message = body.price_per_message.unwrap_or(1);
     let free_trial_messages = body.free_trial_messages.unwrap_or(3);
 
-    // 2. INSERT
+    // 3. INSERT
     let row = sqlx::query_as::<_, ListingRow>(
         r#"INSERT INTO agent_listings
            (creator_id, agent_name, description, category, avatar_url, welcome_message,
@@ -321,8 +338,9 @@ struct UpdateListingBody {
     welcome_message: Option<String>,
     #[serde(rename = "exampleConversations")]
     example_conversations: Option<Value>,
-    /// OpenRouter model ID, e.g. "openai/gpt-4o".
+    /// OpenRouter model ID, e.g. "openai/gpt-4o". Must be non-empty if provided.
     model: Option<String>,
+    /// Max characters per user message. Must be 1..=20000 if provided.
     #[serde(rename = "inputCharLimit")]
     input_char_limit: Option<i32>,
     #[serde(rename = "pricePerMessage")]
@@ -384,6 +402,26 @@ async fn update_listing(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": reason })),
+            );
+        }
+    }
+
+    // Validate model if provided
+    if let Some(ref m) = body.model {
+        if m.trim().is_empty() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "model cannot be empty" })),
+            );
+        }
+    }
+
+    // Validate input_char_limit if provided (1..=20000)
+    if let Some(limit) = body.input_char_limit {
+        if !(1..=20_000).contains(&limit) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "inputCharLimit must be between 1 and 20000" })),
             );
         }
     }
