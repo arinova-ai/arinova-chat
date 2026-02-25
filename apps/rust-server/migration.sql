@@ -151,6 +151,30 @@ CREATE INDEX IF NOT EXISTS idx_marketplace_conversations_user ON marketplace_con
 CREATE INDEX IF NOT EXISTS idx_marketplace_conversations_listing ON marketplace_conversations(listing_id);
 CREATE INDEX IF NOT EXISTS idx_marketplace_messages_conv ON marketplace_messages(conversation_id, created_at);
 
+-- ===== 5b. Column renames for TS→Rust name alignment =====
+-- Existing deployments where TS created agent_listings use different column names.
+-- IF EXISTS guards ensure these are no-ops on fresh installs (schema.sql already correct).
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_listings' AND column_name='name') THEN
+    ALTER TABLE agent_listings RENAME COLUMN name TO agent_name;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_listings' AND column_name='encrypted_api_key') THEN
+    ALTER TABLE agent_listings RENAME COLUMN encrypted_api_key TO api_key_encrypted;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_listings' AND column_name='total_conversations') THEN
+    ALTER TABLE agent_listings RENAME COLUMN total_conversations TO sales_count;
+  END IF;
+END $$;
+
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0;
+
 -- ===== 6. Billing columns for per-message pricing =====
 
 ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS price_per_message INTEGER NOT NULL DEFAULT 1;
