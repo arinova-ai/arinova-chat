@@ -8,7 +8,6 @@ WORKDIR /app
 # Copy workspace config and lockfile
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
 COPY apps/web/package.json ./apps/web/
-COPY apps/server/package.json ./apps/server/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/agent-sdk/package.json ./packages/agent-sdk/
 COPY packages/app-sdk/package.json ./packages/app-sdk/

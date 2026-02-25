@@ -81,9 +81,18 @@ services:
     environment:
       PGPASSWORD: arinova_test
     volumes:
-      - ./scripts/docker-init-db.sh:/init.sh:ro
-      - ./apps/server/drizzle:/drizzle:ro
-    entrypoint: ["sh", "/init.sh"]
+      - ./apps/rust-server/schema.sql:/schema.sql:ro
+      - ./apps/rust-server/migration.sql:/migration.sql:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "Initializing database schema..."
+        psql -h postgres -U arinova -d arinova_chat -f /schema.sql 2>/dev/null || true
+        echo "Running migrations..."
+        psql -h postgres -U arinova -d arinova_chat -f /migration.sql 2>/dev/null || true
+        echo "Database ready."
     depends_on:
       postgres:
         condition: service_healthy

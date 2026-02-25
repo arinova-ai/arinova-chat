@@ -29,8 +29,8 @@ services:
 
   server:
     build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+      context: apps/rust-server
+      dockerfile: Dockerfile
     container_name: arinova-server
     restart: unless-stopped
     ports:

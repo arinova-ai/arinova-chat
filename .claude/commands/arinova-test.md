@@ -54,10 +54,7 @@ Run the Arinova Chat test suite.
 
 **Test Architecture Reference**
 
-- **Server tests** (`apps/server/`): Vitest, node environment, mock-based (no real DB)
-  - Unit: `src/sandbox/`, `src/utils/`, `src/a2a/`, `src/lib/`
-  - Integration: `src/routes/`, `src/ws/`
-  - Test utils: `src/test-utils/` (db, factories, server helpers)
+- **Server**: Rust (`apps/rust-server/`) — tested separately via `cargo test`
 
 - **Frontend tests** (`apps/web/`): Vitest, jsdom environment, React Testing Library
   - Unit: `src/lib/`, `src/store/`
