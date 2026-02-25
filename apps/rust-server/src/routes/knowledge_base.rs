@@ -240,7 +240,45 @@ async fn upload_file(
     .await;
 
     match row {
-        Ok(r) => Ok((StatusCode::CREATED, Json(kb_to_json(&r)))),
+        Ok(r) => {
+            // Spawn background embedding task
+            let db = state.db.clone();
+            let config = state.config.clone();
+            let kb_id = r.id;
+
+            tokio::spawn(async move {
+                match crate::services::embedding::process_embedding(
+                    db.clone(),
+                    config,
+                    kb_id,
+                    &raw_content,
+                )
+                .await
+                {
+                    Ok(chunk_count) => {
+                        tracing::info!("KB {} embedding done: {} chunks", kb_id, chunk_count);
+                        let _ = sqlx::query(
+                            "UPDATE agent_knowledge_bases SET status = 'ready', chunk_count = $1, updated_at = NOW() WHERE id = $2",
+                        )
+                        .bind(chunk_count as i32)
+                        .bind(kb_id)
+                        .execute(&db)
+                        .await;
+                    }
+                    Err(e) => {
+                        tracing::error!("KB {} embedding failed: {:?}", kb_id, e);
+                        let _ = sqlx::query(
+                            "UPDATE agent_knowledge_bases SET status = 'failed', updated_at = NOW() WHERE id = $1",
+                        )
+                        .bind(kb_id)
+                        .execute(&db)
+                        .await;
+                    }
+                }
+            });
+
+            Ok((StatusCode::CREATED, Json(kb_to_json(&r))))
+        }
         Err(e) => {
             tracing::error!("KB insert error: {}", e);
             Err((

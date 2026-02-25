@@ -1,5 +1,6 @@
 pub mod billing;
 pub mod crypto;
+pub mod embedding;
 pub mod llm;
 pub mod message_seq;
 pub mod office;

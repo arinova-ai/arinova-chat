@@ -28,6 +28,8 @@ pub struct Config {
     pub office_event_token: String,
     /// AES-256-GCM key for encrypting API keys (64 hex chars = 32 bytes).
     pub encryption_key: String,
+    /// OpenAI API key for embedding generation (RAG).
+    pub openai_api_key: Option<String>,
 }
 
 impl Config {
@@ -70,6 +72,7 @@ impl Config {
                 .unwrap_or_else(|_| "mailto:admin@arinova.ai".into()),
             sentry_dsn: env::var("SENTRY_DSN").unwrap_or_default(),
             office_event_token: env::var("OFFICE_EVENT_TOKEN").unwrap_or_default(),
+            openai_api_key: env::var("OPENAI_API_KEY").ok().filter(|s| !s.is_empty()),
             encryption_key: {
                 let key = env::var("ENCRYPTION_KEY")
                     .expect("ENCRYPTION_KEY is required");
