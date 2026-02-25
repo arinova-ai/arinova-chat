@@ -153,8 +153,8 @@ CREATE INDEX IF NOT EXISTS idx_marketplace_messages_conv ON marketplace_messages
 
 -- ===== 6. Billing columns for per-message pricing =====
 
-ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS price_per_message INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS free_trial_messages INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS price_per_message INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS free_trial_messages INTEGER NOT NULL DEFAULT 3;
 ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS total_messages INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS total_revenue INTEGER NOT NULL DEFAULT 0;
 

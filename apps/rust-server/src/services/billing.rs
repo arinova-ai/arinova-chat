@@ -76,19 +76,20 @@ pub async fn check_billing(
         });
     }
 
-    // 2. Fetch conversation message count
+    // 2. Fetch conversation message count — must match user_id AND listing_id
     let message_count = sqlx::query_scalar::<_, i32>(
-        "SELECT message_count FROM marketplace_conversations WHERE id = $1 AND user_id = $2",
+        "SELECT message_count FROM marketplace_conversations WHERE id = $1 AND user_id = $2 AND listing_id = $3",
     )
     .bind(conversation_id)
     .bind(user_id)
+    .bind(listing_id)
     .fetch_optional(db)
     .await
     .map_err(|e| {
         tracing::error!("check_billing: fetch message_count failed: {}", e);
         "Database error".to_string()
     })?
-    .unwrap_or(0);
+    .unwrap_or(0); // None = new user, 0 messages = correct free trial start
 
     // 3. Free trial check
     if message_count < free_trial_messages {
@@ -263,19 +264,26 @@ pub async fn record_message(
     price: i32,
 ) -> Result<(), String> {
     // Increment conversation message count
-    if let Err(e) = sqlx::query(
+    let conv_result = sqlx::query(
         "UPDATE marketplace_conversations SET message_count = message_count + 1, updated_at = NOW() WHERE id = $1",
     )
     .bind(conversation_id)
     .execute(db)
-    .await
-    {
-        tracing::error!("record_message: update conversation count failed: {}", e);
-        return Err("Database error".into());
+    .await;
+
+    match conv_result {
+        Ok(r) if r.rows_affected() == 0 => {
+            tracing::warn!("record_message: conversation {} not found (0 rows affected)", conversation_id);
+        }
+        Err(e) => {
+            tracing::error!("record_message: update conversation count failed: {}", e);
+            return Err("Database error".into());
+        }
+        _ => {}
     }
 
     // Increment listing total_messages and total_revenue
-    if let Err(e) = sqlx::query(
+    let listing_result = sqlx::query(
         r#"UPDATE agent_listings
            SET total_messages = total_messages + 1,
                total_revenue = total_revenue + $2,
@@ -285,10 +293,17 @@ pub async fn record_message(
     .bind(listing_id)
     .bind(price)
     .execute(db)
-    .await
-    {
-        tracing::error!("record_message: update listing stats failed: {}", e);
-        return Err("Database error".into());
+    .await;
+
+    match listing_result {
+        Ok(r) if r.rows_affected() == 0 => {
+            tracing::warn!("record_message: listing {} not found (0 rows affected)", listing_id);
+        }
+        Err(e) => {
+            tracing::error!("record_message: update listing stats failed: {}", e);
+            return Err("Database error".into());
+        }
+        _ => {}
     }
 
     Ok(())

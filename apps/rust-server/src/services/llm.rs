@@ -9,6 +9,7 @@ use futures::stream::{Stream, StreamExt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
+use std::time::Duration;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +58,11 @@ pub type SseStream = Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + 
 /// Validate an API key by making a lightweight request to the provider.
 /// Returns `Ok(())` on success, or a user-safe error message on failure.
 pub async fn validate_api_key(provider: &LlmProvider, api_key: &str) -> Result<(), String> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
 
     match provider {
         LlmProvider::OpenAI => {
@@ -89,11 +94,13 @@ pub async fn validate_api_key(provider: &LlmProvider, api_key: &str) -> Result<(
                 .await
                 .map_err(|_| "Failed to reach Anthropic API".to_string())?;
 
-            if resp.status().as_u16() == 401 {
+            let status = resp.status().as_u16();
+            if status == 200 || status == 201 {
+                Ok(())
+            } else if status == 401 || status == 403 {
                 Err("Invalid Anthropic API key".into())
             } else {
-                // Any non-401 response (including 200) means the key is valid.
-                Ok(())
+                Err("Anthropic API key validation failed".into())
             }
         }
     }
@@ -108,7 +115,11 @@ pub async fn validate_api_key(provider: &LlmProvider, api_key: &str) -> Result<(
 /// The caller is responsible for forwarding the stream chunks to the client.
 /// Provider-specific errors are logged internally; the stream will simply end.
 pub async fn call_llm_stream(opts: &LlmCallOptions) -> Result<SseStream, String> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("HTTP client error: {e}"))?;
 
     match opts.provider {
         LlmProvider::OpenAI => call_openai_stream(&client, opts).await,
