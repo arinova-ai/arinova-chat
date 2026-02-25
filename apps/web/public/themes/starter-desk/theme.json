@@ -42,20 +42,20 @@
       "id": "rest-area",
       "name": "REST AREA",
       "type": "lounge",
-      "bounds": { "x": 300, "y": 300, "width": 600, "height": 500 },
+      "bounds": { "x": 200, "y": 250, "width": 700, "height": 550 },
       "capacity": 1,
       "seats": [
-        { "id": "bed-1", "x": 600, "y": 620, "direction": "right" }
+        { "id": "bed-1", "x": 550, "y": 600, "direction": "right" }
       ]
     },
     {
       "id": "work-area",
       "name": "WORK AREA",
       "type": "work",
-      "bounds": { "x": 1000, "y": 250, "width": 600, "height": 500 },
+      "bounds": { "x": 950, "y": 250, "width": 750, "height": 550 },
       "capacity": 1,
       "seats": [
-        { "id": "desk-1", "x": 1200, "y": 520, "direction": "left" }
+        { "id": "desk-1", "x": 1250, "y": 560, "direction": "left" }
       ]
     }
   ],
