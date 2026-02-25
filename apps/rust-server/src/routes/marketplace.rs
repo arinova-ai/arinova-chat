@@ -279,6 +279,16 @@ async fn update_listing(
         }
     }
 
+    // Validate model_provider if provided (regardless of apiKey)
+    if let Some(ref mp) = body.model_provider {
+        if mp != "openai" && mp != "anthropic" {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("Unsupported provider: {}", mp) })),
+            );
+        }
+    }
+
     // If new api_key provided, validate + encrypt
     let mut encrypted_key: Option<String> = None;
     if let Some(ref new_key) = body.api_key {
@@ -287,12 +297,8 @@ async fn update_listing(
         let provider = match body.model_provider.as_deref() {
             Some("anthropic") => llm::LlmProvider::Anthropic,
             Some("openai") => llm::LlmProvider::OpenAI,
-            Some(p) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({ "error": format!("Unsupported provider: {}", p) })),
-                );
-            }
+            // Already validated above, but satisfy exhaustive match
+            Some(_) => unreachable!(),
             None => llm::LlmProvider::from_model(model_id),
         };
 
