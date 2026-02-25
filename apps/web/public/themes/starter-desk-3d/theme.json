@@ -1,0 +1,184 @@
+{
+  "id": "starter-desk-3d",
+  "name": "Starter Desk 3D",
+  "version": "1.0.0",
+  "author": { "name": "Arinova", "id": "arinova-official" },
+  "description": "A 3D personal workspace with the Arinova robot at a cozy desk setup.",
+  "tags": ["3d", "starter", "desk", "free"],
+  "preview": "preview.png",
+  "license": "standard",
+  "renderer": "threejs",
+
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "background": {
+      "image": "background.png",
+      "color": "0x1a1a2e"
+    }
+  },
+
+  "viewport": {
+    "minZoom": 0.5,
+    "maxZoom": 2.0,
+    "defaultZoom": 1.0,
+    "panBounds": true,
+    "mobile": {
+      "defaultZoom": 0.6,
+      "pinchToZoom": true,
+      "doubleTapZoom": 1.2
+    }
+  },
+
+  "layers": [
+    { "id": "background",    "zIndex": 0 },
+    { "id": "floor-decor",   "zIndex": 10 },
+    { "id": "furniture",     "zIndex": 20 },
+    { "id": "characters",    "zIndex": 30 },
+    { "id": "furniture-top", "zIndex": 40 },
+    { "id": "effects",       "zIndex": 50 },
+    { "id": "ui-overlay",    "zIndex": 100 }
+  ],
+
+  "zones": [
+    {
+      "id": "work-area",
+      "name": "WORK AREA",
+      "type": "work",
+      "bounds": { "x": 800, "y": 300, "width": 800, "height": 500 },
+      "capacity": 1,
+      "seats": [
+        { "id": "desk-1", "x": 1200, "y": 560, "direction": "left" }
+      ]
+    },
+    {
+      "id": "rest-area",
+      "name": "REST AREA",
+      "type": "lounge",
+      "bounds": { "x": 200, "y": 300, "width": 550, "height": 500 },
+      "capacity": 1,
+      "seats": [
+        { "id": "couch-1", "x": 475, "y": 580, "direction": "right" }
+      ]
+    }
+  ],
+
+  "furniture": [
+    {
+      "id": "desk-main",
+      "sprite": "office/models/furniture/desk.glb",
+      "layer": "furniture",
+      "x": 1280,
+      "y": 560,
+      "width": 160,
+      "height": 100
+    },
+    {
+      "id": "chair-main",
+      "sprite": "office/models/furniture/chair.glb",
+      "layer": "furniture",
+      "x": 1160,
+      "y": 560,
+      "width": 80,
+      "height": 80
+    },
+    {
+      "id": "monitor-main",
+      "sprite": "office/models/furniture/monitor.glb",
+      "layer": "furniture-top",
+      "x": 1300,
+      "y": 540,
+      "width": 60,
+      "height": 60
+    },
+    {
+      "id": "couch-rest",
+      "sprite": "office/models/furniture/couch.glb",
+      "layer": "furniture",
+      "x": 400,
+      "y": 560,
+      "width": 140,
+      "height": 80
+    },
+    {
+      "id": "coffee-table",
+      "sprite": "office/models/furniture/coffee-table.glb",
+      "layer": "furniture",
+      "x": 480,
+      "y": 640,
+      "width": 80,
+      "height": 50
+    },
+    {
+      "id": "bookshelf-wall",
+      "sprite": "office/models/furniture/bookshelf.glb",
+      "layer": "furniture",
+      "x": 1500,
+      "y": 340,
+      "width": 120,
+      "height": 120
+    },
+    {
+      "id": "plant-corner",
+      "sprite": "office/models/furniture/plant.glb",
+      "layer": "furniture",
+      "x": 850,
+      "y": 340,
+      "width": 60,
+      "height": 70
+    },
+    {
+      "id": "floor-lamp",
+      "sprite": "office/models/furniture/floor-lamp.glb",
+      "layer": "furniture",
+      "x": 300,
+      "y": 380,
+      "width": 40,
+      "height": 80
+    },
+    {
+      "id": "rug-center",
+      "sprite": "office/models/furniture/rug.glb",
+      "layer": "floor-decor",
+      "x": 960,
+      "y": 540,
+      "width": 200,
+      "height": 120
+    }
+  ],
+
+  "effects": [],
+
+  "characters": {
+    "atlas": "",
+    "frameWidth": 0,
+    "frameHeight": 0,
+    "anchor": { "x": 0.5, "y": 1.0 },
+    "hitArea": { "type": "circle", "x": 0, "y": 0, "radius": 38 },
+    "nameTag": {
+      "offsetY": -68,
+      "font": "12px system-ui, sans-serif",
+      "color": "#e2e8f0",
+      "bgColor": "rgba(15,23,42,0.85)",
+      "padding": { "x": 6, "y": 2 },
+      "borderRadius": 6,
+      "maxWidth": 100
+    },
+    "statusBadge": {
+      "offsetX": 24,
+      "offsetY": -24,
+      "radius": 5,
+      "colors": {
+        "working": "#16A34A",
+        "idle": "#F59E0B",
+        "blocked": "#DC2626",
+        "collaborating": "#2563EB"
+      }
+    },
+    "states": {
+      "idle": { "prefix": "bot-idle", "frames": 1, "fps": 1, "loop": true },
+      "working": { "prefix": "bot-working", "frames": 1, "fps": 1, "loop": true }
+    },
+    "directions": ["down"]
+  }
+}

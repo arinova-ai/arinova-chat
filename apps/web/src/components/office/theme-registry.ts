@@ -30,6 +30,15 @@ export const THEME_REGISTRY: ThemeEntry[] = [
     tags: ["warm", "cozy", "starter"],
   },
   {
+    id: "starter-desk-3d",
+    name: "Starter Desk 3D",
+    description: "A 3D personal workspace with the Arinova robot at a cozy desk setup.",
+    previewUrl: "/themes/starter-desk-3d/preview.png",
+    price: "free",
+    maxAgents: 1,
+    tags: ["3d", "starter", "desk"],
+  },
+  {
     id: "default-office",
     name: "Modern Office",
     description: "A modern open-plan office with meeting room and lounge. Great for teams.",
