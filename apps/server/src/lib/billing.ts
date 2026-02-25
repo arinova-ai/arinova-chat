@@ -85,48 +85,52 @@ export async function deductCoins(
 ): Promise<boolean> {
   if (price <= 0) return true;
 
-  // Atomic deduction — fails if balance insufficient
-  const result = await db
-    .update(coinBalances)
-    .set({
-      balance: sql`${coinBalances.balance} - ${price}`,
-      updatedAt: new Date(),
-    })
-    .where(
-      sql`${coinBalances.userId} = ${userId} AND ${coinBalances.balance} >= ${price}`,
-    );
-
-  if (result.rowCount === 0) {
-    return false;
-  }
-
   const creatorEarning = Math.floor(price * CREATOR_SHARE);
 
-  // Record user's purchase transaction + creator's earning in parallel
-  await Promise.all([
-    db.insert(coinTransactions).values({
+  // Single transaction: deduct user → record purchase → credit creator → record earning
+  return await db.transaction(async (tx) => {
+    // Atomic deduction — fails if balance insufficient
+    const result = await tx
+      .update(coinBalances)
+      .set({
+        balance: sql`${coinBalances.balance} - ${price}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        sql`${coinBalances.userId} = ${userId} AND ${coinBalances.balance} >= ${price}`,
+      );
+
+    if (result.rowCount === 0) {
+      return false;
+    }
+
+    // Record user's purchase transaction
+    await tx.insert(coinTransactions).values({
       userId,
       type: "purchase",
       amount: -price,
       description: `Marketplace chat: ${agentListingId}`,
-    }),
-    // Credit creator
-    db
+    });
+
+    // Credit creator balance
+    await tx
       .update(coinBalances)
       .set({
         balance: sql`${coinBalances.balance} + ${creatorEarning}`,
         updatedAt: new Date(),
       })
-      .where(eq(coinBalances.userId, creatorId)),
-    db.insert(coinTransactions).values({
+      .where(eq(coinBalances.userId, creatorId));
+
+    // Record creator earning transaction
+    await tx.insert(coinTransactions).values({
       userId: creatorId,
       type: "earning",
       amount: creatorEarning,
       description: `Marketplace earning: ${agentListingId}`,
-    }),
-  ]);
+    });
 
-  return true;
+    return true;
+  });
 }
 
 /**

@@ -32,8 +32,8 @@ export async function callLLM(options: LLMCallOptions): Promise<void> {
       await callOpenAI({ modelId, apiKey, systemPrompt, messages, onChunk, onComplete, onError });
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown LLM error";
-    onError(msg);
+    console.error("[LLM] Provider error:", err instanceof Error ? err.message : err);
+    onError("Failed to generate response");
   }
 }
 
@@ -97,7 +97,7 @@ export async function validateApiKey(
     }
     return { valid: true };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "API key validation failed";
-    return { valid: false, error: msg };
+    console.error("[LLM] API key validation error:", err instanceof Error ? err.message : err);
+    return { valid: false, error: "API key validation failed" };
   }
 }

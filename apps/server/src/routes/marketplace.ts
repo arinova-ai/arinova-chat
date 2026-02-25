@@ -69,7 +69,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
     // Validate the API key before storing
     const validation = await validateApiKey(rest.modelProvider, apiKey);
     if (!validation.valid) {
-      return reply.status(400).send({ error: `Invalid API key: ${validation.error}` });
+      return reply.status(400).send({ error: "API key validation failed. Please check your key." });
     }
 
     const encrypted = encryptApiKey(apiKey);
@@ -118,6 +118,13 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         updatedAt: new Date(),
       };
       if (apiKey) {
+        const validation = await validateApiKey(
+          rest.modelProvider ?? existing.modelProvider,
+          apiKey,
+        );
+        if (!validation.valid) {
+          return reply.status(400).send({ error: "API key validation failed. Please check your key." });
+        }
         updateData.encryptedApiKey = encryptApiKey(apiKey);
       }
 
@@ -312,7 +319,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
       // 3. Get or create conversation
       let conversationId = body.data.conversationId;
       if (conversationId) {
-        // Verify ownership
+        // Verify ownership + belongs to this agent listing
         const [conv] = await db
           .select()
           .from(marketplaceConversations)
@@ -320,6 +327,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
             and(
               eq(marketplaceConversations.id, conversationId),
               eq(marketplaceConversations.userId, authUser.id),
+              eq(marketplaceConversations.agentListingId, agentListingId),
             ),
           );
         if (!conv) {
@@ -359,19 +367,8 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         .limit(50);
       history.reverse();
 
-      // 6. Deduct coins (if not free trial)
+      // 6. Determine if this is a free message (deduction happens after LLM success)
       const isFree = (billing.freeTrialRemaining ?? 0) > 0 || listing.pricePerMessage === 0;
-      if (!isFree) {
-        const deducted = await deductCoins(
-          authUser.id,
-          agentListingId,
-          listing.pricePerMessage,
-          listing.creatorId,
-        );
-        if (!deducted) {
-          return reply.status(402).send({ error: "Insufficient coins" });
-        }
-      }
 
       // 7. Decrypt API key and stream LLM response via SSE
       const apiKey = decryptApiKey(listing.encryptedApiKey);
@@ -406,14 +403,25 @@ export async function marketplaceRoutes(app: FastifyInstance) {
             content: fullContent,
           });
 
+          // Deduct coins AFTER successful LLM response
+          let charged = true;
+          if (!isFree) {
+            charged = await deductCoins(
+              authUser.id,
+              agentListingId,
+              listing.pricePerMessage,
+              listing.creatorId,
+            );
+          }
+
           // Record message stats
           await recordMessage(conversationId!, agentListingId, isFree ? 0 : listing.pricePerMessage);
 
-          reply.raw.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+          reply.raw.write(`data: ${JSON.stringify({ type: "done", charged })}\n\n`);
           reply.raw.end();
         },
-        onError: (error) => {
-          reply.raw.write(`data: ${JSON.stringify({ type: "error", error })}\n\n`);
+        onError: () => {
+          reply.raw.write(`data: ${JSON.stringify({ type: "error", error: "Failed to generate response" })}\n\n`);
           reply.raw.end();
         },
       });
