@@ -10,7 +10,7 @@ import type { ThemeManifest, ZoneDef, ZoneType } from "./theme-types";
 
 // ── Constants ────────────────────────────────────────────────────
 const AVATAR_R = 28;
-const SPRITE_DISPLAY_SIZE = 96; // pixel art character display size in canvas space
+const SPRITE_DISPLAY_SIZE = 140; // pixel art character display size in canvas space
 const ZONE_BG = 0x1e293b;
 const ZONE_BORDER = 0x334155;
 const STATUS_LABELS: Record<AgentStatus, string> = {
@@ -235,7 +235,7 @@ function createAgentSprite(
     // Pixel art mode: AnimatedSprite
     const initFrames = agent.status === "working" ? frameSets.working : frameSets.idle;
     animSprite = new AnimatedSprite(initFrames);
-    animSprite.anchor.set(0.5, 0.5);
+    animSprite.anchor.set(0.5, 1.0);
     animSprite.width = SPRITE_DISPLAY_SIZE;
     animSprite.height = SPRITE_DISPLAY_SIZE;
     animSprite.animationSpeed = agent.status === "working" ? 0.05 : 0.03;
@@ -674,13 +674,20 @@ export default function OfficeMap({
             fontWeight: "600",
             fill: bgLoadedRef.current ? 0xffffff : 0x64748b,
             letterSpacing: 1,
+            dropShadow: bgLoadedRef.current ? {
+              alpha: 0.8,
+              angle: Math.PI / 2,
+              blur: 4,
+              color: 0x000000,
+              distance: 1,
+            } : undefined,
           }),
         });
         label.anchor.set(0.5, 0);
         label.x = x + zw / 2;
         label.y = y + 8;
         if (bgLoadedRef.current) {
-          label.alpha = 0.7;
+          label.alpha = 0.85;
         }
         uiLayer.addChild(label);
       }

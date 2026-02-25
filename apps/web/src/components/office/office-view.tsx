@@ -7,14 +7,18 @@ import { AgentModal } from "./agent-modal";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { MOCK_AGENTS } from "./mock-data";
 import { ThemeProvider, useTheme } from "./theme-context";
+import { THEME_REGISTRY } from "./theme-registry";
 
 // Dynamic import — PixiJS only works client-side
 const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 
 function OfficeViewInner() {
   const stream = useOfficeStream();
-  const agents = stream.agents.length > 0 ? stream.agents : MOCK_AGENTS;
   const { manifest, themeId } = useTheme();
+  const themeEntry = THEME_REGISTRY.find((t) => t.id === themeId);
+  const maxAgents = themeEntry?.maxAgents ?? 6;
+  const allAgents = stream.agents.length > 0 ? stream.agents : MOCK_AGENTS;
+  const agents = allAgents.slice(0, maxAgents);
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
