@@ -2,6 +2,7 @@
 -- Includes multi-user social features (username, friends, group admin, agent permissions, blocking)
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ===== Enum Types =====
 
@@ -516,3 +517,36 @@ CREATE INDEX idx_agent_reviews_listing ON agent_reviews(listing_id);
 CREATE INDEX idx_marketplace_conversations_user ON marketplace_conversations(user_id);
 CREATE INDEX idx_marketplace_conversations_listing ON marketplace_conversations(listing_id);
 CREATE INDEX idx_marketplace_messages_conv ON marketplace_messages(conversation_id, created_at);
+
+-- ===== Knowledge Base Tables (RAG) =====
+
+CREATE TABLE agent_knowledge_bases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID NOT NULL REFERENCES agent_listings(id) ON DELETE CASCADE,
+    creator_id TEXT NOT NULL REFERENCES "user"(id),
+    file_name VARCHAR(255) NOT NULL,
+    file_size INTEGER NOT NULL DEFAULT 0,
+    file_type VARCHAR(50),
+    status VARCHAR(50) NOT NULL DEFAULT 'processing',
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    total_chars INTEGER NOT NULL DEFAULT 0,
+    embedding_model VARCHAR(100) NOT NULL DEFAULT 'text-embedding-3-small',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE knowledge_base_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kb_id UUID NOT NULL REFERENCES agent_knowledge_bases(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    embedding vector(1536),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_kb_listing ON agent_knowledge_bases(listing_id);
+CREATE INDEX idx_kb_creator ON agent_knowledge_bases(creator_id);
+CREATE INDEX idx_kb_chunks_kb_id ON knowledge_base_chunks(kb_id);
+CREATE INDEX idx_kb_chunks_embedding ON knowledge_base_chunks
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);

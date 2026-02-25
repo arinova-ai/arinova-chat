@@ -414,3 +414,32 @@ pub struct AppPurchase {
     pub status: String,
     pub created_at: NaiveDateTime,
 }
+
+// ===== Knowledge Base tables (RAG) =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeBase {
+    pub id: Uuid,
+    pub listing_id: Uuid,
+    pub creator_id: String,
+    pub file_name: String,
+    pub file_size: i32,
+    pub file_type: Option<String>,
+    pub status: String,
+    pub chunk_count: i32,
+    pub total_chars: i32,
+    pub embedding_model: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct KnowledgeBaseChunk {
+    pub id: Uuid,
+    pub kb_id: Uuid,
+    pub content: String,
+    pub chunk_index: i32,
+    pub token_count: i32,
+    pub created_at: NaiveDateTime,
+}
