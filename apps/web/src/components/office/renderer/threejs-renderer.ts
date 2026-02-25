@@ -572,6 +572,16 @@ export class ThreeJSRenderer implements OfficeRenderer {
       group.add(sphere);
     }
 
+    // Invisible hit-box for click detection — avoids SkinnedMesh raycast
+    // issues that occur when the cloned bot model shares the template's
+    // skeleton reference (bone transforms don't match cloned position).
+    const hitGeo = new THREE.CylinderGeometry(15, 15, BOT_HEIGHT, 8);
+    const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+    const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    hitMesh.name = "hit-box";
+    hitMesh.position.y = BOT_HEIGHT / 2;
+    group.add(hitMesh);
+
     // Name label sprite
     const label = createLabelSprite(agent.name);
     label.position.y = BOT_HEIGHT + 12;
@@ -632,17 +642,21 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
+    // Force world matrix update so hit-box transforms are current
+    // (position.lerp in the render loop may have moved groups since last render)
+    this.scene.updateMatrixWorld();
+
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    // Collect all meshes belonging to agent groups
-    const meshes: THREE.Object3D[] = [];
+    // Raycast only against invisible hit-box meshes — avoids SkinnedMesh
+    // raycasting issues with cloned GLB models that share skeleton refs.
+    const hitBoxes: THREE.Object3D[] = [];
     for (const [, group] of this.agentGroups) {
-      group.traverse((child) => {
-        if (child instanceof THREE.Mesh) meshes.push(child);
-      });
+      const hb = group.getObjectByName("hit-box");
+      if (hb) hitBoxes.push(hb);
     }
 
-    const intersects = this.raycaster.intersectObjects(meshes, false);
+    const intersects = this.raycaster.intersectObjects(hitBoxes, false);
     if (intersects.length === 0) return;
 
     // Walk up the parent chain to find the agent group
