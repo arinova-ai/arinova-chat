@@ -7,7 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, Star, MessageSquare, Coins } from "lucide-react";
+import { Search, Loader2, Star, MessageSquare, Coins, Plus } from "lucide-react";
 
 interface AgentListing {
   id: string;
@@ -123,6 +123,14 @@ function MarketplaceContent() {
               </div>
             </div>
             <div className="flex-1" />
+            <Button
+              size="sm"
+              className="brand-gradient-btn gap-1 hidden sm:flex"
+              onClick={() => router.push("/creator/new")}
+            >
+              <Plus className="h-4 w-4" />
+              Create Agent
+            </Button>
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input

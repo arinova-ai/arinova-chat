@@ -428,6 +428,59 @@ export async function marketplaceRoutes(app: FastifyInstance) {
     },
   );
 
+  // ── Creator: list own agents ─────────────────────────────
+  app.get("/api/creator/agents", async (request, reply) => {
+    const authUser = await requireAuth(request, reply);
+
+    const listings = await db
+      .select({
+        ...publicColumns,
+        systemPrompt: agentListings.systemPrompt,
+      })
+      .from(agentListings)
+      .where(eq(agentListings.creatorId, authUser.id))
+      .orderBy(desc(agentListings.createdAt));
+
+    return reply.send(listings);
+  });
+
+  // ── Creator: dashboard stats ────────────────────────────
+  app.get("/api/creator/dashboard", async (request, reply) => {
+    const authUser = await requireAuth(request, reply);
+
+    // Aggregate stats across all creator's listings
+    const [stats] = await db
+      .select({
+        totalRevenue: sql<number>`coalesce(sum(${agentListings.totalRevenue}), 0)::int`,
+        totalMessages: sql<number>`coalesce(sum(${agentListings.totalMessages}), 0)::int`,
+        totalConversations: sql<number>`coalesce(sum(${agentListings.totalConversations}), 0)::int`,
+        activeListings: sql<number>`count(*) filter (where ${agentListings.status} = 'active')::int`,
+        avgRating: sql<number | null>`avg(${agentListings.avgRating}) filter (where ${agentListings.avgRating} is not null)`,
+        totalReviews: sql<number>`coalesce(sum(${agentListings.reviewCount}), 0)::int`,
+      })
+      .from(agentListings)
+      .where(eq(agentListings.creatorId, authUser.id));
+
+    // Recent earning transactions
+    const recentEarnings = await db
+      .select()
+      .from(coinTransactions)
+      .where(
+        and(
+          eq(coinTransactions.userId, authUser.id),
+          eq(coinTransactions.type, "earning"),
+        ),
+      )
+      .orderBy(desc(coinTransactions.createdAt))
+      .limit(10);
+
+    return reply.send({
+      ...stats,
+      avgRating: stats.avgRating ? parseFloat(stats.avgRating.toFixed(1)) : null,
+      recentEarnings,
+    });
+  });
+
   // ── Get user's marketplace conversations ──────────────────
   app.get("/api/marketplace/conversations", async (request, reply) => {
     const authUser = await requireAuth(request, reply);

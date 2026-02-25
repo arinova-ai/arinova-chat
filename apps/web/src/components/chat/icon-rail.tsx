@@ -49,6 +49,7 @@ export function IconRail() {
     if (pathname.startsWith("/spaces")) return "spaces";
     if (pathname.startsWith("/apps")) return "apps";
     if (pathname.startsWith("/marketplace")) return "market";
+    if (pathname.startsWith("/creator")) return "market";
     if (pathname.startsWith("/wallet")) return "market";
     if (pathname.startsWith("/settings")) return "settings";
     return "chat";
