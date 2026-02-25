@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
 
 const CATEGORIES = [
-  "Translation",
-  "Writing",
-  "Coding",
-  "Customer Service",
+  "Productivity",
+  "Development",
   "Education",
   "Creative",
+  "Analytics",
+  "Support",
   "Other",
 ];
 
@@ -32,7 +32,7 @@ function NewAgentContent() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [category, setCategory] = useState("Other");
+  const [category, setCategory] = useState("other");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -186,7 +186,7 @@ function NewAgentContent() {
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
+                    <option key={c} value={c.toLowerCase()}>
                       {c}
                     </option>
                   ))}

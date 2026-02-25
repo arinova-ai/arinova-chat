@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
 
 const CATEGORIES = [
-  "Translation",
-  "Writing",
-  "Coding",
-  "Customer Service",
+  "Productivity",
+  "Development",
   "Education",
   "Creative",
+  "Analytics",
+  "Support",
   "Other",
 ];
 
@@ -26,11 +26,11 @@ const PROVIDERS = [
 
 interface AgentManage {
   id: string;
-  name: string;
+  agentName: string;
   description: string;
   avatarUrl: string | null;
   category: string;
-  tags: string[];
+  tags?: string[];
   systemPrompt: string;
   welcomeMessage: string | null;
   exampleConversations: { question: string; answer: string }[];
@@ -51,7 +51,7 @@ function EditAgentContent() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [category, setCategory] = useState("Other");
+  const [category, setCategory] = useState("other");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -71,7 +71,7 @@ function EditAgentContent() {
         const data = await api<AgentManage>(
           `/api/marketplace/agents/${id}/manage`,
         );
-        setName(data.name);
+        setName(data.agentName);
         setDescription(data.description);
         setAvatarUrl(data.avatarUrl ?? "");
         setCategory(data.category);
@@ -233,7 +233,7 @@ function EditAgentContent() {
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
+                    <option key={c} value={c.toLowerCase()}>
                       {c}
                     </option>
                   ))}

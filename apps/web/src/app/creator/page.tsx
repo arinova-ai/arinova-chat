@@ -38,13 +38,13 @@ interface DashboardStats {
 
 interface AgentListing {
   id: string;
-  name: string;
+  agentName: string;
   description: string;
   avatarUrl: string | null;
   category: string;
   status: string;
   pricePerMessage: number;
-  totalConversations: number;
+  salesCount: number;
   totalMessages: number;
   totalRevenue: number;
   avgRating: number | null;
@@ -66,11 +66,11 @@ function CreatorDashboardContent() {
     try {
       const [dashData, agentData, balData] = await Promise.all([
         api<DashboardStats>("/api/creator/dashboard"),
-        api<AgentListing[]>("/api/creator/agents"),
+        api<{ listings: AgentListing[] }>("/api/creator/agents"),
         api<{ balance: number }>("/api/wallet/balance"),
       ]);
       setStats(dashData);
-      setAgents(agentData);
+      setAgents(agentData.listings);
       setBalance(balData.balance);
     } catch {
       // auto-handled
@@ -249,19 +249,19 @@ function CreatorDashboardContent() {
                         {agent.avatarUrl ? (
                           <img
                             src={agent.avatarUrl}
-                            alt={agent.name}
+                            alt={agent.agentName}
                             className="h-10 w-10 shrink-0 rounded-lg object-cover"
                           />
                         ) : (
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-sm font-bold text-brand-text">
-                            {agent.name[0]}
+                            {agent.agentName[0]}
                           </div>
                         )}
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="text-sm font-semibold truncate">
-                              {agent.name}
+                              {agent.agentName}
                             </h3>
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(agent.status)}`}
@@ -270,7 +270,7 @@ function CreatorDashboardContent() {
                             </span>
                           </div>
                           <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-                            <span>{agent.totalConversations} chats</span>
+                            <span>{agent.salesCount} chats</span>
                             <span>{agent.totalMessages} msgs</span>
                             <span className="flex items-center gap-0.5">
                               <Coins className="h-3 w-3 text-yellow-500" />

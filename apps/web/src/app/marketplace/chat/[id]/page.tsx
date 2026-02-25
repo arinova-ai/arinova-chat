@@ -18,7 +18,7 @@ import {
 
 interface AgentListing {
   id: string;
-  name: string;
+  agentName: string;
   avatarUrl: string | null;
   pricePerMessage: number;
   freeTrialMessages: number;
@@ -228,16 +228,16 @@ function MarketplaceChatContent() {
           {agent.avatarUrl ? (
             <img
               src={agent.avatarUrl}
-              alt={agent.name}
+              alt={agent.agentName}
               className="h-8 w-8 rounded-lg object-cover"
             />
           ) : (
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/15 text-sm font-bold text-brand-text">
-              {agent.name[0]}
+              {agent.agentName[0]}
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-semibold truncate">{agent.name}</h2>
+            <h2 className="text-sm font-semibold truncate">{agent.agentName}</h2>
             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
               <Coins className="h-3 w-3 text-yellow-500" />
               {agent.pricePerMessage === 0
@@ -265,15 +265,15 @@ function MarketplaceChatContent() {
               {agent.avatarUrl ? (
                 <img
                   src={agent.avatarUrl}
-                  alt={agent.name}
+                  alt={agent.agentName}
                   className="h-16 w-16 rounded-2xl object-cover opacity-60"
                 />
               ) : (
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10 text-2xl font-bold text-brand-text/60">
-                  {agent.name[0]}
+                  {agent.agentName[0]}
                 </div>
               )}
-              <p className="text-sm font-medium">Start chatting with {agent.name}</p>
+              <p className="text-sm font-medium">Start chatting with {agent.agentName}</p>
               <p className="text-xs max-w-xs">
                 Type a message below to begin the conversation
               </p>

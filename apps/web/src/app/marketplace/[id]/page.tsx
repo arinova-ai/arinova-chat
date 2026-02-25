@@ -21,23 +21,21 @@ import {
 
 interface AgentDetail {
   id: string;
-  name: string;
+  agentName: string;
   description: string;
   avatarUrl: string | null;
   category: string;
-  tags: string[];
   welcomeMessage: string | null;
   exampleConversations: { question: string; answer: string }[];
   modelProvider: string;
   modelId: string;
   pricePerMessage: number;
   freeTrialMessages: number;
-  totalConversations: number;
+  salesCount: number;
   totalMessages: number;
   avgRating: number | null;
   reviewCount: number;
   creatorName: string;
-  creatorImage: string | null;
 }
 
 interface Review {
@@ -169,16 +167,16 @@ function AgentDetailContent() {
                   {agent.avatarUrl ? (
                     <img
                       src={agent.avatarUrl}
-                      alt={agent.name}
+                      alt={agent.agentName}
                       className="h-16 w-16 shrink-0 rounded-2xl object-cover"
                     />
                   ) : (
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-2xl font-bold text-brand-text">
-                      {agent.name[0]}
+                      {agent.agentName[0]}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <h1 className="text-2xl font-bold">{agent.name}</h1>
+                    <h1 className="text-2xl font-bold">{agent.agentName}</h1>
                     <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                       <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">
                         {agent.category}
@@ -189,24 +187,16 @@ function AgentDetailContent() {
                           {agent.avgRating.toFixed(1)} ({agent.reviewCount})
                         </span>
                       )}
-                      <span>{agent.totalConversations} chats</span>
+                      <span>{agent.salesCount} chats</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Creator */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  {agent.creatorImage ? (
-                    <img
-                      src={agent.creatorImage}
-                      alt={agent.creatorName}
-                      className="h-6 w-6 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary">
-                      <User className="h-3.5 w-3.5" />
-                    </div>
-                  )}
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary">
+                    <User className="h-3.5 w-3.5" />
+                  </div>
                   <span>by {agent.creatorName}</span>
                 </div>
 
@@ -219,20 +209,6 @@ function AgentDetailContent() {
                     {agent.description}
                   </p>
                 </div>
-
-                {/* Tags */}
-                {agent.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {agent.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
 
                 {/* Example conversations */}
                 {agent.exampleConversations.length > 0 && (
@@ -423,7 +399,7 @@ function AgentDetailContent() {
                   <div className="grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground">
                     <div className="rounded-lg bg-secondary p-2">
                       <p className="text-base font-semibold text-foreground">
-                        {agent.totalConversations}
+                        {agent.salesCount}
                       </p>
                       <p>Chats</p>
                     </div>

@@ -11,16 +11,15 @@ import { Search, Loader2, Star, MessageSquare, Coins, Plus } from "lucide-react"
 
 interface AgentListing {
   id: string;
-  name: string;
+  agentName: string;
   description: string;
   avatarUrl: string | null;
   category: string;
-  tags: string[];
   modelProvider: string;
   modelId: string;
   pricePerMessage: number;
   freeTrialMessages: number;
-  totalConversations: number;
+  salesCount: number;
   totalMessages: number;
   avgRating: number | null;
   reviewCount: number;
@@ -33,12 +32,12 @@ interface BrowseResponse {
 
 const CATEGORIES = [
   "All",
-  "Translation",
-  "Writing",
-  "Coding",
-  "Customer Service",
+  "Productivity",
+  "Development",
   "Education",
   "Creative",
+  "Analytics",
+  "Support",
   "Other",
 ];
 
@@ -64,7 +63,7 @@ function MarketplaceContent() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (category !== "All") params.set("category", category);
+      if (category !== "All") params.set("category", category.toLowerCase());
       if (search.trim()) params.set("search", search.trim());
       params.set("sort", sort);
       params.set("limit", String(limit));
@@ -223,37 +222,23 @@ function MarketplaceContent() {
                       {agent.avatarUrl ? (
                         <img
                           src={agent.avatarUrl}
-                          alt={agent.name}
+                          alt={agent.agentName}
                           className="h-12 w-12 shrink-0 rounded-xl object-cover"
                         />
                       ) : (
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-lg font-bold text-brand-text">
-                          {agent.name[0]}
+                          {agent.agentName[0]}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
                         <h3 className="truncate text-base font-semibold">
-                          {agent.name}
+                          {agent.agentName}
                         </h3>
                         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                           {agent.description}
                         </p>
                       </div>
                     </div>
-
-                    {/* Tags */}
-                    {agent.tags.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {agent.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
 
                     {/* Footer: price + rating + conversations */}
                     <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
@@ -275,7 +260,7 @@ function MarketplaceContent() {
                         </span>
                       )}
                       <span className="ml-auto">
-                        {agent.totalConversations} chats
+                        {agent.salesCount} chats
                       </span>
                     </div>
                   </div>
