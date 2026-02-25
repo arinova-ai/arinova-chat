@@ -213,6 +213,8 @@ function EditAgentContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const clampedCharLimit = Math.max(1, Math.min(20000, inputCharLimit));
+    setInputCharLimit(clampedCharLimit);
     setSaving(true);
     try {
       await api(`/api/marketplace/agents/${id}`, {
@@ -228,7 +230,7 @@ function EditAgentContent() {
             (ex) => ex.question.trim() && ex.answer.trim(),
           ),
           model,
-          inputCharLimit,
+          inputCharLimit: clampedCharLimit,
           pricePerMessage,
           freeTrialMessages,
         }),

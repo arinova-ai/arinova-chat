@@ -103,6 +103,8 @@ function NewAgentContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const clampedCharLimit = Math.max(1, Math.min(20000, inputCharLimit));
+    setInputCharLimit(clampedCharLimit);
     setSaving(true);
     try {
       const created = await api<{ id: string }>("/api/marketplace/agents", {
@@ -118,7 +120,7 @@ function NewAgentContent() {
             (ex) => ex.question.trim() && ex.answer.trim(),
           ),
           model,
-          inputCharLimit,
+          inputCharLimit: clampedCharLimit,
           pricePerMessage,
           freeTrialMessages,
         }),
