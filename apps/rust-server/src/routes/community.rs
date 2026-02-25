@@ -8,7 +8,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -77,8 +77,8 @@ struct CommunityRow {
     cover_image_url: Option<String>,
     category: Option<String>,
     tags: Option<Vec<String>>,
-    created_at: NaiveDateTime,
-    updated_at: NaiveDateTime,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -96,7 +96,7 @@ struct CommunityBrowseRow {
     avatar_url: Option<String>,
     category: Option<String>,
     tags: Option<Vec<String>>,
-    created_at: NaiveDateTime,
+    created_at: DateTime<Utc>,
     creator_name: String,
 }
 
@@ -105,7 +105,7 @@ struct MemberRow {
     id: Uuid,
     user_id: String,
     role: String,
-    joined_at: NaiveDateTime,
+    joined_at: DateTime<Utc>,
     subscription_status: Option<String>,
     user_name: String,
     user_image: Option<String>,
@@ -119,7 +119,7 @@ struct CommunityAgentRow {
     avatar_url: Option<String>,
     description: String,
     model: String,
-    added_at: NaiveDateTime,
+    added_at: DateTime<Utc>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -129,7 +129,7 @@ struct CommunityMessageRow {
     agent_listing_id: Option<Uuid>,
     content: String,
     message_type: String,
-    created_at: NaiveDateTime,
+    created_at: DateTime<Utc>,
     user_name: Option<String>,
     user_image: Option<String>,
     agent_name: Option<String>,
@@ -151,8 +151,8 @@ fn community_json(r: &CommunityRow) -> Value {
         "coverImageUrl": r.cover_image_url,
         "category": r.category,
         "tags": r.tags,
-        "createdAt": r.created_at.and_utc().to_rfc3339(),
-        "updatedAt": r.updated_at.and_utc().to_rfc3339(),
+        "createdAt": r.created_at.to_rfc3339(),
+        "updatedAt": r.updated_at.to_rfc3339(),
     })
 }
 
@@ -232,7 +232,7 @@ async fn browse(
                         "avatarUrl": r.avatar_url,
                         "category": r.category,
                         "tags": r.tags,
-                        "createdAt": r.created_at.and_utc().to_rfc3339(),
+                        "createdAt": r.created_at.to_rfc3339(),
                         "creatorName": r.creator_name,
                     })
                 })
@@ -861,7 +861,7 @@ async fn list_members(
                         "id": r.id,
                         "userId": r.user_id,
                         "role": r.role,
-                        "joinedAt": r.joined_at.and_utc().to_rfc3339(),
+                        "joinedAt": r.joined_at.to_rfc3339(),
                         "subscriptionStatus": r.subscription_status,
                         "userName": r.user_name,
                         "userImage": r.user_image,
@@ -1032,7 +1032,7 @@ async fn list_agents(
                         "avatarUrl": r.avatar_url,
                         "description": r.description,
                         "model": r.model,
-                        "addedAt": r.added_at.and_utc().to_rfc3339(),
+                        "addedAt": r.added_at.to_rfc3339(),
                     })
                 })
                 .collect();
@@ -1518,7 +1518,7 @@ async fn get_messages(
                         "agentListingId": r.agent_listing_id,
                         "content": r.content,
                         "messageType": r.message_type,
-                        "createdAt": r.created_at.and_utc().to_rfc3339(),
+                        "createdAt": r.created_at.to_rfc3339(),
                         "userName": r.user_name,
                         "userImage": r.user_image,
                         "agentName": r.agent_name,

@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -314,8 +314,8 @@ pub struct Community {
     pub cover_image_url: Option<String>,
     pub category: Option<String>,
     pub tags: Option<Vec<String>>,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -324,9 +324,9 @@ pub struct CommunityMember {
     pub community_id: Uuid,
     pub user_id: String,
     pub role: String,
-    pub joined_at: NaiveDateTime,
+    pub joined_at: DateTime<Utc>,
     pub subscription_status: Option<String>,
-    pub subscription_expires_at: Option<NaiveDateTime>,
+    pub subscription_expires_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -334,7 +334,7 @@ pub struct CommunityAgent {
     pub id: Uuid,
     pub community_id: Uuid,
     pub listing_id: Uuid,
-    pub added_at: NaiveDateTime,
+    pub added_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -345,7 +345,7 @@ pub struct CommunityMessage {
     pub agent_listing_id: Option<Uuid>,
     pub content: String,
     pub message_type: String,
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
 }
 
 // ===== Marketplace tables =====

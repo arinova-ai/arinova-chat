@@ -314,9 +314,70 @@ ALTER TABLE communities ADD COLUMN IF NOT EXISTS tags TEXT[];
 ALTER TABLE communities DROP COLUMN IF EXISTS owner_id;
 ALTER TABLE communities DROP COLUMN IF EXISTS is_public;
 
+-- Set creator_id NOT NULL after backfill
+ALTER TABLE communities ALTER COLUMN creator_id SET NOT NULL;
+
+-- Add FK constraint for communities.creator_id → user(id)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'communities_creator_id_fkey'
+  ) THEN
+    ALTER TABLE communities ADD CONSTRAINT communities_creator_id_fkey
+      FOREIGN KEY (creator_id) REFERENCES "user"(id);
+  END IF;
+END $$;
+
+-- Add CHECK constraints matching schema.sql
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'communities_type_check'
+  ) THEN
+    ALTER TABLE communities ADD CONSTRAINT communities_type_check
+      CHECK (type IN ('lounge', 'hub'));
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'communities_status_check'
+  ) THEN
+    ALTER TABLE communities ADD CONSTRAINT communities_status_check
+      CHECK (status IN ('active', 'suspended', 'archived'));
+  END IF;
+END $$;
+
 -- Expand community_members with subscription fields + unique constraint
 ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
 ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
+
+-- Add FK constraint for community_members.user_id → user(id)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'community_members_user_id_fkey'
+  ) THEN
+    ALTER TABLE community_members ADD CONSTRAINT community_members_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES "user"(id);
+  END IF;
+END $$;
+
+-- Add CHECK constraints for community_members
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'community_members_role_check'
+  ) THEN
+    ALTER TABLE community_members ADD CONSTRAINT community_members_role_check
+      CHECK (role IN ('creator', 'moderator', 'member'));
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'community_members_subscription_status_check'
+  ) THEN
+    ALTER TABLE community_members ADD CONSTRAINT community_members_subscription_status_check
+      CHECK (subscription_status IN ('active', 'expired', 'cancelled'));
+  END IF;
+END $$;
 
 -- Add unique constraint if not present
 DO $$ BEGIN
@@ -348,6 +409,16 @@ CREATE TABLE IF NOT EXISTS community_messages (
     message_type TEXT NOT NULL DEFAULT 'text',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add CHECK constraint for community_messages.message_type
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'community_messages_message_type_check'
+  ) THEN
+    ALTER TABLE community_messages ADD CONSTRAINT community_messages_message_type_check
+      CHECK (message_type IN ('text', 'system'));
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_community_messages_community ON community_messages(community_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);

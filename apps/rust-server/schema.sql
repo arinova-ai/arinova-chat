@@ -238,7 +238,7 @@ CREATE TABLE notification_preferences (
 
 CREATE TABLE communities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    creator_id TEXT NOT NULL,
+    creator_id TEXT NOT NULL REFERENCES "user"(id),
     name VARCHAR(100) NOT NULL,
     description TEXT,
     type TEXT NOT NULL DEFAULT 'lounge' CHECK (type IN ('lounge', 'hub')),
@@ -261,7 +261,7 @@ CREATE TABLE communities (
 CREATE TABLE community_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES "user"(id),
     role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('creator', 'moderator', 'member')),
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- Subscription
