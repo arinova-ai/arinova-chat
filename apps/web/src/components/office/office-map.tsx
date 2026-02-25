@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Application, Container, Graphics, Text, TextStyle, Rectangle } from "pixi.js";
+import {
+  Application, Container, Graphics, Text, TextStyle, Rectangle,
+  Sprite as PixiSprite, Assets, Texture, AnimatedSprite,
+} from "pixi.js";
 import type { Agent, AgentStatus } from "./types";
 import type { ThemeManifest, ZoneDef, ZoneType } from "./theme-types";
 
 // ── Constants ────────────────────────────────────────────────────
 const AVATAR_R = 28;
+const SPRITE_DISPLAY_SIZE = 96; // pixel art character display size in canvas space
 const ZONE_BG = 0x1e293b;
 const ZONE_BORDER = 0x334155;
 const STATUS_LABELS: Record<AgentStatus, string> = {
@@ -16,7 +20,6 @@ const STATUS_LABELS: Record<AgentStatus, string> = {
   collaborating: "Collab",
 };
 
-// Fallback status colors (used when manifest is null)
 const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
   working: 0x16a34a,
   idle: 0xf59e0b,
@@ -44,7 +47,6 @@ const DOTS_STYLE = new TextStyle({ fontSize: 14, fill: 0x16a34a });
 
 // ── Manifest helpers ─────────────────────────────────────────────
 
-/** Parse hex color strings from manifest into numbers (null-safe) */
 function parseStatusColors(manifest: ThemeManifest | null): Record<AgentStatus, number> {
   const c = manifest?.characters?.statusBadge?.colors;
   if (!c) return { ...DEFAULT_STATUS_COLORS };
@@ -62,14 +64,12 @@ function parseStatusColors(manifest: ThemeManifest | null): Record<AgentStatus, 
   };
 }
 
-/** Parse background color from manifest */
 function parseBgColor(manifest: ThemeManifest): number {
   const raw = manifest.canvas.background.color;
   if (!raw) return 0x0f172a;
   return Number(raw) || 0x0f172a;
 }
 
-/** Compute uniform scale + offset to fit canvas into container */
 function computeScale(containerW: number, containerH: number, canvasW: number, canvasH: number) {
   const scaleX = containerW / canvasW;
   const scaleY = containerH / canvasH;
@@ -79,14 +79,12 @@ function computeScale(containerW: number, containerH: number, canvasW: number, c
   return { scale, offsetX, offsetY };
 }
 
-/** Map AgentStatus → ZoneType for seat assignment */
 function statusToZoneType(status: AgentStatus): ZoneType {
   if (status === "collaborating") return "meeting";
   if (status === "idle") return "lounge";
   return "work";
 }
 
-/** Assign agents to specific seats from the manifest (defensive: skips zones with no seats) */
 function assignSeats(
   agents: Agent[],
   zones: ZoneDef[],
@@ -94,11 +92,9 @@ function assignSeats(
   const assignments = new Map<string, { x: number; y: number; seatId: string }>();
   if (zones.length === 0) return assignments;
 
-  // Filter to zones that actually have seats
   const usableZones = zones.filter((z) => z.seats.length > 0);
   if (usableZones.length === 0) return assignments;
 
-  // Group agents by target zone type
   const grouped = new Map<string, Agent[]>();
   for (const agent of agents) {
     const targetType = statusToZoneType(agent.status);
@@ -108,7 +104,6 @@ function assignSeats(
     grouped.set(zone.id, list);
   }
 
-  // Assign each agent to a seat (round-robin if overflow)
   for (const [zoneId, zoneAgents] of grouped) {
     const zone = usableZones.find((z) => z.id === zoneId);
     if (!zone || zone.seats.length === 0) continue;
@@ -122,7 +117,7 @@ function assignSeats(
 }
 
 // ── Legacy fallback (when manifest is null) ──────────────────────
-/** @deprecated — kept for fallback when theme.json fails to load */
+/** @deprecated */
 function calcZonesFallback(cw: number, ch: number) {
   const pad = 20;
   const gap = 12;
@@ -169,10 +164,41 @@ function agentSlotPosFallback(idx: number, count: number, zone: { x: number; y: 
   return { x: startX + col * spacing, y: startY + row * rowGap };
 }
 
+// ── Sprite sheet frame extraction ────────────────────────────────
+
+interface SpriteFrameSet {
+  idle: Texture[];
+  working: Texture[];
+  walkRight: Texture[];
+  walkLeft: Texture[];
+}
+
+function extractFrames(
+  sheetTexture: Texture,
+  frameW: number,
+  frameH: number,
+): SpriteFrameSet {
+  const getRow = (row: number, count: number): Texture[] => {
+    const frames: Texture[] = [];
+    for (let i = 0; i < count; i++) {
+      const frame = new Rectangle(i * frameW, row * frameH, frameW, frameH);
+      frames.push(new Texture({ source: sheetTexture.source, frame }));
+    }
+    return frames;
+  };
+  return {
+    idle: getRow(0, 4),
+    working: getRow(1, 4),
+    walkRight: getRow(2, 4),
+    walkLeft: getRow(3, 4),
+  };
+}
+
 // ── Agent sprite types & helpers ─────────────────────────────────
 
 interface AgentSprite {
   container: Container;
+  animSprite?: AnimatedSprite;
   glow: Graphics;
   ring: Graphics;
   avatar: Graphics;
@@ -182,14 +208,17 @@ interface AgentSprite {
   warnBadge: Text;
   dotsBadge: Text;
   hitArea: Graphics;
+  usePixelArt: boolean;
 }
 
 function createAgentSprite(
   agent: Agent,
   onSelect: () => void,
   statusColors: Record<AgentStatus, number>,
+  frameSets?: SpriteFrameSet,
 ): AgentSprite {
   const container = new Container();
+  const usePixelArt = !!frameSets;
 
   const glow = new Graphics();
   glow.visible = false;
@@ -199,18 +228,39 @@ function createAgentSprite(
   container.addChild(ring);
 
   const avatar = new Graphics();
-  const bgColor = parseInt(agent.color.replace("#", ""), 16);
-  avatar.circle(0, 0, AVATAR_R);
-  avatar.fill(bgColor);
-  container.addChild(avatar);
-
   const emoji = new Text({ text: agent.emoji, style: EMOJI_STYLE });
-  emoji.anchor.set(0.5);
-  container.addChild(emoji);
+  let animSprite: AnimatedSprite | undefined;
+
+  if (usePixelArt && frameSets) {
+    // Pixel art mode: AnimatedSprite
+    const initFrames = agent.status === "working" ? frameSets.working : frameSets.idle;
+    animSprite = new AnimatedSprite(initFrames);
+    animSprite.anchor.set(0.5, 0.5);
+    animSprite.width = SPRITE_DISPLAY_SIZE;
+    animSprite.height = SPRITE_DISPLAY_SIZE;
+    animSprite.animationSpeed = agent.status === "working" ? 0.05 : 0.03;
+    animSprite.play();
+    container.addChild(animSprite);
+
+    // Hide fallback circle+emoji
+    avatar.visible = false;
+    emoji.visible = false;
+  } else {
+    // Fallback: circle + emoji
+    const bgColor = parseInt(agent.color.replace("#", ""), 16);
+    avatar.circle(0, 0, AVATAR_R);
+    avatar.fill(bgColor);
+    container.addChild(avatar);
+
+    emoji.anchor.set(0.5);
+    container.addChild(emoji);
+  }
+
+  const labelOffsetY = usePixelArt ? SPRITE_DISPLAY_SIZE / 2 + 6 : AVATAR_R + 14;
 
   const nameLabel = new Text({ text: agent.name, style: NAME_STYLE });
   nameLabel.anchor.set(0.5);
-  nameLabel.y = AVATAR_R + 14;
+  nameLabel.y = labelOffsetY;
   container.addChild(nameLabel);
 
   const statusColor = statusColors[agent.status];
@@ -219,32 +269,38 @@ function createAgentSprite(
     style: new TextStyle({ fontFamily: "system-ui, sans-serif", fontSize: 10, fill: statusColor }),
   });
   statusLabel.anchor.set(0.5);
-  statusLabel.y = AVATAR_R + 28;
+  statusLabel.y = labelOffsetY + 14;
   container.addChild(statusLabel);
+
+  const hitR = usePixelArt ? SPRITE_DISPLAY_SIZE / 2 + 4 : AVATAR_R + 10;
 
   const warnBadge = new Text({ text: "\u26a0\ufe0f", style: WARN_STYLE });
   warnBadge.anchor.set(0.5);
-  warnBadge.x = AVATAR_R - 4;
-  warnBadge.y = -AVATAR_R + 4;
+  warnBadge.x = hitR - 8;
+  warnBadge.y = -hitR + 8;
   warnBadge.visible = agent.status === "blocked";
   container.addChild(warnBadge);
 
   const dotsBadge = new Text({ text: "\u2022\u2022\u2022", style: DOTS_STYLE });
   dotsBadge.anchor.set(0.5);
-  dotsBadge.x = AVATAR_R + 12;
+  dotsBadge.x = hitR;
   dotsBadge.y = -8;
   dotsBadge.visible = agent.status === "working";
   container.addChild(dotsBadge);
 
   const hitAreaGfx = new Graphics();
-  hitAreaGfx.circle(0, 0, AVATAR_R + 10);
+  hitAreaGfx.circle(0, 0, hitR);
   hitAreaGfx.fill({ color: 0xffffff, alpha: 0.001 });
   hitAreaGfx.eventMode = "static";
   hitAreaGfx.cursor = "pointer";
   hitAreaGfx.on("pointerdown", onSelect);
   container.addChild(hitAreaGfx);
 
-  return { container, glow, ring, avatar, emoji, nameLabel, statusLabel, warnBadge, dotsBadge, hitArea: hitAreaGfx };
+  return {
+    container, animSprite, glow, ring, avatar, emoji,
+    nameLabel, statusLabel, warnBadge, dotsBadge,
+    hitArea: hitAreaGfx, usePixelArt,
+  };
 }
 
 function updateAgentVisuals(
@@ -253,36 +309,73 @@ function updateAgentVisuals(
   isSelected: boolean,
   statusColors: Record<AgentStatus, number>,
   isWalking: boolean,
+  frameSets?: SpriteFrameSet,
 ) {
   const statusColor = statusColors[agent.status];
+  const r = sprite.usePixelArt ? SPRITE_DISPLAY_SIZE / 2 + 4 : AVATAR_R;
 
+  // Glow (selection)
   sprite.glow.clear();
   if (isSelected) {
-    sprite.glow.circle(0, 0, AVATAR_R + 8);
+    sprite.glow.circle(0, 0, r + 4);
     sprite.glow.fill({ color: statusColor, alpha: 0.2 });
     sprite.glow.visible = true;
   } else {
     sprite.glow.visible = false;
   }
 
+  // Ring
   sprite.ring.clear();
-  sprite.ring.circle(0, 0, AVATAR_R + 3);
-  sprite.ring.stroke({ width: 3, color: statusColor });
+  if (!sprite.usePixelArt) {
+    sprite.ring.circle(0, 0, AVATAR_R + 3);
+    sprite.ring.stroke({ width: 3, color: statusColor });
+  }
 
+  // Status text
   sprite.statusLabel.text = STATUS_LABELS[agent.status];
   sprite.statusLabel.style.fill = statusColor;
 
-  // Walking state visual
+  // Pixel art animation switching
+  if (sprite.usePixelArt && sprite.animSprite && frameSets) {
+    let targetFrames: Texture[];
+    let speed: number;
+    if (isWalking) {
+      targetFrames = frameSets.walkRight;
+      speed = 0.13;
+    } else if (agent.status === "working") {
+      targetFrames = frameSets.working;
+      speed = 0.05;
+    } else {
+      targetFrames = frameSets.idle;
+      speed = 0.03;
+    }
+    // Only switch if frames actually changed (avoid restart flicker)
+    if (sprite.animSprite.textures !== targetFrames) {
+      sprite.animSprite.textures = targetFrames;
+      sprite.animSprite.animationSpeed = speed;
+      sprite.animSprite.play();
+    }
+  }
+
+  // Walking state
   if (isWalking) {
-    sprite.container.alpha = 0.7;
-    sprite.dotsBadge.text = "\ud83d\udeb6";
-    sprite.dotsBadge.visible = true;
+    sprite.container.alpha = sprite.usePixelArt ? 1.0 : 0.7;
+    if (!sprite.usePixelArt) {
+      sprite.dotsBadge.text = "\ud83d\udeb6";
+      sprite.dotsBadge.visible = true;
+    } else {
+      sprite.dotsBadge.visible = false;
+    }
     sprite.warnBadge.visible = false;
   } else {
     sprite.container.alpha = 1.0;
     sprite.warnBadge.visible = agent.status === "blocked";
-    sprite.dotsBadge.text = "\u2022\u2022\u2022";
-    sprite.dotsBadge.visible = agent.status === "working";
+    if (!sprite.usePixelArt) {
+      sprite.dotsBadge.text = "\u2022\u2022\u2022";
+      sprite.dotsBadge.visible = agent.status === "working";
+    } else {
+      sprite.dotsBadge.visible = false;
+    }
   }
 }
 
@@ -295,6 +388,7 @@ interface Props {
   width: number;
   height: number;
   manifest?: ThemeManifest | null;
+  themeId?: string;
 }
 
 export default function OfficeMap({
@@ -304,6 +398,7 @@ export default function OfficeMap({
   width,
   height,
   manifest = null,
+  themeId,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
@@ -312,7 +407,6 @@ export default function OfficeMap({
   // Layer & display refs
   const rootRef = useRef<Container | null>(null);
   const layerMapRef = useRef<Map<string, Container>>(new Map());
-  // Fallback refs (used only when manifest is null)
   const zoneContainerRef = useRef<Container | null>(null);
   const agentContainerRef = useRef<Container | null>(null);
   const linesGraphicsRef = useRef<Graphics | null>(null);
@@ -321,12 +415,16 @@ export default function OfficeMap({
   const posRef = useRef<Record<string, { x: number; y: number }>>({});
   const targetRef = useRef<Record<string, { x: number; y: number }>>({});
   const statusColorsRef = useRef<Record<AgentStatus, number>>(DEFAULT_STATUS_COLORS);
+  const frameSetsRef = useRef<SpriteFrameSet | undefined>(undefined);
 
   // Walking animation tracking
   const walkingRef = useRef<Set<string>>(new Set());
   const prevSeatRef = useRef<Map<string, string>>(new Map());
 
+  // Determine rendering mode
   const useFallback = manifest === null;
+  const hasAtlas = !!manifest?.characters?.atlas;
+  const hasBgImage = !!manifest?.canvas?.background?.image;
 
   // Update status colors when manifest changes
   useEffect(() => {
@@ -341,6 +439,7 @@ export default function OfficeMap({
     const app = new Application();
     appRef.current = app;
     setReady(false);
+    frameSetsRef.current = undefined;
 
     app
       .init({
@@ -351,7 +450,7 @@ export default function OfficeMap({
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
       })
-      .then(() => {
+      .then(async () => {
         if (appRef.current !== app) return;
         if (!canvasRef.current || !app.canvas) return;
 
@@ -365,7 +464,6 @@ export default function OfficeMap({
           app.stage.addChild(root);
           rootRef.current = root;
 
-          // Create layer containers from manifest
           const layers = [...manifest.layers].sort((a, b) => a.zIndex - b.zIndex);
           const map = new Map<string, Container>();
           for (const layer of layers) {
@@ -378,7 +476,6 @@ export default function OfficeMap({
           root.sortableChildren = true;
           layerMapRef.current = map;
 
-          // Apply initial scale
           const { scale, offsetX, offsetY } = computeScale(
             width, height, manifest.canvas.width, manifest.canvas.height,
           );
@@ -386,7 +483,39 @@ export default function OfficeMap({
           root.x = offsetX;
           root.y = offsetY;
 
-          // Also store collaboration lines in effects layer
+          // Background image
+          const bgLayer = map.get("background");
+          if (bgLayer && hasBgImage && themeId) {
+            try {
+              const bgUrl = `/themes/${themeId}/${manifest.canvas.background.image}`;
+              const texture = await Assets.load(bgUrl);
+              if (appRef.current !== app) return;
+              const bgSprite = new PixiSprite(texture);
+              bgSprite.width = manifest.canvas.width;
+              bgSprite.height = manifest.canvas.height;
+              bgLayer.addChild(bgSprite);
+            } catch (err) {
+              console.warn("[OfficeMap] Failed to load background image:", err);
+            }
+          }
+
+          // Load sprite sheet
+          if (hasAtlas && themeId) {
+            try {
+              const atlasUrl = `/themes/${themeId}/${manifest.characters.atlas}`;
+              const sheetTexture = await Assets.load(atlasUrl);
+              if (appRef.current !== app) return;
+              frameSetsRef.current = extractFrames(
+                sheetTexture,
+                manifest.characters.frameWidth,
+                manifest.characters.frameHeight,
+              );
+            } catch (err) {
+              console.warn("[OfficeMap] Failed to load sprite sheet:", err);
+            }
+          }
+
+          // Collaboration lines in effects layer
           const effectsLayer = map.get("effects");
           if (effectsLayer) {
             const lines = new Graphics();
@@ -416,13 +545,14 @@ export default function OfficeMap({
       zoneContainerRef.current = null;
       agentContainerRef.current = null;
       linesGraphicsRef.current = null;
+      frameSetsRef.current = undefined;
       spritesRef.current.clear();
       walkingRef.current.clear();
       prevSeatRef.current.clear();
       try { app.destroy(true); } catch { /* noop */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manifest]);
+  }, [manifest, themeId]);
 
   // ── Resize ─────────────────────────────────────────────────
   useEffect(() => {
@@ -435,7 +565,6 @@ export default function OfficeMap({
     }
     app.stage.hitArea = new Rectangle(0, 0, width, height);
 
-    // Update root container scale for theme-driven mode
     if (!useFallback && manifest && rootRef.current) {
       const { scale, offsetX, offsetY } = computeScale(
         width, height, manifest.canvas.width, manifest.canvas.height,
@@ -446,17 +575,18 @@ export default function OfficeMap({
     }
   }, [width, height, ready, manifest, useFallback]);
 
-  // ── Draw zones ─────────────────────────────────────────────
+  // ── Draw zones (only when NO background image) ────────────
   useEffect(() => {
     if (!ready) return;
 
     if (!useFallback && manifest) {
-      // Theme-driven: draw zones from manifest into background + ui-overlay layers
+      // If background image is loaded, skip zone rectangles
+      if (hasBgImage) return;
+
       const bgLayer = layerMapRef.current.get("background");
       const uiLayer = layerMapRef.current.get("ui-overlay");
       if (!bgLayer || !uiLayer) return;
 
-      // Clear previous zone graphics (in case manifest changed)
       bgLayer.removeChildren();
       uiLayer.removeChildren();
 
@@ -475,7 +605,6 @@ export default function OfficeMap({
         uiLayer.addChild(label);
       }
     } else {
-      // Fallback: draw zones from calcZones
       const container = zoneContainerRef.current;
       if (!container) return;
       container.removeChildren();
@@ -498,13 +627,12 @@ export default function OfficeMap({
         container.addChild(label);
       }
     }
-  }, [width, height, ready, manifest, useFallback]);
+  }, [width, height, ready, manifest, useFallback, hasBgImage]);
 
   // ── Sync agent sprites ─────────────────────────────────────
   useEffect(() => {
     if (!ready) return;
 
-    // Find the agent container (theme-driven: characters layer; fallback: agentContainerRef)
     const agentContainer = useFallback
       ? agentContainerRef.current
       : layerMapRef.current.get("characters");
@@ -513,6 +641,7 @@ export default function OfficeMap({
     const currentIds = new Set(agents.map((a) => a.id));
     const sprites = spritesRef.current;
     const colors = statusColorsRef.current;
+    const frameSets = frameSetsRef.current;
 
     // Remove stale sprites
     for (const [id, sprite] of sprites) {
@@ -526,7 +655,7 @@ export default function OfficeMap({
     // Create new sprites
     for (const agent of agents) {
       if (!sprites.has(agent.id)) {
-        const sprite = createAgentSprite(agent, () => onSelectAgent(agent.id), colors);
+        const sprite = createAgentSprite(agent, () => onSelectAgent(agent.id), colors, frameSets);
         sprites.set(agent.id, sprite);
         agentContainer.addChild(sprite.container);
       }
@@ -538,10 +667,11 @@ export default function OfficeMap({
     const sprites = spritesRef.current;
     const colors = statusColorsRef.current;
     const walking = walkingRef.current;
+    const frameSets = frameSetsRef.current;
     for (const agent of agents) {
       const sprite = sprites.get(agent.id);
       if (sprite) {
-        updateAgentVisuals(sprite, agent, agent.id === selectedAgentId, colors, walking.has(agent.id));
+        updateAgentVisuals(sprite, agent, agent.id === selectedAgentId, colors, walking.has(agent.id), frameSets);
       }
     }
   }, [agents, selectedAgentId]);
@@ -551,13 +681,11 @@ export default function OfficeMap({
     if (!ready) return;
 
     if (!useFallback && manifest) {
-      // Theme-driven: assign seats from manifest
       const seatMap = assignSeats(agents, manifest.zones);
       const prevSeats = prevSeatRef.current;
 
       for (const [agentId, { x, y, seatId }] of seatMap) {
         const prevSeatId = prevSeats.get(agentId);
-        // Detect seat change → mark as walking
         if (prevSeatId !== undefined && prevSeatId !== seatId) {
           walkingRef.current.add(agentId);
         }
@@ -568,7 +696,6 @@ export default function OfficeMap({
         prevSeats.set(agentId, seatId);
       }
     } else {
-      // Fallback: compute from zones
       const zones = calcZonesFallback(width, height);
       const grouped: Record<string, Agent[]> = { work: [], meeting: [], break: [] };
       for (const a of agents) grouped[agentZoneFallback(a)].push(a);
@@ -596,15 +723,14 @@ export default function OfficeMap({
       const lines = linesGraphicsRef.current;
       const walking = walkingRef.current;
       const colors = statusColorsRef.current;
+      const frameSets = frameSetsRef.current;
 
-      // Lerp positions
       for (const [id, target] of Object.entries(targetRef.current)) {
         const cur = posRef.current[id];
         if (!cur) continue;
         cur.x += (target.x - cur.x) * 0.15;
         cur.y += (target.y - cur.y) * 0.15;
 
-        // Check arrival (within 1px)
         if (walking.has(id)) {
           const dx = Math.abs(target.x - cur.x);
           const dy = Math.abs(target.y - cur.y);
@@ -612,11 +738,10 @@ export default function OfficeMap({
             walking.delete(id);
             cur.x = target.x;
             cur.y = target.y;
-            // Restore normal visuals
             const sprite = sprites.get(id);
             const agent = agents.find((a) => a.id === id);
             if (sprite && agent) {
-              updateAgentVisuals(sprite, agent, agent.id === selectedAgentId, colors, false);
+              updateAgentVisuals(sprite, agent, agent.id === selectedAgentId, colors, false, frameSets);
             }
           }
         }
@@ -628,7 +753,6 @@ export default function OfficeMap({
         }
       }
 
-      // Collaboration lines
       if (lines) {
         lines.clear();
         for (const agent of agents) {

@@ -14,7 +14,7 @@ const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 function OfficeViewInner() {
   const stream = useOfficeStream();
   const agents = stream.agents.length > 0 ? stream.agents : MOCK_AGENTS;
-  const { manifest } = useTheme();
+  const { manifest, themeId } = useTheme();
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -63,6 +63,7 @@ function OfficeViewInner() {
             width={mapSize.width}
             height={mapSize.height}
             manifest={manifest}
+            themeId={themeId}
           />
         )}
       </div>
