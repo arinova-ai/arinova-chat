@@ -13,7 +13,7 @@
     "height": 1080,
     "background": {
       "image": "background.png",
-      "color": "0xf5efe6"
+      "color": "0x0f172a"
     }
   },
 
@@ -42,20 +42,20 @@
       "id": "rest-area",
       "name": "REST AREA",
       "type": "lounge",
-      "bounds": { "x": 60, "y": 200, "width": 800, "height": 680 },
+      "bounds": { "x": 300, "y": 300, "width": 600, "height": 500 },
       "capacity": 1,
       "seats": [
-        { "id": "rest-1", "x": 360, "y": 580, "direction": "right" }
+        { "id": "bed-1", "x": 600, "y": 620, "direction": "right" }
       ]
     },
     {
       "id": "work-area",
       "name": "WORK AREA",
       "type": "work",
-      "bounds": { "x": 960, "y": 200, "width": 800, "height": 680 },
+      "bounds": { "x": 1000, "y": 250, "width": 600, "height": 500 },
       "capacity": 1,
       "seats": [
-        { "id": "desk-1", "x": 1360, "y": 580, "direction": "left" }
+        { "id": "desk-1", "x": 1200, "y": 520, "direction": "left" }
       ]
     }
   ],
@@ -65,8 +65,8 @@
 
   "characters": {
     "atlas": "mascot-sprite.png",
-    "frameWidth": 512,
-    "frameHeight": 512,
+    "frameWidth": 256,
+    "frameHeight": 256,
     "anchor": { "x": 0.5, "y": 1.0 },
     "hitArea": { "type": "circle", "x": 0, "y": 0, "radius": 38 },
     "nameTag": {
@@ -92,7 +92,7 @@
     "states": {
       "idle": { "prefix": "char-idle", "frames": 4, "fps": 2, "loop": true },
       "working": { "prefix": "char-working", "frames": 4, "fps": 3, "loop": true },
-      "walking": { "prefix": "char-walk", "frames": 6, "fps": 8, "loop": true }
+      "walking": { "prefix": "char-walk", "frames": 4, "fps": 8, "loop": true }
     },
     "directions": ["down", "left", "right", "up"]
   }
