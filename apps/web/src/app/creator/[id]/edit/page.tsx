@@ -30,7 +30,6 @@ interface AgentManage {
   description: string;
   avatarUrl: string | null;
   category: string;
-  tags?: string[];
   systemPrompt: string;
   welcomeMessage: string | null;
   exampleConversations: { question: string; answer: string }[];
@@ -52,8 +51,6 @@ function EditAgentContent() {
   const [description, setDescription] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [category, setCategory] = useState("other");
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [modelProvider, setModelProvider] = useState("openai");
@@ -75,7 +72,6 @@ function EditAgentContent() {
         setDescription(data.description);
         setAvatarUrl(data.avatarUrl ?? "");
         setCategory(data.category);
-        setTags(data.tags ?? []);
         setSystemPrompt(data.systemPrompt);
         setWelcomeMessage(data.welcomeMessage ?? "");
         setModelProvider(data.modelProvider);
@@ -90,16 +86,6 @@ function EditAgentContent() {
       }
     })();
   }, [id]);
-
-  const addTag = () => {
-    const t = tagInput.trim();
-    if (t && !tags.includes(t) && tags.length < 5) {
-      setTags([...tags, t]);
-      setTagInput("");
-    }
-  };
-
-  const removeTag = (tag: string) => setTags(tags.filter((t) => t !== tag));
 
   const addExample = () => {
     setExampleConversations([
@@ -133,7 +119,6 @@ function EditAgentContent() {
           description,
           avatarUrl: avatarUrl || undefined,
           category,
-          tags,
           systemPrompt,
           welcomeMessage: welcomeMessage || undefined,
           exampleConversations: exampleConversations.filter(
@@ -240,51 +225,6 @@ function EditAgentContent() {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Tags (max 5)</label>
-                <div className="flex gap-2">
-                  <input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addTag();
-                      }
-                    }}
-                    placeholder="Add a tag..."
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={addTag}
-                    disabled={tags.length >= 5}
-                  >
-                    Add
-                  </Button>
-                </div>
-                {tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs"
-                      >
-                        {tag}
-                        <button
-                          type="button"
-                          onClick={() => removeTag(tag)}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
             </section>
 
             {/* AI Config */}
