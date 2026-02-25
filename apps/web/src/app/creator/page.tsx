@@ -17,6 +17,8 @@ import {
   Users,
   Star,
   ArrowDownCircle,
+  Banknote,
+  X,
 } from "lucide-react";
 
 interface DashboardStats {
@@ -54,16 +56,22 @@ function CreatorDashboardContent() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [agents, setAgents] = useState<AgentListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState(0);
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [payoutLoading, setPayoutLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashData, agentData] = await Promise.all([
+      const [dashData, agentData, balData] = await Promise.all([
         api<DashboardStats>("/api/creator/dashboard"),
         api<AgentListing[]>("/api/creator/agents"),
+        api<{ balance: number }>("/api/wallet/balance"),
       ]);
       setStats(dashData);
       setAgents(agentData);
+      setBalance(balData.balance);
     } catch {
       // auto-handled
     } finally {
@@ -83,6 +91,25 @@ function CreatorDashboardContent() {
       );
     } catch {
       // auto-handled
+    }
+  };
+
+  const handlePayout = async () => {
+    const amount = parseInt(payoutAmount);
+    if (!amount || amount < 100) return;
+    setPayoutLoading(true);
+    try {
+      const result = await api<{ newBalance: number }>("/api/creator/payout", {
+        method: "POST",
+        body: JSON.stringify({ amount }),
+      });
+      setBalance(result.newBalance);
+      setPayoutOpen(false);
+      setPayoutAmount("");
+    } catch {
+      // auto-handled
+    } finally {
+      setPayoutLoading(false);
     }
   };
 
@@ -116,6 +143,15 @@ function CreatorDashboardContent() {
                 Manage your AI agents
               </p>
             </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="gap-1"
+              onClick={() => setPayoutOpen(true)}
+            >
+              <Banknote className="h-4 w-4" />
+              Payout
+            </Button>
             <Button
               size="sm"
               className="brand-gradient-btn gap-1"
@@ -314,6 +350,74 @@ function CreatorDashboardContent() {
 
         <MobileBottomNav />
       </div>
+
+      {/* Payout dialog */}
+      {payoutOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl border border-border bg-card p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Request Payout</h3>
+              <button
+                onClick={() => setPayoutOpen(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="rounded-lg bg-secondary p-3 text-center">
+              <p className="text-xs text-muted-foreground">Available Balance</p>
+              <p className="mt-1 flex items-center justify-center gap-1.5 text-2xl font-bold">
+                <Coins className="h-5 w-5 text-yellow-500" />
+                {balance.toLocaleString()}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Amount (min 100)</label>
+              <input
+                type="number"
+                min={100}
+                max={balance}
+                value={payoutAmount}
+                onChange={(e) => setPayoutAmount(e.target.value)}
+                placeholder="100"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setPayoutOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="brand-gradient-btn flex-1"
+                disabled={
+                  payoutLoading ||
+                  !payoutAmount ||
+                  parseInt(payoutAmount) < 100 ||
+                  parseInt(payoutAmount) > balance
+                }
+                onClick={handlePayout}
+              >
+                {payoutLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Confirm Payout"
+                )}
+              </Button>
+            </div>
+
+            <p className="text-[10px] text-center text-muted-foreground">
+              Payout requests are processed within 3-5 business days.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

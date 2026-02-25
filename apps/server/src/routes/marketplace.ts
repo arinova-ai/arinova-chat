@@ -1,12 +1,28 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { agentListings, marketplaceConversations, marketplaceMessages, user, coinTransactions } from "../db/schema.js";
-import { eq, and, desc, asc, ilike, or, sql } from "drizzle-orm";
+import { agentListings, agentReviews, marketplaceConversations, marketplaceMessages, user, coinTransactions, coinBalances } from "../db/schema.js";
+import { eq, and, desc, asc, ilike, or, sql, gte } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { encryptApiKey, decryptApiKey } from "../lib/crypto.js";
 import { validateApiKey, callLLM } from "../lib/llm-providers.js";
 import { checkBilling, deductCoins, recordMessage } from "../lib/billing.js";
 import { z } from "zod";
+
+// ── Content moderation (Phase 1: basic blocklist) ─────────
+const BLOCKED_WORDS = [
+  "hack", "exploit", "malware", "phishing", "ransomware",
+  "illegal", "deepfake", "impersonate", "scam",
+];
+
+function moderateContent(text: string): string | null {
+  const lower = text.toLowerCase();
+  for (const word of BLOCKED_WORDS) {
+    if (lower.includes(word)) {
+      return `Content contains prohibited term: "${word}"`;
+    }
+  }
+  return null;
+}
 
 const createListingSchema = z.object({
   name: z.string().min(1).max(100),
@@ -14,7 +30,7 @@ const createListingSchema = z.object({
   avatarUrl: z.string().url().optional(),
   category: z.string().min(1).max(50),
   tags: z.array(z.string()).default([]),
-  systemPrompt: z.string().min(1),
+  systemPrompt: z.string().min(1).max(10000),
   welcomeMessage: z.string().optional(),
   exampleConversations: z
     .array(z.object({ question: z.string(), answer: z.string() }))
@@ -66,6 +82,15 @@ export async function marketplaceRoutes(app: FastifyInstance) {
 
     const { apiKey, ...rest } = body.data;
 
+    // Content moderation
+    const modError =
+      moderateContent(rest.name) ??
+      moderateContent(rest.description) ??
+      moderateContent(rest.systemPrompt);
+    if (modError) {
+      return reply.status(400).send({ error: modError });
+    }
+
     // Validate the API key before storing
     const validation = await validateApiKey(rest.modelProvider, apiKey);
     if (!validation.valid) {
@@ -113,6 +138,16 @@ export async function marketplaceRoutes(app: FastifyInstance) {
       }
 
       const { apiKey, ...rest } = body.data;
+
+      // Content moderation on updated fields
+      const modError =
+        (rest.name ? moderateContent(rest.name) : null) ??
+        (rest.description ? moderateContent(rest.description) : null) ??
+        (rest.systemPrompt ? moderateContent(rest.systemPrompt) : null);
+      if (modError) {
+        return reply.status(400).send({ error: modError });
+      }
+
       const updateData: Record<string, unknown> = {
         ...rest,
         updatedAt: new Date(),
@@ -480,6 +515,146 @@ export async function marketplaceRoutes(app: FastifyInstance) {
       avgRating: stats.avgRating ? parseFloat(stats.avgRating.toFixed(1)) : null,
       recentEarnings,
     });
+  });
+
+  // ── Submit review ────────────────────────────────────────
+  const reviewSchema = z.object({
+    rating: z.number().int().min(1).max(5),
+    comment: z.string().max(2000).optional(),
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/api/marketplace/agents/:id/reviews",
+    async (request, reply) => {
+      const authUser = await requireAuth(request, reply);
+      const { id: agentListingId } = request.params;
+
+      const body = reviewSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ error: body.error.flatten() });
+      }
+
+      // Verify listing exists and is active
+      const [listing] = await db
+        .select({ id: agentListings.id, creatorId: agentListings.creatorId })
+        .from(agentListings)
+        .where(and(eq(agentListings.id, agentListingId), eq(agentListings.status, "active")));
+
+      if (!listing) {
+        return reply.status(404).send({ error: "Listing not found" });
+      }
+
+      // Cannot review own agent
+      if (listing.creatorId === authUser.id) {
+        return reply.status(400).send({ error: "Cannot review your own agent" });
+      }
+
+      // Insert review (unique constraint will reject duplicates)
+      try {
+        await db.insert(agentReviews).values({
+          agentListingId,
+          userId: authUser.id,
+          rating: body.data.rating,
+          comment: body.data.comment ?? null,
+        });
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message.includes("unique")) {
+          return reply.status(409).send({ error: "You have already reviewed this agent" });
+        }
+        throw err;
+      }
+
+      // Recalculate avgRating + reviewCount from source of truth
+      await db
+        .update(agentListings)
+        .set({
+          avgRating: sql`(SELECT avg(rating)::real FROM agent_reviews WHERE agent_listing_id = ${agentListingId})`,
+          reviewCount: sql`(SELECT count(*)::int FROM agent_reviews WHERE agent_listing_id = ${agentListingId})`,
+        })
+        .where(eq(agentListings.id, agentListingId));
+
+      return reply.status(201).send({ success: true });
+    },
+  );
+
+  // ── Get reviews for a listing (public) ──────────────────
+  app.get<{
+    Params: { id: string };
+    Querystring: { limit?: string; offset?: string };
+  }>(
+    "/api/marketplace/agents/:id/reviews",
+    async (request, reply) => {
+      const { id: agentListingId } = request.params;
+      const limit = Math.min(parseInt(request.query.limit ?? "20"), 50);
+      const offset = parseInt(request.query.offset ?? "0");
+
+      const [reviews, [{ count }]] = await Promise.all([
+        db
+          .select({
+            id: agentReviews.id,
+            rating: agentReviews.rating,
+            comment: agentReviews.comment,
+            createdAt: agentReviews.createdAt,
+            userName: user.name,
+            userImage: user.image,
+          })
+          .from(agentReviews)
+          .innerJoin(user, eq(agentReviews.userId, user.id))
+          .where(eq(agentReviews.agentListingId, agentListingId))
+          .orderBy(desc(agentReviews.createdAt))
+          .limit(limit)
+          .offset(offset),
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(agentReviews)
+          .where(eq(agentReviews.agentListingId, agentListingId)),
+      ]);
+
+      return reply.send({ reviews, total: count });
+    },
+  );
+
+  // ── Creator payout (mock) ──────────────────────────────
+  const payoutSchema = z.object({
+    amount: z.number().int().min(100, "Minimum payout is 100 credits"),
+  });
+
+  app.post("/api/creator/payout", async (request, reply) => {
+    const authUser = await requireAuth(request, reply);
+
+    const body = payoutSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.flatten() });
+    }
+
+    // Atomic deduction with balance check
+    const [updated] = await db
+      .update(coinBalances)
+      .set({
+        balance: sql`${coinBalances.balance} - ${body.data.amount}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(coinBalances.userId, authUser.id),
+          gte(coinBalances.balance, body.data.amount),
+        ),
+      )
+      .returning({ balance: coinBalances.balance });
+
+    if (!updated) {
+      return reply.status(400).send({ error: "Insufficient balance for payout" });
+    }
+
+    // Record payout transaction
+    await db.insert(coinTransactions).values({
+      userId: authUser.id,
+      type: "payout",
+      amount: -body.data.amount,
+      description: `Payout request: ${body.data.amount} credits`,
+    });
+
+    return reply.send({ success: true, newBalance: updated.balance });
   });
 
   // ── Get user's marketplace conversations ──────────────────

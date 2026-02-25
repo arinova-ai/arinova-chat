@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { AuthGuard } from "@/components/auth-guard";
@@ -16,6 +16,7 @@ import {
   Cpu,
   User,
   Sparkles,
+  Send,
 } from "lucide-react";
 
 interface AgentDetail {
@@ -39,11 +40,40 @@ interface AgentDetail {
   creatorImage: string | null;
 }
 
+interface Review {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  userName: string;
+  userImage: string | null;
+}
+
 function AgentDetailContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Reviews
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewTotal, setReviewTotal] = useState(0);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const fetchReviews = useCallback(async () => {
+    try {
+      const data = await api<{ reviews: Review[]; total: number }>(
+        `/api/marketplace/agents/${id}/reviews?limit=20`,
+        { silent: true },
+      );
+      setReviews(data.reviews);
+      setReviewTotal(data.total);
+    } catch {
+      // silent
+    }
+  }, [id]);
 
   useEffect(() => {
     (async () => {
@@ -56,7 +86,32 @@ function AgentDetailContent() {
         setLoading(false);
       }
     })();
-  }, [id]);
+    fetchReviews();
+  }, [id, fetchReviews]);
+
+  const submitReview = async () => {
+    if (reviewRating === 0) return;
+    setSubmittingReview(true);
+    try {
+      await api(`/api/marketplace/agents/${id}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({
+          rating: reviewRating,
+          ...(reviewComment.trim() ? { comment: reviewComment.trim() } : {}),
+        }),
+      });
+      setReviewRating(0);
+      setReviewComment("");
+      fetchReviews();
+      // Refresh agent to get updated avgRating/reviewCount
+      const updated = await api<AgentDetail>(`/api/marketplace/agents/${id}`);
+      setAgent(updated);
+    } catch {
+      // auto-handled
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const handleStartChat = async () => {
     router.push(`/marketplace/chat/${id}`);
@@ -207,17 +262,118 @@ function AgentDetailContent() {
                   </div>
                 )}
 
-                {/* Reviews placeholder */}
-                <div className="space-y-3">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Reviews
-                  </h2>
-                  <div className="rounded-xl border border-border bg-card p-6 text-center">
-                    <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/40" />
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Reviews coming soon
-                    </p>
+                {/* Reviews */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                      Reviews ({reviewTotal})
+                    </h2>
+                    {agent.avgRating !== null && (
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                        <span className="font-semibold">{agent.avgRating.toFixed(1)}</span>
+                        <span className="text-muted-foreground">({agent.reviewCount})</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Submit review form */}
+                  <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                    <p className="text-xs font-medium text-muted-foreground">Leave a review</p>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setReviewRating(star)}
+                          className="transition-colors"
+                        >
+                          <Star
+                            className={`h-6 w-6 ${
+                              star <= reviewRating
+                                ? "fill-yellow-500 text-yellow-500"
+                                : "text-muted-foreground/30"
+                            }`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      placeholder="Write a comment (optional)..."
+                      rows={2}
+                      maxLength={2000}
+                      className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <Button
+                      size="sm"
+                      disabled={reviewRating === 0 || submittingReview}
+                      onClick={submitReview}
+                      className="gap-1"
+                    >
+                      {submittingReview ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5" />
+                      )}
+                      Submit Review
+                    </Button>
+                  </div>
+
+                  {/* Review list */}
+                  {reviews.length === 0 ? (
+                    <div className="rounded-xl border border-border bg-card p-6 text-center">
+                      <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        No reviews yet. Be the first!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {reviews.map((review) => (
+                        <div
+                          key={review.id}
+                          className="rounded-xl border border-border bg-card p-4 space-y-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            {review.userImage ? (
+                              <img
+                                src={review.userImage}
+                                alt={review.userName}
+                                className="h-6 w-6 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary">
+                                <User className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+                            <span className="text-sm font-medium">{review.userName}</span>
+                            <div className="flex gap-0.5">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={`h-3 w-3 ${
+                                    s <= review.rating
+                                      ? "fill-yellow-500 text-yellow-500"
+                                      : "text-muted-foreground/20"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="ml-auto text-[10px] text-muted-foreground">
+                              {new Date(review.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {review.comment && (
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                              {review.comment}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
