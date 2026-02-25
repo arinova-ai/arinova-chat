@@ -8,6 +8,7 @@ import { useOfficeStream } from "@/hooks/use-office-stream";
 import { MOCK_AGENTS } from "./mock-data";
 import { ThemeProvider, useTheme } from "./theme-context";
 import { THEME_REGISTRY } from "./theme-registry";
+import type { AgentStatus } from "./types";
 
 // Dynamic import — PixiJS only works client-side
 const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
@@ -17,14 +18,29 @@ function OfficeViewInner() {
   const { manifest, themeId } = useTheme();
   const themeEntry = THEME_REGISTRY.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
-  const allAgents = stream.agents.length > 0 ? stream.agents : MOCK_AGENTS;
+  const isDemoMode = stream.agents.length === 0;
+  const allAgents = isDemoMode ? MOCK_AGENTS : stream.agents;
   const agents = allAgents.slice(0, maxAgents);
+
+  const [demoStatus, setDemoStatus] = useState<AgentStatus>("working");
+
+  useEffect(() => {
+    if (!isDemoMode) return;
+    const interval = setInterval(() => {
+      setDemoStatus((prev) => (prev === "working" ? "idle" : "working"));
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [isDemoMode]);
+
+  const displayAgents = isDemoMode
+    ? agents.map((a) => ({ ...a, status: demoStatus, collaboratingWith: undefined }))
+    : agents;
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
+  const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
 
   const selectAgent = useCallback((id: string | null) => {
     setSelectedAgentId(id);
@@ -54,14 +70,14 @@ function OfficeViewInner() {
     <div className="flex h-full flex-col text-white overflow-hidden">
       {/* Status summary */}
       <div className="shrink-0 pb-3">
-        <StatusBar agents={agents} />
+        <StatusBar agents={displayAgents} />
       </div>
 
       {/* Office map area — always takes full remaining space */}
       <div ref={mapContainerRef} className="flex-1 min-h-0">
         {mapSize.width > 0 && mapSize.height > 0 && (
           <OfficeMap
-            agents={agents}
+            agents={displayAgents}
             selectedAgentId={selectedAgentId}
             onSelectAgent={selectAgent}
             width={mapSize.width}
@@ -73,7 +89,7 @@ function OfficeViewInner() {
       </div>
 
       {/* Agent detail modal */}
-      <AgentModal agent={selectedAgent} agents={agents} onClose={closeModal} />
+      <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
     </div>
   );
 }
