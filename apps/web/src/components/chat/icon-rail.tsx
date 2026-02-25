@@ -42,12 +42,6 @@ export function IconRail() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const handler = () => window.dispatchEvent(new CustomEvent("arinova:new-chat"));
-    window.addEventListener("arinova:new-chat", handler);
-    return () => window.removeEventListener("arinova:new-chat", handler);
-  }, []);
-
   const getActiveId = () => {
     if (pathname === "/" || pathname.startsWith("/chat")) return "chat";
     if (pathname.startsWith("/office/themes")) return "theme";
