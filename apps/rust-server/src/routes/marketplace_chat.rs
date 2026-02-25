@@ -230,7 +230,35 @@ async fn chat(
             )
         })?;
 
-    // 7. Build LLM messages
+    // 7. RAG: augment system prompt with knowledge base context
+    let system_prompt = if let Some(ref openai_key) = state.config.openai_api_key {
+        match crate::services::embedding::rag_search(
+            &state.db,
+            listing_id,
+            &body.message,
+            openai_key,
+            5,
+        )
+        .await
+        {
+            Ok(chunks) if !chunks.is_empty() => {
+                let context = chunks.join("\n\n");
+                format!(
+                    "{}\n\n---\nBelow is relevant context from the knowledge base:\n\n{}",
+                    listing.system_prompt, context
+                )
+            }
+            Ok(_) => listing.system_prompt.clone(),
+            Err(e) => {
+                tracing::warn!("RAG search failed for listing {}: {:?}", listing_id, e);
+                listing.system_prompt.clone()
+            }
+        }
+    } else {
+        listing.system_prompt.clone()
+    };
+
+    // 8. Build LLM messages
     let provider = match listing.model_provider.as_str() {
         "anthropic" => llm::LlmProvider::Anthropic,
         _ => llm::LlmProvider::OpenAI,
@@ -238,7 +266,7 @@ async fn chat(
 
     let mut llm_messages = vec![llm::ChatMessage {
         role: "system".into(),
-        content: listing.system_prompt,
+        content: system_prompt,
     }];
 
     for msg in &history {

@@ -247,3 +247,51 @@ pub async fn process_embedding(
 
     Ok(chunks.len())
 }
+
+// ---------------------------------------------------------------------------
+// RAG similarity search
+// ---------------------------------------------------------------------------
+
+/// Search knowledge base chunks by cosine similarity to a query string.
+/// Returns up to `top_k` relevant chunk contents for the given listing.
+pub async fn rag_search(
+    db: &PgPool,
+    listing_id: Uuid,
+    query: &str,
+    api_key: &str,
+    top_k: i32,
+) -> anyhow::Result<Vec<String>> {
+    let client = Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .context("Failed to build HTTP client")?;
+
+    // Embed the query
+    let embeddings =
+        generate_embeddings(&client, api_key, &[query.to_string()], EMBEDDING_MODEL).await?;
+    let query_embedding = embeddings
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow!("No embedding returned for query"))?;
+
+    let query_vec = Vector::from(query_embedding);
+
+    // Cosine similarity search via pgvector <=> operator
+    let rows = sqlx::query_as::<_, (String,)>(
+        r#"SELECT c.content
+           FROM knowledge_base_chunks c
+           JOIN agent_knowledge_bases kb ON c.kb_id = kb.id
+           WHERE kb.listing_id = $1 AND kb.status = 'ready'
+           ORDER BY c.embedding <=> $2::vector
+           LIMIT $3"#,
+    )
+    .bind(listing_id)
+    .bind(query_vec)
+    .bind(top_k)
+    .fetch_all(db)
+    .await
+    .context("RAG similarity search failed")?;
+
+    Ok(rows.into_iter().map(|(content,)| content).collect())
+}
