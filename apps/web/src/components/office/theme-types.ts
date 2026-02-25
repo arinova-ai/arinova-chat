@@ -188,6 +188,10 @@ export interface AudioConfig {
   };
 }
 
+// ── Renderer ───────────────────────────────────────────────────
+
+export type RendererType = "pixi" | "threejs";
+
 // ── Top-level Manifest ──────────────────────────────────────────
 
 export interface ThemeManifest {
@@ -208,4 +212,7 @@ export interface ThemeManifest {
   characters: CharactersConfig;
   effects: EffectDef[];
   audio?: AudioConfig;
+
+  /** Which rendering engine to use. Defaults to "pixi" for backward compat. */
+  renderer?: RendererType;
 }

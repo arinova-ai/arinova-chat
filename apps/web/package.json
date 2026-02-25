@@ -13,6 +13,7 @@
   "dependencies": {
     "@arinova/shared": "workspace:*",
     "@sentry/nextjs": "^10.39.0",
+    "@types/three": "^0.183.1",
     "better-auth": "^1.4.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -29,6 +30,7 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
+    "three": "^0.183.1",
     "zustand": "^5"
   },
   "devDependencies": {
