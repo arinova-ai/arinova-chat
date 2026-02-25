@@ -24,6 +24,8 @@ pub struct Config {
     pub vapid_private_key: String,
     pub vapid_subject: String,
     pub sentry_dsn: String,
+    /// Shared secret for the POST /api/office/event endpoint (plugin → server).
+    pub office_event_token: String,
 }
 
 impl Config {
@@ -65,6 +67,7 @@ impl Config {
             vapid_subject: env::var("VAPID_SUBJECT")
                 .unwrap_or_else(|_| "mailto:admin@arinova.ai".into()),
             sentry_dsn: env::var("SENTRY_DSN").unwrap_or_default(),
+            office_event_token: env::var("OFFICE_EVENT_TOKEN").unwrap_or_default(),
         }
     }
 

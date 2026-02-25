@@ -312,7 +312,7 @@ export function BotManageDialog({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="group relative flex h-20 w-20 items-center justify-center rounded-full bg-neutral-700 overflow-hidden transition-opacity hover:opacity-80"
+              className="group relative flex h-20 w-20 items-center justify-center rounded-full bg-accent overflow-hidden transition-opacity hover:opacity-80"
               disabled={uploading}
             >
               {avatarUrl ? (
@@ -322,7 +322,7 @@ export function BotManageDialog({
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <Bot className="h-8 w-8 text-neutral-300" />
+                <Bot className="h-8 w-8 text-foreground/80" />
               )}
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                 {uploading ? (
@@ -353,7 +353,7 @@ export function BotManageDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Bot name"
-              className="bg-neutral-800 border-none"
+              className="bg-secondary border-none"
             />
           </div>
 
@@ -364,7 +364,7 @@ export function BotManageDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this bot do?"
-              className="bg-neutral-800 border-none min-h-[60px] resize-none"
+              className="bg-secondary border-none min-h-[60px] resize-none"
               rows={2}
             />
           </div>
@@ -373,7 +373,7 @@ export function BotManageDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Category</label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="bg-neutral-800 border-none">
+              <SelectTrigger className="bg-secondary border-none">
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
@@ -393,7 +393,7 @@ export function BotManageDialog({
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
               placeholder="Define the bot's behavior, role, language..."
-              className="bg-neutral-800 border-none min-h-[80px] resize-none text-sm"
+              className="bg-secondary border-none min-h-[80px] resize-none text-sm"
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
@@ -408,7 +408,7 @@ export function BotManageDialog({
               value={welcomeMessage}
               onChange={(e) => setWelcomeMessage(e.target.value)}
               placeholder="Auto-sent when a new conversation starts..."
-              className="bg-neutral-800 border-none min-h-[60px] resize-none text-sm"
+              className="bg-secondary border-none min-h-[60px] resize-none text-sm"
               rows={2}
             />
           </div>
@@ -426,7 +426,7 @@ export function BotManageDialog({
                 {quickReplies.map((qr, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-2 rounded-lg bg-neutral-800/50 px-3 py-2"
+                    className="flex items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2"
                   >
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium">{qr.label}</span>
@@ -447,13 +447,13 @@ export function BotManageDialog({
                   value={newQrLabel}
                   onChange={(e) => setNewQrLabel(e.target.value)}
                   placeholder="Label"
-                  className="bg-neutral-800 border-none text-sm flex-[1] min-w-0"
+                  className="bg-secondary border-none text-sm flex-[1] min-w-0"
                 />
                 <Input
                   value={newQrMessage}
                   onChange={(e) => setNewQrMessage(e.target.value)}
                   placeholder="Message"
-                  className="bg-neutral-800 border-none text-sm flex-[2] min-w-0"
+                  className="bg-secondary border-none text-sm flex-[2] min-w-0"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -479,7 +479,7 @@ export function BotManageDialog({
             <button
               type="button"
               onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-              className="flex w-full items-center justify-between rounded-lg bg-neutral-800/50 px-4 py-3 transition-colors hover:bg-neutral-800"
+              className="flex w-full items-center justify-between rounded-lg bg-secondary/50 px-4 py-3 transition-colors hover:bg-secondary"
             >
               <div className="flex items-center gap-3">
                 {notificationsEnabled ? (
@@ -492,7 +492,7 @@ export function BotManageDialog({
               <div
                 className={cn(
                   "h-5 w-9 rounded-full transition-colors relative",
-                  notificationsEnabled ? "bg-primary" : "bg-neutral-600"
+                  notificationsEnabled ? "bg-primary" : "bg-muted"
                 )}
               >
                 <div
@@ -506,7 +506,7 @@ export function BotManageDialog({
             <button
               type="button"
               onClick={() => setIsPublic(!isPublic)}
-              className="flex w-full items-center justify-between rounded-lg bg-neutral-800/50 px-4 py-3 transition-colors hover:bg-neutral-800"
+              className="flex w-full items-center justify-between rounded-lg bg-secondary/50 px-4 py-3 transition-colors hover:bg-secondary"
             >
               <div className="flex items-center gap-3">
                 {isPublic ? (
@@ -528,7 +528,7 @@ export function BotManageDialog({
               <div
                 className={cn(
                   "h-5 w-9 rounded-full transition-colors relative",
-                  isPublic ? "bg-primary" : "bg-neutral-600"
+                  isPublic ? "bg-primary" : "bg-muted"
                 )}
               >
                 <div
@@ -546,15 +546,15 @@ export function BotManageDialog({
             <div className="space-y-2">
               <label className="text-sm font-medium">Usage</label>
               <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-lg bg-neutral-800/50 px-3 py-2 text-center">
+                <div className="rounded-lg bg-secondary/50 px-3 py-2 text-center">
                   <p className="text-lg font-semibold">{stats.totalMessages}</p>
                   <p className="text-xs text-muted-foreground">Messages</p>
                 </div>
-                <div className="rounded-lg bg-neutral-800/50 px-3 py-2 text-center">
+                <div className="rounded-lg bg-secondary/50 px-3 py-2 text-center">
                   <p className="text-lg font-semibold">{stats.totalConversations}</p>
                   <p className="text-xs text-muted-foreground">Chats</p>
                 </div>
-                <div className="rounded-lg bg-neutral-800/50 px-3 py-2 text-center">
+                <div className="rounded-lg bg-secondary/50 px-3 py-2 text-center">
                   <p className="text-sm font-semibold">{formatLastActive(stats.lastActive)}</p>
                   <p className="text-xs text-muted-foreground">Last Active</p>
                 </div>
@@ -565,12 +565,12 @@ export function BotManageDialog({
           {/* Connection status */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Connection</label>
-            <div className="rounded-lg bg-neutral-800/50 px-4 py-3">
+            <div className="rounded-lg bg-secondary/50 px-4 py-3">
               <div className="flex items-center gap-2">
                 <Circle
                   className={cn(
                     "h-2.5 w-2.5 shrink-0 fill-current",
-                    isConnected ? "text-green-500" : "text-neutral-500"
+                    isConnected ? "text-green-500" : "text-muted-foreground"
                   )}
                 />
                 <span className="text-sm">
@@ -612,7 +612,7 @@ export function BotManageDialog({
                 {localToken ? (
                   <>
                     <div className="flex items-center gap-2">
-                      <code className="min-w-0 flex-1 rounded-lg bg-neutral-800 px-3 py-2 text-xs font-mono truncate select-all">
+                      <code className="min-w-0 flex-1 rounded-lg bg-secondary px-3 py-2 text-xs font-mono truncate select-all">
                         {showToken ? localToken : "ari_" + "•".repeat(40)}
                       </code>
                       <Button variant="outline" size="icon" onClick={() => setShowToken(!showToken)} className="shrink-0">

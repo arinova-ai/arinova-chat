@@ -1,0 +1,122 @@
+{
+  "id": "default-office",
+  "name": "Modern Office",
+  "version": "1.0.0",
+  "author": { "name": "Arinova", "id": "arinova-official" },
+  "description": "The default virtual office theme with work area, meeting room, and lounge.",
+  "tags": ["default", "modern", "dark"],
+  "preview": "preview.png",
+  "license": "standard",
+
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "background": {
+      "image": "background.png",
+      "color": "0x0f172a"
+    }
+  },
+
+  "viewport": {
+    "minZoom": 0.5,
+    "maxZoom": 2.0,
+    "defaultZoom": 1.0,
+    "panBounds": true,
+    "mobile": {
+      "defaultZoom": 0.6,
+      "pinchToZoom": true,
+      "doubleTapZoom": 1.2
+    }
+  },
+
+  "layers": [
+    { "id": "background",    "zIndex": 0 },
+    { "id": "floor-decor",   "zIndex": 10 },
+    { "id": "furniture",     "zIndex": 20 },
+    { "id": "characters",    "zIndex": 30 },
+    { "id": "furniture-top", "zIndex": 40 },
+    { "id": "effects",       "zIndex": 50 },
+    { "id": "ui-overlay",    "zIndex": 100 }
+  ],
+
+  "zones": [
+    {
+      "id": "work-area",
+      "name": "WORK AREA",
+      "type": "work",
+      "bounds": { "x": 60, "y": 280, "width": 900, "height": 500 },
+      "capacity": 6,
+      "seats": [
+        { "id": "desk-1", "x": 160, "y": 380, "direction": "down" },
+        { "id": "desk-2", "x": 360, "y": 380, "direction": "down" },
+        { "id": "desk-3", "x": 560, "y": 380, "direction": "down" },
+        { "id": "desk-4", "x": 160, "y": 560, "direction": "up" },
+        { "id": "desk-5", "x": 360, "y": 560, "direction": "up" },
+        { "id": "desk-6", "x": 560, "y": 560, "direction": "up" }
+      ]
+    },
+    {
+      "id": "meeting-room",
+      "name": "MEETING ROOM",
+      "type": "meeting",
+      "bounds": { "x": 1050, "y": 100, "width": 450, "height": 400 },
+      "capacity": 4,
+      "seats": [
+        { "id": "meet-1", "x": 1150, "y": 220, "direction": "right" },
+        { "id": "meet-2", "x": 1350, "y": 220, "direction": "left" },
+        { "id": "meet-3", "x": 1150, "y": 380, "direction": "right" },
+        { "id": "meet-4", "x": 1350, "y": 380, "direction": "left" }
+      ],
+      "door": { "x": 1050, "y": 300, "width": 20, "height": 80 }
+    },
+    {
+      "id": "lounge",
+      "name": "BREAK AREA  \u2615",
+      "type": "lounge",
+      "bounds": { "x": 1050, "y": 580, "width": 450, "height": 380 },
+      "capacity": 3,
+      "seats": [
+        { "id": "sofa-1", "x": 1150, "y": 700, "direction": "right" },
+        { "id": "sofa-2", "x": 1300, "y": 700, "direction": "down" },
+        { "id": "sofa-3", "x": 1150, "y": 850, "direction": "right" }
+      ]
+    }
+  ],
+
+  "furniture": [],
+  "effects": [],
+
+  "characters": {
+    "atlas": "",
+    "frameWidth": 48,
+    "frameHeight": 64,
+    "anchor": { "x": 0.5, "y": 1.0 },
+    "hitArea": { "type": "circle", "x": 0, "y": 0, "radius": 38 },
+    "nameTag": {
+      "offsetY": -68,
+      "font": "12px system-ui, sans-serif",
+      "color": "#E2E8F0",
+      "bgColor": "rgba(0,0,0,0)",
+      "padding": { "x": 6, "y": 2 },
+      "borderRadius": 4,
+      "maxWidth": 100
+    },
+    "statusBadge": {
+      "offsetX": 24,
+      "offsetY": -24,
+      "radius": 5,
+      "colors": {
+        "working": "#16A34A",
+        "idle": "#F59E0B",
+        "blocked": "#DC2626",
+        "collaborating": "#2563EB"
+      }
+    },
+    "states": {
+      "idle": { "prefix": "char-idle", "frames": 4, "fps": 2, "loop": true },
+      "working": { "prefix": "char-working", "frames": 4, "fps": 3, "loop": true },
+      "walking": { "prefix": "char-walk", "frames": 6, "fps": 8, "loop": true }
+    },
+    "directions": ["down", "left", "right", "up"]
+  }
+}

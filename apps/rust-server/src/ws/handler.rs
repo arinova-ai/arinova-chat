@@ -23,6 +23,163 @@ use crate::ws::agent_handler::send_task_to_agent;
 use crate::ws::state::{QueuedResponse, WsState};
 use crate::AppState;
 
+// ---------- Two-layer agent dispatch filter (pure, testable) ----------
+
+/// Per-agent configuration used by the dispatch filter.
+#[derive(Debug, Clone)]
+pub struct AgentFilterConfig {
+    pub agent_id: String,
+    /// One of "owner_only", "allowed_users", "all_mentions".
+    pub listen_mode: String,
+    pub owner_user_id: String,
+    pub allowed_user_ids: Vec<String>,
+}
+
+/// Pure function implementing the two-layer filtering logic for agent dispatch.
+///
+/// Layer 1 (conversation-level): `mention_only`
+///   - `false` -> ALL agents receive ALL messages (listen_mode ignored).
+///   - `true`  -> only agents that are @mentioned (or `__all__`) proceed to Layer 2.
+///
+/// Layer 2 (per-agent): `listen_mode`
+///   - `"owner_only"`    -> only the agent's owner can trigger it.
+///   - `"allowed_users"` -> owner + whitelisted users can trigger it.
+///   - `"all_mentions"`  -> any @mention triggers it.
+///
+/// For non-group conversations the function always returns all agent IDs
+/// (direct conversations always dispatch).
+pub fn filter_agents_for_dispatch(
+    mention_only: bool,
+    conv_type: &str,
+    sender_user_id: &str,
+    mentions: &[String],
+    agents: &[AgentFilterConfig],
+) -> Vec<String> {
+    let agent_ids: Vec<String> = agents.iter().map(|a| a.agent_id.clone()).collect();
+
+    if !mention_only {
+        // Layer 1: mention_only=false -> ALL agents hear ALL messages
+        return agent_ids;
+    }
+
+    if conv_type == "group" {
+        // Layer 1: mention_only=true -> only @mentions trigger agents
+        // Layer 2: filter by listen_mode per agent
+        let mut filtered = Vec::new();
+        for agent in agents {
+            let is_mentioned = mentions.contains(&"__all__".to_string())
+                || mentions.contains(&agent.agent_id);
+            if !is_mentioned {
+                continue;
+            }
+
+            let is_owner = agent.owner_user_id == sender_user_id;
+            let should_dispatch = match agent.listen_mode.as_str() {
+                "owner_only" => is_owner,
+                "allowed_users" => {
+                    is_owner || agent.allowed_user_ids.contains(&sender_user_id.to_string())
+                }
+                "all_mentions" => true,
+                _ => false,
+            };
+            if should_dispatch {
+                filtered.push(agent.agent_id.clone());
+            }
+        }
+        filtered
+    } else {
+        // Direct conversation -> always dispatch
+        agent_ids
+    }
+}
+
+/// Get conversation member user IDs with caching.
+/// Returns a filtered list excluding users who have blocked (or are blocked by) sender_user_id.
+async fn get_conv_member_ids(
+    ws_state: &WsState,
+    db: &PgPool,
+    conversation_id: &str,
+    sender_user_id: &str,
+) -> Vec<String> {
+    // Check cache first (valid for 60 seconds)
+    let cached = ws_state.conv_member_cache.get(conversation_id).and_then(|entry| {
+        if entry.1.elapsed() < std::time::Duration::from_secs(60) {
+            Some(entry.0.clone())
+        } else {
+            None
+        }
+    });
+
+    let all_members = if let Some(members) = cached {
+        members
+    } else {
+        // Fetch from DB
+        let members = sqlx::query_as::<_, (String,)>(
+            "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1::uuid",
+        )
+        .bind(conversation_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default();
+
+        let member_ids: Vec<String> = if members.is_empty() {
+            // Fallback: single-user conversation
+            let owner = sqlx::query_as::<_, (String,)>(
+                "SELECT user_id FROM conversations WHERE id = $1::uuid",
+            )
+            .bind(conversation_id)
+            .fetch_optional(db)
+            .await;
+            match owner {
+                Ok(Some((id,))) => vec![id],
+                _ => vec![],
+            }
+        } else {
+            members.into_iter().map(|(id,)| id).collect()
+        };
+
+        // Cache the result
+        ws_state.conv_member_cache.insert(
+            conversation_id.to_string(),
+            (member_ids.clone(), std::time::Instant::now()),
+        );
+        member_ids
+    };
+
+    // Filter out blocked pairs
+    if all_members.len() <= 1 {
+        return all_members;
+    }
+
+    let blocked_by = sqlx::query_as::<_, (String,)>(
+        r#"SELECT requester_id FROM friendships
+           WHERE addressee_id = $1 AND status = 'blocked'"#,
+    )
+    .bind(sender_user_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    let sender_blocked = sqlx::query_as::<_, (String,)>(
+        r#"SELECT addressee_id FROM friendships
+           WHERE requester_id = $1 AND status = 'blocked'"#,
+    )
+    .bind(sender_user_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    let blocked_set: std::collections::HashSet<String> =
+        blocked_by.into_iter().map(|(id,)| id).collect();
+    let sender_blocked_set: std::collections::HashSet<String> =
+        sender_blocked.into_iter().map(|(id,)| id).collect();
+
+    all_members
+        .into_iter()
+        .filter(|uid| !blocked_set.contains(uid) && !sender_blocked_set.contains(uid))
+        .collect()
+}
+
 const WS_RATE_LIMIT: i32 = 10; // messages per minute
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -249,6 +406,16 @@ async fn handle_message(
         }
         "cancel_stream" => {
             let message_id = event.get("messageId").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Immediately update DB so a refresh won't see stale 'streaming' status
+            let _ = sqlx::query(
+                r#"UPDATE messages SET status = 'cancelled', updated_at = NOW()
+                   WHERE id = $1::uuid AND status = 'streaming'"#,
+            )
+            .bind(message_id)
+            .execute(db)
+            .await;
+
             if let Some((_, cancel_tx)) = ws_state.stream_cancellers.remove(message_id) {
                 let _ = cancel_tx.send(true);
             }
@@ -334,7 +501,9 @@ async fn handle_sync(
     redis: &deadpool_redis::Pool,
 ) {
     let conv_rows = sqlx::query_as::<_, (String,)>(
-        r#"SELECT id::text FROM conversations WHERE user_id = $1"#,
+        r#"SELECT id::text FROM conversations WHERE user_id = $1
+           UNION
+           SELECT conversation_id::text FROM conversation_user_members WHERE user_id = $1"#,
     )
     .bind(user_id)
     .fetch_all(db)
@@ -556,10 +725,15 @@ pub async fn trigger_agent_response(
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
 ) {
-    // Verify conversation belongs to user and get type + agent info + mention_only flag
+    // Verify conversation access: user is owner OR member via conversation_user_members
     let conv = sqlx::query_as::<_, (String, Option<String>, String, bool)>(
-        r#"SELECT id::text, agent_id::text, type::text, mention_only FROM conversations
-           WHERE id = $1::uuid AND user_id = $2"#,
+        r#"SELECT c.id::text, c.agent_id::text, c.type::text, c.mention_only
+           FROM conversations c
+           WHERE c.id = $1::uuid
+             AND (c.user_id = $2 OR EXISTS (
+                SELECT 1 FROM conversation_user_members cum
+                WHERE cum.conversation_id = c.id AND cum.user_id = $2
+             ))"#,
     )
     .bind(conversation_id)
     .bind(user_id)
@@ -573,7 +747,6 @@ pub async fn trigger_agent_response(
 
     // Determine target agent(s)
     let agent_ids: Vec<String> = if conv_type == "group" {
-        // Group: get all agents from conversation_members
         let members = sqlx::query_as::<_, (String,)>(
             r#"SELECT agent_id::text FROM conversation_members WHERE conversation_id = $1::uuid"#,
         )
@@ -583,32 +756,138 @@ pub async fn trigger_agent_response(
         .unwrap_or_default();
         members.into_iter().map(|m| m.0).collect()
     } else {
-        // Direct: single agent
         match agent_id {
             Some(id) => vec![id],
-            None => return,
+            None => vec![], // Human-to-human DM: no agents to dispatch
         }
     };
 
+    // For human-to-human conversations (no agents): save message, broadcast, and return
     if agent_ids.is_empty() {
+        if !skip_user_message {
+            let user_seq = match get_next_seq(db, conversation_id).await {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            let msg_id = uuid::Uuid::new_v4();
+            let _ = sqlx::query(
+                r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, created_at, updated_at)
+                   VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, NOW(), NOW())"#,
+            )
+            .bind(msg_id)
+            .bind(conversation_id)
+            .bind(user_seq)
+            .bind(content)
+            .bind(user_id)
+            .bind(reply_to_id.as_deref())
+            .execute(db)
+            .await;
+
+            let _ = sqlx::query(
+                r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
+            )
+            .bind(conversation_id)
+            .execute(db)
+            .await;
+
+            // Fetch sender info for broadcast
+            let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+                r#"SELECT name, username FROM "user" WHERE id = $1"#,
+            )
+            .bind(user_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten();
+
+            let sender_name = sender_info.as_ref().and_then(|(n, _)| n.as_deref()).unwrap_or("");
+            let sender_username = sender_info.as_ref().and_then(|(_, u)| u.as_deref()).unwrap_or("");
+
+            // Broadcast new message to all conversation members
+            let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
+            let msg_event = json!({
+                "type": "new_message",
+                "conversationId": conversation_id,
+                "message": {
+                    "id": msg_id.to_string(),
+                    "conversationId": conversation_id,
+                    "seq": user_seq,
+                    "role": "user",
+                    "content": content,
+                    "status": "completed",
+                    "senderUserId": user_id,
+                    "senderUserName": sender_name,
+                    "senderUsername": sender_username,
+                    "replyToId": reply_to_id,
+                    "createdAt": chrono::Utc::now().to_rfc3339(),
+                    "updatedAt": chrono::Utc::now().to_rfc3339(),
+                }
+            });
+            ws_state.broadcast_to_members(&member_ids, &msg_event, redis);
+        }
         return;
     }
 
-    // Filter agent_ids by mentions when mention_only is true for group conversations
-    let dispatch_ids = if mention_only && conv_type == "group" {
-        if mentions.contains(&"__all__".to_string()) {
-            // @all — broadcast to all agents
-            agent_ids
-        } else if !mentions.is_empty() {
-            // Use structured mentions (agent IDs from frontend)
-            agent_ids.into_iter().filter(|id| mentions.contains(id)).collect()
-        } else {
-            // No mentions provided — nobody gets dispatched
-            vec![]
+    // Two-layer filtering: mention_only (conversation-level) × listen_mode (per-agent)
+    // Build AgentFilterConfig for each agent (requires DB queries for group conversations)
+    let agent_configs: Vec<AgentFilterConfig> = if mention_only && conv_type == "group" {
+        let mut configs = Vec::new();
+        for aid in &agent_ids {
+            let agent_perms = sqlx::query_as::<_, (String, Option<String>)>(
+                r#"SELECT listen_mode::text, owner_user_id FROM conversation_members
+                   WHERE conversation_id = $1::uuid AND agent_id = $2::uuid"#,
+            )
+            .bind(conversation_id)
+            .bind(aid)
+            .fetch_optional(db)
+            .await;
+
+            if let Ok(Some((listen_mode, owner_id))) = agent_perms {
+                // Fetch allowed_user_ids if listen_mode is allowed_users
+                let allowed_user_ids = if listen_mode == "allowed_users" {
+                    sqlx::query_as::<_, (String,)>(
+                        r#"SELECT user_id FROM agent_listen_allowed_users
+                           WHERE agent_id = $1::uuid AND conversation_id = $2::uuid"#,
+                    )
+                    .bind(aid)
+                    .bind(conversation_id)
+                    .fetch_all(db)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(uid,)| uid)
+                    .collect()
+                } else {
+                    vec![]
+                };
+
+                configs.push(AgentFilterConfig {
+                    agent_id: aid.clone(),
+                    listen_mode,
+                    owner_user_id: owner_id.unwrap_or_default(),
+                    allowed_user_ids,
+                });
+            }
         }
+        configs
     } else {
-        agent_ids
+        // For non-group or mention_only=false, configs are not inspected by the filter
+        agent_ids.iter().map(|aid| AgentFilterConfig {
+            agent_id: aid.clone(),
+            listen_mode: "all_mentions".into(),
+            owner_user_id: String::new(),
+            allowed_user_ids: vec![],
+        }).collect()
     };
+
+    let dispatch_ids = filter_agents_for_dispatch(
+        mention_only,
+        &conv_type,
+        user_id,
+        mentions,
+        &agent_configs,
+    );
 
     // Save user message immediately
     if !skip_user_message {
@@ -617,14 +896,19 @@ pub async fn trigger_agent_response(
             Err(_) => return,
         };
 
+        let user_msg_id = uuid::Uuid::new_v4();
+        let now = chrono::Utc::now();
         let _ = sqlx::query(
-            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, reply_to_id, created_at, updated_at)
-               VALUES (gen_random_uuid(), $1::uuid, $2, 'user', $3, 'completed', $4::uuid, NOW(), NOW())"#,
+            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, created_at, updated_at)
+               VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, $7, $7)"#,
         )
+        .bind(user_msg_id)
         .bind(conversation_id)
         .bind(user_seq)
         .bind(content)
+        .bind(user_id)
         .bind(reply_to_id.as_deref())
+        .bind(now.naive_utc())
         .execute(db)
         .await;
 
@@ -634,12 +918,49 @@ pub async fn trigger_agent_response(
         .bind(conversation_id)
         .execute(db)
         .await;
+
+        // Broadcast user message to all conversation members (for group visibility)
+        if conv_type == "group" {
+            let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+                r#"SELECT name, username FROM "user" WHERE id = $1"#,
+            )
+            .bind(user_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten();
+
+            let sender_name = sender_info.as_ref().and_then(|(n, _)| n.as_deref()).unwrap_or("");
+            let sender_username = sender_info.as_ref().and_then(|(_, u)| u.as_deref()).unwrap_or("");
+
+            let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
+            let user_msg_event = json!({
+                "type": "new_message",
+                "conversationId": conversation_id,
+                "message": {
+                    "id": user_msg_id.to_string(),
+                    "conversationId": conversation_id,
+                    "seq": user_seq,
+                    "role": "user",
+                    "content": content,
+                    "status": "completed",
+                    "senderUserId": user_id,
+                    "senderUserName": sender_name,
+                    "senderUsername": sender_username,
+                    "replyToId": reply_to_id,
+                    "createdAt": now.to_rfc3339(),
+                    "updatedAt": now.to_rfc3339(),
+                }
+            });
+            ws_state.broadcast_to_members(&member_ids, &user_msg_event, redis);
+        }
     }
 
     // Dispatch to each agent (may be empty if mention_only and no mentions matched)
     for agent_id in &dispatch_ids {
         // Per-agent queue: if this specific agent has an active stream, queue it
         if ws_state.has_active_stream_for_agent(conversation_id, agent_id) {
+            tracing::info!("Agent queued (active stream): conv={} agent={}", conversation_id, agent_id);
             let queue_key = format!("{}:{}", conversation_id, agent_id);
             ws_state
                 .agent_response_queues
@@ -652,6 +973,26 @@ pub async fn trigger_agent_response(
                     content: content.to_string(),
                     reply_to_id: reply_to_id.clone(),
                 });
+
+            // Notify the user that this agent's response is queued
+            let agent_name = sqlx::query_as::<_, (String,)>(
+                r#"SELECT name FROM agents WHERE id = $1::uuid"#,
+            )
+            .bind(agent_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+            .map(|(n,)| n)
+            .unwrap_or_else(|| "Agent".to_string());
+
+            ws_state.send_to_user(user_id, &json!({
+                "type": "stream_queued",
+                "conversationId": conversation_id,
+                "agentId": agent_id,
+                "agentName": agent_name,
+            }));
+
             continue;
         }
 
@@ -696,6 +1037,23 @@ async fn do_trigger_agent_response(
         _ => return,
     };
 
+    // Fetch agent's owner for blocking filter
+    let agent_owner = sqlx::query_as::<_, (Option<String>,)>(
+        r#"SELECT owner_user_id FROM conversation_members
+           WHERE conversation_id = $1::uuid AND agent_id = $2::uuid"#,
+    )
+    .bind(conversation_id)
+    .bind(agent_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .and_then(|(o,)| o)
+    .unwrap_or_else(|| user_id.to_string());
+
+    // Get broadcast targets (all members minus blocked pairs)
+    let member_ids = get_conv_member_ids(ws_state, db, conversation_id, &agent_owner).await;
+
     // Check if agent is connected
     if !ws_state.is_agent_connected(agent_id) {
         let hint = "Copy the **Bot Token** from bot settings, then run:\n```\nopenclaw arinova-setup --token <bot-token>\n```";
@@ -723,7 +1081,7 @@ async fn do_trigger_agent_response(
         .execute(db)
         .await;
 
-        ws_state.send_to_user_or_queue(user_id, &json!({
+        ws_state.broadcast_to_members(&member_ids, &json!({
             "type": "stream_start",
             "conversationId": conversation_id,
             "messageId": err_msg_id,
@@ -732,7 +1090,7 @@ async fn do_trigger_agent_response(
             "senderAgentName": agent_name
         }), redis);
 
-        ws_state.send_to_user_or_queue(user_id, &json!({
+        ws_state.broadcast_to_members(&member_ids, &json!({
             "type": "stream_error",
             "conversationId": conversation_id,
             "messageId": err_msg_id,
@@ -768,9 +1126,9 @@ async fn do_trigger_agent_response(
 
     // Mark this agent as having active stream (keyed by conv:agent)
     let stream_key = format!("{}:{}", conversation_id, agent_id);
-    ws_state.active_streams.insert(stream_key.clone());
+    ws_state.active_streams.insert(stream_key.clone(), std::time::Instant::now());
 
-    ws_state.send_to_user_or_queue(user_id, &json!({
+    ws_state.broadcast_to_members(&member_ids, &json!({
         "type": "stream_start",
         "conversationId": conversation_id,
         "messageId": agent_msg_id,
@@ -787,13 +1145,26 @@ async fn do_trigger_agent_response(
         _ => content.to_string(),
     };
 
+    // Fetch sender username for task payload
+    let sender_username = sqlx::query_as::<_, (Option<String>,)>(
+        r#"SELECT username FROM "user" WHERE id = $1"#,
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .and_then(|(u,)| u);
+
     // Build task payload with group context and reply context
     let mut task_payload = json!({
         "type": "task",
         "taskId": agent_msg_id,
         "conversationId": conversation_id,
         "content": task_content,
-        "conversationType": conv_type
+        "conversationType": conv_type,
+        "senderUserId": user_id,
+        "senderUsername": sender_username
     });
 
     // Add group members context
@@ -902,6 +1273,12 @@ async fn do_trigger_agent_response(
         .stream_cancellers
         .insert(agent_msg_id.clone(), cancel_tx);
 
+    tracing::info!(
+        "Stream dispatch: conv={} agent={} msgId={} active_streams={:?}",
+        conversation_id, agent_id, agent_msg_id,
+        ws_state.active_streams.iter().map(|e| format!("{}({}s)", e.key(), e.value().elapsed().as_secs())).collect::<Vec<_>>()
+    );
+
     let agent_event_rx = send_task_to_agent(
         ws_state,
         agent_id,
@@ -920,16 +1297,35 @@ async fn do_trigger_agent_response(
     let agent_name = agent_name.clone();
     let agent_id = agent_id.to_string();
     let conv_type = conv_type.to_string();
+    let member_ids = member_ids;
 
     tokio::spawn(async move {
         let mut stream_accumulated = String::new();
         let stream_key = format!("{}:{}", conversation_id, agent_id);
         let mut pending_mentions: Option<(Vec<String>, String)> = None;
         let mut event_rx = match agent_event_rx {
-            Some(rx) => rx,
+            Some(rx) => {
+                tracing::info!("Stream started: conv={} agent={} msgId={}", conversation_id, agent_id, agent_msg_id_clone);
+                rx
+            }
             None => {
-                // Agent disconnected between check and send — clean up the stuck stream
-                // so queued messages aren't permanently blocked.
+                tracing::warn!("Stream failed (agent gone): conv={} agent={} msgId={}", conversation_id, agent_id, agent_msg_id_clone);
+                let _ = sqlx::query(
+                    r#"UPDATE messages SET content = $1, status = 'error', updated_at = NOW() WHERE id = $2::uuid"#,
+                )
+                .bind("Agent is not connected")
+                .bind(&agent_msg_id_clone)
+                .execute(&db)
+                .await;
+
+                ws_state.broadcast_to_members(&member_ids, &json!({
+                    "type": "stream_error",
+                    "conversationId": &conversation_id,
+                    "messageId": &agent_msg_id_clone,
+                    "seq": agent_seq,
+                    "error": "Agent is not connected"
+                }), &redis);
+
                 ws_state.active_streams.remove(&stream_key);
                 process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
                 return;
@@ -942,7 +1338,7 @@ async fn do_trigger_agent_response(
                     match event {
                         Some(crate::ws::state::AgentEvent::Chunk(delta)) => {
                             stream_accumulated.push_str(&delta);
-                            ws_state.send_to_user_or_queue(&user_id, &json!({
+                            ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_chunk",
                                 "conversationId": &conversation_id,
                                 "messageId": &agent_msg_id_clone,
@@ -959,6 +1355,11 @@ async fn do_trigger_agent_response(
                             }
                         }
                         Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
+                            tracing::info!(
+                                "Stream complete: conv={} agent={} msgId={} content_len={} chunks_accumulated={}",
+                                conversation_id, agent_id, agent_msg_id_clone,
+                                full_content.len(), stream_accumulated.len()
+                            );
                             ws_state.stream_cancellers.remove(&agent_msg_id_clone);
 
                             if let Ok(mut conn) = redis.get().await {
@@ -973,7 +1374,7 @@ async fn do_trigger_agent_response(
                             .execute(&db)
                             .await;
 
-                            ws_state.send_to_user_or_queue(&user_id, &json!({
+                            ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_end",
                                 "conversationId": &conversation_id,
                                 "messageId": &agent_msg_id_clone,
@@ -1017,6 +1418,10 @@ async fn do_trigger_agent_response(
                             break;
                         }
                         Some(crate::ws::state::AgentEvent::Error(error)) => {
+                            tracing::warn!(
+                                "Stream error: conv={} agent={} msgId={} error={}",
+                                conversation_id, agent_id, agent_msg_id_clone, error
+                            );
                             ws_state.stream_cancellers.remove(&agent_msg_id_clone);
 
                             if let Ok(mut conn) = redis.get().await {
@@ -1031,7 +1436,7 @@ async fn do_trigger_agent_response(
                             .execute(&db)
                             .await;
 
-                            ws_state.send_to_user_or_queue(&user_id, &json!({
+                            ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_error",
                                 "conversationId": &conversation_id,
                                 "messageId": &agent_msg_id_clone,
@@ -1044,6 +1449,49 @@ async fn do_trigger_agent_response(
                             break;
                         }
                         None => {
+                            tracing::warn!(
+                                "Stream channel closed (agent disconnect): conv={} agent={} msgId={} accumulated_len={}",
+                                conversation_id, agent_id, agent_msg_id_clone, stream_accumulated.len()
+                            );
+                            ws_state.stream_cancellers.remove(&agent_msg_id_clone);
+
+                            if let Ok(mut conn) = redis.get().await {
+                                let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
+                            }
+
+                            if stream_accumulated.is_empty() {
+                                let _ = sqlx::query(
+                                    r#"UPDATE messages SET content = 'Agent disconnected', status = 'error', updated_at = NOW() WHERE id = $1::uuid"#,
+                                )
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+
+                                ws_state.broadcast_to_members(&member_ids, &json!({
+                                    "type": "stream_error",
+                                    "conversationId": &conversation_id,
+                                    "messageId": &agent_msg_id_clone,
+                                    "seq": agent_seq,
+                                    "error": "Agent disconnected"
+                                }), &redis);
+                            } else {
+                                let _ = sqlx::query(
+                                    r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
+                                )
+                                .bind(&stream_accumulated)
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+
+                                ws_state.broadcast_to_members(&member_ids, &json!({
+                                    "type": "stream_end",
+                                    "conversationId": &conversation_id,
+                                    "messageId": &agent_msg_id_clone,
+                                    "seq": agent_seq,
+                                    "content": &stream_accumulated
+                                }), &redis);
+                            }
+
                             ws_state.active_streams.remove(&stream_key);
                             process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
                             break;
@@ -1071,8 +1519,8 @@ async fn do_trigger_agent_response(
                         .execute(&db)
                         .await;
 
-                        // 4. Notify user that stream was cancelled
-                        ws_state.send_to_user_or_queue(&user_id, &json!({
+                        // 4. Notify all members that stream was cancelled
+                        ws_state.broadcast_to_members(&member_ids, &json!({
                             "type": "stream_end",
                             "conversationId": &conversation_id,
                             "messageId": &agent_msg_id_clone,

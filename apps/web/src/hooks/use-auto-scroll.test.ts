@@ -7,15 +7,17 @@ describe("useAutoScroll", () => {
     vi.clearAllMocks();
   });
 
-  it("returns a ref object", () => {
+  it("returns an object with ref, showScrollButton, and scrollToBottom", () => {
     const { result } = renderHook(() => useAutoScroll([0]));
     expect(result.current).toBeDefined();
-    expect(result.current).toHaveProperty("current");
+    expect(result.current).toHaveProperty("ref");
+    expect(result.current).toHaveProperty("showScrollButton");
+    expect(result.current).toHaveProperty("scrollToBottom");
   });
 
   it("ref starts as null", () => {
     const { result } = renderHook(() => useAutoScroll([0]));
-    expect(result.current.current).toBeNull();
+    expect(result.current.ref.current).toBeNull();
   });
 
   it("scrolls to bottom on dependency change when near bottom", () => {
@@ -33,7 +35,7 @@ describe("useAutoScroll", () => {
     );
 
     // Attach mock element to ref
-    Object.defineProperty(result.current, "current", {
+    Object.defineProperty(result.current.ref, "current", {
       value: mockElement,
       writable: true,
     });
@@ -52,7 +54,7 @@ describe("useAutoScroll", () => {
     );
 
     // ref is null, should not throw
-    expect(result.current.current).toBeNull();
+    expect(result.current.ref.current).toBeNull();
     rerender({ deps: [1] });
     // If it doesn't throw, the guard works
   });
@@ -63,8 +65,8 @@ describe("useAutoScroll", () => {
       { initialProps: { deps: [0] } }
     );
 
-    const firstRef = result.current;
+    const firstRef = result.current.ref;
     rerender({ deps: [1] });
-    expect(result.current).toBe(firstRef);
+    expect(result.current.ref).toBe(firstRef);
   });
 });

@@ -2,6 +2,7 @@ import { createReplyPrefixOptions, type OpenClawConfig, type RuntimeEnv } from "
 import type { ResolvedArinovaChatAccount } from "./accounts.js";
 import type { ArinovaChatInboundMessage, CoreConfig } from "./types.js";
 import { getArinovaChatRuntime } from "./runtime.js";
+import { replaceImagePaths, type UploadFn } from "./image-upload.js";
 
 const CHANNEL_ID = "openclaw-arinova-ai" as const;
 
@@ -84,14 +85,16 @@ function mediaUrlsToMarkdown(urls: string[]): string {
 export async function handleArinovaChatInbound(params: {
   message: ArinovaChatInboundMessage;
   sendChunk: (chunk: string) => void;
-  sendComplete: (content: string) => void;
+  sendComplete: (content: string, options?: { mentions?: string[] }) => void;
   sendError: (error: string) => void;
+  signal?: AbortSignal;
   account: ResolvedArinovaChatAccount;
   config: CoreConfig;
   runtime: RuntimeEnv;
+  uploadFile?: UploadFn;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
 }): Promise<void> {
-  const { message, sendChunk, sendComplete, sendError, account, config, runtime, statusSink } = params;
+  const { message, sendChunk, sendComplete, sendError, signal, account, config, runtime, uploadFile, statusSink } = params;
   const core = getArinovaChatRuntime();
 
   const rawBody = message.text.trim();
@@ -100,11 +103,18 @@ export async function handleArinovaChatInbound(params: {
     return;
   }
 
+  // If already cancelled before we start, bail out
+  if (signal?.aborted) {
+    sendComplete("");
+    return;
+  }
+
   statusSink?.({ lastInboundAt: message.timestamp });
 
-  // The sender is the Arinova backend on behalf of the user.
-  const senderId = "arinova-user";
-  const senderName = "Arinova User";
+  // Use actual sender identity from the task payload (multi-user support)
+  const senderId = message.senderUserId ?? "arinova-user";
+  const senderName = message.senderUsername ?? "Arinova User";
+  const chatType = message.conversationType ?? "direct";
 
   // DM policy check
   const dmPolicy = account.config.dmPolicy ?? "open";
@@ -114,14 +124,16 @@ export async function handleArinovaChatInbound(params: {
     return;
   }
 
-  // Resolve agent route
+  // Resolve agent route — use conversationId as peer id so each conversation
+  // gets its own session (critical for groups where multiple convos exist).
+  const peerId = message.conversationId ?? senderId;
   const route = core.channel.routing.resolveAgentRoute({
     cfg: config as OpenClawConfig,
     channel: CHANNEL_ID,
     accountId: account.accountId,
     peer: {
-      kind: "direct",
-      id: senderId,
+      kind: chatType === "group" ? "group" : "direct",
+      id: peerId,
     },
   });
 
@@ -135,6 +147,10 @@ export async function handleArinovaChatInbound(params: {
     storePath,
     sessionKey: route.sessionKey,
   });
+
+  // Build enriched body for the LLM with context sections
+  const bodyForAgent = buildEnrichedBody(rawBody, message);
+
   const body = core.channel.reply.formatAgentEnvelope({
     channel: "Arinova Chat",
     from: fromLabel,
@@ -146,17 +162,17 @@ export async function handleArinovaChatInbound(params: {
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
-    BodyForAgent: rawBody,
+    BodyForAgent: bodyForAgent,
     RawBody: rawBody,
     CommandBody: rawBody,
-    From: `openclaw-arinova-ai:${senderId}`,
+    From: `openclaw-arinova-ai:${peerId}`,
     To: `openclaw-arinova-ai:${account.agentId}`,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
-    ChatType: "direct",
+    ChatType: chatType,
     ConversationLabel: fromLabel,
     SenderName: senderName,
-    SenderId: senderId,
+    SenderId: peerId,
     Provider: CHANNEL_ID,
     Surface: CHANNEL_ID,
     MessageSid: message.taskId,
@@ -184,6 +200,12 @@ export async function handleArinovaChatInbound(params: {
 
   // Track final content from block delivery
   let finalText = "";
+  let aborted = false;
+
+  // Wire abort signal to stop generation early
+  if (signal) {
+    signal.addEventListener("abort", () => { aborted = true; }, { once: true });
+  }
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
@@ -191,6 +213,7 @@ export async function handleArinovaChatInbound(params: {
     dispatcherOptions: {
       ...prefixOptions,
       deliver: async (payload) => {
+        if (aborted) return;
         const p = payload as { text?: string; mediaUrls?: string[] };
         let text = p.text ?? "";
 
@@ -213,6 +236,7 @@ export async function handleArinovaChatInbound(params: {
       onModelSelected,
       disableBlockStreaming: false,
       onPartialReply: (payload) => {
+        if (aborted) return;
         // onPartialReply gives the FULL accumulated text across ALL blocks,
         // so we must NOT prepend finalText — that would duplicate completed blocks.
         const text = (payload as { text?: string }).text ?? "";
@@ -226,6 +250,95 @@ export async function handleArinovaChatInbound(params: {
     },
   });
 
-  // Send final completed event
-  sendComplete(finalText);
+  // Post-process completed text: upload local images → R2, resolve @mentions
+  let completedText = aborted ? finalText || "" : finalText;
+
+  if (uploadFile && completedText) {
+    try {
+      completedText = await replaceImagePaths(completedText, process.cwd(), uploadFile, runtime.log);
+    } catch (err) {
+      runtime.error?.(`openclaw-arinova-ai: image upload post-process failed: ${String(err)}`);
+    }
+  }
+
+  const mentionedIds = resolveMentions(completedText, message.members);
+  sendComplete(completedText, mentionedIds.length ? { mentions: mentionedIds } : undefined);
+}
+
+/**
+ * Build an enriched body for the LLM by prepending context sections
+ * (members, attachments, replyTo, history) before the raw user message.
+ */
+function buildEnrichedBody(
+  rawBody: string,
+  message: ArinovaChatInboundMessage,
+): string {
+  const sections: string[] = [];
+
+  // Group members context
+  if (message.conversationType === "group" && message.members?.length) {
+    const names = message.members.map((m) => m.agentName).join(", ");
+    sections.push(`[Group: ${names}]`);
+  }
+
+  // Attachments
+  if (message.attachments?.length) {
+    const lines = message.attachments.map((a) => {
+      const size = formatFileSize(a.fileSize);
+      return `- ${a.fileName} (${a.fileType}, ${size}) ${a.url}`;
+    });
+    sections.push(`[Attachments]\n${lines.join("\n")}`);
+  }
+
+  // Reply context
+  if (message.replyTo) {
+    const sender = message.replyTo.senderAgentName ?? message.replyTo.role;
+    const quoted = message.replyTo.content
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
+    sections.push(`> Replying to ${sender}:\n${quoted}`);
+  }
+
+  // Conversation history
+  if (message.history?.length) {
+    const historyLines = message.history.map((h) => {
+      const sender = h.senderAgentName ?? h.senderUsername ?? h.role;
+      return `[${sender}]: ${h.content}`;
+    });
+    sections.push(`[History]\n${historyLines.join("\n")}`);
+  }
+
+  if (sections.length === 0) return rawBody;
+  return sections.join("\n\n") + "\n\n" + rawBody;
+}
+
+/**
+ * Extract @mentions from text and resolve them to agent IDs.
+ * Matches @Name patterns against the members list (case-insensitive).
+ */
+function resolveMentions(
+  text: string,
+  members?: { agentId: string; agentName: string }[],
+): string[] {
+  if (!members?.length) return [];
+  const mentionPattern = /@(\w+)/g;
+  const ids = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const name = match[1].toLowerCase();
+    for (const m of members) {
+      if (m.agentName.toLowerCase() === name) {
+        ids.add(m.agentId);
+      }
+    }
+  }
+  return [...ids];
+}
+
+/** Format bytes to human-readable size. */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }

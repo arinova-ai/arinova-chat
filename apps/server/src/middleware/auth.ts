@@ -23,7 +23,6 @@ export async function requireAuth(
   }
 
   const session = await auth.api.getSession({ headers });
-
   if (!session) {
     reply.status(401).send({ error: "Unauthorized" });
     throw new Error("Unauthorized");

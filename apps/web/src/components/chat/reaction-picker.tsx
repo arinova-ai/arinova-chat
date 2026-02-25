@@ -32,7 +32,7 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
         <Button
           variant="ghost"
           size="icon-xs"
-          className="h-6 w-6 text-neutral-400 hover:text-neutral-100"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
           title="React"
         >
           <SmilePlus className="h-3 w-3" />
@@ -50,7 +50,7 @@ export function ReactionPicker({ onSelect }: ReactionPickerProps) {
               key={emoji}
               type="button"
               onClick={() => handleSelect(emoji)}
-              className="rounded-md p-1.5 text-lg hover:bg-neutral-700 transition-colors"
+              className="rounded-md p-1.5 text-lg hover:bg-accent transition-colors"
             >
               {emoji}
             </button>
@@ -80,7 +80,7 @@ export function ReactionBadges({ reactions, onToggle }: ReactionBadgesProps) {
           className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
             userReacted
               ? "bg-blue-500/20 border border-blue-500/40 text-blue-300"
-              : "bg-neutral-800 border border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+              : "bg-secondary border border-border text-foreground/80 hover:bg-accent"
           }`}
         >
           <span>{emoji}</span>

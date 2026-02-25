@@ -6,20 +6,25 @@ import { MessageBubble } from "./message-bubble";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { ArrowDown, Loader2, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TypingIndicator } from "./typing-indicator";
 
 interface MessageListProps {
   messages: Message[];
   agentName?: string;
+  isGroupConversation?: boolean;
 }
 
-export function MessageList({ messages: rawMessages, agentName }: MessageListProps) {
+export function MessageList({ messages: rawMessages, agentName, isGroupConversation }: MessageListProps) {
   // Deduplicate by ID (around-cursor + WS events can produce overlaps)
   const messages = rawMessages.filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
   const lastMessage = messages[messages.length - 1];
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);
+  const searchQuery = useChatStore((s) => s.searchQuery);
+  const cancelStream = useChatStore((s) => s.cancelStream);
+  const thinkingCount = useChatStore((s) => activeConversationId ? (s.thinkingAgents[activeConversationId]?.length ?? 0) : 0);
   const [loadingUp, setLoadingUp] = useState(false);
   const [loadingDown, setLoadingDown] = useState(false);
   const [hasMoreUp, setHasMoreUp] = useState(true);
@@ -28,18 +33,49 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   const loadingDownRef = useRef(false);
   const highlightRef = useRef<HTMLDivElement>(null);
 
-  const scrollRef = useAutoScroll<HTMLDivElement>([
-    lastMessage?.content,
-    lastMessage?.status,
-    messages.length,
-  ]);
+  const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
+    [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
+    { conversationId: activeConversationId, skipScroll: !!highlightMessageId, messageCount: messages.length },
+  );
 
-  // Scroll to highlighted message when it appears
+  // Scroll to highlighted message (and matching text within it) when it appears
   useEffect(() => {
-    if (highlightMessageId && highlightRef.current) {
-      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [highlightMessageId, messages]);
+    if (!highlightMessageId || !highlightRef.current) return;
+
+    requestAnimationFrame(() => {
+      const el = highlightRef.current;
+      const container = scrollRef.current;
+      if (!el || !container) return;
+
+      const query = useChatStore.getState().searchQuery?.toLowerCase();
+
+      // Try to find the matching text node inside the message
+      if (query) {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+          const idx = node.textContent?.toLowerCase().indexOf(query) ?? -1;
+          if (idx >= 0) {
+            // Found — get bounding rect of the matched text and center it
+            const range = document.createRange();
+            range.setStart(node, idx);
+            range.setEnd(node, idx + query.length);
+            const rect = range.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const offset = rect.top - containerRect.top + container.scrollTop;
+            container.scrollTo({
+              top: offset - containerRect.height / 2,
+              behavior: "smooth",
+            });
+            return;
+          }
+        }
+      }
+
+      // Fallback: center the whole message
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [highlightMessageId, messages, scrollRef]);
 
   const loadOlder = useCallback(async () => {
     if (loadingUpRef.current || !hasMoreUp || !activeConversationId || messages.length === 0)
@@ -130,38 +166,77 @@ export function MessageList({ messages: rawMessages, agentName }: MessageListPro
   }, [hasMoreUp, hasMoreDown, loadOlder, loadNewer, scrollRef]);
 
   return (
-    <div
-      ref={scrollRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden py-4"
-      onScroll={handleScroll}
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-        {loadingUp && (
-          <div className="flex justify-center py-2">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        )}
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            ref={message.id === highlightMessageId ? highlightRef : undefined}
-            className={cn(
-              "transition-colors duration-1000",
-              message.id === highlightMessageId && "search-highlight"
-            )}
-          >
-            <MessageBubble
-              message={message}
-              agentName={message.role === "agent" ? agentName : undefined}
-            />
-          </div>
-        ))}
-        {loadingDown && (
-          <div className="flex justify-center py-2">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        )}
+    <div className="relative flex-1 overflow-hidden">
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto overflow-x-hidden py-4"
+        onScroll={handleScroll}
+      >
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          {loadingUp && (
+            <div className="flex justify-center py-2">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              ref={message.id === highlightMessageId ? highlightRef : undefined}
+              className={cn(
+                "transition-colors duration-1000",
+                message.id === highlightMessageId && "search-highlight"
+              )}
+            >
+              {message.role === "system" ? (
+                <div className="flex justify-center py-1.5">
+                  <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
+                    {message.content}
+                  </span>
+                </div>
+              ) : (
+                <MessageBubble
+                  message={message}
+                  agentName={message.role === "agent" ? agentName : undefined}
+                  highlightQuery={message.id === highlightMessageId ? searchQuery : undefined}
+                  isGroupConversation={isGroupConversation}
+                />
+              )}
+            </div>
+          ))}
+          {loadingDown && (
+            <div className="flex justify-center py-2">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {activeConversationId && (
+            <TypingIndicator conversationId={activeConversationId} />
+          )}
+        </div>
       </div>
+
+      {/* Full-width Stop generating button */}
+      {lastMessage?.status === "streaming" && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center px-4">
+          <button
+            type="button"
+            onClick={() => cancelStream(lastMessage.id)}
+            className="flex h-11 w-full max-w-xl items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-card/90 text-sm font-medium text-red-400 shadow-lg backdrop-blur-sm transition-colors hover:border-red-500/50 hover:bg-red-950/20"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+            Stop generating
+          </button>
+        </div>
+      )}
+
+      {showScrollButton && !lastMessage?.status?.includes("streaming") && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-opacity hover:bg-accent"
+          aria-label="Scroll to latest"
+        >
+          <ArrowDown className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }

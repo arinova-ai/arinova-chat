@@ -40,6 +40,7 @@ interface ConversationItemProps {
   onPin: (pinned: boolean) => void;
   unreadCount?: number;
   isOnline?: boolean;
+  isThinking?: boolean;
   onDelete: () => void;
 }
 
@@ -77,6 +78,7 @@ export function ConversationItem({
   onClick,
   unreadCount = 0,
   isOnline = false,
+  isThinking = false,
   onRename,
   onPin,
   onDelete,
@@ -149,7 +151,7 @@ export function ConversationItem({
                   className="object-cover"
                 />
               )}
-              <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">
+              <AvatarFallback className="bg-accent text-foreground/80 text-xs">
                 {type === "group" ? (
                   <Users className="h-5 w-5" />
                 ) : (
@@ -158,7 +160,7 @@ export function ConversationItem({
               </AvatarFallback>
             </Avatar>
             {isOnline && (
-              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-neutral-900 bg-green-500" />
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-green-500" />
             )}
           </div>
 
@@ -190,12 +192,12 @@ export function ConversationItem({
                 onChange={(e) => setRenameValue(e.target.value)}
                 onBlur={handleRenameSubmit}
                 onKeyDown={handleRenameKeyDown}
-                className="mt-0.5 h-6 bg-neutral-800 border-none text-xs px-1.5"
+                className="mt-0.5 h-6 bg-secondary border-none text-xs px-1.5"
               />
             ) : (
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {lastMessage?.status === "streaming" ? (
-                  <span className="text-blue-400">Typing...</span>
+                {isThinking ? (
+                  <span className="text-blue-400">Thinking...</span>
                 ) : (
                   preview
                 )}

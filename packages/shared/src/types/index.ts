@@ -1,78 +1,3 @@
-// ===== Voice Call =====
-
-export type VoiceCallState = "idle" | "ringing" | "connected" | "ended";
-
-export type VoiceAudioFormat = "opus" | "pcm-16-16k-mono";
-
-export interface VoiceCapability {
-  voice: boolean;
-  tts: boolean;
-  stt: boolean;
-  realtimeVoice: boolean;
-}
-
-export interface VoiceCallSession {
-  sessionId: string;
-  conversationId: string;
-  agentId: string;
-  userId: string;
-  state: VoiceCallState;
-  audioFormat: VoiceAudioFormat;
-  startedAt: Date | null;
-  endedAt: Date | null;
-  createdAt: Date;
-}
-
-export interface VoiceCall {
-  sessionId: string;
-  conversationId: string;
-  agentId: string;
-  state: VoiceCallState;
-  audioFormat: VoiceAudioFormat;
-  durationMs: number | null;
-}
-
-// ===== Voice Signaling WebSocket Events (User ↔ Backend) =====
-
-/** Events sent from Client → Server for voice signaling */
-export type VoiceWSClientEvent =
-  | { type: "voice_auth"; conversationId: string; agentId: string }
-  | { type: "voice_offer"; sessionId: string; sdp: string }
-  | { type: "voice_answer"; sessionId: string; sdp: string }
-  | { type: "voice_ice_candidate"; sessionId: string; candidate: string; sdpMid: string | null; sdpMLineIndex: number | null }
-  | { type: "voice_hangup"; sessionId: string }
-  | { type: "ping" };
-
-/** Events sent from Server → Client for voice signaling */
-export type VoiceWSServerEvent =
-  | { type: "voice_auth_ok"; sessionId: string }
-  | { type: "voice_auth_error"; error: string }
-  | { type: "voice_offer"; sessionId: string; sdp: string }
-  | { type: "voice_answer"; sessionId: string; sdp: string }
-  | { type: "voice_ice_candidate"; sessionId: string; candidate: string; sdpMid: string | null; sdpMLineIndex: number | null }
-  | { type: "voice_ringing"; sessionId: string }
-  | { type: "voice_connected"; sessionId: string }
-  | { type: "voice_ended"; sessionId: string; reason: string }
-  | { type: "voice_error"; sessionId: string; error: string }
-  | { type: "pong" };
-
-// ===== Agent Voice WebSocket Events (Agent ↔ Backend) =====
-
-export interface VoiceCallStartEvent {
-  type: "voice_call_start";
-  sessionId: string;
-  conversationId: string;
-  audioFormat: VoiceAudioFormat;
-}
-
-export interface VoiceCallEndEvent {
-  type: "voice_call_end";
-  sessionId: string;
-  reason: string;
-}
-
-// voice_audio_chunk is binary — not part of JSON event unions
-
 // ===== User (aligned with Better Auth) =====
 export interface User {
   id: string;
@@ -99,7 +24,7 @@ export interface Agent {
   systemPrompt: string | null;
   welcomeMessage: string | null;
   quickReplies: { label: string; message: string }[] | null;
-  voiceCapable: boolean;
+  voiceCapable?: boolean;
   notificationsEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -114,6 +39,7 @@ export interface Conversation {
   type: ConversationType;
   userId: string;
   agentId: string | null;
+  mentionOnly: boolean;
   pinnedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -128,7 +54,7 @@ export interface ConversationMember {
 }
 
 // ===== Message =====
-export type MessageRole = "user" | "agent";
+export type MessageRole = "user" | "agent" | "system";
 
 export type MessageStatus =
   | "pending"
@@ -140,12 +66,15 @@ export type MessageStatus =
 export interface Message {
   id: string;
   conversationId: string;
-  seq?: number;
+  seq: number;
   role: MessageRole;
   content: string;
   status: MessageStatus;
   senderAgentId?: string;
   senderAgentName?: string;
+  senderUserId?: string;
+  senderUsername?: string;
+  senderUserName?: string;
   replyToId?: string;
   replyTo?: {
     role: MessageRole;
@@ -440,89 +369,147 @@ export interface AppPurchase {
   createdAt: Date;
 }
 
-// ===== Platform App =====
-export type PlatformAppCategory = "game" | "strategy" | "social" | "puzzle" | "tool" | "other";
-
-export interface PlatformApp {
-  id: string;
-  developerId: string;
-  name: string;
-  description: string;
-  category: PlatformAppCategory;
-  iconUrl: string | null;
-  externalUrl: string;
-  status: AppStatus;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface AppOAuthClient {
-  id: string;
-  appId: string;
-  clientId: string;
-  clientSecret: string;
-  redirectUris: string[];
-  createdAt: Date;
-}
-
-export interface AgentApiCall {
-  id: string;
-  appId: string;
-  userId: string;
-  agentId: string;
-  tokenCount: number;
-  createdAt: Date;
-}
-
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
-  | { type: "send_message"; conversationId: string; content: string }
+  | { type: "send_message"; conversationId: string; content: string; replyToId?: string; mentions?: string[] }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
+  | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
+  | { type: "mark_read"; conversationId: string; seq: number }
+  | { type: "focus"; visible: boolean }
   | { type: "ping" };
+
+export interface SyncConversationSummary {
+  conversationId: string;
+  unreadCount: number;
+  maxSeq: number;
+  muted: boolean;
+  lastMessage: {
+    content: string;
+    role: MessageRole;
+    status: MessageStatus;
+    createdAt: string;
+  } | null;
+}
+
+export interface SyncMissedMessage {
+  id: string;
+  conversationId: string;
+  seq: number;
+  role: MessageRole;
+  content: string;
+  status: MessageStatus;
+  createdAt: string;
+}
 
 export type WSServerEvent =
   | {
       type: "stream_start";
       conversationId: string;
       messageId: string;
+      seq: number;
+      senderAgentId?: string;
+      senderAgentName?: string;
     }
   | {
       type: "stream_chunk";
       conversationId: string;
       messageId: string;
+      seq: number;
       chunk: string;
     }
   | {
       type: "stream_end";
       conversationId: string;
       messageId: string;
+      seq: number;
+      content?: string;
     }
   | {
       type: "stream_error";
       conversationId: string;
       messageId: string;
+      seq: number;
       error: string;
     }
+  | {
+      type: "sync_response";
+      conversations: SyncConversationSummary[];
+      missedMessages: SyncMissedMessage[];
+    }
+  | {
+      type: "reaction_added";
+      messageId: string;
+      conversationId: string;
+      emoji: string;
+      userId: string;
+    }
+  | {
+      type: "reaction_removed";
+      messageId: string;
+      conversationId: string;
+      emoji: string;
+      userId: string;
+    }
+  | {
+      type: "new_message";
+      conversationId: string;
+      message: {
+        id: string;
+        conversationId: string;
+        seq: number;
+        role: MessageRole;
+        content: string;
+        status: MessageStatus;
+        senderUserId?: string;
+        senderUserName?: string;
+        senderUsername?: string;
+        replyToId?: string | null;
+        createdAt: string;
+        updatedAt: string;
+      };
+    }
+  | {
+      type: "stream_queued";
+      conversationId: string;
+      agentId: string;
+      agentName: string;
+    }
+  | { type: "kicked_from_group"; conversationId: string }
   | { type: "pong" };
+
+// ===== Agent Skill =====
+export interface AgentSkill {
+  id: string;
+  name: string;
+  description: string;
+}
 
 // ===== Agent WebSocket Events (Agent ↔ Backend) =====
 
 /** Events sent from Agent → Backend */
 export type AgentWSClientEvent =
-  | { type: "agent_auth"; agentId: string; secretToken: string }
+  | { type: "agent_auth"; botToken: string; skills?: AgentSkill[] }
   | { type: "agent_chunk"; taskId: string; chunk: string }
   | { type: "agent_complete"; taskId: string; content: string }
   | { type: "agent_error"; taskId: string; error: string }
-  | { type: "voice_call_end"; sessionId: string; reason: string }
   | { type: "ping" };
 
 /** Events sent from Backend → Agent */
 export type AgentWSServerEvent =
   | { type: "auth_ok"; agentName: string }
   | { type: "auth_error"; error: string }
-  | { type: "task"; taskId: string; conversationId: string; content: string }
-  | { type: "voice_call_start"; sessionId: string; conversationId: string; audioFormat: VoiceAudioFormat }
-  | { type: "voice_call_end"; sessionId: string; reason: string }
+  | {
+      type: "task";
+      taskId: string;
+      conversationId: string;
+      content: string;
+      conversationType?: ConversationType;
+      members?: { agentId: string; agentName: string }[];
+      replyTo?: { role: MessageRole; content: string; senderAgentName?: string };
+      history?: { role: MessageRole; content: string; senderAgentName?: string; createdAt: string }[];
+      attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
+    }
+  | { type: "cancel_task"; taskId: string }
   | { type: "pong" };
 
 // ===== Push Notifications =====

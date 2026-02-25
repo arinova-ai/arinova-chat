@@ -10,6 +10,8 @@ import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
 import { ActiveCall } from "@/components/voice/active-call";
+import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
+import { AddMemberSheet } from "./add-member-sheet";
 
 export function ChatArea() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -18,11 +20,15 @@ export function ChatArea() {
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const agents = useChatStore((s) => s.agents);
   const agentHealth = useChatStore((s) => s.agentHealth);
+  const conversationMembers = useChatStore((s) => s.conversationMembers);
 
   const callState = useVoiceCallStore((s) => s.callState);
   const callConversationId = useVoiceCallStore((s) => s.conversationId);
 
   const [manageOpen, setManageOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
 
   if (searchActive) {
     return <SearchResults />;
@@ -52,6 +58,11 @@ export function ChatArea() {
   const showCallOverlay =
     callState !== "idle" && callConversationId === activeConversationId;
 
+  const openMembersPanel = (tab: PanelTab = "members") => {
+    setMembersPanelTab(tab);
+    setMembersOpen(true);
+  };
+
   return (
     <div className="relative flex h-full min-w-0 flex-col">
       <ChatHeader
@@ -63,9 +74,15 @@ export function ChatArea() {
         conversationId={conversation.id}
         agentId={conversation.agentId ?? undefined}
         voiceCapable={agent?.voiceCapable}
+        mentionOnly={conversation.mentionOnly}
+        title={conversation.title}
+        memberCount={conversation.type === "group" ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
         onClick={agent ? () => setManageOpen(true) : undefined}
+        onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
+        onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
+        onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
       />
-      <MessageList messages={messages} agentName={conversation.agentName} />
+      <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
       <ChatInput />
 
       {showCallOverlay && <ActiveCall />}
@@ -76,6 +93,22 @@ export function ChatArea() {
           open={manageOpen}
           onOpenChange={setManageOpen}
         />
+      )}
+
+      {conversation.type === "group" && (
+        <>
+          <GroupMembersPanel
+            open={membersOpen}
+            onOpenChange={setMembersOpen}
+            conversationId={conversation.id}
+            initialTab={membersPanelTab}
+          />
+          <AddMemberSheet
+            open={addMemberOpen}
+            onOpenChange={setAddMemberOpen}
+            conversationId={conversation.id}
+          />
+        </>
       )}
     </div>
   );

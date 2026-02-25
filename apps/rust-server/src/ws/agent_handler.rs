@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
+use crate::services::message_seq::get_next_seq;
 use crate::ws::state::{AgentEvent, AgentSkill, PendingTask, WsState};
 use crate::AppState;
 
@@ -31,6 +32,9 @@ async fn agent_ws_upgrade(
 
 async fn handle_agent_ws(socket: WebSocket, state: AppState) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
+
+    // Unique ID for this connection — used to avoid cleanup race conditions on reconnect
+    let conn_id = uuid::Uuid::new_v4().to_string();
 
     // Create channel for sending messages to this WebSocket
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -75,7 +79,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                 match agent {
                     Ok(Some((agent_id, agent_name))) => {
                         // Close any existing connection for this agent
-                        if let Some((_, old_sender)) = state.ws.agent_connections.remove(&agent_id) {
+                        if let Some((_, (_, old_sender))) = state.ws.agent_connections.remove(&agent_id) {
                             // The old connection will close when sender is dropped
                             drop(old_sender);
                         }
@@ -86,7 +90,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                             .and_then(|v| serde_json::from_value(v.clone()).ok())
                             .unwrap_or_default();
 
-                        state.ws.agent_connections.insert(agent_id.clone(), tx.clone());
+                        state.ws.agent_connections.insert(agent_id.clone(), (conn_id.clone(), tx.clone()));
                         state.ws.agent_skills.insert(agent_id.clone(), skills.clone());
 
                         // Clean up stale streaming messages for this agent
@@ -152,6 +156,8 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
 
     // Process authenticated messages
     let ws_state = state.ws.clone();
+    let db = state.db.clone();
+    let redis = state.redis.clone();
     let agent_id_clone = agent_id.clone();
 
     let recv_task = tokio::spawn(async move {
@@ -233,6 +239,121 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                         }
                     }
                 }
+                "agent_heartbeat" => {
+                    let task_id = event.get("taskId").and_then(|v| v.as_str()).unwrap_or("");
+
+                    if let Some(mut task) = ws_state.pending_tasks.get_mut(task_id) {
+                        if task.agent_id == agent_id_clone {
+                            // Reset idle timeout — agent is still working
+                            task.timeout_handle.abort();
+                            let ws_state_clone = ws_state.clone();
+                            let task_id_str = task_id.to_string();
+                            task.timeout_handle = tokio::spawn(async move {
+                                tokio::time::sleep(TASK_IDLE_TIMEOUT).await;
+                                cleanup_task(&ws_state_clone, &task_id_str, Some("Task timed out (idle for 600s)"));
+                            });
+                        }
+                    }
+                }
+                "agent_send" => {
+                    let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
+                    let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
+
+                    if conversation_id.is_empty() || content.trim().is_empty() {
+                        tracing::warn!("agent_send: empty conversationId or content from agent {}", agent_id_clone);
+                        continue;
+                    }
+
+                    tracing::info!("agent_send: agentId={} conversationId={} contentLen={}", agent_id_clone, conversation_id, content.len());
+
+                    // Validate agent belongs to this conversation and get user_id
+                    let membership = sqlx::query_as::<_, (String, String)>(
+                        r#"SELECT c.user_id, c.type::text
+                           FROM conversations c
+                           WHERE c.id = $1::uuid
+                             AND (
+                               c.agent_id = $2::uuid
+                               OR EXISTS (
+                                 SELECT 1 FROM conversation_members cm
+                                 WHERE cm.conversation_id = c.id AND cm.agent_id = $2::uuid
+                               )
+                             )"#,
+                    )
+                    .bind(conversation_id)
+                    .bind(&agent_id_clone)
+                    .fetch_optional(&db)
+                    .await;
+
+                    let (user_id, _conv_type) = match membership {
+                        Ok(Some(m)) => m,
+                        Ok(None) => {
+                            tracing::warn!("agent_send: agent {} is not a member of conversation {}", agent_id_clone, conversation_id);
+                            continue;
+                        }
+                        Err(e) => {
+                            tracing::error!("agent_send: DB error checking membership: {}", e);
+                            continue;
+                        }
+                    };
+
+                    // Get agent name
+                    let agent_name = sqlx::query_as::<_, (String,)>(
+                        r#"SELECT name FROM agents WHERE id = $1::uuid"#,
+                    )
+                    .bind(&agent_id_clone)
+                    .fetch_optional(&db)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|r| r.0)
+                    .unwrap_or_else(|| "Agent".to_string());
+
+                    // Create message in DB
+                    let seq = match get_next_seq(&db, conversation_id).await {
+                        Ok(s) => s,
+                        Err(_) => continue,
+                    };
+
+                    let msg_id = uuid::Uuid::new_v4().to_string();
+                    let _ = sqlx::query(
+                        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, created_at, updated_at)
+                           VALUES ($1::uuid, $2::uuid, $3, 'agent', $4, 'completed', $5::uuid, NOW(), NOW())"#,
+                    )
+                    .bind(&msg_id)
+                    .bind(conversation_id)
+                    .bind(seq)
+                    .bind(content)
+                    .bind(&agent_id_clone)
+                    .execute(&db)
+                    .await;
+
+                    let _ = sqlx::query(
+                        r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
+                    )
+                    .bind(conversation_id)
+                    .execute(&db)
+                    .await;
+
+                    tracing::info!("agent_send: delivered msgId={} seq={} to user {}", msg_id, seq, user_id);
+
+                    // Deliver to user via stream_start + stream_end
+                    ws_state.send_to_user_or_queue(&user_id, &json!({
+                        "type": "stream_start",
+                        "conversationId": conversation_id,
+                        "messageId": msg_id,
+                        "seq": seq,
+                        "senderAgentId": &agent_id_clone,
+                        "senderAgentName": agent_name
+                    }), &redis);
+
+                    ws_state.send_to_user_or_queue(&user_id, &json!({
+                        "type": "stream_end",
+                        "conversationId": conversation_id,
+                        "messageId": msg_id,
+                        "seq": seq,
+                        "content": content
+                    }), &redis);
+                }
                 _ => {}
             }
         }
@@ -244,14 +365,21 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
         _ = recv_task => {},
     }
 
-    // Cleanup
+    // Cleanup — only if this is still the registered connection (not superseded by a reconnect)
     if let Some(agent_id) = authenticated_agent_id {
-        // Only remove if this is still the registered connection
-        // (check by seeing if the sender matches)
-        state.ws.agent_connections.remove(&agent_id);
-        state.ws.agent_skills.remove(&agent_id);
-        cleanup_agent_tasks(&state.ws, &agent_id);
-        tracing::info!("Agent WS disconnected: agentId={}", agent_id);
+        let is_current = state.ws.agent_connections
+            .get(&agent_id)
+            .map(|entry| entry.0 == conn_id)
+            .unwrap_or(false);
+
+        if is_current {
+            state.ws.agent_connections.remove(&agent_id);
+            state.ws.agent_skills.remove(&agent_id);
+            cleanup_agent_tasks(&state.ws, &agent_id);
+            tracing::info!("Agent WS disconnected: agentId={}", agent_id);
+        } else {
+            tracing::info!("Agent WS closed (superseded by reconnect): agentId={}", agent_id);
+        }
     }
 }
 
@@ -274,6 +402,26 @@ fn cleanup_agent_tasks(ws_state: &WsState, agent_id: &str) {
 
     for task_id in task_ids {
         cleanup_task(ws_state, &task_id, Some("Agent disconnected"));
+    }
+
+    // Clean up stale active_streams entries for this agent
+    let suffix = format!(":{}", agent_id);
+    let stale_keys: Vec<String> = ws_state
+        .active_streams
+        .iter()
+        .filter(|entry| entry.key().ends_with(&suffix))
+        .map(|entry| entry.key().clone())
+        .collect();
+
+    for key in &stale_keys {
+        ws_state.active_streams.remove(key);
+    }
+    if !stale_keys.is_empty() {
+        tracing::info!(
+            "Cleaned up {} stale active_streams for agent {}",
+            stale_keys.len(),
+            agent_id
+        );
     }
 }
 

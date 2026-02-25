@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/auth/callback/google", get(google_callback))
         .route("/api/auth/callback/github", get(github_callback))
+        .route("/api/auth/update-user", post(update_user))
 }
 
 #[derive(Deserialize)]
@@ -58,6 +59,25 @@ async fn sign_up_email(
     State(state): State<AppState>,
     Json(body): Json<SignUpBody>,
 ) -> Response {
+    // Validate password length
+    if body.password.len() < 8 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Password must be at least 8 characters"})),
+        )
+            .into_response();
+    }
+
+    // Sanitize and validate display name
+    let name = sanitize_display_name(&body.name);
+    if name.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Name is required"})),
+        )
+            .into_response();
+    }
+
     // Check if user already exists
     let existing = sqlx::query_as::<_, (String,)>(r#"SELECT id FROM "user" WHERE email = $1"#)
         .bind(&body.email)
@@ -103,7 +123,7 @@ async fn sign_up_email(
            VALUES ($1, $2, $3, false, $4, $4)"#,
     )
     .bind(&user_id)
-    .bind(&body.name)
+    .bind(&name)
     .bind(&body.email)
     .bind(now)
     .execute(&state.db)
@@ -145,7 +165,7 @@ async fn sign_up_email(
             let mut resp = Json(json!({
                 "user": {
                     "id": user_id,
-                    "name": body.name,
+                    "name": name,
                     "email": body.email,
                     "emailVerified": false,
                     "image": null,
@@ -303,6 +323,7 @@ async fn get_session(State(state): State<AppState>, headers: axum::http::HeaderM
                 "name": s.name,
                 "email": s.email,
                 "image": s.image,
+                "username": s.username,
             },
             "session": {
                 "token": token,
@@ -391,6 +412,81 @@ async fn github_callback(
     }
 }
 
+#[derive(Deserialize)]
+struct UpdateUserBody {
+    name: Option<String>,
+    image: Option<String>,
+}
+
+async fn update_user(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<UpdateUserBody>,
+) -> Response {
+    let cookie_header = headers
+        .get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let token = match extract_session_token(cookie_header) {
+        Some(t) => t,
+        None => {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Not authenticated"}))).into_response();
+        }
+    };
+
+    let session = match validate_session(&state.db, &token).await {
+        Ok(Some(s)) => s,
+        _ => {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid session"}))).into_response();
+        }
+    };
+
+    let mut sets = vec!["updated_at = NOW()".to_string()];
+    let mut idx = 2u32; // $1 = user_id
+
+    if body.name.is_some() {
+        sets.push(format!("name = ${idx}"));
+        idx += 1;
+    }
+    if body.image.is_some() {
+        sets.push(format!("image = ${idx}"));
+    }
+
+    let query_str = format!(
+        r#"UPDATE "user" SET {} WHERE id = $1"#,
+        sets.join(", ")
+    );
+
+    let mut q = sqlx::query(&query_str).bind(&session.user_id);
+
+    if let Some(ref name) = body.name {
+        q = q.bind(name);
+    }
+    if let Some(ref image) = body.image {
+        q = q.bind(image);
+    }
+
+    match q.execute(&state.db).await {
+        Ok(_) => {
+            Json(json!({
+                "user": {
+                    "id": session.user_id,
+                    "name": body.name.as_deref().unwrap_or(&session.name),
+                    "email": session.email,
+                    "image": body.image.as_deref().or(session.image.as_deref()),
+                }
+            }))
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
 fn is_secure_context(config: &crate::config::Config) -> bool {
     config.better_auth_url.starts_with("https://")
 }
@@ -408,6 +504,26 @@ fn build_session_cookie(token: &str, is_production: bool) -> String {
             token,
             60 * 60 * 24 * 30
         )
+    }
+}
+
+/// Strip HTML tags and enforce max 50 characters for display names.
+fn sanitize_display_name(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut in_tag = false;
+    for ch in raw.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    let trimmed = out.trim();
+    if trimmed.len() > 50 {
+        trimmed.chars().take(50).collect::<String>().trim_end().to_string()
+    } else {
+        trimmed.to_string()
     }
 }
 

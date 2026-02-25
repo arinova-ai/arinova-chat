@@ -1,0 +1,37 @@
+{
+  "name": "@arinova-ai/openclaw-office-plugin",
+  "version": "0.0.1",
+  "description": "OpenClaw plugin for Virtual Office — tracks agent session activity and exposes real-time status via SSE",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "tsc --noEmit"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "openclaw": "latest",
+    "tsup": "^8",
+    "typescript": "^5"
+  }
+}

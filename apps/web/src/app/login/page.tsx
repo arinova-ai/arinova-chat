@@ -4,10 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Loader2 } from "lucide-react";
+import { Loader2, Mail, Lock, EyeOff, Eye } from "lucide-react";
+import { AuthBrandPanel } from "@/components/auth-brand-panel";
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -44,6 +42,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -83,91 +82,121 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">Arinova Chat</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to your account
+    <div className="grid min-h-dvh lg:grid-cols-2">
+      {/* Left: Brand panel */}
+      <AuthBrandPanel />
+
+      {/* Right: Login form */}
+      <div className="flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md space-y-8 rounded-2xl border border-border bg-card p-8 shadow-xl shadow-black/20">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold">Welcome Back</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Sign in to your account.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="text-sm font-medium">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-[oklch(0.6_0.18_250)] focus:outline-none focus:ring-1 focus:ring-[oklch(0.6_0.18_250)]"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-sm font-medium">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-[oklch(0.6_0.18_250)] focus:outline-none focus:ring-1 focus:ring-[oklch(0.6_0.18_250)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
+              </div>
+              <div className="text-right">
+                <button type="button" className="text-xs text-[oklch(0.65_0.15_250)] hover:underline">
+                  Forgot password?
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="brand-gradient-btn flex h-11 w-full items-center justify-center rounded-lg text-sm"
+            >
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Sign In
+            </button>
+          </form>
+
+          {/* OAuth separator */}
+          <div className="relative flex items-center gap-4">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">or continue with</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          {/* OAuth buttons */}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => handleOAuthSignIn("google")}
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background text-sm font-medium transition-colors hover:bg-accent"
+            >
+              <GoogleIcon className="h-4 w-4" />
+              Google
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOAuthSignIn("github")}
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background text-sm font-medium transition-colors hover:bg-accent"
+            >
+              <GitHubIcon className="h-4 w-4" />
+              GitHub
+            </button>
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="font-medium text-[oklch(0.65_0.15_250)] hover:underline">
+              Sign up
+            </Link>
+          </p>
+
+          <p className="text-center text-xs text-muted-foreground/60">
+            By signing in you agree to our Terms of Service
           </p>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              className="bg-neutral-800 border-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="********"
-              required
-              className="bg-neutral-800 border-none"
-            />
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign In
-          </Button>
-        </form>
-
-        {/* OAuth separator */}
-        <div className="relative flex items-center gap-4">
-          <Separator className="flex-1" />
-          <span className="text-xs text-muted-foreground">or continue with</span>
-          <Separator className="flex-1" />
-        </div>
-
-        {/* OAuth buttons */}
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            className="flex-1 gap-2"
-            onClick={() => handleOAuthSignIn("google")}
-          >
-            <GoogleIcon className="h-4 w-4" />
-            Google
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 gap-2"
-            onClick={() => handleOAuthSignIn("github")}
-          >
-            <GitHubIcon className="h-4 w-4" />
-            GitHub
-          </Button>
-        </div>
-
-        <p className="text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-foreground underline">
-            Register
-          </Link>
-        </p>
       </div>
     </div>
   );

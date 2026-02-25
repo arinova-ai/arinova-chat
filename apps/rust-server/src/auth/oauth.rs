@@ -202,9 +202,12 @@ pub async fn handle_github_callback(
 async fn find_or_create_oauth_user(
     pool: &PgPool,
     email: &str,
-    name: &str,
+    raw_name: &str,
     image: Option<&str>,
 ) -> Result<String, sqlx::Error> {
+    // Sanitize external display name (strip HTML tags, enforce max 50 chars)
+    let name = sanitize_display_name(raw_name);
+
     // Check if user exists by email
     let existing = sqlx::query_as::<_, (String,)>(r#"SELECT id FROM "user" WHERE email = $1"#)
         .bind(email)
@@ -232,7 +235,7 @@ async fn find_or_create_oauth_user(
            VALUES ($1, $2, $3, true, $4, $5, $5)"#,
     )
     .bind(&user_id)
-    .bind(name)
+    .bind(&name)
     .bind(email)
     .bind(image)
     .bind(now)
@@ -289,6 +292,26 @@ async fn upsert_oauth_account(
     }
 
     Ok(())
+}
+
+/// Strip HTML tags and enforce max 50 characters for display names.
+fn sanitize_display_name(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut in_tag = false;
+    for ch in raw.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    let trimmed = out.trim();
+    if trimmed.len() > 50 {
+        trimmed.chars().take(50).collect::<String>().trim_end().to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 mod urlencoding {

@@ -15,6 +15,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isPending, session, router]);
 
+  // Redirect to username setup if authenticated but no username set
+  useEffect(() => {
+    if (
+      !isPending &&
+      session?.user &&
+      !(session.user as Record<string, unknown>).username
+    ) {
+      router.push("/setup-username");
+    }
+  }, [isPending, session, router]);
+
   if (isPending) {
     return (
       <div className="flex h-dvh items-center justify-center">
@@ -24,6 +35,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) return null;
+
+  // Don't render children until username is confirmed
+  if (!(session.user as Record<string, unknown>).username) return null;
 
   return <>{children}</>;
 }

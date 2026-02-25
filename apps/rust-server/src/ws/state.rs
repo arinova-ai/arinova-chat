@@ -1,8 +1,12 @@
-use dashmap::{DashMap, DashSet};
+use dashmap::DashMap;
 use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::mpsc;
+
+/// Maximum duration before an active_stream entry is considered stale (10 minutes)
+const STREAM_STALE_SECS: u64 = 600;
 
 /// Sender half for sending JSON messages to a WebSocket connection
 pub type WsSender = mpsc::UnboundedSender<String>;
@@ -53,14 +57,14 @@ pub struct WsState {
     /// Active stream cancellers: messageId -> cancel sender
     pub stream_cancellers: Arc<DashMap<String, tokio::sync::watch::Sender<bool>>>,
 
-    /// Conversation IDs with active streams
-    pub active_streams: Arc<DashSet<String>>,
+    /// Conversation IDs with active streams (key -> start time for staleness detection)
+    pub active_streams: Arc<DashMap<String, Instant>>,
 
     /// Per-conversation agent response queues
     pub agent_response_queues: Arc<DashMap<String, VecDeque<QueuedResponse>>>,
 
-    /// Agent connections: agentId -> sender
-    pub agent_connections: Arc<DashMap<String, WsSender>>,
+    /// Agent connections: agentId -> (connectionId, sender)
+    pub agent_connections: Arc<DashMap<String, (String, WsSender)>>,
 
     /// Agent skills: agentId -> skills
     pub agent_skills: Arc<DashMap<String, Vec<AgentSkill>>>,
@@ -70,6 +74,9 @@ pub struct WsState {
 
     /// Rate limits (fallback when Redis unavailable): userId -> (count, reset_at_ms)
     pub ws_rate_limits: Arc<DashMap<String, (i32, i64)>>,
+
+    /// Conversation member cache: conversationId -> (member_user_ids, cached_at)
+    pub conv_member_cache: Arc<DashMap<String, (Vec<String>, std::time::Instant)>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -86,12 +93,13 @@ impl WsState {
             socket_visible: Arc::new(DashMap::new()),
             foreground_counts: Arc::new(DashMap::new()),
             stream_cancellers: Arc::new(DashMap::new()),
-            active_streams: Arc::new(DashSet::new()),
+            active_streams: Arc::new(DashMap::new()),
             agent_response_queues: Arc::new(DashMap::new()),
             agent_connections: Arc::new(DashMap::new()),
             agent_skills: Arc::new(DashMap::new()),
             pending_tasks: Arc::new(DashMap::new()),
             ws_rate_limits: Arc::new(DashMap::new()),
+            conv_member_cache: Arc::new(DashMap::new()),
         }
     }
 
@@ -159,23 +167,62 @@ impl WsState {
 
     /// Send a JSON event to a connected agent
     pub fn send_to_agent(&self, agent_id: &str, event: &Value) -> bool {
-        if let Some(sender) = self.agent_connections.get(agent_id) {
+        if let Some(entry) = self.agent_connections.get(agent_id) {
             let msg = serde_json::to_string(event).unwrap_or_default();
-            sender.send(msg).is_ok()
+            entry.1.send(msg).is_ok()
         } else {
             false
         }
     }
 
-    /// Check if an agent has an active stream in a conversation
+    /// Check if an agent has an active stream in a conversation.
+    /// Automatically removes stale entries (older than STREAM_STALE_SECS).
     pub fn has_active_stream_for_agent(&self, conversation_id: &str, agent_id: &str) -> bool {
-        self.active_streams.contains(&format!("{}:{}", conversation_id, agent_id))
+        let key = format!("{}:{}", conversation_id, agent_id);
+        if let Some(entry) = self.active_streams.get(&key) {
+            if entry.elapsed().as_secs() > STREAM_STALE_SECS {
+                drop(entry);
+                tracing::warn!("Removing stale active_stream: {}", key);
+                self.active_streams.remove(&key);
+                false
+            } else {
+                true
+            }
+        } else {
+            false
+        }
     }
 
-    /// Check if a conversation has any active stream (for sync/reconnection)
+    /// Check if a conversation has any active stream (for sync/reconnection).
+    /// Automatically removes stale entries.
     pub fn has_active_stream(&self, conversation_id: &str) -> bool {
         let prefix = format!("{}:", conversation_id);
-        self.active_streams.iter().any(|key| key.starts_with(&prefix))
+        let stale_keys: Vec<String> = self.active_streams.iter()
+            .filter(|entry| entry.key().starts_with(&prefix) && entry.value().elapsed().as_secs() > STREAM_STALE_SECS)
+            .map(|entry| entry.key().clone())
+            .collect();
+        for key in &stale_keys {
+            tracing::warn!("Removing stale active_stream: {}", key);
+            self.active_streams.remove(key);
+        }
+        self.active_streams.iter().any(|entry| entry.key().starts_with(&prefix))
+    }
+
+    /// Invalidate the conversation member cache for a conversation
+    pub fn invalidate_conv_member_cache(&self, conversation_id: &str) {
+        self.conv_member_cache.remove(conversation_id);
+    }
+
+    /// Broadcast event to a list of user IDs (with offline queue fallback)
+    pub fn broadcast_to_members(
+        &self,
+        member_ids: &[String],
+        event: &Value,
+        redis: &deadpool_redis::Pool,
+    ) {
+        for uid in member_ids {
+            self.send_to_user_or_queue(uid, event, redis);
+        }
     }
 
     /// Get agent skills

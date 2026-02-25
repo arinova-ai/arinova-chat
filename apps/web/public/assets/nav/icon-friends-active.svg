@@ -1,0 +1,12 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Friends icon — active state: filled blue people group -->
+  <!-- Center person (larger) -->
+  <circle cx="12" cy="7" r="3" fill="#3B82F6"/>
+  <path d="M7 20c0-2.761 2.239-5 5-5s5 2.239 5 5" fill="#3B82F6"/>
+  <!-- Left person (smaller) -->
+  <circle cx="5.5" cy="9" r="2.2" fill="#3B82F6"/>
+  <path d="M1.5 19c0-2.209 1.791-4 4-4 1.12 0 2.133.462 2.858 1.206" fill="#3B82F6"/>
+  <!-- Right person (smaller) -->
+  <circle cx="18.5" cy="9" r="2.2" fill="#3B82F6"/>
+  <path d="M22.5 19c0-2.209-1.791-4-4-4-1.12 0-2.133.462-2.858 1.206" fill="#3B82F6"/>
+</svg>

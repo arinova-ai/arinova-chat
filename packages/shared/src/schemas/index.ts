@@ -255,6 +255,19 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
     messageId: z.string().uuid(),
   }),
   z.object({
+    type: z.literal("sync"),
+    conversations: z.record(z.string().uuid(), z.number().int().min(0)),
+  }),
+  z.object({
+    type: z.literal("mark_read"),
+    conversationId: z.string().uuid(),
+    seq: z.number().int().min(0),
+  }),
+  z.object({
+    type: z.literal("focus"),
+    visible: z.boolean(),
+  }),
+  z.object({
     type: z.literal("ping"),
   }),
 ]);
@@ -263,8 +276,12 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
 export const agentWSClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("agent_auth"),
-    agentId: z.string().uuid(),
-    secretToken: z.string().min(1),
+    botToken: z.string().min(1),
+    skills: z.array(z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string(),
+    })).optional(),
   }),
   z.object({
     type: z.literal("agent_chunk"),

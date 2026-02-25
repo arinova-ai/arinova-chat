@@ -26,6 +26,9 @@ import { economyApiRoutes } from "./routes/economy-api.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { voiceWsRoutes } from "./ws/voice-handler.js";
 import { spaceRoutes } from "./routes/spaces.js";
+import { officeRoutes } from "./routes/office.js";
+import { userRoutes } from "./routes/users.js";
+import { initialize as initOfficePlugin } from "@arinova-ai/openclaw-office-plugin";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";
@@ -48,7 +51,7 @@ await app.register(cors, {
 await app.register(rateLimit, {
   max: 300,
   timeWindow: "1 minute",
-  allowList: ["/health", "/ws", "/ws/agent", "/ws/voice"],
+  allowList: ["/health", "/ws", "/ws/agent", "/ws/voice", "/api/office/stream"],
 });
 
 // Multipart (file upload)
@@ -103,6 +106,9 @@ await app.register(economyApiRoutes);
 await app.register(voiceRoutes);
 await app.register(voiceWsRoutes);
 await app.register(spaceRoutes);
+await app.register(officeRoutes);
+await app.register(userRoutes);
+initOfficePlugin();
 // Phase 2+ routes (on features/platform-extras branch)
 // await app.register(marketplaceRoutes);
 // await app.register(communityRoutes);
