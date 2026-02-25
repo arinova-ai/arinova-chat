@@ -1,4 +1,6 @@
+pub mod billing;
 pub mod crypto;
+pub mod llm;
 pub mod message_seq;
 pub mod office;
 pub mod pending_events;

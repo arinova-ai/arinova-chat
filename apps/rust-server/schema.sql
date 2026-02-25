@@ -291,10 +291,14 @@ CREATE TABLE agent_listings (
     api_key_encrypted TEXT,
     model_id VARCHAR(100) NOT NULL DEFAULT 'gpt-4o-mini',
     price INTEGER NOT NULL DEFAULT 0,
+    price_per_message INTEGER NOT NULL DEFAULT 0,
+    free_trial_messages INTEGER NOT NULL DEFAULT 0,
     status agent_listing_status NOT NULL DEFAULT 'draft',
     sales_count INTEGER NOT NULL DEFAULT 0,
     avg_rating NUMERIC(3,2),
     review_count INTEGER NOT NULL DEFAULT 0,
+    total_messages INTEGER NOT NULL DEFAULT 0,
+    total_revenue INTEGER NOT NULL DEFAULT 0,
     example_conversations JSONB NOT NULL DEFAULT '[]',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -315,6 +319,7 @@ CREATE TABLE marketplace_conversations (
     listing_id UUID NOT NULL REFERENCES agent_listings(id),
     user_id TEXT NOT NULL,
     title VARCHAR(200),
+    message_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
