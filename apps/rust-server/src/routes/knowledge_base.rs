@@ -15,6 +15,9 @@ use crate::AppState;
 // Max file size: 5 MB
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024;
 
+// Credits deducted per KB file upload
+const KB_UPLOAD_FEE: i32 = 10;
+
 // Allowed MIME types / extensions
 const ALLOWED_EXTENSIONS: &[&str] = &["txt", "md", "csv", "json", "pdf"];
 
@@ -221,7 +224,73 @@ async fn upload_file(
 
     let total_chars = raw_content.len() as i32;
 
-    // 6. INSERT into agent_knowledge_bases
+    // 6. Deduct credits for KB upload
+    let balance = sqlx::query_scalar::<_, i32>(
+        "SELECT balance FROM coin_balances WHERE user_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("KB billing: fetch balance failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        )
+    })?
+    .unwrap_or(0);
+
+    if balance < KB_UPLOAD_FEE {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "error": "Insufficient credits. Knowledge base upload costs 10 credits."
+            })),
+        ));
+    }
+
+    let deducted = sqlx::query_scalar::<_, i32>(
+        r#"UPDATE coin_balances
+           SET balance = balance - $2, updated_at = NOW()
+           WHERE user_id = $1 AND balance >= $2
+           RETURNING balance"#,
+    )
+    .bind(&user.id)
+    .bind(KB_UPLOAD_FEE)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        tracing::error!("KB billing: deduct failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Failed to deduct credits" })),
+        )
+    })?;
+
+    if deducted.is_none() {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "error": "Insufficient credits. Knowledge base upload costs 10 credits."
+            })),
+        ));
+    }
+
+    // Record transaction
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO coin_transactions (user_id, type, amount, description)
+           VALUES ($1, 'kb_upload', $2, $3)"#,
+    )
+    .bind(&user.id)
+    .bind(-KB_UPLOAD_FEE)
+    .bind(format!("Knowledge base file upload: {}", file_name))
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!("KB billing: record transaction failed: {}", e);
+    }
+
+    // 7. INSERT into agent_knowledge_bases
     let row = sqlx::query_as::<_, KbRow>(
         r#"INSERT INTO agent_knowledge_bases
            (listing_id, creator_id, file_name, file_size, file_type, status, total_chars, raw_content)

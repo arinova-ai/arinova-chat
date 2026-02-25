@@ -316,7 +316,8 @@ function NewAgentContent() {
               </h2>
               <p className="text-xs text-muted-foreground">
                 Upload files to give your agent domain-specific knowledge via RAG.
-                Supported: .txt, .md, .csv, .json (max 5 MB each)
+                Supported: .txt, .md, .csv, .json (max 5 MB each).
+                Each file upload costs 10 credits.
               </p>
 
               <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-6 cursor-pointer hover:border-muted-foreground transition-colors">

@@ -401,7 +401,8 @@ function EditAgentContent() {
               </h2>
               <p className="text-xs text-muted-foreground">
                 Upload files to give your agent domain-specific knowledge via RAG.
-                Supported: .txt, .md, .csv, .json (max 5 MB each)
+                Supported: .txt, .md, .csv, .json (max 5 MB each).
+                Each file upload costs 10 credits.
               </p>
 
               {/* Existing files */}
