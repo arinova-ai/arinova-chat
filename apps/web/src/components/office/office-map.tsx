@@ -440,6 +440,7 @@ export default function OfficeMap({
 
     const bgColor = manifest ? parseBgColor(manifest) : 0x0f172a;
     const app = new Application();
+    const destroyedRef = { current: false };
     appRef.current = app;
     setReady(false);
     frameSetsRef.current = undefined;
@@ -456,7 +457,7 @@ export default function OfficeMap({
         autoDensity: true,
       })
       .then(async () => {
-        if (appRef.current !== app) return;
+        if (destroyedRef.current) return;
         if (!canvasRef.current || !app.canvas) return;
 
         canvasRef.current.appendChild(app.canvas);
@@ -495,7 +496,7 @@ export default function OfficeMap({
             try {
               const bgUrl = `/themes/${themeId}/${manifest.canvas.background.image}`;
               const texture = await Assets.load(bgUrl);
-              if (appRef.current !== app) return;
+              if (destroyedRef.current) return;
               loadedAssetUrlsRef.current.push(bgUrl);
               const bgSprite = new PixiSprite(texture);
               bgSprite.width = manifest.canvas.width;
@@ -503,6 +504,7 @@ export default function OfficeMap({
               bgLayer.addChild(bgSprite);
               bgLoadedRef.current = true;
             } catch (err) {
+              if (destroyedRef.current) return;
               console.warn("[OfficeMap] Failed to load background image, drawing fallback zones:", err);
               bgLoadedRef.current = false;
               // Draw fallback zone rectangles
@@ -529,7 +531,7 @@ export default function OfficeMap({
             try {
               const atlasUrl = `/themes/${themeId}/${manifest.characters.atlas}`;
               const sheetTexture = await Assets.load(atlasUrl);
-              if (appRef.current !== app) return;
+              if (destroyedRef.current) return;
               loadedAssetUrlsRef.current.push(atlasUrl);
               frameSetsRef.current = extractFrames(
                 sheetTexture,
@@ -561,15 +563,33 @@ export default function OfficeMap({
           linesGraphicsRef.current = linesGfx;
         }
 
-        setReady(true);
+        if (!destroyedRef.current) {
+          setReady(true);
+        }
       });
 
     return () => {
-      // Unload previously loaded assets to free GPU memory
+      destroyedRef.current = true;
+
+      // 1. Stop and destroy all agent sprites
+      for (const [, sprite] of spritesRef.current) {
+        try {
+          if (sprite.animSprite) sprite.animSprite.stop();
+          sprite.container.destroy({ children: true });
+        } catch { /* noop */ }
+      }
+      spritesRef.current.clear();
+
+      // 2. Unload assets to free GPU memory
       for (const url of loadedAssetUrlsRef.current) {
         try { Assets.unload(url); } catch { /* noop */ }
       }
       loadedAssetUrlsRef.current = [];
+
+      // 3. Destroy PixiJS app (removes canvas from DOM)
+      try { app.destroy(true); } catch { /* noop */ }
+
+      // 4. Null out refs
       appRef.current = null;
       rootRef.current = null;
       layerMapRef.current = new Map();
@@ -578,10 +598,8 @@ export default function OfficeMap({
       linesGraphicsRef.current = null;
       frameSetsRef.current = undefined;
       bgLoadedRef.current = false;
-      spritesRef.current.clear();
       walkingRef.current.clear();
       prevSeatRef.current.clear();
-      try { app.destroy(true); } catch { /* noop */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manifest, themeId]);
