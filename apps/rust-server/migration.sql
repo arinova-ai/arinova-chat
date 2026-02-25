@@ -35,6 +35,11 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Add 'kb_upload' to coin_transaction_type (for KB file upload billing)
 ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'kb_upload';
 
+-- Community billing transaction types
+ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'community_join';
+ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'community_subscription';
+ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'community_agent_call';
+
 BEGIN;
 
 -- ===== 2. Alter Existing Tables =====
