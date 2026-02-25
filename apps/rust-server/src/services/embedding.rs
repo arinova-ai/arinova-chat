@@ -14,55 +14,77 @@ use crate::config::Config;
 // ---------------------------------------------------------------------------
 
 /// Split text into overlapping chunks, breaking at paragraph/sentence boundaries.
+/// All indexing uses char_indices for UTF-8 safety (CJK, emoji, etc.).
 ///
-/// - `chunk_size`: target chunk size in characters (~2000 chars ≈ 500 tokens)
+/// - `chunk_size`: target chunk size in **characters** (~2000 chars ≈ 500 tokens)
 /// - `overlap`: number of characters to overlap between consecutive chunks (~200)
 pub fn chunk_text(text: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
     if text.is_empty() {
         return vec![];
     }
-    if text.len() <= chunk_size {
+
+    // Build a vec of byte offsets at char boundaries for safe slicing
+    let char_offsets: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
+    let char_count = char_offsets.len();
+
+    if char_count <= chunk_size {
         return vec![text.to_string()];
     }
 
-    let mut chunks = Vec::new();
-    let mut start = 0;
-
-    while start < text.len() {
-        let end = (start + chunk_size).min(text.len());
-
-        // If we're not at the end, try to break at a paragraph or sentence boundary
-        let actual_end = if end < text.len() {
-            find_break_point(text, start, end)
+    // Helper: convert char index to byte offset (clamped to text.len())
+    let byte_at = |ci: usize| -> usize {
+        if ci >= char_count {
+            text.len()
         } else {
-            end
+            char_offsets[ci]
+        }
+    };
+
+    let mut chunks = Vec::new();
+    let mut start_ci: usize = 0; // char index
+
+    while start_ci < char_count {
+        let end_ci = (start_ci + chunk_size).min(char_count);
+        let start_byte = byte_at(start_ci);
+        let end_byte = byte_at(end_ci);
+
+        // Try to find a nice break point near end_byte
+        let actual_end_byte = if end_ci < char_count {
+            find_break_point(text, start_byte, end_byte)
+        } else {
+            end_byte
         };
 
-        let chunk = text[start..actual_end].trim();
+        let chunk = text[start_byte..actual_end_byte].trim();
         if !chunk.is_empty() {
             chunks.push(chunk.to_string());
         }
 
-        // Advance by (actual_end - overlap), but at least 1 char forward
-        let advance = if actual_end > start + overlap {
-            actual_end - overlap
-        } else {
-            actual_end
+        // Convert actual_end_byte back to a char index for advancing
+        let actual_end_ci = match char_offsets.binary_search(&actual_end_byte) {
+            Ok(ci) => ci,
+            Err(ci) => ci, // next char boundary after actual_end_byte
         };
-        if advance <= start {
-            // Safety: always move forward
-            start = actual_end;
+
+        // Advance by (chars consumed - overlap), at least 1 char forward
+        let consumed = actual_end_ci.saturating_sub(start_ci);
+        let advance = if consumed > overlap {
+            consumed - overlap
         } else {
-            start = advance;
-        }
+            consumed.max(1)
+        };
+        start_ci += advance;
     }
 
     chunks
 }
 
-/// Find the best break point near `end`, preferring paragraph > sentence > word boundaries.
+/// Find the best break point near `end` byte offset, preferring
+/// paragraph > newline > sentence > word boundaries.
+/// All rfind operations return byte offsets that are inherently valid
+/// UTF-8 boundaries (they search for ASCII patterns).
 fn find_break_point(text: &str, start: usize, end: usize) -> usize {
-    let search_from = if end > start + 200 { end - 200 } else { start };
+    let search_from = if end > start + 800 { end - 800 } else { start };
     let window = &text[search_from..end];
 
     // Prefer double newline (paragraph break)
@@ -83,7 +105,7 @@ fn find_break_point(text: &str, start: usize, end: usize) -> usize {
     if let Some(pos) = window.rfind(' ') {
         return search_from + pos + 1;
     }
-    // No good break point — just cut at end
+    // No good break point — cut at end (already a valid boundary)
     end
 }
 
@@ -182,7 +204,11 @@ pub async fn process_embedding(
         return Ok(0);
     }
 
-    let client = Client::new();
+    let client = Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .context("Failed to build HTTP client")?;
     let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(chunks.len());
 
     // 2. Generate embeddings in batches

@@ -257,22 +257,28 @@ async fn upload_file(
                 {
                     Ok(chunk_count) => {
                         tracing::info!("KB {} embedding done: {} chunks", kb_id, chunk_count);
-                        let _ = sqlx::query(
+                        if let Err(e) = sqlx::query(
                             "UPDATE agent_knowledge_bases SET status = 'ready', chunk_count = $1, updated_at = NOW() WHERE id = $2",
                         )
                         .bind(chunk_count as i32)
                         .bind(kb_id)
                         .execute(&db)
-                        .await;
+                        .await
+                        {
+                            tracing::error!("KB {} failed to update status to ready: {:?}", kb_id, e);
+                        }
                     }
                     Err(e) => {
                         tracing::error!("KB {} embedding failed: {:?}", kb_id, e);
-                        let _ = sqlx::query(
+                        if let Err(e) = sqlx::query(
                             "UPDATE agent_knowledge_bases SET status = 'failed', updated_at = NOW() WHERE id = $1",
                         )
                         .bind(kb_id)
                         .execute(&db)
-                        .await;
+                        .await
+                        {
+                            tracing::error!("KB {} failed to update status to failed: {:?}", kb_id, e);
+                        }
                     }
                 }
             });
