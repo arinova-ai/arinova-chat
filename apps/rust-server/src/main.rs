@@ -125,6 +125,7 @@ async fn main() {
         .merge(routes::blocking::router())
         .merge(routes::wallet::router())
         .merge(routes::marketplace::router())
+        .merge(routes::marketplace_chat::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

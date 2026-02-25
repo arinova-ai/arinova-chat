@@ -17,6 +17,7 @@ pub mod agent_health;
 pub mod agent_send;
 pub mod agent_uploads;
 pub mod marketplace;
+pub mod marketplace_chat;
 pub mod wallet;
 
 use axum::Router;
@@ -44,5 +45,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(blocking::router())
         .merge(wallet::router())
         .merge(marketplace::router())
+        .merge(marketplace_chat::router())
         .with_state(state)
 }

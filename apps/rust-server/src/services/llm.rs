@@ -171,13 +171,29 @@ async fn call_anthropic_stream(
     client: &Client,
     opts: &LlmCallOptions,
 ) -> Result<SseStream, String> {
-    let body = serde_json::json!({
+    // Anthropic requires system messages as a top-level parameter, not in messages array
+    let system_content: String = opts
+        .messages
+        .iter()
+        .filter(|m| m.role == "system")
+        .map(|m| m.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    let non_system_messages: Vec<&ChatMessage> =
+        opts.messages.iter().filter(|m| m.role != "system").collect();
+
+    let mut body = serde_json::json!({
         "model": opts.model,
-        "messages": opts.messages,
+        "messages": non_system_messages,
         "stream": true,
         "max_tokens": opts.max_tokens.unwrap_or(4096),
         "temperature": opts.temperature.unwrap_or(0.7),
     });
+
+    if !system_content.is_empty() {
+        body["system"] = serde_json::Value::String(system_content);
+    }
 
     let resp = client
         .post("https://api.anthropic.com/v1/messages")
