@@ -619,3 +619,36 @@ export const agentReviews = pgTable("agent_reviews", {
 }, (table) => [
   unique().on(table.agentListingId, table.userId),
 ]);
+
+export const marketplaceMessageRoleEnum = pgEnum("marketplace_message_role", [
+  "user",
+  "assistant",
+]);
+
+export const marketplaceConversations = pgTable("marketplace_conversations", {
+  id: uuid().primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  agentListingId: uuid("agent_listing_id")
+    .notNull()
+    .references(() => agentListings.id),
+  messageCount: integer("message_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("mkt_conv_user_idx").on(t.userId),
+  index("mkt_conv_listing_idx").on(t.agentListingId),
+]);
+
+export const marketplaceMessages = pgTable("marketplace_messages", {
+  id: uuid().primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => marketplaceConversations.id, { onDelete: "cascade" }),
+  role: marketplaceMessageRoleEnum().notNull(),
+  content: text().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("mkt_msg_conv_idx").on(t.conversationId),
+]);

@@ -127,6 +127,13 @@
       "when": 1740556800000,
       "tag": "0017_add_agent_marketplace",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1740643200000,
+      "tag": "0018_add_marketplace_chat",
+      "breakpoints": true
     }
   ]
 }
