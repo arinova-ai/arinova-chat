@@ -4,8 +4,8 @@ import type { Agent, AgentStatus } from "../types";
 import type { ThemeManifest, ZoneDef, ZoneType } from "../theme-types";
 
 // ── Constants ────────────────────────────────────────────────────
-const CANVAS_W = 1920;
-const CANVAS_H = 1080;
+const DEFAULT_CANVAS_W = 1920;
+const DEFAULT_CANVAS_H = 1080;
 const WORLD_SCALE = 0.5;
 const BOT_HEIGHT = 40;
 const LERP_FACTOR = 0.08;
@@ -19,11 +19,28 @@ const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function canvasToWorld(cx: number, cy: number): THREE.Vector3 {
+/** All known texture-map properties on THREE materials (GLB models use many of these). */
+const TEXTURE_KEYS: readonly string[] = [
+  "map", "normalMap", "roughnessMap", "metalnessMap", "emissiveMap",
+  "aoMap", "alphaMap", "lightMap", "bumpMap", "displacementMap",
+  "envMap", "specularMap", "gradientMap",
+];
+
+/** Dispose a material and ALL of its texture maps to avoid GPU memory leaks. */
+function disposeMaterial(material: THREE.Material): void {
+  const m = material as unknown as Record<string, unknown>;
+  for (const key of TEXTURE_KEYS) {
+    const tex = m[key];
+    if (tex instanceof THREE.Texture) tex.dispose();
+  }
+  material.dispose();
+}
+
+function canvasToWorld(cx: number, cy: number, cw: number, ch: number): THREE.Vector3 {
   return new THREE.Vector3(
-    (cx - CANVAS_W / 2) * WORLD_SCALE,
+    (cx - cw / 2) * WORLD_SCALE,
     0,
-    (cy - CANVAS_H / 2) * WORLD_SCALE,
+    (cy - ch / 2) * WORLD_SCALE,
   );
 }
 
@@ -143,6 +160,10 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private height = 0;
   private manifest: ThemeManifest | null = null;
 
+  // Canvas dimensions from manifest (fallback to 1920×1080)
+  private canvasW = DEFAULT_CANVAS_W;
+  private canvasH = DEFAULT_CANVAS_H;
+
   private agents: Agent[] = [];
   private selectedAgentId: string | null = null;
 
@@ -176,6 +197,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.width = width;
     this.height = height;
     this.manifest = manifest;
+    this.canvasW = manifest?.canvas?.width ?? DEFAULT_CANVAS_W;
+    this.canvasH = manifest?.canvas?.height ?? DEFAULT_CANVAS_H;
     this.statusColors = parseStatusColors(manifest);
 
     // Scene
@@ -232,19 +255,13 @@ export class ThreeJSRenderer implements OfficeRenderer {
         if (obj instanceof THREE.Mesh) {
           obj.geometry?.dispose();
           if (Array.isArray(obj.material)) {
-            obj.material.forEach((m) => {
-              (m as THREE.MeshStandardMaterial).map?.dispose();
-              m.dispose();
-            });
+            obj.material.forEach((m) => disposeMaterial(m));
           } else {
-            const mat = obj.material as THREE.MeshStandardMaterial;
-            mat.map?.dispose();
-            mat.dispose();
+            disposeMaterial(obj.material as THREE.Material);
           }
         }
         if (obj instanceof THREE.Sprite) {
-          obj.material.map?.dispose();
-          obj.material.dispose();
+          disposeMaterial(obj.material);
         }
       });
     }
@@ -312,11 +329,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
       // Fallback: line up horizontally
       assignments = new Map();
       const spacing = 80;
-      const startX = CANVAS_W / 2 - ((agents.length - 1) * spacing) / 2;
+      const startX = this.canvasW / 2 - ((agents.length - 1) * spacing) / 2;
       agents.forEach((a, i) => {
         assignments.set(a.id, {
           x: startX + i * spacing,
-          y: CANVAS_H / 2,
+          y: this.canvasH / 2,
           seatId: `fallback-${i}`,
         });
       });
@@ -326,7 +343,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     for (const agent of agents) {
       const seat = assignments.get(agent.id);
       if (!seat) continue;
-      const worldPos = canvasToWorld(seat.x, seat.y);
+      const worldPos = canvasToWorld(seat.x, seat.y, this.canvasW, this.canvasH);
       this.targetPositions.set(agent.id, worldPos);
 
       let group = this.agentGroups.get(agent.id);
@@ -402,8 +419,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private createGround(): void {
     if (!this.scene) return;
 
-    const w = CANVAS_W * WORLD_SCALE;
-    const h = CANVAS_H * WORLD_SCALE;
+    const w = this.canvasW * WORLD_SCALE;
+    const h = this.canvasH * WORLD_SCALE;
     const geo = new THREE.PlaneGeometry(w, h);
     const mat = new THREE.MeshStandardMaterial({
       color: 0x1e293b,
@@ -423,7 +440,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
     for (const zone of this.manifest.zones) {
       const b = zone.bounds;
-      const center = canvasToWorld(b.x + b.width / 2, b.y + b.height / 2);
+      const center = canvasToWorld(b.x + b.width / 2, b.y + b.height / 2, this.canvasW, this.canvasH);
       const w = b.width * WORLD_SCALE;
       const h = b.height * WORLD_SCALE;
 
@@ -519,7 +536,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
         }
       });
 
-      const pos = canvasToWorld(f.x, f.y);
+      const pos = canvasToWorld(f.x, f.y, this.canvasW, this.canvasH);
       clone.position.copy(pos);
       this.scene.add(clone);
     }
@@ -646,19 +663,13 @@ export class ThreeJSRenderer implements OfficeRenderer {
       if (obj instanceof THREE.Mesh) {
         obj.geometry?.dispose();
         if (Array.isArray(obj.material)) {
-          obj.material.forEach((m) => {
-            (m as THREE.MeshStandardMaterial).map?.dispose();
-            m.dispose();
-          });
+          obj.material.forEach((m) => disposeMaterial(m));
         } else {
-          const mat = obj.material as THREE.MeshStandardMaterial;
-          mat.map?.dispose();
-          mat.dispose();
+          disposeMaterial(obj.material as THREE.Material);
         }
       }
       if (obj instanceof THREE.Sprite) {
-        obj.material.map?.dispose();
-        obj.material.dispose();
+        disposeMaterial(obj.material);
       }
     });
   }
