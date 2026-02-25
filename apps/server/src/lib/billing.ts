@@ -89,8 +89,8 @@ export async function deductCoins(
 
   // Single transaction: deduct user → record purchase → credit creator → record earning
   return await db.transaction(async (tx) => {
-    // Atomic deduction — fails if balance insufficient
-    const result = await tx
+    // Atomic deduction — returns nothing if balance insufficient
+    const [updated] = await tx
       .update(coinBalances)
       .set({
         balance: sql`${coinBalances.balance} - ${price}`,
@@ -98,9 +98,10 @@ export async function deductCoins(
       })
       .where(
         sql`${coinBalances.userId} = ${userId} AND ${coinBalances.balance} >= ${price}`,
-      );
+      )
+      .returning({ balance: coinBalances.balance });
 
-    if (result.rowCount === 0) {
+    if (!updated) {
       return false;
     }
 
