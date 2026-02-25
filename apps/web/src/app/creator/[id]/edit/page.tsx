@@ -73,6 +73,32 @@ function EditAgentContent() {
   const [kbFiles, setKbFiles] = useState<KbFile[]>([]);
   const [newKbFiles, setNewKbFiles] = useState<File[]>([]);
   const [uploadingKb, setUploadingKb] = useState(false);
+  const [kbError, setKbError] = useState("");
+
+  const ALLOWED_KB_EXTENSIONS = ["txt", "md", "csv", "json"];
+  const MAX_KB_FILE_SIZE = 5 * 1024 * 1024;
+
+  const validateAndAddKbFiles = (files: FileList) => {
+    setKbError("");
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const file of Array.from(files)) {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (!ALLOWED_KB_EXTENSIONS.includes(ext)) {
+        rejected.push(`${file.name}: unsupported type (.${ext})`);
+      } else if (file.size > MAX_KB_FILE_SIZE) {
+        rejected.push(`${file.name}: exceeds 5 MB limit`);
+      } else {
+        accepted.push(file);
+      }
+    }
+    if (accepted.length > 0) {
+      setNewKbFiles((prev) => [...prev, ...accepted]);
+    }
+    if (rejected.length > 0) {
+      setKbError(rejected.join("; "));
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -423,16 +449,20 @@ function EditAgentContent() {
                 <input
                   type="file"
                   multiple
-                  accept=".txt,.md,.csv,.json,.pdf"
+                  accept=".txt,.md,.csv,.json"
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files) {
-                      setNewKbFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                      validateAndAddKbFiles(e.target.files);
                     }
                     e.target.value = "";
                   }}
                 />
               </label>
+
+              {kbError && (
+                <p className="text-xs text-red-500">{kbError}</p>
+              )}
 
               {newKbFiles.length > 0 && (
                 <div className="space-y-2">

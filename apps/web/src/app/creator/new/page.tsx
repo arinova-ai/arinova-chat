@@ -44,6 +44,32 @@ function NewAgentContent() {
     { question: string; answer: string }[]
   >([]);
   const [kbFiles, setKbFiles] = useState<File[]>([]);
+  const [kbError, setKbError] = useState("");
+
+  const ALLOWED_KB_EXTENSIONS = ["txt", "md", "csv", "json"];
+  const MAX_KB_FILE_SIZE = 5 * 1024 * 1024;
+
+  const validateAndAddKbFiles = (files: FileList) => {
+    setKbError("");
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const file of Array.from(files)) {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (!ALLOWED_KB_EXTENSIONS.includes(ext)) {
+        rejected.push(`${file.name}: unsupported type (.${ext})`);
+      } else if (file.size > MAX_KB_FILE_SIZE) {
+        rejected.push(`${file.name}: exceeds 5 MB limit`);
+      } else {
+        accepted.push(file);
+      }
+    }
+    if (accepted.length > 0) {
+      setKbFiles((prev) => [...prev, ...accepted]);
+    }
+    if (rejected.length > 0) {
+      setKbError(rejected.join("; "));
+    }
+  };
 
   const addExample = () => {
     setExampleConversations([
@@ -98,6 +124,7 @@ function NewAgentContent() {
 
       // Upload KB files if any
       if (kbFiles.length > 0 && created.id) {
+        let succeeded = 0;
         for (const file of kbFiles) {
           const fd = new FormData();
           fd.append("file", file);
@@ -106,9 +133,16 @@ function NewAgentContent() {
               method: "POST",
               body: fd,
             });
+            succeeded++;
           } catch {
             // continue uploading remaining files
           }
+        }
+        const failed = kbFiles.length - succeeded;
+        if (failed > 0) {
+          alert(
+            `${succeeded}/${kbFiles.length} files uploaded successfully. ${failed} file${failed !== 1 ? "s" : ""} failed to upload.`,
+          );
         }
       }
 
@@ -293,16 +327,20 @@ function NewAgentContent() {
                 <input
                   type="file"
                   multiple
-                  accept=".txt,.md,.csv,.json,.pdf"
+                  accept=".txt,.md,.csv,.json"
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files) {
-                      setKbFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                      validateAndAddKbFiles(e.target.files);
                     }
                     e.target.value = "";
                   }}
                 />
               </label>
+
+              {kbError && (
+                <p className="text-xs text-red-500">{kbError}</p>
+              )}
 
               {kbFiles.length > 0 && (
                 <div className="space-y-2">
