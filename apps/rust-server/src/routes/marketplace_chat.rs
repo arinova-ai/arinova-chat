@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -194,11 +194,13 @@ async fn chat(
 
     // 5. Load last 50 messages for LLM context
     let history = sqlx::query_as::<_, ChatMessageRow>(
-        r#"SELECT id, role::text AS role, content, created_at
-           FROM marketplace_messages
-           WHERE conversation_id = $1
-           ORDER BY created_at ASC
-           LIMIT 50"#,
+        r#"SELECT * FROM (
+               SELECT id, role::text AS role, content, created_at
+               FROM marketplace_messages
+               WHERE conversation_id = $1
+               ORDER BY created_at DESC
+               LIMIT 50
+           ) sub ORDER BY created_at ASC"#,
     )
     .bind(conversation_id)
     .fetch_all(&state.db)
@@ -350,9 +352,10 @@ async fn chat(
                 }
             }
 
-            // Record message stats (increments message_count + total_messages + total_revenue)
+            // Record message stats — only record revenue if actually charged
+            let recorded_cost = if charged { cost } else { 0 };
             if let Err(e) =
-                billing::record_message(&db, conversation_id, listing_id, cost).await
+                billing::record_message(&db, conversation_id, listing_id, recorded_cost).await
             {
                 tracing::error!("Chat: record_message failed: {}", e);
             }
@@ -425,11 +428,20 @@ async fn list_conversations(
 // GET /api/marketplace/conversations/{id}/messages — Get conversation messages
 // ---------------------------------------------------------------------------
 
+#[derive(Deserialize)]
+struct MessagesQuery {
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
 async fn get_messages(
     State(state): State<AppState>,
     user: AuthUser,
     Path(conversation_id): Path<Uuid>,
+    Query(q): Query<MessagesQuery>,
 ) -> (StatusCode, Json<Value>) {
+    let limit = q.limit.unwrap_or(100).min(200);
+    let offset = q.offset.unwrap_or(0).max(0);
     // Verify conversation belongs to user
     let owner = sqlx::query_scalar::<_, String>(
         "SELECT user_id FROM marketplace_conversations WHERE id = $1",
@@ -465,9 +477,12 @@ async fn get_messages(
         r#"SELECT id, role::text AS role, content, created_at
            FROM marketplace_messages
            WHERE conversation_id = $1
-           ORDER BY created_at ASC"#,
+           ORDER BY created_at ASC
+           LIMIT $2 OFFSET $3"#,
     )
     .bind(conversation_id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await;
 
