@@ -6,10 +6,12 @@ import {
   timestamp,
   boolean,
   integer,
+  real,
   pgEnum,
   jsonb,
   index,
   uniqueIndex,
+  unique,
 } from "drizzle-orm/pg-core";
 
 // ===== Better Auth tables =====
@@ -561,3 +563,59 @@ export const playgroundTransactions = pgTable("playground_transactions", {
   amount: integer().notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ===== Agent Marketplace tables =====
+
+export const agentListingStatusEnum = pgEnum("agent_listing_status", [
+  "draft",
+  "pending_review",
+  "active",
+  "suspended",
+  "archived",
+]);
+
+export const agentListings = pgTable("agent_listings", {
+  id: uuid().primaryKey().defaultRandom(),
+  creatorId: text("creator_id")
+    .notNull()
+    .references(() => user.id),
+  name: varchar({ length: 100 }).notNull(),
+  description: text().notNull(),
+  avatarUrl: text("avatar_url"),
+  category: varchar({ length: 50 }).notNull(),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  systemPrompt: text("system_prompt").notNull(),
+  welcomeMessage: text("welcome_message"),
+  exampleConversations: jsonb("example_conversations")
+    .$type<{ question: string; answer: string }[]>()
+    .default([]),
+  modelProvider: varchar("model_provider", { length: 50 }).notNull(),
+  modelId: varchar("model_id", { length: 100 }).notNull(),
+  encryptedApiKey: text("encrypted_api_key").notNull(),
+  pricePerMessage: integer("price_per_message").notNull().default(1),
+  freeTrialMessages: integer("free_trial_messages").notNull().default(3),
+  status: agentListingStatusEnum().notNull().default("draft"),
+  totalConversations: integer("total_conversations").notNull().default(0),
+  totalMessages: integer("total_messages").notNull().default(0),
+  totalRevenue: integer("total_revenue").notNull().default(0),
+  avgRating: real("avg_rating"),
+  reviewCount: integer("review_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const agentReviews = pgTable("agent_reviews", {
+  id: uuid().primaryKey().defaultRandom(),
+  agentListingId: uuid("agent_listing_id")
+    .notNull()
+    .references(() => agentListings.id),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id),
+  rating: integer().notNull(),
+  comment: text(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique().on(table.agentListingId, table.userId),
+]);
