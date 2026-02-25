@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { agentListings, marketplaceConversations, marketplaceMessages, user } from "../db/schema.js";
+import { agentListings, marketplaceConversations, marketplaceMessages, user, coinTransactions } from "../db/schema.js";
 import { eq, and, desc, asc, ilike, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { encryptApiKey, decryptApiKey } from "../lib/crypto.js";
@@ -455,7 +455,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         totalMessages: sql<number>`coalesce(sum(${agentListings.totalMessages}), 0)::int`,
         totalConversations: sql<number>`coalesce(sum(${agentListings.totalConversations}), 0)::int`,
         activeListings: sql<number>`count(*) filter (where ${agentListings.status} = 'active')::int`,
-        avgRating: sql<number | null>`avg(${agentListings.avgRating}) filter (where ${agentListings.avgRating} is not null)`,
+        avgRating: sql<number | null>`CASE WHEN sum(${agentListings.reviewCount}) > 0 THEN sum(${agentListings.avgRating} * ${agentListings.reviewCount}) / sum(${agentListings.reviewCount}) ELSE null END`,
         totalReviews: sql<number>`coalesce(sum(${agentListings.reviewCount}), 0)::int`,
       })
       .from(agentListings)
@@ -469,6 +469,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         and(
           eq(coinTransactions.userId, authUser.id),
           eq(coinTransactions.type, "earning"),
+          sql`${coinTransactions.description} LIKE 'Marketplace earning:%'`,
         ),
       )
       .orderBy(desc(coinTransactions.createdAt))
