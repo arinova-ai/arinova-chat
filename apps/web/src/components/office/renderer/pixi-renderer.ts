@@ -552,9 +552,12 @@ export class PixiRenderer implements OfficeRenderer {
     }
     this.loadedAssetUrls = [];
 
+    // Application.destroy(removeView=true) removes the canvas from the DOM
+    // and destroys the stage + all children
     try { this.app?.destroy(true, { children: true }); } catch { /* noop */ }
 
     this.app = null;
+    this.manifest = null;
     this.root = null;
     this.layerMap = new Map();
     this.zoneContainer = null;
@@ -562,6 +565,8 @@ export class PixiRenderer implements OfficeRenderer {
     this.linesGraphics = null;
     this.frameSets = undefined;
     this.bgLoaded = false;
+    this.agents = [];
+    this.selectedAgentId = null;
     this.walking.clear();
     this.prevSeat.clear();
     this.pos = {};
@@ -586,16 +591,19 @@ export class PixiRenderer implements OfficeRenderer {
     }
 
     if (!this.useFallback && this.manifest && this.root) {
+      // Theme mode: zones are in canvas space, root container scaling
+      // handles the viewport transform — only update root transform.
       const { scale, offsetX, offsetY } = computeScale(
         width, height, this.manifest.canvas.width, this.manifest.canvas.height,
       );
       this.root.scale.set(scale);
       this.root.x = offsetX;
       this.root.y = offsetY;
+    } else {
+      // Fallback mode: zone layout depends on screen size, must redraw.
+      this.drawZones();
+      this.computePositions();
     }
-
-    this.drawZones();
-    this.computePositions();
   }
 
   // ── updateAgents ──────────────────────────────────────────────
@@ -698,12 +706,16 @@ export class PixiRenderer implements OfficeRenderer {
     const currentIds = new Set(this.agents.map((a) => a.id));
     const sprites = this.sprites;
 
-    // Remove stale
+    // Remove stale sprites and their position/state records
     for (const [id, sprite] of sprites) {
       if (!currentIds.has(id)) {
         agentContainer.removeChild(sprite.container);
         sprite.container.destroy({ children: true });
         sprites.delete(id);
+        delete this.pos[id];
+        delete this.target[id];
+        this.prevSeat.delete(id);
+        this.walking.delete(id);
       }
     }
 
