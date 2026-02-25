@@ -310,6 +310,7 @@ function updateAgentVisuals(
   statusColors: Record<AgentStatus, number>,
   isWalking: boolean,
   frameSets?: SpriteFrameSet,
+  walkDirX?: number,
 ) {
   const statusColor = statusColors[agent.status];
   const r = sprite.usePixelArt ? SPRITE_DISPLAY_SIZE / 2 + 4 : AVATAR_R;
@@ -340,7 +341,7 @@ function updateAgentVisuals(
     let targetFrames: Texture[];
     let speed: number;
     if (isWalking) {
-      targetFrames = frameSets.walkRight;
+      targetFrames = (walkDirX !== undefined && walkDirX < 0) ? frameSets.walkLeft : frameSets.walkRight;
       speed = 0.13;
     } else if (agent.status === "working") {
       targetFrames = frameSets.working;
@@ -416,6 +417,8 @@ export default function OfficeMap({
   const targetRef = useRef<Record<string, { x: number; y: number }>>({});
   const statusColorsRef = useRef<Record<AgentStatus, number>>(DEFAULT_STATUS_COLORS);
   const frameSetsRef = useRef<SpriteFrameSet | undefined>(undefined);
+  const bgLoadedRef = useRef(false);
+  const loadedAssetUrlsRef = useRef<string[]>([]);
 
   // Walking animation tracking
   const walkingRef = useRef<Set<string>>(new Set());
@@ -440,6 +443,8 @@ export default function OfficeMap({
     appRef.current = app;
     setReady(false);
     frameSetsRef.current = undefined;
+    bgLoadedRef.current = false;
+    loadedAssetUrlsRef.current = [];
 
     app
       .init({
@@ -485,17 +490,37 @@ export default function OfficeMap({
 
           // Background image
           const bgLayer = map.get("background");
+          const uiLayer = map.get("ui-overlay");
           if (bgLayer && hasBgImage && themeId) {
             try {
               const bgUrl = `/themes/${themeId}/${manifest.canvas.background.image}`;
               const texture = await Assets.load(bgUrl);
               if (appRef.current !== app) return;
+              loadedAssetUrlsRef.current.push(bgUrl);
               const bgSprite = new PixiSprite(texture);
               bgSprite.width = manifest.canvas.width;
               bgSprite.height = manifest.canvas.height;
               bgLayer.addChild(bgSprite);
+              bgLoadedRef.current = true;
             } catch (err) {
-              console.warn("[OfficeMap] Failed to load background image:", err);
+              console.warn("[OfficeMap] Failed to load background image, drawing fallback zones:", err);
+              bgLoadedRef.current = false;
+              // Draw fallback zone rectangles
+              if (bgLayer && uiLayer) {
+                for (const zone of manifest.zones) {
+                  const { x, y, width: zw, height: zh } = zone.bounds;
+                  const g = new Graphics();
+                  g.roundRect(x, y, zw, zh, 12);
+                  g.fill(ZONE_BG);
+                  g.roundRect(x, y, zw, zh, 12);
+                  g.stroke({ width: 1, color: ZONE_BORDER });
+                  bgLayer.addChild(g);
+                  const label = new Text({ text: zone.name, style: LABEL_STYLE });
+                  label.x = x + 12;
+                  label.y = y + 8;
+                  uiLayer.addChild(label);
+                }
+              }
             }
           }
 
@@ -505,6 +530,7 @@ export default function OfficeMap({
               const atlasUrl = `/themes/${themeId}/${manifest.characters.atlas}`;
               const sheetTexture = await Assets.load(atlasUrl);
               if (appRef.current !== app) return;
+              loadedAssetUrlsRef.current.push(atlasUrl);
               frameSetsRef.current = extractFrames(
                 sheetTexture,
                 manifest.characters.frameWidth,
@@ -539,6 +565,11 @@ export default function OfficeMap({
       });
 
     return () => {
+      // Unload previously loaded assets to free GPU memory
+      for (const url of loadedAssetUrlsRef.current) {
+        try { Assets.unload(url); } catch { /* noop */ }
+      }
+      loadedAssetUrlsRef.current = [];
       appRef.current = null;
       rootRef.current = null;
       layerMapRef.current = new Map();
@@ -546,6 +577,7 @@ export default function OfficeMap({
       agentContainerRef.current = null;
       linesGraphicsRef.current = null;
       frameSetsRef.current = undefined;
+      bgLoadedRef.current = false;
       spritesRef.current.clear();
       walkingRef.current.clear();
       prevSeatRef.current.clear();
@@ -580,8 +612,8 @@ export default function OfficeMap({
     if (!ready) return;
 
     if (!useFallback && manifest) {
-      // If background image is loaded, skip zone rectangles
-      if (hasBgImage) return;
+      // If background image successfully loaded, skip zone rectangles
+      if (bgLoadedRef.current) return;
 
       const bgLayer = layerMapRef.current.get("background");
       const uiLayer = layerMapRef.current.get("ui-overlay");
@@ -671,7 +703,11 @@ export default function OfficeMap({
     for (const agent of agents) {
       const sprite = sprites.get(agent.id);
       if (sprite) {
-        updateAgentVisuals(sprite, agent, agent.id === selectedAgentId, colors, walking.has(agent.id), frameSets);
+        const isWalk = walking.has(agent.id);
+        const walkDirX = isWalk
+          ? (targetRef.current[agent.id]?.x ?? 0) - (posRef.current[agent.id]?.x ?? 0)
+          : undefined;
+        updateAgentVisuals(sprite, agent, agent.id === selectedAgentId, colors, isWalk, frameSets, walkDirX);
       }
     }
   }, [agents, selectedAgentId]);

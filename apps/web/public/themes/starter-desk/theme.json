@@ -64,9 +64,9 @@
   "effects": [],
 
   "characters": {
-    "atlas": "",
-    "frameWidth": 48,
-    "frameHeight": 64,
+    "atlas": "mascot-sprite.png",
+    "frameWidth": 512,
+    "frameHeight": 512,
     "anchor": { "x": 0.5, "y": 1.0 },
     "hitArea": { "type": "circle", "x": 0, "y": 0, "radius": 38 },
     "nameTag": {
