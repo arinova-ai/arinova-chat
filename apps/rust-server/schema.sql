@@ -278,7 +278,7 @@ CREATE TABLE channel_messages (
 
 -- ===== Agent Marketplace Tables =====
 
-CREATE TYPE agent_listing_status AS ENUM ('draft', 'published', 'suspended');
+CREATE TYPE agent_listing_status AS ENUM ('draft', 'pending_review', 'active', 'suspended', 'archived');
 
 CREATE TABLE agent_listings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -186,9 +186,9 @@ async fn purchase(
     user: AuthUser,
     Path(listing_id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
-    // Fetch listing price and creator
+    // Fetch listing price and creator (outside tx — read-only)
     let listing = sqlx::query_as::<_, (Uuid, i32, String)>(
-        "SELECT id, price, creator_id FROM agent_listings WHERE id = $1 AND status = 'published'",
+        "SELECT id, price, creator_id FROM agent_listings WHERE id = $1 AND status = 'active'",
     )
     .bind(listing_id)
     .fetch_optional(&state.db)
@@ -199,7 +199,7 @@ async fn purchase(
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
-                Json(json!({ "error": "Listing not found or not published" })),
+                Json(json!({ "error": "Listing not found or not active" })),
             );
         }
         Err(e) => {
@@ -218,8 +218,23 @@ async fn purchase(
         );
     }
 
+    // 70/30 split: 70% to creator, 30% platform fee (integer math)
+    let creator_share = price * 7 / 10;
+
+    // === Begin transaction — all mutations atomic ===
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("Begin tx failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Internal error" })),
+            );
+        }
+    };
+
     // Atomic deduction: only succeeds if balance >= price
-    let deducted = sqlx::query_scalar::<_, i32>(
+    let new_balance = match sqlx::query_scalar::<_, i32>(
         r#"UPDATE coin_balances
            SET balance = balance - $2, updated_at = NOW()
            WHERE user_id = $1 AND balance >= $2
@@ -227,10 +242,9 @@ async fn purchase(
     )
     .bind(&user.id)
     .bind(price)
-    .fetch_optional(&state.db)
-    .await;
-
-    let new_balance = match deducted {
+    .fetch_optional(&mut *tx)
+    .await
+    {
         Ok(Some(b)) => b,
         Ok(None) => {
             return (
@@ -247,8 +261,8 @@ async fn purchase(
         }
     };
 
-    // Record purchase transaction (buyer) — returns id for refund reference
-    let purchase_tx = sqlx::query_scalar::<_, Uuid>(
+    // Record purchase transaction (buyer)
+    let purchase_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO coin_transactions (user_id, type, amount, related_app_id, description)
            VALUES ($1, 'purchase', $2, $3, 'Purchased agent listing')
            RETURNING id"#,
@@ -256,10 +270,9 @@ async fn purchase(
     .bind(&user.id)
     .bind(-price)
     .bind(lid)
-    .fetch_one(&state.db)
-    .await;
-
-    let purchase_id = match purchase_tx {
+    .fetch_one(&mut *tx)
+    .await
+    {
         Ok(id) => id,
         Err(e) => {
             tracing::error!("Record purchase tx failed: {}", e);
@@ -270,11 +283,8 @@ async fn purchase(
         }
     };
 
-    // 70/30 split: 70% to creator, 30% platform fee
-    let creator_share = (price as f64 * 0.7).round() as i32;
-
-    // Credit creator
-    let _ = sqlx::query(
+    // Credit creator balance
+    sqlx::query(
         r#"INSERT INTO coin_balances (user_id, balance, updated_at)
            VALUES ($1, $2, NOW())
            ON CONFLICT (user_id) DO UPDATE
@@ -282,27 +292,39 @@ async fn purchase(
     )
     .bind(&creator_id)
     .bind(creator_share)
-    .execute(&state.db)
-    .await;
+    .execute(&mut *tx)
+    .await
+    .ok();
 
     // Record earning transaction (creator)
-    let _ = sqlx::query(
+    sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, related_app_id, description)
            VALUES ($1, 'earning', $2, $3, 'Marketplace earning: agent sale')"#,
     )
     .bind(&creator_id)
     .bind(creator_share)
     .bind(lid)
-    .execute(&state.db)
-    .await;
+    .execute(&mut *tx)
+    .await
+    .ok();
 
     // Increment sales_count
-    let _ = sqlx::query(
+    sqlx::query(
         "UPDATE agent_listings SET sales_count = sales_count + 1, updated_at = NOW() WHERE id = $1",
     )
     .bind(lid)
-    .execute(&state.db)
-    .await;
+    .execute(&mut *tx)
+    .await
+    .ok();
+
+    // === Commit transaction ===
+    if let Err(e) = tx.commit().await {
+        tracing::error!("Commit failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Transaction failed" })),
+        );
+    }
 
     (
         StatusCode::OK,
@@ -322,13 +344,25 @@ async fn refund(
     user: AuthUser,
     Path(purchase_id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
-    // Fetch purchase transaction from coin_transactions
+    // === Begin transaction ===
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("Begin tx failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Internal error" })),
+            );
+        }
+    };
+
+    // SELECT FOR UPDATE locks the row to prevent concurrent refunds
     let purchase = sqlx::query_as::<_, (Uuid, String, i32, String, NaiveDateTime)>(
         r#"SELECT id, user_id, amount, type, created_at
-           FROM coin_transactions WHERE id = $1"#,
+           FROM coin_transactions WHERE id = $1 FOR UPDATE"#,
     )
     .bind(purchase_id)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await;
 
     let (pid, buyer_id, amount, tx_type, created_at) = match purchase {
@@ -363,14 +397,14 @@ async fn refund(
         );
     }
 
-    // Check if already refunded (a refund tx referencing this purchase)
+    // Check if already refunded (inside tx, row locked)
     let already_refunded = sqlx::query_scalar::<_, i64>(
         r#"SELECT COUNT(*) FROM coin_transactions
-           WHERE user_id = $1 AND type = 'refund' AND description LIKE $2"#,
+           WHERE user_id = $1 AND type = 'refund' AND description = $2"#,
     )
     .bind(&user.id)
     .bind(format!("Refund for purchase:{}", pid))
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .unwrap_or(0);
 
@@ -395,25 +429,36 @@ async fn refund(
     let refund_amount = amount.abs();
 
     // Refund to buyer
-    let _ = sqlx::query(
+    sqlx::query(
         r#"UPDATE coin_balances SET balance = balance + $2, updated_at = NOW()
            WHERE user_id = $1"#,
     )
     .bind(&user.id)
     .bind(refund_amount)
-    .execute(&state.db)
-    .await;
+    .execute(&mut *tx)
+    .await
+    .ok();
 
     // Record refund transaction
-    let _ = sqlx::query(
+    sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, description)
            VALUES ($1, 'refund', $2, $3)"#,
     )
     .bind(&user.id)
     .bind(refund_amount)
     .bind(format!("Refund for purchase:{}", pid))
-    .execute(&state.db)
-    .await;
+    .execute(&mut *tx)
+    .await
+    .ok();
+
+    // === Commit transaction ===
+    if let Err(e) = tx.commit().await {
+        tracing::error!("Refund commit failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Refund failed" })),
+        );
+    }
 
     (
         StatusCode::OK,

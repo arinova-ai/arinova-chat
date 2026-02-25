@@ -23,7 +23,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-  CREATE TYPE agent_listing_status AS ENUM ('draft', 'published', 'suspended');
+  CREATE TYPE agent_listing_status AS ENUM ('draft', 'pending_review', 'active', 'suspended', 'archived');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

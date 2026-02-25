@@ -70,7 +70,17 @@ impl Config {
                 .unwrap_or_else(|_| "mailto:admin@arinova.ai".into()),
             sentry_dsn: env::var("SENTRY_DSN").unwrap_or_default(),
             office_event_token: env::var("OFFICE_EVENT_TOKEN").unwrap_or_default(),
-            encryption_key: env::var("ENCRYPTION_KEY").unwrap_or_default(),
+            encryption_key: {
+                let key = env::var("ENCRYPTION_KEY")
+                    .expect("ENCRYPTION_KEY is required");
+                if !regex_lite::Regex::new(r"^[0-9a-fA-F]{64}$")
+                    .unwrap()
+                    .is_match(&key)
+                {
+                    panic!("ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
+                }
+                key
+            },
         }
     }
 
