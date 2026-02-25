@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@arinova/game-sdk"],
+  transpilePackages: ["@arinova-ai/spaces-sdk"],
 };
 
 export default nextConfig;

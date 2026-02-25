@@ -1,11 +1,11 @@
-# @arinova/game-sdk
+# @arinova-ai/spaces-sdk
 
 Official SDK for integrating external games with the Arinova platform.
 
 ## Install
 
 ```bash
-npm install @arinova/game-sdk
+npm install @arinova-ai/spaces-sdk
 ```
 
 ## Quick Start
@@ -13,7 +13,7 @@ npm install @arinova/game-sdk
 ### 1. Initialize
 
 ```typescript
-import { Arinova } from "@arinova/game-sdk";
+import { Arinova } from "@arinova-ai/spaces-sdk";
 
 Arinova.init({
   appId: "your-client-id",

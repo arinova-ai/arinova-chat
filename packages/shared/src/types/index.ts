@@ -141,6 +141,50 @@ export interface ChannelMessage {
   updatedAt: Date;
 }
 
+// ===== Spaces =====
+export type SpaceCategory = "game" | "strategy" | "social" | "puzzle" | "roleplay" | "other";
+export type SpaceSessionStatus = "waiting" | "active" | "paused" | "finished";
+export type SpaceControlMode = "agent" | "human" | "copilot";
+
+export interface Space {
+  id: string;
+  ownerId: string;
+  name: string;
+  description: string;
+  category: SpaceCategory;
+  tags: string[];
+  definition: Record<string, unknown>;
+  isPublic: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SpaceSession {
+  id: string;
+  playgroundId: string;
+  status: SpaceSessionStatus;
+  state: Record<string, unknown>;
+  currentPhase: string | null;
+  prizePool: number;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+  participantCount?: number;
+}
+
+export interface SpaceParticipant {
+  id: string;
+  sessionId: string;
+  userId: string;
+  agentId: string | null;
+  role: string | null;
+  controlMode: SpaceControlMode;
+  isConnected: boolean;
+  joinedAt: Date;
+  userName?: string;
+  agentName?: string;
+}
+
 // ===== App Manifest =====
 export type AppCategory = "game" | "shopping" | "tool" | "social" | "other";
 export type AgentInterfaceMode = "static" | "dynamic";
