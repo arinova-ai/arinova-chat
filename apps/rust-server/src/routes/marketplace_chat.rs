@@ -244,7 +244,7 @@ async fn chat(
     for msg in &history {
         let role = match msg.role.as_str() {
             "user" => "user",
-            "agent" => "assistant",
+            "assistant" => "assistant",
             _ => continue,
         };
         llm_messages.push(llm::ChatMessage {
@@ -285,6 +285,11 @@ async fn chat(
                 let _ = tx
                     .send(Ok(Event::default().data(
                         json!({"type": "error", "message": "LLM request failed"}).to_string(),
+                    )))
+                    .await;
+                let _ = tx
+                    .send(Ok(Event::default().data(
+                        json!({"type": "done", "charged": false}).to_string(),
                     )))
                     .await;
                 return;
@@ -334,7 +339,7 @@ async fn chat(
             // Store assistant message
             if let Err(e) = sqlx::query(
                 r#"INSERT INTO marketplace_messages (conversation_id, role, content)
-                   VALUES ($1, 'agent', $2)"#,
+                   VALUES ($1, 'assistant', $2)"#,
             )
             .bind(conversation_id)
             .bind(&full_content)

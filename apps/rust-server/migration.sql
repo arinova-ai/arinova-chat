@@ -5,6 +5,8 @@
 
 -- Add 'system' to message_role (existing: 'user', 'agent')
 ALTER TYPE message_role ADD VALUE IF NOT EXISTS 'system';
+-- Add 'assistant' for marketplace chat (Rust uses 'assistant' instead of 'agent')
+ALTER TYPE message_role ADD VALUE IF NOT EXISTS 'assistant';
 
 -- New enums for multi-user features (DO block checks if they exist first)
 DO $$ BEGIN
@@ -174,6 +176,15 @@ DO $$ BEGIN
 END $$;
 
 ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS price INTEGER NOT NULL DEFAULT 0;
+
+-- marketplace_conversations: rename agent_listing_id → listing_id, add title
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='marketplace_conversations' AND column_name='agent_listing_id') THEN
+    ALTER TABLE marketplace_conversations RENAME COLUMN agent_listing_id TO listing_id;
+  END IF;
+END $$;
+
+ALTER TABLE marketplace_conversations ADD COLUMN IF NOT EXISTS title VARCHAR(255);
 
 -- ===== 6. Billing columns for per-message pricing =====
 
