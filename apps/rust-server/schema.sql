@@ -234,48 +234,64 @@ CREATE TABLE notification_preferences (
     quiet_hours_end VARCHAR(5)
 );
 
--- ===== Community Tables =====
+-- ===== Community Tables (Lounge + Hub) =====
 
 CREATE TABLE communities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id TEXT NOT NULL,
     name VARCHAR(100) NOT NULL,
     description TEXT,
+    type TEXT NOT NULL DEFAULT 'lounge' CHECK (type IN ('lounge', 'hub')),
+    -- Pricing (credits)
+    join_fee INTEGER NOT NULL DEFAULT 0,
+    monthly_fee INTEGER NOT NULL DEFAULT 0,
+    agent_call_fee INTEGER NOT NULL DEFAULT 0,
+    -- Status
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'archived')),
+    member_count INTEGER NOT NULL DEFAULT 0,
+    -- Metadata
     avatar_url TEXT,
-    owner_id TEXT NOT NULL,
-    is_public BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE channels (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    agent_id UUID,
-    position INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    cover_image_url TEXT,
+    category TEXT,
+    tags TEXT[],
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE community_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
-    role community_role NOT NULL DEFAULT 'member',
-    joined_at TIMESTAMP NOT NULL DEFAULT NOW()
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('creator', 'moderator', 'member')),
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Subscription
+    subscription_status TEXT DEFAULT 'active' CHECK (subscription_status IN ('active', 'expired', 'cancelled')),
+    subscription_expires_at TIMESTAMPTZ,
+    UNIQUE(community_id, user_id)
 );
 
-CREATE TABLE channel_messages (
+CREATE TABLE community_agents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-    user_id TEXT,
-    role message_role NOT NULL,
-    content TEXT NOT NULL DEFAULT '',
-    status message_status NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    listing_id UUID NOT NULL REFERENCES agent_listings(id),
+    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(community_id, listing_id)
 );
+
+CREATE TABLE community_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    user_id TEXT,
+    agent_listing_id UUID REFERENCES agent_listings(id),
+    content TEXT NOT NULL,
+    message_type TEXT NOT NULL DEFAULT 'text' CHECK (message_type IN ('text', 'system')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_community_messages_community ON community_messages(community_id, created_at);
+CREATE INDEX idx_community_members_community ON community_members(community_id);
+CREATE INDEX idx_community_members_user ON community_members(user_id);
+CREATE INDEX idx_community_agents_community ON community_agents(community_id);
 
 -- ===== Agent Marketplace Tables =====
 

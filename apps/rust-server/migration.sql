@@ -280,4 +280,73 @@ ALTER TABLE agent_listings DROP COLUMN IF EXISTS api_key_encrypted;
 ALTER TABLE agent_listings DROP COLUMN IF EXISTS model_provider;
 ALTER TABLE agent_listings DROP COLUMN IF EXISTS model_id;
 
+-- ===== 9. Community Lounge + Hub tables =====
+
+-- Expand existing communities table with type, pricing, status, metadata
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS creator_id TEXT;
+
+-- Backfill creator_id from owner_id if it exists
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'communities' AND column_name = 'owner_id'
+  ) THEN
+    UPDATE communities SET creator_id = owner_id WHERE creator_id IS NULL;
+  END IF;
+END $$;
+
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'lounge';
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS join_fee INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS monthly_fee INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS agent_call_fee INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS member_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS cover_image_url TEXT;
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS tags TEXT[];
+
+-- Drop old columns no longer needed
+ALTER TABLE communities DROP COLUMN IF EXISTS owner_id;
+ALTER TABLE communities DROP COLUMN IF EXISTS is_public;
+
+-- Expand community_members with subscription fields + unique constraint
+ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
+ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
+
+-- Add unique constraint if not present
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'community_members_community_id_user_id_key'
+  ) THEN
+    ALTER TABLE community_members ADD CONSTRAINT community_members_community_id_user_id_key
+      UNIQUE (community_id, user_id);
+  END IF;
+END $$;
+
+-- community_agents
+CREATE TABLE IF NOT EXISTS community_agents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    listing_id UUID NOT NULL REFERENCES agent_listings(id),
+    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(community_id, listing_id)
+);
+
+-- community_messages (Lounge chat)
+CREATE TABLE IF NOT EXISTS community_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    user_id TEXT,
+    agent_listing_id UUID REFERENCES agent_listings(id),
+    content TEXT NOT NULL,
+    message_type TEXT NOT NULL DEFAULT 'text',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_messages_community ON community_messages(community_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);
+CREATE INDEX IF NOT EXISTS idx_community_members_user ON community_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_community_agents_community ON community_agents(community_id);
+
 COMMIT;

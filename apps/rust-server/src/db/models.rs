@@ -295,28 +295,25 @@ pub struct NotificationPreference {
     pub quiet_hours_end: Option<String>,
 }
 
-// ===== Community tables =====
+// ===== Community tables (Lounge + Hub) =====
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Community {
     pub id: Uuid,
+    pub creator_id: String,
     pub name: String,
     pub description: Option<String>,
+    #[sqlx(rename = "type")]
+    pub community_type: String,
+    pub join_fee: i32,
+    pub monthly_fee: i32,
+    pub agent_call_fee: i32,
+    pub status: String,
+    pub member_count: i32,
     pub avatar_url: Option<String>,
-    pub owner_id: String,
-    pub is_public: bool,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Channel {
-    pub id: Uuid,
-    pub community_id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub agent_id: Option<Uuid>,
-    pub position: i32,
+    pub cover_image_url: Option<String>,
+    pub category: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -328,18 +325,27 @@ pub struct CommunityMember {
     pub user_id: String,
     pub role: String,
     pub joined_at: NaiveDateTime,
+    pub subscription_status: Option<String>,
+    pub subscription_expires_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct ChannelMessage {
+pub struct CommunityAgent {
     pub id: Uuid,
-    pub channel_id: Uuid,
+    pub community_id: Uuid,
+    pub listing_id: Uuid,
+    pub added_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct CommunityMessage {
+    pub id: Uuid,
+    pub community_id: Uuid,
     pub user_id: Option<String>,
-    pub role: String,
+    pub agent_listing_id: Option<Uuid>,
     pub content: String,
-    pub status: String,
+    pub message_type: String,
     pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
 }
 
 // ===== Marketplace tables =====
