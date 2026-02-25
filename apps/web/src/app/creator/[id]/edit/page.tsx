@@ -19,9 +19,13 @@ const CATEGORIES = [
   "Other",
 ];
 
-const PROVIDERS = [
-  { value: "openai", label: "OpenAI" },
-  { value: "anthropic", label: "Anthropic" },
+const MODELS = [
+  { value: "openai/gpt-4o", label: "GPT-4o" },
+  { value: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
+  { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
+  { value: "anthropic/claude-3-haiku", label: "Claude 3 Haiku" },
+  { value: "google/gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  { value: "meta-llama/llama-3.1-70b-instruct", label: "Llama 3.1 70B" },
 ];
 
 interface KbFile {
@@ -42,8 +46,8 @@ interface AgentManage {
   systemPrompt: string;
   welcomeMessage: string | null;
   exampleConversations: { question: string; answer: string }[];
-  modelProvider: string;
-  modelId: string;
+  model: string;
+  inputCharLimit: number;
   pricePerMessage: number;
   freeTrialMessages: number;
   status: string;
@@ -62,9 +66,8 @@ function EditAgentContent() {
   const [category, setCategory] = useState("other");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
-  const [modelProvider, setModelProvider] = useState("openai");
-  const [modelId, setModelId] = useState("");
-  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("openai/gpt-4o-mini");
+  const [inputCharLimit, setInputCharLimit] = useState(2000);
   const [pricePerMessage, setPricePerMessage] = useState(1);
   const [freeTrialMessages, setFreeTrialMessages] = useState(3);
   const [exampleConversations, setExampleConversations] = useState<
@@ -112,8 +115,8 @@ function EditAgentContent() {
         setCategory(data.category);
         setSystemPrompt(data.systemPrompt);
         setWelcomeMessage(data.welcomeMessage ?? "");
-        setModelProvider(data.modelProvider);
-        setModelId(data.modelId);
+        setModel(data.model);
+        setInputCharLimit(data.inputCharLimit);
         setPricePerMessage(data.pricePerMessage);
         setFreeTrialMessages(data.freeTrialMessages);
         setExampleConversations(data.exampleConversations ?? []);
@@ -224,9 +227,8 @@ function EditAgentContent() {
           exampleConversations: exampleConversations.filter(
             (ex) => ex.question.trim() && ex.answer.trim(),
           ),
-          modelProvider,
-          modelId,
-          ...(apiKey ? { apiKey } : {}),
+          model,
+          inputCharLimit,
           pricePerMessage,
           freeTrialMessages,
         }),
@@ -240,7 +242,7 @@ function EditAgentContent() {
   };
 
   const isValid =
-    name.trim() && description.trim() && systemPrompt.trim() && modelId.trim();
+    name.trim() && description.trim() && systemPrompt.trim();
 
   if (loading) {
     return (
@@ -354,43 +356,35 @@ function EditAgentContent() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Provider *</label>
+                  <label className="text-sm font-medium">Model *</label>
                   <select
-                    value={modelProvider}
-                    onChange={(e) => setModelProvider(e.target.value)}
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   >
-                    {PROVIDERS.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
+                    {MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Model ID *</label>
+                  <label className="text-sm font-medium">Input Char Limit</label>
                   <input
-                    value={modelId}
-                    onChange={(e) => setModelId(e.target.value)}
+                    type="number"
+                    min={1}
+                    max={20000}
+                    value={inputCharLimit}
+                    onChange={(e) =>
+                      setInputCharLimit(parseInt(e.target.value) || 2000)
+                    }
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   />
+                  <p className="text-[10px] text-muted-foreground">
+                    Max characters per user message (1–20,000)
+                  </p>
                 </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">
-                  API Key (leave empty to keep current)
-                </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Only fill this in if you want to replace the existing key.
-                </p>
               </div>
             </section>
 

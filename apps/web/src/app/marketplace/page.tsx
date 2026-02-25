@@ -15,8 +15,7 @@ interface AgentListing {
   description: string;
   avatarUrl: string | null;
   category: string;
-  modelProvider: string;
-  modelId: string;
+  model: string;
   pricePerMessage: number;
   freeTrialMessages: number;
   salesCount: number;
@@ -254,6 +253,9 @@ function MarketplaceContent() {
                           {agent.avgRating.toFixed(1)}
                         </span>
                       )}
+                      <span className="flex items-center gap-0.5 text-[10px]">
+                        {agent.model.split("/").pop()}
+                      </span>
                       {agent.freeTrialMessages > 0 && (
                         <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-400">
                           {agent.freeTrialMessages} free

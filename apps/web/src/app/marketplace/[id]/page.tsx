@@ -27,8 +27,8 @@ interface AgentDetail {
   category: string;
   welcomeMessage: string | null;
   exampleConversations: { question: string; answer: string }[];
-  modelProvider: string;
-  modelId: string;
+  model: string;
+  inputCharLimit: number;
   pricePerMessage: number;
   freeTrialMessages: number;
   salesCount: number;
@@ -381,10 +381,13 @@ function AgentDetailContent() {
                   {/* Model info */}
                   <div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
                     <Cpu className="h-3.5 w-3.5" />
-                    <span>
-                      {agent.modelProvider} / {agent.modelId}
-                    </span>
+                    <span>{agent.model}</span>
                   </div>
+                  {agent.inputCharLimit && (
+                    <p className="text-center text-[10px] text-muted-foreground">
+                      Max {agent.inputCharLimit.toLocaleString()} chars per message
+                    </p>
+                  )}
 
                   {/* Start Chat button */}
                   <Button
