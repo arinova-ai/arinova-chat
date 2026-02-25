@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Palette, Check, Lock, Users } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
@@ -12,15 +12,21 @@ import { THEME_REGISTRY, type ThemeEntry } from "@/components/office/theme-regis
 function ThemeCard({ entry }: { entry: ThemeEntry }) {
   const { themeId, switchTheme } = useTheme();
   const [toast, setToast] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
   const isPremium = !isFree;
+
+  useEffect(() => {
+    return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
+  }, []);
 
   const handleApply = () => {
     if (!isFree || isActive) return;
     switchTheme(entry.id);
     setToast(true);
-    setTimeout(() => setToast(false), 2000);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(false), 2000);
   };
 
   return (

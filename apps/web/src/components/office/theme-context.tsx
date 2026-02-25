@@ -3,14 +3,18 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { ThemeManifest } from "./theme-types";
 import { loadTheme } from "./theme-loader";
+import { isKnownTheme, isFreeTheme } from "./theme-registry";
 
 const DEFAULT_THEME_ID = "default-office";
 const STORAGE_KEY = "arinova-office-theme";
 
+/** Read saved themeId from localStorage, validating it's a known free theme. */
 function readSavedThemeId(): string {
   if (typeof window === "undefined") return DEFAULT_THEME_ID;
   try {
-    return localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME_ID;
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && isKnownTheme(saved) && isFreeTheme(saved)) return saved;
+    return DEFAULT_THEME_ID;
   } catch {
     return DEFAULT_THEME_ID;
   }
@@ -60,7 +64,14 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
     setLoading(true);
     setError(null);
 
-    loadTheme(themeId)
+    // Validate themeId against registry whitelist
+    const resolvedId = isKnownTheme(themeId) ? themeId : DEFAULT_THEME_ID;
+    if (resolvedId !== themeId) {
+      setThemeId(resolvedId);
+      return;
+    }
+
+    loadTheme(resolvedId)
       .then((m) => {
         if (!cancelled) {
           setManifest(m);
@@ -69,7 +80,7 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error(`[ThemeProvider] Failed to load theme "${themeId}":`, err);
+          console.error(`[ThemeProvider] Failed to load theme "${resolvedId}":`, err);
           setError(err instanceof Error ? err.message : String(err));
           setManifest(null);
           setLoading(false);
@@ -80,10 +91,14 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
   }, [themeId]);
 
   const switchTheme = useCallback((newId: string) => {
-    if (newId !== themeId) {
-      saveThemeId(newId);
-      setThemeId(newId);
+    if (newId === themeId) return;
+    // Only allow switching to known, free themes
+    if (!isKnownTheme(newId) || !isFreeTheme(newId)) {
+      console.warn(`[ThemeProvider] Cannot switch to "${newId}" — not a known free theme`);
+      return;
     }
+    saveThemeId(newId);
+    setThemeId(newId);
   }, [themeId]);
 
   return (
