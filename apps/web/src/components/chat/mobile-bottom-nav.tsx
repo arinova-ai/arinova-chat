@@ -63,7 +63,7 @@ export function MobileBottomNav() {
 
   const fanItems = [
     { id: "office-theme", icon: Palette, label: "Theme", href: "/office/themes" },
-    { id: "marketplace", icon: Store, label: "Market", href: "/apps" },
+    { id: "marketplace", icon: Store, label: "Market", href: "/marketplace" },
     { id: "spaces", icon: Globe, label: "Spaces", href: "/spaces" },
   ];
 

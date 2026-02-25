@@ -42,15 +42,21 @@ export async function walletRoutes(app: FastifyInstance) {
       const limit = Math.min(parseInt(request.query.limit ?? "20"), 50);
       const offset = parseInt(request.query.offset ?? "0");
 
-      const transactions = await db
-        .select()
-        .from(coinTransactions)
-        .where(eq(coinTransactions.userId, user.id))
-        .orderBy(desc(coinTransactions.createdAt))
-        .limit(limit)
-        .offset(offset);
+      const [transactions, [{ count }]] = await Promise.all([
+        db
+          .select()
+          .from(coinTransactions)
+          .where(eq(coinTransactions.userId, user.id))
+          .orderBy(desc(coinTransactions.createdAt))
+          .limit(limit)
+          .offset(offset),
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(coinTransactions)
+          .where(eq(coinTransactions.userId, user.id)),
+      ]);
 
-      return reply.send({ transactions });
+      return reply.send({ transactions, total: count });
     }
   );
 

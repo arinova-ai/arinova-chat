@@ -48,7 +48,8 @@ export function IconRail() {
     if (pathname.startsWith("/office")) return "office";
     if (pathname.startsWith("/spaces")) return "spaces";
     if (pathname.startsWith("/apps")) return "apps";
-    if (pathname.startsWith("/market")) return "market";
+    if (pathname.startsWith("/marketplace")) return "market";
+    if (pathname.startsWith("/wallet")) return "market";
     if (pathname.startsWith("/settings")) return "settings";
     return "chat";
   };
@@ -70,7 +71,7 @@ export function IconRail() {
 
   const secondaryItems: NavEntry[] = [
     { id: "theme", label: "Theme", href: "/office/themes" },
-    { id: "market", label: "Market", href: "/market" },
+    { id: "market", label: "Market", href: "/marketplace" },
   ];
 
   const settingsItem: NavEntry = {
