@@ -185,11 +185,18 @@ async fn dashboard(
     )
     .bind(&user.id)
     .fetch_all(&state.db)
-    .await
-    .map_err(|e| {
-        tracing::error!("Creator dashboard: fetch earnings failed: {}", e);
-    })
-    .unwrap_or_default();
+    .await;
+
+    let earnings = match earnings {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!("Creator dashboard: fetch earnings failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     let earnings_json: Vec<Value> = earnings
         .iter()
