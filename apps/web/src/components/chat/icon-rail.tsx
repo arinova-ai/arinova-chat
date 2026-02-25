@@ -2,23 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  MessageCircle,
-  Globe,
-  LayoutGrid,
-  Settings,
-  Users,
-  Plus,
-} from "lucide-react";
-import { useChatStore } from "@/store/chat-store";
-import { NewChatDialog } from "./new-chat-dialog";
 import { FriendsDialog } from "../friends/friends-dialog";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-interface NavItem {
+/** SVG icon paths keyed by nav id — active/inactive variants */
+const NAV_ICONS: Record<string, { active: string; inactive: string }> = {
+  chat: { active: "/assets/nav/icon-chat-active.svg", inactive: "/assets/nav/icon-chat-inactive.svg" },
+  office: { active: "/assets/nav/icon-office-active.svg", inactive: "/assets/nav/icon-office-inactive.svg" },
+  spaces: { active: "/assets/nav/icon-spaces-active.svg", inactive: "/assets/nav/icon-spaces-inactive.svg" },
+  apps: { active: "/assets/nav/icon-apps-active.svg", inactive: "/assets/nav/icon-apps-inactive.svg" },
+  friends: { active: "/assets/nav/icon-friends-active.svg", inactive: "/assets/nav/icon-friends-inactive.svg" },
+  theme: { active: "/assets/nav/icon-theme-active.svg", inactive: "/assets/nav/icon-theme-inactive.svg" },
+  market: { active: "/assets/nav/icon-market-active.svg", inactive: "/assets/nav/icon-market-inactive.svg" },
+  settings: { active: "/assets/nav/icon-settings-active.svg", inactive: "/assets/nav/icon-settings-inactive.svg" },
+};
+
+interface NavEntry {
   id: string;
-  icon: React.ReactNode;
   label: string;
   href?: string;
   action?: () => void;
@@ -27,7 +28,6 @@ interface NavItem {
 export function IconRail() {
   const router = useRouter();
   const pathname = usePathname();
-  const [newChatOpen, setNewChatOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
@@ -43,100 +43,111 @@ export function IconRail() {
   }, []);
 
   useEffect(() => {
-    const handler = () => setNewChatOpen(true);
+    const handler = () => window.dispatchEvent(new CustomEvent("arinova:new-chat"));
     window.addEventListener("arinova:new-chat", handler);
     return () => window.removeEventListener("arinova:new-chat", handler);
   }, []);
 
-  const navItems: NavItem[] = [
-    { id: "chat", icon: <MessageCircle className="h-5 w-5" />, label: "Chat", href: "/" },
-    { id: "spaces", icon: <Globe className="h-5 w-5" />, label: "Spaces", href: "/office" },
-    { id: "apps", icon: <LayoutGrid className="h-5 w-5" />, label: "Apps", href: "/apps" },
-    // TODO: Add Market item once Agent Marketplace feature is built
-    // { id: "market", icon: <ShoppingBag className="h-5 w-5" />, label: "Market", href: "/market" },
-  ];
-
   const getActiveId = () => {
     if (pathname === "/" || pathname.startsWith("/chat")) return "chat";
-    if (pathname.startsWith("/office")) return "spaces";
+    if (pathname.startsWith("/office/themes")) return "theme";
+    if (pathname.startsWith("/office")) return "office";
+    if (pathname.startsWith("/spaces")) return "spaces";
     if (pathname.startsWith("/apps")) return "apps";
+    if (pathname.startsWith("/market")) return "market";
     if (pathname.startsWith("/settings")) return "settings";
     return "chat";
   };
 
   const activeId = getActiveId();
 
+  const mainItems: NavEntry[] = [
+    { id: "chat", label: "Chat", href: "/" },
+    { id: "office", label: "Office", href: "/office" },
+    { id: "spaces", label: "Spaces", href: "/spaces" },
+    { id: "apps", label: "Apps", href: "/apps" },
+  ];
+
+  const friendsItem: NavEntry = {
+    id: "friends",
+    label: "Friends",
+    action: () => setFriendsOpen(true),
+  };
+
+  const secondaryItems: NavEntry[] = [
+    { id: "theme", label: "Theme", href: "/office/themes" },
+    { id: "market", label: "Market", href: "/market" },
+  ];
+
+  const settingsItem: NavEntry = {
+    id: "settings",
+    label: "Settings",
+    href: "/settings",
+  };
+
+  const renderButton = (item: NavEntry, extra?: React.ReactNode) => {
+    const isActive = activeId === item.id;
+    const icons = NAV_ICONS[item.id];
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => {
+          if (item.href) router.push(item.href);
+          else if (item.action) item.action();
+        }}
+        className={cn(
+          "flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors",
+          isActive
+            ? "bg-brand/15 text-brand-text"
+            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+        )}
+        title={item.label}
+      >
+        {icons && (
+          <img
+            src={isActive ? icons.active : icons.inactive}
+            alt={item.label}
+            width={24}
+            height={24}
+            className="h-6 w-6"
+          />
+        )}
+        <span>{item.label}</span>
+        {extra}
+      </button>
+    );
+  };
+
   return (
     <div className="flex h-full w-16 shrink-0 flex-col items-center border-r border-border bg-[oklch(0.14_0.025_260)] py-4">
       {/* Logo */}
-      <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-lg font-bold text-white">
-        A
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-gradient-end">
+        <img src="/assets/nav/logo-arinova-white.svg" alt="Arinova" width={28} height={28} className="h-7 w-7" />
       </div>
 
-      {/* Nav items */}
-      <nav className="flex flex-1 flex-col items-center gap-1">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => {
-              if (item.href) router.push(item.href);
-              else if (item.action) item.action();
-            }}
-            className={cn(
-              "flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors",
-              activeId === item.id
-                ? "bg-[oklch(0.55_0.2_250/15%)] text-[oklch(0.7_0.18_250)]"
-                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            )}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
+      {/* Main nav */}
+      <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
+        {mainItems.map((item) => renderButton(item))}
 
-        {/* New chat button */}
-        <button
-          type="button"
-          onClick={() => setNewChatOpen(true)}
-          className="mt-2 flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground transition-colors hover:border-[oklch(0.55_0.2_250)] hover:text-[oklch(0.7_0.18_250)]"
-          title="New Chat"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-
-        {/* Friends button */}
-        <button
-          type="button"
-          onClick={() => setFriendsOpen(true)}
-          className="relative mt-1 flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-          title="Friends"
-        >
-          <Users className="h-5 w-5" />
+        {/* Friends with badge */}
+        <div className="relative">
+          {renderButton(friendsItem)}
           {pendingRequestCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white pointer-events-none">
               {pendingRequestCount}
             </span>
           )}
-        </button>
+        </div>
+
+        {secondaryItems.map((item) => renderButton(item))}
       </nav>
 
-      {/* Bottom: Settings */}
-      <button
-        type="button"
-        onClick={() => router.push("/settings")}
-        className={cn(
-          "flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors",
-          activeId === "settings"
-            ? "bg-[oklch(0.55_0.2_250/15%)] text-[oklch(0.7_0.18_250)]"
-            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-        )}
-      >
-        <Settings className="h-5 w-5" />
-        <span>Settings</span>
-      </button>
+      {/* Settings pinned to bottom */}
+      <div className="mt-auto">
+        {renderButton(settingsItem)}
+      </div>
 
-      <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
       <FriendsDialog open={friendsOpen} onOpenChange={setFriendsOpen} />
     </div>
   );
