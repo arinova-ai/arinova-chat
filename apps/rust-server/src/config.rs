@@ -26,10 +26,10 @@ pub struct Config {
     pub sentry_dsn: String,
     /// Shared secret for the POST /api/office/event endpoint (plugin → server).
     pub office_event_token: String,
-    /// AES-256-GCM key for encrypting API keys (64 hex chars = 32 bytes).
-    pub encryption_key: String,
     /// OpenAI API key for embedding generation (RAG).
     pub openai_api_key: Option<String>,
+    /// OpenRouter API key for marketplace chat LLM calls.
+    pub openrouter_api_key: Option<String>,
 }
 
 impl Config {
@@ -73,17 +73,7 @@ impl Config {
             sentry_dsn: env::var("SENTRY_DSN").unwrap_or_default(),
             office_event_token: env::var("OFFICE_EVENT_TOKEN").unwrap_or_default(),
             openai_api_key: env::var("OPENAI_API_KEY").ok().filter(|s| !s.is_empty()),
-            encryption_key: {
-                let key = env::var("ENCRYPTION_KEY")
-                    .expect("ENCRYPTION_KEY is required");
-                if !regex_lite::Regex::new(r"^[0-9a-fA-F]{64}$")
-                    .unwrap()
-                    .is_match(&key)
-                {
-                    panic!("ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
-                }
-                key
-            },
+            openrouter_api_key: env::var("OPENROUTER_API_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
 

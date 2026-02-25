@@ -246,4 +246,25 @@ CREATE INDEX IF NOT EXISTS idx_kb_chunks_kb_id ON knowledge_base_chunks(kb_id);
 CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding ON knowledge_base_chunks
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
+-- ===== 8. Marketplace OpenRouter migration =====
+-- Replace per-creator API keys with platform-managed OpenRouter
+
+-- Add model column (OpenRouter model ID format: 'provider/model-name')
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS model TEXT;
+
+-- Backfill model from existing model_provider + model_id
+UPDATE agent_listings SET model = model_provider || '/' || model_id WHERE model IS NULL;
+
+-- Set NOT NULL + default after backfill
+ALTER TABLE agent_listings ALTER COLUMN model SET NOT NULL;
+ALTER TABLE agent_listings ALTER COLUMN model SET DEFAULT 'openai/gpt-4o-mini';
+
+-- Add input character limit
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS input_char_limit INTEGER NOT NULL DEFAULT 2000;
+
+-- Drop deprecated columns
+ALTER TABLE agent_listings DROP COLUMN IF EXISTS api_key_encrypted;
+ALTER TABLE agent_listings DROP COLUMN IF EXISTS model_provider;
+ALTER TABLE agent_listings DROP COLUMN IF EXISTS model_id;
+
 COMMIT;

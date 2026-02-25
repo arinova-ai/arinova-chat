@@ -11,7 +11,6 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
-use crate::services::{crypto, llm};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -42,8 +41,8 @@ struct ListingRow {
     category: String,
     avatar_url: Option<String>,
     welcome_message: Option<String>,
-    model_provider: String,
-    model_id: String,
+    model: String,
+    input_char_limit: i32,
     price_per_message: i32,
     free_trial_messages: i32,
     sales_count: i32,
@@ -67,8 +66,8 @@ struct ListingDetailRow {
     category: String,
     avatar_url: Option<String>,
     welcome_message: Option<String>,
-    model_provider: String,
-    model_id: String,
+    model: String,
+    input_char_limit: i32,
     price_per_message: i32,
     free_trial_messages: i32,
     sales_count: i32,
@@ -94,8 +93,8 @@ struct ManageListingRow {
     category: String,
     avatar_url: Option<String>,
     welcome_message: Option<String>,
-    model_provider: String,
-    model_id: String,
+    model: String,
+    input_char_limit: i32,
     system_prompt: String,
     price_per_message: i32,
     free_trial_messages: i32,
@@ -122,8 +121,8 @@ fn listing_row_to_json(r: &ListingRow) -> Value {
         "category": r.category,
         "avatarUrl": r.avatar_url,
         "welcomeMessage": r.welcome_message,
-        "modelProvider": r.model_provider,
-        "modelId": r.model_id,
+        "model": r.model,
+        "inputCharLimit": r.input_char_limit,
         "pricePerMessage": r.price_per_message,
         "freeTrialMessages": r.free_trial_messages,
         "salesCount": r.sales_count,
@@ -147,8 +146,8 @@ fn detail_row_to_json(r: &ListingDetailRow) -> Value {
         "category": r.category,
         "avatarUrl": r.avatar_url,
         "welcomeMessage": r.welcome_message,
-        "modelProvider": r.model_provider,
-        "modelId": r.model_id,
+        "model": r.model,
+        "inputCharLimit": r.input_char_limit,
         "pricePerMessage": r.price_per_message,
         "freeTrialMessages": r.free_trial_messages,
         "salesCount": r.sales_count,
@@ -174,8 +173,8 @@ fn manage_row_to_json(r: &ManageListingRow) -> Value {
         "category": r.category,
         "avatarUrl": r.avatar_url,
         "welcomeMessage": r.welcome_message,
-        "modelProvider": r.model_provider,
-        "modelId": r.model_id,
+        "model": r.model,
+        "inputCharLimit": r.input_char_limit,
         "systemPrompt": r.system_prompt,
         "pricePerMessage": r.price_per_message,
         "freeTrialMessages": r.free_trial_messages,
@@ -231,12 +230,10 @@ struct CreateListingBody {
     welcome_message: Option<String>,
     #[serde(rename = "exampleConversations")]
     example_conversations: Option<Value>,
-    #[serde(rename = "modelProvider")]
-    model_provider: Option<String>,
-    #[serde(rename = "modelId")]
-    model_id: Option<String>,
-    #[serde(rename = "apiKey")]
-    api_key: String,
+    /// OpenRouter model ID, e.g. "openai/gpt-4o", "anthropic/claude-3-sonnet".
+    model: Option<String>,
+    #[serde(rename = "inputCharLimit")]
+    input_char_limit: Option<i32>,
     #[serde(rename = "pricePerMessage")]
     price_per_message: Option<i32>,
     #[serde(rename = "freeTrialMessages")]
@@ -256,57 +253,22 @@ async fn create_listing(
         );
     }
 
-    // 2. Validate API key — respect explicit model_provider, infer only when absent
-    let model_id = body.model_id.as_deref().unwrap_or("gpt-4o-mini");
-    let provider = match body.model_provider.as_deref() {
-        Some("anthropic") => llm::LlmProvider::Anthropic,
-        Some("openai") => llm::LlmProvider::OpenAI,
-        Some(p) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("Unsupported provider: {}", p) })),
-            );
-        }
-        None => llm::LlmProvider::from_model(model_id),
-    };
-
-    if let Err(e) = llm::validate_api_key(&provider, &body.api_key).await {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": e })),
-        );
-    }
-
-    // 3. Encrypt API key
-    let api_key_encrypted = match crypto::encrypt(&body.api_key, &state.config.encryption_key) {
-        Ok(enc) => enc,
-        Err(e) => {
-            tracing::error!("Encrypt API key failed: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Failed to encrypt API key" })),
-            );
-        }
-    };
-
+    let model = body.model.as_deref().unwrap_or("openai/gpt-4o-mini");
     let category = body.category.as_deref().unwrap_or("general");
-    let model_provider_str = body.model_provider.as_deref().unwrap_or(match provider {
-        llm::LlmProvider::Anthropic => "anthropic",
-        llm::LlmProvider::OpenAI => "openai",
-    });
+    let input_char_limit = body.input_char_limit.unwrap_or(2000);
     let example_conversations = body.example_conversations.unwrap_or(json!([]));
     let price_per_message = body.price_per_message.unwrap_or(1);
     let free_trial_messages = body.free_trial_messages.unwrap_or(3);
 
-    // 4. INSERT
+    // 2. INSERT
     let row = sqlx::query_as::<_, ListingRow>(
         r#"INSERT INTO agent_listings
            (creator_id, agent_name, description, category, avatar_url, welcome_message,
-            model_provider, model_id, price, price_per_message, free_trial_messages,
-            api_key_encrypted, system_prompt, status, example_conversations)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, 'active', $13)
+            model, input_char_limit, price, price_per_message, free_trial_messages,
+            system_prompt, status, example_conversations)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, 'active', $12)
            RETURNING id, agent_name, description, category, avatar_url, welcome_message,
-                     model_provider, model_id, price_per_message, free_trial_messages,
+                     model, input_char_limit, price_per_message, free_trial_messages,
                      sales_count, status::text AS status, avg_rating::float8 AS avg_rating,
                      review_count, total_messages, total_revenue,
                      example_conversations, created_at, updated_at"#,
@@ -317,11 +279,10 @@ async fn create_listing(
     .bind(category)
     .bind(&body.avatar_url)
     .bind(&body.welcome_message)
-    .bind(model_provider_str)
-    .bind(model_id)
+    .bind(model)
+    .bind(input_char_limit)
     .bind(price_per_message)
     .bind(free_trial_messages)
-    .bind(&api_key_encrypted)
     .bind(&body.system_prompt)
     .bind(&example_conversations)
     .fetch_one(&state.db)
@@ -360,12 +321,10 @@ struct UpdateListingBody {
     welcome_message: Option<String>,
     #[serde(rename = "exampleConversations")]
     example_conversations: Option<Value>,
-    #[serde(rename = "modelId")]
-    model_id: Option<String>,
-    #[serde(rename = "modelProvider")]
-    model_provider: Option<String>,
-    #[serde(rename = "apiKey")]
-    api_key: Option<String>,
+    /// OpenRouter model ID, e.g. "openai/gpt-4o".
+    model: Option<String>,
+    #[serde(rename = "inputCharLimit")]
+    input_char_limit: Option<i32>,
     #[serde(rename = "pricePerMessage")]
     price_per_message: Option<i32>,
     #[serde(rename = "freeTrialMessages")]
@@ -429,48 +388,6 @@ async fn update_listing(
         }
     }
 
-    // Validate model_provider if provided (regardless of apiKey)
-    if let Some(ref mp) = body.model_provider {
-        if mp != "openai" && mp != "anthropic" {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": format!("Unsupported provider: {}", mp) })),
-            );
-        }
-    }
-
-    // If new api_key provided, validate + encrypt
-    let mut encrypted_key: Option<String> = None;
-    if let Some(ref new_key) = body.api_key {
-        let model_id = body.model_id.as_deref().unwrap_or("gpt-4o-mini");
-        // Respect explicit model_provider; only infer from model_id when absent
-        let provider = match body.model_provider.as_deref() {
-            Some("anthropic") => llm::LlmProvider::Anthropic,
-            Some("openai") => llm::LlmProvider::OpenAI,
-            // Already validated above, but satisfy exhaustive match
-            Some(_) => unreachable!(),
-            None => llm::LlmProvider::from_model(model_id),
-        };
-
-        if let Err(e) = llm::validate_api_key(&provider, new_key).await {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": e })),
-            );
-        }
-
-        match crypto::encrypt(new_key, &state.config.encryption_key) {
-            Ok(enc) => encrypted_key = Some(enc),
-            Err(e) => {
-                tracing::error!("Encrypt API key failed: {}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": "Failed to encrypt API key" })),
-                );
-            }
-        }
-    }
-
     // Build dynamic UPDATE
     let result = sqlx::query_as::<_, ListingRow>(
         r#"UPDATE agent_listings SET
@@ -480,16 +397,15 @@ async fn update_listing(
                avatar_url = COALESCE($5, avatar_url),
                system_prompt = COALESCE($6, system_prompt),
                welcome_message = COALESCE($7, welcome_message),
-               model_provider = COALESCE($8, model_provider),
-               model_id = COALESCE($9, model_id),
-               api_key_encrypted = COALESCE($10, api_key_encrypted),
-               example_conversations = COALESCE($11, example_conversations),
-               price_per_message = COALESCE($12, price_per_message),
-               free_trial_messages = COALESCE($13, free_trial_messages),
+               model = COALESCE($8, model),
+               input_char_limit = COALESCE($9, input_char_limit),
+               example_conversations = COALESCE($10, example_conversations),
+               price_per_message = COALESCE($11, price_per_message),
+               free_trial_messages = COALESCE($12, free_trial_messages),
                updated_at = NOW()
            WHERE id = $1
            RETURNING id, agent_name, description, category, avatar_url, welcome_message,
-                     model_provider, model_id, price_per_message, free_trial_messages,
+                     model, input_char_limit, price_per_message, free_trial_messages,
                      sales_count, status::text AS status, avg_rating::float8 AS avg_rating,
                      review_count, total_messages, total_revenue,
                      example_conversations, created_at, updated_at"#,
@@ -501,9 +417,8 @@ async fn update_listing(
     .bind(&body.avatar_url)
     .bind(&body.system_prompt)
     .bind(&body.welcome_message)
-    .bind(&body.model_provider)
-    .bind(&body.model_id)
-    .bind(&encrypted_key)
+    .bind(&body.model)
+    .bind(&body.input_char_limit)
     .bind(&body.example_conversations)
     .bind(&body.price_per_message)
     .bind(&body.free_trial_messages)
@@ -633,7 +548,7 @@ async fn browse(
 
     let data_sql = format!(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
-                  al.avatar_url, al.welcome_message, al.model_provider, al.model_id,
+                  al.avatar_url, al.welcome_message, al.model, al.input_char_limit,
                   al.price_per_message, al.free_trial_messages,
                   al.sales_count, al.status::text AS status,
                   al.avg_rating::float8 AS avg_rating, al.review_count,
@@ -689,7 +604,7 @@ async fn get_detail(
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, ListingDetailRow>(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
-                  al.avatar_url, al.welcome_message, al.model_provider, al.model_id,
+                  al.avatar_url, al.welcome_message, al.model, al.input_char_limit,
                   al.price_per_message, al.free_trial_messages,
                   al.sales_count, al.status::text AS status,
                   al.avg_rating::float8 AS avg_rating, al.review_count,
@@ -731,7 +646,7 @@ async fn manage_detail(
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, ManageListingRow>(
         r#"SELECT id, creator_id, agent_name, description, category,
-                  avatar_url, welcome_message, model_provider, model_id,
+                  avatar_url, welcome_message, model, input_char_limit,
                   system_prompt, price_per_message, free_trial_messages,
                   sales_count, status::text AS status,
                   avg_rating::float8 AS avg_rating, review_count,
@@ -771,7 +686,7 @@ async fn my_listings(
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, ListingRow>(
         r#"SELECT id, agent_name, description, category,
-                  avatar_url, welcome_message, model_provider, model_id,
+                  avatar_url, welcome_message, model, input_char_limit,
                   price_per_message, free_trial_messages,
                   sales_count, status::text AS status,
                   avg_rating::float8 AS avg_rating, review_count,

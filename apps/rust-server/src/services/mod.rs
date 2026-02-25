@@ -1,9 +1,9 @@
 pub mod billing;
-pub mod crypto;
 pub mod embedding;
 pub mod llm;
 pub mod message_seq;
 pub mod office;
+pub mod openrouter;
 pub mod pending_events;
 pub mod push;
 pub mod push_trigger;

@@ -17,7 +17,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
-use crate::services::{billing, crypto, llm};
+use crate::services::{billing, llm, openrouter};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -38,9 +38,8 @@ pub fn router() -> Router<AppState> {
 struct ChatListingInfo {
     agent_name: String,
     system_prompt: String,
-    api_key_encrypted: Option<String>,
-    model_provider: String,
-    model_id: String,
+    model: String,
+    input_char_limit: i32,
     status: String,
 }
 
@@ -81,18 +80,10 @@ async fn chat(
     Json(body): Json<ChatBody>,
 ) -> Result<Sse<impl futures::Stream<Item = Result<Event, Infallible>>>, (StatusCode, Json<Value>)>
 {
-    // Validate message length
-    if body.message.is_empty() || body.message.len() > 10_000 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Message must be 1-10000 characters" })),
-        ));
-    }
-
     // 1. Load listing (must be active)
     let listing = sqlx::query_as::<_, ChatListingInfo>(
-        r#"SELECT agent_name, system_prompt, api_key_encrypted,
-                  model_provider, model_id, status::text AS status
+        r#"SELECT agent_name, system_prompt, model, input_char_limit,
+                  status::text AS status
            FROM agent_listings WHERE id = $1"#,
     )
     .bind(listing_id)
@@ -119,7 +110,27 @@ async fn chat(
         ));
     }
 
-    // 2. Check billing
+    // 2. Validate message length against listing's input_char_limit
+    let char_limit = listing.input_char_limit.max(1) as usize;
+    if body.message.is_empty() || body.message.len() > char_limit {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": format!("Message must be 1-{} characters", char_limit)
+            })),
+        ));
+    }
+
+    // 3. Ensure platform OpenRouter API key is configured
+    let openrouter_key = state.config.openrouter_api_key.as_deref().ok_or_else(|| {
+        tracing::error!("Chat: OPENROUTER_API_KEY not configured");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "LLM service not configured" })),
+        )
+    })?;
+
+    // 4. Check billing
     let billing_result =
         billing::check_billing(&state.db, &user.id, listing_id, body.conversation_id)
             .await
@@ -139,7 +150,7 @@ async fn chat(
         ));
     }
 
-    // 3. Get or create conversation
+    // 5. Get or create conversation
     let conversation_id = match body.conversation_id {
         Some(cid) => cid,
         None => {
@@ -175,7 +186,7 @@ async fn chat(
         }
     };
 
-    // 4. Store user message
+    // 6. Store user message
     sqlx::query(
         r#"INSERT INTO marketplace_messages (conversation_id, role, content)
            VALUES ($1, 'user', $2)"#,
@@ -192,7 +203,7 @@ async fn chat(
         )
     })?;
 
-    // 5. Load last 50 messages for LLM context
+    // 7. Load last 50 messages for LLM context
     let history = sqlx::query_as::<_, ChatMessageRow>(
         r#"SELECT * FROM (
                SELECT id, role::text AS role, content, created_at
@@ -213,24 +224,7 @@ async fn chat(
         )
     })?;
 
-    // 6. Decrypt API key
-    let api_key_encrypted = listing.api_key_encrypted.ok_or_else(|| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": "Listing has no API key configured" })),
-        )
-    })?;
-
-    let api_key =
-        crypto::decrypt(&api_key_encrypted, &state.config.encryption_key).map_err(|e| {
-            tracing::error!("Chat: decrypt API key failed: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Failed to decrypt API key" })),
-            )
-        })?;
-
-    // 7. RAG: augment system prompt with knowledge base context
+    // 8. RAG: augment system prompt with knowledge base context
     let system_prompt = if let Some(ref openai_key) = state.config.openai_api_key {
         match crate::services::embedding::rag_search(
             &state.db,
@@ -258,12 +252,7 @@ async fn chat(
         listing.system_prompt.clone()
     };
 
-    // 8. Build LLM messages
-    let provider = match listing.model_provider.as_str() {
-        "anthropic" => llm::LlmProvider::Anthropic,
-        _ => llm::LlmProvider::OpenAI,
-    };
-
+    // 9. Build LLM messages
     let mut llm_messages = vec![llm::ChatMessage {
         role: "system".into(),
         content: system_prompt,
@@ -281,21 +270,20 @@ async fn chat(
         });
     }
 
-    let llm_opts = llm::LlmCallOptions {
-        provider,
-        model: listing.model_id,
-        api_key,
+    let or_opts = openrouter::OpenRouterCallOptions {
+        model: listing.model.clone(),
         messages: llm_messages,
         max_tokens: None,
         temperature: None,
     };
 
-    // 8. Setup SSE stream via channel
+    // 10. Setup SSE stream via channel
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(32);
     let db = state.db.clone();
     let user_id = user.id.clone();
     let cost = billing_result.cost;
     let is_free = billing_result.is_free_trial || cost == 0;
+    let api_key = openrouter_key.to_string();
 
     tokio::spawn(async move {
         // Send meta event
@@ -305,11 +293,11 @@ async fn chat(
             )))
             .await;
 
-        // Call LLM stream
-        let mut stream = match llm::call_llm_stream(&llm_opts).await {
+        // Call OpenRouter stream
+        let mut stream = match openrouter::call_stream(&api_key, &or_opts).await {
             Ok(s) => s,
             Err(e) => {
-                tracing::error!("Chat: LLM stream failed: {}", e);
+                tracing::error!("Chat: OpenRouter stream failed: {}", e);
                 let _ = tx
                     .send(Ok(Event::default().data(
                         json!({"type": "error", "message": "LLM request failed"}).to_string(),
@@ -338,10 +326,8 @@ async fn chat(
                         buffer = buffer[pos + 1..].to_string();
 
                         if let Some(data) = line.strip_prefix("data: ") {
-                            let text = match llm_opts.provider {
-                                llm::LlmProvider::OpenAI => llm::parse_openai_chunk(data),
-                                llm::LlmProvider::Anthropic => llm::parse_anthropic_chunk(data),
-                            };
+                            // OpenRouter uses OpenAI-compatible SSE format
+                            let text = llm::parse_openai_chunk(data);
                             if let Some(ref t) = text {
                                 full_content.push_str(t);
                                 let _ = tx
@@ -354,7 +340,7 @@ async fn chat(
                     }
                 }
                 Err(e) => {
-                    tracing::error!("Chat: LLM stream chunk error: {}", e);
+                    tracing::error!("Chat: OpenRouter stream chunk error: {}", e);
                     break;
                 }
             }
