@@ -874,6 +874,18 @@ async fn create_review(
         }
     }
 
+    // Atomic transaction: insert review + recalculate aggregates
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("Create review: begin transaction failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
+
     // Insert review (UNIQUE constraint catches duplicates)
     let result = sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO agent_reviews (listing_id, user_id, rating, comment)
@@ -883,7 +895,7 @@ async fn create_review(
     .bind(&user.id)
     .bind(body.rating)
     .bind(&body.comment)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await;
 
     let review_id = match result {
@@ -915,10 +927,22 @@ async fn create_review(
            WHERE id = $1"#,
     )
     .bind(listing_id)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await
     {
         tracing::error!("Create review: update avg_rating failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Failed to update rating" })),
+        );
+    }
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!("Create review: commit failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
     }
 
     (
@@ -962,13 +986,22 @@ async fn list_reviews(
     let offset = q.offset.unwrap_or(0).max(0);
 
     // Get total count
-    let total = sqlx::query_scalar::<_, i64>(
+    let total = match sqlx::query_scalar::<_, i64>(
         "SELECT count(*) FROM agent_reviews WHERE listing_id = $1",
     )
     .bind(listing_id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("List reviews: count failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     let rows = sqlx::query_as::<_, ReviewRow>(
         r#"SELECT r.id, r.rating, r.comment, r.created_at,

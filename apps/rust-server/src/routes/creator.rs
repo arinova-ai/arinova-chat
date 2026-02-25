@@ -186,6 +186,9 @@ async fn dashboard(
     .bind(&user.id)
     .fetch_all(&state.db)
     .await
+    .map_err(|e| {
+        tracing::error!("Creator dashboard: fetch earnings failed: {}", e);
+    })
     .unwrap_or_default();
 
     let earnings_json: Vec<Value> = earnings
@@ -237,13 +240,22 @@ async fn payout(
     }
 
     // Verify creator has at least 1 listing
-    let listing_count = sqlx::query_scalar::<_, i64>(
+    let listing_count = match sqlx::query_scalar::<_, i64>(
         "SELECT count(*) FROM agent_listings WHERE creator_id = $1",
     )
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Payout: check listing count failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     if listing_count == 0 {
         return (
@@ -321,14 +333,22 @@ async fn payout(
     }
 
     // Fetch new balance
-    let new_balance = sqlx::query_scalar::<_, i32>(
+    let new_balance = match sqlx::query_scalar::<_, i32>(
         "SELECT balance FROM coin_balances WHERE user_id = $1",
     )
     .bind(&user.id)
     .fetch_optional(&state.db)
     .await
-    .unwrap_or(None)
-    .unwrap_or(0);
+    {
+        Ok(b) => b.unwrap_or(0),
+        Err(e) => {
+            tracing::error!("Payout: fetch new balance failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     (
         StatusCode::OK,
