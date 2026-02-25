@@ -289,6 +289,8 @@ CREATE TABLE agent_listings (
     avatar_url TEXT,
     system_prompt TEXT NOT NULL,
     api_key_encrypted TEXT,
+    welcome_message TEXT,
+    model_provider VARCHAR(50) NOT NULL DEFAULT 'openai',
     model_id VARCHAR(100) NOT NULL DEFAULT 'gpt-4o-mini',
     price INTEGER NOT NULL DEFAULT 0,
     price_per_message INTEGER NOT NULL DEFAULT 1,

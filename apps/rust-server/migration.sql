@@ -160,4 +160,7 @@ ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS total_revenue INTEGER NOT NU
 
 ALTER TABLE marketplace_conversations ADD COLUMN IF NOT EXISTS message_count INTEGER NOT NULL DEFAULT 0;
 
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS welcome_message TEXT;
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS model_provider VARCHAR(50) NOT NULL DEFAULT 'openai';
+
 COMMIT;

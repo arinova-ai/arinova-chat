@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
             get(get_detail).put(update_listing).delete(archive_listing),
         )
         .route("/api/marketplace/agents/{id}/manage", get(manage_detail))
+        .route("/api/marketplace/manage", get(my_listings))
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +58,6 @@ struct CreateListingBody {
     #[serde(rename = "avatarUrl")]
     avatar_url: Option<String>,
     category: Option<String>,
-    tags: Option<Vec<String>>,
     #[serde(rename = "systemPrompt")]
     system_prompt: String,
     #[serde(rename = "welcomeMessage")]
@@ -89,17 +89,18 @@ async fn create_listing(
         );
     }
 
-    // 2. Validate API key
+    // 2. Validate API key — respect explicit model_provider, infer only when absent
     let model_id = body.model_id.as_deref().unwrap_or("gpt-4o-mini");
     let provider = match body.model_provider.as_deref() {
         Some("anthropic") => llm::LlmProvider::Anthropic,
-        Some("openai") | None => llm::LlmProvider::OpenAI,
+        Some("openai") => llm::LlmProvider::OpenAI,
         Some(p) => {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": format!("Unsupported provider: {}", p) })),
             );
         }
+        None => llm::LlmProvider::from_model(model_id),
     };
 
     if let Err(e) = llm::validate_api_key(&provider, &body.api_key).await {
@@ -122,20 +123,24 @@ async fn create_listing(
     };
 
     let category = body.category.as_deref().unwrap_or("general");
+    let model_provider_str = body.model_provider.as_deref().unwrap_or(match provider {
+        llm::LlmProvider::Anthropic => "anthropic",
+        llm::LlmProvider::OpenAI => "openai",
+    });
     let example_conversations = body.example_conversations.unwrap_or(json!([]));
     let price_per_message = body.price_per_message.unwrap_or(1);
     let free_trial_messages = body.free_trial_messages.unwrap_or(3);
 
     // 4. INSERT
-    let row = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, String, i32, i32, i32, String, Option<f64>, i32, Value, chrono::NaiveDateTime, chrono::NaiveDateTime)>(
+    let row = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, Option<String>, String, String, i32, i32, i32, String, Option<f64>, i32, Value, chrono::NaiveDateTime, chrono::NaiveDateTime)>(
         r#"INSERT INTO agent_listings
-           (creator_id, agent_name, description, category, avatar_url, model_id,
-            price, price_per_message, free_trial_messages, api_key_encrypted,
-            system_prompt, status, example_conversations)
-           VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, $10, 'active', $11)
-           RETURNING id, agent_name, description, category, avatar_url, model_id,
-                     price_per_message, free_trial_messages, sales_count,
-                     status::text, avg_rating, review_count,
+           (creator_id, agent_name, description, category, avatar_url, welcome_message,
+            model_provider, model_id, price, price_per_message, free_trial_messages,
+            api_key_encrypted, system_prompt, status, example_conversations)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, 'active', $13)
+           RETURNING id, agent_name, description, category, avatar_url, welcome_message,
+                     model_provider, model_id, price_per_message, free_trial_messages,
+                     sales_count, status::text, avg_rating, review_count,
                      example_conversations, created_at, updated_at"#,
     )
     .bind(&user.id)
@@ -143,6 +148,8 @@ async fn create_listing(
     .bind(&body.description)
     .bind(category)
     .bind(&body.avatar_url)
+    .bind(&body.welcome_message)
+    .bind(model_provider_str)
     .bind(model_id)
     .bind(price_per_message)
     .bind(free_trial_messages)
@@ -153,7 +160,7 @@ async fn create_listing(
     .await;
 
     match row {
-        Ok((id, name, desc, cat, avatar, mid, ppm, ftm, sc, status, avg_r, rc, ec, ca, ua)) => (
+        Ok((id, name, desc, cat, avatar, wm, mp, mid, ppm, ftm, sc, status, avg_r, rc, ec, ca, ua)) => (
             StatusCode::CREATED,
             Json(json!({
                 "id": id,
@@ -162,6 +169,8 @@ async fn create_listing(
                 "description": desc,
                 "category": cat,
                 "avatarUrl": avatar,
+                "welcomeMessage": wm,
+                "modelProvider": mp,
                 "modelId": mid,
                 "pricePerMessage": ppm,
                 "freeTrialMessages": ftm,
@@ -274,9 +283,17 @@ async fn update_listing(
     let mut encrypted_key: Option<String> = None;
     if let Some(ref new_key) = body.api_key {
         let model_id = body.model_id.as_deref().unwrap_or("gpt-4o-mini");
+        // Respect explicit model_provider; only infer from model_id when absent
         let provider = match body.model_provider.as_deref() {
             Some("anthropic") => llm::LlmProvider::Anthropic,
-            _ => llm::LlmProvider::from_model(model_id),
+            Some("openai") => llm::LlmProvider::OpenAI,
+            Some(p) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": format!("Unsupported provider: {}", p) })),
+                );
+            }
+            None => llm::LlmProvider::from_model(model_id),
         };
 
         if let Err(e) = llm::validate_api_key(&provider, new_key).await {
@@ -299,23 +316,25 @@ async fn update_listing(
     }
 
     // Build dynamic UPDATE
-    let result = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, String, i32, i32, i32, String, Option<f64>, i32, Value, chrono::NaiveDateTime, chrono::NaiveDateTime)>(
+    let result = sqlx::query_as::<_, (Uuid, String, String, String, Option<String>, Option<String>, String, String, i32, i32, i32, String, Option<f64>, i32, Value, chrono::NaiveDateTime, chrono::NaiveDateTime)>(
         r#"UPDATE agent_listings SET
                agent_name = COALESCE($2, agent_name),
                description = COALESCE($3, description),
                category = COALESCE($4, category),
                avatar_url = COALESCE($5, avatar_url),
                system_prompt = COALESCE($6, system_prompt),
-               model_id = COALESCE($7, model_id),
-               api_key_encrypted = COALESCE($8, api_key_encrypted),
-               example_conversations = COALESCE($9, example_conversations),
-               price_per_message = COALESCE($10, price_per_message),
-               free_trial_messages = COALESCE($11, free_trial_messages),
+               welcome_message = COALESCE($7, welcome_message),
+               model_provider = COALESCE($8, model_provider),
+               model_id = COALESCE($9, model_id),
+               api_key_encrypted = COALESCE($10, api_key_encrypted),
+               example_conversations = COALESCE($11, example_conversations),
+               price_per_message = COALESCE($12, price_per_message),
+               free_trial_messages = COALESCE($13, free_trial_messages),
                updated_at = NOW()
            WHERE id = $1
-           RETURNING id, agent_name, description, category, avatar_url, model_id,
-                     price_per_message, free_trial_messages, sales_count,
-                     status::text, avg_rating, review_count,
+           RETURNING id, agent_name, description, category, avatar_url, welcome_message,
+                     model_provider, model_id, price_per_message, free_trial_messages,
+                     sales_count, status::text, avg_rating, review_count,
                      example_conversations, created_at, updated_at"#,
     )
     .bind(id)
@@ -324,6 +343,8 @@ async fn update_listing(
     .bind(&body.category)
     .bind(&body.avatar_url)
     .bind(&body.system_prompt)
+    .bind(&body.welcome_message)
+    .bind(&body.model_provider)
     .bind(&body.model_id)
     .bind(&encrypted_key)
     .bind(&body.example_conversations)
@@ -333,7 +354,7 @@ async fn update_listing(
     .await;
 
     match result {
-        Ok((lid, name, desc, cat, avatar, mid, ppm, ftm, sc, status, avg_r, rc, ec, ca, ua)) => (
+        Ok((lid, name, desc, cat, avatar, wm, mp, mid, ppm, ftm, sc, status, avg_r, rc, ec, ca, ua)) => (
             StatusCode::OK,
             Json(json!({
                 "id": lid,
@@ -341,6 +362,8 @@ async fn update_listing(
                 "description": desc,
                 "category": cat,
                 "avatarUrl": avatar,
+                "welcomeMessage": wm,
+                "modelProvider": mp,
                 "modelId": mid,
                 "pricePerMessage": ppm,
                 "freeTrialMessages": ftm,
@@ -423,9 +446,9 @@ async fn browse(
         _ => "ORDER BY al.sales_count DESC", // popular (default)
     };
 
-    // Build WHERE conditions
+    // Build WHERE conditions — bind_idx tracks the next $N placeholder
     let mut conditions = vec!["al.status = 'active'".to_string()];
-    let mut bind_idx = 1u32;
+    let mut bind_idx = 0u32;
 
     let category_val = q.category.clone();
     if category_val.is_some() {
@@ -474,7 +497,8 @@ async fn browse(
 
     let data_sql = format!(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
-                  al.avatar_url, al.model_id, al.price_per_message, al.free_trial_messages,
+                  al.avatar_url, al.welcome_message, al.model_provider, al.model_id,
+                  al.price_per_message, al.free_trial_messages,
                   al.sales_count, al.status::text, al.avg_rating, al.review_count,
                   al.total_messages, al.total_revenue,
                   al.example_conversations, al.created_at, al.updated_at,
@@ -488,7 +512,8 @@ async fn browse(
 
     let mut data_query = sqlx::query_as::<_, (
         Uuid, String, String, String, String,
-        Option<String>, String, i32, i32,
+        Option<String>, Option<String>, String, String,
+        i32, i32,
         i32, String, Option<f64>, i32,
         i32, i32,
         Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
@@ -524,20 +549,22 @@ async fn browse(
                 "description": r.3,
                 "category": r.4,
                 "avatarUrl": r.5,
-                "modelId": r.6,
-                "pricePerMessage": r.7,
-                "freeTrialMessages": r.8,
-                "salesCount": r.9,
-                "status": r.10,
-                "avgRating": r.11,
-                "reviewCount": r.12,
-                "totalMessages": r.13,
-                "totalRevenue": r.14,
-                "exampleConversations": r.15,
-                "createdAt": r.16.and_utc().to_rfc3339(),
-                "updatedAt": r.17.and_utc().to_rfc3339(),
-                "creatorName": r.18,
-                "creatorUsername": r.19,
+                "welcomeMessage": r.6,
+                "modelProvider": r.7,
+                "modelId": r.8,
+                "pricePerMessage": r.9,
+                "freeTrialMessages": r.10,
+                "salesCount": r.11,
+                "status": r.12,
+                "avgRating": r.13,
+                "reviewCount": r.14,
+                "totalMessages": r.15,
+                "totalRevenue": r.16,
+                "exampleConversations": r.17,
+                "createdAt": r.18.and_utc().to_rfc3339(),
+                "updatedAt": r.19.and_utc().to_rfc3339(),
+                "creatorName": r.20,
+                "creatorUsername": r.21,
             })
         })
         .collect();
@@ -561,14 +588,16 @@ async fn get_detail(
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, (
         Uuid, String, String, String, String,
-        Option<String>, String, i32, i32,
+        Option<String>, Option<String>, String, String,
+        i32, i32,
         i32, String, Option<f64>, i32,
         i32, i32,
         Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
         Option<String>, Option<String>,
     )>(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
-                  al.avatar_url, al.model_id, al.price_per_message, al.free_trial_messages,
+                  al.avatar_url, al.welcome_message, al.model_provider, al.model_id,
+                  al.price_per_message, al.free_trial_messages,
                   al.sales_count, al.status::text, al.avg_rating, al.review_count,
                   al.total_messages, al.total_revenue,
                   al.example_conversations, al.created_at, al.updated_at,
@@ -591,20 +620,22 @@ async fn get_detail(
                 "description": r.3,
                 "category": r.4,
                 "avatarUrl": r.5,
-                "modelId": r.6,
-                "pricePerMessage": r.7,
-                "freeTrialMessages": r.8,
-                "salesCount": r.9,
-                "status": r.10,
-                "avgRating": r.11,
-                "reviewCount": r.12,
-                "totalMessages": r.13,
-                "totalRevenue": r.14,
-                "exampleConversations": r.15,
-                "createdAt": r.16.and_utc().to_rfc3339(),
-                "updatedAt": r.17.and_utc().to_rfc3339(),
-                "creatorName": r.18,
-                "creatorUsername": r.19,
+                "welcomeMessage": r.6,
+                "modelProvider": r.7,
+                "modelId": r.8,
+                "pricePerMessage": r.9,
+                "freeTrialMessages": r.10,
+                "salesCount": r.11,
+                "status": r.12,
+                "avgRating": r.13,
+                "reviewCount": r.14,
+                "totalMessages": r.15,
+                "totalRevenue": r.16,
+                "exampleConversations": r.17,
+                "createdAt": r.18.and_utc().to_rfc3339(),
+                "updatedAt": r.19.and_utc().to_rfc3339(),
+                "creatorName": r.20,
+                "creatorUsername": r.21,
             })),
         ),
         Ok(None) => (
@@ -622,7 +653,7 @@ async fn get_detail(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/agents/{id}/manage — Creator Manage View (auth)
+// GET /api/marketplace/agents/{id}/manage — Creator Manage View (single, auth)
 // ---------------------------------------------------------------------------
 
 async fn manage_detail(
@@ -632,13 +663,15 @@ async fn manage_detail(
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, (
         Uuid, String, String, String, String,
-        Option<String>, String, String, i32, i32,
+        Option<String>, Option<String>, String, String,
+        String, i32, i32,
         i32, String, Option<f64>, i32,
         i32, i32,
         Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
     )>(
         r#"SELECT id, creator_id, agent_name, description, category,
-                  avatar_url, model_id, system_prompt, price_per_message, free_trial_messages,
+                  avatar_url, welcome_message, model_provider, model_id,
+                  system_prompt, price_per_message, free_trial_messages,
                   sales_count, status::text, avg_rating, review_count,
                   total_messages, total_revenue,
                   example_conversations, created_at, updated_at
@@ -660,19 +693,21 @@ async fn manage_detail(
                 "description": r.3,
                 "category": r.4,
                 "avatarUrl": r.5,
-                "modelId": r.6,
-                "systemPrompt": r.7,
-                "pricePerMessage": r.8,
-                "freeTrialMessages": r.9,
-                "salesCount": r.10,
-                "status": r.11,
-                "avgRating": r.12,
-                "reviewCount": r.13,
-                "totalMessages": r.14,
-                "totalRevenue": r.15,
-                "exampleConversations": r.16,
-                "createdAt": r.17.and_utc().to_rfc3339(),
-                "updatedAt": r.18.and_utc().to_rfc3339(),
+                "welcomeMessage": r.6,
+                "modelProvider": r.7,
+                "modelId": r.8,
+                "systemPrompt": r.9,
+                "pricePerMessage": r.10,
+                "freeTrialMessages": r.11,
+                "salesCount": r.12,
+                "status": r.13,
+                "avgRating": r.14,
+                "reviewCount": r.15,
+                "totalMessages": r.16,
+                "totalRevenue": r.17,
+                "exampleConversations": r.18,
+                "createdAt": r.19.and_utc().to_rfc3339(),
+                "updatedAt": r.20.and_utc().to_rfc3339(),
             })),
         ),
         Ok(None) => (
@@ -681,6 +716,80 @@ async fn manage_detail(
         ),
         Err(e) => {
             tracing::error!("Manage listing detail failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/marketplace/manage — Creator's own listings (list, auth)
+// ---------------------------------------------------------------------------
+
+async fn my_listings(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, (
+        Uuid, String, String, String,
+        Option<String>, Option<String>, String, String,
+        i32, i32,
+        i32, String, Option<f64>, i32,
+        i32, i32,
+        Value, chrono::NaiveDateTime, chrono::NaiveDateTime,
+    )>(
+        r#"SELECT id, agent_name, description, category,
+                  avatar_url, welcome_message, model_provider, model_id,
+                  price_per_message, free_trial_messages,
+                  sales_count, status::text, avg_rating, review_count,
+                  total_messages, total_revenue,
+                  example_conversations, created_at, updated_at
+           FROM agent_listings
+           WHERE creator_id = $1
+           ORDER BY created_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let listings: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    json!({
+                        "id": r.0,
+                        "agentName": r.1,
+                        "description": r.2,
+                        "category": r.3,
+                        "avatarUrl": r.4,
+                        "welcomeMessage": r.5,
+                        "modelProvider": r.6,
+                        "modelId": r.7,
+                        "pricePerMessage": r.8,
+                        "freeTrialMessages": r.9,
+                        "salesCount": r.10,
+                        "status": r.11,
+                        "avgRating": r.12,
+                        "reviewCount": r.13,
+                        "totalMessages": r.14,
+                        "totalRevenue": r.15,
+                        "exampleConversations": r.16,
+                        "createdAt": r.17.and_utc().to_rfc3339(),
+                        "updatedAt": r.18.and_utc().to_rfc3339(),
+                    })
+                })
+                .collect();
+
+            (
+                StatusCode::OK,
+                Json(json!({ "listings": listings })),
+            )
+        }
+        Err(e) => {
+            tracing::error!("My listings fetch failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Database error" })),
