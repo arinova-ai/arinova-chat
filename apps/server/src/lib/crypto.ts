@@ -1,8 +1,14 @@
 import crypto from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
-const KEY =
-  process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString("hex");
+
+const KEY = process.env.ENCRYPTION_KEY;
+if (!KEY || !/^[0-9a-f]{64}$/i.test(KEY)) {
+  throw new Error(
+    "ENCRYPTION_KEY must be set to a 64-character hex string (32 bytes). " +
+    "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
+  );
+}
 const keyBuffer = Buffer.from(KEY, "hex");
 
 export function encryptApiKey(plainText: string): string {

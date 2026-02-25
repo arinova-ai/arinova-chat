@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { agentListings, agentReviews, user } from "../db/schema.js";
+import { agentListings, user } from "../db/schema.js";
 import { eq, and, desc, asc, ilike, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth.js";
 import { encryptApiKey } from "../lib/crypto.js";
@@ -65,6 +65,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
     const { apiKey, ...rest } = body.data;
     const encrypted = encryptApiKey(apiKey);
 
+    // Phase 1: skip review, auto-activate. Phase 2 will add content moderation.
     const [listing] = await db
       .insert(agentListings)
       .values({
@@ -73,7 +74,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         encryptedApiKey: encrypted,
         status: "active",
       })
-      .returning();
+      .returning(publicColumns);
 
     return reply.status(201).send(listing);
   });
@@ -115,7 +116,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         .update(agentListings)
         .set(updateData)
         .where(eq(agentListings.id, id))
-        .returning();
+        .returning(publicColumns);
 
       return reply.send(updated);
     },
@@ -202,7 +203,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
         })
         .from(agentListings)
         .innerJoin(user, eq(agentListings.creatorId, user.id))
-        .where(eq(agentListings.id, id));
+        .where(and(eq(agentListings.id, id), eq(agentListings.status, "active")));
 
       if (!listing) {
         return reply.status(404).send({ error: "Listing not found" });
