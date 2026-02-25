@@ -73,7 +73,7 @@ function parseBgColor(manifest: ThemeManifest): number {
 function computeScale(containerW: number, containerH: number, canvasW: number, canvasH: number) {
   const scaleX = containerW / canvasW;
   const scaleY = containerH / canvasH;
-  const scale = Math.min(scaleX, scaleY);
+  const scale = Math.max(scaleX, scaleY);
   const offsetX = (containerW - canvasW * scale) / 2;
   const offsetY = (containerH - canvasH * scale) / 2;
   return { scale, offsetX, offsetY };
@@ -630,28 +630,46 @@ export default function OfficeMap({
     if (!ready) return;
 
     if (!useFallback && manifest) {
-      // If background image successfully loaded, skip zone rectangles
-      if (bgLoadedRef.current) return;
-
       const bgLayer = layerMapRef.current.get("background");
       const uiLayer = layerMapRef.current.get("ui-overlay");
       if (!bgLayer || !uiLayer) return;
 
-      bgLayer.removeChildren();
+      // Only clear non-background children (preserve bg image sprite)
+      if (!bgLoadedRef.current) {
+        bgLayer.removeChildren();
+      }
       uiLayer.removeChildren();
 
       for (const zone of manifest.zones) {
         const { x, y, width: zw, height: zh } = zone.bounds;
-        const g = new Graphics();
-        g.roundRect(x, y, zw, zh, 12);
-        g.fill(ZONE_BG);
-        g.roundRect(x, y, zw, zh, 12);
-        g.stroke({ width: 1, color: ZONE_BORDER });
-        bgLayer.addChild(g);
 
-        const label = new Text({ text: zone.name, style: LABEL_STYLE });
-        label.x = x + 12;
+        // Only draw zone rectangles when there's no background image
+        if (!bgLoadedRef.current) {
+          const g = new Graphics();
+          g.roundRect(x, y, zw, zh, 12);
+          g.fill(ZONE_BG);
+          g.roundRect(x, y, zw, zh, 12);
+          g.stroke({ width: 1, color: ZONE_BORDER });
+          bgLayer.addChild(g);
+        }
+
+        // Always show zone labels
+        const label = new Text({
+          text: zone.name,
+          style: new TextStyle({
+            fontFamily: "system-ui, sans-serif",
+            fontSize: 13,
+            fontWeight: "600",
+            fill: bgLoadedRef.current ? 0xffffff : 0x64748b,
+            letterSpacing: 1,
+          }),
+        });
+        label.anchor.set(0.5, 0);
+        label.x = x + zw / 2;
         label.y = y + 8;
+        if (bgLoadedRef.current) {
+          label.alpha = 0.7;
+        }
         uiLayer.addChild(label);
       }
     } else {
