@@ -627,34 +627,50 @@ export async function marketplaceRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: body.error.flatten() });
     }
 
-    // Atomic deduction with balance check
-    const [updated] = await db
-      .update(coinBalances)
-      .set({
-        balance: sql`${coinBalances.balance} - ${body.data.amount}`,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(coinBalances.userId, authUser.id),
-          gte(coinBalances.balance, body.data.amount),
-        ),
-      )
-      .returning({ balance: coinBalances.balance });
+    // Verify user is a creator (has at least 1 listing)
+    const [hasListings] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(agentListings)
+      .where(eq(agentListings.creatorId, authUser.id));
+    if (hasListings.count === 0) {
+      return reply.status(403).send({ error: "No creator account found" });
+    }
 
-    if (!updated) {
+    // Atomic deduction + transaction record in single DB transaction
+    const result = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(coinBalances)
+        .set({
+          balance: sql`${coinBalances.balance} - ${body.data.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(coinBalances.userId, authUser.id),
+            gte(coinBalances.balance, body.data.amount),
+          ),
+        )
+        .returning({ balance: coinBalances.balance });
+
+      if (!updated) {
+        return null;
+      }
+
+      await tx.insert(coinTransactions).values({
+        userId: authUser.id,
+        type: "payout",
+        amount: -body.data.amount,
+        description: `Payout request: ${body.data.amount} credits`,
+      });
+
+      return updated.balance;
+    });
+
+    if (result === null) {
       return reply.status(400).send({ error: "Insufficient balance for payout" });
     }
 
-    // Record payout transaction
-    await db.insert(coinTransactions).values({
-      userId: authUser.id,
-      type: "payout",
-      amount: -body.data.amount,
-      description: `Payout request: ${body.data.amount} credits`,
-    });
-
-    return reply.send({ success: true, newBalance: updated.balance });
+    return reply.send({ success: true, newBalance: result });
   });
 
   // ── Get user's marketplace conversations ──────────────────
