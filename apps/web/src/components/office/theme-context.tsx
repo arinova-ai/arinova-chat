@@ -5,6 +5,24 @@ import type { ThemeManifest } from "./theme-types";
 import { loadTheme } from "./theme-loader";
 
 const DEFAULT_THEME_ID = "default-office";
+const STORAGE_KEY = "arinova-office-theme";
+
+function readSavedThemeId(): string {
+  if (typeof window === "undefined") return DEFAULT_THEME_ID;
+  try {
+    return localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME_ID;
+  } catch {
+    return DEFAULT_THEME_ID;
+  }
+}
+
+function saveThemeId(id: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // storage unavailable
+  }
+}
 
 interface ThemeContextValue {
   manifest: ThemeManifest | null;
@@ -31,8 +49,8 @@ interface ThemeProviderProps {
   initialThemeId?: string;
 }
 
-export function ThemeProvider({ children, initialThemeId = DEFAULT_THEME_ID }: ThemeProviderProps) {
-  const [themeId, setThemeId] = useState(initialThemeId);
+export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) {
+  const [themeId, setThemeId] = useState(() => initialThemeId ?? readSavedThemeId());
   const [manifest, setManifest] = useState<ThemeManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +81,7 @@ export function ThemeProvider({ children, initialThemeId = DEFAULT_THEME_ID }: T
 
   const switchTheme = useCallback((newId: string) => {
     if (newId !== themeId) {
+      saveThemeId(newId);
       setThemeId(newId);
     }
   }, [themeId]);
