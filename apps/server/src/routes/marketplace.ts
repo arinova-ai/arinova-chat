@@ -415,7 +415,7 @@ export async function marketplaceRoutes(app: FastifyInstance) {
           }
 
           // Record message stats
-          await recordMessage(conversationId!, agentListingId, isFree ? 0 : listing.pricePerMessage);
+          await recordMessage(conversationId!, agentListingId, charged ? listing.pricePerMessage : 0);
 
           reply.raw.write(`data: ${JSON.stringify({ type: "done", charged })}\n\n`);
           reply.raw.end();
