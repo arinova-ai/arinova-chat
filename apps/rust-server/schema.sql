@@ -276,7 +276,58 @@ CREATE TABLE channel_messages (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- ===== Marketplace Tables =====
+-- ===== Agent Marketplace Tables =====
+
+CREATE TYPE agent_listing_status AS ENUM ('draft', 'published', 'suspended');
+
+CREATE TABLE agent_listings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id TEXT NOT NULL,
+    agent_name VARCHAR(100) NOT NULL,
+    description TEXT NOT NULL,
+    category VARCHAR(50) NOT NULL DEFAULT 'general',
+    avatar_url TEXT,
+    system_prompt TEXT NOT NULL,
+    api_key_encrypted TEXT,
+    model_id VARCHAR(100) NOT NULL DEFAULT 'gpt-4o-mini',
+    price INTEGER NOT NULL DEFAULT 0,
+    status agent_listing_status NOT NULL DEFAULT 'draft',
+    sales_count INTEGER NOT NULL DEFAULT 0,
+    avg_rating NUMERIC(3,2),
+    review_count INTEGER NOT NULL DEFAULT 0,
+    example_conversations JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE agent_reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID NOT NULL REFERENCES agent_listings(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(listing_id, user_id)
+);
+
+CREATE TABLE marketplace_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID NOT NULL REFERENCES agent_listings(id),
+    user_id TEXT NOT NULL,
+    title VARCHAR(200),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE marketplace_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES marketplace_conversations(id) ON DELETE CASCADE,
+    role message_role NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- ===== App Marketplace Tables =====
 
 CREATE TABLE developer_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -452,3 +503,9 @@ CREATE INDEX idx_conversations_user ON conversations(user_id);
 CREATE INDEX idx_conversation_user_members_conv ON conversation_user_members(conversation_id);
 CREATE INDEX idx_conversation_user_members_user ON conversation_user_members(user_id);
 CREATE INDEX idx_conversation_members_conv ON conversation_members(conversation_id);
+CREATE INDEX idx_agent_listings_creator ON agent_listings(creator_id);
+CREATE INDEX idx_agent_listings_status ON agent_listings(status);
+CREATE INDEX idx_agent_reviews_listing ON agent_reviews(listing_id);
+CREATE INDEX idx_marketplace_conversations_user ON marketplace_conversations(user_id);
+CREATE INDEX idx_marketplace_conversations_listing ON marketplace_conversations(listing_id);
+CREATE INDEX idx_marketplace_messages_conv ON marketplace_messages(conversation_id, created_at);

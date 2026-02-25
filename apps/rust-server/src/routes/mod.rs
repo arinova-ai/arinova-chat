@@ -16,6 +16,7 @@ pub mod users;
 pub mod agent_health;
 pub mod agent_send;
 pub mod agent_uploads;
+pub mod wallet;
 
 use axum::Router;
 use crate::AppState;
@@ -40,5 +41,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(users::router())
         .merge(friends::router())
         .merge(blocking::router())
+        .merge(wallet::router())
         .with_state(state)
 }

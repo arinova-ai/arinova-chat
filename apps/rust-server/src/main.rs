@@ -123,6 +123,7 @@ async fn main() {
         .merge(routes::users::router())
         .merge(routes::friends::router())
         .merge(routes::blocking::router())
+        .merge(routes::wallet::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

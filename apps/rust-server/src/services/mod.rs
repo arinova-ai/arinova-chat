@@ -1,3 +1,4 @@
+pub mod crypto;
 pub mod message_seq;
 pub mod office;
 pub mod pending_events;

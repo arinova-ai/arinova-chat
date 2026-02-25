@@ -26,6 +26,8 @@ pub struct Config {
     pub sentry_dsn: String,
     /// Shared secret for the POST /api/office/event endpoint (plugin → server).
     pub office_event_token: String,
+    /// AES-256-GCM key for encrypting API keys (64 hex chars = 32 bytes).
+    pub encryption_key: String,
 }
 
 impl Config {
@@ -68,6 +70,7 @@ impl Config {
                 .unwrap_or_else(|_| "mailto:admin@arinova.ai".into()),
             sentry_dsn: env::var("SENTRY_DSN").unwrap_or_default(),
             office_event_token: env::var("OFFICE_EVENT_TOKEN").unwrap_or_default(),
+            encryption_key: env::var("ENCRYPTION_KEY").unwrap_or_default(),
         }
     }
 

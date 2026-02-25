@@ -22,6 +22,11 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$ BEGIN
+  CREATE TYPE agent_listing_status AS ENUM ('draft', 'published', 'suspended');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 BEGIN;
 
 -- ===== 2. Alter Existing Tables =====
@@ -89,5 +94,61 @@ CREATE INDEX IF NOT EXISTS idx_conversation_user_members_user ON conversation_us
 CREATE INDEX IF NOT EXISTS idx_conversation_members_conv ON conversation_members(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id);
 CREATE INDEX IF NOT EXISTS idx_friendships_status ON friendships(status);
+
+-- ===== 5. Agent Marketplace Tables =====
+
+CREATE TABLE IF NOT EXISTS agent_listings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id TEXT NOT NULL,
+    agent_name VARCHAR(100) NOT NULL,
+    description TEXT NOT NULL,
+    category VARCHAR(50) NOT NULL DEFAULT 'general',
+    avatar_url TEXT,
+    system_prompt TEXT NOT NULL,
+    api_key_encrypted TEXT,
+    model_id VARCHAR(100) NOT NULL DEFAULT 'gpt-4o-mini',
+    price INTEGER NOT NULL DEFAULT 0,
+    status agent_listing_status NOT NULL DEFAULT 'draft',
+    sales_count INTEGER NOT NULL DEFAULT 0,
+    avg_rating NUMERIC(3,2),
+    review_count INTEGER NOT NULL DEFAULT 0,
+    example_conversations JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS agent_reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID NOT NULL REFERENCES agent_listings(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(listing_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS marketplace_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_id UUID NOT NULL REFERENCES agent_listings(id),
+    user_id TEXT NOT NULL,
+    title VARCHAR(200),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS marketplace_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES marketplace_conversations(id) ON DELETE CASCADE,
+    role message_role NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_listings_creator ON agent_listings(creator_id);
+CREATE INDEX IF NOT EXISTS idx_agent_listings_status ON agent_listings(status);
+CREATE INDEX IF NOT EXISTS idx_agent_reviews_listing ON agent_reviews(listing_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_conversations_user ON marketplace_conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_conversations_listing ON marketplace_conversations(listing_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_messages_conv ON marketplace_messages(conversation_id, created_at);
 
 COMMIT;
