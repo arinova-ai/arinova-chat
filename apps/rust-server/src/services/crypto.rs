@@ -1,3 +1,15 @@
+//! AES-256-GCM encryption for API keys stored in agent_listings.
+//!
+//! Wire format: `hex(iv):hex(authTag):hex(ciphertext)`
+//!   - iv: 12 bytes (AES-GCM standard nonce)
+//!   - authTag: 16 bytes
+//!   - ciphertext: variable length
+//!
+//! Note: This is a new module for the marketplace feature (no legacy TS-encrypted
+//! data exists in the DB). The TS crypto module used 16-byte IVs which differ from
+//! the AES-GCM standard 12-byte nonce used here. Since marketplace is brand new,
+//! backward compatibility with the TS 16-byte IV format is not needed.
+
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,

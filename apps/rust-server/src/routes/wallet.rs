@@ -284,7 +284,7 @@ async fn purchase(
     };
 
     // Credit creator balance
-    sqlx::query(
+    if let Err(e) = sqlx::query(
         r#"INSERT INTO coin_balances (user_id, balance, updated_at)
            VALUES ($1, $2, NOW())
            ON CONFLICT (user_id) DO UPDATE
@@ -294,10 +294,17 @@ async fn purchase(
     .bind(creator_share)
     .execute(&mut *tx)
     .await
-    .ok();
+    {
+        tracing::error!("Credit creator failed: {}", e);
+        // tx drops → auto rollback
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     // Record earning transaction (creator)
-    sqlx::query(
+    if let Err(e) = sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, related_app_id, description)
            VALUES ($1, 'earning', $2, $3, 'Marketplace earning: agent sale')"#,
     )
@@ -306,16 +313,28 @@ async fn purchase(
     .bind(lid)
     .execute(&mut *tx)
     .await
-    .ok();
+    {
+        tracing::error!("Record earning tx failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     // Increment sales_count
-    sqlx::query(
+    if let Err(e) = sqlx::query(
         "UPDATE agent_listings SET sales_count = sales_count + 1, updated_at = NOW() WHERE id = $1",
     )
     .bind(lid)
     .execute(&mut *tx)
     .await
-    .ok();
+    {
+        tracing::error!("Increment sales_count failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     // === Commit transaction ===
     if let Err(e) = tx.commit().await {
@@ -429,7 +448,7 @@ async fn refund(
     let refund_amount = amount.abs();
 
     // Refund to buyer
-    sqlx::query(
+    if let Err(e) = sqlx::query(
         r#"UPDATE coin_balances SET balance = balance + $2, updated_at = NOW()
            WHERE user_id = $1"#,
     )
@@ -437,10 +456,16 @@ async fn refund(
     .bind(refund_amount)
     .execute(&mut *tx)
     .await
-    .ok();
+    {
+        tracing::error!("Refund balance update failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     // Record refund transaction
-    sqlx::query(
+    if let Err(e) = sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, description)
            VALUES ($1, 'refund', $2, $3)"#,
     )
@@ -449,7 +474,13 @@ async fn refund(
     .bind(format!("Refund for purchase:{}", pid))
     .execute(&mut *tx)
     .await
-    .ok();
+    {
+        tracing::error!("Record refund tx failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     // === Commit transaction ===
     if let Err(e) = tx.commit().await {
