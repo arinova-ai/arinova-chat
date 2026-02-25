@@ -235,6 +235,8 @@ CREATE TABLE IF NOT EXISTS knowledge_base_chunks (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE agent_knowledge_bases ADD COLUMN IF NOT EXISTS raw_content TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_kb_listing ON agent_knowledge_bases(listing_id);
 CREATE INDEX IF NOT EXISTS idx_kb_creator ON agent_knowledge_bases(creator_id);
 CREATE INDEX IF NOT EXISTS idx_kb_chunks_kb_id ON knowledge_base_chunks(kb_id);

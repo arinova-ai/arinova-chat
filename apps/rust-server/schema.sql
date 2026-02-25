@@ -531,6 +531,7 @@ CREATE TABLE agent_knowledge_bases (
     chunk_count INTEGER NOT NULL DEFAULT 0,
     total_chars INTEGER NOT NULL DEFAULT 0,
     embedding_model VARCHAR(100) NOT NULL DEFAULT 'text-embedding-3-small',
+    raw_content TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

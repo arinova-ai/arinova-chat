@@ -430,6 +430,7 @@ pub struct KnowledgeBase {
     pub chunk_count: i32,
     pub total_chars: i32,
     pub embedding_model: String,
+    pub raw_content: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
