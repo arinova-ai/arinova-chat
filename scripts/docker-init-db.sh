@@ -10,21 +10,30 @@ DB_NAME=arinova_chat
 
 echo "Running database migrations..."
 
-# Check if migrations have already been applied by looking for the "user" table
-TABLE_EXISTS=$(psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
-  "SELECT 1 FROM information_schema.tables WHERE table_name = 'user'" 2>/dev/null || true)
+# Create migration tracking table if not exists
+psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c \
+  "CREATE TABLE IF NOT EXISTS drizzle_migrations (tag TEXT PRIMARY KEY, applied_at TIMESTAMP DEFAULT NOW());" \
+  2>/dev/null
 
-if [ "$TABLE_EXISTS" = "1" ]; then
-  echo "Tables already exist, skipping migrations."
-  exit 0
-fi
-
-# Concatenate and run all migration SQL files in order
+# Run each migration file if not already applied
 for f in /drizzle/0*.sql; do
   [ -f "$f" ] || continue
-  echo "  Applying $(basename "$f") ..."
-  # Strip Drizzle breakpoint markers before executing
+  TAG=$(basename "$f" .sql)
+
+  # Check if already applied
+  APPLIED=$(psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -tAc \
+    "SELECT 1 FROM drizzle_migrations WHERE tag = '$TAG'" 2>/dev/null || true)
+
+  if [ "$APPLIED" = "1" ]; then
+    continue
+  fi
+
+  echo "  Applying $TAG ..."
   sed 's/--> statement-breakpoint//' "$f" | psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1
+
+  # Record migration
+  psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c \
+    "INSERT INTO drizzle_migrations (tag) VALUES ('$TAG');" 2>/dev/null
 done
 
 echo "Migrations complete."
