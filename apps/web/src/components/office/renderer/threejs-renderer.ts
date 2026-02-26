@@ -268,7 +268,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    // v3 themes disable realtime shadows (small room, ambient+directional suffice);
+    // legacy themes keep PCFSoftShadowMap for zone-based office.
+    this.renderer.shadowMap.enabled = !isV3Theme(manifest);
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
@@ -766,6 +768,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
           child.receiveShadow = false;
         }
       });
+
+      // Raise character so feet sit on the floor (not sunk into ground).
+      // Compute from model bounding box: shift up by -box.min.y so bottom = 0.
+      const charBox = new THREE.Box3().setFromObject(this.characterModel);
+      this.characterModel.position.y = -charBox.min.y;
 
       this.scene.add(this.characterModel);
 
