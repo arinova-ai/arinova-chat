@@ -9,6 +9,7 @@ const DEFAULT_CANVAS_H = 1080;
 const WORLD_SCALE = 0.5;
 const BOT_HEIGHT = 40;
 const LERP_FACTOR = 0.08;
+const CHARACTER_MOVE_SPEED = 2; // units per second
 
 const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
   working: 0x16a34a,
@@ -159,6 +160,11 @@ function darkenColor(hex: number, amount: number): number {
   return c.getHex();
 }
 
+/** Check if theme uses v3 features (room model). */
+function isV3Theme(manifest: ThemeManifest | null): boolean {
+  return !!manifest?.room?.model;
+}
+
 // ── ThreeJSRenderer ──────────────────────────────────────────────
 
 export class ThreeJSRenderer implements OfficeRenderer {
@@ -200,6 +206,17 @@ export class ThreeJSRenderer implements OfficeRenderer {
   // Lerp animation targets
   private targetPositions = new Map<string, THREE.Vector3>();
 
+  // ── v3: AnimationMixer + character ───────────────────────────
+  private mixer: THREE.AnimationMixer | null = null;
+  private clock = new THREE.Clock();
+  private characterModel: THREE.Object3D | null = null;
+  private animationClips: Record<string, THREE.AnimationClip> = {};
+  private currentAction: THREE.AnimationAction | null = null;
+
+  // ── v3: Click-to-walk ────────────────────────────────────────
+  private walkTarget: THREE.Vector3 | null = null;
+  private roomScene: THREE.Object3D | null = null;
+
   onAgentClick?: (agentId: string) => void;
 
   // ── init ──────────────────────────────────────────────────────
@@ -231,10 +248,13 @@ export class ThreeJSRenderer implements OfficeRenderer {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(this.bgColor);
-    // No fog for indoor scenes
 
-    // Camera
-    this.setupCamera(width, height);
+    // Camera — v3 uses manifest camera config, legacy uses hardcoded
+    if (isV3Theme(manifest)) {
+      this.setupCameraV3(width, height);
+    } else {
+      this.setupCamera(width, height);
+    }
 
     // WebGL renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -246,20 +266,24 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.renderer.toneMappingExposure = 1.2;
     container.appendChild(this.renderer.domElement);
 
-    // Lighting
-    this.setupLights();
+    // Lighting — v3 uses manifest lighting config
+    if (isV3Theme(manifest)) {
+      this.setupLightsV3();
+    } else {
+      this.setupLights();
+    }
 
-    // Ground plane
-    this.createGround();
-
-    // Zone floor markers
-    this.drawZoneFloors();
-
-    // Load GLB models (bot + furniture)
-    await this.loadModels();
-
-    // Place furniture from manifest
-    this.placeFurniture();
+    if (isV3Theme(manifest)) {
+      // v3 path: load room model + animated character
+      await this.loadRoomModel();
+      await this.loadCharacterModel();
+    } else {
+      // Legacy path: ground + zones + individual furniture + bot model
+      this.createGround();
+      this.drawZoneFloors();
+      await this.loadModels();
+      this.placeFurniture();
+    }
 
     // Click handler
     this.renderer.domElement.addEventListener("click", this.handleClick);
@@ -273,6 +297,12 @@ export class ThreeJSRenderer implements OfficeRenderer {
     cancelAnimationFrame(this.animId);
 
     this.renderer?.domElement.removeEventListener("click", this.handleClick);
+
+    // Stop animation mixer
+    if (this.mixer) {
+      this.mixer.stopAllAction();
+      this.mixer = null;
+    }
 
     // Traverse entire scene and dispose all GPU resources
     if (this.scene) {
@@ -294,6 +324,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.agentGroups.clear();
     this.targetPositions.clear();
     this.botTemplate = null;
+    this.characterModel = null;
+    this.roomScene = null;
+    this.animationClips = {};
+    this.currentAction = null;
+    this.walkTarget = null;
 
     this.renderer?.dispose();
     if (this.renderer?.domElement && this.container) {
@@ -316,12 +351,21 @@ export class ThreeJSRenderer implements OfficeRenderer {
       this.renderer.setSize(width, height);
     }
     if (this.camera) {
-      const frustum = 250;
-      const aspect = width / height;
-      this.camera.left = -frustum * aspect;
-      this.camera.right = frustum * aspect;
-      this.camera.top = frustum;
-      this.camera.bottom = -frustum;
+      if (isV3Theme(this.manifest)) {
+        const frustum = this.manifest?.camera?.frustum ?? 8;
+        const aspect = width / height;
+        this.camera.left = -frustum * aspect;
+        this.camera.right = frustum * aspect;
+        this.camera.top = frustum;
+        this.camera.bottom = -frustum;
+      } else {
+        const frustum = 250;
+        const aspect = width / height;
+        this.camera.left = -frustum * aspect;
+        this.camera.right = frustum * aspect;
+        this.camera.top = frustum;
+        this.camera.bottom = -frustum;
+      }
       this.camera.updateProjectionMatrix();
     }
   }
@@ -331,6 +375,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
   updateAgents(agents: Agent[]): void {
     if (!this.scene) return;
     this.agents = agents;
+
+    // v3 themes don't use agent zone placement (character is user-controlled)
+    if (isV3Theme(this.manifest)) return;
 
     const currentIds = new Set(agents.map((a) => a.id));
 
@@ -395,7 +442,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     }
   }
 
-  // ── Private: Camera ───────────────────────────────────────────
+  // ── Private: Camera (legacy) ──────────────────────────────────
 
   private setupCamera(w: number, h: number): void {
     const frustum = 250;
@@ -410,7 +457,27 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.camera.lookAt(0, 0, 0);
   }
 
-  // ── Private: Lighting ─────────────────────────────────────────
+  // ── Private: Camera (v3) ──────────────────────────────────────
+
+  private setupCameraV3(w: number, h: number): void {
+    const camConfig = this.manifest?.camera;
+    const frustum = camConfig?.frustum ?? 8;
+    const aspect = w / h;
+
+    this.camera = new THREE.OrthographicCamera(
+      -frustum * aspect, frustum * aspect,
+      frustum, -frustum,
+      0.1, 200,
+    );
+
+    const pos = camConfig?.position ?? [7, 7, 6];
+    this.camera.position.set(pos[0], pos[1], pos[2]);
+
+    const target = camConfig?.target ?? [0, 0, 0];
+    this.camera.lookAt(target[0], target[1], target[2]);
+  }
+
+  // ── Private: Lighting (legacy) ────────────────────────────────
 
   private setupLights(): void {
     if (!this.scene) return;
@@ -445,7 +512,163 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.scene.add(windowLight);
   }
 
-  // ── Private: Ground ───────────────────────────────────────────
+  // ── Private: Lighting (v3) ────────────────────────────────────
+
+  private setupLightsV3(): void {
+    if (!this.scene) return;
+
+    const lightConfig = this.manifest?.lighting;
+
+    // Ambient
+    const ambientColor = lightConfig?.ambient?.color
+      ? Number(lightConfig.ambient.color) : 0xfff5e6;
+    const ambientIntensity = lightConfig?.ambient?.intensity ?? 0.7;
+    this.scene.add(new THREE.AmbientLight(ambientColor, ambientIntensity));
+
+    // Hemisphere for subtle variation
+    this.scene.add(new THREE.HemisphereLight(0x87ceeb, 0x362d22, 0.25));
+
+    // Directional
+    const dirColor = lightConfig?.directional?.color
+      ? Number(lightConfig.directional.color) : 0xffffff;
+    const dirIntensity = lightConfig?.directional?.intensity ?? 1.0;
+    const dirPos = lightConfig?.directional?.position ?? [5, 8, 6];
+
+    const dir = new THREE.DirectionalLight(dirColor, dirIntensity);
+    dir.position.set(dirPos[0], dirPos[1], dirPos[2]);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.camera.left = -15;
+    dir.shadow.camera.right = 15;
+    dir.shadow.camera.top = 15;
+    dir.shadow.camera.bottom = -15;
+    dir.shadow.camera.near = 0.1;
+    dir.shadow.camera.far = 50;
+    this.scene.add(dir);
+
+    // Soft fill from opposite side
+    const fill = new THREE.DirectionalLight(0xc4d4ff, 0.3);
+    fill.position.set(-5, 4, -3);
+    this.scene.add(fill);
+  }
+
+  // ── Private: Load room model (v3) ─────────────────────────────
+
+  private async loadRoomModel(): Promise<void> {
+    if (!this.scene || !this.manifest?.room?.model) return;
+
+    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+    const loader = new GLTFLoader();
+
+    const roomUrl = `/themes/${this.manifest.id}/${this.manifest.room.model}`;
+    try {
+      const gltf = await loader.loadAsync(roomUrl);
+      this.roomScene = gltf.scene;
+      const scale = this.manifest.room.scale ?? [1, 1, 1];
+      this.roomScene.scale.set(scale[0], scale[1], scale[2]);
+
+      // Enable shadows on room meshes
+      this.roomScene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      this.scene.add(this.roomScene);
+    } catch (err) {
+      console.warn("[ThreeJSRenderer] Failed to load room model:", err);
+    }
+  }
+
+  // ── Private: Load character model (v3) ────────────────────────
+
+  private async loadCharacterModel(): Promise<void> {
+    if (!this.scene || !this.manifest?.character?.model) return;
+
+    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+    const loader = new GLTFLoader();
+
+    // Load main character model (with walk animation)
+    const charUrl = `/themes/${this.manifest.id}/${this.manifest.character.model}`;
+    try {
+      const gltf = await loader.loadAsync(charUrl);
+      this.characterModel = gltf.scene;
+
+      const scale = this.manifest.character.scale ?? [1, 1, 1];
+      this.characterModel.scale.set(scale[0], scale[1], scale[2]);
+
+      // Enable shadows
+      this.characterModel.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      this.scene.add(this.characterModel);
+
+      // Setup AnimationMixer
+      this.mixer = new THREE.AnimationMixer(this.characterModel);
+
+      // Store all animations from the main model
+      for (const clip of gltf.animations) {
+        this.animationClips[clip.name] = clip;
+      }
+
+      // If there's only one animation clip, map it to "walk"
+      if (gltf.animations.length === 1 && !this.animationClips["walk"]) {
+        this.animationClips["walk"] = gltf.animations[0];
+      }
+    } catch (err) {
+      console.warn("[ThreeJSRenderer] Failed to load character model:", err);
+      return;
+    }
+
+    // Load separate idle model if specified
+    if (this.manifest.character.idleModel) {
+      const idleUrl = `/themes/${this.manifest.id}/${this.manifest.character.idleModel}`;
+      try {
+        const idleGltf = await loader.loadAsync(idleUrl);
+        for (const clip of idleGltf.animations) {
+          this.animationClips["idle"] = clip;
+        }
+        // If only one clip and no idle yet, use it
+        if (idleGltf.animations.length === 1 && !this.animationClips["idle"]) {
+          this.animationClips["idle"] = idleGltf.animations[0];
+        }
+      } catch (err) {
+        console.warn("[ThreeJSRenderer] Failed to load idle model:", err);
+      }
+    }
+
+    // Play idle animation by default (fall back to walk if no idle)
+    if (this.animationClips["idle"]) {
+      this.playAnimation("idle");
+    } else if (Object.keys(this.animationClips).length > 0) {
+      // Play any available animation
+      const firstName = Object.keys(this.animationClips)[0];
+      this.playAnimation(firstName);
+    }
+  }
+
+  // ── Private: Play animation ───────────────────────────────────
+
+  private playAnimation(name: string): void {
+    if (!this.mixer) return;
+    const clip = this.animationClips[name];
+    if (!clip) return;
+
+    if (this.currentAction) {
+      this.currentAction.fadeOut(0.3);
+    }
+
+    const action = this.mixer.clipAction(clip);
+    action.reset().fadeIn(0.3).play();
+    this.currentAction = action;
+  }
+
+  // ── Private: Ground (legacy) ──────────────────────────────────
 
   private createGround(): void {
     if (!this.scene) return;
@@ -464,7 +687,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.scene.add(ground);
   }
 
-  // ── Private: Zone floor markers ───────────────────────────────
+  // ── Private: Zone floor markers (legacy) ──────────────────────
 
   private drawZoneFloors(): void {
     if (!this.scene || !this.manifest?.zones) return;
@@ -498,7 +721,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     }
   }
 
-  // ── Private: Load GLB models ──────────────────────────────────
+  // ── Private: Load GLB models (legacy) ─────────────────────────
 
   private async loadModels(): Promise<void> {
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
@@ -547,7 +770,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
   private furnitureScenes = new Map<string, THREE.Group>();
 
-  // ── Private: Place furniture ──────────────────────────────────
+  // ── Private: Place furniture (legacy) ─────────────────────────
 
   private placeFurniture(): void {
     if (!this.scene || !this.manifest?.furniture) return;
@@ -593,7 +816,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     }
   }
 
-  // ── Private: Create agent group ───────────────────────────────
+  // ── Private: Create agent group (legacy) ──────────────────────
 
   private createAgentGroup(agent: Agent): THREE.Group {
     const group = new THREE.Group();
@@ -649,7 +872,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     return group;
   }
 
-  // ── Private: Update agent color ───────────────────────────────
+  // ── Private: Update agent color (legacy) ──────────────────────
 
   private updateAgentColor(group: THREE.Group, status: AgentStatus): void {
     const color = this.statusColors[status];
@@ -687,17 +910,30 @@ export class ThreeJSRenderer implements OfficeRenderer {
   // ── Private: Click handler ────────────────────────────────────
 
   private handleClick = (event: MouseEvent): void => {
-    if (!this.renderer || !this.camera || !this.scene || !this.onAgentClick) return;
+    if (!this.renderer || !this.camera || !this.scene) return;
 
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     // Force world matrix update so hit-box transforms are current
-    // (position.lerp in the render loop may have moved groups since last render)
     this.scene.updateMatrixWorld();
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    // v3: click-to-walk — intersect room meshes to get floor position
+    if (isV3Theme(this.manifest) && this.characterModel && this.roomScene) {
+      const intersects = this.raycaster.intersectObjects(this.roomScene.children, true);
+      if (intersects.length > 0) {
+        const hit = intersects[0].point;
+        this.walkTarget = new THREE.Vector3(hit.x, 0, hit.z);
+        this.playAnimation("walk");
+        return;
+      }
+    }
+
+    // Legacy: agent click detection
+    if (!this.onAgentClick) return;
 
     // Raycast only against invisible hit-box meshes — avoids SkinnedMesh
     // raycasting issues with cloned GLB models that share skeleton refs.
@@ -743,7 +979,42 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
   private startRenderLoop(): void {
     const tick = () => {
-      // Lerp agent positions toward their targets
+      const delta = this.clock.getDelta();
+
+      // Update AnimationMixer (v3 character animations)
+      if (this.mixer) {
+        this.mixer.update(delta);
+      }
+
+      // v3: Move character toward walk target
+      if (this.walkTarget && this.characterModel) {
+        const current = this.characterModel.position;
+        const direction = this.walkTarget.clone().sub(current);
+        direction.y = 0;
+        const distance = direction.length();
+
+        if (distance > 0.1) {
+          direction.normalize();
+          const step = CHARACTER_MOVE_SPEED * delta;
+          current.add(direction.multiplyScalar(Math.min(step, distance)));
+
+          // Rotate character to face movement direction
+          const lookTarget = new THREE.Vector3(
+            this.walkTarget.x,
+            current.y,
+            this.walkTarget.z,
+          );
+          this.characterModel.lookAt(lookTarget);
+        } else {
+          // Arrived at target
+          this.walkTarget = null;
+          if (this.animationClips["idle"]) {
+            this.playAnimation("idle");
+          }
+        }
+      }
+
+      // Legacy: Lerp agent positions toward their targets
       for (const [id, group] of this.agentGroups) {
         const target = this.targetPositions.get(id);
         if (target) {

@@ -6,3 +6,8 @@ dist/
 .env.local
 .npmrc
 *.log
+
+# Large 3D assets — room and character GLBs (use LFS or local copy)
+apps/web/public/themes/cozy-studio/cosy-studio-room.glb
+apps/web/public/themes/cozy-studio/arinova-doll-walk.glb
+apps/web/public/themes/cozy-studio/arinova-doll-idle.glb

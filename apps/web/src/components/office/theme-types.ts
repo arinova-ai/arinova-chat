@@ -192,6 +192,39 @@ export interface AudioConfig {
 
 export type RendererType = "pixi" | "threejs";
 
+// ── v3: Room Model ─────────────────────────────────────────────
+
+export interface RoomConfig {
+  model: string;
+  scale?: [number, number, number];
+}
+
+// ── v3: Character with skeletal animations ─────────────────────
+
+export interface CharacterConfig {
+  model: string;
+  idleModel?: string;
+  scale?: [number, number, number];
+  height?: number;
+  animations?: Record<string, string>;
+}
+
+// ── v3: Camera ─────────────────────────────────────────────────
+
+export interface CameraConfig {
+  type?: "orthographic" | "perspective";
+  frustum?: number;
+  position?: [number, number, number];
+  target?: [number, number, number];
+}
+
+// ── v3: Lighting ───────────────────────────────────────────────
+
+export interface LightingConfig {
+  ambient?: { color: string; intensity: number };
+  directional?: { color: string; intensity: number; position: [number, number, number] };
+}
+
 // ── Top-level Manifest ──────────────────────────────────────────
 
 export interface ThemeManifest {
@@ -215,4 +248,13 @@ export interface ThemeManifest {
 
   /** Which rendering engine to use. Defaults to "pixi" for backward compat. */
   renderer?: RendererType;
+
+  /** v3: Single room model (replaces furniture list) */
+  room?: RoomConfig;
+  /** v3: Animated character model */
+  character?: CharacterConfig;
+  /** v3: Camera settings */
+  camera?: CameraConfig;
+  /** v3: Lighting settings */
+  lighting?: LightingConfig;
 }
