@@ -109,7 +109,7 @@ export function ChatLayout() {
       <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
 
       {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
-      <div className={`h-full flex-1 min-w-0 flex flex-col bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:block"}`}>
+      <div className={`h-full flex-1 min-w-0 flex flex-col bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:flex md:flex-col"}`}>
         <NotificationBanner />
         <div className="flex-1 min-h-0">
           <ChatArea />
