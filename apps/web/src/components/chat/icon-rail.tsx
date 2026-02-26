@@ -14,6 +14,7 @@ const NAV_ICONS: Record<string, { active: string; inactive: string }> = {
   apps: { active: "/assets/nav/icon-apps-active.svg", inactive: "/assets/nav/icon-apps-inactive.svg" },
   friends: { active: "/assets/nav/icon-friends-active.svg", inactive: "/assets/nav/icon-friends-inactive.svg" },
   theme: { active: "/assets/nav/icon-theme-active.svg", inactive: "/assets/nav/icon-theme-inactive.svg" },
+  community: { active: "/assets/nav/icon-spaces-active.svg", inactive: "/assets/nav/icon-spaces-inactive.svg" },
   market: { active: "/assets/nav/icon-market-active.svg", inactive: "/assets/nav/icon-market-inactive.svg" },
   settings: { active: "/assets/nav/icon-settings-active.svg", inactive: "/assets/nav/icon-settings-inactive.svg" },
 };
@@ -48,6 +49,7 @@ export function IconRail() {
     if (pathname.startsWith("/office")) return "office";
     if (pathname.startsWith("/spaces")) return "spaces";
     if (pathname.startsWith("/apps")) return "apps";
+    if (pathname.startsWith("/community")) return "community";
     if (pathname.startsWith("/marketplace")) return "market";
     if (pathname.startsWith("/creator")) return "market";
     if (pathname.startsWith("/wallet")) return "market";
@@ -71,6 +73,7 @@ export function IconRail() {
   };
 
   const secondaryItems: NavEntry[] = [
+    { id: "community", label: "Community", href: "/community" },
     { id: "theme", label: "Theme", href: "/office/themes" },
     { id: "market", label: "Market", href: "/marketplace" },
   ];

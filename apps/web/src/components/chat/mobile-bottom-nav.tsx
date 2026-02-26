@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Palette, Store, Globe } from "lucide-react";
+import { Palette, Store, Globe, Users } from "lucide-react";
 import { FriendsDialog } from "../friends/friends-dialog";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -62,13 +62,14 @@ export function MobileBottomNav() {
   const activeId = getActiveId();
 
   const fanItems = [
+    { id: "community", icon: Users, label: "Community", href: "/community" },
     { id: "office-theme", icon: Palette, label: "Theme", href: "/office/themes" },
     { id: "marketplace", icon: Store, label: "Market", href: "/marketplace" },
     { id: "spaces", icon: Globe, label: "Spaces", href: "/spaces" },
   ];
 
-  // 3 items: -45°, 0°, 45°
-  const fanAngles = [-45, 0, 45];
+  // 4 items: wider spread
+  const fanAngles = [-60, -20, 20, 60];
 
   return (
     <>
