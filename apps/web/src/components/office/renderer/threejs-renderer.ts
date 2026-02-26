@@ -231,7 +231,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(this.bgColor);
-    this.scene.fog = new THREE.FogExp2(this.bgColor, 0.0006);
+    // No fog for indoor scenes
 
     // Camera
     this.setupCamera(width, height);
@@ -316,7 +316,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
       this.renderer.setSize(width, height);
     }
     if (this.camera) {
-      const frustum = 500;
+      const frustum = 250;
       const aspect = width / height;
       this.camera.left = -frustum * aspect;
       this.camera.right = frustum * aspect;
@@ -398,7 +398,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
   // ── Private: Camera ───────────────────────────────────────────
 
   private setupCamera(w: number, h: number): void {
-    const frustum = 500;
+    const frustum = 250;
     const aspect = w / h;
     this.camera = new THREE.OrthographicCamera(
       -frustum * aspect, frustum * aspect,
@@ -415,7 +415,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private setupLights(): void {
     if (!this.scene) return;
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
     this.scene.add(ambient);
 
     // Hemisphere for subtle sky/ground color variation
@@ -437,6 +437,12 @@ export class ThreeJSRenderer implements OfficeRenderer {
     const fill = new THREE.DirectionalLight(0xc4d4ff, 0.3);
     fill.position.set(-200, 300, -100);
     this.scene.add(fill);
+
+    // Warm window light (simulate sunlight streaming in)
+    const windowLight = new THREE.SpotLight(0xfff0d4, 0.6, 600, Math.PI / 4);
+    windowLight.position.set(-200, 400, -200);
+    windowLight.castShadow = false;
+    this.scene.add(windowLight);
   }
 
   // ── Private: Ground ───────────────────────────────────────────
