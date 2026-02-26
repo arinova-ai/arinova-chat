@@ -15,6 +15,7 @@ import {
   Coins,
   AlertCircle,
 } from "lucide-react";
+import { AudioPlayer } from "@/components/chat/audio-player";
 
 interface AgentListing {
   id: string;
@@ -28,6 +29,7 @@ interface Message {
   id?: string;
   role: "user" | "assistant";
   content: string;
+  ttsAudioUrl?: string;
 }
 
 function MarketplaceChatContent() {
@@ -139,6 +141,15 @@ function MarketplaceChatContent() {
                     ...last,
                     content: last.content + event.content,
                   };
+                }
+                return copy;
+              });
+            } else if (event.type === "audio_ready") {
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.role === "assistant") {
+                  copy[copy.length - 1] = { ...last, ttsAudioUrl: event.audioUrl };
                 }
                 return copy;
               });
@@ -295,6 +306,11 @@ function MarketplaceChatContent() {
                 }`}
               >
                 <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                {msg.ttsAudioUrl && (
+                  <div className="mt-1.5">
+                    <AudioPlayer src={msg.ttsAudioUrl} />
+                  </div>
+                )}
                 {msg.role === "assistant" && !msg.content && streaming && (
                   <span className="streaming-dot inline-flex gap-0.5">
                     <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />

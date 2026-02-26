@@ -133,6 +133,7 @@ struct CommunityMessageRow {
     user_name: Option<String>,
     user_image: Option<String>,
     agent_name: Option<String>,
+    tts_audio_url: Option<String>,
 }
 
 fn community_json(r: &CommunityRow) -> Value {
@@ -1799,7 +1800,7 @@ async fn get_messages(
         sqlx::query_as::<_, CommunityMessageRow>(
             r#"SELECT m.id, m.user_id, m.agent_listing_id, m.content, m.message_type, m.created_at,
                       u.name AS user_name, u.image AS user_image,
-                      l.agent_name
+                      l.agent_name, m.tts_audio_url
                FROM community_messages m
                LEFT JOIN "user" u ON m.user_id = u.id
                LEFT JOIN agent_listings l ON m.agent_listing_id = l.id
@@ -1816,7 +1817,7 @@ async fn get_messages(
         sqlx::query_as::<_, CommunityMessageRow>(
             r#"SELECT m.id, m.user_id, m.agent_listing_id, m.content, m.message_type, m.created_at,
                       u.name AS user_name, u.image AS user_image,
-                      l.agent_name
+                      l.agent_name, m.tts_audio_url
                FROM community_messages m
                LEFT JOIN "user" u ON m.user_id = u.id
                LEFT JOIN agent_listings l ON m.agent_listing_id = l.id
@@ -1846,6 +1847,7 @@ async fn get_messages(
                         "userName": r.user_name,
                         "userImage": r.user_image,
                         "agentName": r.agent_name,
+                        "ttsAudioUrl": r.tts_audio_url,
                     })
                 })
                 .collect();

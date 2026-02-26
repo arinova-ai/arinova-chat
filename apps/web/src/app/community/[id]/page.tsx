@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AudioPlayer } from "@/components/chat/audio-player";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +76,7 @@ interface Message {
   userName: string | null;
   userImage: string | null;
   agentName: string | null;
+  ttsAudioUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -346,6 +348,15 @@ function CommunityDetailContent() {
                 }
                 return copy;
               });
+            } else if (event.type === "audio_ready") {
+              setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last?.agentListingId) {
+                  copy[copy.length - 1] = { ...last, ttsAudioUrl: event.audioUrl };
+                }
+                return copy;
+              });
             } else if (event.type === "error") {
               setError(event.message ?? "Agent error");
               // Remove empty assistant placeholder
@@ -574,6 +585,11 @@ function CommunityDetailContent() {
                         <p className="whitespace-pre-wrap break-words">
                           {msg.content}
                         </p>
+                        {msg.ttsAudioUrl && (
+                          <div className="mt-1.5">
+                            <AudioPlayer src={msg.ttsAudioUrl} />
+                          </div>
+                        )}
                         {isAgent && !msg.content && streaming && (
                           <span className="inline-flex gap-0.5">
                             <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse" />
