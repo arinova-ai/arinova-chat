@@ -611,9 +611,17 @@ export class ThreeJSRenderer implements OfficeRenderer {
       // Setup AnimationMixer
       this.mixer = new THREE.AnimationMixer(this.characterModel);
 
-      // Store all animations from the main model
+      // Build reverse map from clip names to canonical keys (e.g. "Armature|walking" → "walk")
+      const animMap = this.manifest.character?.animations ?? {};
+      const reverseMap: Record<string, string> = {};
+      for (const [key, clipName] of Object.entries(animMap)) {
+        reverseMap[clipName as string] = key;
+      }
+
+      // Store animations using canonical keys from manifest mapping
       for (const clip of gltf.animations) {
-        this.animationClips[clip.name] = clip;
+        const canonicalKey = reverseMap[clip.name] ?? clip.name;
+        this.animationClips[canonicalKey] = clip;
       }
 
       // If there's only one animation clip, map it to "walk"
@@ -630,8 +638,14 @@ export class ThreeJSRenderer implements OfficeRenderer {
       const idleUrl = `/themes/${this.manifest.id}/${this.manifest.character.idleModel}`;
       try {
         const idleGltf = await loader.loadAsync(idleUrl);
+        const animMap = this.manifest.character?.animations ?? {};
+        const reverseMap: Record<string, string> = {};
+        for (const [key, clipName] of Object.entries(animMap)) {
+          reverseMap[clipName as string] = key;
+        }
         for (const clip of idleGltf.animations) {
-          this.animationClips["idle"] = clip;
+          const canonicalKey = reverseMap[clip.name] ?? clip.name;
+          this.animationClips[canonicalKey] = clip;
         }
         // If only one clip and no idle yet, use it
         if (idleGltf.animations.length === 1 && !this.animationClips["idle"]) {
