@@ -44,39 +44,46 @@ export function validateManifest(data: unknown): ThemeManifest {
   if (bg.image2x != null) assertSafePath(bg.image2x, "canvas.background.image2x");
   if (bg.mobile != null) assertSafePath(bg.mobile, "canvas.background.mobile");
 
-  // Zones: must be non-empty, each zone must have ≥1 seat
-  if (!Array.isArray(d.zones)) throw new Error("Manifest missing 'zones' array");
-  const zones = d.zones as unknown[];
-  if (zones.length === 0) throw new Error("Manifest 'zones' must not be empty");
-  for (const zone of zones) {
-    const z = zone as Record<string, unknown>;
-    if (!z.id || !z.bounds || !Array.isArray(z.seats)) {
-      throw new Error(`Zone '${z.id ?? "unknown"}' missing id/bounds/seats`);
-    }
-    if ((z.seats as unknown[]).length === 0) {
-      throw new Error(`Zone '${z.id}' must have at least 1 seat`);
-    }
-  }
+  // v3 themes use room.model instead of zones/layers/characters
+  const room = d.room as Record<string, unknown> | undefined;
+  const isV3 = !!room?.model;
 
-  // Layers: must have entries
-  if (!Array.isArray(d.layers) || (d.layers as unknown[]).length === 0) {
-    throw new Error("Manifest missing 'layers' array");
-  }
+  if (!isV3) {
+    // Zones: must be non-empty, each zone must have ≥1 seat
+    if (!Array.isArray(d.zones)) throw new Error("Manifest missing 'zones' array");
+    const zones = d.zones as unknown[];
+    if (zones.length === 0) throw new Error("Manifest 'zones' must not be empty");
+    for (const zone of zones) {
+      const z = zone as Record<string, unknown>;
+      if (!z.id || !z.bounds || !Array.isArray(z.seats)) {
+        throw new Error(`Zone '${z.id ?? "unknown"}' missing id/bounds/seats`);
+      }
+      if ((z.seats as unknown[]).length === 0) {
+        throw new Error(`Zone '${z.id}' must have at least 1 seat`);
+      }
+    }
 
-  // Characters: statusBadge.colors must exist
-  const chars = d.characters as Record<string, unknown> | undefined;
-  if (!chars?.statusBadge || typeof chars.statusBadge !== "object") {
-    throw new Error("Manifest missing 'characters.statusBadge'");
-  }
-  const badge = chars.statusBadge as Record<string, unknown>;
-  if (!badge.colors || typeof badge.colors !== "object") {
-    throw new Error("Manifest missing 'characters.statusBadge.colors'");
+    // Layers: must have entries
+    if (!Array.isArray(d.layers) || (d.layers as unknown[]).length === 0) {
+      throw new Error("Manifest missing 'layers' array");
+    }
+
+    // Characters: statusBadge.colors must exist
+    const chars = d.characters as Record<string, unknown> | undefined;
+    if (!chars?.statusBadge || typeof chars.statusBadge !== "object") {
+      throw new Error("Manifest missing 'characters.statusBadge'");
+    }
+    const badge = chars.statusBadge as Record<string, unknown>;
+    if (!badge.colors || typeof badge.colors !== "object") {
+      throw new Error("Manifest missing 'characters.statusBadge.colors'");
+    }
   }
 
   // Path safety: preview, atlas, audio
   if (d.preview != null) assertSafePath(d.preview, "preview");
-  if (typeof chars.atlas === "string" && chars.atlas.length > 0) {
-    assertSafePath(chars.atlas, "characters.atlas");
+  const charsForPath = d.characters as Record<string, unknown> | undefined;
+  if (charsForPath && typeof charsForPath.atlas === "string" && charsForPath.atlas.length > 0) {
+    assertSafePath(charsForPath.atlas, "characters.atlas");
   }
   const audio = d.audio as Record<string, unknown> | undefined;
   if (audio?.ambient) {
