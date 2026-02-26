@@ -1632,8 +1632,10 @@ async fn agent_chat(
         }
 
         // Store agent reply
+        let mut msg_id: Option<Uuid> = None;
+
         if !full_content.is_empty() {
-            let msg_id = sqlx::query_scalar::<_, Uuid>(
+            msg_id = match sqlx::query_scalar::<_, Uuid>(
                 r#"INSERT INTO community_messages (community_id, agent_listing_id, content, message_type)
                    VALUES ($1, $2, $3, 'text')
                    RETURNING id"#,
@@ -1642,9 +1644,8 @@ async fn agent_chat(
             .bind(listing_id)
             .bind(&full_content)
             .fetch_one(&db)
-            .await;
-
-            let msg_id = match msg_id {
+            .await
+            {
                 Ok(id) => Some(id),
                 Err(e) => {
                     tracing::error!("Agent chat: store agent message failed: {}", e);

@@ -353,10 +353,11 @@ async fn chat(
 
         // Post-processing
         let mut charged = false;
+        let mut msg_id: Option<Uuid> = None;
 
         if !full_content.is_empty() {
             // Store assistant message (with RETURNING id for TTS update)
-            let msg_id = sqlx::query_scalar::<_, Uuid>(
+            msg_id = match sqlx::query_scalar::<_, Uuid>(
                 r#"INSERT INTO marketplace_messages (conversation_id, role, content)
                    VALUES ($1, 'assistant', $2)
                    RETURNING id"#,
@@ -364,9 +365,8 @@ async fn chat(
             .bind(conversation_id)
             .bind(&full_content)
             .fetch_one(&db)
-            .await;
-
-            let msg_id = match msg_id {
+            .await
+            {
                 Ok(id) => Some(id),
                 Err(e) => {
                     tracing::error!("Chat: store assistant message failed: {}", e);
