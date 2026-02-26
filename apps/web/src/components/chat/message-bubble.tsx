@@ -29,6 +29,7 @@ import {
   Download,
   Square,
   Reply,
+  MessageSquare,
 } from "lucide-react";
 import { assetUrl } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
@@ -43,6 +44,7 @@ interface MessageBubbleProps {
   agentName?: string;
   highlightQuery?: string;
   isGroupConversation?: boolean;
+  isInThread?: boolean;
 }
 
 function formatTimestamp(date: Date | string): string {
@@ -54,7 +56,7 @@ function formatTimestamp(date: Date | string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
-export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation }: MessageBubbleProps) {
+export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
   // "isUser" means "is this MY message" — for human DMs both sides have role "user",
@@ -72,6 +74,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const mentionNames = members.length > 0 ? members.map((m) => m.agentName) : undefined;
   const sendMessage = useChatStore((s) => s.sendMessage);
   const cancelStream = useChatStore((s) => s.cancelStream);
+  const openThread = useChatStore((s) => s.openThread);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const showTimestamps = useChatStore((s) => s.showTimestamps);
   const toggleReaction = useChatStore((s) => s.toggleReaction);
@@ -269,6 +272,21 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             onToggle={(emoji) => toggleReaction(message.id, emoji)}
           />
 
+          {/* Thread indicator */}
+          {!isInThread && message.threadSummary && message.threadSummary.replyCount > 0 && (
+            <button
+              type="button"
+              onClick={() => openThread(message.id)}
+              className="mt-1.5 flex items-center gap-1.5 text-xs text-primary hover:underline"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span>
+                {message.threadSummary.replyCount}{" "}
+                {message.threadSummary.replyCount === 1 ? "reply" : "replies"}
+              </span>
+            </button>
+          )}
+
           {/* Timestamp + Read receipt */}
           {showTimestamps && message.createdAt && (
             <p className={cn(
@@ -317,6 +335,18 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               >
                 <Reply className="h-3 w-3" />
               </Button>
+
+              {!isInThread && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => openThread(message.id)}
+                  className="h-6 w-6 text-muted-foreground hover:text-blue-400"
+                  title="Start thread"
+                >
+                  <MessageSquare className="h-3 w-3" />
+                </Button>
+              )}
 
               <Button
                 variant="ghost"

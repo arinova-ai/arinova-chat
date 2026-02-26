@@ -17,8 +17,10 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages: rawMessages, agentName, isGroupConversation }: MessageListProps) {
-  // Deduplicate by ID (around-cursor + WS events can produce overlaps)
-  const messages = rawMessages.filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
+  // Filter out thread messages (they display in the thread panel only) + deduplicate
+  const messages = rawMessages
+    .filter((m) => !m.threadId)
+    .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
   const lastMessage = messages[messages.length - 1];
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);

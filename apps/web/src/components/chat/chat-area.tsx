@@ -12,6 +12,7 @@ import { SearchResults } from "./search-results";
 import { ActiveCall } from "@/components/voice/active-call";
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
+import { ThreadPanel } from "./thread-panel";
 
 export function ChatArea() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -110,6 +111,8 @@ export function ChatArea() {
           />
         </>
       )}
+
+      <ThreadPanel />
     </div>
   );
 }

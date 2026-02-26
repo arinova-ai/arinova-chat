@@ -63,6 +63,13 @@ export type MessageStatus =
   | "cancelled"
   | "error";
 
+export interface ThreadSummary {
+  replyCount: number;
+  lastReplyAt: string;
+  participants: string[];
+  lastReplyPreview: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -81,6 +88,8 @@ export interface Message {
     content: string;
     senderAgentName?: string;
   };
+  threadId?: string;
+  threadSummary?: ThreadSummary;
   attachments?: Attachment[];
   createdAt: Date;
   updatedAt: Date;
@@ -371,7 +380,7 @@ export interface AppPurchase {
 
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
-  | { type: "send_message"; conversationId: string; content: string; replyToId?: string; mentions?: string[] }
+  | { type: "send_message"; conversationId: string; content: string; replyToId?: string; threadId?: string; mentions?: string[] }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
   | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
   | { type: "mark_read"; conversationId: string; seq: number }
@@ -453,6 +462,7 @@ export type WSServerEvent =
   | {
       type: "new_message";
       conversationId: string;
+      threadId?: string;
       message: {
         id: string;
         conversationId: string;
@@ -464,6 +474,7 @@ export type WSServerEvent =
         senderUserName?: string;
         senderUsername?: string;
         replyToId?: string | null;
+        threadId?: string;
         createdAt: string;
         updatedAt: string;
       };

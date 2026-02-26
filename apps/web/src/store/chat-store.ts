@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, Conversation, Message } from "@arinova/shared/types";
+import type { Agent, Conversation, Message, ThreadSummary } from "@arinova/shared/types";
 import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
@@ -107,6 +107,13 @@ interface ChatState {
   replyingTo: Message | null;
   blockedUserIds: Set<string>;
 
+  // Thread state
+  activeThreadId: string | null;
+  threadMessages: Record<string, Message[]>;
+  threadLoading: boolean;
+  /** Maps messageId → threadId for streaming agent messages in threads */
+  threadStreamMap: Record<string, string>;
+
   // Actions
   setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
@@ -173,6 +180,10 @@ interface ChatState {
   loadBlockedUsers: () => Promise<void>;
   blockUser: (userId: string) => Promise<void>;
   unblockUser: (userId: string) => Promise<void>;
+  openThread: (threadId: string) => void;
+  closeThread: () => void;
+  loadThreadMessages: (conversationId: string, threadId: string) => Promise<void>;
+  sendThreadMessage: (content: string) => void;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -211,6 +222,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   thinkingAgents: {},
   replyingTo: null,
   blockedUserIds: new Set<string>(),
+  activeThreadId: null,
+  threadMessages: {},
+  threadLoading: false,
+  threadStreamMap: {},
 
   setReplyingTo: (message) => set({ replyingTo: message }),
 
@@ -223,6 +238,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeConversationId: id,
       sidebarOpen: false,
       searchActive: false,
+      activeThreadId: null,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
     });
     get().loadMessages(id);
@@ -918,6 +934,71 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ blockedUserIds: next });
   },
 
+  openThread: (threadId) => {
+    const { activeConversationId } = get();
+    set({ activeThreadId: threadId });
+    if (activeConversationId) {
+      get().loadThreadMessages(activeConversationId, threadId);
+    }
+  },
+
+  closeThread: () => {
+    set({ activeThreadId: null });
+  },
+
+  loadThreadMessages: async (conversationId, threadId) => {
+    set({ threadLoading: true });
+    try {
+      const data = await api<{ messages: Message[]; hasMore: boolean }>(
+        `/api/conversations/${conversationId}/threads/${threadId}/messages?limit=50`
+      );
+      set({
+        threadMessages: {
+          ...get().threadMessages,
+          [threadId]: data.messages,
+        },
+      });
+    } catch {
+      // ignore
+    } finally {
+      set({ threadLoading: false });
+    }
+  },
+
+  sendThreadMessage: (content) => {
+    const { activeConversationId, activeThreadId } = get();
+    if (!activeConversationId || !activeThreadId) return;
+
+    // Optimistic: add user message to thread
+    const userMsg: Message = {
+      id: `temp-${Date.now()}`,
+      conversationId: activeConversationId,
+      seq: 0,
+      role: "user",
+      content,
+      status: "completed",
+      threadId: activeThreadId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const current = get().threadMessages[activeThreadId] ?? [];
+    set({
+      threadMessages: {
+        ...get().threadMessages,
+        [activeThreadId]: [...current, userMsg],
+      },
+    });
+
+    // Send via WebSocket with threadId
+    wsManager.send({
+      type: "send_message",
+      conversationId: activeConversationId,
+      content,
+      threadId: activeThreadId,
+    });
+  },
+
   handleWSEvent: (event) => {
     if (event.type === "pong") return;
 
@@ -933,6 +1014,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "new_message") {
       const { conversationId, message: msg } = event;
+      const threadId = (event as { threadId?: string }).threadId ?? msg.threadId;
       const { activeConversationId, unreadCounts } = get();
 
       const newMsg: Message = {
@@ -945,9 +1027,63 @@ export const useChatStore = create<ChatState>((set, get) => ({
         senderUserId: msg.senderUserId,
         senderUserName: msg.senderUserName,
         replyToId: msg.replyToId ?? undefined,
+        threadId: threadId ?? undefined,
         createdAt: new Date(msg.createdAt),
         updatedAt: new Date(msg.updatedAt),
       };
+
+      // Thread message — route to threadMessages, update parent threadSummary
+      if (threadId) {
+        const threadMsgs = get().threadMessages[threadId] ?? [];
+        const alreadyExists = threadMsgs.some(
+          (m) => m.id === msg.id || (m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role)
+        );
+        if (alreadyExists) {
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [threadId]: threadMsgs.map((m) =>
+                m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role
+                  ? newMsg : m
+              ),
+            },
+          });
+        } else {
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [threadId]: [...threadMsgs, newMsg],
+            },
+          });
+        }
+
+        // Update parent message's threadSummary in main conversation
+        const mainMsgs = get().messagesByConversation[conversationId] ?? [];
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: mainMsgs.map((m) =>
+              m.id === threadId
+                ? {
+                    ...m,
+                    threadSummary: {
+                      replyCount: (m.threadSummary?.replyCount ?? 0) + 1,
+                      lastReplyAt: new Date().toISOString(),
+                      participants: m.threadSummary?.participants ?? [],
+                      lastReplyPreview: msg.content.slice(0, 100),
+                    },
+                  }
+                : m
+            ),
+          },
+        });
+
+        if (conversationId === activeConversationId && msg.seq > 0) {
+          wsManager.send({ type: "mark_read", conversationId, seq: msg.seq });
+          wsManager.updateLastSeq(conversationId, msg.seq);
+        }
+        return;
+      }
 
       const current = get().messagesByConversation[conversationId] ?? [];
       // Deduplicate: skip if message already exists (e.g. optimistic send)
@@ -1036,6 +1172,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_start") {
       const { conversationId, messageId, seq, senderAgentId, senderAgentName } = event;
+
+      // If user has an active thread open in this conversation,
+      // map this stream's messageId to the thread so chunks/end route there
+      const { activeThreadId, activeConversationId } = get();
+      if (activeThreadId && conversationId === activeConversationId) {
+        set({
+          threadStreamMap: {
+            ...get().threadStreamMap,
+            [messageId]: activeThreadId,
+          },
+        });
+      }
+
       const thinking: ThinkingAgent = {
         messageId,
         agentId: senderAgentId ?? "",
@@ -1057,6 +1206,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_chunk") {
       const { conversationId, messageId, chunk } = event;
+      const threadId = get().threadStreamMap[messageId];
 
       // Check if this is the first chunk (message still in thinkingAgents)
       const thinking = get().thinkingAgents[conversationId] ?? [];
@@ -1064,7 +1214,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       if (thinkingEntry) {
         // First chunk: create message bubble and remove from thinkingAgents
-        const current = get().messagesByConversation[conversationId] ?? [];
         const agentMsg: Message = {
           id: messageId,
           conversationId,
@@ -1074,59 +1223,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
           status: "streaming",
           senderAgentId: thinkingEntry.agentId || undefined,
           senderAgentName: thinkingEntry.agentName,
+          threadId: threadId ?? undefined,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
-        set({
-          messagesByConversation: {
-            ...get().messagesByConversation,
-            [conversationId]: [...current, agentMsg],
-          },
-          thinkingAgents: {
-            ...get().thinkingAgents,
-            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
-          },
-        });
-      } else {
-        // Subsequent chunks: append to existing message
-        const current = get().messagesByConversation[conversationId] ?? [];
-        set({
-          messagesByConversation: {
-            ...get().messagesByConversation,
-            [conversationId]: current.map((m) =>
-              m.id === messageId ? { ...m, content: m.content + chunk } : m
-            ),
-          },
-        });
-      }
-      return;
-    }
 
-    if (event.type === "stream_end") {
-      const { conversationId, messageId, seq } = event;
-      const { activeConversationId, unreadCounts } = get();
-      const finalContent = event.content;
-
-      // Check if still in thinkingAgents (no chunks ever arrived)
-      const thinking = get().thinkingAgents[conversationId] ?? [];
-      const stillThinking = thinking.find((t) => t.messageId === messageId);
-      if (stillThinking) {
-        // No chunks arrived — if server sent final content, create the message
-        // directly from it (agent completed without streaming any deltas)
-        if (finalContent) {
+        if (threadId) {
+          const threadMsgs = get().threadMessages[threadId] ?? [];
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [threadId]: [...threadMsgs, agentMsg],
+            },
+            thinkingAgents: {
+              ...get().thinkingAgents,
+              [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+            },
+          });
+        } else {
           const current = get().messagesByConversation[conversationId] ?? [];
-          const agentMsg: Message = {
-            id: messageId,
-            conversationId,
-            seq: stillThinking.seq,
-            role: "agent",
-            content: finalContent,
-            status: "completed",
-            senderAgentId: stillThinking.agentId || undefined,
-            senderAgentName: stillThinking.agentName,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
           set({
             messagesByConversation: {
               ...get().messagesByConversation,
@@ -1136,28 +1251,110 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ...get().thinkingAgents,
               [conversationId]: thinking.filter((t) => t.messageId !== messageId),
             },
-            // Update sidebar lastMessage preview
-            conversations: get().conversations.map((c) =>
-              c.id === conversationId
-                ? { ...c, lastMessage: agentMsg, updatedAt: new Date() }
-                : c
-            ),
-            // Increment unread if not viewing this conversation
-            unreadCounts:
-              conversationId !== activeConversationId &&
-              !get().mutedConversations[conversationId]
-                ? {
-                    ...unreadCounts,
-                    [conversationId]:
-                      (unreadCounts[conversationId] ?? 0) + 1,
-                  }
-                : unreadCounts,
           });
+        }
+      } else {
+        // Subsequent chunks: append to existing message
+        if (threadId) {
+          const threadMsgs = get().threadMessages[threadId] ?? [];
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [threadId]: threadMsgs.map((m) =>
+                m.id === messageId ? { ...m, content: m.content + chunk } : m
+              ),
+            },
+          });
+        } else {
+          const current = get().messagesByConversation[conversationId] ?? [];
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: current.map((m) =>
+                m.id === messageId ? { ...m, content: m.content + chunk } : m
+              ),
+            },
+          });
+        }
+      }
+      return;
+    }
+
+    if (event.type === "stream_end") {
+      const { conversationId, messageId, seq } = event;
+      const { activeConversationId, unreadCounts } = get();
+      const finalContent = event.content;
+      const threadId = get().threadStreamMap[messageId];
+
+      // Clean up thread stream mapping
+      if (threadId) {
+        const newMap = { ...get().threadStreamMap };
+        delete newMap[messageId];
+        set({ threadStreamMap: newMap });
+      }
+
+      // Check if still in thinkingAgents (no chunks ever arrived)
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const stillThinking = thinking.find((t) => t.messageId === messageId);
+      if (stillThinking) {
+        if (finalContent) {
+          const agentMsg: Message = {
+            id: messageId,
+            conversationId,
+            seq: stillThinking.seq,
+            role: "agent",
+            content: finalContent,
+            status: "completed",
+            senderAgentId: stillThinking.agentId || undefined,
+            senderAgentName: stillThinking.agentName,
+            threadId: threadId ?? undefined,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+
+          if (threadId) {
+            const threadMsgs = get().threadMessages[threadId] ?? [];
+            set({
+              threadMessages: {
+                ...get().threadMessages,
+                [threadId]: [...threadMsgs, agentMsg],
+              },
+              thinkingAgents: {
+                ...get().thinkingAgents,
+                [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+              },
+            });
+          } else {
+            const current = get().messagesByConversation[conversationId] ?? [];
+            set({
+              messagesByConversation: {
+                ...get().messagesByConversation,
+                [conversationId]: [...current, agentMsg],
+              },
+              thinkingAgents: {
+                ...get().thinkingAgents,
+                [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+              },
+              conversations: get().conversations.map((c) =>
+                c.id === conversationId
+                  ? { ...c, lastMessage: agentMsg, updatedAt: new Date() }
+                  : c
+              ),
+              unreadCounts:
+                conversationId !== activeConversationId &&
+                !get().mutedConversations[conversationId]
+                  ? {
+                      ...unreadCounts,
+                      [conversationId]:
+                        (unreadCounts[conversationId] ?? 0) + 1,
+                    }
+                  : unreadCounts,
+            });
+          }
           if (conversationId === activeConversationId && seq > 0) {
             wsManager.send({ type: "mark_read", conversationId, seq });
           }
         } else {
-          // No content — just remove from thinkingAgents silently
           set({
             thinkingAgents: {
               ...get().thinkingAgents,
@@ -1168,56 +1365,70 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return;
       }
 
-      const current = get().messagesByConversation[conversationId] ?? [];
+      // Message already exists from chunks — update status
+      if (threadId) {
+        const threadMsgs = get().threadMessages[threadId] ?? [];
+        set({
+          threadMessages: {
+            ...get().threadMessages,
+            [threadId]: threadMsgs.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    ...(finalContent !== undefined ? { content: finalContent } : {}),
+                    status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                    updatedAt: new Date(),
+                  }
+                : m
+            ),
+          },
+        });
+      } else {
+        const current = get().messagesByConversation[conversationId] ?? [];
+        const completedMsg = current.find((m) => m.id === messageId);
 
-      // Find the completed message content for sidebar preview
-      const completedMsg = current.find((m) => m.id === messageId);
-
-      set({
-        messagesByConversation: {
-          ...get().messagesByConversation,
-          [conversationId]: current.map((m) =>
-            m.id === messageId
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: current.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    ...(finalContent !== undefined ? { content: finalContent } : {}),
+                    status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                    updatedAt: new Date(),
+                  }
+                : m
+            ),
+          },
+          conversations: get().conversations.map((c) =>
+            c.id === conversationId
               ? {
-                  ...m,
-                  ...(finalContent !== undefined ? { content: finalContent } : {}),
-                  // Keep 'cancelled' status if user already cancelled
-                  status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                  ...c,
+                  lastMessage: completedMsg
+                    ? {
+                        ...completedMsg,
+                        ...(finalContent !== undefined ? { content: finalContent } : {}),
+                        status: "completed" as const,
+                        updatedAt: new Date(),
+                      }
+                    : c.lastMessage,
                   updatedAt: new Date(),
                 }
-              : m
+              : c
           ),
-        },
-        // Update sidebar lastMessage preview directly
-        conversations: get().conversations.map((c) =>
-          c.id === conversationId
-            ? {
-                ...c,
-                lastMessage: completedMsg
-                  ? {
-                      ...completedMsg,
-                      ...(finalContent !== undefined ? { content: finalContent } : {}),
-                      status: "completed" as const,
-                      updatedAt: new Date(),
-                    }
-                  : c.lastMessage,
-                updatedAt: new Date(),
-              }
-            : c
-        ),
-        // Increment unread if not viewing this conversation
-        unreadCounts:
-          conversationId !== activeConversationId &&
-          !get().mutedConversations[conversationId]
-            ? {
-                ...unreadCounts,
-                [conversationId]:
-                  (unreadCounts[conversationId] ?? 0) + 1,
-              }
-            : unreadCounts,
-      });
+          unreadCounts:
+            conversationId !== activeConversationId &&
+            !get().mutedConversations[conversationId]
+              ? {
+                  ...unreadCounts,
+                  [conversationId]:
+                    (unreadCounts[conversationId] ?? 0) + 1,
+                }
+              : unreadCounts,
+        });
+      }
 
-      // If viewing this conversation, mark as read
       if (conversationId === activeConversationId && seq > 0) {
         wsManager.send({
           type: "mark_read",
@@ -1230,13 +1441,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_error") {
       const { conversationId, messageId, error } = event;
+      const threadId = get().threadStreamMap[messageId];
+
+      // Clean up thread stream mapping
+      if (threadId) {
+        const newMap = { ...get().threadStreamMap };
+        delete newMap[messageId];
+        set({ threadStreamMap: newMap });
+      }
 
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);
       if (stillThinking) {
-        // Create error message bubble so user sees the error
-        const current = get().messagesByConversation[conversationId] ?? [];
         const errorMsg: Message = {
           id: messageId,
           conversationId,
@@ -1246,34 +1463,64 @@ export const useChatStore = create<ChatState>((set, get) => ({
           status: "error",
           senderAgentId: stillThinking.agentId || undefined,
           senderAgentName: stillThinking.agentName,
+          threadId: threadId ?? undefined,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
-        set({
-          messagesByConversation: {
-            ...get().messagesByConversation,
-            [conversationId]: [...current, errorMsg],
-          },
-          thinkingAgents: {
-            ...get().thinkingAgents,
-            [conversationId]: thinking.filter((t) => t.messageId !== messageId),
-          },
-        });
+        if (threadId) {
+          const threadMsgs = get().threadMessages[threadId] ?? [];
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [threadId]: [...threadMsgs, errorMsg],
+            },
+            thinkingAgents: {
+              ...get().thinkingAgents,
+              [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+            },
+          });
+        } else {
+          const current = get().messagesByConversation[conversationId] ?? [];
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: [...current, errorMsg],
+            },
+            thinkingAgents: {
+              ...get().thinkingAgents,
+              [conversationId]: thinking.filter((t) => t.messageId !== messageId),
+            },
+          });
+        }
         return;
       }
 
       // Message exists: update with error
-      const current = get().messagesByConversation[conversationId] ?? [];
-      set({
-        messagesByConversation: {
-          ...get().messagesByConversation,
-          [conversationId]: current.map((m) =>
-            m.id === messageId
-              ? { ...m, content: error, status: "error" as const }
-              : m
-          ),
-        },
-      });
+      if (threadId) {
+        const threadMsgs = get().threadMessages[threadId] ?? [];
+        set({
+          threadMessages: {
+            ...get().threadMessages,
+            [threadId]: threadMsgs.map((m) =>
+              m.id === messageId
+                ? { ...m, content: error, status: "error" as const }
+                : m
+            ),
+          },
+        });
+      } else {
+        const current = get().messagesByConversation[conversationId] ?? [];
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: current.map((m) =>
+              m.id === messageId
+                ? { ...m, content: error, status: "error" as const }
+                : m
+            ),
+          },
+        });
+      }
       return;
     }
 
