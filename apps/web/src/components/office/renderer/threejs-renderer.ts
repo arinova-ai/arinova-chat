@@ -564,12 +564,16 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
   private async createGLTFLoader() {
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-    const { DRACOLoader } = await import("three/examples/jsm/loaders/DRACOLoader.js");
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
-    this.dracoLoader = dracoLoader;
+
+    // Lazy singleton: reuse existing DRACOLoader
+    if (!this.dracoLoader) {
+      const { DRACOLoader } = await import("three/examples/jsm/loaders/DRACOLoader.js");
+      this.dracoLoader = new DRACOLoader();
+      this.dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    }
+
     const loader = new GLTFLoader();
-    loader.setDRACOLoader(dracoLoader);
+    loader.setDRACOLoader(this.dracoLoader);
     return loader;
   }
 
