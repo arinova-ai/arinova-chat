@@ -111,11 +111,20 @@ export function useAutoScroll<T extends HTMLElement>(
   }, [handleScroll]);
 
   useEffect(() => {
-    // New message added — reset scroll lock so user sees it
+    // New message added — reset scroll lock so user sees it.
+    // Only auto-scroll if the user is already near the bottom;
+    // when older messages are prepended the user is scrolled up and
+    // we must NOT yank them back to the bottom.
     const count = options?.messageCount ?? 0;
     if (count > prevMessageCount.current) {
-      userScrolledUp.current = false;
-      setShowScrollButton(false);
+      const el = ref.current;
+      const isNearBottom = el
+        ? el.scrollHeight - el.scrollTop - el.clientHeight < 100
+        : true;
+      if (isNearBottom) {
+        userScrolledUp.current = false;
+        setShowScrollButton(false);
+      }
     }
     prevMessageCount.current = count;
 

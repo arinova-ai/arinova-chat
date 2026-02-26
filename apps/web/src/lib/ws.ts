@@ -59,6 +59,13 @@ class WebSocketManager {
         try {
           const data = JSON.parse(event.data) as WSServerEvent;
 
+          // Log stream lifecycle events for debugging
+          if (data.type === "stream_end") {
+            console.log("[WS] stream_end", { conversationId: data.conversationId, messageId: data.messageId });
+          } else if (data.type === "stream_error") {
+            console.log("[WS] stream_error", { conversationId: data.conversationId, messageId: data.messageId, error: (data as Record<string, unknown>).error });
+          }
+
           // Track seq from stream events and new_message
           if (
             data.type === "stream_start" ||

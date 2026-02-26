@@ -1443,6 +1443,10 @@ async fn do_trigger_agent_response(
                             .execute(&db)
                             .await;
 
+                            tracing::info!(
+                                "stream_end reason=completed conv={} agent={} msgId={} len={}",
+                                conversation_id, agent_id, agent_msg_id_clone, full_content.len()
+                            );
                             ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_end",
                                 "conversationId": &conversation_id,
@@ -1560,6 +1564,10 @@ async fn do_trigger_agent_response(
                                 .execute(&db)
                                 .await;
 
+                                tracing::info!(
+                                    "stream_end reason=agent_disconnect conv={} agent={} msgId={} len={}",
+                                    conversation_id, agent_id, agent_msg_id_clone, stream_accumulated.len()
+                                );
                                 ws_state.broadcast_to_members(&member_ids, &json!({
                                     "type": "stream_end",
                                     "conversationId": &conversation_id,
@@ -1598,6 +1606,10 @@ async fn do_trigger_agent_response(
                         .await;
 
                         // 4. Notify all members that stream was cancelled
+                        tracing::info!(
+                            "stream_end reason=cancelled conv={} agent={} msgId={}",
+                            conversation_id, agent_id, agent_msg_id_clone
+                        );
                         ws_state.broadcast_to_members(&member_ids, &json!({
                             "type": "stream_end",
                             "conversationId": &conversation_id,

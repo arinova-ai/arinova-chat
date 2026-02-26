@@ -74,13 +74,13 @@ export function ChatArea() {
   }
 
   if (!activeConversationId) {
-    return <EmptyState />;
+    return <div className="relative flex h-full min-w-0 flex-col"><EmptyState /></div>;
   }
 
   const conversation = conversations.find(
     (c) => c.id === activeConversationId
   );
-  if (!conversation) return <EmptyState />;
+  if (!conversation) return <div className="relative flex h-full min-w-0 flex-col"><EmptyState /></div>;
 
   const messages = messagesByConversation[activeConversationId] ?? [];
 
