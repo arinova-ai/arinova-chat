@@ -51,15 +51,20 @@ export function AudioPlayer({ src, className }: AudioPlayerProps) {
     };
   }, []);
 
-  const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return;
     if (playing) {
       audio.pause();
       setPlaying(false);
     } else {
-      audio.play();
-      setPlaying(true);
+      try {
+        await audio.play();
+        setPlaying(true);
+      } catch (err) {
+        console.error("Audio playback failed:", err);
+        setPlaying(false);
+      }
     }
   }, [playing]);
 
@@ -112,7 +117,7 @@ export function AudioPlayer({ src, className }: AudioPlayerProps) {
       </div>
 
       <span className="text-[10px] text-muted-foreground font-mono shrink-0 min-w-[2rem] text-right">
-        {formatTime(playing ? currentTime : duration)}
+        {formatTime(currentTime > 0 ? currentTime : duration)}
       </span>
     </div>
   );
