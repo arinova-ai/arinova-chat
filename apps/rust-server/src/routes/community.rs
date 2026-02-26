@@ -212,7 +212,10 @@ async fn browse(
     .bind(q.search.as_deref())
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    .unwrap_or_else(|e| {
+        tracing::error!("Browse: count query failed: {}", e);
+        0
+    });
 
     match rows {
         Ok(rows) => {
@@ -467,6 +470,31 @@ async fn update_community(
         }
     }
 
+    if let Some(fee) = body.join_fee {
+        if fee < 0 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Join fee cannot be negative" })),
+            );
+        }
+    }
+    if let Some(fee) = body.monthly_fee {
+        if fee < 0 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Monthly fee cannot be negative" })),
+            );
+        }
+    }
+    if let Some(fee) = body.agent_call_fee {
+        if fee < 0 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Agent call fee cannot be negative" })),
+            );
+        }
+    }
+
     let result = sqlx::query(
         r#"UPDATE communities SET
              name = COALESCE($2, name),
@@ -580,14 +608,23 @@ async fn join(
     }
 
     // Check not already a member
-    let exists = sqlx::query_scalar::<_, bool>(
+    let exists = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
     )
     .bind(id)
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Join: membership check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     if exists {
         return (
@@ -641,7 +678,7 @@ async fn join(
 
         // Record join fee transaction
         if join_fee > 0 {
-            let _ = sqlx::query(
+            if let Err(e) = sqlx::query(
                 r#"INSERT INTO coin_transactions (user_id, type, amount, description)
                    VALUES ($1, 'community_join', $2, $3)"#,
             )
@@ -649,51 +686,86 @@ async fn join(
             .bind(-join_fee)
             .bind(format!("Community join fee"))
             .execute(&mut *tx)
-            .await;
+            .await
+            {
+                tracing::error!("Join: record join fee transaction failed: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to record transaction" })),
+                );
+            }
 
             // Creator gets 70% of join fee
-            let creator_id = sqlx::query_scalar::<_, String>(
+            let creator_id = match sqlx::query_scalar::<_, String>(
                 "SELECT creator_id FROM communities WHERE id = $1",
             )
             .bind(id)
             .fetch_one(&mut *tx)
             .await
-            .unwrap_or_default();
+            {
+                Ok(cid) => cid,
+                Err(e) => {
+                    tracing::error!("Join: fetch creator_id failed: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": "Database error" })),
+                    );
+                }
+            };
 
-            if !creator_id.is_empty() {
-                let creator_share = join_fee * 7 / 10;
-                let _ = sqlx::query(
-                    r#"INSERT INTO coin_balances (user_id, balance, updated_at)
-                       VALUES ($1, $2, NOW())
-                       ON CONFLICT (user_id) DO UPDATE
-                       SET balance = coin_balances.balance + $2, updated_at = NOW()"#,
-                )
-                .bind(&creator_id)
-                .bind(creator_share)
-                .execute(&mut *tx)
-                .await;
+            let creator_share = join_fee * 7 / 10;
+            if let Err(e) = sqlx::query(
+                r#"INSERT INTO coin_balances (user_id, balance, updated_at)
+                   VALUES ($1, $2, NOW())
+                   ON CONFLICT (user_id) DO UPDATE
+                   SET balance = coin_balances.balance + $2, updated_at = NOW()"#,
+            )
+            .bind(&creator_id)
+            .bind(creator_share)
+            .execute(&mut *tx)
+            .await
+            {
+                tracing::error!("Join: credit creator balance failed: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to credit creator" })),
+                );
+            }
 
-                let _ = sqlx::query(
-                    r#"INSERT INTO coin_transactions (user_id, type, amount, description)
-                       VALUES ($1, 'earning', $2, 'Community join fee earning')"#,
-                )
-                .bind(&creator_id)
-                .bind(creator_share)
-                .execute(&mut *tx)
-                .await;
+            if let Err(e) = sqlx::query(
+                r#"INSERT INTO coin_transactions (user_id, type, amount, description)
+                   VALUES ($1, 'earning', $2, 'Community join fee earning')"#,
+            )
+            .bind(&creator_id)
+            .bind(creator_share)
+            .execute(&mut *tx)
+            .await
+            {
+                tracing::error!("Join: record creator earning transaction failed: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to record transaction" })),
+                );
             }
         }
 
         // Record subscription transaction
         if monthly_fee > 0 {
-            let _ = sqlx::query(
+            if let Err(e) = sqlx::query(
                 r#"INSERT INTO coin_transactions (user_id, type, amount, description)
                    VALUES ($1, 'community_subscription', $2, 'Community monthly subscription')"#,
             )
             .bind(&user.id)
             .bind(-monthly_fee)
             .execute(&mut *tx)
-            .await;
+            .await
+            {
+                tracing::error!("Join: record subscription transaction failed: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to record transaction" })),
+                );
+            }
         }
     }
 
@@ -733,12 +805,19 @@ async fn join(
     }
 
     // Increment member_count
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "UPDATE communities SET member_count = member_count + 1, updated_at = NOW() WHERE id = $1",
     )
     .bind(id)
     .execute(&mut *tx)
-    .await;
+    .await
+    {
+        tracing::error!("Join: increment member_count failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!("Join community: commit failed: {}", e);
@@ -803,20 +882,34 @@ async fn leave(
         }
     };
 
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "DELETE FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
     .execute(&mut *tx)
-    .await;
+    .await
+    {
+        tracing::error!("Leave: delete member failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "UPDATE communities SET member_count = GREATEST(member_count - 1, 0), updated_at = NOW() WHERE id = $1",
     )
     .bind(id)
     .execute(&mut *tx)
-    .await;
+    .await
+    {
+        tracing::error!("Leave: decrement member_count failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!("Leave community: commit failed: {}", e);
@@ -897,14 +990,23 @@ async fn add_agent(
     Json(body): Json<AddAgentBody>,
 ) -> (StatusCode, Json<Value>) {
     // Verify creator
-    let is_creator = sqlx::query_scalar::<_, bool>(
+    let is_creator = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM communities WHERE id = $1 AND creator_id = $2)",
     )
     .bind(id)
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("add_agent: creator check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     if !is_creator {
         return (
@@ -914,13 +1016,22 @@ async fn add_agent(
     }
 
     // Verify listing exists and is active
-    let listing_active = sqlx::query_scalar::<_, bool>(
+    let listing_active = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM agent_listings WHERE id = $1 AND status = 'active')",
     )
     .bind(body.listing_id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("add_agent: listing check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     if !listing_active {
         return (
@@ -960,14 +1071,23 @@ async fn remove_agent(
     user: AuthUser,
     Path((id, listing_id)): Path<(Uuid, Uuid)>,
 ) -> (StatusCode, Json<Value>) {
-    let is_creator = sqlx::query_scalar::<_, bool>(
+    let is_creator = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM communities WHERE id = $1 AND creator_id = $2)",
     )
     .bind(id)
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("remove_agent: creator check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     if !is_creator {
         return (
@@ -1071,14 +1191,23 @@ async fn send_message(
     }
 
     // Verify member
-    let is_member = sqlx::query_scalar::<_, bool>(
+    let is_member = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
     )
     .bind(id)
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("send_message: membership check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
 
     if !is_member {
         return (
@@ -1152,7 +1281,13 @@ async fn agent_chat(
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    .map_err(|e| {
+        tracing::error!("agent_chat: membership check failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        )
+    })?;
 
     if !is_member {
         return Err((
@@ -1169,7 +1304,13 @@ async fn agent_chat(
     .bind(body.listing_id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    .map_err(|e| {
+        tracing::error!("agent_chat: agent-in-community check failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        )
+    })?;
 
     if !agent_in_community {
         return Err((
@@ -1211,14 +1352,29 @@ async fn agent_chat(
         ));
     }
 
-    // 5. Check agent_call_fee and deduct if needed
+    // 5. Ensure OpenRouter API key (check BEFORE billing)
+    let openrouter_key = state.config.openrouter_api_key.as_deref().ok_or_else(|| {
+        tracing::error!("Agent chat: OPENROUTER_API_KEY not configured");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "LLM service not configured" })),
+        )
+    })?;
+
+    // 6. Check agent_call_fee and deduct if needed
     let community_fee = sqlx::query_scalar::<_, i32>(
         "SELECT agent_call_fee FROM communities WHERE id = $1",
     )
     .bind(community_id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    .map_err(|e| {
+        tracing::error!("agent_chat: fetch agent_call_fee failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        )
+    })?;
 
     if community_fee > 0 {
         // Atomic deduction
@@ -1248,7 +1404,7 @@ async fn agent_chat(
         }
 
         // Record transaction
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             r#"INSERT INTO coin_transactions (user_id, type, amount, description)
                VALUES ($1, 'community_agent_call', $2, $3)"#,
         )
@@ -1256,7 +1412,10 @@ async fn agent_chat(
         .bind(-community_fee)
         .bind(format!("Agent call: {}", listing.agent_name))
         .execute(&state.db)
-        .await;
+        .await
+        {
+            tracing::error!("agent_chat: record transaction failed: {}", e);
+        }
 
         // Creator gets 70%
         let creator_id = sqlx::query_scalar::<_, String>(
@@ -1265,12 +1424,17 @@ async fn agent_chat(
         .bind(community_id)
         .fetch_optional(&state.db)
         .await
-        .ok()
-        .flatten();
+        .map_err(|e| {
+            tracing::error!("agent_chat: fetch creator_id failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        })?;
 
         if let Some(cid) = creator_id {
             let creator_share = community_fee * 7 / 10;
-            let _ = sqlx::query(
+            if let Err(e) = sqlx::query(
                 r#"INSERT INTO coin_balances (user_id, balance, updated_at)
                    VALUES ($1, $2, NOW())
                    ON CONFLICT (user_id) DO UPDATE
@@ -1279,27 +1443,24 @@ async fn agent_chat(
             .bind(&cid)
             .bind(creator_share)
             .execute(&state.db)
-            .await;
+            .await
+            {
+                tracing::error!("agent_chat: credit creator balance failed: {}", e);
+            }
 
-            let _ = sqlx::query(
+            if let Err(e) = sqlx::query(
                 r#"INSERT INTO coin_transactions (user_id, type, amount, description)
                    VALUES ($1, 'earning', $2, 'Community agent call earning')"#,
             )
             .bind(&cid)
             .bind(creator_share)
             .execute(&state.db)
-            .await;
+            .await
+            {
+                tracing::error!("agent_chat: record creator earning failed: {}", e);
+            }
         }
     }
-
-    // 6. Ensure OpenRouter API key
-    let openrouter_key = state.config.openrouter_api_key.as_deref().ok_or_else(|| {
-        tracing::error!("Agent chat: OPENROUTER_API_KEY not configured");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": "LLM service not configured" })),
-        )
-    })?;
 
     // 7. Store user message
     let user_msg_id = sqlx::query_scalar::<_, Uuid>(
@@ -1466,9 +1627,36 @@ struct MessagesQuery {
 
 async fn get_messages(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(id): Path<Uuid>,
     Query(q): Query<MessagesQuery>,
 ) -> (StatusCode, Json<Value>) {
+    // Verify membership
+    let is_member = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await;
+
+    match is_member {
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "You must be a member to view messages" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("get_messages: membership check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+        Ok(true) => {}
+    }
+
     let limit = q.limit.unwrap_or(50).min(100);
 
     let rows = if let Some(ref before) = q.before {
