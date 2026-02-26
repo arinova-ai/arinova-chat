@@ -278,6 +278,7 @@ async fn upload_file(
             &agent_content,
             true, // skip_user_message — we already created it above
             None,
+            None, // thread_id
             &[],
             &ws,
             &db,

@@ -22,6 +22,14 @@ pub fn router() -> Router<AppState> {
             "/api/conversations/{conversationId}/messages/{messageId}",
             delete(delete_message),
         )
+        .route(
+            "/api/conversations/{conversationId}/threads",
+            get(get_threads),
+        )
+        .route(
+            "/api/conversations/{conversationId}/threads/{threadId}/messages",
+            get(get_thread_messages),
+        )
 }
 
 // ── Row types for SQL queries ──────────────────────────────────────────
@@ -37,6 +45,7 @@ struct MessageRow {
     sender_agent_id: Option<Uuid>,
     sender_user_id: Option<String>,
     reply_to_id: Option<Uuid>,
+    thread_id: Option<Uuid>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
 }
@@ -146,6 +155,28 @@ async fn with_attachments(
         std::collections::HashMap::new()
     };
 
+    // Fetch thread summaries for messages that have threads
+    let thread_summary_data: std::collections::HashMap<Uuid, (i32, NaiveDateTime, Vec<String>, Option<String>)> = {
+        let msg_ids: Vec<Uuid> = items.iter().map(|m| m.id).collect();
+        if !msg_ids.is_empty() {
+            sqlx::query_as::<_, (Uuid, i32, NaiveDateTime, Vec<String>, Option<String>)>(
+                r#"SELECT ts.thread_id, ts.reply_count, ts.last_reply_at, ts.participant_ids,
+                          (SELECT content FROM messages WHERE thread_id = ts.thread_id ORDER BY created_at DESC LIMIT 1)
+                   FROM thread_summaries ts
+                   WHERE ts.thread_id = ANY($1)"#,
+            )
+            .bind(&msg_ids)
+            .fetch_all(db)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(tid, count, last, parts, preview)| (tid, (count, last, parts, preview)))
+            .collect()
+        } else {
+            std::collections::HashMap::new()
+        }
+    };
+
     // Fetch reply-to message data
     let reply_ids: Vec<Uuid> = items.iter().filter_map(|m| m.reply_to_id).collect();
     let reply_data: std::collections::HashMap<Uuid, (String, String, Option<String>)> = if !reply_ids.is_empty() {
@@ -211,6 +242,18 @@ async fn with_attachments(
                 let sender_user_info = m.sender_user_id.as_ref().and_then(|uid| sender_user_names.get(uid));
                 let sender_username = sender_user_info.and_then(|(_, u)| u.clone());
                 let sender_user_name = sender_user_info.map(|(n, _)| n.clone());
+
+                let thread_summary = thread_summary_data.get(&m.id).map(|(count, last, parts, preview)| {
+                    json!({
+                        "replyCount": count,
+                        "lastReplyAt": last.and_utc().to_rfc3339(),
+                        "participants": parts,
+                        "lastReplyPreview": preview.as_deref().map(|c| {
+                            c.chars().take(200).collect::<String>()
+                        }),
+                    })
+                });
+
                 json!({
                     "id": m.id,
                     "conversationId": m.conversation_id,
@@ -225,6 +268,8 @@ async fn with_attachments(
                     "senderUserName": sender_user_name,
                     "replyToId": m.reply_to_id,
                     "replyTo": reply_to,
+                    "threadId": m.thread_id,
+                    "threadSummary": thread_summary,
                     "createdAt": m.created_at.and_utc().to_rfc3339(),
                     "updatedAt": m.updated_at.and_utc().to_rfc3339(),
                     "attachments": att_json,
@@ -761,7 +806,318 @@ async fn load_default_messages(
     .into_response()
 }
 
-// ── 3. DELETE /api/conversations/{conversationId}/messages/:messageId ───
+// ── 3. GET /api/conversations/{conversationId}/threads ─────────────────
+
+#[derive(Deserialize)]
+struct ThreadsQuery {
+    cursor: Option<String>,
+    limit: Option<String>,
+}
+
+#[derive(Debug, FromRow)]
+struct ThreadListRow {
+    thread_id: Uuid,
+    reply_count: i32,
+    last_reply_at: NaiveDateTime,
+    participant_ids: Vec<String>,
+    // Original message fields
+    original_content: String,
+    original_role: String,
+    original_agent_name: Option<String>,
+    // Last reply preview
+    last_reply_content: Option<String>,
+}
+
+async fn get_threads(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+    Query(query): Query<ThreadsQuery>,
+) -> Response {
+    let limit: i64 = query
+        .limit
+        .as_deref()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(20)
+        .min(50);
+
+    // Verify conversation access
+    let conv = sqlx::query_as::<_, ConvCheck>(
+        r#"SELECT id FROM conversations WHERE id = $1 AND (
+            user_id = $2
+            OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
+        )"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match conv {
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Conversation not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+        Ok(Some(_)) => {}
+    }
+
+    let cursor_ts = if let Some(ref cursor) = query.cursor {
+        chrono::DateTime::parse_from_rfc3339(cursor)
+            .ok()
+            .map(|dt| dt.naive_utc())
+    } else {
+        None
+    };
+
+    let rows = if let Some(ts) = cursor_ts {
+        sqlx::query_as::<_, ThreadListRow>(
+            r#"SELECT
+                 ts.thread_id,
+                 ts.reply_count,
+                 ts.last_reply_at,
+                 ts.participant_ids,
+                 m.content AS original_content,
+                 m.role::text AS original_role,
+                 (SELECT name FROM agents WHERE id = m.sender_agent_id) AS original_agent_name,
+                 (SELECT content FROM messages WHERE thread_id = ts.thread_id ORDER BY created_at DESC LIMIT 1) AS last_reply_content
+               FROM thread_summaries ts
+               JOIN messages m ON m.id = ts.thread_id
+               WHERE m.conversation_id = $1 AND ts.last_reply_at < $2
+               ORDER BY ts.last_reply_at DESC
+               LIMIT $3"#,
+        )
+        .bind(conversation_id)
+        .bind(ts)
+        .bind(limit + 1)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, ThreadListRow>(
+            r#"SELECT
+                 ts.thread_id,
+                 ts.reply_count,
+                 ts.last_reply_at,
+                 ts.participant_ids,
+                 m.content AS original_content,
+                 m.role::text AS original_role,
+                 (SELECT name FROM agents WHERE id = m.sender_agent_id) AS original_agent_name,
+                 (SELECT content FROM messages WHERE thread_id = ts.thread_id ORDER BY created_at DESC LIMIT 1) AS last_reply_content
+               FROM thread_summaries ts
+               JOIN messages m ON m.id = ts.thread_id
+               WHERE m.conversation_id = $1
+               ORDER BY ts.last_reply_at DESC
+               LIMIT $2"#,
+        )
+        .bind(conversation_id)
+        .bind(limit + 1)
+        .fetch_all(&state.db)
+        .await
+    };
+
+    match rows {
+        Ok(rows) => {
+            let has_more = rows.len() as i64 > limit;
+            let items: Vec<serde_json::Value> = rows
+                .iter()
+                .take(limit as usize)
+                .map(|r| {
+                    let preview = r.original_content.chars().take(200).collect::<String>();
+                    json!({
+                        "threadId": r.thread_id,
+                        "originalMessage": {
+                            "content": preview,
+                            "role": r.original_role,
+                            "senderAgentName": r.original_agent_name,
+                        },
+                        "replyCount": r.reply_count,
+                        "lastReplyAt": r.last_reply_at.and_utc().to_rfc3339(),
+                        "participants": r.participant_ids,
+                        "lastReplyPreview": r.last_reply_content.as_deref().map(|c| {
+                            c.chars().take(200).collect::<String>()
+                        }),
+                    })
+                })
+                .collect();
+
+            Json(json!({
+                "threads": items,
+                "hasMore": has_more,
+            }))
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+// ── 4. GET /api/conversations/{conversationId}/threads/{threadId}/messages ──
+
+#[derive(Deserialize)]
+struct ThreadMessagesQuery {
+    cursor: Option<String>,
+    limit: Option<String>,
+    direction: Option<String>,
+}
+
+async fn get_thread_messages(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conversation_id, thread_id)): Path<(Uuid, Uuid)>,
+    Query(query): Query<ThreadMessagesQuery>,
+) -> Response {
+    let limit: i64 = query
+        .limit
+        .as_deref()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(50)
+        .min(100);
+
+    // Verify conversation access
+    let conv = sqlx::query_as::<_, ConvCheck>(
+        r#"SELECT id FROM conversations WHERE id = $1 AND (
+            user_id = $2
+            OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
+        )"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match conv {
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Conversation not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+        Ok(Some(_)) => {}
+    }
+
+    // Verify thread_id message exists in this conversation
+    let thread_exists = sqlx::query_as::<_, ConvCheck>(
+        "SELECT id FROM messages WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(thread_id)
+    .bind(conversation_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match thread_exists {
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Thread not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+        Ok(Some(_)) => {}
+    }
+
+    let direction = query.direction.as_deref().unwrap_or("before");
+    let cursor_seq: Option<i32> = query.cursor.as_deref().and_then(|c| c.parse().ok());
+
+    // Query: original message (id = thread_id) UNION thread replies (thread_id = thread_id)
+    let result = if let Some(seq) = cursor_seq {
+        if direction == "after" {
+            sqlx::query_as::<_, MessageRow>(
+                r#"SELECT * FROM messages
+                   WHERE conversation_id = $1 AND (id = $2 OR thread_id = $2) AND seq > $3
+                   ORDER BY seq ASC
+                   LIMIT $4"#,
+            )
+            .bind(conversation_id)
+            .bind(thread_id)
+            .bind(seq)
+            .bind(limit + 1)
+            .fetch_all(&state.db)
+            .await
+        } else {
+            sqlx::query_as::<_, MessageRow>(
+                r#"SELECT * FROM messages
+                   WHERE conversation_id = $1 AND (id = $2 OR thread_id = $2) AND seq < $3
+                   ORDER BY seq DESC
+                   LIMIT $4"#,
+            )
+            .bind(conversation_id)
+            .bind(thread_id)
+            .bind(seq)
+            .bind(limit + 1)
+            .fetch_all(&state.db)
+            .await
+        }
+    } else {
+        // Default: load latest messages in thread (descending, then reverse)
+        sqlx::query_as::<_, MessageRow>(
+            r#"SELECT * FROM messages
+               WHERE conversation_id = $1 AND (id = $2 OR thread_id = $2)
+               ORDER BY seq DESC
+               LIMIT $3"#,
+        )
+        .bind(conversation_id)
+        .bind(thread_id)
+        .bind(limit + 1)
+        .fetch_all(&state.db)
+        .await
+    };
+
+    let rows = result.unwrap_or_default();
+    let has_more = rows.len() as i64 > limit;
+    let mut items: Vec<MessageRow> = rows.into_iter().take(limit as usize).collect();
+
+    // For default/before mode, reverse to chronological order
+    if direction != "after" {
+        items.reverse();
+    }
+
+    let next_cursor = if has_more {
+        items.first().map(|m| json!(m.seq))
+    } else {
+        None
+    };
+
+    let messages_with_atts = with_attachments(&state.db, &state.config, &items).await;
+    let messages_enriched =
+        enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
+
+    Json(json!({
+        "messages": messages_enriched,
+        "hasMore": has_more,
+        "nextCursor": next_cursor,
+        "threadId": thread_id,
+    }))
+    .into_response()
+}
+
+// ── 5. DELETE /api/conversations/{conversationId}/messages/:messageId ───
 
 #[derive(Deserialize)]
 struct DeleteMessagePath {
@@ -842,6 +1198,7 @@ fn clone_message_row(m: &MessageRow) -> MessageRow {
         sender_agent_id: m.sender_agent_id,
         sender_user_id: m.sender_user_id.clone(),
         reply_to_id: m.reply_to_id,
+        thread_id: m.thread_id,
         created_at: m.created_at,
         updated_at: m.updated_at,
     }
