@@ -722,30 +722,24 @@ export class ThreeJSRenderer implements OfficeRenderer {
       const scale = this.manifest.room.scale ?? [1, 1, 1];
       this.roomScene.scale.set(scale[0], scale[1], scale[2]);
 
-      // Disable shadows and strip PBR maps that cause specular artifacts on
-      // room surfaces.  The base color map (map) is preserved for visual
-      // appearance.  normalMap, metalnessMap, roughnessMap create micro-specular
-      // highlights under directional lighting that appear as white speckles.
+      // Shadows disabled for v3 (renderer.shadowMap.enabled = false).
+      // Set max anisotropy on all textures for better quality at oblique angles.
+      // NOTE: wall speckles are baked into the model's texture atlas (per-face UV
+      // baking with insufficient island margins). Fix requires re-exporting the
+      // model with proper UV padding — not a renderer-side issue.
       this.roomScene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = false;
           child.receiveShadow = false;
 
-          // Strip PBR maps that cause specular artifacts on room surfaces.
           const materials = Array.isArray(child.material) ? child.material : [child.material];
           for (const mat of materials) {
             if (mat && 'isMeshStandardMaterial' in mat && (mat as any).isMeshStandardMaterial) {
               const stdMat = mat as THREE.MeshStandardMaterial;
-              stdMat.normalMap = null;
-              stdMat.metalnessMap = null;
-              stdMat.metalness = 0;
-              stdMat.roughness = 1;
-              stdMat.needsUpdate = true;
-
-              // Keep anisotropy on base color map for texture filtering
-              if (stdMat.map) {
-                const maxAniso = this.renderer!.capabilities.getMaxAnisotropy();
-                stdMat.map.anisotropy = maxAniso;
+              const maxAniso = this.renderer!.capabilities.getMaxAnisotropy();
+              const textures = [stdMat.map, stdMat.normalMap, stdMat.roughnessMap, stdMat.metalnessMap];
+              for (const tex of textures) {
+                if (tex) tex.anisotropy = maxAniso;
               }
             }
           }
