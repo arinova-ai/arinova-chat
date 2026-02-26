@@ -177,6 +177,8 @@ async fn with_attachments(
                         a.storage_path.clone()
                     } else if is_r2 {
                         format!("{}/{}", config.r2_public_url, a.storage_path)
+                    } else if a.storage_path.starts_with("/uploads/") {
+                        a.storage_path.clone()
                     } else {
                         format!("/uploads/{}", a.storage_path)
                     };
