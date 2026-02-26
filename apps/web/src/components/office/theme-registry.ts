@@ -30,13 +30,13 @@ export const THEME_REGISTRY: ThemeEntry[] = [
     tags: ["warm", "cozy", "starter"],
   },
   {
-    id: "starter-desk-3d",
-    name: "Starter Desk 3D",
-    description: "A 3D personal workspace with the Arinova robot at a cozy desk setup.",
-    previewUrl: "/themes/starter-desk-3d/preview.png",
+    id: "cozy-studio",
+    name: "Cozy Studio",
+    description: "A warm illustrated studio with wood floors, bookshelves, and cozy furniture.",
+    previewUrl: "/themes/cozy-studio/preview.png",
     price: "free",
     maxAgents: 1,
-    tags: ["3d", "starter", "desk"],
+    tags: ["warm", "cozy", "illustrated"],
   },
   {
     id: "default-office",
