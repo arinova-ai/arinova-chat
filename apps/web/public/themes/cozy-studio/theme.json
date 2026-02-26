@@ -1,19 +1,20 @@
 {
   "id": "cozy-studio",
   "name": "Cozy Studio",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": { "name": "Arinova", "id": "arinova-official" },
-  "description": "A warm illustrated studio with wood floors, bookshelves, and cozy furniture.",
-  "tags": ["warm", "cozy", "illustrated", "free"],
+  "description": "A warm 3D isometric studio with wood floors, bookshelves, and cozy furniture.",
+  "tags": ["warm", "cozy", "3d", "free"],
   "preview": "preview.png",
   "license": "standard",
+  "renderer": "threejs",
 
   "canvas": {
     "width": 1920,
     "height": 1080,
     "background": {
       "image": "background-cozy.png",
-      "color": "0x2a1f14"
+      "color": "0xf5f0e8"
     }
   },
 
@@ -42,15 +43,104 @@
       "id": "work-area",
       "name": "WORK AREA",
       "type": "work",
-      "bounds": { "x": 900, "y": 350, "width": 700, "height": 450 },
+      "bounds": { "x": 1050, "y": 350, "width": 550, "height": 400 },
       "capacity": 1,
       "seats": [
-        { "id": "desk-1", "x": 1200, "y": 600, "direction": "left" }
+        { "id": "desk-1", "x": 1350, "y": 520, "direction": "up" }
+      ]
+    },
+    {
+      "id": "lounge-area",
+      "name": "LOUNGE",
+      "type": "lounge",
+      "bounds": { "x": 350, "y": 350, "width": 550, "height": 400 },
+      "capacity": 1,
+      "seats": [
+        { "id": "bean-1", "x": 700, "y": 500, "direction": "down" }
       ]
     }
   ],
 
-  "furniture": [],
+  "furniture": [
+    {
+      "id": "room-shell",
+      "sprite": "/themes/cozy-studio/models/room.glb",
+      "layer": "furniture",
+      "x": 960, "y": 540,
+      "width": 1920, "height": 1080
+    },
+    {
+      "id": "desk",
+      "sprite": "/themes/cozy-studio/models/desk.glb",
+      "layer": "furniture",
+      "x": 1350, "y": 420,
+      "width": 220, "height": 110
+    },
+    {
+      "id": "chair",
+      "sprite": "/themes/cozy-studio/models/chair.glb",
+      "layer": "furniture",
+      "x": 1350, "y": 540,
+      "width": 80, "height": 80
+    },
+    {
+      "id": "monitor",
+      "sprite": "/themes/cozy-studio/models/monitor.glb",
+      "layer": "furniture",
+      "x": 1350, "y": 410,
+      "width": 100, "height": 60
+    },
+    {
+      "id": "bookshelf",
+      "sprite": "/themes/cozy-studio/models/bookshelf.glb",
+      "layer": "furniture",
+      "x": 600, "y": 200,
+      "width": 140, "height": 100
+    },
+    {
+      "id": "bean-bag",
+      "sprite": "/themes/cozy-studio/models/bean-bag.glb",
+      "layer": "furniture",
+      "x": 700, "y": 500,
+      "width": 140, "height": 120
+    },
+    {
+      "id": "coffee-table",
+      "sprite": "/themes/cozy-studio/models/coffee-table.glb",
+      "layer": "furniture",
+      "x": 850, "y": 580,
+      "width": 100, "height": 100
+    },
+    {
+      "id": "plant",
+      "sprite": "/themes/cozy-studio/models/plant.glb",
+      "layer": "furniture",
+      "x": 400, "y": 380,
+      "width": 100, "height": 180
+    },
+    {
+      "id": "floor-lamp",
+      "sprite": "/themes/cozy-studio/models/floor-lamp.glb",
+      "layer": "furniture",
+      "x": 350, "y": 650,
+      "width": 60, "height": 260
+    },
+    {
+      "id": "rug",
+      "sprite": "/themes/cozy-studio/models/rug.glb",
+      "layer": "furniture",
+      "x": 900, "y": 580,
+      "width": 400, "height": 300
+    },
+    {
+      "id": "wall-art",
+      "sprite": "/themes/cozy-studio/models/wall-art.glb",
+      "layer": "furniture",
+      "x": 960, "y": 200,
+      "width": 100, "height": 80
+    }
+  ],
+
   "effects": [],
 
   "characters": {
