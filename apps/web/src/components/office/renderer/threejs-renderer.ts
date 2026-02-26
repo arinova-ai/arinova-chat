@@ -627,7 +627,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     // Maintain camera direction but re-center on room
     const camConfig = this.manifest?.camera;
     const origTarget = camConfig?.target ?? [0, 0, 0];
-    const origPos = camConfig?.position ?? [8, 12, 8];
+    const origPos = camConfig?.position ?? [-8, 12, -8];
     const offset = new THREE.Vector3(
       origPos[0] - origTarget[0],
       origPos[1] - origTarget[1],
