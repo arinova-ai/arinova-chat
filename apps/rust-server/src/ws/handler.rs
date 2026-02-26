@@ -595,8 +595,8 @@ async fn handle_sync(
         {
             let client_last_seq = client_last_seq as i32;
             if client_last_seq < max_seq {
-                let missed = sqlx::query_as::<_, (String, String, i32, String, String, String, chrono::NaiveDateTime)>(
-                    r#"SELECT id::text, conversation_id::text, seq, role::text, content, status::text, created_at
+                let missed = sqlx::query_as::<_, (String, String, i32, String, String, String, chrono::NaiveDateTime, Option<String>)>(
+                    r#"SELECT id::text, conversation_id::text, seq, role::text, content, status::text, created_at, thread_id::text
                        FROM messages
                        WHERE conversation_id = $1::uuid AND seq > $2
                        ORDER BY seq ASC LIMIT 100"#,
@@ -607,7 +607,7 @@ async fn handle_sync(
                 .await
                 .unwrap_or_default();
 
-                for (id, cid, seq, role, mut content, mut status, created_at) in missed {
+                for (id, cid, seq, role, mut content, mut status, created_at, thread_id) in missed {
                     // Fix stuck streaming messages
                     if status == "streaming" && !ws_state.has_active_stream(conv_id) {
                         status = if !content.is_empty() {
@@ -642,7 +642,8 @@ async fn handle_sync(
                         "role": role,
                         "content": content,
                         "status": status,
-                        "createdAt": created_at.and_utc().to_rfc3339()
+                        "createdAt": created_at.and_utc().to_rfc3339(),
+                        "threadId": thread_id
                     }));
                 }
             }

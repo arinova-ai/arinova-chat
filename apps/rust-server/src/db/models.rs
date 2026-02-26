@@ -201,8 +201,26 @@ pub struct Message {
     pub sender_agent_id: Option<Uuid>,
     pub sender_user_id: Option<String>,
     pub reply_to_id: Option<Uuid>,
+    pub thread_id: Option<Uuid>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ThreadSummary {
+    pub thread_id: Uuid,
+    pub reply_count: i32,
+    pub last_reply_at: NaiveDateTime,
+    pub last_reply_user_id: Option<String>,
+    pub last_reply_agent_id: Option<Uuid>,
+    pub participant_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ThreadRead {
+    pub user_id: String,
+    pub thread_id: Uuid,
+    pub last_read_seq: i32,
 }
 
 // ===== Multi-user social tables =====

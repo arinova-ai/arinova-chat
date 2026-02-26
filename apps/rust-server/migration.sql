@@ -451,4 +451,34 @@ ALTER TABLE communities ADD COLUMN IF NOT EXISTS tts_voice TEXT DEFAULT 'alloy';
 ALTER TABLE marketplace_messages ADD COLUMN IF NOT EXISTS tts_audio_url TEXT;
 ALTER TABLE community_messages ADD COLUMN IF NOT EXISTS tts_audio_url TEXT;
 
+-- ============================================================
+-- 11. Thread (討論串) support
+-- ============================================================
+
+-- thread_id 指向討論串的原始訊息（開啟 thread 的那則 message）
+-- thread_id IS NULL = 主對話訊息（不在任何 thread 內）
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS thread_id UUID;
+
+-- Thread 統計快取（避免每次都 COUNT）
+CREATE TABLE IF NOT EXISTS thread_summaries (
+  thread_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  reply_count INTEGER NOT NULL DEFAULT 0,
+  last_reply_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_reply_user_id TEXT,
+  last_reply_agent_id UUID,
+  participant_ids TEXT[] NOT NULL DEFAULT '{}'
+);
+
+-- Thread 已讀追蹤
+CREATE TABLE IF NOT EXISTS thread_reads (
+  user_id TEXT NOT NULL,
+  thread_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  last_read_seq INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, thread_id)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_thread_summaries_last ON thread_summaries(last_reply_at DESC);
+
 COMMIT;

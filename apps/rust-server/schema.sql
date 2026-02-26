@@ -153,7 +153,24 @@ CREATE TABLE messages (
     seq INTEGER NOT NULL,
     sender_agent_id UUID,
     sender_user_id TEXT,
-    reply_to_id UUID
+    reply_to_id UUID,
+    thread_id UUID
+);
+
+CREATE TABLE thread_summaries (
+    thread_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    reply_count INTEGER NOT NULL DEFAULT 0,
+    last_reply_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_reply_user_id TEXT,
+    last_reply_agent_id UUID,
+    participant_ids TEXT[] NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE thread_reads (
+    user_id TEXT NOT NULL,
+    thread_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    last_read_seq INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, thread_id)
 );
 
 CREATE TABLE conversation_reads (
