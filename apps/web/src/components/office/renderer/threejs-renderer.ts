@@ -217,6 +217,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private walkTarget: THREE.Vector3 | null = null;
   private roomScene: THREE.Object3D | null = null;
 
+  // ── DRACOLoader for compressed GLB models ──────────────────
+  private dracoLoader: import("three/examples/jsm/loaders/DRACOLoader.js").DRACOLoader | null = null;
+
   onAgentClick?: (agentId: string) => void;
 
   // ── init ──────────────────────────────────────────────────────
@@ -329,6 +332,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.animationClips = {};
     this.currentAction = null;
     this.walkTarget = null;
+
+    if (this.dracoLoader) {
+      this.dracoLoader.dispose();
+      this.dracoLoader = null;
+    }
 
     this.renderer?.dispose();
     if (this.renderer?.domElement && this.container) {
@@ -552,13 +560,25 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.scene.add(fill);
   }
 
+  // ── Private: Create GLTFLoader with DRACOLoader ──────────────
+
+  private async createGLTFLoader() {
+    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+    const { DRACOLoader } = await import("three/examples/jsm/loaders/DRACOLoader.js");
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
+    this.dracoLoader = dracoLoader;
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+    return loader;
+  }
+
   // ── Private: Load room model (v3) ─────────────────────────────
 
   private async loadRoomModel(): Promise<void> {
     if (!this.scene || !this.manifest?.room?.model) return;
 
-    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-    const loader = new GLTFLoader();
+    const loader = await this.createGLTFLoader();
 
     const roomUrl = `/themes/${this.manifest.id}/${this.manifest.room.model}`;
     try {
@@ -586,8 +606,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private async loadCharacterModel(): Promise<void> {
     if (!this.scene || !this.manifest?.character?.model) return;
 
-    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-    const loader = new GLTFLoader();
+    const loader = await this.createGLTFLoader();
 
     // Load main character model (with walk animation)
     const charUrl = `/themes/${this.manifest.id}/${this.manifest.character.model}`;
@@ -738,8 +757,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
   // ── Private: Load GLB models (legacy) ─────────────────────────
 
   private async loadModels(): Promise<void> {
-    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-    const loader = new GLTFLoader();
+    const loader = await this.createGLTFLoader();
 
     // Load agent bot model
     try {
