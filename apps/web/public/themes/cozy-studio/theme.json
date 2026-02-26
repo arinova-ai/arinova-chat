@@ -47,8 +47,7 @@
   },
 
   "character": {
-    "model": "arinova-doll-walk.glb",
-    "idleModel": "arinova-doll-idle.glb",
+    "model": "arinova-doll-animated.glb",
     "scale": [1, 1, 1],
     "height": 1.6,
     "animations": {
@@ -60,8 +59,8 @@
   "camera": {
     "type": "orthographic",
     "frustum": 8,
-    "position": [7, 7, 6],
-    "target": [0, 0, 0]
+    "position": [8, 12, 8],
+    "target": [0, 1, 0]
   },
 
   "lighting": {

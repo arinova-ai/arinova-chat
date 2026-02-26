@@ -220,6 +220,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
   // ── DRACOLoader for compressed GLB models ──────────────────
   private dracoLoader: import("three/examples/jsm/loaders/DRACOLoader.js").DRACOLoader | null = null;
 
+  // ── OrbitControls for pan/zoom ────────────────────────────
+  private controls: import("three/examples/jsm/controls/OrbitControls.js").OrbitControls | null = null;
+  /** Frustum computed by fitCameraToRoom(); used in resize(). */
+  private v3Frustum: number | null = null;
+
   onAgentClick?: (agentId: string) => void;
 
   // ── init ──────────────────────────────────────────────────────
@@ -269,6 +274,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.renderer.toneMappingExposure = 1.2;
     container.appendChild(this.renderer.domElement);
 
+    // v3: OrbitControls for pan/zoom (desktop scroll + drag, mobile pinch + swipe)
+    if (isV3Theme(manifest)) {
+      await this.setupOrbitControls();
+    }
+
     // Lighting — v3 uses manifest lighting config
     if (isV3Theme(manifest)) {
       this.setupLightsV3();
@@ -301,6 +311,12 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
     this.renderer?.domElement.removeEventListener("click", this.handleClick);
 
+    // Dispose OrbitControls
+    if (this.controls) {
+      this.controls.dispose();
+      this.controls = null;
+    }
+
     // Stop animation mixer
     if (this.mixer) {
       this.mixer.stopAllAction();
@@ -332,6 +348,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.animationClips = {};
     this.currentAction = null;
     this.walkTarget = null;
+    this.v3Frustum = null;
 
     if (this.dracoLoader) {
       this.dracoLoader.dispose();
@@ -360,7 +377,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     }
     if (this.camera) {
       if (isV3Theme(this.manifest)) {
-        const frustum = this.manifest?.camera?.frustum ?? 8;
+        const frustum = this.v3Frustum ?? this.manifest?.camera?.frustum ?? 8;
         const aspect = width / height;
         this.camera.left = -frustum * aspect;
         this.camera.right = frustum * aspect;
@@ -375,6 +392,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
         this.camera.bottom = -frustum;
       }
       this.camera.updateProjectionMatrix();
+    }
+    if (this.controls) {
+      this.controls.update();
     }
   }
 
@@ -560,6 +580,116 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.scene.add(fill);
   }
 
+  // ── Private: OrbitControls (v3) ─────────────────────────────
+
+  private async setupOrbitControls(): Promise<void> {
+    if (!this.camera || !this.renderer) return;
+
+    const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js");
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableRotate = false; // Keep isometric angle fixed
+    this.controls.enablePan = true;
+    this.controls.enableZoom = true;
+    this.controls.screenSpacePanning = true;
+
+    // Zoom limits from viewport config
+    const viewport = this.manifest?.viewport;
+    this.controls.minZoom = viewport?.minZoom ?? 0.5;
+    this.controls.maxZoom = viewport?.maxZoom ?? 3.0;
+
+    // Desktop: left-drag = pan, scroll = zoom
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.PAN,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+
+    // Mobile: one-finger drag = pan, two-finger pinch = zoom+pan
+    this.controls.touches = {
+      ONE: THREE.TOUCH.PAN,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
+
+    // Set target from camera config
+    const target = this.manifest?.camera?.target ?? [0, 0, 0];
+    this.controls.target.set(target[0], target[1], target[2]);
+    this.controls.update();
+  }
+
+  // ── Private: Auto-fit camera to room bounding box (v3) ─────
+
+  private fitCameraToRoom(): void {
+    if (!this.camera || !this.roomScene) return;
+
+    const box = new THREE.Box3().setFromObject(this.roomScene);
+    const center = box.getCenter(new THREE.Vector3());
+
+    // Maintain camera direction but re-center on room
+    const camConfig = this.manifest?.camera;
+    const origTarget = camConfig?.target ?? [0, 0, 0];
+    const origPos = camConfig?.position ?? [8, 12, 8];
+    const offset = new THREE.Vector3(
+      origPos[0] - origTarget[0],
+      origPos[1] - origTarget[1],
+      origPos[2] - origTarget[2],
+    );
+
+    this.camera.position.copy(center).add(offset);
+    this.camera.lookAt(center);
+
+    if (this.controls) {
+      this.controls.target.copy(center);
+    }
+
+    // Transform bounding-box corners to camera space to find required frustum
+    this.camera.updateMatrixWorld();
+    const viewMatrix = this.camera.matrixWorldInverse;
+
+    const corners = [
+      new THREE.Vector3(box.min.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.min.x, box.max.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.min.y, box.max.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.min.z),
+      new THREE.Vector3(box.max.x, box.max.y, box.max.z),
+    ];
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const corner of corners) {
+      const projected = corner.applyMatrix4(viewMatrix);
+      minX = Math.min(minX, projected.x);
+      maxX = Math.max(maxX, projected.x);
+      minY = Math.min(minY, projected.y);
+      maxY = Math.max(maxY, projected.y);
+    }
+
+    const aspect = this.width / this.height;
+    const roomWidth = maxX - minX;
+    const roomHeight = maxY - minY;
+    const padding = 1.1; // 10% margin
+
+    // Frustum half-height that fits both dimensions
+    const frustumH = (roomHeight * padding) / 2;
+    const frustumW = (roomWidth * padding) / 2;
+    const frustum = Math.max(frustumH, frustumW / aspect);
+
+    this.v3Frustum = frustum;
+    this.camera.left = -frustum * aspect;
+    this.camera.right = frustum * aspect;
+    this.camera.top = frustum;
+    this.camera.bottom = -frustum;
+    this.camera.zoom = 1;
+    this.camera.updateProjectionMatrix();
+
+    if (this.controls) {
+      this.controls.update();
+    }
+  }
+
   // ── Private: Create GLTFLoader with DRACOLoader ──────────────
 
   private async createGLTFLoader() {
@@ -600,6 +730,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
       });
 
       this.scene.add(this.roomScene);
+
+      // Auto-fit camera frustum so room fills the viewport
+      this.fitCameraToRoom();
     } catch (err) {
       console.warn("[ThreeJSRenderer] Failed to load room model:", err);
     }
