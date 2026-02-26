@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Paperclip, X, FileText, ImageIcon } from "lucide-react";
+import { SendHorizontal, Paperclip, X, FileText, ImageIcon, Mic } from "lucide-react";
+import { VoiceRecorder } from "./voice-recorder";
 import { useChatStore } from "@/store/chat-store";
 import { useRouter } from "next/navigation";
 import {
@@ -49,6 +50,7 @@ export function ChatInput() {
   const [value, setValue] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -384,6 +386,54 @@ export function ChatInput() {
     }
   }, [selectedFile, activeConversationId, value, sendMessage, clearInput]);
 
+  const handleVoiceUpload = useCallback(
+    async (blob: Blob) => {
+      setIsRecording(false);
+      if (!activeConversationId) return;
+
+      const ext = blob.type.includes("mp4") ? "m4a" : "webm";
+      const file = new File([blob], `voice-${Date.now()}.${ext}`, {
+        type: blob.type,
+      });
+
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch(
+          `${BACKEND_URL}/api/conversations/${activeConversationId}/upload`,
+          {
+            method: "POST",
+            credentials: "include",
+            body: formData,
+          }
+        );
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? "Upload failed");
+        }
+
+        const data = await res.json();
+        const store = useChatStore.getState();
+        const current =
+          store.messagesByConversation[activeConversationId] ?? [];
+        useChatStore.setState({
+          messagesByConversation: {
+            ...store.messagesByConversation,
+            [activeConversationId]: [...current, data.message],
+          },
+        });
+      } catch (err) {
+        console.error("Voice upload failed:", err);
+      } finally {
+        setUploading(false);
+      }
+    },
+    [activeConversationId]
+  );
+
   const handleSend = useCallback(() => {
     if (selectedFile) {
       handleUpload();
@@ -608,43 +658,65 @@ export function ChatInput() {
           </div>
         )}
 
-        <div className="flex items-end gap-2">
-          {/* File upload button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => fileInputRef.current?.click()}
-            className="h-11 w-11 shrink-0 rounded-xl"
-            title="Attach file"
-          >
-            <Paperclip className="h-5 w-5" />
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json"
-            onChange={handleFileSelect}
-          />
+        {isRecording ? (
+          <div className="flex items-end gap-2">
+            <VoiceRecorder
+              onRecordingComplete={(blob) => handleVoiceUpload(blob)}
+              onCancel={() => setIsRecording(false)}
+            />
+          </div>
+        ) : (
+          <div className="flex items-end gap-2">
+            {/* File upload button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              className="h-11 w-11 shrink-0 rounded-xl"
+              title="Attach file"
+            >
+              <Paperclip className="h-5 w-5" />
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav"
+              onChange={handleFileSelect}
+            />
 
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            rows={1}
-            className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <Button
-            size="icon"
-            onClick={handleSend}
-            disabled={(!value.trim() && !selectedFile) || uploading}
-            className="brand-gradient-btn h-11 w-11 shrink-0 rounded-xl"
-          >
-            <SendHorizontal className="h-5 w-5" />
-          </Button>
-        </div>
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              rows={1}
+              className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+
+            {value.trim() || selectedFile ? (
+              <Button
+                size="icon"
+                onClick={handleSend}
+                disabled={uploading}
+                className="brand-gradient-btn h-11 w-11 shrink-0 rounded-xl"
+              >
+                <SendHorizontal className="h-5 w-5" />
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                onClick={() => setIsRecording(true)}
+                disabled={uploading}
+                className="h-11 w-11 shrink-0 rounded-xl bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
+                title="Record voice message"
+              >
+                <Mic className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

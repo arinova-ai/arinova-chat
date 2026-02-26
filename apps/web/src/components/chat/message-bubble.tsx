@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useChatStore, type ReactionInfo } from "@/store/chat-store";
 import { ImageLightbox } from "./image-lightbox";
+import { AudioPlayer } from "./audio-player";
 
 const EMPTY_REACTIONS: Record<string, ReactionInfo> = {};
 import {
@@ -222,6 +223,11 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                       src={assetUrl(att.url)}
                       alt={att.fileName}
                       className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
+                    />
+                  ) : att.fileType.startsWith("audio/") ? (
+                    <AudioPlayer
+                      key={att.id}
+                      src={assetUrl(att.url)}
                     />
                   ) : (
                     <a
