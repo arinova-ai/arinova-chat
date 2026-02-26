@@ -16,6 +16,7 @@ import {
   type CommandCategory,
 } from "@/lib/platform-commands";
 import { BACKEND_URL } from "@/lib/config";
+import { useToastStore } from "@/store/toast-store";
 
 // ---------- Popup item types ----------
 
@@ -44,9 +45,24 @@ interface PopupSkillItem {
 
 type PopupItem = PopupHeaderItem | PopupCommandItem | PopupSkillItem;
 
+const ACCEPTED_TYPES = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "application/pdf", "text/plain", "text/csv", "application/json",
+  "audio/webm", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav",
+]);
+
+function isAcceptedFile(file: File): boolean {
+  return ACCEPTED_TYPES.has(file.type) || file.type.startsWith("audio/");
+}
+
+interface ChatInputProps {
+  droppedFile?: File | null;
+  onDropHandled?: () => void;
+}
+
 // ---------- Component ----------
 
-export function ChatInput() {
+export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const [value, setValue] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -88,6 +104,17 @@ export function ChatInput() {
       loadAgentSkills(agentId);
     }
   }, [agentId, loadAgentSkills]);
+
+  // Handle file dropped from ChatArea drag-and-drop
+  useEffect(() => {
+    if (!droppedFile) return;
+    if (isAcceptedFile(droppedFile)) {
+      setSelectedFile(droppedFile);
+    } else {
+      useToastStore.getState().addToast("Unsupported file type");
+    }
+    onDropHandled?.();
+  }, [droppedFile, onDropHandled]);
 
   // ---------- Slash popup logic ----------
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { useVoiceCallStore } from "@/store/voice-call-store";
 import { ChatHeader } from "./chat-header";
@@ -13,6 +13,7 @@ import { ActiveCall } from "@/components/voice/active-call";
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
+import { Upload } from "lucide-react";
 
 export function ChatArea() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -30,6 +31,43 @@ export function ChatArea() {
   const [membersOpen, setMembersOpen] = useState(false);
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const dragCounterRef = useRef(0);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      setDroppedFile(files[0]);
+    }
+  }, []);
 
   if (searchActive) {
     return <SearchResults />;
@@ -65,7 +103,21 @@ export function ChatArea() {
   };
 
   return (
-    <div className="relative flex h-full min-w-0 flex-col">
+    <div
+      className="relative flex h-full min-w-0 flex-col"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-primary">
+            <Upload className="h-12 w-12" />
+            <p className="text-lg font-medium">Drop file to upload</p>
+          </div>
+        </div>
+      )}
       <ChatHeader
         agentName={conversation.agentName}
         agentDescription={conversation.agentDescription}
@@ -84,7 +136,7 @@ export function ChatArea() {
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
       />
       <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
-      <ChatInput />
+      <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
 
       {showCallOverlay && <ActiveCall />}
 
