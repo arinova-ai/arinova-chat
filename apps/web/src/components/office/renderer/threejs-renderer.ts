@@ -116,7 +116,11 @@ function normalizeModel(group: THREE.Group, targetHeight: number): void {
 }
 
 /** Create a text label sprite using canvas texture. */
-function createLabelSprite(text: string, color: string = "#e2e8f0"): THREE.Sprite {
+function createLabelSprite(
+  text: string,
+  color: string = "#e2e8f0",
+  bgColor: string = "rgba(15, 23, 42, 0.85)",
+): THREE.Sprite {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
   canvas.width = 256;
@@ -132,7 +136,7 @@ function createLabelSprite(text: string, color: string = "#e2e8f0"): THREE.Sprit
   const ph = 34;
   const px = (canvas.width - pw) / 2;
   const py = (canvas.height - ph) / 2;
-  ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+  ctx.fillStyle = bgColor;
   ctx.beginPath();
   ctx.roundRect(px, py, pw, ph, 8);
   ctx.fill();
@@ -146,6 +150,13 @@ function createLabelSprite(text: string, color: string = "#e2e8f0"): THREE.Sprit
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(40, 10, 1);
   return sprite;
+}
+
+/** Darken a hex color by a fraction (0–1). Returns a new hex number. */
+function darkenColor(hex: number, amount: number): number {
+  const c = new THREE.Color(hex);
+  c.offsetHSL(0, 0, -amount);
+  return c.getHex();
 }
 
 // ── ThreeJSRenderer ──────────────────────────────────────────────
@@ -179,6 +190,13 @@ export class ThreeJSRenderer implements OfficeRenderer {
   // Status colors parsed from manifest
   private statusColors: Record<AgentStatus, number> = { ...DEFAULT_STATUS_COLORS };
 
+  // Background color from manifest (used for ground, zone floors, etc.)
+  private bgColor = 0x1a1a2e;
+
+  // Name tag style from manifest
+  private nameTagColor = "#e2e8f0";
+  private nameTagBgColor = "rgba(15, 23, 42, 0.85)";
+
   // Lerp animation targets
   private targetPositions = new Map<string, THREE.Vector3>();
 
@@ -201,12 +219,19 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.canvasH = manifest?.canvas?.height ?? DEFAULT_CANVAS_H;
     this.statusColors = parseStatusColors(manifest);
 
+    // Parse background color
+    const bgColorStr = manifest?.canvas?.background?.color;
+    this.bgColor = bgColorStr ? Number(bgColorStr) : 0x1a1a2e;
+
+    // Parse name tag style from manifest
+    const nt = manifest?.characters?.nameTag;
+    if (nt?.color) this.nameTagColor = nt.color;
+    if (nt?.bgColor) this.nameTagBgColor = nt.bgColor;
+
     // Scene
     this.scene = new THREE.Scene();
-    const bgColorStr = manifest?.canvas?.background?.color;
-    const bgColor = bgColorStr ? Number(bgColorStr) : 0x1a1a2e;
-    this.scene.background = new THREE.Color(bgColor);
-    this.scene.fog = new THREE.FogExp2(bgColor, 0.0006);
+    this.scene.background = new THREE.Color(this.bgColor);
+    this.scene.fog = new THREE.FogExp2(this.bgColor, 0.0006);
 
     // Camera
     this.setupCamera(width, height);
@@ -423,7 +448,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     const h = this.canvasH * WORLD_SCALE;
     const geo = new THREE.PlaneGeometry(w, h);
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
+      color: this.bgColor,
       roughness: 0.9,
       metalness: 0.0,
     });
@@ -444,13 +469,14 @@ export class ThreeJSRenderer implements OfficeRenderer {
       const w = b.width * WORLD_SCALE;
       const h = b.height * WORLD_SCALE;
 
-      // Semi-transparent floor rectangle
+      // Semi-transparent floor rectangle (slightly darker than background)
+      const zoneColor = darkenColor(this.bgColor, 0.08);
       const geo = new THREE.PlaneGeometry(w, h);
       const mat = new THREE.MeshStandardMaterial({
-        color: 0x334155,
+        color: zoneColor,
         roughness: 0.85,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.5,
       });
       const plane = new THREE.Mesh(geo, mat);
       plane.rotation.x = -Math.PI / 2;
@@ -458,8 +484,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
       plane.receiveShadow = true;
       this.scene.add(plane);
 
-      // Zone label sprite above the zone
-      const label = createLabelSprite(zone.name, "#94a3b8");
+      // Zone label sprite above the zone (use nameTag style from manifest)
+      const label = createLabelSprite(zone.name, this.nameTagColor, this.nameTagBgColor);
       label.position.set(center.x, 55, center.z - h / 2 + 10);
       label.scale.set(50, 12, 1);
       this.scene.add(label);
@@ -526,9 +552,30 @@ export class ThreeJSRenderer implements OfficeRenderer {
       if (!template) continue;
 
       const clone = template.clone();
-      // Scale furniture: use width as target footprint in canvas space
-      const targetSize = Math.max(f.width, f.height) * WORLD_SCALE * 0.5;
-      normalizeModel(clone, targetSize);
+
+      if (f.id === "room-shell") {
+        // Room shell spans the full world — scale to match world-space dimensions
+        const worldW = this.canvasW * WORLD_SCALE;
+        const worldH = this.canvasH * WORLD_SCALE;
+        const box = new THREE.Box3().setFromObject(clone);
+        const size = box.getSize(new THREE.Vector3());
+        if (size.x > 0 && size.z > 0) {
+          clone.scale.set(worldW / size.x, worldW / size.x, worldH / size.z);
+        }
+        // Re-center after scaling
+        box.setFromObject(clone);
+        const center = box.getCenter(new THREE.Vector3());
+        clone.position.x -= center.x;
+        clone.position.z -= center.z;
+        clone.position.y -= box.min.y;
+      } else {
+        // Normal furniture: scale to target footprint in canvas space
+        const targetSize = Math.max(f.width, f.height) * WORLD_SCALE * 0.5;
+        normalizeModel(clone, targetSize);
+        const pos = canvasToWorld(f.x, f.y, this.canvasW, this.canvasH);
+        clone.position.copy(pos);
+      }
+
       clone.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = true;
@@ -536,8 +583,6 @@ export class ThreeJSRenderer implements OfficeRenderer {
         }
       });
 
-      const pos = canvasToWorld(f.x, f.y, this.canvasW, this.canvasH);
-      clone.position.copy(pos);
       this.scene.add(clone);
     }
   }
@@ -582,8 +627,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
     hitMesh.position.y = BOT_HEIGHT / 2;
     group.add(hitMesh);
 
-    // Name label sprite
-    const label = createLabelSprite(agent.name);
+    // Name label sprite (use nameTag style from manifest)
+    const label = createLabelSprite(agent.name, this.nameTagColor, this.nameTagBgColor);
     label.position.y = BOT_HEIGHT + 12;
     group.add(label);
 
