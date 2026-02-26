@@ -36,7 +36,7 @@ class MockWebSocket {
 }
 
 vi.mock("./config", () => ({
-  WS_URL: "ws://localhost:3501/ws",
+  WS_URL: "ws://localhost:21001/ws",
 }));
 
 describe("WebSocketManager", () => {

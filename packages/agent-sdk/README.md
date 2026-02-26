@@ -53,7 +53,7 @@ Creates a new agent instance.
 
 | Option | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `serverUrl` | `string` | Yes | -- | WebSocket server URL (e.g. `wss://chat.arinova.ai` or `ws://localhost:3501`) |
+| `serverUrl` | `string` | Yes | -- | WebSocket server URL (e.g. `wss://chat.arinova.ai` or `ws://localhost:21001`) |
 | `botToken` | `string` | Yes | -- | Bot token from the Arinova dashboard |
 | `reconnectInterval` | `number` | No | `5000` | Milliseconds to wait before reconnecting after a disconnect |
 | `pingInterval` | `number` | No | `30000` | Milliseconds between keep-alive pings |

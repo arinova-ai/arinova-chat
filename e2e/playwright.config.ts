@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 2,
   workers: 1,
   use: {
-    baseURL: "http://localhost:3500",
+    baseURL: "http://localhost:21000",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     navigationTimeout: 20000,
@@ -21,13 +21,13 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm --filter server dev",
-      port: 3501,
+      port: 21001,
       reuseExistingServer: true,
       cwd: "..",
     },
     {
       command: "pnpm --filter web dev",
-      port: 3500,
+      port: 21000,
       reuseExistingServer: true,
       cwd: "..",
     },

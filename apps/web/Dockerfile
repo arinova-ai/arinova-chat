@@ -11,7 +11,7 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/agent-sdk/package.json ./packages/agent-sdk/
 COPY packages/app-sdk/package.json ./packages/app-sdk/
-COPY packages/game-sdk/package.json ./packages/game-sdk/
+COPY packages/spaces-sdk/package.json ./packages/spaces-sdk/
 COPY packages/openclaw-plugin/package.json ./packages/openclaw-plugin/
 COPY packages/openclaw-office-plugin/package.json ./packages/openclaw-office-plugin/
 
@@ -48,7 +48,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
-ENV PORT=3500
+ENV PORT=21000
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -60,6 +60,6 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 
 USER nextjs
 
-EXPOSE 3500
+EXPOSE 21000
 
 CMD ["node", "apps/web/server.js"]

@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_ARINOVA_API_URL || "http://localhost:3501";
+const BASE_URL = process.env.NEXT_PUBLIC_ARINOVA_API_URL || "http://localhost:21001";
 const APP_ID = process.env.NEXT_PUBLIC_ARINOVA_APP_ID || "";
 
 // Store auth state in memory (for demo, use localStorage in real app)

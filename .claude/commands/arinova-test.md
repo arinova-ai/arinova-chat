@@ -64,10 +64,10 @@ Run the Arinova Chat test suite.
 - **E2E tests** (`e2e/`): Playwright, Chromium
   - Specs: `e2e/tests/`
   - Helpers: `e2e/helpers/`
-  - Config: `e2e/playwright.config.ts` (ports 3500/3501)
+  - Config: `e2e/playwright.config.ts` (ports 21000/21001)
 
 **Guardrails**
 - Always show the full test output so the user can see details
 - If a test command fails to start (missing deps, config error), diagnose and suggest a fix
-- For E2E tests, warn if dev servers are not running on ports 3500/3501
+- For E2E tests, warn if dev servers are not running on ports 21000/21001
 - Never modify test files or source code unless the user explicitly asks you to fix failures

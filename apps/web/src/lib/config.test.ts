@@ -3,9 +3,9 @@ import { assetUrl } from "./config";
 
 // BACKEND_URL is derived from window.location / env at module load time.
 // In the jsdom environment NEXT_PUBLIC_API_URL is not set, so BACKEND_URL
-// resolves to `${window.location.protocol}//${window.location.hostname}:3501`
-// which in jsdom defaults to "http://localhost:3501".
-const EXPECTED_BACKEND = "http://localhost:3501";
+// resolves to `${window.location.protocol}//${window.location.hostname}:21001`
+// which in jsdom defaults to "http://localhost:21001".
+const EXPECTED_BACKEND = "http://localhost:21001";
 
 describe("assetUrl()", () => {
   it("returns an absolute http:// URL unchanged", () => {

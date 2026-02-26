@@ -38,14 +38,14 @@ impl Config {
             port: env::var("PORT")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(3501),
+                .unwrap_or(21001),
             database_url: env::var("DATABASE_URL").expect("DATABASE_URL is required"),
             redis_url: env::var("REDIS_URL").expect("REDIS_URL is required"),
-            cors_origin: env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:3500".into()),
+            cors_origin: env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:21000".into()),
             better_auth_secret: env::var("BETTER_AUTH_SECRET")
                 .unwrap_or_else(|_| "arinova-dev-secret-change-in-production".into()),
             better_auth_url: env::var("BETTER_AUTH_URL")
-                .unwrap_or_else(|_| "http://localhost:3501".into()),
+                .unwrap_or_else(|_| "http://localhost:21001".into()),
             google_client_id: env::var("GOOGLE_CLIENT_ID").unwrap_or_default(),
             google_client_secret: env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default(),
             github_client_id: env::var("GITHUB_CLIENT_ID").unwrap_or_default(),

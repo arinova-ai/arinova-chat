@@ -10,7 +10,7 @@ export interface AgentSkill {
 
 /** Options for creating an ArinovaAgent. */
 export interface ArinovaAgentOptions {
-  /** WebSocket server URL (e.g. "wss://chat.arinova.ai" or "ws://localhost:3501"). */
+  /** WebSocket server URL (e.g. "wss://chat.arinova.ai" or "ws://localhost:21001"). */
   serverUrl: string;
   /** Bot token from the Arinova dashboard. */
   botToken: string;

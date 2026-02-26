@@ -5,7 +5,7 @@ export type { DmPolicy };
 export type ArinovaChatAccountConfig = {
   name?: string;
   enabled?: boolean;
-  /** Arinova backend URL (e.g., "http://localhost:3501"). */
+  /** Arinova backend URL (e.g., "http://localhost:21001"). */
   apiUrl?: string;
   /** Permanent bot token from Arinova UI (never expires, survives reinstalls). */
   botToken?: string;

@@ -81,7 +81,7 @@ self.addEventListener("fetch", (event) => {
     event.request.method !== "GET" ||
     event.request.url.includes("/api/") ||
     event.request.url.includes("/ws") ||
-    event.request.url.includes("localhost:3501")
+    event.request.url.includes("localhost:21001")
   ) {
     return;
   }

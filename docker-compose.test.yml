@@ -19,7 +19,7 @@
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     container_name: arinova-test-postgres
     restart: unless-stopped
     ports:
@@ -64,7 +64,7 @@ services:
       OPENCLAW_GATEWAY_PORT: "18789"
       OPENCLAW_GATEWAY_BIND: lan
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-test-openclaw-token}
-      OFFICE_FORWARD_URL: http://server:3501/api/office/event
+      OFFICE_FORWARD_URL: http://server:21001/api/office/event
       OFFICE_EVENT_TOKEN: ${OFFICE_EVENT_TOKEN:-test-office-token}
     volumes:
       - openclaw_data:/home/node/.openclaw
@@ -107,9 +107,9 @@ services:
     container_name: arinova-test-server
     restart: unless-stopped
     ports:
-      - "21001:3501"
+      - "21001:21001"
     environment:
-      PORT: 3501
+      PORT: 21001
       DATABASE_URL: postgres://arinova:arinova_test@postgres:5432/arinova_chat
       REDIS_URL: redis://redis:6379
       CORS_ORIGIN: http://192.168.68.83:21000,http://localhost:21000
@@ -126,8 +126,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      openclaw:
-        condition: service_healthy
+      # openclaw:
+      #   condition: service_healthy
 
   web:
     build:
@@ -138,11 +138,11 @@ services:
     container_name: arinova-test-web
     restart: unless-stopped
     ports:
-      - "21000:3500"
+      - "21000:21000"
     environment:
-      PORT: 3500
+      PORT: 21000
       HOSTNAME: 0.0.0.0
-      INTERNAL_API_URL: http://server:3501
+      INTERNAL_API_URL: http://server:21001
     depends_on:
       - server
 

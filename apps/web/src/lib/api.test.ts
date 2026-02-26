@@ -3,7 +3,7 @@ import { api, ApiError } from "./api";
 
 // Mock config
 vi.mock("./config", () => ({
-  BACKEND_URL: "http://localhost:3501",
+  BACKEND_URL: "http://localhost:21001",
 }));
 
 // Mock toast store
@@ -29,7 +29,7 @@ describe("api", () => {
     const result = await api("/api/test");
     expect(result).toEqual(mockResponse);
     expect(fetch).toHaveBeenCalledWith(
-      "http://localhost:3501/api/test",
+      "http://localhost:21001/api/test",
       expect.objectContaining({ credentials: "include" })
     );
   });
@@ -45,7 +45,7 @@ describe("api", () => {
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      "http://localhost:3501/api/test",
+      "http://localhost:21001/api/test",
       expect.objectContaining({
         headers: expect.objectContaining({ "Content-Type": "application/json" }),
       })

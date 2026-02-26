@@ -9,8 +9,8 @@ vi.mock("@/store/chat-store", () => ({
 // Mock assetUrl from config so it doesn't hit real URLs
 vi.mock("@/lib/config", () => ({
   assetUrl: (url: string) => url,
-  BACKEND_URL: "http://localhost:3501",
-  WS_URL: "ws://localhost:3501/ws",
+  BACKEND_URL: "http://localhost:21001",
+  WS_URL: "ws://localhost:21001/ws",
 }));
 
 import { ConversationItem } from "./conversation-item";

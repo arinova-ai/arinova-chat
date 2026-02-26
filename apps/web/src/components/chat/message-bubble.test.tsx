@@ -30,7 +30,7 @@ vi.mock("./streaming-cursor", () => ({
 }));
 
 vi.mock("@/lib/config", () => ({
-  assetUrl: (url: string) => `http://localhost:3501${url}`,
+  assetUrl: (url: string) => `http://localhost:21001${url}`,
 }));
 
 function createMessage(overrides: Partial<Message> = {}): Message {
@@ -170,7 +170,7 @@ describe("MessageBubble", () => {
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute(
       "src",
-      "http://localhost:3501/uploads/photo.png"
+      "http://localhost:21001/uploads/photo.png"
     );
   });
 

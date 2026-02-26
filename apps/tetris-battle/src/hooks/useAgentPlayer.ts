@@ -108,7 +108,7 @@ export function useAgentPlayer({
       const prompt = buildPrompt(gameState);
 
       // Use the Arinova SDK base URL (from env or default)
-      const baseUrl = process.env.NEXT_PUBLIC_ARINOVA_API_URL || "http://localhost:3501";
+      const baseUrl = process.env.NEXT_PUBLIC_ARINOVA_API_URL || "http://localhost:21001";
       const response = await fetch(`${baseUrl}/api/v1/agent/chat`, {
         method: "POST",
         headers: {

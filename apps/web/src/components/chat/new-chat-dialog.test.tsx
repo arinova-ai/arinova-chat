@@ -74,7 +74,7 @@ vi.mock("./bot-manage-dialog", () => ({
 }));
 
 vi.mock("@/lib/config", () => ({
-  assetUrl: (url: string) => `http://localhost:3501${url}`,
+  assetUrl: (url: string) => `http://localhost:21001${url}`,
 }));
 
 describe("NewChatDialog", () => {

@@ -3,21 +3,21 @@ function getBackendUrl(): string {
     return (
       process.env.INTERNAL_API_URL ??
       process.env.NEXT_PUBLIC_API_URL ??
-      "http://localhost:3501"
+      "http://localhost:21001"
     );
   }
   return (
     process.env.NEXT_PUBLIC_API_URL ??
-    `${window.location.protocol}//${window.location.hostname}:3501`
+    `${window.location.protocol}//${window.location.hostname}:21001`
   );
 }
 
 function getWsUrl(): string {
-  if (typeof window === "undefined") return "ws://localhost:3501/ws";
+  if (typeof window === "undefined") return "ws://localhost:21001/ws";
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host =
     process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, "") ??
-    `${window.location.hostname}:3501`;
+    `${window.location.hostname}:21001`;
   return `${protocol}//${host}/ws`;
 }
 

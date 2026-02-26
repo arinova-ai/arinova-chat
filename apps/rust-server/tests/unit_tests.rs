@@ -69,12 +69,12 @@ mod config_tests {
     fn test_cors_origins_parsing() {
         // Test with multiple origins
         let config = arinova_server::config::Config {
-            port: 3501,
+            port: 21001,
             database_url: "postgres://localhost/test".into(),
             redis_url: "redis://localhost".into(),
-            cors_origin: "http://localhost:3500,https://app.arinova.ai".into(),
+            cors_origin: "http://localhost:21000,https://app.arinova.ai".into(),
             better_auth_secret: "test".into(),
-            better_auth_url: "http://localhost:3501".into(),
+            better_auth_url: "http://localhost:21001".into(),
             google_client_id: String::new(),
             google_client_secret: String::new(),
             github_client_id: String::new(),
@@ -95,19 +95,19 @@ mod config_tests {
 
         let origins = config.cors_origins();
         assert_eq!(origins.len(), 2);
-        assert_eq!(origins[0], "http://localhost:3500");
+        assert_eq!(origins[0], "http://localhost:21000");
         assert_eq!(origins[1], "https://app.arinova.ai");
     }
 
     #[test]
     fn test_r2_not_configured() {
         let config = arinova_server::config::Config {
-            port: 3501,
+            port: 21001,
             database_url: "postgres://localhost/test".into(),
             redis_url: "redis://localhost".into(),
-            cors_origin: "http://localhost:3500".into(),
+            cors_origin: "http://localhost:21000".into(),
             better_auth_secret: "test".into(),
-            better_auth_url: "http://localhost:3501".into(),
+            better_auth_url: "http://localhost:21001".into(),
             google_client_id: String::new(),
             google_client_secret: String::new(),
             github_client_id: String::new(),
@@ -133,12 +133,12 @@ mod config_tests {
     #[test]
     fn test_r2_configured() {
         let config = arinova_server::config::Config {
-            port: 3501,
+            port: 21001,
             database_url: "postgres://localhost/test".into(),
             redis_url: "redis://localhost".into(),
-            cors_origin: "http://localhost:3500".into(),
+            cors_origin: "http://localhost:21000".into(),
             better_auth_secret: "test".into(),
-            better_auth_url: "http://localhost:3501".into(),
+            better_auth_url: "http://localhost:21001".into(),
             google_client_id: String::new(),
             google_client_secret: String::new(),
             github_client_id: String::new(),

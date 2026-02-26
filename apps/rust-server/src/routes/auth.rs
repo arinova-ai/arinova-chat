@@ -370,7 +370,7 @@ async fn google_callback(
             let secure = is_secure_context(&state.config);
             let cookie = build_session_cookie(&session_data.token, secure);
             // Redirect to frontend after successful OAuth
-            let frontend_url = state.config.cors_origins().first().cloned().unwrap_or_else(|| "http://localhost:3500".to_string());
+            let frontend_url = state.config.cors_origins().first().cloned().unwrap_or_else(|| "http://localhost:21000".to_string());
             let mut resp = Redirect::temporary(&frontend_url).into_response();
             resp.headers_mut()
                 .insert("set-cookie", cookie.parse().unwrap());
@@ -395,7 +395,7 @@ async fn github_callback(
         Ok(session_data) => {
             let secure = is_secure_context(&state.config);
             let cookie = build_session_cookie(&session_data.token, secure);
-            let frontend_url = state.config.cors_origins().first().cloned().unwrap_or_else(|| "http://localhost:3500".to_string());
+            let frontend_url = state.config.cors_origins().first().cloned().unwrap_or_else(|| "http://localhost:21000".to_string());
             let mut resp = Redirect::temporary(&frontend_url).into_response();
             resp.headers_mut()
                 .insert("set-cookie", cookie.parse().unwrap());
