@@ -16,6 +16,7 @@ const NAV_ICONS: Record<string, { active: string; inactive: string }> = {
   theme: { active: "/assets/nav/icon-theme-active.svg", inactive: "/assets/nav/icon-theme-inactive.svg" },
   community: { active: "/assets/nav/icon-spaces-active.svg", inactive: "/assets/nav/icon-spaces-inactive.svg" },
   market: { active: "/assets/nav/icon-market-active.svg", inactive: "/assets/nav/icon-market-inactive.svg" },
+  wallet: { active: "/assets/nav/icon-market-active.svg", inactive: "/assets/nav/icon-market-inactive.svg" },
   settings: { active: "/assets/nav/icon-settings-active.svg", inactive: "/assets/nav/icon-settings-inactive.svg" },
 };
 
@@ -52,7 +53,7 @@ export function IconRail() {
     if (pathname.startsWith("/community")) return "community";
     if (pathname.startsWith("/marketplace")) return "market";
     if (pathname.startsWith("/creator")) return "market";
-    if (pathname.startsWith("/wallet")) return "market";
+    if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/settings")) return "settings";
     return "chat";
   };
@@ -76,6 +77,7 @@ export function IconRail() {
     { id: "community", label: "Community", href: "/community" },
     { id: "theme", label: "Theme", href: "/office/themes" },
     { id: "market", label: "Market", href: "/marketplace" },
+    { id: "wallet", label: "Wallet", href: "/wallet" },
   ];
 
   const settingsItem: NavEntry = {
