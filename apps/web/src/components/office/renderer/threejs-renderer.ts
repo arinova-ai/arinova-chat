@@ -272,8 +272,17 @@ export class ThreeJSRenderer implements OfficeRenderer {
     // legacy themes keep PCFSoftShadowMap for zone-based office.
     this.renderer.shadowMap.enabled = !isV3Theme(manifest);
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    // v3 themes: NoToneMapping preserves GLB material colors as-authored by
+    // the artist — ACESFilmic amplifies subtle texture variations on flat
+    // pastel surfaces (walls) causing visible speckles/noise.
+    // Legacy themes keep ACESFilmic for cinematic look.
+    if (isV3Theme(manifest)) {
+      this.renderer.toneMapping = THREE.NoToneMapping;
+    } else {
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.2;
+    }
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
 
     // v3: OrbitControls for pan/zoom (desktop scroll + drag, mobile pinch + swipe)
@@ -554,34 +563,27 @@ export class ThreeJSRenderer implements OfficeRenderer {
     // Ambient
     const ambientColor = lightConfig?.ambient?.color
       ? Number(lightConfig.ambient.color) : 0xfff5e6;
-    const ambientIntensity = lightConfig?.ambient?.intensity ?? 0.7;
+    const ambientIntensity = lightConfig?.ambient?.intensity ?? 0.5;
     this.scene.add(new THREE.AmbientLight(ambientColor, ambientIntensity));
 
     // Hemisphere for subtle variation
-    this.scene.add(new THREE.HemisphereLight(0x87ceeb, 0x362d22, 0.25));
+    this.scene.add(new THREE.HemisphereLight(0x87ceeb, 0x362d22, 0.15));
 
     // Directional
     const dirColor = lightConfig?.directional?.color
       ? Number(lightConfig.directional.color) : 0xffffff;
-    const dirIntensity = lightConfig?.directional?.intensity ?? 1.0;
+    const dirIntensity = lightConfig?.directional?.intensity ?? 0.8;
     const dirPos = lightConfig?.directional?.position ?? [5, 8, 6];
 
     const dir = new THREE.DirectionalLight(dirColor, dirIntensity);
     dir.position.set(dirPos[0], dirPos[1], dirPos[2]);
-    dir.castShadow = true;
-    dir.shadow.mapSize.set(2048, 2048);
-    dir.shadow.bias = -0.002;
-    dir.shadow.normalBias = 0.02;
-    dir.shadow.camera.left = -15;
-    dir.shadow.camera.right = 15;
-    dir.shadow.camera.top = 15;
-    dir.shadow.camera.bottom = -15;
-    dir.shadow.camera.near = 0.1;
-    dir.shadow.camera.far = 50;
+    // v3 themes have shadowMap.enabled = false, so skip all shadow config
+    // to avoid wasted GPU resources and potential artifacts.
+    dir.castShadow = false;
     this.scene.add(dir);
 
     // Soft fill from opposite side
-    const fill = new THREE.DirectionalLight(0xc4d4ff, 0.3);
+    const fill = new THREE.DirectionalLight(0xc4d4ff, 0.2);
     fill.position.set(-5, 4, -3);
     this.scene.add(fill);
   }
