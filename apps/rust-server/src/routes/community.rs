@@ -17,7 +17,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
-use crate::services::{llm, openrouter};
+use crate::services::{llm, openrouter, tts};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -1264,6 +1264,7 @@ struct AgentChatInfo {
     system_prompt: String,
     model: String,
     input_char_limit: i32,
+    tts_voice: Option<String>,
 }
 
 async fn agent_chat(
@@ -1321,7 +1322,7 @@ async fn agent_chat(
 
     // 3. Fetch agent listing info
     let listing = sqlx::query_as::<_, AgentChatInfo>(
-        r#"SELECT agent_name, system_prompt, model, input_char_limit
+        r#"SELECT agent_name, system_prompt, model, input_char_limit, tts_voice
            FROM agent_listings WHERE id = $1 AND status = 'active'"#,
     )
     .bind(body.listing_id)
@@ -1562,6 +1563,9 @@ async fn agent_chat(
     let db = state.db.clone();
     let api_key = openrouter_key.to_string();
     let listing_id = body.listing_id;
+    let s3_clone = state.s3.clone();
+    let config_clone = state.config.clone();
+    let tts_voice = listing.tts_voice.clone().unwrap_or_else(|| "alloy".into());
 
     tokio::spawn(async move {
         // Send meta event
@@ -1628,15 +1632,112 @@ async fn agent_chat(
 
         // Store agent reply
         if !full_content.is_empty() {
-            let _ = sqlx::query(
+            let msg_id = sqlx::query_scalar::<_, Uuid>(
                 r#"INSERT INTO community_messages (community_id, agent_listing_id, content, message_type)
-                   VALUES ($1, $2, $3, 'text')"#,
+                   VALUES ($1, $2, $3, 'text')
+                   RETURNING id"#,
             )
             .bind(community_id)
             .bind(listing_id)
             .bind(&full_content)
-            .execute(&db)
+            .fetch_one(&db)
             .await;
+
+            let msg_id = match msg_id {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::error!("Agent chat: store agent message failed: {}", e);
+                    None
+                }
+            };
+
+            // TTS: generate audio from agent reply (non-blocking, silent on failure)
+            if let Some(openai_key) = config_clone.openai_api_key.as_deref() {
+                match tts::text_to_speech(openai_key, &full_content, &tts_voice).await {
+                    Ok(audio_bytes) => {
+                        let tts_filename = format!(
+                            "tts_{}.mp3",
+                            msg_id.map(|id| id.to_string()).unwrap_or_else(|| "unknown".into())
+                        );
+                        let r2_key = format!(
+                            "tts/community/{}/{}",
+                            community_id, tts_filename
+                        );
+
+                        let audio_url = if let Some(ref s3) = s3_clone {
+                            match crate::services::r2::upload_to_r2(
+                                s3,
+                                &config_clone.r2_bucket,
+                                &r2_key,
+                                audio_bytes.clone(),
+                                "audio/mpeg",
+                                &config_clone.r2_public_url,
+                            )
+                            .await
+                            {
+                                Ok(url) => Some(url),
+                                Err(e) => {
+                                    tracing::error!("Community TTS: R2 upload failed: {}", e);
+                                    let dir = std::path::Path::new(&config_clone.upload_dir)
+                                        .join("tts")
+                                        .join("community")
+                                        .join(community_id.to_string());
+                                    let _ = tokio::fs::create_dir_all(&dir).await;
+                                    let local_path = dir.join(&tts_filename);
+                                    match tokio::fs::write(&local_path, &audio_bytes).await {
+                                        Ok(_) => Some(format!(
+                                            "/uploads/tts/community/{}/{}",
+                                            community_id, tts_filename
+                                        )),
+                                        Err(e2) => {
+                                            tracing::error!("Community TTS: local write failed: {}", e2);
+                                            None
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            let dir = std::path::Path::new(&config_clone.upload_dir)
+                                .join("tts")
+                                .join("community")
+                                .join(community_id.to_string());
+                            let _ = tokio::fs::create_dir_all(&dir).await;
+                            let local_path = dir.join(&tts_filename);
+                            match tokio::fs::write(&local_path, &audio_bytes).await {
+                                Ok(_) => Some(format!(
+                                    "/uploads/tts/community/{}/{}",
+                                    community_id, tts_filename
+                                )),
+                                Err(e) => {
+                                    tracing::error!("Community TTS: local write failed: {}", e);
+                                    None
+                                }
+                            }
+                        };
+
+                        if let Some(ref url) = audio_url {
+                            if let Some(mid) = msg_id {
+                                let _ = sqlx::query(
+                                    "UPDATE community_messages SET tts_audio_url = $1 WHERE id = $2",
+                                )
+                                .bind(url)
+                                .bind(mid)
+                                .execute(&db)
+                                .await;
+                            }
+
+                            let _ = tx
+                                .send(Ok(Event::default().data(
+                                    json!({"type": "audio_ready", "audioUrl": url}).to_string(),
+                                )))
+                                .await;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Community TTS: generation failed: {}", e);
+                    }
+                }
+            }
         }
 
         let _ = tx

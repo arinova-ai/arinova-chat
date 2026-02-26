@@ -17,7 +17,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
-use crate::services::{billing, llm, openrouter};
+use crate::services::{billing, llm, openrouter, tts};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -41,6 +41,7 @@ struct ChatListingInfo {
     model: String,
     input_char_limit: i32,
     status: String,
+    tts_voice: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -48,6 +49,7 @@ struct ChatMessageRow {
     id: Uuid,
     role: String,
     content: String,
+    tts_audio_url: Option<String>,
     created_at: NaiveDateTime,
 }
 
@@ -83,7 +85,7 @@ async fn chat(
     // 1. Load listing (must be active)
     let listing = sqlx::query_as::<_, ChatListingInfo>(
         r#"SELECT agent_name, system_prompt, model, input_char_limit,
-                  status::text AS status
+                  status::text AS status, tts_voice
            FROM agent_listings WHERE id = $1"#,
     )
     .bind(listing_id)
@@ -206,7 +208,7 @@ async fn chat(
     // 7. Load last 50 messages for LLM context
     let history = sqlx::query_as::<_, ChatMessageRow>(
         r#"SELECT * FROM (
-               SELECT id, role::text AS role, content, created_at
+               SELECT id, role::text AS role, content, tts_audio_url, created_at
                FROM marketplace_messages
                WHERE conversation_id = $1
                ORDER BY created_at DESC
@@ -284,6 +286,9 @@ async fn chat(
     let cost = billing_result.cost;
     let is_free = billing_result.is_free_trial || cost == 0;
     let api_key = openrouter_key.to_string();
+    let s3_clone = state.s3.clone();
+    let config_clone = state.config.clone();
+    let tts_voice = listing.tts_voice.clone().unwrap_or_else(|| "alloy".into());
 
     tokio::spawn(async move {
         // Send meta event
@@ -350,18 +355,24 @@ async fn chat(
         let mut charged = false;
 
         if !full_content.is_empty() {
-            // Store assistant message
-            if let Err(e) = sqlx::query(
+            // Store assistant message (with RETURNING id for TTS update)
+            let msg_id = sqlx::query_scalar::<_, Uuid>(
                 r#"INSERT INTO marketplace_messages (conversation_id, role, content)
-                   VALUES ($1, 'assistant', $2)"#,
+                   VALUES ($1, 'assistant', $2)
+                   RETURNING id"#,
             )
             .bind(conversation_id)
             .bind(&full_content)
-            .execute(&db)
-            .await
-            {
-                tracing::error!("Chat: store assistant message failed: {}", e);
-            }
+            .fetch_one(&db)
+            .await;
+
+            let msg_id = match msg_id {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::error!("Chat: store assistant message failed: {}", e);
+                    None
+                }
+            };
 
             // Deduct coins if not free
             if !is_free && cost > 0 {
@@ -377,6 +388,98 @@ async fn chat(
                 billing::record_message(&db, conversation_id, listing_id, recorded_cost).await
             {
                 tracing::error!("Chat: record_message failed: {}", e);
+            }
+
+            // TTS: generate audio from agent reply (non-blocking, silent on failure)
+            if let Some(openai_key) = config_clone.openai_api_key.as_deref() {
+                match tts::text_to_speech(openai_key, &full_content, &tts_voice).await {
+                    Ok(audio_bytes) => {
+                        let tts_filename = format!(
+                            "tts_{}.mp3",
+                            msg_id.map(|id| id.to_string()).unwrap_or_else(|| "unknown".into())
+                        );
+                        let r2_key = format!(
+                            "tts/marketplace/{}/{}",
+                            conversation_id, tts_filename
+                        );
+
+                        let audio_url = if let Some(ref s3) = s3_clone {
+                            match crate::services::r2::upload_to_r2(
+                                s3,
+                                &config_clone.r2_bucket,
+                                &r2_key,
+                                audio_bytes.clone(),
+                                "audio/mpeg",
+                                &config_clone.r2_public_url,
+                            )
+                            .await
+                            {
+                                Ok(url) => Some(url),
+                                Err(e) => {
+                                    tracing::error!("Chat TTS: R2 upload failed: {}", e);
+                                    // Fallback to local storage
+                                    let dir = std::path::Path::new(&config_clone.upload_dir)
+                                        .join("tts")
+                                        .join("marketplace")
+                                        .join(conversation_id.to_string());
+                                    let _ = tokio::fs::create_dir_all(&dir).await;
+                                    let local_path = dir.join(&tts_filename);
+                                    match tokio::fs::write(&local_path, &audio_bytes).await {
+                                        Ok(_) => Some(format!(
+                                            "/uploads/tts/marketplace/{}/{}",
+                                            conversation_id, tts_filename
+                                        )),
+                                        Err(e2) => {
+                                            tracing::error!("Chat TTS: local write failed: {}", e2);
+                                            None
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // No R2 — local storage
+                            let dir = std::path::Path::new(&config_clone.upload_dir)
+                                .join("tts")
+                                .join("marketplace")
+                                .join(conversation_id.to_string());
+                            let _ = tokio::fs::create_dir_all(&dir).await;
+                            let local_path = dir.join(&tts_filename);
+                            match tokio::fs::write(&local_path, &audio_bytes).await {
+                                Ok(_) => Some(format!(
+                                    "/uploads/tts/marketplace/{}/{}",
+                                    conversation_id, tts_filename
+                                )),
+                                Err(e) => {
+                                    tracing::error!("Chat TTS: local write failed: {}", e);
+                                    None
+                                }
+                            }
+                        };
+
+                        if let Some(ref url) = audio_url {
+                            // Update DB record
+                            if let Some(mid) = msg_id {
+                                let _ = sqlx::query(
+                                    "UPDATE marketplace_messages SET tts_audio_url = $1 WHERE id = $2",
+                                )
+                                .bind(url)
+                                .bind(mid)
+                                .execute(&db)
+                                .await;
+                            }
+
+                            // Send audio_ready event
+                            let _ = tx
+                                .send(Ok(Event::default().data(
+                                    json!({"type": "audio_ready", "audioUrl": url}).to_string(),
+                                )))
+                                .await;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Chat TTS: generation failed: {}", e);
+                    }
+                }
             }
         }
 
@@ -493,7 +596,7 @@ async fn get_messages(
     }
 
     let rows = sqlx::query_as::<_, ChatMessageRow>(
-        r#"SELECT id, role::text AS role, content, created_at
+        r#"SELECT id, role::text AS role, content, tts_audio_url, created_at
            FROM marketplace_messages
            WHERE conversation_id = $1
            ORDER BY created_at ASC
@@ -514,6 +617,7 @@ async fn get_messages(
                         "id": r.id,
                         "role": r.role,
                         "content": r.content,
+                        "ttsAudioUrl": r.tts_audio_url,
                         "createdAt": r.created_at.and_utc().to_rfc3339(),
                     })
                 })

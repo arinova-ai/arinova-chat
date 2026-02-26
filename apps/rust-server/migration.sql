@@ -441,4 +441,14 @@ CREATE INDEX IF NOT EXISTS idx_community_agents_community ON community_agents(co
 ALTER TABLE communities ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
 ALTER TABLE communities ALTER COLUMN updated_at TYPE TIMESTAMPTZ USING updated_at AT TIME ZONE 'UTC';
 
+-- ===== 10. Voice L2: TTS columns =====
+
+-- TTS voice per agent/community
+ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS tts_voice TEXT DEFAULT 'alloy';
+ALTER TABLE communities ADD COLUMN IF NOT EXISTS tts_voice TEXT DEFAULT 'alloy';
+
+-- TTS audio URL on messages
+ALTER TABLE marketplace_messages ADD COLUMN IF NOT EXISTS tts_audio_url TEXT;
+ALTER TABLE community_messages ADD COLUMN IF NOT EXISTS tts_audio_url TEXT;
+
 COMMIT;

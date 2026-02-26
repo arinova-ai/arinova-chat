@@ -254,6 +254,7 @@ CREATE TABLE communities (
     cover_image_url TEXT,
     category TEXT,
     tags TEXT[],
+    tts_voice TEXT DEFAULT 'alloy',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -285,6 +286,7 @@ CREATE TABLE community_messages (
     agent_listing_id UUID REFERENCES agent_listings(id),
     content TEXT NOT NULL,
     message_type TEXT NOT NULL DEFAULT 'text' CHECK (message_type IN ('text', 'system')),
+    tts_audio_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -318,9 +320,11 @@ CREATE TABLE agent_listings (
     total_messages INTEGER NOT NULL DEFAULT 0,
     total_revenue INTEGER NOT NULL DEFAULT 0,
     example_conversations JSONB NOT NULL DEFAULT '[]',
+    tts_voice TEXT DEFAULT 'alloy',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
 
 CREATE TABLE agent_reviews (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -347,6 +351,7 @@ CREATE TABLE marketplace_messages (
     conversation_id UUID NOT NULL REFERENCES marketplace_conversations(id) ON DELETE CASCADE,
     role message_role NOT NULL,
     content TEXT NOT NULL DEFAULT '',
+    tts_audio_url TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
