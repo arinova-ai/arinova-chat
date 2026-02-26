@@ -560,32 +560,25 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
     const lightConfig = this.manifest?.lighting;
 
-    // Ambient
+    // Ambient — provides uniform base illumination (no specular, no shadows).
+    // High intensity so the GLB materials look correct without complex lighting.
     const ambientColor = lightConfig?.ambient?.color
-      ? Number(lightConfig.ambient.color) : 0xfff5e6;
-    const ambientIntensity = lightConfig?.ambient?.intensity ?? 0.5;
+      ? Number(lightConfig.ambient.color) : 0xffffff;
+    const ambientIntensity = lightConfig?.ambient?.intensity ?? 1.0;
     this.scene.add(new THREE.AmbientLight(ambientColor, ambientIntensity));
 
-    // Hemisphere for subtle variation
-    this.scene.add(new THREE.HemisphereLight(0x87ceeb, 0x362d22, 0.15));
-
-    // Directional
+    // Single soft directional from directly above — gentle fill that avoids
+    // specular hotspots on vertical walls (straight-down light minimises
+    // specular reflection on surfaces facing the camera at oblique angles).
     const dirColor = lightConfig?.directional?.color
       ? Number(lightConfig.directional.color) : 0xffffff;
-    const dirIntensity = lightConfig?.directional?.intensity ?? 0.8;
-    const dirPos = lightConfig?.directional?.position ?? [5, 8, 6];
+    const dirIntensity = lightConfig?.directional?.intensity ?? 0.3;
+    const dirPos = lightConfig?.directional?.position ?? [0, 10, 0];
 
     const dir = new THREE.DirectionalLight(dirColor, dirIntensity);
     dir.position.set(dirPos[0], dirPos[1], dirPos[2]);
-    // v3 themes have shadowMap.enabled = false, so skip all shadow config
-    // to avoid wasted GPU resources and potential artifacts.
     dir.castShadow = false;
     this.scene.add(dir);
-
-    // Soft fill from opposite side
-    const fill = new THREE.DirectionalLight(0xc4d4ff, 0.2);
-    fill.position.set(-5, 4, -3);
-    this.scene.add(fill);
   }
 
   // ── Private: OrbitControls (v3) ─────────────────────────────
@@ -729,12 +722,29 @@ export class ThreeJSRenderer implements OfficeRenderer {
       const scale = this.manifest.room.scale ?? [1, 1, 1];
       this.roomScene.scale.set(scale[0], scale[1], scale[2]);
 
-      // Room meshes only receive shadows — castShadow disabled to prevent
-      // shadow acne (self-shadowing artifacts on walls and flat surfaces).
+      // Disable all shadows on room meshes (shadowMap is off for v3 anyway)
+      // and fix texture filtering: set max anisotropy on every texture map
+      // to eliminate speckling at oblique viewing angles (isometric camera).
       this.roomScene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = false;
-          child.receiveShadow = true;
+          child.receiveShadow = false;
+
+          // Fix texture filtering: set anisotropy on all texture maps
+          const mat = child.material;
+          if (mat && 'map' in mat) {
+            const stdMat = mat as THREE.MeshStandardMaterial;
+            const maxAniso = this.renderer!.capabilities.getMaxAnisotropy();
+            const textures = [
+              stdMat.map, stdMat.normalMap, stdMat.roughnessMap,
+              stdMat.metalnessMap, stdMat.aoMap, stdMat.emissiveMap,
+            ];
+            for (const tex of textures) {
+              if (tex) {
+                tex.anisotropy = maxAniso;
+              }
+            }
+          }
         }
       });
 
