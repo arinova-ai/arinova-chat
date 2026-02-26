@@ -522,6 +522,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
     dir.position.set(200, 500, 200);
     dir.castShadow = true;
     dir.shadow.mapSize.set(1024, 1024);
+    dir.shadow.bias = -0.002;
+    dir.shadow.normalBias = 0.02;
     dir.shadow.camera.left = -500;
     dir.shadow.camera.right = 500;
     dir.shadow.camera.top = 500;
@@ -566,6 +568,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
     dir.position.set(dirPos[0], dirPos[1], dirPos[2]);
     dir.castShadow = true;
     dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.bias = -0.002;
+    dir.shadow.normalBias = 0.02;
     dir.shadow.camera.left = -15;
     dir.shadow.camera.right = 15;
     dir.shadow.camera.top = 15;
@@ -721,10 +725,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
       const scale = this.manifest.room.scale ?? [1, 1, 1];
       this.roomScene.scale.set(scale[0], scale[1], scale[2]);
 
-      // Enable shadows on room meshes
+      // Room meshes only receive shadows — castShadow disabled to prevent
+      // shadow acne (self-shadowing artifacts on walls and flat surfaces).
       this.roomScene.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          child.castShadow = true;
+          child.castShadow = false;
           child.receiveShadow = true;
         }
       });
@@ -754,11 +759,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
       const scale = this.manifest.character.scale ?? [1, 1, 1];
       this.characterModel.scale.set(scale[0], scale[1], scale[2]);
 
-      // Enable shadows
+      // Character casts shadows onto room but doesn't receive (avoids self-shadow acne)
       this.characterModel.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = true;
-          child.receiveShadow = true;
+          child.receiveShadow = false;
         }
       });
 
