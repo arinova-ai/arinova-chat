@@ -212,9 +212,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private characterModel: THREE.Object3D | null = null;
   private animationClips: Record<string, THREE.AnimationClip> = {};
   private currentAction: THREE.AnimationAction | null = null;
+  private currentFinishedHandler: ((e: { action: THREE.AnimationAction }) => void) | null = null;
 
   // ── v3: Room scene ──────────────────────────────────────────
   private roomScene: THREE.Object3D | null = null;
+  private backgroundTexture: THREE.Texture | null = null;
 
   // ── v3: Animation State Machine ────────────────────────────
   private characterState: "working" | "idle" | "sleeping" = "idle";
@@ -272,6 +274,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
       const bgUrl = `/themes/${manifest.id}/${bgImage}`;
       new THREE.TextureLoader().load(bgUrl, (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
+        this.backgroundTexture = tex;
         if (this.scene) this.scene.background = tex;
       });
     }
@@ -359,6 +362,15 @@ export class ThreeJSRenderer implements OfficeRenderer {
       this.mixer = null;
     }
 
+    // Dispose background texture (loaded separately from scene graph)
+    if (this.backgroundTexture) {
+      this.backgroundTexture.dispose();
+      this.backgroundTexture = null;
+    }
+    if (this.scene) {
+      this.scene.background = null;
+    }
+
     // Traverse entire scene and dispose all GPU resources
     if (this.scene) {
       this.scene.traverse((obj) => {
@@ -383,6 +395,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.roomScene = null;
     this.animationClips = {};
     this.currentAction = null;
+    this.currentFinishedHandler = null;
     this.v3Frustum = null;
 
     // State machine cleanup
@@ -920,6 +933,12 @@ export class ThreeJSRenderer implements OfficeRenderer {
       return;
     }
 
+    // Remove any stale finished handler from a previous one-shot animation
+    if (this.currentFinishedHandler) {
+      this.mixer.removeEventListener("finished", this.currentFinishedHandler as any);
+      this.currentFinishedHandler = null;
+    }
+
     if (this.currentAction) {
       this.currentAction.fadeOut(0.3);
     }
@@ -929,11 +948,15 @@ export class ThreeJSRenderer implements OfficeRenderer {
       action.setLoop(THREE.LoopOnce, 1);
       action.clampWhenFinished = true;
       if (onFinished) {
-        const handler = () => {
-          this.mixer?.removeEventListener("finished", handler);
+        const handler = (e: { action: THREE.AnimationAction }) => {
+          // Only fire if this is the action we're waiting on
+          if (e.action !== action) return;
+          this.mixer?.removeEventListener("finished", handler as any);
+          this.currentFinishedHandler = null;
           onFinished();
         };
-        this.mixer.addEventListener("finished", handler);
+        this.currentFinishedHandler = handler;
+        this.mixer.addEventListener("finished", handler as any);
       }
     } else {
       action.setLoop(THREE.LoopRepeat, Infinity);
@@ -949,6 +972,12 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.characterState = newState;
     this.idleTimer = 0;
     this.walkRequest = null;
+
+    // Remove stale finished handler so old one-shots don't fire mid-transition
+    if (this.currentFinishedHandler && this.mixer) {
+      this.mixer.removeEventListener("finished", this.currentFinishedHandler as any);
+      this.currentFinishedHandler = null;
+    }
 
     // Clear idle cycle timer
     if (this.idleCycleTimer) {
