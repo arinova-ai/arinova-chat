@@ -390,9 +390,25 @@ async fn chat(
                 tracing::error!("Chat: record_message failed: {}", e);
             }
 
-            // TTS: generate audio from agent reply (non-blocking, silent on failure)
-            if let Some(openai_key) = config_clone.openai_api_key.as_deref() {
-                match tts::text_to_speech(openai_key, &full_content, &tts_voice).await {
+        }
+
+        // Send done event BEFORE TTS (so the user sees the reply immediately)
+        let _ = tx
+            .send(Ok(
+                Event::default().data(json!({"type": "done", "charged": charged}).to_string())
+            ))
+            .await;
+
+        // TTS: generate audio in background (non-blocking, silent on failure)
+        if let Some(openai_key) = config_clone.openai_api_key.as_deref() {
+            let openai_key = openai_key.to_string();
+            let tx_tts = tx.clone();
+            let db_tts = db.clone();
+            let s3_tts = s3_clone.clone();
+            let config_tts = config_clone.clone();
+            let tts_voice = tts_voice.clone();
+            tokio::spawn(async move {
+                match tts::text_to_speech(&openai_key, &full_content, &tts_voice).await {
                     Ok(audio_bytes) => {
                         let tts_filename = format!(
                             "tts_{}.mp3",
@@ -403,22 +419,21 @@ async fn chat(
                             conversation_id, tts_filename
                         );
 
-                        let audio_url = if let Some(ref s3) = s3_clone {
+                        let audio_url = if let Some(ref s3) = s3_tts {
                             match crate::services::r2::upload_to_r2(
                                 s3,
-                                &config_clone.r2_bucket,
+                                &config_tts.r2_bucket,
                                 &r2_key,
                                 audio_bytes.clone(),
                                 "audio/mpeg",
-                                &config_clone.r2_public_url,
+                                &config_tts.r2_public_url,
                             )
                             .await
                             {
                                 Ok(url) => Some(url),
                                 Err(e) => {
                                     tracing::error!("Chat TTS: R2 upload failed: {}", e);
-                                    // Fallback to local storage
-                                    let dir = std::path::Path::new(&config_clone.upload_dir)
+                                    let dir = std::path::Path::new(&config_tts.upload_dir)
                                         .join("tts")
                                         .join("marketplace")
                                         .join(conversation_id.to_string());
@@ -437,8 +452,7 @@ async fn chat(
                                 }
                             }
                         } else {
-                            // No R2 — local storage
-                            let dir = std::path::Path::new(&config_clone.upload_dir)
+                            let dir = std::path::Path::new(&config_tts.upload_dir)
                                 .join("tts")
                                 .join("marketplace")
                                 .join(conversation_id.to_string());
@@ -457,19 +471,17 @@ async fn chat(
                         };
 
                         if let Some(ref url) = audio_url {
-                            // Update DB record
                             if let Some(mid) = msg_id {
                                 let _ = sqlx::query(
                                     "UPDATE marketplace_messages SET tts_audio_url = $1 WHERE id = $2",
                                 )
                                 .bind(url)
                                 .bind(mid)
-                                .execute(&db)
+                                .execute(&db_tts)
                                 .await;
                             }
 
-                            // Send audio_ready event
-                            let _ = tx
+                            let _ = tx_tts
                                 .send(Ok(Event::default().data(
                                     json!({"type": "audio_ready", "audioUrl": url}).to_string(),
                                 )))
@@ -477,18 +489,11 @@ async fn chat(
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Chat TTS: generation failed: {}", e);
+                        tracing::warn!("Chat TTS: generation failed: {}", e);
                     }
                 }
-            }
+            });
         }
-
-        // Send done event
-        let _ = tx
-            .send(Ok(
-                Event::default().data(json!({"type": "done", "charged": charged}).to_string())
-            ))
-            .await;
     });
 
     let stream = ReceiverStream::new(rx);

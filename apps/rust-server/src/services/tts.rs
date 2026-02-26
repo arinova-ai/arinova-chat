@@ -10,14 +10,21 @@ pub async fn text_to_speech(
     text: &str,
     voice: &str,
 ) -> Result<Vec<u8>, String> {
-    // OpenAI TTS max input is 4096 chars
+    // OpenAI TTS max input is 4096 chars — truncate at a safe char boundary
     let input = if text.len() > 4096 {
-        &text[..4096]
+        let mut end = 4096;
+        while !text.is_char_boundary(end) && end > 0 {
+            end -= 1;
+        }
+        &text[..end]
     } else {
         text
     };
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
     let res = client
         .post("https://api.openai.com/v1/audio/speech")
         .header("Authorization", format!("Bearer {}", api_key))
