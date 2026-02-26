@@ -40,6 +40,18 @@ ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'community_join';
 ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'community_subscription';
 ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'community_agent_call';
 
+-- Community role enum: add 'creator' and 'moderator' (Rust code uses these instead of 'owner'/'admin')
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'creator' AND enumtypid = 'community_role'::regtype) THEN
+    ALTER TYPE community_role ADD VALUE 'creator';
+  END IF;
+END $$;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'moderator' AND enumtypid = 'community_role'::regtype) THEN
+    ALTER TYPE community_role ADD VALUE 'moderator';
+  END IF;
+END $$;
+
 BEGIN;
 
 -- ===== 2. Alter Existing Tables =====
@@ -424,5 +436,9 @@ CREATE INDEX IF NOT EXISTS idx_community_messages_community ON community_message
 CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);
 CREATE INDEX IF NOT EXISTS idx_community_members_user ON community_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_community_agents_community ON community_agents(community_id);
+
+-- Fix communities timestamp columns: TIMESTAMP → TIMESTAMPTZ (Rust uses DateTime<Utc>)
+ALTER TABLE communities ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
+ALTER TABLE communities ALTER COLUMN updated_at TYPE TIMESTAMPTZ USING updated_at AT TIME ZONE 'UTC';
 
 COMMIT;

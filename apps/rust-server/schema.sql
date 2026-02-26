@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TYPE conversation_type AS ENUM ('direct', 'group');
 CREATE TYPE message_role AS ENUM ('user', 'agent', 'assistant', 'system');
 CREATE TYPE message_status AS ENUM ('pending', 'streaming', 'completed', 'cancelled', 'error');
-CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member');
+CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member', 'creator', 'moderator');
 CREATE TYPE friendship_status AS ENUM ('pending', 'accepted', 'blocked');
 CREATE TYPE conversation_user_role AS ENUM ('admin', 'vice_admin', 'member');
 CREATE TYPE agent_listen_mode AS ENUM ('owner_only', 'allowed_users', 'all_mentions');
