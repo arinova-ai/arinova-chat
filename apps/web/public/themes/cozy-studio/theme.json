@@ -59,7 +59,7 @@
   "camera": {
     "type": "orthographic",
     "frustum": 8,
-    "position": [-8, 12, -8],
+    "position": [-8, 12, 8],
     "target": [0, 1, 0]
   },
 
