@@ -2,29 +2,20 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Palette, Store, Globe, Users, Wallet } from "lucide-react";
+import {
+  MessageSquare, Building2, Globe, Users, UserPlus, Wallet,
+  Palette, Store, Settings, type LucideIcon,
+} from "lucide-react";
 import { FriendsDialog } from "../friends/friends-dialog";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/** SVG icon paths keyed by nav id — active/inactive variants */
-const NAV_ICONS: Record<string, { active: string; inactive: string }> = {
-  chat: {
-    active: "/assets/nav/icon-chat-active.svg",
-    inactive: "/assets/nav/icon-chat-inactive.svg",
-  },
-  office: {
-    active: "/assets/nav/icon-office-active.svg",
-    inactive: "/assets/nav/icon-office-inactive.svg",
-  },
-  friends: {
-    active: "/assets/nav/icon-friends-active.svg",
-    inactive: "/assets/nav/icon-friends-inactive.svg",
-  },
-  settings: {
-    active: "/assets/nav/icon-settings-active.svg",
-    inactive: "/assets/nav/icon-settings-inactive.svg",
-  },
+/** Lucide icon per nav id — active/inactive styling via parent text color */
+const NAV_ICONS: Record<string, LucideIcon> = {
+  chat: MessageSquare,
+  office: Building2,
+  friends: UserPlus,
+  settings: Settings,
 };
 
 export function MobileBottomNav() {
@@ -224,7 +215,7 @@ function NavButton({
   active: boolean;
   onClick: () => void;
 }) {
-  const icons = NAV_ICONS[iconId];
+  const Icon = NAV_ICONS[iconId];
   return (
     <button
       type="button"
@@ -234,15 +225,7 @@ function NavButton({
         active ? "text-brand-text" : "text-muted-foreground"
       )}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={active ? icons.active : icons.inactive}
-        alt=""
-        aria-hidden="true"
-        width={24}
-        height={24}
-        className="h-6 w-6"
-      />
+      {Icon && <Icon className="h-6 w-6" />}
       <span>{label}</span>
     </button>
   );

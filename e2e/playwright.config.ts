@@ -1,12 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const WEB_PORT = Number(process.env.WEB_PORT) || 21000;
+const API_PORT = Number(process.env.API_PORT) || 21001;
+
 export default defineConfig({
   testDir: "./tests",
   timeout: 60000,
   retries: 2,
   workers: 1,
   use: {
-    baseURL: "http://localhost:21000",
+    baseURL: `http://localhost:${WEB_PORT}`,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     navigationTimeout: 20000,
@@ -21,13 +24,13 @@ export default defineConfig({
   webServer: [
     {
       command: "pnpm --filter server dev",
-      port: 21001,
+      port: API_PORT,
       reuseExistingServer: true,
       cwd: "..",
     },
     {
       command: "pnpm --filter web dev",
-      port: 21000,
+      port: WEB_PORT,
       reuseExistingServer: true,
       cwd: "..",
     },

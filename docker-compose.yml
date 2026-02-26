@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     container_name: arinova-postgres
     restart: unless-stopped
     environment:
@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: arinova_dev
       POSTGRES_DB: arinova_chat
     ports:
-      - "5458:5432"
+      - "21003:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
@@ -18,7 +18,7 @@ services:
     container_name: arinova-redis
     restart: unless-stopped
     ports:
-      - "6381:6379"
+      - "21004:6379"
     volumes:
       - redis_data:/data
 
@@ -32,7 +32,7 @@ services:
       POSTGRES_PASSWORD: arinova_dev
       POSTGRES_DB: arinova_test
     ports:
-      - "5459:5432"
+      - "21005:5432"
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
 

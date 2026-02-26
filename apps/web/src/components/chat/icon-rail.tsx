@@ -2,22 +2,26 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import {
+  MessageSquare, Building2, Globe, LayoutGrid, UserPlus,
+  Palette, Users, Store, Wallet, Settings, type LucideIcon,
+} from "lucide-react";
 import { FriendsDialog } from "../friends/friends-dialog";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/** SVG icon paths keyed by nav id — active/inactive variants */
-const NAV_ICONS: Record<string, { active: string; inactive: string }> = {
-  chat: { active: "/assets/nav/icon-chat-active.svg", inactive: "/assets/nav/icon-chat-inactive.svg" },
-  office: { active: "/assets/nav/icon-office-active.svg", inactive: "/assets/nav/icon-office-inactive.svg" },
-  spaces: { active: "/assets/nav/icon-spaces-active.svg", inactive: "/assets/nav/icon-spaces-inactive.svg" },
-  apps: { active: "/assets/nav/icon-apps-active.svg", inactive: "/assets/nav/icon-apps-inactive.svg" },
-  friends: { active: "/assets/nav/icon-friends-active.svg", inactive: "/assets/nav/icon-friends-inactive.svg" },
-  theme: { active: "/assets/nav/icon-theme-active.svg", inactive: "/assets/nav/icon-theme-inactive.svg" },
-  community: { active: "/assets/nav/icon-spaces-active.svg", inactive: "/assets/nav/icon-spaces-inactive.svg" },
-  market: { active: "/assets/nav/icon-market-active.svg", inactive: "/assets/nav/icon-market-inactive.svg" },
-  wallet: { active: "/assets/nav/icon-market-active.svg", inactive: "/assets/nav/icon-market-inactive.svg" },
-  settings: { active: "/assets/nav/icon-settings-active.svg", inactive: "/assets/nav/icon-settings-inactive.svg" },
+/** Lucide icon per nav id — active/inactive styling via parent text color */
+const NAV_ICONS: Record<string, LucideIcon> = {
+  chat: MessageSquare,
+  office: Building2,
+  spaces: Globe,
+  apps: LayoutGrid,
+  friends: UserPlus,
+  theme: Palette,
+  community: Users,
+  market: Store,
+  wallet: Wallet,
+  settings: Settings,
 };
 
 interface NavEntry {
@@ -88,7 +92,7 @@ export function IconRail() {
 
   const renderButton = (item: NavEntry, extra?: React.ReactNode) => {
     const isActive = activeId === item.id;
-    const icons = NAV_ICONS[item.id];
+    const Icon = NAV_ICONS[item.id];
     return (
       <button
         key={item.id}
@@ -105,15 +109,7 @@ export function IconRail() {
         )}
         title={item.label}
       >
-        {icons && (
-          <img
-            src={isActive ? icons.active : icons.inactive}
-            alt={item.label}
-            width={24}
-            height={24}
-            className="h-6 w-6"
-          />
-        )}
+        {Icon && <Icon className="h-6 w-6" />}
         <span>{item.label}</span>
         {extra}
       </button>
