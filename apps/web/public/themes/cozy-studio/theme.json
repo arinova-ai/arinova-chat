@@ -12,7 +12,7 @@
   "canvas": {
     "width": 1920,
     "height": 1080,
-    "background": { "image": "background-cozy.png", "color": "0xf5f0e8" }
+    "background": { "image": "background-cozy.png", "color": "0x0d0d0d" }
   },
   "viewport": {
     "minZoom": 0.5, "maxZoom": 2.0, "defaultZoom": 1.0, "panBounds": true
@@ -48,19 +48,37 @@
 
   "character": {
     "model": "arinova-doll-animated.glb",
-    "scale": [1, 1, 1],
+    "scale": [0.3, 0.3, 0.3],
     "height": 1.6,
     "animations": {
+      "idle": "idle",
+      "idle_long": "idle_long",
       "walk": "walk",
-      "idle": "idle"
+      "run": "run",
+      "dance": "dance",
+      "swing": "swing",
+      "crunch": "crunch",
+      "pushup": "pushup",
+      "sleeping": "sleeping",
+      "fall": "fall",
+      "walk_to_sit": "walk_to_sit",
+      "lie_down": "lie_down",
+      "pushup_to_idle": "pushup_to_idle",
+      "sit_to_stand": "sit_to_stand",
+      "stand_up": "stand_up"
+    },
+    "positions": {
+      "desk": [0.8, 0, 0.3],
+      "playground": [-0.8, 0, 0.8],
+      "bed": [-0.5, 0, -0.8]
     }
   },
 
   "camera": {
     "type": "orthographic",
-    "frustum": 8,
-    "position": [-8, 12, 8],
-    "target": [0, 1, 0]
+    "zoom": 1.5,
+    "position": [4, 5, 4],
+    "target": [0, -0.1, 0]
   },
 
   "lighting": {

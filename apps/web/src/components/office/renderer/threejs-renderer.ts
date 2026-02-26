@@ -9,7 +9,7 @@ const DEFAULT_CANVAS_H = 1080;
 const WORLD_SCALE = 0.5;
 const BOT_HEIGHT = 40;
 const LERP_FACTOR = 0.08;
-const CHARACTER_MOVE_SPEED = 2; // units per second
+const CHARACTER_MOVE_SPEED = 1.0; // units per second
 
 const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
   working: 0x16a34a,
@@ -213,9 +213,17 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private animationClips: Record<string, THREE.AnimationClip> = {};
   private currentAction: THREE.AnimationAction | null = null;
 
-  // ── v3: Click-to-walk ────────────────────────────────────────
-  private walkTarget: THREE.Vector3 | null = null;
+  // ── v3: Room scene ──────────────────────────────────────────
   private roomScene: THREE.Object3D | null = null;
+
+  // ── v3: Animation State Machine ────────────────────────────
+  private characterState: "working" | "idle" | "sleeping" = "idle";
+  private walkRequest: { target: THREE.Vector3; onArrival: () => void } | null = null;
+  private idleTimer = 0;
+  private idleCycleTimer: ReturnType<typeof setTimeout> | null = null;
+  private characterPositions: Record<string, THREE.Vector3> = {};
+  private static IDLE_TIMEOUT = 30 * 60; // 30 minutes in seconds
+  private static IDLE_ANIMS = ["dance", "swing", "crunch", "pushup"];
 
   // ── DRACOLoader for compressed GLB models ──────────────────
   private dracoLoader: import("three/examples/jsm/loaders/DRACOLoader.js").DRACOLoader | null = null;
@@ -226,6 +234,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
   private v3Frustum: number | null = null;
 
   onAgentClick?: (agentId: string) => void;
+  onCharacterClick?: () => void;
 
   // ── init ──────────────────────────────────────────────────────
 
@@ -256,6 +265,16 @@ export class ThreeJSRenderer implements OfficeRenderer {
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(this.bgColor);
+
+    // Background image (v3 themes)
+    const bgImage = manifest?.canvas?.background?.image;
+    if (bgImage && isV3Theme(manifest)) {
+      const bgUrl = `/themes/${manifest.id}/${bgImage}`;
+      new THREE.TextureLoader().load(bgUrl, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        if (this.scene) this.scene.background = tex;
+      });
+    }
 
     // Camera — v3 uses manifest camera config, legacy uses hardcoded
     if (isV3Theme(manifest)) {
@@ -312,6 +331,11 @@ export class ThreeJSRenderer implements OfficeRenderer {
     // Click handler
     this.renderer.domElement.addEventListener("click", this.handleClick);
 
+    // v3: Number keys trigger animations
+    if (isV3Theme(manifest)) {
+      window.addEventListener("keydown", this.handleKeyDown);
+    }
+
     this.startRenderLoop();
   }
 
@@ -321,6 +345,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     cancelAnimationFrame(this.animId);
 
     this.renderer?.domElement.removeEventListener("click", this.handleClick);
+    window.removeEventListener("keydown", this.handleKeyDown);
 
     // Dispose OrbitControls
     if (this.controls) {
@@ -358,8 +383,19 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.roomScene = null;
     this.animationClips = {};
     this.currentAction = null;
-    this.walkTarget = null;
     this.v3Frustum = null;
+
+    // State machine cleanup
+    this.walkRequest = null;
+    this.characterState = "idle";
+    this.idleTimer = 0;
+    this.characterPositions = {};
+    if (this.idleCycleTimer) {
+      clearTimeout(this.idleCycleTimer);
+      this.idleCycleTimer = null;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).__setAgentStatus;
 
     if (this.dracoLoader) {
       this.dracoLoader.dispose();
@@ -683,7 +719,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.camera.right = frustum * aspect;
     this.camera.top = frustum;
     this.camera.bottom = -frustum;
-    this.camera.zoom = 1;
+    // Apply zoom from theme.json (bigger number = more zoomed in)
+    this.camera.zoom = camConfig?.zoom ?? 1;
     this.camera.updateProjectionMatrix();
 
     if (this.controls) {
@@ -834,31 +871,209 @@ export class ThreeJSRenderer implements OfficeRenderer {
       }
     }
 
-    // Play idle animation by default (fall back to walk if no idle)
-    if (this.animationClips["idle"]) {
-      this.playAnimation("idle");
-    } else if (Object.keys(this.animationClips).length > 0) {
-      // Play any available animation
-      const firstName = Object.keys(this.animationClips)[0];
-      this.playAnimation(firstName);
+    // Add invisible hit-box cylinder for click detection
+    if (this.characterModel) {
+      const charHeight = this.manifest.character?.height ?? 1.6;
+      const hitGeo = new THREE.CylinderGeometry(0.4, 0.4, charHeight, 8);
+      const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+      const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+      hitMesh.name = "character-hit-box";
+      hitMesh.position.y = charHeight / 2;
+      this.characterModel.add(hitMesh);
     }
+
+    // Parse named positions from theme.json
+    const positions = this.manifest.character?.positions;
+    if (positions) {
+      for (const [key, coords] of Object.entries(positions)) {
+        this.characterPositions[key] = new THREE.Vector3(coords[0], coords[1], coords[2]);
+      }
+    }
+
+    // Start state machine with default "idle" state
+    this.transitionTo("idle");
+
+    // Debug: expose status setter on window for console testing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__setAgentStatus = (status: string) => {
+      if (status === "working" || status === "idle" || status === "sleeping") {
+        this.transitionTo(status);
+      } else {
+        console.warn(`[StateMachine] Unknown status: ${status}. Use working/idle/sleeping.`);
+      }
+    };
   }
 
   // ── Private: Play animation ───────────────────────────────────
 
-  private playAnimation(name: string): void {
+  // Animations that play once (not looping) — state machine controls transitions
+  private static ONE_SHOT_ANIMS = new Set([
+    "fall", "stand_up", "walk_to_sit", "lie_down", "pushup_to_idle", "sit_to_stand",
+  ]);
+
+  private playAnimation(name: string, onFinished?: () => void): void {
     if (!this.mixer) return;
     const clip = this.animationClips[name];
-    if (!clip) return;
+    if (!clip) {
+      // If clip not found, call onFinished so state machine doesn't stall
+      onFinished?.();
+      return;
+    }
 
     if (this.currentAction) {
       this.currentAction.fadeOut(0.3);
     }
 
     const action = this.mixer.clipAction(clip);
+    if (ThreeJSRenderer.ONE_SHOT_ANIMS.has(name)) {
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+      if (onFinished) {
+        const handler = () => {
+          this.mixer?.removeEventListener("finished", handler);
+          onFinished();
+        };
+        this.mixer.addEventListener("finished", handler);
+      }
+    } else {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+    }
     action.reset().fadeIn(0.3).play();
     this.currentAction = action;
   }
+
+  // ── State Machine ───────────────────────────────────────────
+
+  private transitionTo(newState: "working" | "idle" | "sleeping"): void {
+    const prevState = this.characterState;
+    this.characterState = newState;
+    this.idleTimer = 0;
+    this.walkRequest = null;
+
+    // Clear idle cycle timer
+    if (this.idleCycleTimer) {
+      clearTimeout(this.idleCycleTimer);
+      this.idleCycleTimer = null;
+    }
+
+    switch (newState) {
+      case "working":
+        this.goToWorking(prevState);
+        break;
+      case "idle":
+        this.goToIdle(prevState);
+        break;
+      case "sleeping":
+        this.goToSleeping();
+        break;
+    }
+  }
+
+  private goToWorking(prevState: string): void {
+    const deskPos = this.characterPositions["desk"];
+    if (!deskPos) { this.playAnimation("idle"); return; }
+
+    if (prevState === "sleeping") {
+      this.playAnimation("stand_up", () => {
+        this.walkTo(deskPos, () => this.playAnimation("idle"));
+      });
+    } else {
+      this.walkTo(deskPos, () => this.playAnimation("idle"));
+    }
+  }
+
+  private goToIdle(prevState: string): void {
+    const playgroundPos = this.characterPositions["playground"];
+    if (!playgroundPos) { this.playAnimation("idle"); return; }
+
+    if (prevState === "sleeping") {
+      this.playAnimation("stand_up", () => {
+        this.walkTo(playgroundPos, () => this.startIdleAnimCycle());
+      });
+    } else {
+      this.walkTo(playgroundPos, () => this.startIdleAnimCycle());
+    }
+  }
+
+  private goToSleeping(): void {
+    const bedPos = this.characterPositions["bed"];
+    if (!bedPos) { this.playAnimation("sleeping"); return; }
+
+    this.walkTo(bedPos, () => {
+      this.playAnimation("walk_to_sit", () => {
+        this.playAnimation("lie_down", () => {
+          this.playAnimation("sleeping");
+        });
+      });
+    });
+  }
+
+  private walkTo(target: THREE.Vector3, onArrival: () => void): void {
+    if (!this.characterModel) { onArrival(); return; }
+
+    // Face the target direction
+    const lookTarget = new THREE.Vector3(target.x, this.characterModel.position.y, target.z);
+    this.characterModel.lookAt(lookTarget);
+
+    this.walkRequest = { target: target.clone(), onArrival };
+    this.playAnimation("walk");
+  }
+
+  private startIdleAnimCycle(): void {
+    if (this.characterState !== "idle") return;
+
+    const anims = ThreeJSRenderer.IDLE_ANIMS;
+    const animName = anims[Math.floor(Math.random() * anims.length)];
+    this.playIdleAnim(animName);
+  }
+
+  private playIdleAnim(name: string): void {
+    if (this.characterState !== "idle") return;
+
+    this.playAnimation(name);
+
+    // Play looping anim for 10-15s, then switch to next random
+    const duration = 10_000 + Math.random() * 5_000;
+
+    if (this.idleCycleTimer) clearTimeout(this.idleCycleTimer);
+    this.idleCycleTimer = setTimeout(() => {
+      if (this.characterState !== "idle") return;
+
+      if (name === "pushup") {
+        // Pushup needs transition animation before next
+        this.playAnimation("pushup_to_idle", () => this.startIdleAnimCycle());
+      } else {
+        this.startIdleAnimCycle();
+      }
+    }, duration);
+  }
+
+  // Number key → animation mapping
+  // 0=idle, 1=walk, 2=sleep, 3=dance, 4=run, 5=swing, 6=crunch,
+  // 7=fall, 8=pushup, 9=sit, +more via other keys
+  private static KEY_ANIM_MAP: Record<string, string> = {
+    "0": "idle",
+    "1": "walk",
+    "2": "sleep",
+    "3": "dance",
+    "4": "run",
+    "5": "swing",
+    "6": "crunch",
+    "7": "fall",
+    "8": "pushup",
+    "9": "sit",
+  };
+
+  private handleKeyDown = (e: KeyboardEvent): void => {
+    // Ignore if typing in an input
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    const animName = ThreeJSRenderer.KEY_ANIM_MAP[e.key];
+    if (animName && this.animationClips[animName]) {
+      this.playAnimation(animName);
+    }
+  };
 
   // ── Private: Ground (legacy) ──────────────────────────────────
 
@@ -1112,14 +1327,15 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    // v3: click-to-walk — intersect room meshes to get floor position
-    if (isV3Theme(this.manifest) && this.characterModel && this.roomScene) {
-      const intersects = this.raycaster.intersectObjects(this.roomScene.children, true);
-      if (intersects.length > 0) {
-        const hit = intersects[0].point;
-        this.walkTarget = new THREE.Vector3(hit.x, 0, hit.z);
-        this.playAnimation("walk");
-        return;
+    // v3: detect click on character model
+    if (isV3Theme(this.manifest) && this.characterModel && this.onCharacterClick) {
+      const hitBox = this.characterModel.getObjectByName("character-hit-box");
+      if (hitBox) {
+        const intersects = this.raycaster.intersectObject(hitBox, false);
+        if (intersects.length > 0) {
+          this.onCharacterClick();
+          return;
+        }
       }
     }
 
@@ -1177,31 +1393,39 @@ export class ThreeJSRenderer implements OfficeRenderer {
         this.mixer.update(delta);
       }
 
-      // v3: Move character toward walk target
-      if (this.walkTarget && this.characterModel) {
+      // v3: Walk-request movement (state machine driven)
+      if (this.walkRequest && this.characterModel) {
         const current = this.characterModel.position;
-        const direction = this.walkTarget.clone().sub(current);
+        const direction = this.walkRequest.target.clone().sub(current);
         direction.y = 0;
         const distance = direction.length();
 
-        if (distance > 0.1) {
+        if (distance > 0.05) {
           direction.normalize();
           const step = CHARACTER_MOVE_SPEED * delta;
           current.add(direction.multiplyScalar(Math.min(step, distance)));
 
           // Rotate character to face movement direction
           const lookTarget = new THREE.Vector3(
-            this.walkTarget.x,
+            this.walkRequest.target.x,
             current.y,
-            this.walkTarget.z,
+            this.walkRequest.target.z,
           );
           this.characterModel.lookAt(lookTarget);
         } else {
-          // Arrived at target
-          this.walkTarget = null;
-          if (this.animationClips["idle"]) {
-            this.playAnimation("idle");
-          }
+          // Arrived — snap to target and invoke callback
+          current.set(this.walkRequest.target.x, current.y, this.walkRequest.target.z);
+          const onArrival = this.walkRequest.onArrival;
+          this.walkRequest = null;
+          onArrival();
+        }
+      }
+
+      // v3: Idle timer — auto-sleep after 30 minutes of idle
+      if (this.characterState === "idle" && !this.walkRequest) {
+        this.idleTimer += delta;
+        if (this.idleTimer >= ThreeJSRenderer.IDLE_TIMEOUT) {
+          this.transitionTo("sleeping");
         }
       }
 

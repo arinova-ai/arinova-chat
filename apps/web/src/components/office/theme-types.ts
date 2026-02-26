@@ -207,6 +207,7 @@ export interface CharacterConfig {
   scale?: [number, number, number];
   height?: number;
   animations?: Record<string, string>;
+  positions?: { desk?: [number, number, number]; playground?: [number, number, number]; bed?: [number, number, number] };
 }
 
 // ── v3: Camera ─────────────────────────────────────────────────
@@ -214,6 +215,7 @@ export interface CharacterConfig {
 export interface CameraConfig {
   type?: "orthographic" | "perspective";
   frustum?: number;
+  zoom?: number;
   position?: [number, number, number];
   target?: [number, number, number];
 }

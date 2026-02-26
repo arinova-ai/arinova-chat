@@ -10,6 +10,7 @@ interface Props {
   agents: Agent[];
   selectedAgentId: string | null;
   onSelectAgent: (id: string) => void;
+  onCharacterClick?: () => void;
   width: number;
   height: number;
   manifest?: ThemeManifest | null;
@@ -20,6 +21,7 @@ export default function OfficeMap({
   agents,
   selectedAgentId,
   onSelectAgent,
+  onCharacterClick,
   width,
   height,
   manifest = null,
@@ -29,9 +31,11 @@ export default function OfficeMap({
   const rendererRef = useRef<OfficeRenderer | null>(null);
   const readyRef = useRef(false);
 
-  // Keep latest callback accessible to the renderer
+  // Keep latest callbacks accessible to the renderer
   const onSelectRef = useRef(onSelectAgent);
   onSelectRef.current = onSelectAgent;
+  const onCharacterClickRef = useRef(onCharacterClick);
+  onCharacterClickRef.current = onCharacterClick;
 
   // Keep latest values accessible via refs for post-init application
   const pendingAgentsRef = useRef(agents);
@@ -52,6 +56,7 @@ export default function OfficeMap({
     const rendererType: RendererType = manifest?.renderer ?? "pixi";
     const renderer = createRenderer(rendererType);
     renderer.onAgentClick = (id: string) => onSelectRef.current(id);
+    renderer.onCharacterClick = () => onCharacterClickRef.current?.();
 
     renderer
       .init(container, width, height, manifest, themeId)

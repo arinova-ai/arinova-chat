@@ -25,4 +25,7 @@ export interface OfficeRenderer {
 
   /** Callback invoked when the user clicks an agent. */
   onAgentClick?: (agentId: string) => void;
+
+  /** Callback invoked when the user clicks the v3 character model. */
+  onCharacterClick?: () => void;
 }

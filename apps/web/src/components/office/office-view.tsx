@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import StatusBar from "./status-bar";
 import { AgentModal } from "./agent-modal";
+import { CharacterModal } from "./character-modal";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { MOCK_AGENTS } from "./mock-data";
 import { ThemeProvider, useTheme } from "./theme-context";
@@ -37,6 +38,7 @@ function OfficeViewInner() {
     : agents;
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [showCharacterModal, setShowCharacterModal] = useState(false);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
@@ -47,6 +49,8 @@ function OfficeViewInner() {
   }, []);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
+  const handleCharacterClick = useCallback(() => setShowCharacterModal(true), []);
+  const closeCharacterModal = useCallback(() => setShowCharacterModal(false), []);
 
   useEffect(() => {
     const el = mapContainerRef.current;
@@ -80,6 +84,7 @@ function OfficeViewInner() {
             agents={displayAgents}
             selectedAgentId={selectedAgentId}
             onSelectAgent={selectAgent}
+            onCharacterClick={handleCharacterClick}
             width={mapSize.width}
             height={mapSize.height}
             manifest={manifest}
@@ -90,6 +95,13 @@ function OfficeViewInner() {
 
       {/* Agent detail modal */}
       <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
+
+      {/* Character modal (v3 themes) */}
+      <CharacterModal
+        isOpen={showCharacterModal}
+        onClose={closeCharacterModal}
+        agentStatus={demoStatus}
+      />
     </div>
   );
 }
