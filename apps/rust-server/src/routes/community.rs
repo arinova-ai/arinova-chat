@@ -1377,6 +1377,15 @@ async fn agent_chat(
     })?;
 
     if community_fee > 0 {
+        // Wrap entire billing flow in a transaction
+        let mut tx = state.db.begin().await.map_err(|e| {
+            tracing::error!("agent_chat: begin billing tx failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        })?;
+
         // Atomic deduction
         let deducted = sqlx::query_scalar::<_, i32>(
             r#"UPDATE coin_balances
@@ -1386,10 +1395,10 @@ async fn agent_chat(
         )
         .bind(&user.id)
         .bind(community_fee)
-        .fetch_optional(&state.db)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| {
-            tracing::error!("Agent chat: deduct fee failed: {}", e);
+            tracing::error!("agent_chat: deduct fee failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Payment failed" })),
@@ -1404,25 +1413,29 @@ async fn agent_chat(
         }
 
         // Record transaction
-        if let Err(e) = sqlx::query(
+        sqlx::query(
             r#"INSERT INTO coin_transactions (user_id, type, amount, description)
                VALUES ($1, 'community_agent_call', $2, $3)"#,
         )
         .bind(&user.id)
         .bind(-community_fee)
         .bind(format!("Agent call: {}", listing.agent_name))
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
-        {
+        .map_err(|e| {
             tracing::error!("agent_chat: record transaction failed: {}", e);
-        }
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to record transaction" })),
+            )
+        })?;
 
         // Creator gets 70%
         let creator_id = sqlx::query_scalar::<_, String>(
             "SELECT creator_id FROM communities WHERE id = $1",
         )
         .bind(community_id)
-        .fetch_optional(&state.db)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| {
             tracing::error!("agent_chat: fetch creator_id failed: {}", e);
@@ -1434,7 +1447,7 @@ async fn agent_chat(
 
         if let Some(cid) = creator_id {
             let creator_share = community_fee * 7 / 10;
-            if let Err(e) = sqlx::query(
+            sqlx::query(
                 r#"INSERT INTO coin_balances (user_id, balance, updated_at)
                    VALUES ($1, $2, NOW())
                    ON CONFLICT (user_id) DO UPDATE
@@ -1442,24 +1455,40 @@ async fn agent_chat(
             )
             .bind(&cid)
             .bind(creator_share)
-            .execute(&state.db)
+            .execute(&mut *tx)
             .await
-            {
+            .map_err(|e| {
                 tracing::error!("agent_chat: credit creator balance failed: {}", e);
-            }
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to credit creator" })),
+                )
+            })?;
 
-            if let Err(e) = sqlx::query(
+            sqlx::query(
                 r#"INSERT INTO coin_transactions (user_id, type, amount, description)
                    VALUES ($1, 'earning', $2, 'Community agent call earning')"#,
             )
             .bind(&cid)
             .bind(creator_share)
-            .execute(&state.db)
+            .execute(&mut *tx)
             .await
-            {
+            .map_err(|e| {
                 tracing::error!("agent_chat: record creator earning failed: {}", e);
-            }
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Failed to record transaction" })),
+                )
+            })?;
         }
+
+        tx.commit().await.map_err(|e| {
+            tracing::error!("agent_chat: commit billing tx failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Billing commit failed" })),
+            )
+        })?;
     }
 
     // 7. Store user message
@@ -1493,7 +1522,13 @@ async fn agent_chat(
     .bind(community_id)
     .fetch_all(&state.db)
     .await
-    .unwrap_or_default();
+    .map_err(|e| {
+        tracing::error!("agent_chat: load history failed: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Failed to load message history" })),
+        )
+    })?;
 
     // 9. Build LLM messages
     let mut llm_messages = vec![llm::ChatMessage {
