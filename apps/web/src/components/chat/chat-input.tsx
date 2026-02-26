@@ -52,7 +52,7 @@ const ACCEPTED_TYPES = new Set([
 ]);
 
 function isAcceptedFile(file: File): boolean {
-  return ACCEPTED_TYPES.has(file.type) || file.type.startsWith("audio/");
+  return ACCEPTED_TYPES.has(file.type);
 }
 
 interface ChatInputProps {
