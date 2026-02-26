@@ -111,8 +111,6 @@ interface ChatState {
   activeThreadId: string | null;
   threadMessages: Record<string, Message[]>;
   threadLoading: boolean;
-  /** Maps messageId → threadId for streaming agent messages in threads */
-  threadStreamMap: Record<string, string>;
 
   // Actions
   setReplyingTo: (message: Message | null) => void;
@@ -225,7 +223,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
-  threadStreamMap: {},
 
   setReplyingTo: (message) => set({ replyingTo: message }),
 
@@ -1173,18 +1170,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "stream_start") {
       const { conversationId, messageId, seq, senderAgentId, senderAgentName } = event;
 
-      // If user has an active thread open in this conversation,
-      // map this stream's messageId to the thread so chunks/end route there
-      const { activeThreadId, activeConversationId } = get();
-      if (activeThreadId && conversationId === activeConversationId) {
-        set({
-          threadStreamMap: {
-            ...get().threadStreamMap,
-            [messageId]: activeThreadId,
-          },
-        });
-      }
-
       const thinking: ThinkingAgent = {
         messageId,
         agentId: senderAgentId ?? "",
@@ -1206,7 +1191,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_chunk") {
       const { conversationId, messageId, chunk } = event;
-      const threadId = get().threadStreamMap[messageId];
+      const threadId = event.threadId;
 
       // Check if this is the first chunk (message still in thinkingAgents)
       const thinking = get().thinkingAgents[conversationId] ?? [];
@@ -1284,14 +1269,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { conversationId, messageId, seq } = event;
       const { activeConversationId, unreadCounts } = get();
       const finalContent = event.content;
-      const threadId = get().threadStreamMap[messageId];
-
-      // Clean up thread stream mapping
-      if (threadId) {
-        const newMap = { ...get().threadStreamMap };
-        delete newMap[messageId];
-        set({ threadStreamMap: newMap });
-      }
+      const threadId = event.threadId;
 
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];
@@ -1441,14 +1419,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_error") {
       const { conversationId, messageId, error } = event;
-      const threadId = get().threadStreamMap[messageId];
-
-      // Clean up thread stream mapping
-      if (threadId) {
-        const newMap = { ...get().threadStreamMap };
-        delete newMap[messageId];
-        set({ threadStreamMap: newMap });
-      }
+      const threadId = event.threadId;
 
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];

@@ -1089,7 +1089,16 @@ async fn get_thread_messages(
         .await
     };
 
-    let rows = result.unwrap_or_default();
+    let rows = match result {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
     let has_more = rows.len() as i64 > limit;
     let mut items: Vec<MessageRow> = rows.into_iter().take(limit as usize).collect();
 
@@ -1099,7 +1108,11 @@ async fn get_thread_messages(
     }
 
     let next_cursor = if has_more {
-        items.first().map(|m| json!(m.seq))
+        if direction == "after" {
+            items.last().map(|m| json!(m.seq))
+        } else {
+            items.first().map(|m| json!(m.seq))
+        }
     } else {
         None
     };

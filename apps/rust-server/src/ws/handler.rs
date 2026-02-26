@@ -1029,6 +1029,7 @@ pub async fn trigger_agent_response(
                     agent_id: agent_id.clone(),
                     content: content.to_string(),
                     reply_to_id: reply_to_id.clone(),
+                    thread_id: thread_id.clone(),
                 });
 
             // Notify the user that this agent's response is queued
@@ -1059,6 +1060,7 @@ pub async fn trigger_agent_response(
             conversation_id,
             content,
             reply_to_id.as_deref(),
+            thread_id.as_deref(),
             &conv_type,
             ws_state,
             db,
@@ -1076,6 +1078,7 @@ async fn do_trigger_agent_response(
     conversation_id: &str,
     content: &str,
     reply_to_id: Option<&str>,
+    thread_id: Option<&str>,
     conv_type: &str,
     ws_state: &WsState,
     db: &PgPool,
@@ -1108,19 +1111,7 @@ async fn do_trigger_agent_response(
     .and_then(|(o,)| o)
     .unwrap_or_else(|| user_id.to_string());
 
-    // Look up thread_id from the latest user message in this conversation
-    let thread_id: Option<String> = sqlx::query_as::<_, (Option<String>,)>(
-        r#"SELECT thread_id::text FROM messages
-           WHERE conversation_id = $1::uuid AND sender_user_id = $2
-           ORDER BY seq DESC LIMIT 1"#,
-    )
-    .bind(conversation_id)
-    .bind(user_id)
-    .fetch_optional(db)
-    .await
-    .ok()
-    .flatten()
-    .and_then(|(t,)| t);
+    let thread_id: Option<String> = thread_id.map(|s| s.to_string());
 
     // Get broadcast targets (all members minus blocked pairs)
     let member_ids = get_conv_member_ids(ws_state, db, conversation_id, &agent_owner).await;
@@ -1158,7 +1149,8 @@ async fn do_trigger_agent_response(
             "messageId": err_msg_id,
             "seq": err_seq,
             "senderAgentId": agent_id,
-            "senderAgentName": agent_name
+            "senderAgentName": agent_name,
+            "threadId": thread_id
         }), redis);
 
         ws_state.broadcast_to_members(&member_ids, &json!({
@@ -1166,6 +1158,7 @@ async fn do_trigger_agent_response(
             "conversationId": conversation_id,
             "messageId": err_msg_id,
             "seq": err_seq,
+            "threadId": thread_id,
             "error": format!("{} is not connected. Copy the Bot Token from bot settings and run: openclaw arinova-setup --token <bot-token>", agent_name)
         }), redis);
 
@@ -1206,7 +1199,8 @@ async fn do_trigger_agent_response(
         "messageId": agent_msg_id,
         "seq": agent_seq,
         "senderAgentId": agent_id,
-        "senderAgentName": agent_name
+        "senderAgentName": agent_name,
+        "threadId": thread_id
     }), redis);
 
     // Prepend system prompt if configured
@@ -1396,6 +1390,7 @@ async fn do_trigger_agent_response(
                     "conversationId": &conversation_id,
                     "messageId": &agent_msg_id_clone,
                     "seq": agent_seq,
+                    "threadId": &thread_id,
                     "error": "Agent is not connected"
                 }), &redis);
 
@@ -1416,6 +1411,7 @@ async fn do_trigger_agent_response(
                                 "conversationId": &conversation_id,
                                 "messageId": &agent_msg_id_clone,
                                 "seq": agent_seq,
+                                "threadId": &thread_id,
                                 "chunk": delta
                             }), &redis);
 
@@ -1452,6 +1448,7 @@ async fn do_trigger_agent_response(
                                 "conversationId": &conversation_id,
                                 "messageId": &agent_msg_id_clone,
                                 "seq": agent_seq,
+                                "threadId": &thread_id,
                                 "content": &full_content
                             }), &redis);
 
@@ -1519,6 +1516,7 @@ async fn do_trigger_agent_response(
                                 "conversationId": &conversation_id,
                                 "messageId": &agent_msg_id_clone,
                                 "seq": agent_seq,
+                                "threadId": &thread_id,
                                 "error": error
                             }), &redis);
 
@@ -1550,6 +1548,7 @@ async fn do_trigger_agent_response(
                                     "conversationId": &conversation_id,
                                     "messageId": &agent_msg_id_clone,
                                     "seq": agent_seq,
+                                    "threadId": &thread_id,
                                     "error": "Agent disconnected"
                                 }), &redis);
                             } else {
@@ -1566,6 +1565,7 @@ async fn do_trigger_agent_response(
                                     "conversationId": &conversation_id,
                                     "messageId": &agent_msg_id_clone,
                                     "seq": agent_seq,
+                                    "threadId": &thread_id,
                                     "content": &stream_accumulated
                                 }), &redis);
                             }
@@ -1602,7 +1602,8 @@ async fn do_trigger_agent_response(
                             "type": "stream_end",
                             "conversationId": &conversation_id,
                             "messageId": &agent_msg_id_clone,
-                            "seq": agent_seq
+                            "seq": agent_seq,
+                            "threadId": &thread_id
                         }), &redis);
 
                         // 5. Send cancel_task to agent so it can stop generating
@@ -1673,6 +1674,7 @@ fn spawn_mention_dispatch(
             &conversation_id,
             &content,
             Some(&reply_to_id),
+            None,
             &conv_type,
             &ws_state,
             &db,
@@ -1734,6 +1736,7 @@ fn process_next_in_queue(
             &next.conversation_id,
             &next.content,
             next.reply_to_id.as_deref(),
+            next.thread_id.as_deref(),
             &conv_type,
             &ws_state,
             &db,

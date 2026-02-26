@@ -91,7 +91,7 @@ export function ThreadPanel() {
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="w-[380px] sm:max-w-[380px] p-0 flex flex-col"
+        className="w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col"
       >
         {/* Thread Header */}
         <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0">

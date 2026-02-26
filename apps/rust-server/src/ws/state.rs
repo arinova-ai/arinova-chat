@@ -40,6 +40,7 @@ pub struct QueuedResponse {
     pub agent_id: String,
     pub content: String,
     pub reply_to_id: Option<String>,
+    pub thread_id: Option<String>,
 }
 
 /// Shared WebSocket state across all connections

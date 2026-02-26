@@ -67,7 +67,7 @@ export interface ThreadSummary {
   replyCount: number;
   lastReplyAt: string;
   participants: string[];
-  lastReplyPreview: string;
+  lastReplyPreview: string | null;
 }
 
 export interface Message {
@@ -418,6 +418,7 @@ export type WSServerEvent =
       seq: number;
       senderAgentId?: string;
       senderAgentName?: string;
+      threadId?: string;
     }
   | {
       type: "stream_chunk";
@@ -425,6 +426,7 @@ export type WSServerEvent =
       messageId: string;
       seq: number;
       chunk: string;
+      threadId?: string;
     }
   | {
       type: "stream_end";
@@ -432,6 +434,7 @@ export type WSServerEvent =
       messageId: string;
       seq: number;
       content?: string;
+      threadId?: string;
     }
   | {
       type: "stream_error";
@@ -439,6 +442,7 @@ export type WSServerEvent =
       messageId: string;
       seq: number;
       error: string;
+      threadId?: string;
     }
   | {
       type: "sync_response";

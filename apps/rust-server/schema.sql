@@ -543,6 +543,8 @@ CREATE TABLE playground_transactions (
 
 CREATE INDEX idx_messages_conversation_seq ON messages(conversation_id, seq);
 CREATE INDEX idx_messages_conversation_created ON messages(conversation_id, created_at DESC);
+CREATE INDEX idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL;
+CREATE INDEX idx_thread_summaries_last ON thread_summaries(last_reply_at DESC);
 CREATE INDEX idx_conversation_reads_user_conv ON conversation_reads(user_id, conversation_id);
 CREATE INDEX idx_conversations_user ON conversations(user_id);
 CREATE INDEX idx_conversation_user_members_conv ON conversation_user_members(conversation_id);
