@@ -713,6 +713,43 @@ async fn handle_mark_read(user_id: &str, conversation_id: &str, seq: i32, db: &P
     .await;
 }
 
+/// Update thread_summaries when a message is posted to a thread.
+/// Uses UPSERT: creates the summary on first reply, increments on subsequent replies.
+async fn update_thread_summary(
+    db: &PgPool,
+    thread_id: &str,
+    sender_user_id: Option<&str>,
+    sender_agent_id: Option<&str>,
+) {
+    let _ = sqlx::query(
+        r#"INSERT INTO thread_summaries (thread_id, reply_count, last_reply_at, last_reply_user_id, last_reply_agent_id, participant_ids)
+           VALUES ($1::uuid, 1, NOW(), $2, $3::uuid,
+             CASE
+               WHEN $2 IS NOT NULL THEN ARRAY[$2]
+               WHEN $3 IS NOT NULL THEN ARRAY[$3::text]
+               ELSE '{}'
+             END
+           )
+           ON CONFLICT (thread_id) DO UPDATE SET
+             reply_count = thread_summaries.reply_count + 1,
+             last_reply_at = NOW(),
+             last_reply_user_id = COALESCE($2, thread_summaries.last_reply_user_id),
+             last_reply_agent_id = COALESCE($3::uuid, thread_summaries.last_reply_agent_id),
+             participant_ids = CASE
+               WHEN $2 IS NOT NULL AND NOT (thread_summaries.participant_ids @> ARRAY[$2])
+                 THEN array_append(thread_summaries.participant_ids, $2)
+               WHEN $3 IS NOT NULL AND NOT (thread_summaries.participant_ids @> ARRAY[$3::text])
+                 THEN array_append(thread_summaries.participant_ids, $3::text)
+               ELSE thread_summaries.participant_ids
+             END"#,
+    )
+    .bind(thread_id)
+    .bind(sender_user_id)
+    .bind(sender_agent_id)
+    .execute(db)
+    .await;
+}
+
 /// Trigger an agent response for a conversation.
 /// For direct conversations, dispatches to the single agent.
 /// For group conversations, broadcasts to all agents in conversation_members.
@@ -795,6 +832,11 @@ pub async fn trigger_agent_response(
             .bind(conversation_id)
             .execute(db)
             .await;
+
+            // Update thread summary if this message is part of a thread
+            if let Some(ref tid) = thread_id {
+                update_thread_summary(db, tid, Some(user_id), None).await;
+            }
 
             // Fetch sender info for broadcast
             let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>)>(
@@ -926,6 +968,11 @@ pub async fn trigger_agent_response(
         .bind(conversation_id)
         .execute(db)
         .await;
+
+        // Update thread summary if this message is part of a thread
+        if let Some(ref tid) = thread_id {
+            update_thread_summary(db, tid, Some(user_id), None).await;
+        }
 
         // Broadcast user message to all conversation members (for group visibility)
         if conv_type == "group" {
@@ -1061,6 +1108,20 @@ async fn do_trigger_agent_response(
     .and_then(|(o,)| o)
     .unwrap_or_else(|| user_id.to_string());
 
+    // Look up thread_id from the latest user message in this conversation
+    let thread_id: Option<String> = sqlx::query_as::<_, (Option<String>,)>(
+        r#"SELECT thread_id::text FROM messages
+           WHERE conversation_id = $1::uuid AND sender_user_id = $2
+           ORDER BY seq DESC LIMIT 1"#,
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .and_then(|(t,)| t);
+
     // Get broadcast targets (all members minus blocked pairs)
     let member_ids = get_conv_member_ids(ws_state, db, conversation_id, &agent_owner).await;
 
@@ -1119,13 +1180,14 @@ async fn do_trigger_agent_response(
 
     let agent_msg_id = uuid::Uuid::new_v4().to_string();
     let _ = sqlx::query(
-        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, created_at, updated_at)
-           VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', $4::uuid, NOW(), NOW())"#,
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, thread_id, created_at, updated_at)
+           VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', $4::uuid, $5::uuid, NOW(), NOW())"#,
     )
     .bind(&agent_msg_id)
     .bind(conversation_id)
     .bind(agent_seq)
     .bind(agent_id)
+    .bind(thread_id.as_deref())
     .execute(db)
     .await;
 
@@ -1308,6 +1370,7 @@ async fn do_trigger_agent_response(
     let agent_id = agent_id.to_string();
     let conv_type = conv_type.to_string();
     let member_ids = member_ids;
+    let thread_id = thread_id;
 
     tokio::spawn(async move {
         let mut stream_accumulated = String::new();
@@ -1391,6 +1454,11 @@ async fn do_trigger_agent_response(
                                 "seq": agent_seq,
                                 "content": &full_content
                             }), &redis);
+
+                            // Update thread summary if agent reply is in a thread
+                            if let Some(ref tid) = thread_id {
+                                update_thread_summary(&db, tid, None, Some(&agent_id)).await;
+                            }
 
                             // Push notification
                             if !ws_state.is_user_foreground(&user_id) {
