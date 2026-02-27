@@ -126,6 +126,7 @@ interface ChatState {
   loadMessages: (conversationId: string) => Promise<void>;
   sendMessage: (content: string, mentions?: string[]) => void;
   cancelStream: (messageId?: string) => void;
+  cancelAgentStream: (conversationId: string, messageId: string) => void;
   createAgent: (data: {
     name: string;
     description?: string;
@@ -464,6 +465,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ),
       },
     });
+  },
+
+  cancelAgentStream: (conversationId, messageId) => {
+    wsManager.send({
+      type: "cancel_stream",
+      conversationId,
+      messageId,
+    });
+    // Optimistically remove from thinkingAgents
+    const prev = get().thinkingAgents[conversationId] ?? [];
+    set({
+      thinkingAgents: {
+        ...get().thinkingAgents,
+        [conversationId]: prev.filter((t) => t.messageId !== messageId),
+      },
+    });
+    // Also mark message as cancelled if it exists
+    const msgs = get().messagesByConversation[conversationId] ?? [];
+    const target = msgs.find((m) => m.id === messageId && m.status === "streaming");
+    if (target) {
+      set({
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [conversationId]: msgs.map((m) =>
+            m.id === messageId ? { ...m, status: "cancelled" as const } : m
+          ),
+        },
+      });
+    }
   },
 
   createAgent: async (data) => {
