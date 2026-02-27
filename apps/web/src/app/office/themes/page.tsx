@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
-import { Palette, Check, Lock, Users } from "lucide-react";
+import { Palette, Check, Lock, Users, Search } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -118,6 +118,41 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
 }
 
 function ThemesGrid() {
+  const [search, setSearch] = useState("");
+  const [priceFilter, setPriceFilter] = useState<"all" | "free" | "premium">("all");
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    for (const entry of THEME_REGISTRY) {
+      for (const tag of entry.tags) tags.add(tag);
+    }
+    return Array.from(tags).sort();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return THEME_REGISTRY.filter((entry) => {
+      if (priceFilter === "free" && entry.price !== "free") return false;
+      if (priceFilter === "premium" && entry.price === "free") return false;
+      if (selectedTags.size > 0 && !entry.tags.some((t) => selectedTags.has(t))) return false;
+      if (q) {
+        const haystack = `${entry.name} ${entry.description} ${entry.tags.join(" ")}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [search, priceFilter, selectedTags]);
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  };
+
   return (
     <div className="app-dvh flex bg-background">
       <div className="hidden h-full md:block">
@@ -138,13 +173,69 @@ function ThemesGrid() {
           </div>
         </div>
 
-        {/* Theme cards grid */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            {THEME_REGISTRY.map((entry) => (
-              <ThemeCard key={entry.id} entry={entry} />
+        {/* Search + filters */}
+        <div className="shrink-0 border-b border-border px-6 py-3 space-y-3">
+          {/* Search bar */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search themes..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+            />
+          </div>
+
+          {/* Filter chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(["all", "free", "premium"] as const).map((value) => (
+              <button
+                key={value}
+                onClick={() => setPriceFilter(value)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  priceFilter === value
+                    ? "bg-brand text-brand-text"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {value === "all" ? "All" : value === "free" ? "Free" : "Premium"}
+              </button>
+            ))}
+
+            {allTags.length > 0 && (
+              <span className="mx-1 h-4 w-px bg-border" />
+            )}
+
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  selectedTags.has(tag)
+                    ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                #{tag}
+              </button>
             ))}
           </div>
+        </div>
+
+        {/* Theme cards grid */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {filtered.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-12">
+              No themes match your filters.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              {filtered.map((entry) => (
+                <ThemeCard key={entry.id} entry={entry} />
+              ))}
+            </div>
+          )}
         </div>
 
         <MobileBottomNav />
