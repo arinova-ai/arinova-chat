@@ -63,6 +63,8 @@ export default function LoginPage() {
         return;
       }
 
+      // Ensure the session cookie is persisted before redirecting
+      await authClient.getSession();
       router.push("/");
     } catch {
       setError("An unexpected error occurred");
