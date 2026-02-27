@@ -27,7 +27,6 @@
       "background": "scene-working.png",
       "overlays": [
         { "type": "thought-bubble", "position": [74.9, 25.4] },
-        { "type": "led", "position": [71.8, 33.7], "color": "green" },
         { "type": "screen-glow", "position": [70.5, 57.3] }
       ]
     },
@@ -35,15 +34,13 @@
       "background": "scene-idle.png",
       "overlays": [
         { "type": "music-notes", "position": [60.7, 20.2] },
-        { "type": "led", "position": [59.2, 24.1], "color": "red" },
         { "type": "sun-rays", "position": [61.8, 13.0] }
       ]
     },
     "sleeping": {
       "background": "scene-sleeping.png",
       "overlays": [
-        { "type": "zzz", "position": [35.6, 25.4] },
-        { "type": "led", "position": [32.7, 28.6], "color": "red" }
+        { "type": "zzz", "position": [35.6, 25.4] }
       ]
     }
   },

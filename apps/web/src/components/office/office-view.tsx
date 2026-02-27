@@ -28,7 +28,11 @@ function OfficeViewInner() {
   useEffect(() => {
     if (!isDemoMode) return;
     const interval = setInterval(() => {
-      setDemoStatus((prev) => (prev === "working" ? "idle" : "working"));
+      setDemoStatus((prev) => {
+        if (prev === "working") return "idle";
+        if (prev === "idle") return "blocked";
+        return "working";
+      });
     }, 10_000);
     return () => clearInterval(interval);
   }, [isDemoMode]);
