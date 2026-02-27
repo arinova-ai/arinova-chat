@@ -1631,11 +1631,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (typeof window !== "undefined") {
         localStorage.setItem("arinova_muted", JSON.stringify(newMuted));
       }
+      // Clear stale thinking indicators — if stream completed while
+      // disconnected, thinkingAgents entries won't get cleaned up by
+      // the missed stream_end/stream_error. Active streams will
+      // re-create entries from subsequent stream_chunk events.
       set({
         conversations: updatedConversations,
         messagesByConversation: newMessagesByConv,
         unreadCounts: newUnreadCounts,
         mutedConversations: newMuted,
+        thinkingAgents: {},
       });
       return;
     }
