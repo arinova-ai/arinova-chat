@@ -181,6 +181,7 @@ function ThemesGrid() {
             <input
               type="text"
               placeholder="Search themes..."
+              aria-label="Search themes"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
@@ -188,11 +189,12 @@ function ThemesGrid() {
           </div>
 
           {/* Filter chips */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Price filter">
             {(["all", "free", "premium"] as const).map((value) => (
               <button
                 key={value}
                 onClick={() => setPriceFilter(value)}
+                aria-pressed={priceFilter === value}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   priceFilter === value
                     ? "bg-brand text-brand-text"
@@ -211,6 +213,7 @@ function ThemesGrid() {
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
+                aria-pressed={selectedTags.has(tag)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   selectedTags.has(tag)
                     ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
