@@ -127,10 +127,11 @@ async fn agent_send(
         "conversationId": conversation_id,
         "messageId": &msg_id,
         "seq": seq,
-        "content": content
+        "content": content,
+        "reason": "agent_send"
     }), &state.redis);
 
-    tracing::info!("agent_send REST: delivered msgId={} seq={} from agent {} to user {}", msg_id, seq, agent_id, user_id);
+    tracing::info!("stream_end reason=agent_send conv={} agent={} msgId={} seq={}", conversation_id, agent_id, msg_id, seq);
 
     (
         StatusCode::OK,

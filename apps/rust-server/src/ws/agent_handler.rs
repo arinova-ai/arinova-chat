@@ -351,7 +351,8 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                         "conversationId": conversation_id,
                         "messageId": msg_id,
                         "seq": seq,
-                        "content": content
+                        "content": content,
+                        "reason": "agent_send"
                     }), &redis);
                 }
                 _ => {}

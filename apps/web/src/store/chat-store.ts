@@ -1310,6 +1310,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);
+
+      console.log("[stream_end]", {
+        conversationId,
+        messageId,
+        reason: event.reason ?? "unknown",
+        agentName: stillThinking?.agentName ?? "unknown",
+        timestamp: new Date().toISOString(),
+      });
       if (stillThinking) {
         if (finalContent) {
           const agentMsg: Message = {

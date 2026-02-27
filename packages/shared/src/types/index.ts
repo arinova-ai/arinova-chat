@@ -435,6 +435,7 @@ export type WSServerEvent =
       seq: number;
       content?: string;
       threadId?: string;
+      reason?: string;
     }
   | {
       type: "stream_error";

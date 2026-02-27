@@ -1453,7 +1453,8 @@ async fn do_trigger_agent_response(
                                 "messageId": &agent_msg_id_clone,
                                 "seq": agent_seq,
                                 "threadId": &thread_id,
-                                "content": &full_content
+                                "content": &full_content,
+                                "reason": "completed"
                             }), &redis);
 
                             // Update thread summary if agent reply is in a thread
@@ -1574,7 +1575,8 @@ async fn do_trigger_agent_response(
                                     "messageId": &agent_msg_id_clone,
                                     "seq": agent_seq,
                                     "threadId": &thread_id,
-                                    "content": &stream_accumulated
+                                    "content": &stream_accumulated,
+                                    "reason": "agent_disconnect"
                                 }), &redis);
                             }
 
@@ -1615,7 +1617,8 @@ async fn do_trigger_agent_response(
                             "conversationId": &conversation_id,
                             "messageId": &agent_msg_id_clone,
                             "seq": agent_seq,
-                            "threadId": &thread_id
+                            "threadId": &thread_id,
+                            "reason": "cancelled"
                         }), &redis);
 
                         // 5. Send cancel_task to agent so it can stop generating

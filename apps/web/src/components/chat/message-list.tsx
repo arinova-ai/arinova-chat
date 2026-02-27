@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Message } from "@arinova/shared/types";
 import { MessageBubble } from "./message-bubble";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
@@ -33,6 +33,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const loadingUpRef = useRef(false);
   const loadingDownRef = useRef(false);
   const highlightRef = useRef<HTMLDivElement>(null);
+  const prependHeightRef = useRef<number | null>(null);
 
   const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
@@ -92,7 +93,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
 
       if (data.messages.length > 0) {
         const el = scrollRef.current;
-        const prevScrollHeight = el?.scrollHeight ?? 0;
+        prependHeightRef.current = el?.scrollHeight ?? 0;
 
         const store = useChatStore.getState();
         const current = store.messagesByConversation[activeConversationId] ?? [];
@@ -101,13 +102,6 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
             ...store.messagesByConversation,
             [activeConversationId]: [...data.messages, ...current],
           },
-        });
-
-        // Preserve scroll position after prepending
-        requestAnimationFrame(() => {
-          if (el) {
-            el.scrollTop += el.scrollHeight - prevScrollHeight;
-          }
         });
       }
 
@@ -152,6 +146,17 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     }
   }, [hasMoreDown, activeConversationId, messages]);
 
+  // Restore scroll position after older messages are prepended (before paint)
+  useLayoutEffect(() => {
+    const prevHeight = prependHeightRef.current;
+    if (prevHeight === null) return;
+    prependHeightRef.current = null;
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop += el.scrollHeight - prevHeight;
+    }
+  });
+
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -171,6 +176,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       <div
         ref={scrollRef}
         className="h-full overflow-y-auto overflow-x-hidden py-4"
+        style={{ overflowAnchor: "none" }}
         onScroll={handleScroll}
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
