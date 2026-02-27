@@ -693,8 +693,12 @@ export class ThreeJSRenderer implements OfficeRenderer {
         s.angle ?? Math.PI / 4,
       );
       spot.position.set(s.position[0], s.position[1], s.position[2]);
+      if (s.target) {
+        spot.target.position.set(s.target[0], s.target[1], s.target[2]);
+      }
       spot.castShadow = false;
       this.scene.add(spot);
+      this.scene.add(spot.target);
     }
   }
 

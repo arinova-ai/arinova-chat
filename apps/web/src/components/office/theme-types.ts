@@ -227,7 +227,7 @@ export interface LightingConfig {
   hemisphere?: { skyColor: string; groundColor: string; intensity: number };
   directional?: { color: string; intensity: number; position: [number, number, number] };
   fill?: { color: string; intensity: number; position: [number, number, number] };
-  spot?: { color: string; intensity: number; position: [number, number, number]; angle?: number; distance?: number };
+  spot?: { color: string; intensity: number; position: [number, number, number]; target?: [number, number, number]; angle?: number; distance?: number };
 }
 
 // ── Quality Modes ───────────────────────────────────────────────
