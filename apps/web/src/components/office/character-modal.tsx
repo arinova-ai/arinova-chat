@@ -46,6 +46,41 @@ interface CharacterModalProps {
   agent: Agent | null;
 }
 
+const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
+
+function CharacterDetailOffline() {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-700/30 text-2xl">
+          🤖
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-slate-100">Arinova Assistant</div>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${OFFLINE_BADGE.bg} ${OFFLINE_BADGE.text}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${OFFLINE_BADGE.dot}`} />
+            {OFFLINE_BADGE.label}
+          </span>
+        </div>
+      </div>
+
+      <p className="text-sm text-slate-400">No agent is currently connected to this office.</p>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled
+          className="flex-1 rounded-lg bg-amber-600/50 px-4 py-2 text-sm font-medium text-white/50 cursor-not-allowed"
+        >
+          Chat
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CharacterDetail({ agent }: { agent: Agent }) {
   const badge = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
 
@@ -131,9 +166,10 @@ export function CharacterModal({ isOpen, onClose, agent }: CharacterModalProps) 
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  if (!agent) return null;
-
-  const title = agent.name || "Agent";
+  const title = agent?.name || "Arinova Assistant";
+  const content = agent
+    ? <CharacterDetail agent={agent} />
+    : <CharacterDetailOffline />;
 
   if (isMobile) {
     return (
@@ -144,7 +180,7 @@ export function CharacterModal({ isOpen, onClose, agent }: CharacterModalProps) 
             <SheetDescription className="sr-only">Character details</SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-6">
-            <CharacterDetail agent={agent} />
+            {content}
           </div>
         </SheetContent>
       </Sheet>
@@ -158,7 +194,7 @@ export function CharacterModal({ isOpen, onClose, agent }: CharacterModalProps) 
           <DialogTitle className="text-slate-100">{title}</DialogTitle>
           <DialogDescription className="sr-only">Character details</DialogDescription>
         </DialogHeader>
-        <CharacterDetail agent={agent} />
+        {content}
       </DialogContent>
     </Dialog>
   );
