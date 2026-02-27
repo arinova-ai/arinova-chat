@@ -120,7 +120,6 @@ const SPRITE_CSS = /* css */ `
 .sprite-bg-layer img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
   display: block;
 }
 `;
@@ -347,6 +346,11 @@ export class SpriteRenderer implements OfficeRenderer {
   private hitboxEl: HTMLDivElement | null = null;
   private firstAgentId: string | null = null;
 
+  // Viewport sizing (aspect-ratio-aware)
+  private canvasAspect = 16 / 9;
+  private vpW = 0;
+  private vpH = 0;
+
   // Pan / zoom state
   private isMobile = false;
   private scale = 1;
@@ -379,10 +383,15 @@ export class SpriteRenderer implements OfficeRenderer {
     this.root.style.cssText = "position:relative;width:100%;height:100%;overflow:hidden;border-radius:12px;";
     container.appendChild(this.root);
 
-    // Viewport (transformed inner container)
+    // Viewport (transformed inner container — sized to canvas aspect ratio)
     this.viewport = document.createElement("div");
-    this.viewport.style.cssText = "position:relative;width:100%;height:100%;transform-origin:0 0;";
+    this.viewport.style.cssText = "position:absolute;transform-origin:0 0;";
     this.root.appendChild(this.viewport);
+
+    const canvasW = manifest?.canvas?.width ?? 1376;
+    const canvasH = manifest?.canvas?.height ?? 768;
+    this.canvasAspect = canvasW / canvasH;
+    this.layoutViewport();
 
     const scenes = manifest?.scenes;
     if (!scenes) return;
@@ -454,6 +463,8 @@ export class SpriteRenderer implements OfficeRenderer {
 
   resize(_width: number, _height: number): void {
     if (!this.container || !this.root) return;
+
+    this.layoutViewport();
 
     const wasMobile = this.isMobile;
     this.isMobile = this.container.clientWidth < MOBILE_BREAKPOINT;
@@ -544,6 +555,31 @@ export class SpriteRenderer implements OfficeRenderer {
     this.hitboxEl.style.height = `${height}%`;
   }
 
+  // ── Private: Viewport Layout ────────────────────────────────────
+
+  /** Size the viewport div to match the canvas aspect ratio (contain-fit). */
+  private layoutViewport(): void {
+    if (!this.root || !this.viewport) return;
+    const cw = this.root.clientWidth;
+    const ch = this.root.clientHeight;
+    const containerAspect = cw / ch;
+
+    if (containerAspect > this.canvasAspect) {
+      // Container wider than canvas → fit by height
+      this.vpH = ch;
+      this.vpW = ch * this.canvasAspect;
+    } else {
+      // Container taller than canvas → fit by width
+      this.vpW = cw;
+      this.vpH = cw / this.canvasAspect;
+    }
+
+    this.viewport.style.width = `${this.vpW}px`;
+    this.viewport.style.height = `${this.vpH}px`;
+    this.viewport.style.left = `${(cw - this.vpW) / 2}px`;
+    this.viewport.style.top = `${(ch - this.vpH) / 2}px`;
+  }
+
   // ── Private: Pan / Zoom ───────────────────────────────────────
 
   private applyTransform(): void {
@@ -553,21 +589,23 @@ export class SpriteRenderer implements OfficeRenderer {
 
   private centerPan(): void {
     if (!this.root) return;
-    const w = this.root.clientWidth;
-    const h = this.root.clientHeight;
-    // Center the scaled viewport: offset = (containerSize - scaledSize) / 2
-    this.panX = (w - w * this.scale) / 2;
-    this.panY = (h - h * this.scale) / 2;
+    const cw = this.root.clientWidth;
+    const ch = this.root.clientHeight;
+    // Center the scaled viewport within the root clip area
+    this.panX = (cw - this.vpW * this.scale) / 2;
+    this.panY = (ch - this.vpH * this.scale) / 2;
     this.clampPan();
   }
 
   private clampPan(): void {
     if (!this.root) return;
-    const w = this.root.clientWidth;
-    const h = this.root.clientHeight;
-    // Min values: the right/bottom edge of scaled content aligns with container edge
-    const minX = w - w * this.scale;
-    const minY = h - h * this.scale;
+    const cw = this.root.clientWidth;
+    const ch = this.root.clientHeight;
+    const scaledW = this.vpW * this.scale;
+    const scaledH = this.vpH * this.scale;
+    // Don't let edges scroll past the root container
+    const minX = cw - scaledW;
+    const minY = ch - scaledH;
     this.panX = Math.min(0, Math.max(minX, this.panX));
     this.panY = Math.min(0, Math.max(minY, this.panY));
   }
