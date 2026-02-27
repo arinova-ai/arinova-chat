@@ -84,5 +84,24 @@
   "lighting": {
     "ambient": { "color": "0xfff5e6", "intensity": 0.7 },
     "directional": { "color": "0xffffff", "intensity": 1.0, "position": [5, 8, 6] }
+  },
+
+  "quality": {
+    "high": {
+      "renderer": {
+        "pixelRatio": 2,
+        "antialias": true,
+        "lighting": "full",
+        "anisotropy": true
+      }
+    },
+    "performance": {
+      "renderer": {
+        "pixelRatio": 1,
+        "antialias": false,
+        "lighting": "ambient-only",
+        "anisotropy": false
+      }
+    }
   }
 }

@@ -231,10 +231,18 @@ export interface LightingConfig {
 
 export type ThemeQuality = "high" | "performance";
 
+export interface QualityRendererHints {
+  pixelRatio?: number;
+  antialias?: boolean;
+  lighting?: "full" | "ambient-only";
+  anisotropy?: boolean;
+}
+
 export interface QualityOverrides {
   room?: { model: string };
   character?: { model: string };
   background?: { image: string };
+  renderer?: QualityRendererHints;
 }
 
 export interface QualityConfig {

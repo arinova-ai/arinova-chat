@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Agent } from "./types";
 import type { ThemeManifest, RendererType } from "./theme-types";
 import { createRenderer } from "./renderer";
@@ -47,7 +47,15 @@ export default function OfficeMap({
   widthRef.current = width;
   heightRef.current = height;
 
-  // ── Init / re-init when theme changes ──────────────────────
+  // ── Quality change listener — triggers full re-init ────────
+  const [qualityVersion, setQualityVersion] = useState(0);
+  useEffect(() => {
+    const handler = () => setQualityVersion((v) => v + 1);
+    window.addEventListener("arinova:quality-change", handler);
+    return () => window.removeEventListener("arinova:quality-change", handler);
+  }, []);
+
+  // ── Init / re-init when theme or quality changes ──────────
   useEffect(() => {
     if (!canvasRef.current) return;
     const container = canvasRef.current;
@@ -86,7 +94,7 @@ export default function OfficeMap({
       renderer.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manifest, themeId]);
+  }, [manifest, themeId, qualityVersion]);
 
   // ── Resize ────────────────────────────────────────────────────
   useEffect(() => {
