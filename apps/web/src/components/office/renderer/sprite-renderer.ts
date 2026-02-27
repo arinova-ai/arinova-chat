@@ -430,6 +430,9 @@ export class SpriteRenderer implements OfficeRenderer {
     // Detect mobile and set up pan
     this.isMobile = container.clientWidth < MOBILE_BREAKPOINT;
     if (this.isMobile) {
+      // Reset CSS centering — pan transform handles all positioning on mobile
+      this.viewport.style.left = "0px";
+      this.viewport.style.top = "0px";
       this.scale = MOBILE_SCALE;
       this.centerPan();
       this.applyTransform();
@@ -470,13 +473,18 @@ export class SpriteRenderer implements OfficeRenderer {
     this.isMobile = this.container.clientWidth < MOBILE_BREAKPOINT;
 
     if (this.isMobile && !wasMobile) {
-      // Switched to mobile
+      // Switched to mobile — reset CSS centering, pan handles positioning
+      if (this.viewport) {
+        this.viewport.style.left = "0px";
+        this.viewport.style.top = "0px";
+      }
       this.scale = MOBILE_SCALE;
       this.centerPan();
       this.applyTransform();
       this.bindPanEvents();
     } else if (!this.isMobile && wasMobile) {
-      // Switched to desktop
+      // Switched to desktop — restore CSS centering, reset transform
+      this.layoutViewport();
       this.scale = 1;
       this.panX = 0;
       this.panY = 0;
@@ -576,8 +584,16 @@ export class SpriteRenderer implements OfficeRenderer {
 
     this.viewport.style.width = `${this.vpW}px`;
     this.viewport.style.height = `${this.vpH}px`;
-    this.viewport.style.left = `${(cw - this.vpW) / 2}px`;
-    this.viewport.style.top = `${(ch - this.vpH) / 2}px`;
+
+    if (this.isMobile) {
+      // On mobile, pan transform handles all positioning
+      this.viewport.style.left = "0px";
+      this.viewport.style.top = "0px";
+    } else {
+      // On desktop, center viewport via CSS
+      this.viewport.style.left = `${(cw - this.vpW) / 2}px`;
+      this.viewport.style.top = `${(ch - this.vpH) / 2}px`;
+    }
   }
 
   // ── Private: Pan / Zoom ───────────────────────────────────────
@@ -603,11 +619,22 @@ export class SpriteRenderer implements OfficeRenderer {
     const ch = this.root.clientHeight;
     const scaledW = this.vpW * this.scale;
     const scaledH = this.vpH * this.scale;
-    // Don't let edges scroll past the root container
-    const minX = cw - scaledW;
-    const minY = ch - scaledH;
-    this.panX = Math.min(0, Math.max(minX, this.panX));
-    this.panY = Math.min(0, Math.max(minY, this.panY));
+
+    if (scaledW <= cw) {
+      // Content fits horizontally — center it
+      this.panX = (cw - scaledW) / 2;
+    } else {
+      // Content overflows — clamp so edges don't scroll past container
+      this.panX = Math.min(0, Math.max(cw - scaledW, this.panX));
+    }
+
+    if (scaledH <= ch) {
+      // Content fits vertically — center it
+      this.panY = (ch - scaledH) / 2;
+    } else {
+      // Content overflows — clamp
+      this.panY = Math.min(0, Math.max(ch - scaledH, this.panY));
+    }
   }
 
   private bindPanEvents(): void {
