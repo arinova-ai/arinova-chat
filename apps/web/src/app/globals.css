@@ -197,6 +197,7 @@
 .app-dvh {
   height: calc(var(--app-height, 100dvh) + env(safe-area-inset-bottom, 0px));
   min-height: calc(var(--app-height, 100dvh) + env(safe-area-inset-bottom, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Markdown content styles */

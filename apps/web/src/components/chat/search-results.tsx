@@ -68,7 +68,7 @@ export function SearchResults() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4 pt-[env(safe-area-inset-top,0px)]">
+      <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         <Button variant="ghost" size="icon" onClick={clearSearch}>
           <ArrowLeft className="h-5 w-5" />
         </Button>

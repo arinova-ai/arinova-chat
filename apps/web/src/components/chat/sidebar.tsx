@@ -22,7 +22,7 @@ export function Sidebar() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* Header */}
-      <div className="shrink-0 px-4 pt-[env(safe-area-inset-top,0px)] pb-2">
+      <div className="shrink-0 px-4 pb-2">
         <PageTitle
           title="Chat"
           subtitle="Connect with your team instantly"

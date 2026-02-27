@@ -123,8 +123,9 @@ export function MobileBottomNav() {
 
       {/* Bottom nav bar — glassmorphism */}
       <nav
-        className="relative flex h-14 shrink-0 items-center justify-around pb-[env(safe-area-inset-bottom,0px)] md:hidden"
+        className="relative flex shrink-0 items-center justify-around pt-2 md:hidden"
         style={{
+          paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))",
           background: "rgba(22, 29, 42, 0.85)",
           backdropFilter: "blur(20px) saturate(1.2)",
           WebkitBackdropFilter: "blur(20px) saturate(1.2)",
