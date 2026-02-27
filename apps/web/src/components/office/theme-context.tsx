@@ -5,7 +5,7 @@ import type { ThemeManifest } from "./theme-types";
 import { loadTheme } from "./theme-loader";
 import { isKnownTheme, isFreeTheme } from "./theme-registry";
 
-const DEFAULT_THEME_ID = "default-office";
+const DEFAULT_THEME_ID = "cozy-studio";
 const STORAGE_KEY = "arinova-office-theme";
 
 /** Read saved themeId from localStorage, validating it's a known free theme. */

@@ -45,78 +45,18 @@ interface ThemeDetails {
 }
 
 const THEME_DETAILS: Record<string, ThemeDetails> = {
-  "starter-desk": {
-    author: { name: "Arinova Official", initial: "A" },
-    rating: 4.6,
-    reviewCount: 18,
-    userCount: 230,
-    renderer: "PixiJS 2D",
-    animationCount: 4,
-    roomSize: "Small",
-    version: "v2.0",
-
-    reviews: [
-      { name: "Alex T.", initial: "A", color: "from-blue-500 to-blue-700", date: "3 days ago", stars: 5, text: "Great starter theme! Simple and clean, perfect for new users." },
-      { name: "Jordan L.", initial: "J", color: "from-emerald-500 to-emerald-700", date: "1 week ago", stars: 4, text: "Does the job. Would be nice to have more customization options." },
-    ],
-  },
   "cozy-studio": {
     author: { name: "Arinova Official", initial: "A" },
     rating: 4.8,
     reviewCount: 23,
     userCount: 142,
-    renderer: "Three.js 3D",
-    animationCount: 15,
+    renderer: "Sprite 2D",
+    animationCount: 6,
     roomSize: "Small",
-    version: "v3.0",
+    version: "v4.0",
     reviews: [
-      { name: "Mike C.", initial: "M", color: "from-indigo-500 to-indigo-700", date: "2 days ago", stars: 5, text: "Love the warm atmosphere! The 3D room feels so cozy. Animations are smooth and the sleeping chain is a nice touch." },
+      { name: "Mike C.", initial: "M", color: "from-indigo-500 to-indigo-700", date: "2 days ago", stars: 5, text: "Love the warm atmosphere! The illustrated scenes feel so cozy. Animations are smooth and the sleeping scene is a nice touch." },
       { name: "Sarah K.", initial: "S", color: "from-pink-500 to-pink-700", date: "1 week ago", stars: 4, text: "Beautiful design, well worth it. Would love more furniture options in future updates." },
-    ],
-  },
-  "default-office": {
-    author: { name: "Arinova Official", initial: "A" },
-    rating: 4.5,
-    reviewCount: 42,
-    userCount: 389,
-    renderer: "PixiJS 2D",
-    animationCount: 8,
-    roomSize: "Large",
-    version: "v2.1",
-
-    reviews: [
-      { name: "David R.", initial: "D", color: "from-cyan-500 to-cyan-700", date: "5 days ago", stars: 5, text: "Perfect for team setups. The open-plan layout makes it easy to see all agents at once." },
-      { name: "Emily W.", initial: "E", color: "from-violet-500 to-violet-700", date: "2 weeks ago", stars: 4, text: "Solid default choice. Clean and professional." },
-    ],
-  },
-  "neon-lab": {
-    author: { name: "Arinova Official", initial: "A" },
-    rating: 4.7,
-    reviewCount: 15,
-    userCount: 67,
-    renderer: "PixiJS 2D",
-    animationCount: 10,
-    roomSize: "Medium",
-    version: "v2.0",
-
-    reviews: [
-      { name: "Leo Z.", initial: "L", color: "from-amber-500 to-amber-700", date: "1 day ago", stars: 5, text: "The neon glow is absolutely stunning. Best premium theme hands down." },
-      { name: "Nina P.", initial: "N", color: "from-rose-500 to-rose-700", date: "4 days ago", stars: 5, text: "Worth every credit. The cyberpunk vibe is on point." },
-    ],
-  },
-  "cloud-garden": {
-    author: { name: "Arinova Official", initial: "A" },
-    rating: 4.9,
-    reviewCount: 11,
-    userCount: 34,
-    renderer: "PixiJS 2D",
-    animationCount: 12,
-    roomSize: "Large",
-    version: "v2.0",
-
-    reviews: [
-      { name: "Yuki A.", initial: "Y", color: "from-sky-500 to-sky-700", date: "3 days ago", stars: 5, text: "Dreamy and beautiful. The watercolor art style is unique and relaxing." },
-      { name: "Chris B.", initial: "C", color: "from-teal-500 to-teal-700", date: "1 week ago", stars: 5, text: "Best looking theme in the store. The floating island concept is genius." },
     ],
   },
 };
