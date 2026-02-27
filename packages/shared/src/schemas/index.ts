@@ -1,5 +1,22 @@
 import { z } from "zod";
 
+// ===== Theme Manifest =====
+export {
+  themeManifestSchema,
+  validateThemeResources,
+  collectAssetPaths,
+  ALLOWED_IMAGE_EXTENSIONS,
+  ALLOWED_MODEL_EXTENSIONS,
+  MAX_IMAGE_DIMENSION,
+  MAX_FILE_SIZES,
+  REQUIRED_THEME_FILES,
+} from "./theme.js";
+export type {
+  ThemeManifestInput,
+  ThemeManifestOutput,
+  ThemeResourceError,
+} from "./theme.js";
+
 // ===== Auth =====
 export const registerSchema = z.object({
   email: z.string().email(),

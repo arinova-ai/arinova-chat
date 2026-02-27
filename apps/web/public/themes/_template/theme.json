@@ -1,0 +1,143 @@
+{
+  "$schema": "https://arinova.ai/schemas/theme-manifest.json",
+
+  "id": "my-theme-name",
+  "name": "My Theme Name",
+  "version": "1.0.0",
+  "author": {
+    "name": "Your Name",
+    "id": "your-creator-id"
+  },
+  "description": "A brief description of your theme (max 500 characters).",
+  "tags": ["cozy", "modern"],
+  "preview": "preview.png",
+  "license": "standard",
+
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "background": {
+      "image": "background.png",
+      "image2x": "background@2x.png",
+      "mobile": "background-mobile.png",
+      "color": "0x0f172a"
+    }
+  },
+
+  "viewport": {
+    "minZoom": 0.5,
+    "maxZoom": 2.0,
+    "defaultZoom": 1.0,
+    "panBounds": true,
+    "mobile": {
+      "defaultZoom": 0.6,
+      "pinchToZoom": true,
+      "doubleTapZoom": 1.2
+    }
+  },
+
+  "layers": [
+    { "id": "floor", "zIndex": 0 },
+    { "id": "furniture", "zIndex": 10 },
+    { "id": "characters", "zIndex": 20 },
+    { "id": "overlay", "zIndex": 30 }
+  ],
+
+  "zones": [
+    {
+      "id": "main-desk",
+      "name": "Main Desk",
+      "type": "work",
+      "bounds": { "x": 400, "y": 300, "width": 500, "height": 400 },
+      "capacity": 2,
+      "seats": [
+        { "id": "seat-1", "x": 500, "y": 450, "direction": "down" },
+        { "id": "seat-2", "x": 700, "y": 450, "direction": "down" }
+      ]
+    },
+    {
+      "id": "lounge",
+      "name": "Lounge Area",
+      "type": "lounge",
+      "bounds": { "x": 1000, "y": 300, "width": 400, "height": 400 },
+      "capacity": 3,
+      "seats": [
+        { "id": "seat-3", "x": 1100, "y": 450, "direction": "left" },
+        { "id": "seat-4", "x": 1200, "y": 500, "direction": "up" },
+        { "id": "seat-5", "x": 1300, "y": 450, "direction": "right" }
+      ]
+    }
+  ],
+
+  "furniture": [
+    {
+      "id": "desk-1",
+      "sprite": "sprites/desk.png",
+      "layer": "furniture",
+      "x": 400,
+      "y": 350,
+      "width": 500,
+      "height": 200
+    },
+    {
+      "id": "plant-1",
+      "sprite": "sprites/plant.png",
+      "layer": "furniture",
+      "x": 300,
+      "y": 250,
+      "width": 80,
+      "height": 120,
+      "interactive": true,
+      "tooltip": "A happy little plant"
+    }
+  ],
+
+  "characters": {
+    "atlas": "sprites/characters.png",
+    "frameWidth": 64,
+    "frameHeight": 64,
+    "anchor": { "x": 0.5, "y": 1.0 },
+    "hitArea": {
+      "type": "rect",
+      "x": -20,
+      "y": -50,
+      "width": 40,
+      "height": 50
+    },
+    "nameTag": {
+      "offsetY": -60,
+      "font": "12px sans-serif",
+      "color": "#ffffff",
+      "bgColor": "#1e293b",
+      "padding": { "x": 8, "y": 4 },
+      "borderRadius": 6,
+      "maxWidth": 120
+    },
+    "statusBadge": {
+      "offsetX": 18,
+      "offsetY": -45,
+      "radius": 5,
+      "colors": {
+        "working": "#22c55e",
+        "idle": "#eab308",
+        "blocked": "#ef4444",
+        "collaborating": "#3b82f6"
+      }
+    },
+    "states": {
+      "idle": { "prefix": "idle", "frames": 4, "fps": 4, "loop": true },
+      "walk": { "prefix": "walk", "frames": 8, "fps": 10, "loop": true }
+    },
+    "directions": ["up", "down", "left", "right"]
+  },
+
+  "effects": [],
+
+  "audio": {
+    "ambient": {
+      "src": "audio/ambient.mp3",
+      "volume": 0.3,
+      "loop": true
+    }
+  }
+}
