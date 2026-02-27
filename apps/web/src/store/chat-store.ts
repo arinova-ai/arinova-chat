@@ -613,14 +613,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   leaveGroup: async (conversationId) => {
     await api(`/api/groups/${conversationId}/leave`, { method: "POST" });
-    const { activeConversationId, messagesByConversation } = get();
+    const { activeConversationId, messagesByConversation, thinkingAgents } = get();
     const newMessages = { ...messagesByConversation };
     delete newMessages[conversationId];
+    const newThinking = { ...thinkingAgents };
+    delete newThinking[conversationId];
     set({
       conversations: get().conversations.filter((c) => c.id !== conversationId),
       activeConversationId:
         activeConversationId === conversationId ? null : activeConversationId,
       messagesByConversation: newMessages,
+      thinkingAgents: newThinking,
     });
   },
 
@@ -654,14 +657,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   deleteConversation: async (id) => {
     await api(`/api/conversations/${id}`, { method: "DELETE" });
-    const { activeConversationId, messagesByConversation } = get();
+    const { activeConversationId, messagesByConversation, thinkingAgents } = get();
     const newMessages = { ...messagesByConversation };
     delete newMessages[id];
+    const newThinking = { ...thinkingAgents };
+    delete newThinking[id];
     set({
       conversations: get().conversations.filter((c) => c.id !== id),
       activeConversationId:
         activeConversationId === id ? null : activeConversationId,
       messagesByConversation: newMessages,
+      thinkingAgents: newThinking,
     });
   },
 
@@ -1528,14 +1534,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "kicked_from_group") {
       const convId = event.conversationId;
-      const { activeConversationId, messagesByConversation } = get();
+      const { activeConversationId, messagesByConversation, thinkingAgents } = get();
       const newMessages = { ...messagesByConversation };
       delete newMessages[convId];
+      const newThinking = { ...thinkingAgents };
+      delete newThinking[convId];
       set({
         conversations: get().conversations.filter((c) => c.id !== convId),
         activeConversationId:
           activeConversationId === convId ? null : activeConversationId,
         messagesByConversation: newMessages,
+        thinkingAgents: newThinking,
       });
       return;
     }
