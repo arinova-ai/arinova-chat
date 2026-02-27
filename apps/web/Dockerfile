@@ -29,12 +29,10 @@ WORKDIR /app
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+# Copy entire workspace from deps (preserves pnpm symlink structure)
+COPY --from=deps /app ./
 
-# Copy source
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
+# Overlay source code
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 
