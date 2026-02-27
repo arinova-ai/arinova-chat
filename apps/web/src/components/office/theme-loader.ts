@@ -55,6 +55,13 @@ export function validateManifest(data: unknown): ThemeManifest {
     if (!scenes?.working) {
       throw new Error("Sprite themes require 'scenes' with at least a 'working' scene");
     }
+    // Path safety: scene background images
+    for (const key of ["working", "idle", "sleeping"] as const) {
+      const scene = scenes[key] as Record<string, unknown> | undefined;
+      if (scene?.background != null) {
+        assertSafePath(scene.background, `scenes.${key}.background`);
+      }
+    }
   }
 
   if (!isV3 && !isSprite) {

@@ -470,6 +470,13 @@ export function validateThemeResources(manifest: ThemeManifestOutput): ThemeReso
     checkModelPath(manifest.character.idleModel, "character.idleModel");
   }
 
+  // v4 sprite scene backgrounds
+  if (manifest.scenes) {
+    for (const [key, scene] of Object.entries(manifest.scenes)) {
+      checkImagePath(scene.background, `scenes.${key}.background`);
+    }
+  }
+
   // Quality overrides — if defined, both high and performance should have matching keys
   if (manifest.quality) {
     const q = manifest.quality;
@@ -516,6 +523,13 @@ export function collectAssetPaths(manifest: ThemeManifestOutput): string[] {
     add(manifest.character.model);
     add(manifest.character.idleModel);
   }
+  // v4 sprite scene backgrounds
+  if (manifest.scenes) {
+    for (const scene of Object.values(manifest.scenes)) {
+      add(scene.background);
+    }
+  }
+
   if (manifest.quality) {
     const q = manifest.quality;
     add(q.high?.room?.model);
