@@ -236,10 +236,27 @@ const lightingConfigSchema = z.object({
     color: z.string().min(1),
     intensity: z.number().min(0),
   }).optional(),
+  hemisphere: z.object({
+    skyColor: z.string().min(1),
+    groundColor: z.string().min(1),
+    intensity: z.number().min(0),
+  }).optional(),
   directional: z.object({
     color: z.string().min(1),
     intensity: z.number().min(0),
     position: vec3Schema,
+  }).optional(),
+  fill: z.object({
+    color: z.string().min(1),
+    intensity: z.number().min(0),
+    position: vec3Schema,
+  }).optional(),
+  spot: z.object({
+    color: z.string().min(1),
+    intensity: z.number().min(0),
+    position: vec3Schema,
+    angle: z.number().min(0).max(Math.PI).optional(),
+    distance: z.number().min(0).optional(),
   }).optional(),
 });
 

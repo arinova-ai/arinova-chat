@@ -224,7 +224,10 @@ export interface CameraConfig {
 
 export interface LightingConfig {
   ambient?: { color: string; intensity: number };
+  hemisphere?: { skyColor: string; groundColor: string; intensity: number };
   directional?: { color: string; intensity: number; position: [number, number, number] };
+  fill?: { color: string; intensity: number; position: [number, number, number] };
+  spot?: { color: string; intensity: number; position: [number, number, number]; angle?: number; distance?: number };
 }
 
 // ── Quality Modes ───────────────────────────────────────────────

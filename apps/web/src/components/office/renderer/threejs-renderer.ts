@@ -645,18 +645,26 @@ export class ThreeJSRenderer implements OfficeRenderer {
     const lightConfig = this.manifest?.lighting;
 
     // Ambient — provides uniform base illumination (no specular, no shadows).
-    // High intensity so the GLB materials look correct without complex lighting.
     const ambientColor = lightConfig?.ambient?.color
       ? Number(lightConfig.ambient.color) : 0xffffff;
     const ambientIntensity = lightConfig?.ambient?.intensity ?? 1.0;
     this.scene.add(new THREE.AmbientLight(ambientColor, ambientIntensity));
 
-    // Ambient-only: skip directional light
+    // Ambient-only mode: skip all other lights for performance
     if (this.hints.lighting === "ambient-only") return;
 
-    // Single soft directional from directly above — gentle fill that avoids
-    // specular hotspots on vertical walls (straight-down light minimises
-    // specular reflection on surfaces facing the camera at oblique angles).
+    // Hemisphere — subtle sky/ground color variation for natural shading
+    if (lightConfig?.hemisphere) {
+      const h = lightConfig.hemisphere;
+      const hemi = new THREE.HemisphereLight(
+        Number(h.skyColor),
+        Number(h.groundColor),
+        h.intensity,
+      );
+      this.scene.add(hemi);
+    }
+
+    // Main directional — primary light source
     const dirColor = lightConfig?.directional?.color
       ? Number(lightConfig.directional.color) : 0xffffff;
     const dirIntensity = lightConfig?.directional?.intensity ?? 0.3;
@@ -666,6 +674,28 @@ export class ThreeJSRenderer implements OfficeRenderer {
     dir.position.set(dirPos[0], dirPos[1], dirPos[2]);
     dir.castShadow = false;
     this.scene.add(dir);
+
+    // Fill — secondary directional from opposite side for softer shadows
+    if (lightConfig?.fill) {
+      const f = lightConfig.fill;
+      const fill = new THREE.DirectionalLight(Number(f.color), f.intensity);
+      fill.position.set(f.position[0], f.position[1], f.position[2]);
+      this.scene.add(fill);
+    }
+
+    // Spot — focused beam (e.g. window light, desk lamp)
+    if (lightConfig?.spot) {
+      const s = lightConfig.spot;
+      const spot = new THREE.SpotLight(
+        Number(s.color),
+        s.intensity,
+        s.distance ?? 0,
+        s.angle ?? Math.PI / 4,
+      );
+      spot.position.set(s.position[0], s.position[1], s.position[2]);
+      spot.castShadow = false;
+      this.scene.add(spot);
+    }
   }
 
   // ── Private: OrbitControls (v3) ─────────────────────────────

@@ -82,8 +82,11 @@
   },
 
   "lighting": {
-    "ambient": { "color": "0xfff5e6", "intensity": 0.7 },
-    "directional": { "color": "0xffffff", "intensity": 1.0, "position": [5, 8, 6] }
+    "ambient": { "color": "0xfff5e6", "intensity": 0.8 },
+    "hemisphere": { "skyColor": "0x87ceeb", "groundColor": "0x362d22", "intensity": 0.35 },
+    "directional": { "color": "0xfff5e6", "intensity": 1.2, "position": [5, 8, 3] },
+    "fill": { "color": "0xc4d4ff", "intensity": 0.4, "position": [-4, 6, -2] },
+    "spot": { "color": "0xfff0d4", "intensity": 0.7, "position": [-3, 8, -3], "angle": 0.78, "distance": 20 }
   },
 
   "quality": {
