@@ -15,6 +15,10 @@ interface OfficeStatusEvent {
     collaboratingWith: string[];
     currentTask: string | null;
     online: boolean;
+    model?: string;
+    tokenUsage?: { input: number; output: number; cacheRead?: number; cacheWrite?: number; total?: number };
+    sessionDurationMs?: number;
+    currentToolDetail?: string;
   }[];
   timestamp: number;
 }
@@ -37,6 +41,10 @@ function toAgent(raw: OfficeStatusEvent["agents"][number]): Agent {
       ? { title: raw.currentTask, priority: "", due: "", assignedBy: "", progress: 0, subtasks: [] }
       : undefined,
     recentActivity: [],
+    model: raw.model ?? undefined,
+    tokenUsage: raw.tokenUsage ?? undefined,
+    sessionDurationMs: raw.sessionDurationMs ?? undefined,
+    currentToolDetail: raw.currentToolDetail ?? undefined,
   };
 }
 

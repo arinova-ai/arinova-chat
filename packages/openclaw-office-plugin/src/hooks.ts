@@ -34,6 +34,19 @@ export function registerHooks(api: OpenClawPluginApi): void {
 
   // ── LLM activity ──────────────────────────────────────
 
+  api.on("llm_input", (event, ctx) => {
+    emit({
+      type: "llm_input",
+      agentId: ctx.agentId ?? "unknown",
+      sessionId: event.runId ?? ctx.sessionKey ?? "",
+      timestamp: Date.now(),
+      data: {
+        model: event.model,
+        provider: event.provider,
+      },
+    });
+  });
+
   api.on("llm_output", (event, ctx) => {
     emit({
       type: "llm_output",

@@ -9,7 +9,7 @@ import { useOfficeStream } from "@/hooks/use-office-stream";
 import { MOCK_AGENTS } from "./mock-data";
 import { ThemeProvider, useTheme } from "./theme-context";
 import { THEME_REGISTRY } from "./theme-registry";
-import type { AgentStatus } from "./types";
+import type { Agent, AgentStatus } from "./types";
 
 // Dynamic import — PixiJS only works client-side
 const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
@@ -43,6 +43,11 @@ function OfficeViewInner() {
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
   const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
+
+  // For v3 single-character themes, use the first real agent or a demo fallback
+  const characterAgent: Agent | null = displayAgents.length > 0
+    ? displayAgents[0]
+    : null;
 
   const selectAgent = useCallback((id: string | null) => {
     setSelectedAgentId(id);
@@ -100,7 +105,7 @@ function OfficeViewInner() {
       <CharacterModal
         isOpen={showCharacterModal}
         onClose={closeCharacterModal}
-        agentStatus={demoStatus}
+        agent={characterAgent}
       />
     </div>
   );

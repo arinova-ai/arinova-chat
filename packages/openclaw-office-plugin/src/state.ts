@@ -43,7 +43,12 @@ class OfficeStateStore {
       case "session_end":
         this.handleSessionEnd(event);
         break;
+      case "llm_input":
+        this.handleLlmInput(event);
+        break;
       case "llm_output":
+        this.handleLlmOutput(event);
+        break;
       case "tool_result":
       case "message_in":
       case "message_out":
@@ -77,6 +82,10 @@ class OfficeStateStore {
       collaboratingWith: existing?.collaboratingWith ?? [],
       currentTask: existing?.currentTask ?? null,
       online: true,
+      model: existing?.model ?? null,
+      tokenUsage: null,
+      sessionDurationMs: null,
+      currentToolDetail: null,
     });
     this.broadcast();
   }
@@ -89,11 +98,55 @@ class OfficeStateStore {
     agent.online = false;
     agent.lastActivity = event.timestamp;
     agent.currentTask = null;
+    agent.currentToolDetail = null;
+    const durationMs = event.data.durationMs as number | undefined;
+    if (durationMs != null) {
+      agent.sessionDurationMs = durationMs;
+    }
     // Clean up subagent links involving this agent
     this.removeSubagentLinks(event.agentId);
     this.updateCollaborationStatus();
     // Clean up session mapping
     this.sessionToAgent.delete(event.sessionId);
+    this.broadcast();
+  }
+
+  private handleLlmInput(event: InternalEvent): void {
+    const agent = this.ensureAgent(event.agentId, event.timestamp);
+    const model = event.data.model as string | undefined;
+    if (model) {
+      agent.model = model;
+    }
+    if (agent.status === "blocked" || agent.status === "idle") {
+      agent.status = "working";
+    }
+    agent.lastActivity = event.timestamp;
+    agent.online = true;
+    this.broadcast();
+  }
+
+  private handleLlmOutput(event: InternalEvent): void {
+    const agent = this.ensureAgent(event.agentId, event.timestamp);
+    const model = event.data.model as string | undefined;
+    if (model) {
+      agent.model = model;
+    }
+    const usage = event.data.usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number } | undefined;
+    if (usage) {
+      const prev = agent.tokenUsage;
+      agent.tokenUsage = {
+        input: (prev?.input ?? 0) + (usage.input ?? 0),
+        output: (prev?.output ?? 0) + (usage.output ?? 0),
+        cacheRead: (prev?.cacheRead ?? 0) + (usage.cacheRead ?? 0),
+        cacheWrite: (prev?.cacheWrite ?? 0) + (usage.cacheWrite ?? 0),
+        total: (prev?.total ?? 0) + (usage.total ?? 0),
+      };
+    }
+    if (agent.status === "blocked" || agent.status === "idle") {
+      agent.status = "working";
+    }
+    agent.lastActivity = event.timestamp;
+    agent.online = true;
     this.broadcast();
   }
 
@@ -125,6 +178,10 @@ class OfficeStateStore {
     const toolName = event.data.toolName as string | undefined;
     if (toolName) {
       agent.currentTask = toolName;
+      const durationMs = event.data.durationMs as number | undefined;
+      agent.currentToolDetail = durationMs
+        ? `${toolName} (${durationMs}ms)`
+        : toolName;
     }
     this.broadcast();
   }
@@ -145,6 +202,11 @@ class OfficeStateStore {
     }
     agent.lastActivity = event.timestamp;
     agent.currentTask = null;
+    agent.currentToolDetail = null;
+    const durationMs = event.data.durationMs as number | undefined;
+    if (durationMs != null) {
+      agent.sessionDurationMs = durationMs;
+    }
     this.broadcast();
   }
 
@@ -227,6 +289,10 @@ class OfficeStateStore {
         collaboratingWith: [],
         currentTask: null,
         online: true,
+        model: null,
+        tokenUsage: null,
+        sessionDurationMs: null,
+        currentToolDetail: null,
       };
       this.agents.set(agentId, agent);
     }

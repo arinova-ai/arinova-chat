@@ -24,6 +24,19 @@ pub enum AgentStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TokenUsage {
+    pub input: i64,
+    pub output: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_read: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_write: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentState {
     pub agent_id: String,
     pub name: String,
@@ -32,6 +45,14 @@ pub struct AgentState {
     pub collaborating_with: Vec<String>,
     pub current_task: Option<String>,
     pub online: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_usage: Option<TokenUsage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_duration_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_tool_detail: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -145,7 +166,9 @@ impl OfficeState {
         match event.event_type.as_str() {
             "session_start" => self.handle_session_start(&event),
             "session_end" => self.handle_session_end(&event),
-            "llm_output" | "message_in" | "message_out" => self.handle_activity(&event),
+            "llm_input" => self.handle_llm_input(&event),
+            "llm_output" => self.handle_llm_output(&event),
+            "message_in" | "message_out" => self.handle_activity(&event),
             "tool_call" => self.handle_tool_call(&event),
             "tool_result" => self.handle_activity(&event),
             "agent_error" => self.handle_error(&event),
@@ -209,6 +232,10 @@ impl OfficeState {
                 .map_or_else(Vec::new, |e| e.collaborating_with.clone()),
             current_task: existing.as_ref().and_then(|e| e.current_task.clone()),
             online: true,
+            model: existing.as_ref().and_then(|e| e.model.clone()),
+            token_usage: None,
+            session_duration_ms: None,
+            current_tool_detail: None,
         };
         drop(existing);
         self.inner.agents.insert(event.agent_id.clone(), agent);
@@ -222,10 +249,64 @@ impl OfficeState {
             agent.online = false;
             agent.last_activity = event.timestamp;
             agent.current_task = None;
+            agent.current_tool_detail = None;
+            if let Some(d) = event.data.get("durationMs").and_then(|v| v.as_i64()) {
+                agent.session_duration_ms = Some(d);
+            }
         }
         self.remove_subagent_links(&event.agent_id);
         self.inner.session_to_agent.remove(&event.session_id);
         self.update_collaboration_status();
+        self.broadcast();
+    }
+
+    fn handle_llm_input(&self, event: &InternalEvent) {
+        self.ensure_agent(&event.agent_id, event.timestamp);
+        if let Some(mut entry) = self.inner.agents.get_mut(&event.agent_id) {
+            let a = entry.value_mut();
+            if let Some(model) = event.data.get("model").and_then(|v| v.as_str()) {
+                a.model = Some(model.to_string());
+            }
+            if a.status == AgentStatus::Blocked || a.status == AgentStatus::Idle {
+                a.status = AgentStatus::Working;
+            }
+            a.last_activity = event.timestamp;
+            a.online = true;
+        }
+        self.broadcast();
+    }
+
+    fn handle_llm_output(&self, event: &InternalEvent) {
+        self.ensure_agent(&event.agent_id, event.timestamp);
+        if let Some(mut entry) = self.inner.agents.get_mut(&event.agent_id) {
+            let a = entry.value_mut();
+            if let Some(model) = event.data.get("model").and_then(|v| v.as_str()) {
+                a.model = Some(model.to_string());
+            }
+            if let Some(usage) = event.data.get("usage") {
+                let input = usage.get("input").and_then(|v| v.as_i64()).unwrap_or(0);
+                let output = usage.get("output").and_then(|v| v.as_i64()).unwrap_or(0);
+                let cache_read = usage.get("cacheRead").and_then(|v| v.as_i64());
+                let cache_write = usage.get("cacheWrite").and_then(|v| v.as_i64());
+                let total = usage.get("total").and_then(|v| v.as_i64());
+
+                let prev = a.token_usage.take().unwrap_or(TokenUsage {
+                    input: 0, output: 0, cache_read: None, cache_write: None, total: None,
+                });
+                a.token_usage = Some(TokenUsage {
+                    input: prev.input + input,
+                    output: prev.output + output,
+                    cache_read: Some(prev.cache_read.unwrap_or(0) + cache_read.unwrap_or(0)),
+                    cache_write: Some(prev.cache_write.unwrap_or(0) + cache_write.unwrap_or(0)),
+                    total: Some(prev.total.unwrap_or(0) + total.unwrap_or(0)),
+                });
+            }
+            if a.status == AgentStatus::Blocked || a.status == AgentStatus::Idle {
+                a.status = AgentStatus::Working;
+            }
+            a.last_activity = event.timestamp;
+            a.online = true;
+        }
         self.broadcast();
     }
 
@@ -251,9 +332,14 @@ impl OfficeState {
             }
             a.last_activity = event.timestamp;
             a.online = true;
-            // Set currentTask from the tool name
+            // Set currentTask and currentToolDetail from the tool name
             if let Some(tool_name) = event.data.get("toolName").and_then(|v| v.as_str()) {
                 a.current_task = Some(tool_name.to_string());
+                let duration = event.data.get("durationMs").and_then(|v| v.as_i64());
+                a.current_tool_detail = Some(match duration {
+                    Some(d) => format!("{} ({}ms)", tool_name, d),
+                    None => tool_name.to_string(),
+                });
             }
         }
         self.broadcast();
@@ -277,6 +363,10 @@ impl OfficeState {
             }
             a.last_activity = event.timestamp;
             a.current_task = None;
+            a.current_tool_detail = None;
+            if let Some(d) = event.data.get("durationMs").and_then(|v| v.as_i64()) {
+                a.session_duration_ms = Some(d);
+            }
         }
         self.broadcast();
     }
@@ -336,6 +426,10 @@ impl OfficeState {
             collaborating_with: Vec::new(),
             current_task: None,
             online: true,
+            model: None,
+            token_usage: None,
+            session_duration_ms: None,
+            current_tool_detail: None,
         };
         self.inner.agents.insert(agent_id.to_string(), agent.clone());
         agent

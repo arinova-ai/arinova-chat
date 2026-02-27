@@ -6,7 +6,7 @@ import { officeState } from "./state.js";
 export { officeState } from "./state.js";
 export { handleSSEConnection } from "./sse.js";
 export { ingestHookEvent } from "./hooks.js";
-export type { AgentState, AgentStatus, OfficeStatusEvent, InternalEvent, InternalEventType } from "./types.js";
+export type { AgentState, AgentStatus, TokenUsage, OfficeStatusEvent, InternalEvent, InternalEventType } from "./types.js";
 // Legacy aliases
 export type { HookEvent, HookEventType } from "./types.js";
 

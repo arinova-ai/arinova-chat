@@ -14,6 +14,14 @@ export interface AgentActivity {
   text: string;
 }
 
+export interface AgentTokenUsage {
+  input: number;
+  output: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  total?: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -24,4 +32,8 @@ export interface Agent {
   collaboratingWith?: string[];
   currentTask?: AgentTask;
   recentActivity: AgentActivity[];
+  model?: string;
+  tokenUsage?: AgentTokenUsage;
+  sessionDurationMs?: number;
+  currentToolDetail?: string;
 }

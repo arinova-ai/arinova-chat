@@ -1,6 +1,15 @@
 /** Agent status in the virtual office */
 export type AgentStatus = "working" | "idle" | "blocked" | "collaborating";
 
+/** Token usage from the last LLM call */
+export interface TokenUsage {
+  input: number;
+  output: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  total?: number;
+}
+
 /** Tracked state for a single agent session */
 export interface AgentState {
   /** Agent/session identifier */
@@ -17,6 +26,14 @@ export interface AgentState {
   currentTask: string | null;
   /** Whether the session is currently active */
   online: boolean;
+  /** LLM model being used (e.g. "claude-sonnet-4-20250514") */
+  model: string | null;
+  /** Cumulative token usage for the current session */
+  tokenUsage: TokenUsage | null;
+  /** Session duration in milliseconds (set on session_end / agent_end) */
+  sessionDurationMs: number | null;
+  /** Current tool call detail (name + optional duration) */
+  currentToolDetail: string | null;
 }
 
 /** Payload for SSE status events */
@@ -30,6 +47,7 @@ export interface OfficeStatusEvent {
 export type InternalEventType =
   | "session_start"
   | "session_end"
+  | "llm_input"
   | "llm_output"
   | "tool_call"
   | "tool_result"
