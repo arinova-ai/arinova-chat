@@ -327,12 +327,16 @@ function buildOverlay(ov: SpriteOverlay): HTMLElement {
 
 // ── SpriteRenderer ──────────────────────────────────────────────
 
+const MOBILE_BREAKPOINT = 768;
+const MOBILE_SCALE = 2.0;
+
 export class SpriteRenderer implements OfficeRenderer {
   onAgentClick?: (agentId: string) => void;
   onCharacterClick?: () => void;
 
   private container: HTMLDivElement | null = null;
   private root: HTMLDivElement | null = null;
+  private viewport: HTMLDivElement | null = null;
   private styleEl: HTMLStyleElement | null = null;
   private manifest: ThemeManifest | null = null;
   private themeId = "";
@@ -342,6 +346,17 @@ export class SpriteRenderer implements OfficeRenderer {
   private overlayContainer: HTMLDivElement | null = null;
   private hitboxEl: HTMLDivElement | null = null;
   private firstAgentId: string | null = null;
+
+  // Pan / zoom state
+  private isMobile = false;
+  private scale = 1;
+  private panX = 0;
+  private panY = 0;
+  private dragging = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private panStartX = 0;
+  private panStartY = 0;
 
   async init(
     container: HTMLDivElement,
@@ -359,10 +374,15 @@ export class SpriteRenderer implements OfficeRenderer {
     this.styleEl.textContent = SPRITE_CSS;
     document.head.appendChild(this.styleEl);
 
-    // Root element
+    // Root element (clip area)
     this.root = document.createElement("div");
     this.root.style.cssText = "position:relative;width:100%;height:100%;overflow:hidden;border-radius:12px;";
     container.appendChild(this.root);
+
+    // Viewport (transformed inner container)
+    this.viewport = document.createElement("div");
+    this.viewport.style.cssText = "position:relative;width:100%;height:100%;transform-origin:0 0;";
+    this.root.appendChild(this.viewport);
 
     const scenes = manifest?.scenes;
     if (!scenes) return;
@@ -383,26 +403,36 @@ export class SpriteRenderer implements OfficeRenderer {
       img.draggable = false;
       layer.appendChild(img);
 
-      this.root.appendChild(layer);
+      this.viewport.appendChild(layer);
       this.bgLayers.set(key, layer);
     }
 
     // Overlay container
     this.overlayContainer = document.createElement("div");
     this.overlayContainer.style.cssText = "position:absolute;inset:0;pointer-events:none;";
-    this.root.appendChild(this.overlayContainer);
+    this.viewport.appendChild(this.overlayContainer);
 
     // Hitbox
     this.hitboxEl = document.createElement("div");
     this.hitboxEl.style.cssText = "position:absolute;cursor:pointer;z-index:10;";
     this.hitboxEl.addEventListener("click", this.handleHitboxClick);
-    this.root.appendChild(this.hitboxEl);
+    this.viewport.appendChild(this.hitboxEl);
+
+    // Detect mobile and set up pan
+    this.isMobile = container.clientWidth < MOBILE_BREAKPOINT;
+    if (this.isMobile) {
+      this.scale = MOBILE_SCALE;
+      this.centerPan();
+      this.applyTransform();
+      this.bindPanEvents();
+    }
 
     // Render initial scene
     this.renderScene(this.currentScene);
   }
 
   destroy(): void {
+    this.unbindPanEvents();
     if (this.hitboxEl) {
       this.hitboxEl.removeEventListener("click", this.handleHitboxClick);
     }
@@ -414,6 +444,7 @@ export class SpriteRenderer implements OfficeRenderer {
       this.root.remove();
       this.root = null;
     }
+    this.viewport = null;
     this.bgLayers.clear();
     this.overlayContainer = null;
     this.hitboxEl = null;
@@ -422,7 +453,29 @@ export class SpriteRenderer implements OfficeRenderer {
   }
 
   resize(_width: number, _height: number): void {
-    // Percentage-based layout handles resize automatically
+    if (!this.container || !this.root) return;
+
+    const wasMobile = this.isMobile;
+    this.isMobile = this.container.clientWidth < MOBILE_BREAKPOINT;
+
+    if (this.isMobile && !wasMobile) {
+      // Switched to mobile
+      this.scale = MOBILE_SCALE;
+      this.centerPan();
+      this.applyTransform();
+      this.bindPanEvents();
+    } else if (!this.isMobile && wasMobile) {
+      // Switched to desktop
+      this.scale = 1;
+      this.panX = 0;
+      this.panY = 0;
+      this.applyTransform();
+      this.unbindPanEvents();
+    } else if (this.isMobile) {
+      // Still mobile — re-clamp after container size change
+      this.clampPan();
+      this.applyTransform();
+    }
   }
 
   updateAgents(agents: Agent[]): void {
@@ -440,7 +493,7 @@ export class SpriteRenderer implements OfficeRenderer {
     // Single-agent sprite renderer — no visual selection needed
   }
 
-  // ── Private ─────────────────────────────────────────────────
+  // ── Private: Hit / Scene ──────────────────────────────────────
 
   private handleHitboxClick = (): void => {
     this.onCharacterClick?.();
@@ -450,7 +503,6 @@ export class SpriteRenderer implements OfficeRenderer {
   };
 
   private transitionTo(scene: SceneKey): void {
-    // Crossfade backgrounds
     for (const [key, layer] of this.bgLayers) {
       layer.style.opacity = key === scene ? "1" : "0";
     }
@@ -464,17 +516,14 @@ export class SpriteRenderer implements OfficeRenderer {
 
     const scene: SpriteScene | undefined = scenes[key];
 
-    // Clear existing overlays
     this.overlayContainer.innerHTML = "";
 
-    // Build new overlays
     if (scene) {
       for (const ov of scene.overlays) {
         this.overlayContainer.appendChild(buildOverlay(ov));
       }
     }
 
-    // Update hitbox position
     this.updateHitbox(key);
   }
 
@@ -494,4 +543,87 @@ export class SpriteRenderer implements OfficeRenderer {
     this.hitboxEl.style.width = `${width}%`;
     this.hitboxEl.style.height = `${height}%`;
   }
+
+  // ── Private: Pan / Zoom ───────────────────────────────────────
+
+  private applyTransform(): void {
+    if (!this.viewport) return;
+    this.viewport.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
+  }
+
+  private centerPan(): void {
+    if (!this.root) return;
+    const w = this.root.clientWidth;
+    const h = this.root.clientHeight;
+    // Center the scaled viewport: offset = (containerSize - scaledSize) / 2
+    this.panX = (w - w * this.scale) / 2;
+    this.panY = (h - h * this.scale) / 2;
+    this.clampPan();
+  }
+
+  private clampPan(): void {
+    if (!this.root) return;
+    const w = this.root.clientWidth;
+    const h = this.root.clientHeight;
+    // Min values: the right/bottom edge of scaled content aligns with container edge
+    const minX = w - w * this.scale;
+    const minY = h - h * this.scale;
+    this.panX = Math.min(0, Math.max(minX, this.panX));
+    this.panY = Math.min(0, Math.max(minY, this.panY));
+  }
+
+  private bindPanEvents(): void {
+    if (!this.root) return;
+    this.root.addEventListener("touchstart", this.onPointerDown, { passive: false });
+    this.root.addEventListener("touchmove", this.onPointerMove, { passive: false });
+    this.root.addEventListener("touchend", this.onPointerUp);
+    this.root.addEventListener("mousedown", this.onPointerDown);
+    this.root.addEventListener("mousemove", this.onPointerMove);
+    this.root.addEventListener("mouseup", this.onPointerUp);
+    this.root.addEventListener("mouseleave", this.onPointerUp);
+  }
+
+  private unbindPanEvents(): void {
+    if (!this.root) return;
+    this.root.removeEventListener("touchstart", this.onPointerDown);
+    this.root.removeEventListener("touchmove", this.onPointerMove);
+    this.root.removeEventListener("touchend", this.onPointerUp);
+    this.root.removeEventListener("mousedown", this.onPointerDown);
+    this.root.removeEventListener("mousemove", this.onPointerMove);
+    this.root.removeEventListener("mouseup", this.onPointerUp);
+    this.root.removeEventListener("mouseleave", this.onPointerUp);
+  }
+
+  private clientPos(e: MouseEvent | TouchEvent): { x: number; y: number } {
+    if ("touches" in e && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    const me = e as MouseEvent;
+    return { x: me.clientX, y: me.clientY };
+  }
+
+  private onPointerDown = (e: MouseEvent | TouchEvent): void => {
+    if (!this.isMobile) return;
+    // Don't prevent default on the hitbox click area
+    const pos = this.clientPos(e);
+    this.dragging = true;
+    this.dragStartX = pos.x;
+    this.dragStartY = pos.y;
+    this.panStartX = this.panX;
+    this.panStartY = this.panY;
+  };
+
+  private onPointerMove = (e: MouseEvent | TouchEvent): void => {
+    if (!this.dragging) return;
+    e.preventDefault();
+    const pos = this.clientPos(e);
+    this.panX = this.panStartX + (pos.x - this.dragStartX);
+    this.panY = this.panStartY + (pos.y - this.dragStartY);
+    this.clampPan();
+    this.applyTransform();
+  };
+
+  private onPointerUp = (): void => {
+    this.dragging = false;
+  };
 }
