@@ -52,18 +52,18 @@ function OfficeContent() {
             <button
               type="button"
               onClick={toggleQuality}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium transition-colors hover:bg-secondary/80"
+              className="flex items-center gap-1.5 rounded-full border border-brand-text/30 bg-secondary px-3.5 py-1.5 text-sm font-medium transition-colors hover:bg-secondary/80"
               title={quality === "high" ? "Switch to Performance mode" : "Switch to High Resolution"}
             >
               {quality === "high" ? (
                 <>
-                  <Monitor className="h-3 w-3 text-brand-text" />
-                  <span className="hidden sm:inline text-foreground">High Res</span>
+                  <Monitor className="h-4 w-4 text-brand-text" />
+                  <span className="text-foreground">High Res</span>
                 </>
               ) : (
                 <>
-                  <Zap className="h-3 w-3 text-yellow-400" />
-                  <span className="hidden sm:inline text-foreground">Performance</span>
+                  <Zap className="h-4 w-4 text-yellow-400" />
+                  <span className="text-foreground">Performance</span>
                 </>
               )}
             </button>
