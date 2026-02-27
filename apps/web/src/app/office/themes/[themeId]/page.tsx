@@ -339,6 +339,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                 )}
                 <button
                   onClick={() => setLiked(!liked)}
+                  aria-label={liked ? "Remove from favorites" : "Add to favorites"}
                   className={`rounded-xl border px-5 py-3.5 transition-colors ${
                     liked
                       ? "border-pink-500/30 bg-pink-500/10 text-pink-400"
