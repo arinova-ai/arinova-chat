@@ -25,7 +25,7 @@ The Virtual Office is rendered with **PixiJS** and driven by a declarative **The
 
 ```
 themes/
-  default-office/
+  cozy-studio/
     theme.json            # manifest (required)
     preview.png           # marketplace thumbnail (required, 640x360)
     background.png        # base scene (required)
@@ -59,8 +59,8 @@ themes/
 ```jsonc
 {
   // ─── Meta ─────────────────────────────────────────────
-  "id": "default-office",
-  "name": "Modern Office",
+  "id": "cozy-studio",
+  "name": "Cozy Studio",
   "version": "1.0.0",
   "author": {
     "name": "Arinova",
