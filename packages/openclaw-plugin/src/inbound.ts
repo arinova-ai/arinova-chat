@@ -235,6 +235,7 @@ export async function handleArinovaChatInbound(params: {
     replyOptions: {
       onModelSelected,
       disableBlockStreaming: false,
+      abortSignal: signal,
       onPartialReply: (payload) => {
         if (aborted) return;
         // onPartialReply gives the FULL accumulated text across ALL blocks,
