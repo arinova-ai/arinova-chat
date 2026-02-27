@@ -691,6 +691,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
         s.intensity,
         s.distance ?? 0,
         s.angle ?? Math.PI / 4,
+        s.penumbra ?? 0.3,
+        s.decay ?? 1,
       );
       spot.position.set(s.position[0], s.position[1], s.position[2]);
       if (s.target) {

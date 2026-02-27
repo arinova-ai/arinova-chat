@@ -258,6 +258,8 @@ const lightingConfigSchema = z.object({
     target: vec3Schema.optional(),
     angle: z.number().min(0).max(Math.PI).optional(),
     distance: z.number().min(0).optional(),
+    penumbra: z.number().min(0).max(1).optional(),
+    decay: z.number().min(0).optional(),
   }).optional(),
 });
 
