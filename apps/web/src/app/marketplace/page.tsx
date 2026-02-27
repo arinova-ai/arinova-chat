@@ -7,7 +7,8 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, Star, MessageSquare, Coins, Plus } from "lucide-react";
+import { Search, Loader2, Star, Store, MessageSquare, Coins, Plus } from "lucide-react";
+import { PageTitle } from "@/components/ui/page-title";
 
 interface AgentListing {
   id: string;
@@ -109,17 +110,11 @@ function MarketplaceContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/15">
-                <MessageSquare className="h-5 w-5 text-brand-text" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">Agent Marketplace</h1>
-                <p className="text-xs text-muted-foreground">
-                  Chat with AI agents built by the community
-                </p>
-              </div>
-            </div>
+            <PageTitle
+              title="Marketplace"
+              subtitle="Agent Store"
+              icon={Store}
+            />
             <div className="flex-1" />
             <Button
               size="sm"

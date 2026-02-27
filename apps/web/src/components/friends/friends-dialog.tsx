@@ -7,9 +7,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
+import { PageTitle } from "@/components/ui/page-title";
 import { UserSearch } from "./user-search";
 import { FriendsPanel } from "./friends-panel";
 import { PendingRequests } from "./pending-requests";
@@ -65,7 +67,9 @@ export function FriendsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Friends</DialogTitle>
+          <DialogTitle asChild>
+            <PageTitle title="Friends" subtitle="Connect and socialize" icon={Users} />
+          </DialogTitle>
         </DialogHeader>
 
         {/* Tab bar */}

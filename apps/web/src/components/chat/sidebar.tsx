@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Search } from "lucide-react";
+import { Search, MessageCircle } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { ConversationList } from "./conversation-list";
+import { PageTitle } from "@/components/ui/page-title";
 
 export function Sidebar() {
   const searchMessages = useChatStore((s) => s.searchMessages);
@@ -20,11 +21,13 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
-      {/* Header label */}
-      <div className="flex min-h-[52px] shrink-0 items-center px-4 pt-[env(safe-area-inset-top,0px)]">
-        <h2 className="text-sm font-semibold text-muted-foreground tracking-wide">
-          Conversations
-        </h2>
+      {/* Header */}
+      <div className="shrink-0 px-4 pt-[env(safe-area-inset-top,0px)] pb-2">
+        <PageTitle
+          title="Chat"
+          subtitle="Connect with your team instantly"
+          icon={MessageCircle}
+        />
       </div>
 
       {/* Search */}

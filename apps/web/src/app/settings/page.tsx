@@ -22,7 +22,9 @@ import {
   ChevronRight,
   Monitor,
   Zap,
+  Settings,
 } from "lucide-react";
+import { PageTitle } from "@/components/ui/page-title";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
@@ -710,7 +712,7 @@ function SettingsContent() {
       {/* Settings Sidebar — desktop */}
       <div className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
         <div className="p-5">
-          <h1 className="text-lg font-bold">Settings</h1>
+          <PageTitle title="Settings" subtitle="Customize your experience" icon={Settings} />
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
@@ -752,8 +754,8 @@ function SettingsContent() {
       {/* Content panel */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Mobile header */}
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3 md:hidden">
-          <h1 className="text-lg font-bold">Settings</h1>
+        <div className="border-b border-border px-4 py-3 md:hidden">
+          <PageTitle title="Settings" subtitle="Customize your experience" icon={Settings} />
         </div>
 
         {/* Mobile nav tabs */}
