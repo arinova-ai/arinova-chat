@@ -70,6 +70,7 @@ thiserror = "2"
 anyhow = "1"
 regex-lite = "0.1"
 url = "2"
+zip = "2"
 
 # Sentry
 sentry = { version = "0.35", features = ["tower", "tracing"] }

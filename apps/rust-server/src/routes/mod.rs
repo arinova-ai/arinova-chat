@@ -22,6 +22,7 @@ pub mod marketplace_chat;
 pub mod knowledge_base;
 pub mod wallet;
 pub mod community;
+pub mod themes;
 
 use axum::Router;
 use crate::AppState;
@@ -52,5 +53,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(creator::router())
         .merge(knowledge_base::router())
         .merge(community::router())
+        .merge(themes::router())
         .with_state(state)
 }
