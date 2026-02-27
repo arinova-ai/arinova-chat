@@ -1,18 +1,18 @@
 {
   "id": "cozy-studio",
   "name": "Cozy Studio",
-  "version": "3.0",
+  "version": "4.0.0",
   "author": { "name": "Arinova", "id": "arinova-official" },
-  "description": "A warm 3D isometric studio with animated character and full room model.",
-  "tags": ["warm", "cozy", "3d", "free"],
+  "description": "A warm illustrated studio with CSS overlay animations — typing, sleeping, and sunset scenes.",
+  "tags": ["warm", "cozy", "illustrated", "free"],
   "preview": "preview.png",
   "license": "standard",
-  "renderer": "threejs",
+  "renderer": "sprite",
 
   "canvas": {
-    "width": 1920,
-    "height": 1080,
-    "background": { "image": "background-cozy.png", "color": "0x0d0d0d" }
+    "width": 1376,
+    "height": 768,
+    "background": { "image": "scene-working.png", "color": "0x1a1a2e" }
   },
   "viewport": {
     "minZoom": 0.5, "maxZoom": 2.0, "defaultZoom": 1.0, "panBounds": true
@@ -21,90 +21,36 @@
   "zones": [],
   "furniture": [],
   "effects": [],
-  "characters": {
-    "atlas": "mascot-sprite.png",
-    "frameWidth": 256, "frameHeight": 256,
-    "anchor": { "x": 0.5, "y": 1.0 },
-    "hitArea": { "type": "circle", "x": 0, "y": 0, "radius": 38 },
-    "nameTag": {
-      "offsetY": -68, "font": "12px system-ui", "color": "#4A3728",
-      "bgColor": "rgba(255,245,230,0.75)", "padding": { "x": 6, "y": 2 },
-      "borderRadius": 4, "maxWidth": 100
-    },
-    "statusBadge": {
-      "offsetX": 24, "offsetY": -24, "radius": 5,
-      "colors": { "working": "#16A34A", "idle": "#F59E0B", "blocked": "#DC2626", "collaborating": "#2563EB" }
-    },
-    "states": {
-      "idle": { "prefix": "char-idle", "frames": 1, "fps": 1, "loop": true }
-    },
-    "directions": ["down"]
-  },
 
-  "room": {
-    "model": "cosy-studio-room.glb",
-    "scale": [1, 1, 1]
-  },
-
-  "character": {
-    "model": "arinova-doll-animated.glb",
-    "scale": [0.3, 0.3, 0.3],
-    "height": 1.6,
-    "animations": {
-      "idle": "idle",
-      "idle_long": "idle_long",
-      "walk": "walk",
-      "run": "run",
-      "dance": "dance",
-      "swing": "swing",
-      "crunch": "crunch",
-      "pushup": "pushup",
-      "sleeping": "sleeping",
-      "fall": "fall",
-      "walk_to_sit": "walk_to_sit",
-      "lie_down": "lie_down",
-      "pushup_to_idle": "pushup_to_idle",
-      "sit_to_stand": "sit_to_stand",
-      "stand_up": "stand_up"
+  "scenes": {
+    "working": {
+      "background": "scene-working.png",
+      "overlays": [
+        { "type": "thought-bubble", "position": [74.9, 25.4] },
+        { "type": "led", "position": [71.8, 33.7], "color": "green" },
+        { "type": "screen-glow", "position": [70.5, 57.3] }
+      ]
     },
-    "positions": {
-      "desk": [0.8, 0, 0.3],
-      "playground": [-0.8, 0, 0.8],
-      "bed": [-0.5, 0, -0.8]
+    "idle": {
+      "background": "scene-idle.png",
+      "overlays": [
+        { "type": "music-notes", "position": [60.7, 20.2] },
+        { "type": "led", "position": [59.2, 24.1], "color": "red" },
+        { "type": "sun-rays", "position": [61.8, 13.0] }
+      ]
+    },
+    "sleeping": {
+      "background": "scene-sleeping.png",
+      "overlays": [
+        { "type": "zzz", "position": [35.6, 25.4] },
+        { "type": "led", "position": [32.7, 28.6], "color": "red" }
+      ]
     }
   },
 
-  "camera": {
-    "type": "orthographic",
-    "zoom": 1.5,
-    "position": [4, 5, 4],
-    "target": [0, -0.1, 0]
-  },
-
-  "lighting": {
-    "ambient": { "color": "0xfff5e6", "intensity": 0.8 },
-    "hemisphere": { "skyColor": "0x87ceeb", "groundColor": "0x362d22", "intensity": 0.35 },
-    "directional": { "color": "0xfff5e6", "intensity": 1.2, "position": [5, 8, 3] },
-    "fill": { "color": "0xc4d4ff", "intensity": 0.4, "position": [-4, 6, -2] },
-    "spot": { "color": "0xfff0d4", "intensity": 5, "position": [-3, 8, -3], "target": [0, 0, 0], "angle": 0.78, "distance": 0, "penumbra": 0.5, "decay": 1 }
-  },
-
-  "quality": {
-    "high": {
-      "renderer": {
-        "pixelRatio": 2,
-        "antialias": true,
-        "lighting": "full",
-        "anisotropy": true
-      }
-    },
-    "performance": {
-      "renderer": {
-        "pixelRatio": 1,
-        "antialias": false,
-        "lighting": "ambient-only",
-        "anisotropy": false
-      }
-    }
+  "characterHitbox": {
+    "working": { "rect": [65, 28, 18, 45] },
+    "idle": { "rect": [53, 22, 14, 40] },
+    "sleeping": { "rect": [27, 18, 15, 35] }
   }
 }

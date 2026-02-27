@@ -263,6 +263,39 @@ const lightingConfigSchema = z.object({
   }).optional(),
 });
 
+// ── v4: Sprite Renderer ─────────────────────────────────────────
+
+const spriteOverlayTypeSchema = z.enum([
+  "thought-bubble", "zzz", "music-notes", "led", "screen-glow", "sun-rays",
+]);
+
+const spriteOverlaySchema = z.object({
+  type: spriteOverlayTypeSchema,
+  position: z.tuple([z.number(), z.number()]),
+  color: z.string().optional(),
+});
+
+const spriteSceneSchema = z.object({
+  background: safePathSchema,
+  overlays: z.array(spriteOverlaySchema).default([]),
+});
+
+const spriteScenesSchema = z.object({
+  working: spriteSceneSchema,
+  idle: spriteSceneSchema,
+  sleeping: spriteSceneSchema,
+});
+
+const spriteCharacterHitboxSchema = z.object({
+  rect: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+});
+
+const characterHitboxConfigSchema = z.object({
+  working: spriteCharacterHitboxSchema.optional(),
+  idle: spriteCharacterHitboxSchema.optional(),
+  sleeping: spriteCharacterHitboxSchema.optional(),
+});
+
 // ── Quality Modes ────────────────────────────────────────────────
 
 const qualityRendererHintsSchema = z.object({
@@ -308,7 +341,7 @@ export const themeManifestSchema = z.object({
   effects: z.array(effectDefSchema).default([]),
   audio: audioConfigSchema.optional(),
 
-  renderer: z.enum(["pixi", "threejs"]).optional(),
+  renderer: z.enum(["pixi", "threejs", "sprite"]).optional(),
 
   // v3 fields
   room: roomConfigSchema.optional(),
@@ -316,11 +349,16 @@ export const themeManifestSchema = z.object({
   camera: cameraConfigSchema.optional(),
   lighting: lightingConfigSchema.optional(),
 
+  // v4 fields (sprite renderer)
+  scenes: spriteScenesSchema.optional(),
+  characterHitbox: characterHitboxConfigSchema.optional(),
+
   quality: qualityConfigSchema.optional(),
 }).refine((m) => {
   // v2 (pixi) themes must have zones, layers, and characters
   const isV3 = m.renderer === "threejs" || !!m.room?.model;
-  if (!isV3) {
+  const isSprite = m.renderer === "sprite";
+  if (!isV3 && !isSprite) {
     if (m.zones.length === 0) return false;
     if (m.layers.length === 0) return false;
     if (!m.characters) return false;
@@ -330,11 +368,16 @@ export const themeManifestSchema = z.object({
   message: "v2 (pixi) themes require non-empty zones, layers, and a characters config",
 }).refine((m) => {
   // v3 (threejs) themes must have room.model
-  const isV3 = m.renderer === "threejs";
-  if (isV3 && !m.room?.model) return false;
+  if (m.renderer === "threejs" && !m.room?.model) return false;
   return true;
 }, {
   message: "v3 (threejs) themes require room.model",
+}).refine((m) => {
+  // v4 (sprite) themes must have scenes.working
+  if (m.renderer === "sprite" && !m.scenes?.working) return false;
+  return true;
+}, {
+  message: "v4 (sprite) themes require scenes with at least a working scene",
 });
 
 export type ThemeManifestInput = z.input<typeof themeManifestSchema>;

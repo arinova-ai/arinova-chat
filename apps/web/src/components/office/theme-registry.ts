@@ -39,6 +39,15 @@ export const THEME_REGISTRY: ThemeEntry[] = [
     tags: ["warm", "cozy", "illustrated"],
   },
   {
+    id: "cozy-studio-3d",
+    name: "Cozy Studio 3D",
+    description: "A warm 3D studio with animated character. Three.js powered.",
+    previewUrl: "/themes/cozy-studio-3d/preview.png",
+    price: "free",
+    maxAgents: 1,
+    tags: ["warm", "cozy", "3d"],
+  },
+  {
     id: "default-office",
     name: "Modern Office",
     description: "A modern open-plan office with meeting room and lounge. Great for teams.",

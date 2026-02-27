@@ -190,7 +190,35 @@ export interface AudioConfig {
 
 // ── Renderer ───────────────────────────────────────────────────
 
-export type RendererType = "pixi" | "threejs";
+export type RendererType = "pixi" | "threejs" | "sprite";
+
+// ── v4: Sprite Renderer ─────────────────────────────────────────
+
+export type SpriteOverlayType = "thought-bubble" | "zzz" | "music-notes" | "led" | "screen-glow" | "sun-rays";
+
+export interface SpriteOverlay {
+  type: SpriteOverlayType;
+  /** Position as percentage [left%, top%] relative to scene container */
+  position: [number, number];
+  color?: string;
+}
+
+export interface SpriteScene {
+  /** Background image path relative to theme directory */
+  background: string;
+  overlays: SpriteOverlay[];
+}
+
+export interface SpriteScenes {
+  working: SpriteScene;
+  idle: SpriteScene;
+  sleeping: SpriteScene;
+}
+
+export interface SpriteCharacterHitbox {
+  /** Position as percentage [left%, top%, width%, height%] */
+  rect: [number, number, number, number];
+}
 
 // ── v3: Room Model ─────────────────────────────────────────────
 
@@ -288,4 +316,13 @@ export interface ThemeManifest {
 
   /** Quality mode overrides — alternative resource paths for high/performance */
   quality?: QualityConfig;
+
+  /** v4: Sprite renderer scenes */
+  scenes?: SpriteScenes;
+  /** v4: Character click hitbox per scene */
+  characterHitbox?: {
+    working?: SpriteCharacterHitbox;
+    idle?: SpriteCharacterHitbox;
+    sleeping?: SpriteCharacterHitbox;
+  };
 }
