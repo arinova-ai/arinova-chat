@@ -9,16 +9,18 @@ import { Button } from "@/components/ui/button";
 import { X, Send, Loader2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const EMPTY: never[] = [];
+
 export function ThreadPanel() {
   const activeThreadId = useChatStore((s) => s.activeThreadId);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const closeThread = useChatStore((s) => s.closeThread);
-  const threadMessages = useChatStore((s) => activeThreadId ? (s.threadMessages[activeThreadId] ?? []) : []);
+  const threadMessages = useChatStore((s) => activeThreadId ? (s.threadMessages[activeThreadId] ?? EMPTY) : EMPTY);
   const threadLoading = useChatStore((s) => s.threadLoading);
   const sendThreadMessage = useChatStore((s) => s.sendThreadMessage);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const thinkingAgents = useChatStore((s) =>
-    activeConversationId ? (s.thinkingAgents[activeConversationId] ?? []) : []
+    activeConversationId ? (s.thinkingAgents[activeConversationId] ?? EMPTY) : EMPTY
   );
 
   const [input, setInput] = useState("");
