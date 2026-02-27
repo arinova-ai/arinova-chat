@@ -14,6 +14,7 @@ import {
   Clapperboard,
   Maximize,
   Tag,
+  Sparkles,
 } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -32,6 +33,7 @@ interface ThemeDetails {
   animationCount: number;
   roomSize: string;
   version: string;
+  qualityModes: string;
   reviews: {
     name: string;
     initial: string;
@@ -52,6 +54,7 @@ const THEME_DETAILS: Record<string, ThemeDetails> = {
     animationCount: 4,
     roomSize: "Small",
     version: "v2.0",
+    qualityModes: "Standard",
     reviews: [
       { name: "Alex T.", initial: "A", color: "from-blue-500 to-blue-700", date: "3 days ago", stars: 5, text: "Great starter theme! Simple and clean, perfect for new users." },
       { name: "Jordan L.", initial: "J", color: "from-emerald-500 to-emerald-700", date: "1 week ago", stars: 4, text: "Does the job. Would be nice to have more customization options." },
@@ -66,6 +69,7 @@ const THEME_DETAILS: Record<string, ThemeDetails> = {
     animationCount: 15,
     roomSize: "Small",
     version: "v3.0",
+    qualityModes: "High / Performance",
     reviews: [
       { name: "Mike C.", initial: "M", color: "from-indigo-500 to-indigo-700", date: "2 days ago", stars: 5, text: "Love the warm atmosphere! The 3D room feels so cozy. Animations are smooth and the sleeping chain is a nice touch." },
       { name: "Sarah K.", initial: "S", color: "from-pink-500 to-pink-700", date: "1 week ago", stars: 4, text: "Beautiful design, well worth it. Would love more furniture options in future updates." },
@@ -80,6 +84,7 @@ const THEME_DETAILS: Record<string, ThemeDetails> = {
     animationCount: 8,
     roomSize: "Large",
     version: "v2.1",
+    qualityModes: "Standard",
     reviews: [
       { name: "David R.", initial: "D", color: "from-cyan-500 to-cyan-700", date: "5 days ago", stars: 5, text: "Perfect for team setups. The open-plan layout makes it easy to see all agents at once." },
       { name: "Emily W.", initial: "E", color: "from-violet-500 to-violet-700", date: "2 weeks ago", stars: 4, text: "Solid default choice. Clean and professional." },
@@ -94,6 +99,7 @@ const THEME_DETAILS: Record<string, ThemeDetails> = {
     animationCount: 10,
     roomSize: "Medium",
     version: "v2.0",
+    qualityModes: "Standard",
     reviews: [
       { name: "Leo Z.", initial: "L", color: "from-amber-500 to-amber-700", date: "1 day ago", stars: 5, text: "The neon glow is absolutely stunning. Best premium theme hands down." },
       { name: "Nina P.", initial: "N", color: "from-rose-500 to-rose-700", date: "4 days ago", stars: 5, text: "Worth every credit. The cyberpunk vibe is on point." },
@@ -108,6 +114,7 @@ const THEME_DETAILS: Record<string, ThemeDetails> = {
     animationCount: 12,
     roomSize: "Large",
     version: "v2.0",
+    qualityModes: "Standard",
     reviews: [
       { name: "Yuki A.", initial: "Y", color: "from-sky-500 to-sky-700", date: "3 days ago", stars: 5, text: "Dreamy and beautiful. The watercolor art style is unique and relaxing." },
       { name: "Chris B.", initial: "C", color: "from-teal-500 to-teal-700", date: "1 week ago", stars: 5, text: "Best looking theme in the store. The floating island concept is genius." },
@@ -285,6 +292,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                     { icon: Clapperboard, label: "Animations", value: String(details.animationCount) },
                     { icon: Maximize, label: "Room Size", value: details.roomSize },
                     { icon: Tag, label: "Version", value: details.version },
+                    { icon: Sparkles, label: "Quality Modes", value: details.qualityModes },
                   ].map((spec) => (
                     <div key={spec.label} className="rounded-[10px] bg-white/[0.03] border border-white/[0.04] p-3">
                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1">

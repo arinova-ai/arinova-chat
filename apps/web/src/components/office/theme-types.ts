@@ -227,6 +227,21 @@ export interface LightingConfig {
   directional?: { color: string; intensity: number; position: [number, number, number] };
 }
 
+// ── Quality Modes ───────────────────────────────────────────────
+
+export type ThemeQuality = "high" | "performance";
+
+export interface QualityOverrides {
+  room?: { model: string };
+  character?: { model: string };
+  background?: { image: string };
+}
+
+export interface QualityConfig {
+  high?: QualityOverrides;
+  performance?: QualityOverrides;
+}
+
 // ── Top-level Manifest ──────────────────────────────────────────
 
 export interface ThemeManifest {
@@ -259,4 +274,7 @@ export interface ThemeManifest {
   camera?: CameraConfig;
   /** v3: Lighting settings */
   lighting?: LightingConfig;
+
+  /** Quality mode overrides — alternative resource paths for high/performance */
+  quality?: QualityConfig;
 }

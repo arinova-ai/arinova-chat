@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { OfficeRenderer } from "./types";
 import type { Agent, AgentStatus } from "../types";
-import type { ThemeManifest, ZoneDef, ZoneType } from "../theme-types";
+import type { ThemeManifest, ThemeQuality, ZoneDef, ZoneType } from "../theme-types";
 
 // ── Constants ────────────────────────────────────────────────────
 const DEFAULT_CANVAS_W = 1920;
@@ -165,6 +165,16 @@ function isV3Theme(manifest: ThemeManifest | null): boolean {
   return !!manifest?.room?.model;
 }
 
+/** Read theme quality setting from localStorage. */
+function readThemeQuality(): ThemeQuality {
+  try {
+    const saved = localStorage.getItem("arinova_theme_quality");
+    return saved === "performance" ? "performance" : "high";
+  } catch {
+    return "high";
+  }
+}
+
 // ── ThreeJSRenderer ──────────────────────────────────────────────
 
 export class ThreeJSRenderer implements OfficeRenderer {
@@ -235,6 +245,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
   /** Frustum computed by fitCameraToRoom(); used in resize(). */
   private v3Frustum: number | null = null;
 
+  /** Quality mode read at init — affects pixel ratio, lighting, resource paths */
+  private quality: ThemeQuality = "high";
+
   onAgentClick?: (agentId: string) => void;
   onCharacterClick?: () => void;
 
@@ -251,6 +264,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.width = width;
     this.height = height;
     this.manifest = manifest;
+    this.quality = readThemeQuality();
     this.canvasW = manifest?.canvas?.width ?? DEFAULT_CANVAS_W;
     this.canvasH = manifest?.canvas?.height ?? DEFAULT_CANVAS_H;
     this.statusColors = parseStatusColors(manifest);
@@ -269,8 +283,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
     this.scene.background = new THREE.Color(this.bgColor);
 
     // Background image (v3 themes)
-    const bgImage = manifest?.canvas?.background?.image;
-    if (bgImage && isV3Theme(manifest)) {
+    const bgImageDefault = manifest?.canvas?.background?.image;
+    if (bgImageDefault && isV3Theme(manifest)) {
+      const bgImage = this.resolveQualityPath("background", "image", bgImageDefault);
       const bgUrl = `/themes/${manifest.id}/${bgImage}`;
       new THREE.TextureLoader().load(bgUrl, (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
@@ -287,9 +302,13 @@ export class ThreeJSRenderer implements OfficeRenderer {
     }
 
     // WebGL renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: this.quality === "high",
+    });
     this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(
+      this.quality === "high" ? Math.min(window.devicePixelRatio, 2) : 1,
+    );
     // v3 themes disable realtime shadows (small room, ambient+directional suffice);
     // legacy themes keep PCFSoftShadowMap for zone-based office.
     this.renderer.shadowMap.enabled = !isV3Theme(manifest);
@@ -616,6 +635,9 @@ export class ThreeJSRenderer implements OfficeRenderer {
     const ambientIntensity = lightConfig?.ambient?.intensity ?? 1.0;
     this.scene.add(new THREE.AmbientLight(ambientColor, ambientIntensity));
 
+    // Performance mode: ambient-only lighting (skip directional)
+    if (this.quality === "performance") return;
+
     // Single soft directional from directly above — gentle fill that avoids
     // specular hotspots on vertical walls (straight-down light minimises
     // specular reflection on surfaces facing the camera at oblique angles).
@@ -760,12 +782,24 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
   // ── Private: Load room model (v3) ─────────────────────────────
 
+  /** Resolve a resource path using quality overrides if available. */
+  private resolveQualityPath(
+    category: "room" | "character" | "background",
+    field: "model" | "image",
+    fallback: string,
+  ): string {
+    const override = this.manifest?.quality?.[this.quality]?.[category];
+    if (override && field in override) return (override as Record<string, string>)[field];
+    return fallback;
+  }
+
   private async loadRoomModel(): Promise<void> {
     if (!this.scene || !this.manifest?.room?.model) return;
 
     const loader = await this.createGLTFLoader();
 
-    const roomUrl = `/themes/${this.manifest.id}/${this.manifest.room.model}`;
+    const roomModel = this.resolveQualityPath("room", "model", this.manifest.room.model);
+    const roomUrl = `/themes/${this.manifest.id}/${roomModel}`;
     try {
       const gltf = await loader.loadAsync(roomUrl);
       this.roomScene = gltf.scene;
@@ -782,14 +816,17 @@ export class ThreeJSRenderer implements OfficeRenderer {
           child.castShadow = false;
           child.receiveShadow = false;
 
-          const materials = Array.isArray(child.material) ? child.material : [child.material];
-          for (const mat of materials) {
-            if (mat && 'isMeshStandardMaterial' in mat && (mat as any).isMeshStandardMaterial) {
-              const stdMat = mat as THREE.MeshStandardMaterial;
-              const maxAniso = this.renderer!.capabilities.getMaxAnisotropy();
-              const textures = [stdMat.map, stdMat.normalMap, stdMat.roughnessMap, stdMat.metalnessMap];
-              for (const tex of textures) {
-                if (tex) tex.anisotropy = maxAniso;
+          // High quality: max anisotropy for sharp textures at oblique angles
+          if (this.quality === "high") {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            for (const mat of materials) {
+              if (mat && 'isMeshStandardMaterial' in mat && (mat as any).isMeshStandardMaterial) {
+                const stdMat = mat as THREE.MeshStandardMaterial;
+                const maxAniso = this.renderer!.capabilities.getMaxAnisotropy();
+                const textures = [stdMat.map, stdMat.normalMap, stdMat.roughnessMap, stdMat.metalnessMap];
+                for (const tex of textures) {
+                  if (tex) tex.anisotropy = maxAniso;
+                }
               }
             }
           }
@@ -813,7 +850,8 @@ export class ThreeJSRenderer implements OfficeRenderer {
     const loader = await this.createGLTFLoader();
 
     // Load main character model (with walk animation)
-    const charUrl = `/themes/${this.manifest.id}/${this.manifest.character.model}`;
+    const charModel = this.resolveQualityPath("character", "model", this.manifest.character.model);
+    const charUrl = `/themes/${this.manifest.id}/${charModel}`;
     try {
       const gltf = await loader.loadAsync(charUrl);
       this.characterModel = gltf.scene;
