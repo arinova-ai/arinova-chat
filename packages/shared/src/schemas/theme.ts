@@ -245,10 +245,18 @@ const lightingConfigSchema = z.object({
 
 // ── Quality Modes ────────────────────────────────────────────────
 
+const qualityRendererHintsSchema = z.object({
+  pixelRatio: z.number().min(1).max(4).optional(),
+  antialias: z.boolean().optional(),
+  lighting: z.enum(["full", "ambient-only"]).optional(),
+  anisotropy: z.boolean().optional(),
+});
+
 const qualityOverridesSchema = z.object({
   room: z.object({ model: safePathSchema }).optional(),
   character: z.object({ model: safePathSchema }).optional(),
   background: z.object({ image: safePathSchema }).optional(),
+  renderer: qualityRendererHintsSchema.optional(),
 });
 
 const qualityConfigSchema = z.object({
