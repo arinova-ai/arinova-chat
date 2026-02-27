@@ -516,9 +516,6 @@ export class SpriteRenderer implements OfficeRenderer {
 
   private handleHitboxClick = (): void => {
     this.onCharacterClick?.();
-    if (this.firstAgentId) {
-      this.onAgentClick?.(this.firstAgentId);
-    }
   };
 
   private transitionTo(scene: SceneKey): void {

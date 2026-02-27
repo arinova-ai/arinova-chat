@@ -44,6 +44,7 @@ interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
   agent: Agent | null;
+  agents?: Agent[];
 }
 
 const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
@@ -81,18 +82,26 @@ function CharacterDetailOffline() {
   );
 }
 
-function CharacterDetail({ agent }: { agent: Agent }) {
+function CharacterDetail({ agent, agents }: { agent: Agent; agents: Agent[] }) {
   const badge = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
 
   return (
     <div className="space-y-5">
-      {/* Character header */}
+      {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-700/30 text-2xl">
+        <div
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl"
+          style={{ backgroundColor: agent.color }}
+        >
           {agent.emoji}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-slate-100">{agent.name}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-100">{agent.name}</span>
+            {agent.role && (
+              <span className="text-sm text-slate-400">{agent.role}</span>
+            )}
+          </div>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.bg} ${badge.text}`}
           >
@@ -102,45 +111,123 @@ function CharacterDetail({ agent }: { agent: Agent }) {
         </div>
       </div>
 
-      {/* Info grid */}
-      <div className="space-y-2.5">
-        {agent.model && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Model</span>
-            <span className="text-slate-200 font-mono text-xs">{agent.model}</span>
-          </div>
-        )}
+      {/* Plugin stats: model, tokens, session, tool */}
+      {(agent.model || agent.tokenUsage || agent.sessionDurationMs != null || agent.currentToolDetail) && (
+        <div className="space-y-2.5">
+          {agent.model && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">Model</span>
+              <span className="text-slate-200 font-mono text-xs">{agent.model}</span>
+            </div>
+          )}
+          {agent.tokenUsage && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">Tokens</span>
+              <span className="text-slate-200 text-xs">
+                {formatTokens(agent.tokenUsage.input)} in / {formatTokens(agent.tokenUsage.output)} out
+              </span>
+            </div>
+          )}
+          {agent.sessionDurationMs != null && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">Session</span>
+              <span className="text-slate-200 text-xs">{formatDuration(agent.sessionDurationMs)}</span>
+            </div>
+          )}
+          {agent.currentToolDetail && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400">Tool</span>
+              <span className="text-slate-200 font-mono text-xs truncate ml-2">{agent.currentToolDetail}</span>
+            </div>
+          )}
+        </div>
+      )}
 
-        {agent.tokenUsage && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Tokens</span>
-            <span className="text-slate-200 text-xs">
-              {formatTokens(agent.tokenUsage.input)} in / {formatTokens(agent.tokenUsage.output)} out
-            </span>
-          </div>
-        )}
+      {/* Current Task */}
+      {agent.currentTask && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Current Task
+          </h3>
+          <div className="space-y-2.5 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="rounded bg-yellow-500/15 px-1.5 py-0.5 font-mono text-xs text-yellow-400">
+                {agent.currentTask.priority}
+              </span>
+              <span className="font-medium text-slate-100">{agent.currentTask.title}</span>
+            </div>
+            <div className="text-xs text-slate-400">
+              Due: {agent.currentTask.due} &middot; Assigned by: {agent.currentTask.assignedBy}
+            </div>
 
-        {agent.sessionDurationMs != null && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Session</span>
-            <span className="text-slate-200 text-xs">{formatDuration(agent.sessionDurationMs)}</span>
-          </div>
-        )}
+            {/* Progress bar */}
+            <div className="flex items-center gap-2">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-700">
+                <div
+                  className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                  style={{ width: `${agent.currentTask.progress}%` }}
+                />
+              </div>
+              <span className="w-8 text-right text-xs text-slate-400">
+                {agent.currentTask.progress}%
+              </span>
+            </div>
 
-        {agent.currentToolDetail && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Tool</span>
-            <span className="text-slate-200 font-mono text-xs truncate ml-2">{agent.currentToolDetail}</span>
+            {/* Subtasks */}
+            <div className="space-y-1">
+              {agent.currentTask.subtasks.map((st, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className={st.done ? "text-green-400" : "text-slate-500"}>
+                    {st.done ? "✓" : "○"}
+                  </span>
+                  <span className={st.done ? "text-slate-500 line-through" : "text-slate-300"}>
+                    {st.label}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {agent.currentTask && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Task</span>
-            <span className="text-slate-200 text-xs truncate ml-2">{agent.currentTask.title}</span>
+      {/* Recent Activity */}
+      {agent.recentActivity.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Recent Activity
+          </h3>
+          <div className="space-y-1.5">
+            {agent.recentActivity.map((act, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <span className="w-10 shrink-0 font-mono text-slate-500">{act.time}</span>
+                <span className="text-slate-300">{act.text}</span>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Collaborators */}
+      {agent.status === "collaborating" && agent.collaboratingWith && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Collaborators
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {agent.collaboratingWith.map((id) => {
+              const partner = agents.find((a) => a.id === id);
+              return (
+                <span
+                  key={id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs text-blue-400"
+                >
+                  {partner?.emoji ?? "🤖"} {partner?.name ?? id}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-2">
@@ -155,7 +242,7 @@ function CharacterDetail({ agent }: { agent: Agent }) {
   );
 }
 
-export function CharacterModal({ isOpen, onClose, agent }: CharacterModalProps) {
+export function CharacterModal({ isOpen, onClose, agent, agents = [] }: CharacterModalProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -168,7 +255,7 @@ export function CharacterModal({ isOpen, onClose, agent }: CharacterModalProps) 
 
   const title = agent?.name || "Arinova Assistant";
   const content = agent
-    ? <CharacterDetail agent={agent} />
+    ? <CharacterDetail agent={agent} agents={agents} />
     : <CharacterDetailOffline />;
 
   if (isMobile) {

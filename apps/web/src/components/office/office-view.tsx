@@ -102,14 +102,17 @@ function OfficeViewInner() {
         )}
       </div>
 
-      {/* Agent detail modal */}
-      <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
+      {/* Agent detail modal (v2/PixiJS themes — multi-agent click) */}
+      {manifest?.renderer !== "sprite" && (
+        <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
+      )}
 
-      {/* Character modal (v3 themes) */}
+      {/* Character modal (v3/v4 single-character themes) */}
       <CharacterModal
         isOpen={showCharacterModal}
         onClose={closeCharacterModal}
         agent={characterAgent}
+        agents={displayAgents}
       />
     </div>
   );
