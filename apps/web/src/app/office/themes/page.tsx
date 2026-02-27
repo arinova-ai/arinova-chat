@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Palette, Check, Lock, Users, Search } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -31,8 +32,8 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
 
   return (
     <div className="group relative rounded-xl border border-border bg-card overflow-hidden transition-shadow hover:shadow-lg hover:shadow-brand/5">
-      {/* Preview image */}
-      <div className="relative aspect-video overflow-hidden">
+      {/* Preview image — links to detail page */}
+      <Link href={`/office/themes/${entry.id}`} className="block relative aspect-video overflow-hidden">
         <Image
           src={entry.previewUrl}
           alt={entry.name}
@@ -47,13 +48,15 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
             </span>
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Card body */}
       <div className="p-4 space-y-3">
         {/* Name + price */}
         <div className="flex items-center justify-between gap-2">
-          <h3 className="font-semibold text-foreground truncate">{entry.name}</h3>
+          <Link href={`/office/themes/${entry.id}`} className="font-semibold text-foreground truncate hover:text-brand-text transition-colors">
+            {entry.name}
+          </Link>
           {isFree ? (
             <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
               FREE
