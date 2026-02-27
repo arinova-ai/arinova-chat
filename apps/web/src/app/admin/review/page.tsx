@@ -14,6 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { PageTitle } from "@/components/ui/page-title";
 import {
   ArrowLeft,
   Loader2,
@@ -125,9 +126,8 @@ function AdminReviewContent() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <Shield className="h-6 w-6 text-orange-400" />
-          <h1 className="text-2xl font-bold">App Review Queue</h1>
-          <span className="ml-auto rounded-full bg-orange-500/20 px-3 py-1 text-sm font-medium text-orange-400">
+          <PageTitle icon={Shield} title="App Review" subtitle="Review and approve submitted apps" className="flex-1" />
+          <span className="rounded-full bg-orange-500/20 px-3 py-1 text-sm font-medium text-orange-400">
             {apps.length} pending
           </span>
         </div>

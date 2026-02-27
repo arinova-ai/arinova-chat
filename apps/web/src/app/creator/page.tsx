@@ -7,6 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
+import { PageTitle } from "@/components/ui/page-title";
 import {
   Loader2,
   Plus,
@@ -134,15 +135,7 @@ function CreatorDashboardContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/15">
-              <Coins className="h-5 w-5 text-brand-text" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-xl font-bold">Creator Dashboard</h1>
-              <p className="text-xs text-muted-foreground">
-                Manage your AI agents
-              </p>
-            </div>
+            <PageTitle icon={Coins} title="Creator Dashboard" subtitle="Manage your AI agents" className="flex-1" />
             <Button
               size="sm"
               variant="secondary"

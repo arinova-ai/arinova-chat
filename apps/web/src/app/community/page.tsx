@@ -7,6 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
+import { PageTitle } from "@/components/ui/page-title";
 import { Loader2, Search, Plus, Users, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -119,7 +120,7 @@ function CommunityBrowseContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-3">
-            <h1 className="text-lg font-bold">Community</h1>
+            <PageTitle icon={Users} title="Community" subtitle="Connect with creators and communities" />
             <Button
               size="sm"
               className="brand-gradient-btn gap-1"
