@@ -6,7 +6,7 @@ import { MessageBubble } from "./message-bubble";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
-import { ArrowDown, Loader2, Square } from "lucide-react";
+import { ArrowDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
 
@@ -25,7 +25,6 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);
   const searchQuery = useChatStore((s) => s.searchQuery);
-  const cancelStream = useChatStore((s) => s.cancelStream);
   const thinkingCount = useChatStore((s) => activeConversationId ? (s.thinkingAgents[activeConversationId]?.length ?? 0) : 0);
   const [loadingUp, setLoadingUp] = useState(false);
   const [loadingDown, setLoadingDown] = useState(false);
@@ -216,21 +215,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         </div>
       </div>
 
-      {/* Full-width Stop generating button */}
-      {lastMessage?.status === "streaming" && (
-        <div className="absolute bottom-4 left-0 right-0 flex justify-center px-4">
-          <button
-            type="button"
-            onClick={() => cancelStream(lastMessage.id)}
-            className="flex h-11 w-full max-w-xl items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-card/90 text-sm font-medium text-red-400 shadow-lg backdrop-blur-sm transition-colors hover:border-red-500/50 hover:bg-red-950/20"
-          >
-            <Square className="h-3.5 w-3.5 fill-current" />
-            Stop generating
-          </button>
-        </div>
-      )}
-
-      {showScrollButton && !lastMessage?.status?.includes("streaming") && (
+      {showScrollButton && (
         <button
           onClick={scrollToBottom}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-opacity hover:bg-accent"
