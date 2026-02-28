@@ -269,9 +269,15 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             {message.content ? (
               <MarkdownContent
                 content={
-                  // Strip image/file markdown when attachments already render them
+                  // Strip markdown links/images whose URL matches an already-rendered attachment
                   message.attachments?.length
-                    ? message.content.replace(/!?\[[^\]]*\]\([^)]+\/uploads\/[^)]+\)/g, "").trim()
+                    ? (() => {
+                        const attUrls = new Set(message.attachments!.map((a) => a.url));
+                        return message.content.replace(
+                          /!?\[[^\]]*\]\(([^)]+)\)/g,
+                          (match, url: string) => attUrls.has(url) ? "" : match,
+                        ).trim();
+                      })()
                     : message.content
                 }
                 highlightQuery={highlightQuery}
