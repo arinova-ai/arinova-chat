@@ -2,7 +2,7 @@
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Bot, Loader2, SearchX } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, SearchX, User } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 
@@ -106,13 +106,19 @@ export function SearchResults() {
               >
                 {/* Avatar */}
                 <Avatar className="mt-0.5 h-9 w-9 shrink-0">
-                  <img
-                    src={result.agentAvatarUrl ? assetUrl(result.agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
-                    alt={result.agentName ?? ""}
-                    className="h-full w-full object-cover"
-                  />
+                  {result.role !== "user" && (
+                    <img
+                      src={result.agentAvatarUrl ? assetUrl(result.agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
+                      alt={result.agentName ?? ""}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
                   <AvatarFallback className="bg-accent text-foreground/80 text-xs">
-                    <Bot className="h-4 w-4" />
+                    {result.role === "user" ? (
+                      <User className="h-4 w-4" />
+                    ) : (
+                      <Bot className="h-4 w-4" />
+                    )}
                   </AvatarFallback>
                 </Avatar>
 
