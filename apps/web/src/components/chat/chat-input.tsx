@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 import {
   Popover,
   PopoverContent,
@@ -70,6 +71,7 @@ interface ChatInputProps {
 // ---------- Component ----------
 
 export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
+  const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -1065,7 +1067,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                     variant="ghost"
                     size="icon"
                     className="h-11 w-11 shrink-0 rounded-xl"
-                    title="Stickers"
+                    title={t("chat.stickers")}
                   >
                     <Smile className="h-5 w-5" />
                   </Button>
@@ -1091,11 +1093,11 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                         </div>
                         <Button size="sm" className="shrink-0 gap-1.5" onClick={handleStickerSend}>
                           <SendHorizontal className="h-3.5 w-3.5" />
-                          Send
+                          {t("common.send")}
                         </Button>
                       </>
                     ) : (
-                      <p className="text-sm text-muted-foreground w-full text-center">Select a sticker</p>
+                      <p className="text-sm text-muted-foreground w-full text-center">{t("chat.selectSticker")}</p>
                     )}
                   </div>
 

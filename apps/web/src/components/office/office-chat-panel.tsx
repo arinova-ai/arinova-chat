@@ -7,6 +7,7 @@ import { TypingIndicator } from "@/components/chat/typing-indicator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { X, Send, Loader2, MessageSquare } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 const EMPTY: never[] = [];
 
@@ -17,6 +18,7 @@ interface OfficeChatPanelProps {
 }
 
 export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps) {
+  const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -35,6 +37,7 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
   // Find or create conversation when panel opens
   useEffect(() => {
     if (!open || !agentId) return;
+    let cancelled = false;
 
     const existing = conversations.find(
       (c) => c.agentId === agentId && c.type === "direct"
@@ -42,7 +45,6 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
 
     if (existing) {
       setConversationId(existing.id);
-      // Save previous activeConversationId and switch
       prevActiveRef.current = useChatStore.getState().activeConversationId;
       setActiveConversation(existing.id);
       loadMessages(existing.id);
@@ -50,13 +52,18 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
       setInitializing(true);
       createConversation(agentId)
         .then((conv) => {
+          if (cancelled) return;
           setConversationId(conv.id);
           prevActiveRef.current = useChatStore.getState().activeConversationId;
           setActiveConversation(conv.id);
         })
         .catch(() => {})
-        .finally(() => setInitializing(false));
+        .finally(() => {
+          if (!cancelled) setInitializing(false);
+        });
     }
+
+    return () => { cancelled = true; };
   }, [open, agentId, conversations, createConversation, setActiveConversation, loadMessages]);
 
   // Restore previous activeConversationId on close
@@ -135,7 +142,7 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
           <div className="flex items-center justify-between">
             <SheetTitle className="text-sm flex items-center gap-1.5">
               <MessageSquare className="h-4 w-4" />
-              Chat
+              {t("nav.chat")}
             </SheetTitle>
             <Button variant="ghost" size="icon-xs" onClick={handleClose} className="h-6 w-6">
               <X className="h-4 w-4" />
@@ -152,7 +159,7 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">Start a conversation</p>
+              <p className="text-sm">{t("officeChat.startConversation")}</p>
             </div>
           ) : (
             <div className="space-y-1 px-3">
@@ -178,7 +185,7 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
+              placeholder={t("officeChat.placeholder")}
               rows={1}
               className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />

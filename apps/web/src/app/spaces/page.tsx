@@ -7,6 +7,7 @@ import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { PageTitle } from "@/components/ui/page-title";
 import { Button } from "@/components/ui/button";
 import { Search, Gamepad2, Star, Play, Users } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -33,7 +34,7 @@ const MOCK_GAMES: Game[] = [
   { id: "tower-defense", name: "Tower Defense", desc: "Strategic tower placement game", category: "strategy", plays: 95000, rating: 4.1 },
 ];
 
-const CATEGORIES = ["All", "Action", "Puzzle", "Strategy", "Social", "Casual"];
+const CATEGORY_KEYS = ["all", "action", "puzzle", "strategy", "social", "casual"] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
   action: "bg-red-500/15 text-red-400",
@@ -68,7 +69,7 @@ function formatPlays(n: number): string {
 // Featured Banner
 // ---------------------------------------------------------------------------
 
-function FeaturedBanner({ game }: { game: Game }) {
+function FeaturedBanner({ game, t }: { game: Game; t: (k: string) => string }) {
   return (
     <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-brand/20 via-purple-600/10 to-blue-600/10 border border-brand/20 p-5 md:p-6">
       <div className="flex items-center gap-4 md:gap-6">
@@ -76,13 +77,13 @@ function FeaturedBanner({ game }: { game: Game }) {
           {GAME_EMOJIS[game.id] ?? "\ud83c\udfae"}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-brand-text uppercase tracking-wide">Featured Game</p>
+          <p className="text-xs font-medium text-brand-text uppercase tracking-wide">{t("spaces.featured")}</p>
           <h3 className="mt-0.5 text-lg md:text-xl font-bold truncate">{game.name}</h3>
           <p className="mt-1 text-xs text-muted-foreground line-clamp-2 md:line-clamp-1">{game.desc}</p>
           <div className="mt-2 flex items-center gap-3">
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Users className="h-3 w-3" />
-              {formatPlays(game.plays)} plays
+              {formatPlays(game.plays)} {t("spaces.plays")}
             </span>
             <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
@@ -92,7 +93,7 @@ function FeaturedBanner({ game }: { game: Game }) {
         </div>
         <Button size="sm" className="brand-gradient-btn gap-1 shrink-0">
           <Play className="h-3.5 w-3.5" />
-          Play Now
+          {t("spaces.playNow")}
         </Button>
       </div>
     </div>
@@ -103,7 +104,7 @@ function FeaturedBanner({ game }: { game: Game }) {
 // Game Card
 // ---------------------------------------------------------------------------
 
-function GameCard({ game }: { game: Game }) {
+function GameCard({ game, t }: { game: Game; t: (k: string) => string }) {
   const categoryClass = CATEGORY_COLORS[game.category] ?? "bg-gray-500/15 text-gray-400";
 
   return (
@@ -117,7 +118,7 @@ function GameCard({ game }: { game: Game }) {
         <div className="flex items-start gap-2">
           <h3 className="flex-1 text-sm font-semibold truncate">{game.name}</h3>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${categoryClass}`}>
-            {game.category}
+            {t(`spaces.cat.${game.category}`)}
           </span>
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground line-clamp-2">{game.desc}</p>
@@ -134,7 +135,7 @@ function GameCard({ game }: { game: Game }) {
           </div>
           <Button size="sm" variant="secondary" className="h-7 gap-1 text-[11px] px-2.5">
             <Play className="h-3 w-3" />
-            Play
+            {t("spaces.play")}
           </Button>
         </div>
       </div>
@@ -147,15 +148,16 @@ function GameCard({ game }: { game: Game }) {
 // ---------------------------------------------------------------------------
 
 function SpacesContent() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
+  const [category, setCategory] = useState("all");
 
   const featuredGame = MOCK_GAMES.find((g) => g.featured);
 
   const filtered = useMemo(() => {
     let list = MOCK_GAMES;
-    if (category !== "All") {
-      list = list.filter((g) => g.category === category.toLowerCase());
+    if (category !== "all") {
+      list = list.filter((g) => g.category === category);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -178,14 +180,14 @@ function SpacesContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
-            <PageTitle title="Spaces" subtitle="Games & social experiences" icon={Gamepad2} />
+            <PageTitle title={t("spaces.title")} subtitle={t("spaces.subtitle")} icon={Gamepad2} />
           </div>
 
           {/* Search */}
           <div className="mt-3 relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              placeholder="Search games..."
+              placeholder={t("spaces.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -194,7 +196,7 @@ function SpacesContent() {
 
           {/* Category pills */}
           <div className="mt-3 flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
+            {CATEGORY_KEYS.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
@@ -204,7 +206,7 @@ function SpacesContent() {
                     : "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                {cat}
+                {t(`spaces.cat.${cat}`)}
               </button>
             ))}
           </div>
@@ -214,20 +216,20 @@ function SpacesContent() {
         <div className="flex-1 overflow-y-auto p-4 pb-24 md:p-6 md:pb-6">
           <div className="mx-auto max-w-5xl space-y-6">
             {/* Featured banner */}
-            {featuredGame && category === "All" && !search.trim() && (
-              <FeaturedBanner game={featuredGame} />
+            {featuredGame && category === "all" && !search.trim() && (
+              <FeaturedBanner game={featuredGame} t={t} />
             )}
 
             {/* Grid */}
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Gamepad2 className="h-10 w-10 opacity-40 mb-2" />
-                <p className="text-sm">No games found</p>
+                <p className="text-sm">{t("spaces.noGames")}</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {filtered.map((game) => (
-                  <GameCard key={game.id} game={game} />
+                  <GameCard key={game.id} game={game} t={t} />
                 ))}
               </div>
             )}

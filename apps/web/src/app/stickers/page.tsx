@@ -20,8 +20,8 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
-  X,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -52,7 +52,7 @@ const MOCK_PACKS: StickerPack[] = [
 
 const FEATURED_PACKS = MOCK_PACKS.slice(0, 3);
 
-const CATEGORIES = ["All", "Cute", "Funny", "Anime", "Meme", "Seasonal"];
+const CATEGORY_KEYS = ["all", "cute", "funny", "anime", "meme", "seasonal"] as const;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,7 +88,7 @@ function renderStars(rating: number) {
 // Featured Carousel
 // ---------------------------------------------------------------------------
 
-function FeaturedCarousel({ packs }: { packs: StickerPack[] }) {
+function FeaturedCarousel({ packs, t }: { packs: StickerPack[]; t: (k: string) => string }) {
   const [idx, setIdx] = useState(0);
   const pack = packs[idx];
 
@@ -101,13 +101,13 @@ function FeaturedCarousel({ packs }: { packs: StickerPack[] }) {
           className="h-16 w-16 md:h-20 md:w-20 shrink-0 rounded-lg object-contain bg-white/5 p-1"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-brand-text uppercase tracking-wide">Featured</p>
+          <p className="text-xs font-medium text-brand-text uppercase tracking-wide">{t("stickerShop.featured")}</p>
           <h3 className="mt-0.5 text-lg font-bold truncate">{pack.name}</h3>
           <p className="text-xs text-muted-foreground">
-            by {pack.author} &middot; {pack.stickers} stickers
+            {pack.author} &middot; {pack.stickers} {t("stickerShop.stickersCount")}
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <PriceBadge price={pack.price} />
+            <PriceBadge price={pack.price} t={t} />
             {renderStars(pack.rating)}
           </div>
         </div>
@@ -146,17 +146,17 @@ function FeaturedCarousel({ packs }: { packs: StickerPack[] }) {
 // Price Badge
 // ---------------------------------------------------------------------------
 
-function PriceBadge({ price }: { price: number }) {
+function PriceBadge({ price, t }: { price: number; t: (k: string) => string }) {
   if (price === 0) {
     return (
       <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-medium text-green-400">
-        Free
+        {t("stickerShop.free")}
       </span>
     );
   }
   return (
     <span className="rounded-full bg-yellow-500/15 px-2 py-0.5 text-[11px] font-medium text-yellow-400">
-      {price} coins
+      {price} {t("stickerShop.coins")}
     </span>
   );
 }
@@ -165,7 +165,7 @@ function PriceBadge({ price }: { price: number }) {
 // Pack Card
 // ---------------------------------------------------------------------------
 
-function PackCard({ pack, onClick }: { pack: StickerPack; onClick: () => void }) {
+function PackCard({ pack, onClick, t }: { pack: StickerPack; onClick: () => void; t: (k: string) => string }) {
   return (
     <button
       onClick={onClick}
@@ -179,9 +179,9 @@ function PackCard({ pack, onClick }: { pack: StickerPack; onClick: () => void })
         />
       </div>
       <h3 className="mt-2.5 text-sm font-semibold truncate">{pack.name}</h3>
-      <p className="text-[11px] text-muted-foreground truncate">by {pack.author}</p>
+      <p className="text-[11px] text-muted-foreground truncate">{pack.author}</p>
       <div className="mt-2 flex items-center gap-2">
-        <PriceBadge price={pack.price} />
+        <PriceBadge price={pack.price} t={t} />
         <span className="ml-auto flex items-center gap-0.5 text-[11px] text-muted-foreground">
           <Download className="h-3 w-3" />
           {formatCount(pack.downloads)}
@@ -210,10 +210,12 @@ function PackDetailDialog({
   pack,
   open,
   onClose,
+  t,
 }: {
   pack: StickerPack | null;
   open: boolean;
   onClose: () => void;
+  t: (k: string) => string;
 }) {
   if (!pack) return null;
 
@@ -227,11 +229,11 @@ function PackDetailDialog({
           <DialogHeader>
             <DialogTitle className="text-lg">{pack.name}</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              by {pack.author} &middot; {pack.stickers} stickers
+              {pack.author} &middot; {pack.stickers} {t("stickerShop.stickersCount")}
             </DialogDescription>
           </DialogHeader>
           <div className="mt-3 flex items-center gap-3">
-            <PriceBadge price={pack.price} />
+            <PriceBadge price={pack.price} t={t} />
             {renderStars(pack.rating)}
             <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
               <Download className="h-3 w-3" />
@@ -240,7 +242,7 @@ function PackDetailDialog({
           </div>
           <Button size="sm" className="brand-gradient-btn mt-3 gap-1">
             <Download className="h-3.5 w-3.5" />
-            {pack.price === 0 ? "Download" : `Buy for ${pack.price} coins`}
+            {pack.price === 0 ? t("stickerShop.download") : `${t("stickerShop.buyFor")} ${pack.price} ${t("stickerShop.coins")}`}
           </Button>
         </div>
 
@@ -265,14 +267,15 @@ function PackDetailDialog({
 // ---------------------------------------------------------------------------
 
 function StickerShopContent() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
+  const [category, setCategory] = useState("all");
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
 
   const filtered = useMemo(() => {
     let list = MOCK_PACKS;
-    if (category !== "All") {
-      list = list.filter((p) => p.category === category.toLowerCase());
+    if (category !== "all") {
+      list = list.filter((p) => p.category === category);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -295,14 +298,14 @@ function StickerShopContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
-            <PageTitle title="Sticker Shop" subtitle="Browse & collect sticker packs" icon={Sticker} />
+            <PageTitle title={t("stickerShop.title")} subtitle={t("stickerShop.subtitle")} icon={Sticker} />
           </div>
 
           {/* Search */}
           <div className="mt-3 relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              placeholder="Search sticker packs..."
+              placeholder={t("stickerShop.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -311,7 +314,7 @@ function StickerShopContent() {
 
           {/* Category pills */}
           <div className="mt-3 flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
+            {CATEGORY_KEYS.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
@@ -321,7 +324,7 @@ function StickerShopContent() {
                     : "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                {cat}
+                {t(`stickerShop.cat.${cat}`)}
               </button>
             ))}
           </div>
@@ -331,13 +334,13 @@ function StickerShopContent() {
         <div className="flex-1 overflow-y-auto p-4 pb-24 md:p-6 md:pb-6">
           <div className="mx-auto max-w-5xl space-y-6">
             {/* Featured carousel */}
-            <FeaturedCarousel packs={FEATURED_PACKS} />
+            <FeaturedCarousel packs={FEATURED_PACKS} t={t} />
 
             {/* Grid */}
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Sticker className="h-10 w-10 opacity-40 mb-2" />
-                <p className="text-sm">No sticker packs found</p>
+                <p className="text-sm">{t("stickerShop.noPacks")}</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -346,6 +349,7 @@ function StickerShopContent() {
                     key={pack.id}
                     pack={pack}
                     onClick={() => setSelectedPack(pack)}
+                    t={t}
                   />
                 ))}
               </div>
@@ -360,6 +364,7 @@ function StickerShopContent() {
         pack={selectedPack}
         open={selectedPack !== null}
         onClose={() => setSelectedPack(null)}
+        t={t}
       />
     </div>
   );

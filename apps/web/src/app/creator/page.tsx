@@ -8,6 +8,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
+import { useTranslation } from "@/lib/i18n";
 import {
   Loader2,
   Plus,
@@ -99,11 +100,11 @@ const MOCK_THEME_LISTINGS = [
 
 type Tab = "overview" | "stickers" | "agents" | "themes";
 
-const TABS: { key: Tab; label: string; icon: typeof LayoutDashboard }[] = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "stickers", label: "Stickers", icon: Sticker },
-  { key: "agents", label: "Agents", icon: Bot },
-  { key: "themes", label: "Themes", icon: Palette },
+const TAB_DEFS: { key: Tab; i18nKey: string; icon: typeof LayoutDashboard }[] = [
+  { key: "overview", i18nKey: "creator.tab.overview", icon: LayoutDashboard },
+  { key: "stickers", i18nKey: "creator.tab.stickers", icon: Sticker },
+  { key: "agents", i18nKey: "creator.tab.agents", icon: Bot },
+  { key: "themes", i18nKey: "creator.tab.themes", icon: Palette },
 ];
 
 // ---------------------------------------------------------------------------
@@ -132,7 +133,7 @@ const ACTIVITY_ICONS = {
 // Overview Tab
 // ---------------------------------------------------------------------------
 
-function OverviewTab() {
+function OverviewTab({ t }: { t: (k: string) => string }) {
   return (
     <div className="space-y-8">
       {/* Stats */}
@@ -140,43 +141,43 @@ function OverviewTab() {
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Coins className="h-4 w-4 text-green-400" />
-            <span className="text-xs">Total Revenue</span>
+            <span className="text-xs">{t("creator.totalRevenue")}</span>
           </div>
           <p className="mt-1 text-2xl font-bold">${MOCK_CREATOR_STATS.revenue.toFixed(2)}</p>
           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-green-400">
             <TrendingUp className="h-3 w-3" />
-            +{MOCK_CREATOR_STATS.revenueChange}% this week
+            +{MOCK_CREATOR_STATS.revenueChange}%
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Download className="h-4 w-4 text-blue-400" />
-            <span className="text-xs">Total Downloads</span>
+            <span className="text-xs">{t("creator.totalDownloads")}</span>
           </div>
           <p className="mt-1 text-2xl font-bold">{MOCK_CREATOR_STATS.downloads.toLocaleString()}</p>
           <p className="mt-0.5 text-[11px] text-blue-400">
-            +{MOCK_CREATOR_STATS.downloadsNew} new
+            +{MOCK_CREATOR_STATS.downloadsNew} {t("creator.new")}
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="h-4 w-4 text-green-400" />
-            <span className="text-xs">Total Users</span>
+            <span className="text-xs">{t("creator.totalUsers")}</span>
           </div>
           <p className="mt-1 text-2xl font-bold">{MOCK_CREATOR_STATS.users.toLocaleString()}</p>
           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-green-400">
             <TrendingUp className="h-3 w-3" />
-            +{MOCK_CREATOR_STATS.usersChange}% new
+            +{MOCK_CREATOR_STATS.usersChange}%
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Star className="h-4 w-4 text-yellow-500" />
-            <span className="text-xs">Average Rating</span>
+            <span className="text-xs">{t("creator.avgRating")}</span>
           </div>
           <p className="mt-1 text-2xl font-bold">{MOCK_CREATOR_STATS.rating}</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Based on {MOCK_CREATOR_STATS.ratingCount} ratings
+            {MOCK_CREATOR_STATS.ratingCount} {t("creator.ratings")}
           </p>
         </div>
       </div>
@@ -184,23 +185,23 @@ function OverviewTab() {
       {/* Your Creations */}
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Your Creations
+          {t("creator.yourCreations")}
         </h2>
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Sticker className="mx-auto h-6 w-6 text-brand-text" />
             <p className="mt-2 text-2xl font-bold">{MOCK_CREATIONS.stickerPacks}</p>
-            <p className="text-xs text-muted-foreground">Sticker Packs</p>
+            <p className="text-xs text-muted-foreground">{t("creator.stickerPacks")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Bot className="mx-auto h-6 w-6 text-brand-text" />
             <p className="mt-2 text-2xl font-bold">{MOCK_CREATIONS.agents}</p>
-            <p className="text-xs text-muted-foreground">Agents</p>
+            <p className="text-xs text-muted-foreground">{t("creator.tab.agents")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Palette className="mx-auto h-6 w-6 text-brand-text" />
             <p className="mt-2 text-2xl font-bold">{MOCK_CREATIONS.themes}</p>
-            <p className="text-xs text-muted-foreground">Themes</p>
+            <p className="text-xs text-muted-foreground">{t("creator.tab.themes")}</p>
           </div>
         </div>
       </div>
@@ -208,7 +209,7 @@ function OverviewTab() {
       {/* Recent Activity */}
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Recent Activity
+          {t("creator.recentActivity")}
         </h2>
         <div className="space-y-2">
           {MOCK_ACTIVITY.map((act, i) => {
@@ -238,16 +239,16 @@ function OverviewTab() {
 // Stickers Tab
 // ---------------------------------------------------------------------------
 
-function StickersTab() {
+function StickersTab({ t }: { t: (k: string) => string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Your Sticker Packs ({MOCK_STICKER_LISTINGS.length})
+          {t("creator.yourStickerPacks")} ({MOCK_STICKER_LISTINGS.length})
         </h2>
         <Button size="sm" variant="secondary" className="gap-1" disabled>
           <Plus className="h-3.5 w-3.5" />
-          New Sticker Pack
+          {t("creator.newStickerPack")}
         </Button>
       </div>
       <div className="space-y-2">
@@ -289,10 +290,12 @@ function AgentsTab({
   agents,
   loading,
   onArchive,
+  t,
 }: {
   agents: AgentListing[];
   loading: boolean;
   onArchive: (id: string) => void;
+  t: (k: string) => string;
 }) {
   const router = useRouter();
 
@@ -308,7 +311,7 @@ function AgentsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Your Agents ({agents.length})
+          {t("creator.yourAgents")} ({agents.length})
         </h2>
         <Button
           size="sm"
@@ -316,13 +319,13 @@ function AgentsTab({
           onClick={() => router.push("/creator/new")}
         >
           <Plus className="h-3.5 w-3.5" />
-          New Agent
+          {t("creator.newAgent")}
         </Button>
       </div>
       {agents.length === 0 ? (
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <MessageSquare className="mx-auto h-10 w-10 text-muted-foreground opacity-40" />
-          <p className="mt-2 text-sm text-muted-foreground">No agents yet</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("creator.noAgents")}</p>
           <Button
             variant="secondary"
             size="sm"
@@ -407,16 +410,16 @@ function AgentsTab({
 // Themes Tab
 // ---------------------------------------------------------------------------
 
-function ThemesTab() {
+function ThemesTab({ t }: { t: (k: string) => string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Your Themes ({MOCK_THEME_LISTINGS.length})
+          {t("creator.yourThemes")} ({MOCK_THEME_LISTINGS.length})
         </h2>
         <Button size="sm" variant="secondary" className="gap-1" disabled>
           <Plus className="h-3.5 w-3.5" />
-          New Theme
+          {t("creator.newTheme")}
         </Button>
       </div>
       <div className="space-y-2">
@@ -455,6 +458,7 @@ function ThemesTab() {
 // ---------------------------------------------------------------------------
 
 function CreatorConsoleContent() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("overview");
   const [agents, setAgents] = useState<AgentListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -525,8 +529,8 @@ function CreatorConsoleContent() {
           <div className="flex items-center gap-3">
             <PageTitle
               icon={LayoutDashboard}
-              title="Creator Console"
-              subtitle="Manage your creations"
+              title={t("creator.title")}
+              subtitle={t("creator.subtitle")}
               className="flex-1"
             />
             <Button
@@ -542,18 +546,18 @@ function CreatorConsoleContent() {
 
           {/* Tabs */}
           <div className="mt-4 flex gap-1 overflow-x-auto">
-            {TABS.map((t) => (
+            {TAB_DEFS.map((td) => (
               <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
+                key={td.key}
+                onClick={() => setTab(td.key)}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
-                  tab === t.key
+                  tab === td.key
                     ? "bg-brand/15 text-brand-text"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                <t.icon className="h-3.5 w-3.5" />
-                {t.label}
+                <td.icon className="h-3.5 w-3.5" />
+                {t(td.i18nKey)}
               </button>
             ))}
           </div>
@@ -562,12 +566,12 @@ function CreatorConsoleContent() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 pb-24 md:pb-6">
           <div className="mx-auto max-w-4xl">
-            {tab === "overview" && <OverviewTab />}
-            {tab === "stickers" && <StickersTab />}
+            {tab === "overview" && <OverviewTab t={t} />}
+            {tab === "stickers" && <StickersTab t={t} />}
             {tab === "agents" && (
-              <AgentsTab agents={agents} loading={loading} onArchive={handleArchive} />
+              <AgentsTab agents={agents} loading={loading} onArchive={handleArchive} t={t} />
             )}
-            {tab === "themes" && <ThemesTab />}
+            {tab === "themes" && <ThemesTab t={t} />}
           </div>
         </div>
 
