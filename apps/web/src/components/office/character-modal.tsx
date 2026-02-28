@@ -24,6 +24,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, Link2, Link2Off, Bot } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
+import { authClient } from "@/lib/auth-client";
 import type { Agent } from "./types";
 
 const STATUS_BADGE: Record<string, { label: string; dot: string; bg: string; text: string }> = {
@@ -49,24 +50,28 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-const BINDINGS_KEY = "office-agent-bindings";
+function bindingsKey(userId: string): string {
+  return `office-agent-bindings:${userId}`;
+}
 
-function getBindings(): Record<string, string> {
+function getBindings(userId: string | undefined): Record<string, string> {
+  if (typeof window === "undefined" || !userId) return {};
   try {
-    return JSON.parse(localStorage.getItem(BINDINGS_KEY) ?? "{}");
+    return JSON.parse(localStorage.getItem(bindingsKey(userId)) ?? "{}");
   } catch {
     return {};
   }
 }
 
-function setBinding(characterId: string, agentId: string | null) {
-  const bindings = getBindings();
+function setBinding(userId: string | undefined, characterId: string, agentId: string | null) {
+  if (typeof window === "undefined" || !userId) return;
+  const bindings = getBindings(userId);
   if (agentId) {
     bindings[characterId] = agentId;
   } else {
     delete bindings[characterId];
   }
-  localStorage.setItem(BINDINGS_KEY, JSON.stringify(bindings));
+  localStorage.setItem(bindingsKey(userId), JSON.stringify(bindings));
 }
 
 interface CharacterModalProps {
@@ -115,10 +120,19 @@ function CharacterDetailOffline() {
 
 function CharacterDetail({ agent, agents, characterId }: { agent: Agent; agents: Agent[]; characterId: string }) {
   const badge = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
+  const { data: session } = authClient.useSession();
+  const currentUserId = session?.user?.id;
   const chatAgents = useChatStore((s) => s.agents);
   const loadAgents = useChatStore((s) => s.loadAgents);
-  const [boundAgentId, setBoundAgentId] = useState<string | null>(() => getBindings()[characterId] ?? null);
+  const [boundAgentId, setBoundAgentId] = useState<string | null>(() => getBindings(currentUserId)[characterId] ?? null);
   const [bindOpen, setBindOpen] = useState(false);
+
+  // Re-sync from localStorage when userId becomes available
+  useEffect(() => {
+    if (currentUserId) {
+      setBoundAgentId(getBindings(currentUserId)[characterId] ?? null);
+    }
+  }, [currentUserId, characterId]);
 
   const boundChatAgent = boundAgentId ? chatAgents.find((a) => a.id === boundAgentId) : null;
 
@@ -127,15 +141,15 @@ function CharacterDetail({ agent, agents, characterId }: { agent: Agent; agents:
   }, [chatAgents.length, loadAgents]);
 
   const handleBind = useCallback((agentId: string) => {
-    setBinding(characterId, agentId);
+    setBinding(currentUserId, characterId, agentId);
     setBoundAgentId(agentId);
     setBindOpen(false);
-  }, [characterId]);
+  }, [currentUserId, characterId]);
 
   const handleUnbind = useCallback(() => {
-    setBinding(characterId, null);
+    setBinding(currentUserId, characterId, null);
     setBoundAgentId(null);
-  }, [characterId]);
+  }, [currentUserId, characterId]);
 
   const displayName = boundChatAgent?.name ?? agent.name;
 
