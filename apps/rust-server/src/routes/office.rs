@@ -180,6 +180,25 @@ async fn put_binding(
         }
     };
 
+    // Verify agent belongs to this user
+    match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM agents WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(body.agent_id)
+    .bind(&user.id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(true) => {}
+        Ok(false) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "agent not owned by user"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("put_binding ownership check: {e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "db error"}))).into_response();
+        }
+    }
+
     // Remove this agent from any other slot in the same theme (move semantics)
     if let Err(e) = sqlx::query(
         "DELETE FROM office_slot_bindings WHERE user_id = $1 AND theme_id = $2 AND agent_id = $3",
@@ -195,7 +214,7 @@ async fn put_binding(
     }
 
     // Upsert into the target slot
-    let result = sqlx::query(
+    if let Err(e) = sqlx::query(
         "INSERT INTO office_slot_bindings (user_id, theme_id, slot_index, agent_id) \
          VALUES ($1, $2, $3, $4) \
          ON CONFLICT (user_id, theme_id, slot_index) \
@@ -206,10 +225,14 @@ async fn put_binding(
     .bind(body.slot_index)
     .bind(body.agent_id)
     .execute(&mut *tx)
-    .await;
-
-    if let Err(e) = result {
+    .await
+    {
         tracing::error!("put_binding upsert: {e}");
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.constraint().is_some() {
+                return (StatusCode::CONFLICT, Json(json!({"error": "binding conflict"}))).into_response();
+            }
+        }
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "db error"}))).into_response();
     }
 
