@@ -532,7 +532,7 @@ async fn upload_user_avatar(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     mut multipart: Multipart,
-) -> Response {
+) -> Result<Response, Response> {
     let cookie_header = headers
         .get("cookie")
         .and_then(|v| v.to_str().ok())
@@ -541,40 +541,46 @@ async fn upload_user_avatar(
     let token = match extract_session_token(cookie_header) {
         Some(t) => t,
         None => {
-            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Not authenticated"}))).into_response();
+            return Err((StatusCode::UNAUTHORIZED, Json(json!({"error": "Not authenticated"}))).into_response());
         }
     };
 
     let sess = match validate_session(&state.db, &token).await {
         Ok(Some(s)) => s,
         _ => {
-            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid session"}))).into_response();
+            return Err((StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid session"}))).into_response());
         }
     };
 
     while let Ok(Some(field)) = multipart.next_field().await {
-        let content_type = field.content_type().unwrap_or("").to_string();
-        if !content_type.starts_with("image/") {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Only image files are allowed"})),
-            )
-                .into_response();
-        }
-
-        let filename = field.file_name().unwrap_or("avatar.jpg").to_string();
         let data = match field.bytes().await {
             Ok(d) => d,
             Err(_) => {
-                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response();
+                return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response());
             }
         };
 
         if data.len() > 5 * 1024 * 1024 {
-            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Avatar must be under 5MB"}))).into_response();
+            return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "Avatar must be under 5MB"}))).into_response());
         }
 
-        let ext = filename.rsplit('.').next().unwrap_or("jpg");
+        // Validate magic bytes and derive safe extension + MIME type
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.starts_with(&[0x47, 0x49, 0x46]) {
+            ("gif", "image/gif")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Only PNG, JPEG, GIF, and WebP images are allowed"})),
+            )
+                .into_response());
+        };
+
         let stored = format!("user_{}_{}.{}", sess.user_id, chrono::Utc::now().timestamp(), ext);
         let r2_key = format!("avatars/{}", stored);
 
@@ -584,7 +590,7 @@ async fn upload_user_avatar(
                 &state.config.r2_bucket,
                 &r2_key,
                 data.to_vec(),
-                &content_type,
+                content_type,
                 &state.config.r2_public_url,
             )
             .await
@@ -592,28 +598,39 @@ async fn upload_user_avatar(
                 Ok(url) => url,
                 Err(_) => {
                     let dir = std::path::Path::new(&state.config.upload_dir).join("avatars");
-                    let _ = tokio::fs::create_dir_all(&dir).await;
-                    let _ = tokio::fs::write(dir.join(&stored), &data).await;
+                    tokio::fs::create_dir_all(&dir).await.map_err(|e| {
+                        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to create directory: {}", e)}))).into_response()
+                    })?;
+                    tokio::fs::write(dir.join(&stored), &data).await.map_err(|e| {
+                        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to write file: {}", e)}))).into_response()
+                    })?;
                     format!("/uploads/avatars/{}", stored)
                 }
             }
         } else {
             let dir = std::path::Path::new(&state.config.upload_dir).join("avatars");
-            let _ = tokio::fs::create_dir_all(&dir).await;
-            let _ = tokio::fs::write(dir.join(&stored), &data).await;
+            tokio::fs::create_dir_all(&dir).await.map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to create directory: {}", e)}))).into_response()
+            })?;
+            tokio::fs::write(dir.join(&stored), &data).await.map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to write file: {}", e)}))).into_response()
+            })?;
             format!("/uploads/avatars/{}", stored)
         };
 
-        let _ = sqlx::query(r#"UPDATE "user" SET image = $1, updated_at = NOW() WHERE id = $2"#)
+        sqlx::query(r#"UPDATE "user" SET image = $1, updated_at = NOW() WHERE id = $2"#)
             .bind(&avatar_url)
             .bind(&sess.user_id)
             .execute(&state.db)
-            .await;
+            .await
+            .map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to update avatar: {}", e)}))).into_response()
+            })?;
 
-        return Json(json!({"imageUrl": avatar_url})).into_response();
+        return Ok(Json(json!({"imageUrl": avatar_url})).into_response());
     }
 
-    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response()
+    Err((StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response())
 }
 
 fn extract_session_token(cookie_header: &str) -> Option<String> {
