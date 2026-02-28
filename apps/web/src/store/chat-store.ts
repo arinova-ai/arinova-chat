@@ -264,6 +264,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       searchActive: false,
       activeThreadId: null,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [id]: [],
+      },
     });
     get().loadMessages(id);
 
