@@ -59,7 +59,18 @@ export function registerOffice(api: OpenClawPluginApi): void {
     | undefined;
   const arinova = channels?.["openclaw-arinova-ai"];
   const apiUrl = arinova?.apiUrl as string | undefined;
-  const botToken = arinova?.botToken as string | undefined;
+
+  // Try direct botToken first (single-agent), then accounts structure (multi-agent)
+  let botToken = arinova?.botToken as string | undefined;
+  if (!botToken && arinova?.accounts) {
+    const accounts = arinova.accounts as Record<string, Record<string, unknown>>;
+    for (const acc of Object.values(accounts)) {
+      if (acc.enabled !== false && acc.botToken) {
+        botToken = acc.botToken as string;
+        break;
+      }
+    }
+  }
 
   if (apiUrl && botToken) {
     const forwardUrl = apiUrl.replace(/\/+$/, "") + "/api/office/event";

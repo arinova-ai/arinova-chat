@@ -90,9 +90,12 @@ async fn office_stream(State(state): State<AppState>, _user: AuthUser) -> Respon
 /// Authenticated via `Authorization: Bearer <botToken>` (same as agent endpoints).
 async fn office_ingest(
     State(state): State<AppState>,
-    _agent: AuthAgent,
-    Json(event): Json<InternalEvent>,
+    agent: AuthAgent,
+    Json(mut event): Json<InternalEvent>,
 ) -> Response {
+    // Enforce: event must belong to the authenticated agent
+    event.agent_id = agent.id.to_string();
+
     state.office.ingest(event);
     StatusCode::NO_CONTENT.into_response()
 }
