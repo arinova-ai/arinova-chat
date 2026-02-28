@@ -1162,7 +1162,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
               [threadId]: threadMsgs.map((m) => {
                 if (!replaced && m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role) {
                   replaced = true;
-                  return { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined };
+                  return {
+                    ...newMsg,
+                    senderUserId: newMsg.senderUserId || get().currentUserId || undefined,
+                    attachments: (newMsg.attachments?.length ? newMsg.attachments : m.attachments) ?? [],
+                  };
                 }
                 return m;
               }),
@@ -1220,7 +1224,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
             [conversationId]: current.map((m) => {
               if (!replaced && m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role) {
                 replaced = true;
-                return { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined };
+                return {
+                  ...newMsg,
+                  senderUserId: newMsg.senderUserId || get().currentUserId || undefined,
+                  attachments: (newMsg.attachments?.length ? newMsg.attachments : m.attachments) ?? [],
+                };
               }
               return m;
             }),
@@ -1809,6 +1817,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 role: m.role,
                 content: m.content,
                 status: m.status,
+                senderUserId: (m as unknown as Record<string, unknown>).senderUserId as string | undefined,
+                attachments: ((m as unknown as Record<string, unknown>).attachments as Message["attachments"]) ?? [],
                 createdAt: new Date(m.createdAt),
                 updatedAt: new Date(m.createdAt),
               }) as Message

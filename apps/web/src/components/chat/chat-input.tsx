@@ -537,8 +537,59 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
         throw new Error(body.error ?? "Upload failed");
       }
 
-      // REST response — WS handler will dedup via temp-* matching
-      // No manual append needed
+      // Promote the optimistic message with real data from the server
+      const { message: realMsg } = await res.json() as {
+        message: {
+          id: string;
+          conversationId: string;
+          seq: number;
+          role: string;
+          content: string;
+          status: string;
+          senderUserId?: string;
+          senderAgentId?: string;
+          createdAt: string;
+          updatedAt: string;
+          attachments?: Array<{
+            id: string;
+            messageId: string;
+            fileName: string;
+            fileType: string;
+            fileSize: number;
+            url: string;
+            duration?: number;
+            createdAt: string;
+          }>;
+        };
+      };
+      const s2 = useChatStore.getState();
+      const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
+      useChatStore.setState({
+        messagesByConversation: {
+          ...s2.messagesByConversation,
+          [activeConversationId]: msgs2.map((m) =>
+            m.id === tempId
+              ? {
+                  ...m,
+                  id: realMsg.id,
+                  seq: realMsg.seq,
+                  senderUserId: realMsg.senderUserId ?? m.senderUserId,
+                  attachments: realMsg.attachments?.map((a) => ({
+                    id: a.id,
+                    messageId: a.messageId,
+                    fileName: a.fileName,
+                    fileType: a.fileType,
+                    fileSize: a.fileSize,
+                    url: a.url,
+                    duration: a.duration,
+                    createdAt: new Date(a.createdAt),
+                  })) ?? m.attachments,
+                  updatedAt: new Date(realMsg.updatedAt),
+                }
+              : m
+          ),
+        },
+      });
     } catch (err) {
       console.error("Upload failed:", err);
       // Remove optimistic message and restore input on failure
