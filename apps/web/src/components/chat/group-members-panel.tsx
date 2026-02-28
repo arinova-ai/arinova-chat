@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useChatStore, type GroupAgentMember, type GroupUserMember, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { assetUrl } from "@/lib/config";
@@ -237,6 +238,7 @@ export function GroupMembersPanel({
               actionLoading={actionLoading}
               showAgents={showAgents}
               setShowAgents={setShowAgents}
+              onClosePanel={() => onOpenChange(false)}
               onKick={(userId) => handleAction(() => kickUser(conversationId, userId), `kick-${userId}`)}
               onPromote={(userId) => handleAction(() => promoteUser(conversationId, userId), `promote-${userId}`)}
               onDemote={(userId) => handleAction(() => demoteUser(conversationId, userId), `demote-${userId}`)}
@@ -305,6 +307,7 @@ function MembersTab({
   actionLoading,
   showAgents,
   setShowAgents,
+  onClosePanel,
   onKick,
   onPromote,
   onDemote,
@@ -323,6 +326,7 @@ function MembersTab({
   actionLoading: string | null;
   showAgents: boolean;
   setShowAgents: (v: boolean) => void;
+  onClosePanel: () => void;
   onKick: (userId: string) => void;
   onPromote: (userId: string) => void;
   onDemote: (userId: string) => void;
@@ -350,6 +354,7 @@ function MembersTab({
               isViceAdmin={isViceAdmin}
               canManage={canManage}
               actionLoading={actionLoading}
+              onClosePanel={onClosePanel}
               onKick={onKick}
               onPromote={onPromote}
               onDemote={onDemote}
@@ -379,6 +384,7 @@ function MembersTab({
                 agent={agent}
                 currentUserId={currentUserId}
                 actionLoading={actionLoading}
+                onClosePanel={onClosePanel}
                 onUpdateListenMode={onUpdateListenMode}
                 onWithdrawAgent={onWithdrawAgent}
               />
@@ -419,6 +425,7 @@ function UserMemberRow({
   isViceAdmin,
   canManage,
   actionLoading,
+  onClosePanel,
   onKick,
   onPromote,
   onDemote,
@@ -431,12 +438,14 @@ function UserMemberRow({
   isViceAdmin: boolean;
   canManage: boolean;
   actionLoading: string | null;
+  onClosePanel: () => void;
   onKick: (userId: string) => void;
   onPromote: (userId: string) => void;
   onDemote: (userId: string) => void;
   onTransferAdmin: (userId: string) => void;
   onBlock: (userId: string) => void;
 }) {
+  const router = useRouter();
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
 
   const showAdminMenu =
@@ -447,20 +456,27 @@ function UserMemberRow({
   // Block option is available for any non-self member
   const showMenu = showAdminMenu || !isCurrentUser;
 
+  const handleProfileClick = useCallback(() => {
+    onClosePanel();
+    router.push(`/profile/${user.userId}`);
+  }, [onClosePanel, router, user.userId]);
+
   return (
     <>
       <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors">
-        <Avatar className="h-8 w-8 shrink-0">
-          {user.image ? (
-            <AvatarImage src={assetUrl(user.image)} alt={user.username ?? user.name} />
-          ) : null}
-          <AvatarFallback className="text-xs bg-accent">
-            {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
+        <button type="button" onClick={handleProfileClick} className="shrink-0 cursor-pointer">
+          <Avatar className="h-8 w-8">
+            {user.image ? (
+              <AvatarImage src={assetUrl(user.image)} alt={user.username ?? user.name} />
+            ) : null}
+            <AvatarFallback className="text-xs bg-accent">
+              {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        </button>
+        <button type="button" onClick={handleProfileClick} className="min-w-0 flex-1 text-left cursor-pointer">
           <div className="flex items-center gap-1.5">
-            <p className="text-sm font-medium truncate">
+            <p className="text-sm font-medium truncate hover:underline">
               {user.name}{isCurrentUser ? " (you)" : ""}
             </p>
             <RoleBadge role={user.role} />
@@ -468,7 +484,7 @@ function UserMemberRow({
           {user.username && (
             <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
           )}
-        </div>
+        </button>
         {showMenu && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -573,33 +589,43 @@ function AgentMemberRow({
   agent,
   currentUserId,
   actionLoading,
+  onClosePanel,
   onUpdateListenMode,
   onWithdrawAgent,
 }: {
   agent: GroupAgentMember;
   currentUserId: string | undefined;
   actionLoading: string | null;
+  onClosePanel: () => void;
   onUpdateListenMode: (agentId: string, mode: string) => void;
   onWithdrawAgent: (agentId: string) => void;
 }) {
+  const router = useRouter();
   const isOwner = agent.ownerUserId === currentUserId;
+
+  const handleProfileClick = useCallback(() => {
+    onClosePanel();
+    router.push(`/agent/${agent.agentId}`);
+  }, [onClosePanel, router, agent.agentId]);
 
   return (
     <div className="rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors">
       <div className="flex items-center gap-2.5">
-        {agent.agentAvatarUrl ? (
-          <img
-            src={assetUrl(agent.agentAvatarUrl)}
-            alt={agent.agentName}
-            className="h-8 w-8 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
-            <Bot className="h-4 w-4" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate">{agent.agentName}</p>
+        <button type="button" onClick={handleProfileClick} className="shrink-0 cursor-pointer">
+          {agent.agentAvatarUrl ? (
+            <img
+              src={assetUrl(agent.agentAvatarUrl)}
+              alt={agent.agentName}
+              className="h-8 w-8 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent">
+              <Bot className="h-4 w-4" />
+            </div>
+          )}
+        </button>
+        <button type="button" onClick={handleProfileClick} className="min-w-0 flex-1 text-left cursor-pointer">
+          <p className="text-sm font-medium truncate hover:underline">{agent.agentName}</p>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] text-muted-foreground">
               {LISTEN_MODE_LABELS[agent.listenMode] ?? agent.listenMode}
@@ -608,7 +634,7 @@ function AgentMemberRow({
               <span className="text-[10px] text-blue-400">(yours)</span>
             )}
           </div>
-        </div>
+        </button>
         {isOwner && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
