@@ -454,6 +454,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       role: "user",
       content,
       status: "completed",
+      senderUserId: get().currentUserId || undefined,
       replyToId: replyingTo?.id,
       replyTo: replyingTo
         ? {
