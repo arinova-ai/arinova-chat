@@ -188,9 +188,11 @@ function emit(event: InternalEvent, accountId?: string): void {
 
   if (!forwardUrl) return;
 
-  // Only forward with the exact account's token — no fallback
-  const token = accountId ? accountTokens.get(accountId) : undefined;
+  // Try exact account token first, then fall back to "default" for single-agent setups
+  const token = (accountId ? accountTokens.get(accountId) : undefined) ?? accountTokens.get("default");
   if (!token) return;
+
+  console.log("[office] emit", event.type, accountId, "token found:", !!token);
 
   fetch(forwardUrl, {
     method: "POST",
