@@ -111,7 +111,7 @@ function CommunityBrowseContent() {
   }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex h-dvh bg-background">
+    <div className="app-dvh flex bg-background">
       <div className="hidden h-full md:block">
         <IconRail />
       </div>
