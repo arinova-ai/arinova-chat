@@ -268,7 +268,7 @@ function StickersTab({ t }: { t: (k: string) => string }) {
                 </span>
               </div>
               <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span>{pack.sales.toLocaleString()} sales</span>
+                <span>{pack.sales.toLocaleString()} {t("creator.sales")}</span>
                 <span className="flex items-center gap-0.5">
                   <Coins className="h-3 w-3 text-yellow-500" />
                   ${pack.revenue.toFixed(2)}
@@ -333,7 +333,7 @@ function AgentsTab({
             onClick={() => router.push("/creator/new")}
           >
             <Plus className="h-3.5 w-3.5" />
-            Create Your First Agent
+            {t("creator.createFirstAgent")}
           </Button>
         </div>
       ) : (
@@ -362,8 +362,8 @@ function AgentsTab({
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-                  <span>{agent.salesCount} chats</span>
-                  <span>{agent.totalMessages} msgs</span>
+                  <span>{agent.salesCount} {t("creator.chats")}</span>
+                  <span>{agent.totalMessages} {t("creator.msgs")}</span>
                   <span className="flex items-center gap-0.5">
                     <Coins className="h-3 w-3 text-yellow-500" />
                     {agent.totalRevenue}
@@ -382,7 +382,7 @@ function AgentsTab({
                   size="sm"
                   className="h-8 w-8 p-0"
                   onClick={() => router.push(`/creator/${agent.id}/edit`)}
-                  title="Edit"
+                  title={t("creator.edit")}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -392,7 +392,7 @@ function AgentsTab({
                     size="sm"
                     className="h-8 w-8 p-0"
                     onClick={() => onArchive(agent.id)}
-                    title="Archive"
+                    title={t("creator.archive")}
                   >
                     <Archive className="h-3.5 w-3.5" />
                   </Button>
@@ -439,7 +439,7 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
                 </span>
               </div>
               <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span>{theme.sales.toLocaleString()} sales</span>
+                <span>{theme.sales.toLocaleString()} {t("creator.sales")}</span>
                 <span className="flex items-center gap-0.5">
                   <Coins className="h-3 w-3 text-yellow-500" />
                   ${theme.revenue.toFixed(2)}
@@ -540,7 +540,7 @@ function CreatorConsoleContent() {
               onClick={() => setPayoutOpen(true)}
             >
               <Banknote className="h-4 w-4" />
-              <span className="hidden sm:inline">Payout</span>
+              <span className="hidden sm:inline">{t("creator.payout")}</span>
             </Button>
           </div>
 
@@ -583,7 +583,7 @@ function CreatorConsoleContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-sm rounded-2xl border border-border bg-card p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Request Payout</h3>
+              <h3 className="text-lg font-semibold">{t("creator.requestPayout")}</h3>
               <button
                 onClick={() => setPayoutOpen(false)}
                 className="text-muted-foreground hover:text-foreground"
@@ -593,7 +593,7 @@ function CreatorConsoleContent() {
             </div>
 
             <div className="rounded-lg bg-secondary p-3 text-center">
-              <p className="text-xs text-muted-foreground">Available Balance</p>
+              <p className="text-xs text-muted-foreground">{t("creator.availableBalance")}</p>
               <p className="mt-1 flex items-center justify-center gap-1.5 text-2xl font-bold">
                 <Coins className="h-5 w-5 text-yellow-500" />
                 {balance.toLocaleString()}
@@ -601,7 +601,7 @@ function CreatorConsoleContent() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Amount (min 100)</label>
+              <label className="text-sm font-medium">{t("creator.payoutAmount")}</label>
               <input
                 type="number"
                 min={100}
@@ -619,7 +619,7 @@ function CreatorConsoleContent() {
                 className="flex-1"
                 onClick={() => setPayoutOpen(false)}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 className="brand-gradient-btn flex-1"
@@ -634,13 +634,13 @@ function CreatorConsoleContent() {
                 {payoutLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Confirm Payout"
+                  t("creator.confirmPayout")
                 )}
               </Button>
             </div>
 
             <p className="text-[10px] text-center text-muted-foreground">
-              Payout requests are processed within 3-5 business days.
+              {t("creator.payoutNote")}
             </p>
           </div>
         </div>
