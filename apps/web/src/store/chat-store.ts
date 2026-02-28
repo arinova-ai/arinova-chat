@@ -391,7 +391,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadMessages: async (conversationId) => {
-    const requestId = Date.now();
+    const requestId = get().loadingRequestId + 1;
+    const prevMessages = get().messagesByConversation[conversationId] ?? [];
     set({ loadingMessages: true, loadingRequestId: requestId });
     try {
       // Always load fresh messages (no cache guard)
@@ -419,6 +420,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
           wsManager.updateLastSeq(conversationId, maxSeq);
         }
+      }
+    } catch {
+      // Rollback to previous messages so the UI doesn't show an empty screen
+      if (get().loadingRequestId === requestId) {
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: prevMessages,
+          },
+        });
       }
     } finally {
       // Only clear loading if this is still the latest request
