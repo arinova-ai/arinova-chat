@@ -16,6 +16,7 @@ import {
   type CommandCategory,
 } from "@/lib/platform-commands";
 import { BACKEND_URL } from "@/lib/config";
+import type { Message } from "@arinova/shared/types";
 import { useToastStore } from "@/store/toast-store";
 import { MentionPopup, type MentionItem } from "./mention-popup";
 
@@ -459,13 +460,38 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const handleUpload = useCallback(async () => {
     if (!selectedFile || !activeConversationId) return;
 
+    const trimmed = value.trim();
+
+    // Optimistic message so it shows immediately
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: tempId,
+      seq: 0,
+      conversationId: activeConversationId,
+      role: "user",
+      content: trimmed,
+      status: "completed",
+      senderUserId: useChatStore.getState().currentUserId ?? undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const store = useChatStore.getState();
+    const current = store.messagesByConversation[activeConversationId] ?? [];
+    useChatStore.setState({
+      messagesByConversation: {
+        ...store.messagesByConversation,
+        [activeConversationId]: [...current, optimisticMsg],
+      },
+    });
+
+    setSelectedFile(null);
+    clearInput();
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
       // Include text as caption so backend combines them into one message
-      const trimmed = value.trim();
       if (trimmed) {
         formData.append("caption", trimmed);
       }
@@ -484,25 +510,23 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
         throw new Error(body.error ?? "Upload failed");
       }
 
-      const data = await res.json();
-      // Add the uploaded message to the store
-      const store = useChatStore.getState();
-      const current = store.messagesByConversation[activeConversationId] ?? [];
-      useChatStore.setState({
-        messagesByConversation: {
-          ...store.messagesByConversation,
-          [activeConversationId]: [...current, data.message],
-        },
-      });
-
-      setSelectedFile(null);
-      clearInput();
+      // REST response — WS handler will dedup via temp-* matching
+      // No manual append needed
     } catch (err) {
       console.error("Upload failed:", err);
+      // Remove optimistic message on failure
+      const s = useChatStore.getState();
+      const msgs = s.messagesByConversation[activeConversationId] ?? [];
+      useChatStore.setState({
+        messagesByConversation: {
+          ...s.messagesByConversation,
+          [activeConversationId]: msgs.filter((m) => m.id !== tempId),
+        },
+      });
     } finally {
       setUploading(false);
     }
-  }, [selectedFile, activeConversationId, value, sendMessage, clearInput]);
+  }, [selectedFile, activeConversationId, value, clearInput]);
 
   const handleVoiceUpload = useCallback(
     async (blob: Blob, durationSeconds?: number) => {
@@ -512,6 +536,28 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       const ext = blob.type.includes("mp4") ? "m4a" : "webm";
       const file = new File([blob], `voice-${Date.now()}.${ext}`, {
         type: blob.type,
+      });
+
+      // Optimistic message
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMsg: Message = {
+        id: tempId,
+        seq: 0,
+        conversationId: activeConversationId,
+        role: "user",
+        content: "",
+        status: "completed",
+        senderUserId: useChatStore.getState().currentUserId ?? undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const store = useChatStore.getState();
+      const current = store.messagesByConversation[activeConversationId] ?? [];
+      useChatStore.setState({
+        messagesByConversation: {
+          ...store.messagesByConversation,
+          [activeConversationId]: [...current, optimisticMsg],
+        },
       });
 
       setUploading(true);
@@ -536,18 +582,18 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
           throw new Error(body.error ?? "Upload failed");
         }
 
-        const data = await res.json();
-        const store = useChatStore.getState();
-        const current =
-          store.messagesByConversation[activeConversationId] ?? [];
-        useChatStore.setState({
-          messagesByConversation: {
-            ...store.messagesByConversation,
-            [activeConversationId]: [...current, data.message],
-          },
-        });
+        // WS handler will dedup via temp-* matching
       } catch (err) {
         console.error("Voice upload failed:", err);
+        // Remove optimistic message on failure
+        const s = useChatStore.getState();
+        const msgs = s.messagesByConversation[activeConversationId] ?? [];
+        useChatStore.setState({
+          messagesByConversation: {
+            ...s.messagesByConversation,
+            [activeConversationId]: msgs.filter((m) => m.id !== tempId),
+          },
+        });
       } finally {
         setUploading(false);
       }
