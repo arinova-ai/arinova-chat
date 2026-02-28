@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import type { Message } from "@arinova/shared/types";
+import type { Message, Attachment } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -39,13 +39,9 @@ import { UserProfileSheet } from "./user-profile-sheet";
 import { AgentProfileSheet } from "./agent-profile-sheet";
 import { useDoubleTap } from "@/hooks/use-double-tap";
 
-interface MessageBubbleProps {
-  message: Message;
-  agentName?: string;
-  highlightQuery?: string;
-  isGroupConversation?: boolean;
-  isInThread?: boolean;
-}
+// ============================================================
+// Utilities
+// ============================================================
 
 function formatTimestamp(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
@@ -56,7 +52,14 @@ function formatTimestamp(date: Date | string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
-/** Normalize a URL to its decoded pathname for comparison (ignores host, query, encoding). */
+/**
+ * Normalize a URL to its decoded pathname for loose comparison.
+ * Handles three levels of fallback:
+ * 1. Parse as full URL → extract pathname → decode
+ * 2. If URL parse fails (relative path) → decode raw string
+ * 3. If decodeURIComponent fails (malformed %XX) → use raw string
+ * All levels strip trailing slashes for consistent matching.
+ */
 function normalizeUrlForCompare(raw: string): string {
   try {
     const url = new URL(raw, "https://_");
@@ -70,7 +73,17 @@ function normalizeUrlForCompare(raw: string): string {
   }
 }
 
-/** Strip markdown image syntax whose URL matches an already-rendered attachment. */
+/**
+ * Remove markdown image syntax `![alt](url)` from content when the image URL
+ * matches an attachment that is already rendered by AttachmentRenderer.
+ *
+ * Only targets images (! prefix mandatory) — markdown links like
+ * `[Attachment: voice.webm](url)` are preserved for audio/file messages.
+ *
+ * Uses normalized pathname comparison to handle differences in protocol,
+ * host, encoding, or trailing slashes between the markdown URL and the
+ * attachment URL stored in the database.
+ */
 function stripAttachmentMarkdown(content: string, attachmentUrls: string[]): string {
   const attPaths = new Set(attachmentUrls.map(normalizeUrlForCompare));
   return content.replace(
@@ -79,14 +92,295 @@ function stripAttachmentMarkdown(content: string, attachmentUrls: string[]): str
   ).trim();
 }
 
+/**
+ * Determine if a message was sent by the current user.
+ *
+ * Cases:
+ * - Optimistic messages: `id` starts with "temp-" (created locally before server confirmation)
+ * - Confirmed messages: `senderUserId` matches the current session user
+ * - Other users' messages: role is "user" but neither condition matches → false
+ *
+ * IMPORTANT: Do NOT use `!senderUserId` as an own-message signal.
+ * Messages from other users may also arrive without senderUserId during
+ * WS race conditions (#28, #35, #36).
+ */
+function isOwnMessage(message: Message, currentUserId: string | undefined): boolean {
+  return message.role === "user" &&
+    (message.id.startsWith("temp-") || message.senderUserId === currentUserId);
+}
+
+interface SenderDisplayInfo {
+  name: string;
+  color: string;
+}
+
+/**
+ * Resolve the sender display name and color for the name label above the bubble.
+ *
+ * Returns null when no label should be shown. Display rules:
+ * - Agent messages: show agent name in blue
+ * - Other users' messages (not own): show user name in emerald
+ * - Own messages in group conversations: show own name in emerald
+ * - Own messages in 1:1: no label (null)
+ */
+function getSenderDisplayInfo(
+  message: Message,
+  isOwn: boolean,
+  agentName: string | undefined,
+  isGroupConversation: boolean | undefined,
+): SenderDisplayInfo | null {
+  if (!isOwn && (message.senderAgentName || agentName)) {
+    return { name: message.senderAgentName || agentName!, color: "text-blue-400" };
+  }
+  if (!isOwn && !message.senderAgentName && !agentName && message.senderUserId) {
+    return { name: message.senderUserName || message.senderUsername || "User", color: "text-emerald-400" };
+  }
+  if (isOwn && isGroupConversation && message.senderUserId) {
+    return { name: message.senderUserName || message.senderUsername || "User", color: "text-emerald-400" };
+  }
+  return null;
+}
+
+// ============================================================
+// Sub-components
+// ============================================================
+
+interface MessageAvatarProps {
+  message: Message;
+  isOwn: boolean;
+  clickable: boolean;
+  onClick: () => void;
+}
+
+/** Avatar with optional click-to-open-profile. Renders agent or user icon. */
+function MessageAvatar({ message, isOwn, clickable, onClick }: MessageAvatarProps) {
+  const isAgent = message.role !== "user";
+
+  const avatarContent = (
+    <Avatar className="h-8 w-8 shrink-0">
+      {isAgent && (
+        <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
+      )}
+      {!isAgent && message.senderUserImage && (
+        <AvatarImage src={assetUrl(message.senderUserImage)} alt={message.senderUserName ?? "User"} className="object-cover" />
+      )}
+      <AvatarFallback
+        className={cn(
+          "text-xs",
+          isOwn ? "bg-blue-600 text-white" : "bg-accent text-foreground/80"
+        )}
+      >
+        {isAgent ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
+      </AvatarFallback>
+    </Avatar>
+  );
+
+  if (clickable) {
+    return (
+      <button
+        type="button"
+        className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        onClick={onClick}
+      >
+        {avatarContent}
+      </button>
+    );
+  }
+
+  return avatarContent;
+}
+
+/** Name label shown above the message bubble content. */
+function SenderLabel({ info }: { info: SenderDisplayInfo | null }) {
+  if (!info) return null;
+  return (
+    <p className={`mb-1 text-xs font-medium ${info.color}`}>
+      {info.name}
+    </p>
+  );
+}
+
+/** Renders image, audio, or file attachments inside the bubble. */
+function AttachmentRenderer({ attachments }: { attachments: Attachment[] }) {
+  if (attachments.length === 0) return null;
+  return (
+    <div className="mb-1 space-y-1">
+      {attachments.map((att) =>
+        att.fileType.startsWith("image/") ? (
+          <ImageLightbox
+            key={att.id}
+            src={assetUrl(att.url)}
+            alt={att.fileName}
+            className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
+          />
+        ) : att.fileType.startsWith("audio/") ? (
+          <AudioPlayer
+            key={att.id}
+            src={assetUrl(att.url)}
+            duration={att.duration}
+          />
+        ) : (
+          <a
+            key={att.id}
+            href={assetUrl(att.url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 text-xs hover:bg-accent"
+          >
+            <FileText className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate">{att.fileName}</span>
+            <Download className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </a>
+        )
+      )}
+    </div>
+  );
+}
+
+interface MessageContentProps {
+  message: Message;
+  highlightQuery?: string;
+  mentionNames?: string[];
+  isStreaming: boolean;
+}
+
+/** Markdown content with attachment-image stripping, plus streaming cursor. */
+function MessageContent({ message, highlightQuery, mentionNames, isStreaming }: MessageContentProps) {
+  const content = message.attachments?.length
+    ? stripAttachmentMarkdown(message.content, message.attachments.map((a) => a.url))
+    : message.content;
+
+  return (
+    <>
+      {content ? (
+        <MarkdownContent
+          content={content}
+          highlightQuery={highlightQuery}
+          mentionNames={mentionNames}
+          streaming={isStreaming}
+        />
+      ) : isStreaming ? (
+        <StreamingCursor />
+      ) : null}
+      {isStreaming && message.content && <StreamingCursor />}
+    </>
+  );
+}
+
+interface MessageActionsProps {
+  message: Message;
+  isOwn: boolean;
+  isError: boolean;
+  isInThread?: boolean;
+  copied: boolean;
+  onCopy: () => void;
+  onDelete: () => void;
+  onRetry: () => void;
+  onReply: () => void;
+  onReact: (emoji: string) => void;
+  onOpenThread: (messageId: string) => void;
+}
+
+/** Hover action toolbar (copy, react, reply, thread, delete, retry). */
+function MessageActions({
+  message,
+  isOwn,
+  isError,
+  isInThread,
+  copied,
+  onCopy,
+  onDelete,
+  onRetry,
+  onReply,
+  onReact,
+  onOpenThread,
+}: MessageActionsProps) {
+  return (
+    <div
+      className={cn(
+        "absolute -top-8 flex items-center gap-0.5 rounded-lg border border-border bg-secondary p-0.5 opacity-0 shadow-md transition-opacity group-hover:opacity-100",
+        isOwn ? "right-0" : "left-0"
+      )}
+    >
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={onCopy}
+        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+        title="Copy message"
+      >
+        {copied ? (
+          <Check className="h-3 w-3 text-green-400" />
+        ) : (
+          <Copy className="h-3 w-3" />
+        )}
+      </Button>
+
+      <ReactionPicker onSelect={onReact} />
+
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={onReply}
+        className="h-6 w-6 text-muted-foreground hover:text-blue-400"
+        title="Reply"
+      >
+        <Reply className="h-3 w-3" />
+      </Button>
+
+      {!isInThread && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={() => onOpenThread(message.id)}
+          className="h-6 w-6 text-muted-foreground hover:text-blue-400"
+          title="Start thread"
+        >
+          <MessageSquare className="h-3 w-3" />
+        </Button>
+      )}
+
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={onDelete}
+        className="h-6 w-6 text-muted-foreground hover:text-red-400"
+        title="Delete message"
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+
+      {isError && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onRetry}
+          className="h-6 w-6 text-muted-foreground hover:text-blue-400"
+          title="Retry message"
+        >
+          <RotateCcw className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Main component
+// ============================================================
+
+interface MessageBubbleProps {
+  message: Message;
+  agentName?: string;
+  highlightQuery?: string;
+  isGroupConversation?: boolean;
+  isInThread?: boolean;
+}
+
 export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
-  // "isUser" means "is this MY message" — optimistic messages use temp-{timestamp} IDs,
-  // confirmed messages use senderUserId to verify ownership.
-  // Do NOT use !senderUserId as own-message signal — received messages may also lack it.
-  const isUser = message.role === "user" &&
-    (message.id.startsWith("temp-") || message.senderUserId === currentUserId);
+  const isUser = isOwnMessage(message, currentUserId);
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
   const isCancelled = message.status === "cancelled";
@@ -112,7 +406,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
     () => !isUser && message.role === "user" && !!message.senderUserId,
     [isUser, message.role, message.senderUserId]
   );
-  // Resolve agentId: prefer senderAgentId, fall back to conversation's agentId
   const resolvedAgentId = useMemo(() => {
     if (message.senderAgentId) return message.senderAgentId;
     const conv = conversations.find((c) => c.id === message.conversationId);
@@ -126,6 +419,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const doubleTapHandlers = useDoubleTap(() => {
     if (!isStreaming) setActionSheetOpen(true);
   });
+
+  const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -142,9 +437,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   }, [deleteMessage, message.conversationId, message.id]);
 
   const handleRetry = useCallback(() => {
-    // Find the last user message in the conversation and resend it
     const messages = messagesByConversation[message.conversationId] ?? [];
-    // Walk backwards to find the most recent user message before/at this error message
     let lastUserContent: string | null = null;
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") {
@@ -153,7 +446,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       }
     }
     if (lastUserContent) {
-      // Delete the errored message first, then resend
       deleteMessage(message.conversationId, message.id);
       sendMessage(lastUserContent);
     }
@@ -170,41 +462,12 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
-      {showProfileClick ? (
-        <button
-          type="button"
-          className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          onClick={() => setProfileOpen(true)}
-        >
-          <Avatar className="h-8 w-8 shrink-0">
-            {message.role !== "user" && (
-              <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
-            )}
-            {message.role === "user" && message.senderUserImage && (
-              <AvatarImage src={assetUrl(message.senderUserImage)} alt={message.senderUserName ?? "User"} className="object-cover" />
-            )}
-            <AvatarFallback className="text-xs bg-accent text-foreground/80">
-              {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-            </AvatarFallback>
-          </Avatar>
-        </button>
-      ) : (
-        <Avatar className="h-8 w-8 shrink-0">
-          {!isUser && message.role !== "user" && (
-            <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
-          )}
-          <AvatarFallback
-            className={cn(
-              "text-xs",
-              isUser
-                ? "bg-blue-600 text-white"
-                : "bg-accent text-foreground/80"
-            )}
-          >
-            {isUser ? <User className="h-4 w-4" /> : message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-          </AvatarFallback>
-        </Avatar>
-      )}
+      <MessageAvatar
+        message={message}
+        isOwn={isUser}
+        clickable={showProfileClick}
+        onClick={() => setProfileOpen(true)}
+      />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
         <div className="relative min-w-0" {...doubleTapHandlers}>
@@ -218,21 +481,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               isCancelled && "border border-neutral-500/30"
             )}
           >
-            {!isUser && (message.senderAgentName || agentName) && (
-              <p className="mb-1 text-xs font-medium text-blue-400">
-                {message.senderAgentName || agentName}
-              </p>
-            )}
-            {!isUser && !message.senderAgentName && !agentName && message.senderUserId && (
-              <p className="mb-1 text-xs font-medium text-emerald-400">
-                {message.senderUserName || message.senderUsername || "User"}
-              </p>
-            )}
-            {isUser && isGroupConversation && message.senderUserId && (
-              <p className="mb-1 text-xs font-medium text-emerald-400">
-                {message.senderUserName || message.senderUsername || "User"}
-              </p>
-            )}
+            <SenderLabel info={senderInfo} />
+
             {isError && (
               <div className="mb-1 flex items-center gap-1 text-xs text-red-400">
                 <AlertCircle className="h-3 w-3" />
@@ -245,6 +495,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 <span>Stopped</span>
               </div>
             )}
+
             {/* Reply quote */}
             {message.replyTo && (
               <div className="mb-1.5 rounded-lg bg-white/5 px-3 py-1.5 border-l-2 border-blue-400/50">
@@ -256,55 +507,15 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 </p>
               </div>
             )}
-            {/* Attachments */}
-            {message.attachments && message.attachments.length > 0 && (
-              <div className="mb-1 space-y-1">
-                {message.attachments.map((att) =>
-                  att.fileType.startsWith("image/") ? (
-                    <ImageLightbox
-                      key={att.id}
-                      src={assetUrl(att.url)}
-                      alt={att.fileName}
-                      className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
-                    />
-                  ) : att.fileType.startsWith("audio/") ? (
-                    <AudioPlayer
-                      key={att.id}
-                      src={assetUrl(att.url)}
-                      duration={att.duration}
-                    />
-                  ) : (
-                    <a
-                      key={att.id}
-                      href={assetUrl(att.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 text-xs hover:bg-accent"
-                    >
-                      <FileText className="h-4 w-4 shrink-0" />
-                      <span className="flex-1 truncate">{att.fileName}</span>
-                      <Download className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    </a>
-                  )
-                )}
-              </div>
-            )}
-            {message.content ? (
-              <MarkdownContent
-                content={
-                  // Strip markdown links/images whose URL matches an already-rendered attachment
-                  message.attachments?.length
-                    ? stripAttachmentMarkdown(message.content, message.attachments.map((a) => a.url))
-                    : message.content
-                }
-                highlightQuery={highlightQuery}
-                mentionNames={mentionNames}
-                streaming={isStreaming}
-              />
-            ) : isStreaming ? (
-              <StreamingCursor />
-            ) : null}
-            {isStreaming && message.content && <StreamingCursor />}
+
+            <AttachmentRenderer attachments={message.attachments ?? []} />
+
+            <MessageContent
+              message={message}
+              highlightQuery={highlightQuery}
+              mentionNames={mentionNames}
+              isStreaming={isStreaming}
+            />
           </div>
 
           {/* Reaction badges */}
@@ -343,74 +554,19 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
           {/* Hover action buttons */}
           {!isStreaming && (
-            <div
-              className={cn(
-                "absolute -top-8 flex items-center gap-0.5 rounded-lg border border-border bg-secondary p-0.5 opacity-0 shadow-md transition-opacity group-hover:opacity-100",
-                isUser ? "right-0" : "left-0"
-              )}
-            >
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleCopy}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                title="Copy message"
-              >
-                {copied ? (
-                  <Check className="h-3 w-3 text-green-400" />
-                ) : (
-                  <Copy className="h-3 w-3" />
-                )}
-              </Button>
-
-              <ReactionPicker
-                onSelect={(emoji) => toggleReaction(message.id, emoji)}
-              />
-
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleReply}
-                className="h-6 w-6 text-muted-foreground hover:text-blue-400"
-                title="Reply"
-              >
-                <Reply className="h-3 w-3" />
-              </Button>
-
-              {!isInThread && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => openThread(message.id)}
-                  className="h-6 w-6 text-muted-foreground hover:text-blue-400"
-                  title="Start thread"
-                >
-                  <MessageSquare className="h-3 w-3" />
-                </Button>
-              )}
-
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleDelete}
-                className="h-6 w-6 text-muted-foreground hover:text-red-400"
-                title="Delete message"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-
-              {isError && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleRetry}
-                  className="h-6 w-6 text-muted-foreground hover:text-blue-400"
-                  title="Retry message"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
+            <MessageActions
+              message={message}
+              isOwn={isUser}
+              isError={isError}
+              isInThread={isInThread}
+              copied={copied}
+              onCopy={handleCopy}
+              onDelete={handleDelete}
+              onRetry={handleRetry}
+              onReply={handleReply}
+              onReact={(emoji) => toggleReaction(message.id, emoji)}
+              onOpenThread={openThread}
+            />
           )}
         </div>
 
