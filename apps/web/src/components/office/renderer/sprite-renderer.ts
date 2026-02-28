@@ -362,6 +362,15 @@ export class SpriteRenderer implements OfficeRenderer {
   private panStartX = 0;
   private panStartY = 0;
 
+  // Pinch zoom state
+  private static MIN_SCALE = 0.5;
+  private static MAX_SCALE = 3;
+  private pinching = false;
+  private pinchStartDist = 0;
+  private pinchStartScale = 1;
+  private pinchMidX = 0;
+  private pinchMidY = 0;
+
   async init(
     container: HTMLDivElement,
     _width: number,
@@ -664,9 +673,30 @@ export class SpriteRenderer implements OfficeRenderer {
     return { x: me.clientX, y: me.clientY };
   }
 
+  private touchDist(e: TouchEvent): number {
+    const [a, b] = [e.touches[0], e.touches[1]];
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
   private onPointerDown = (e: MouseEvent | TouchEvent): void => {
     if (!this.isMobile) return;
-    // Don't prevent default on the hitbox click area
+
+    // Pinch start (2 fingers)
+    if ("touches" in e && e.touches.length === 2) {
+      e.preventDefault();
+      this.dragging = false;
+      this.pinching = true;
+      this.pinchStartDist = this.touchDist(e);
+      this.pinchStartScale = this.scale;
+      const [a, b] = [e.touches[0], e.touches[1]];
+      this.pinchMidX = (a.clientX + b.clientX) / 2;
+      this.pinchMidY = (a.clientY + b.clientY) / 2;
+      this.panStartX = this.panX;
+      this.panStartY = this.panY;
+      return;
+    }
+
+    // Single-finger drag
     const pos = this.clientPos(e);
     this.dragging = true;
     this.dragStartX = pos.x;
@@ -676,6 +706,28 @@ export class SpriteRenderer implements OfficeRenderer {
   };
 
   private onPointerMove = (e: MouseEvent | TouchEvent): void => {
+    // Pinch zoom
+    if (this.pinching && "touches" in e && e.touches.length === 2) {
+      e.preventDefault();
+      const dist = this.touchDist(e);
+      const ratio = dist / this.pinchStartDist;
+      const newScale = Math.min(
+        SpriteRenderer.MAX_SCALE,
+        Math.max(SpriteRenderer.MIN_SCALE, this.pinchStartScale * ratio),
+      );
+
+      // Zoom toward the pinch midpoint
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      // Adjust pan so the pinch center stays in place
+      this.panX = midX - (this.pinchMidX - this.panStartX) * (newScale / this.pinchStartScale);
+      this.panY = midY - (this.pinchMidY - this.panStartY) * (newScale / this.pinchStartScale);
+      this.scale = newScale;
+      this.clampPan();
+      this.applyTransform();
+      return;
+    }
+
     if (!this.dragging) return;
     e.preventDefault();
     const pos = this.clientPos(e);
@@ -685,7 +737,14 @@ export class SpriteRenderer implements OfficeRenderer {
     this.applyTransform();
   };
 
-  private onPointerUp = (): void => {
+  private onPointerUp = (e: MouseEvent | TouchEvent): void => {
+    if (this.pinching) {
+      // If one finger lifts, end pinch but don't start a drag
+      if ("touches" in e && e.touches.length < 2) {
+        this.pinching = false;
+      }
+      return;
+    }
     this.dragging = false;
   };
 }
