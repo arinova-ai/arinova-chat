@@ -59,10 +59,11 @@ function formatTimestamp(date: Date | string): string {
 export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
-  // "isUser" means "is this MY message" — optimistic messages don't have senderUserId yet,
-  // so treat missing senderUserId as "own message" (the common case).
+  // "isUser" means "is this MY message" — optimistic messages use temp-{timestamp} IDs,
+  // confirmed messages use senderUserId to verify ownership.
+  // Do NOT use !senderUserId as own-message signal — received messages may also lack it.
   const isUser = message.role === "user" &&
-    (!message.senderUserId || message.senderUserId === currentUserId);
+    (message.id.startsWith("temp-") || message.senderUserId === currentUserId);
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
   const isCancelled = message.status === "cancelled";
