@@ -86,6 +86,55 @@ function extractLanguageFromChildren(children: React.ReactNode): string | null {
 const JS_LANGUAGES = new Set(["javascript", "js"]);
 
 /**
+ * Normalize markdown content for reliable GFM table parsing.
+ *
+ * The agent's final content (via stream_end) may have different newline
+ * formatting than the accumulated streaming chunks — e.g. \r\n vs \n or
+ * missing blank line before a table.  When remarkGfm fails to detect the
+ * table block, remarkBreaks turns the pipe/dash lines into <br>-separated
+ * text, rendering the table as plain characters.
+ *
+ * This preprocessing ensures tables are always parseable:
+ * 1. Normalize \r\n → \n
+ * 2. Ensure a blank line before GFM table header + delimiter rows
+ */
+function preprocessMarkdown(raw: string): string {
+  // 1. Normalize line endings
+  let s = raw.replace(/\r\n/g, "\n");
+
+  // 2. Ensure blank line before table blocks.
+  //    Detect table delimiter row: a line whose pipe-separated cells are all :?-+:?
+  const lines = s.split("\n");
+  const result: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Check for delimiter row (e.g. "| --- | :---: |" or "---|---")
+    if (
+      i >= 1 &&
+      line.includes("-") &&
+      line.includes("|") &&
+      isTableDelimiterRow(line) &&
+      lines[i - 1].includes("|") // previous line is the header row
+    ) {
+      // Ensure a blank line before the header row
+      const headerIdx = result.length - 1;
+      if (headerIdx > 0 && result[headerIdx - 1].trim() !== "") {
+        result.splice(headerIdx, 0, "");
+      }
+    }
+    result.push(line);
+  }
+  return result.join("\n");
+}
+
+/** Returns true if every pipe-separated cell matches the GFM delimiter pattern :?-+:? */
+function isTableDelimiterRow(line: string): boolean {
+  const trimmed = line.trim().replace(/^\||\|$/g, "");
+  const cells = trimmed.split("|");
+  return cells.length > 0 && cells.every((c) => /^\s*:?-{1,}:?\s*$/.test(c));
+}
+
+/**
  * Custom remark plugin: strip `break` nodes inside `table` elements.
  * remark-breaks converts single \n to <br>, but table rows use \n as
  * structural delimiters — the extra <br> breaks table rendering.
@@ -268,7 +317,7 @@ export function MarkdownContent({ content, highlightQuery, mentionNames, streami
         rehypePlugins={rehypePluginList}
         components={markdownComponents}
       >
-        {content}
+        {preprocessMarkdown(content)}
       </ReactMarkdown>
     </div>
   );
