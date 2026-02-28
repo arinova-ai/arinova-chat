@@ -70,11 +70,11 @@ function normalizeUrlForCompare(raw: string): string {
   }
 }
 
-/** Strip markdown image/link syntax whose URL matches an already-rendered attachment. */
+/** Strip markdown image syntax whose URL matches an already-rendered attachment. */
 function stripAttachmentMarkdown(content: string, attachmentUrls: string[]): string {
   const attPaths = new Set(attachmentUrls.map(normalizeUrlForCompare));
   return content.replace(
-    /!?\[[^\]]*\]\(([^)]+)\)/g,
+    /!\[[^\]]*\]\(([^)]+)\)/g,
     (match, url: string) => attPaths.has(normalizeUrlForCompare(url)) ? "" : match,
   ).trim();
 }
