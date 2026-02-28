@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import StatusBar from "./status-bar";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
+import { OfficeChatPanel } from "./office-chat-panel";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { useTheme } from "./theme-context";
 import { THEME_REGISTRY } from "./theme-registry";
@@ -30,6 +31,7 @@ function OfficeViewInner() {
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
+  const [chatAgentId, setChatAgentId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
@@ -89,6 +91,11 @@ function OfficeViewInner() {
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const handleCharacterClick = useCallback(() => setShowCharacterModal(true), []);
   const closeCharacterModal = useCallback(() => setShowCharacterModal(false), []);
+  const handleOpenChat = useCallback((agentId: string) => {
+    setShowCharacterModal(false);
+    setChatAgentId(agentId);
+  }, []);
+  const closeChatPanel = useCallback(() => setChatAgentId(null), []);
 
   useEffect(() => {
     const el = mapContainerRef.current;
@@ -146,7 +153,17 @@ function OfficeViewInner() {
         slotIndex={0}
         boundAgentId={slot0Binding?.agentId ?? null}
         onBindingChange={fetchBindings}
+        onOpenChat={handleOpenChat}
       />
+
+      {/* Inline chat panel */}
+      {chatAgentId && (
+        <OfficeChatPanel
+          open={!!chatAgentId}
+          onClose={closeChatPanel}
+          agentId={chatAgentId}
+        />
+      )}
     </div>
   );
 }

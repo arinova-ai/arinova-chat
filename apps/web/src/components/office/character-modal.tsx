@@ -73,6 +73,8 @@ interface CharacterModalProps {
   boundAgentId?: string | null;
   /** Called after bind/unbind so the parent can refetch bindings */
   onBindingChange?: () => void;
+  /** Open inline chat panel instead of navigating away */
+  onOpenChat?: (agentId: string) => void;
 }
 
 const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
@@ -110,8 +112,8 @@ function CharacterDetailOffline() {
   );
 }
 
-function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBindingChange }: {
-  agent: Agent; agents: Agent[]; themeId: string; slotIndex: number; boundAgentId?: string | null; onBindingChange?: () => void;
+function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBindingChange, onOpenChat }: {
+  agent: Agent; agents: Agent[]; themeId: string; slotIndex: number; boundAgentId?: string | null; onBindingChange?: () => void; onOpenChat?: (agentId: string) => void;
 }) {
   const badge = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
   const router = useRouter();
@@ -148,18 +150,23 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
     } catch { /* api() shows toast */ }
   }, [themeId, slotIndex, onBindingChange]);
 
-  const handleChat = useCallback(async () => {
+  const handleChat = useCallback(() => {
     if (!boundAgentId) return;
-    // Find existing conversation with this agent
-    const existing = conversations.find((c) => c.agentId === boundAgentId && c.type === "direct");
-    if (existing) {
-      setActiveConversation(existing.id);
+    if (onOpenChat) {
+      onOpenChat(boundAgentId);
     } else {
-      const conv = await createConversation(boundAgentId);
-      setActiveConversation(conv.id);
+      // Fallback: navigate to chat page
+      const existing = conversations.find((c) => c.agentId === boundAgentId && c.type === "direct");
+      if (existing) {
+        setActiveConversation(existing.id);
+      } else {
+        createConversation(boundAgentId).then((conv) => {
+          setActiveConversation(conv.id);
+        });
+      }
+      router.push("/");
     }
-    router.push("/");
-  }, [boundAgentId, conversations, setActiveConversation, createConversation, router]);
+  }, [boundAgentId, onOpenChat, conversations, setActiveConversation, createConversation, router]);
 
   const displayName = boundChatAgent?.name ?? agent.name;
 
@@ -345,7 +352,7 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
   );
 }
 
-export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, slotIndex, boundAgentId, onBindingChange }: CharacterModalProps) {
+export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, slotIndex, boundAgentId, onBindingChange, onOpenChat }: CharacterModalProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -358,7 +365,7 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
 
   const title = agent?.name || "Arinova Assistant";
   const content = agent
-    ? <CharacterDetail agent={agent} agents={agents} themeId={themeId} slotIndex={slotIndex} boundAgentId={boundAgentId} onBindingChange={onBindingChange} />
+    ? <CharacterDetail agent={agent} agents={agents} themeId={themeId} slotIndex={slotIndex} boundAgentId={boundAgentId} onBindingChange={onBindingChange} onOpenChat={onOpenChat} />
     : <CharacterDetailOffline />;
 
   if (isMobile) {
