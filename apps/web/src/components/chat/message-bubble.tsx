@@ -56,6 +56,25 @@ function formatTimestamp(date: Date | string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
+/** Normalize a URL to its decoded pathname for comparison (ignores host, query, encoding). */
+function normalizeUrlForCompare(raw: string): string {
+  try {
+    const url = new URL(raw, "https://_");
+    return decodeURIComponent(url.pathname).replace(/\/+$/, "");
+  } catch {
+    return decodeURIComponent(raw).replace(/\/+$/, "");
+  }
+}
+
+/** Strip markdown image/link syntax whose URL matches an already-rendered attachment. */
+function stripAttachmentMarkdown(content: string, attachmentUrls: string[]): string {
+  const attPaths = new Set(attachmentUrls.map(normalizeUrlForCompare));
+  return content.replace(
+    /!?\[[^\]]*\]\(([^)]+)\)/g,
+    (match, url: string) => attPaths.has(normalizeUrlForCompare(url)) ? "" : match,
+  ).trim();
+}
+
 export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
@@ -271,13 +290,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 content={
                   // Strip markdown links/images whose URL matches an already-rendered attachment
                   message.attachments?.length
-                    ? (() => {
-                        const attUrls = new Set(message.attachments!.map((a) => a.url));
-                        return message.content.replace(
-                          /!?\[[^\]]*\]\(([^)]+)\)/g,
-                          (match, url: string) => attUrls.has(url) ? "" : match,
-                        ).trim();
-                      })()
+                    ? stripAttachmentMarkdown(message.content, message.attachments.map((a) => a.url))
                     : message.content
                 }
                 highlightQuery={highlightQuery}
