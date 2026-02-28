@@ -300,6 +300,8 @@ async fn upload_file(
                 "role": message.role,
                 "content": message.content,
                 "status": message.status,
+                "senderUserId": message.sender_user_id,
+                "senderAgentId": message.sender_agent_id,
                 "createdAt": message.created_at.and_utc().to_rfc3339(),
                 "updatedAt": message.updated_at.and_utc().to_rfc3339(),
                 "attachments": [{
