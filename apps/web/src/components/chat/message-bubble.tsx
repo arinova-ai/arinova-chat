@@ -239,11 +239,18 @@ function AttachmentRenderer({ attachments }: { attachments: Attachment[] }) {
             </div>
           );
         })() : att.fileType.startsWith("audio/") ? (
-          <AudioPlayer
-            key={att.id}
-            src={assetUrl(att.url)}
-            duration={att.duration}
-          />
+          att.id.startsWith("temp-att-") ? (
+            <div key={att.id} className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 text-xs">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <span className="text-muted-foreground">{att.duration ? `${att.duration}s` : "Uploading audio..."}</span>
+            </div>
+          ) : (
+            <AudioPlayer
+              key={att.id}
+              src={assetUrl(att.url)}
+              duration={att.duration}
+            />
+          )
         ) : (
           <a
             key={att.id}

@@ -610,7 +610,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
         type: blob.type,
       });
 
-      // Optimistic message
+      // Optimistic message with audio attachment placeholder
       const tempId = `temp-${Date.now()}`;
       const optimisticMsg: Message = {
         id: tempId,
@@ -620,6 +620,18 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
         content: "",
         status: "completed",
         senderUserId: useChatStore.getState().currentUserId ?? undefined,
+        attachments: [
+          {
+            id: `temp-att-${Date.now()}`,
+            messageId: tempId,
+            fileName: file.name,
+            fileType: file.type || "audio/webm",
+            fileSize: file.size,
+            url: "",
+            duration: durationSeconds ? Math.round(durationSeconds) : undefined,
+            createdAt: new Date(),
+          },
+        ],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -654,7 +666,49 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
           throw new Error(body.error ?? "Upload failed");
         }
 
-        // WS handler will dedup via temp-* matching
+        // Promote temp → real using REST response
+        const json = await res.json();
+        const realMsg = json?.message;
+        if (realMsg?.id) {
+          const s2 = useChatStore.getState();
+          const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
+          const alreadyHasReal = msgs2.some((m) => m.id === realMsg.id);
+          if (alreadyHasReal) {
+            useChatStore.setState({
+              messagesByConversation: {
+                ...s2.messagesByConversation,
+                [activeConversationId]: msgs2.filter((m) => m.id !== tempId),
+              },
+            });
+          } else {
+            useChatStore.setState({
+              messagesByConversation: {
+                ...s2.messagesByConversation,
+                [activeConversationId]: msgs2.map((m) =>
+                  m.id === tempId
+                    ? {
+                        ...m,
+                        id: realMsg.id,
+                        seq: realMsg.seq,
+                        senderUserId: realMsg.senderUserId ?? m.senderUserId,
+                        attachments: realMsg.attachments?.map((a: Record<string, unknown>) => ({
+                          id: a.id as string,
+                          messageId: a.messageId as string,
+                          fileName: a.fileName as string,
+                          fileType: a.fileType as string,
+                          fileSize: a.fileSize as number,
+                          url: a.url as string,
+                          duration: a.duration as number | undefined,
+                          createdAt: new Date(a.createdAt as string),
+                        })) ?? m.attachments,
+                        updatedAt: new Date(realMsg.updatedAt),
+                      }
+                    : m
+                ),
+              },
+            });
+          }
+        }
       } catch (err) {
         console.error("Voice upload failed:", err);
         // Remove optimistic message on failure
