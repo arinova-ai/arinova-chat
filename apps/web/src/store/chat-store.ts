@@ -1124,13 +1124,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           (m) => m.id === msg.id || (m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role)
         );
         if (alreadyExists) {
+          let replaced = false;
           set({
             threadMessages: {
               ...get().threadMessages,
-              [threadId]: threadMsgs.map((m) =>
-                m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role
-                  ? { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined } : m
-              ),
+              [threadId]: threadMsgs.map((m) => {
+                if (!replaced && m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role) {
+                  replaced = true;
+                  return { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined };
+                }
+                return m;
+              }),
             },
           });
         } else {
@@ -1177,15 +1181,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
 
       if (alreadyExists) {
-        // Replace temp message with real one
+        // Replace first matching temp message with real one
+        let replaced = false;
         set({
           messagesByConversation: {
             ...get().messagesByConversation,
-            [conversationId]: current.map((m) =>
-              m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role
-                ? { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined }
-                : m
-            ),
+            [conversationId]: current.map((m) => {
+              if (!replaced && m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role) {
+                replaced = true;
+                return { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined };
+              }
+              return m;
+            }),
           },
           conversations: get().conversations.map((c) =>
             c.id === conversationId

@@ -484,12 +484,14 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       },
     });
 
+    const prevFile = selectedFile;
+    const prevValue = value;
     setSelectedFile(null);
     clearInput();
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      formData.append("file", prevFile);
 
       // Include text as caption so backend combines them into one message
       if (trimmed) {
@@ -514,7 +516,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       // No manual append needed
     } catch (err) {
       console.error("Upload failed:", err);
-      // Remove optimistic message on failure
+      // Remove optimistic message and restore input on failure
       const s = useChatStore.getState();
       const msgs = s.messagesByConversation[activeConversationId] ?? [];
       useChatStore.setState({
@@ -523,6 +525,8 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
           [activeConversationId]: msgs.filter((m) => m.id !== tempId),
         },
       });
+      setSelectedFile(prevFile);
+      setValue(prevValue);
     } finally {
       setUploading(false);
     }
