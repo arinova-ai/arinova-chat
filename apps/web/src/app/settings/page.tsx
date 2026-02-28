@@ -293,8 +293,21 @@ function readThemeQuality(): "high" | "performance" {
   return saved === "performance" ? "performance" : "high";
 }
 
+function useCurrentThemeRenderer(): string | null {
+  const [renderer, setRenderer] = useState<string | null>(null);
+  useEffect(() => {
+    const themeId = localStorage.getItem("arinova-office-theme") ?? "cozy-studio";
+    fetch(`/themes/${themeId}/theme.json`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.renderer) setRenderer(data.renderer); })
+      .catch(() => {});
+  }, []);
+  return renderer;
+}
+
 function AppearancePanel() {
   const [quality, setQuality] = useState<"high" | "performance">(readThemeQuality);
+  const themeRenderer = useCurrentThemeRenderer();
 
   const handleQualityChange = (value: "high" | "performance") => {
     setQuality(value);
@@ -318,44 +331,46 @@ function AppearancePanel() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Theme Quality</label>
-          <p className="text-xs text-muted-foreground">
-            Choose rendering quality for virtual office themes. Lower quality improves performance on older devices.
-          </p>
-          <div className="flex gap-3 mt-1">
-            <button
-              onClick={() => handleQualityChange("high")}
-              className={cn(
-                "flex flex-1 items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                quality === "high"
-                  ? "border-brand bg-brand/10 text-foreground"
-                  : "border-border bg-secondary text-muted-foreground hover:bg-secondary/80",
-              )}
-            >
-              <Monitor className="h-5 w-5 shrink-0" />
-              <div>
-                <div className="text-sm font-medium">High Resolution</div>
-                <div className="text-xs text-muted-foreground">Full textures & lighting</div>
-              </div>
-            </button>
-            <button
-              onClick={() => handleQualityChange("performance")}
-              className={cn(
-                "flex flex-1 items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                quality === "performance"
-                  ? "border-brand bg-brand/10 text-foreground"
-                  : "border-border bg-secondary text-muted-foreground hover:bg-secondary/80",
-              )}
-            >
-              <Zap className="h-5 w-5 shrink-0" />
-              <div>
-                <div className="text-sm font-medium">Performance</div>
-                <div className="text-xs text-muted-foreground">Reduced quality, faster</div>
-              </div>
-            </button>
+        {themeRenderer === "threejs" && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Theme Quality</label>
+            <p className="text-xs text-muted-foreground">
+              Choose rendering quality for virtual office themes. Lower quality improves performance on older devices.
+            </p>
+            <div className="flex gap-3 mt-1">
+              <button
+                onClick={() => handleQualityChange("high")}
+                className={cn(
+                  "flex flex-1 items-center gap-3 rounded-lg border p-3 text-left transition-colors",
+                  quality === "high"
+                    ? "border-brand bg-brand/10 text-foreground"
+                    : "border-border bg-secondary text-muted-foreground hover:bg-secondary/80",
+                )}
+              >
+                <Monitor className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-medium">High Resolution</div>
+                  <div className="text-xs text-muted-foreground">Full textures & lighting</div>
+                </div>
+              </button>
+              <button
+                onClick={() => handleQualityChange("performance")}
+                className={cn(
+                  "flex flex-1 items-center gap-3 rounded-lg border p-3 text-left transition-colors",
+                  quality === "performance"
+                    ? "border-brand bg-brand/10 text-foreground"
+                    : "border-border bg-secondary text-muted-foreground hover:bg-secondary/80",
+                )}
+              >
+                <Zap className="h-5 w-5 shrink-0" />
+                <div>
+                  <div className="text-sm font-medium">Performance</div>
+                  <div className="text-xs text-muted-foreground">Reduced quality, faster</div>
+                </div>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Language</label>
