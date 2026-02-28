@@ -157,6 +157,8 @@ interface MessageAvatarProps {
 /** Avatar with optional click-to-open-profile. Renders agent or user icon. */
 function MessageAvatar({ message, isOwn, clickable, onClick }: MessageAvatarProps) {
   const isAgent = message.role !== "user";
+  const { data: session } = authClient.useSession();
+  const ownImage = isOwn ? session?.user?.image : undefined;
 
   const avatarContent = (
     <Avatar className="h-8 w-8 shrink-0">
@@ -165,6 +167,9 @@ function MessageAvatar({ message, isOwn, clickable, onClick }: MessageAvatarProp
       )}
       {!isAgent && !isOwn && message.senderUserImage && (
         <AvatarImage src={assetUrl(message.senderUserImage)} alt={message.senderUserName ?? "User"} className="object-cover" />
+      )}
+      {!isAgent && isOwn && ownImage && (
+        <AvatarImage src={assetUrl(ownImage)} alt="Me" className="object-cover" />
       )}
       <AvatarFallback
         className={cn(
