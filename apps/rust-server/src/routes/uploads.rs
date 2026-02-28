@@ -82,7 +82,16 @@ async fn upload_file(
         }
 
         if field_name == "duration_seconds" {
-            let raw = field.text().await.unwrap_or_default();
+            let raw = match field.text().await {
+                Ok(v) => v,
+                Err(_) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": "Failed to read duration_seconds field"})),
+                    )
+                        .into_response();
+                }
+            };
             if !raw.is_empty() {
                 match raw.parse::<i32>() {
                     Ok(v) if v >= 0 && v <= 3600 => {

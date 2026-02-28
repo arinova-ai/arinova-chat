@@ -71,6 +71,7 @@ export function UserProfileSheet({
   useEffect(() => {
     if (!open || groupUser) {
       setApiUser(null);
+      setLoading(false);
       return;
     }
     let cancelled = false;
