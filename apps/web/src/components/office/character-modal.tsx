@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, Link2, Link2Off, Bot } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { api } from "@/lib/api";
@@ -102,8 +103,12 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
   agent: Agent; agents: Agent[]; themeId: string; slotIndex: number; boundAgentId?: string | null; onBindingChange?: () => void;
 }) {
   const badge = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
+  const router = useRouter();
   const chatAgents = useChatStore((s) => s.agents);
   const loadAgents = useChatStore((s) => s.loadAgents);
+  const createConversation = useChatStore((s) => s.createConversation);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const conversations = useChatStore((s) => s.conversations);
   const [bindOpen, setBindOpen] = useState(false);
 
   const boundChatAgent = boundAgentId ? chatAgents.find((a) => a.id === boundAgentId) : null;
@@ -131,6 +136,19 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
       onBindingChange?.();
     } catch { /* api() shows toast */ }
   }, [themeId, slotIndex, onBindingChange]);
+
+  const handleChat = useCallback(async () => {
+    if (!boundAgentId) return;
+    // Find existing conversation with this agent
+    const existing = conversations.find((c) => c.agentId === boundAgentId && c.type === "direct");
+    if (existing) {
+      setActiveConversation(existing.id);
+    } else {
+      const conv = await createConversation(boundAgentId);
+      setActiveConversation(conv.id);
+    }
+    router.push("/");
+  }, [boundAgentId, conversations, setActiveConversation, createConversation, router]);
 
   const displayName = boundChatAgent?.name ?? agent.name;
 
@@ -317,7 +335,9 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
       <div className="flex gap-2">
         <button
           type="button"
-          className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500"
+          disabled={!boundChatAgent}
+          onClick={handleChat}
+          className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Chat
         </button>
