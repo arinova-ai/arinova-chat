@@ -32,6 +32,7 @@ import { useChatStore } from "@/store/chat-store";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
+import { useTranslation, type Locale } from "@/lib/i18n";
 
 // ───── Types ─────
 
@@ -62,16 +63,17 @@ interface BlockedUser {
 
 // ───── Sidebar Nav Items ─────
 
-const NAV_ITEMS: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
-  { id: "profile", label: "Profile", icon: <User className="h-4 w-4" /> },
-  { id: "appearance", label: "Appearance", icon: <Palette className="h-4 w-4" /> },
-  { id: "notifications", label: "Notifications", icon: <Bell className="h-4 w-4" /> },
-  { id: "privacy", label: "Privacy", icon: <ShieldBan className="h-4 w-4" /> },
+const NAV_ITEMS: { id: SettingsSection; labelKey: string; icon: React.ReactNode }[] = [
+  { id: "profile", labelKey: "settings.nav.profile", icon: <User className="h-4 w-4" /> },
+  { id: "appearance", labelKey: "settings.nav.appearance", icon: <Palette className="h-4 w-4" /> },
+  { id: "notifications", labelKey: "settings.nav.notifications", icon: <Bell className="h-4 w-4" /> },
+  { id: "privacy", labelKey: "settings.nav.privacy", icon: <ShieldBan className="h-4 w-4" /> },
 ];
 
 // ───── Profile Panel ─────
 
 function ProfilePanel() {
+  const { t } = useTranslation();
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [name, setName] = useState(session?.user?.name ?? "");
   const [nameLoading, setNameLoading] = useState(false);
@@ -98,20 +100,20 @@ function ProfilePanel() {
     setNameSuccess("");
     const trimmed = name.trim();
     if (!trimmed) {
-      setNameError("Name cannot be empty");
+      setNameError(t("settings.profile.nameEmpty"));
       return;
     }
     setNameLoading(true);
     try {
       const result = await authClient.updateUser({ name: trimmed });
       if (result.error) {
-        setNameError(result.error.message ?? "Failed to update name");
+        setNameError(result.error.message ?? t("settings.profile.nameUpdateFailed"));
       } else {
-        setNameSuccess("Name updated successfully");
+        setNameSuccess(t("settings.profile.nameUpdated"));
         setTimeout(() => setNameSuccess(""), 3000);
       }
     } catch {
-      setNameError("An unexpected error occurred");
+      setNameError(t("settings.profile.unexpectedError"));
     } finally {
       setNameLoading(false);
     }
@@ -120,7 +122,7 @@ function ProfilePanel() {
   const handleAvatarUpload = async (file: File) => {
     if (!file.type.startsWith("image/")) return;
     if (file.size > 5 * 1024 * 1024) {
-      setNameError("Avatar must be under 5MB");
+      setNameError(t("settings.profile.avatarTooLarge"));
       return;
     }
     setAvatarUploading(true);
@@ -150,27 +152,27 @@ function ProfilePanel() {
     setPasswordError("");
     setPasswordSuccess("");
     if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters");
+      setPasswordError(t("settings.profile.passwordTooShort"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError("Passwords do not match");
+      setPasswordError(t("settings.profile.passwordMismatch"));
       return;
     }
     setPasswordLoading(true);
     try {
       const result = await authClient.changePassword({ currentPassword, newPassword });
       if (result.error) {
-        setPasswordError(result.error.message ?? "Failed to change password");
+        setPasswordError(result.error.message ?? t("settings.profile.passwordChangeFailed"));
       } else {
-        setPasswordSuccess("Password changed successfully");
+        setPasswordSuccess(t("settings.profile.passwordChanged"));
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
         setTimeout(() => setPasswordSuccess(""), 3000);
       }
     } catch {
-      setPasswordError("An unexpected error occurred");
+      setPasswordError(t("settings.profile.unexpectedError"));
     } finally {
       setPasswordLoading(false);
     }
@@ -179,8 +181,8 @@ function ProfilePanel() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold">Profile</h2>
-        <p className="text-sm text-muted-foreground">Manage your personal information and preferences.</p>
+        <h2 className="text-2xl font-bold">{t("settings.profile.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("settings.profile.subtitle")}</p>
       </div>
 
       {/* Avatar */}
@@ -218,7 +220,7 @@ function ProfilePanel() {
             e.target.value = "";
           }}
         />
-        <p className="text-sm text-muted-foreground">Change Avatar</p>
+        <p className="text-sm text-muted-foreground">{t("settings.profile.changeAvatar")}</p>
       </div>
 
       {/* Profile form */}
@@ -231,19 +233,19 @@ function ProfilePanel() {
         )}
 
         <div className="space-y-2">
-          <label htmlFor="displayName" className="text-sm font-medium">Display Name</label>
+          <label htmlFor="displayName" className="text-sm font-medium">{t("settings.profile.displayName")}</label>
           <Input
             id="displayName"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Enter your display name"
+            placeholder={t("settings.profile.displayNamePlaceholder")}
             required
             className="bg-secondary border-border"
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Email</label>
+          <label className="text-sm font-medium">{t("settings.profile.email")}</label>
           <Input
             value={session?.user?.email ?? ""}
             readOnly
@@ -253,16 +255,16 @@ function ProfilePanel() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Bio</label>
+          <label className="text-sm font-medium">{t("settings.profile.bio")}</label>
           <textarea
-            placeholder="Tell us a little about yourself..."
+            placeholder={t("settings.profile.bioPlaceholder")}
             className="min-h-[100px] w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
           />
         </div>
 
         <Button type="submit" className="brand-gradient-btn w-full" disabled={nameLoading}>
           {nameLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save Changes
+          {t("common.save")}
         </Button>
       </form>
 
@@ -272,7 +274,7 @@ function ProfilePanel() {
       <div>
         <div className="mb-4 flex items-center gap-2">
           <Lock className="h-5 w-5 text-muted-foreground" />
-          <h3 className="text-lg font-semibold">Change Password</h3>
+          <h3 className="text-lg font-semibold">{t("settings.profile.changePassword")}</h3>
         </div>
 
         <form onSubmit={handleChangePassword} className="space-y-4">
@@ -284,7 +286,7 @@ function ProfilePanel() {
           )}
 
           <div className="space-y-2">
-            <label htmlFor="currentPassword" className="text-sm font-medium">Current Password</label>
+            <label htmlFor="currentPassword" className="text-sm font-medium">{t("settings.profile.currentPassword")}</label>
             <Input
               id="currentPassword"
               type="password"
@@ -297,13 +299,13 @@ function ProfilePanel() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="newPassword" className="text-sm font-medium">New Password</label>
+            <label htmlFor="newPassword" className="text-sm font-medium">{t("settings.profile.newPassword")}</label>
             <Input
               id="newPassword"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="At least 8 characters"
+              placeholder={t("settings.profile.newPasswordPlaceholder")}
               required
               minLength={8}
               className="bg-secondary border-border"
@@ -311,13 +313,13 @@ function ProfilePanel() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm New Password</label>
+            <label htmlFor="confirmPassword" className="text-sm font-medium">{t("settings.profile.confirmPassword")}</label>
             <Input
               id="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Repeat new password"
+              placeholder={t("settings.profile.confirmPasswordPlaceholder")}
               required
               minLength={8}
               className="bg-secondary border-border"
@@ -326,7 +328,7 @@ function ProfilePanel() {
 
           <Button type="submit" variant="secondary" disabled={passwordLoading}>
             {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Change Password
+            {t("settings.profile.changePassword")}
           </Button>
         </form>
       </div>
@@ -357,6 +359,7 @@ function useCurrentThemeRenderer(): string | null {
 }
 
 function AppearancePanel() {
+  const { t, locale, setLocale } = useTranslation();
   const [quality, setQuality] = useState<"high" | "performance">(readThemeQuality);
   const themeRenderer = useCurrentThemeRenderer();
 
@@ -368,25 +371,25 @@ function AppearancePanel() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold">Appearance</h2>
-        <p className="text-sm text-muted-foreground">Customize the look and feel of the app.</p>
+        <h2 className="text-2xl font-bold">{t("settings.appearance.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("settings.appearance.subtitle")}</p>
       </div>
 
       <div className="space-y-6">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Theme</label>
+          <label className="text-sm font-medium">{t("settings.appearance.theme")}</label>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Light</span>
+            <span className="text-sm text-muted-foreground">{t("settings.appearance.light")}</span>
             <Switch checked={true} />
-            <span className="text-sm">Dark</span>
+            <span className="text-sm">{t("settings.appearance.dark")}</span>
           </div>
         </div>
 
         {themeRenderer === "threejs" && (
           <div className="space-y-2">
-            <label className="text-sm font-medium">Theme Quality</label>
+            <label className="text-sm font-medium">{t("settings.appearance.quality")}</label>
             <p className="text-xs text-muted-foreground">
-              Choose rendering quality for virtual office themes. Lower quality improves performance on older devices.
+              {t("settings.appearance.qualityDesc")}
             </p>
             <div className="flex gap-3 mt-1">
               <button
@@ -400,8 +403,8 @@ function AppearancePanel() {
               >
                 <Monitor className="h-5 w-5 shrink-0" />
                 <div>
-                  <div className="text-sm font-medium">High Resolution</div>
-                  <div className="text-xs text-muted-foreground">Full textures & lighting</div>
+                  <div className="text-sm font-medium">{t("settings.appearance.highRes")}</div>
+                  <div className="text-xs text-muted-foreground">{t("settings.appearance.highResDesc")}</div>
                 </div>
               </button>
               <button
@@ -415,8 +418,8 @@ function AppearancePanel() {
               >
                 <Zap className="h-5 w-5 shrink-0" />
                 <div>
-                  <div className="text-sm font-medium">Performance</div>
-                  <div className="text-xs text-muted-foreground">Reduced quality, faster</div>
+                  <div className="text-sm font-medium">{t("settings.appearance.performance")}</div>
+                  <div className="text-xs text-muted-foreground">{t("settings.appearance.performanceDesc")}</div>
                 </div>
               </button>
             </div>
@@ -424,8 +427,12 @@ function AppearancePanel() {
         )}
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Language</label>
-          <select className="h-9 w-full rounded-md border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring">
+          <label className="text-sm font-medium">{t("settings.appearance.language")}</label>
+          <select
+            className="h-9 w-full rounded-md border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            value={locale}
+            onChange={(e) => setLocale(e.target.value as Locale)}
+          >
             <option value="en">English</option>
             <option value="zh-TW">繁體中文</option>
             <option value="zh-CN">简体中文</option>
@@ -440,6 +447,7 @@ function AppearancePanel() {
 // ───── Notification Panel ─────
 
 function NotificationPanel() {
+  const { t } = useTranslation();
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
   const [loading, setLoading] = useState(true);
   const [pushStatus, setPushStatus] = useState<{
@@ -511,8 +519,8 @@ function NotificationPanel() {
     return (
       <div className="space-y-8">
         <div>
-          <h2 className="text-2xl font-bold">Notifications</h2>
-          <p className="text-sm text-muted-foreground">Manage how you receive notifications.</p>
+          <h2 className="text-2xl font-bold">{t("settings.notifications.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("settings.notifications.subtitle")}</p>
         </div>
         <div className="flex justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -526,8 +534,8 @@ function NotificationPanel() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold">Notifications</h2>
-        <p className="text-sm text-muted-foreground">Manage how you receive notifications.</p>
+        <h2 className="text-2xl font-bold">{t("settings.notifications.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("settings.notifications.subtitle")}</p>
       </div>
 
       <div className="space-y-5">
@@ -535,13 +543,13 @@ function NotificationPanel() {
           <>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">Push Notifications</p>
+                <p className="text-sm font-medium">{t("settings.notifications.push")}</p>
                 <p className="text-xs text-muted-foreground">
                   {pushStatus.permission === "denied"
-                    ? "Blocked by browser \u2014 update in browser settings"
+                    ? t("settings.notifications.pushBlocked")
                     : pushStatus.subscribed
-                      ? "Enabled on this device"
-                      : "Receive notifications on this device"}
+                      ? t("settings.notifications.pushEnabled")
+                      : t("settings.notifications.pushReceive")}
                 </p>
               </div>
               <Button
@@ -553,9 +561,9 @@ function NotificationPanel() {
                 {pushLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : pushStatus.subscribed ? (
-                  "Disable"
+                  t("common.disable")
                 ) : (
-                  "Enable"
+                  t("common.enable")
                 )}
               </Button>
             </div>
@@ -565,8 +573,8 @@ function NotificationPanel() {
 
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium">All Notifications</p>
-            <p className="text-xs text-muted-foreground">Master switch for all notification types</p>
+            <p className="text-sm font-medium">{t("settings.notifications.all")}</p>
+            <p className="text-xs text-muted-foreground">{t("settings.notifications.allDesc")}</p>
           </div>
           <Switch
             checked={prefs.globalEnabled}
@@ -578,8 +586,8 @@ function NotificationPanel() {
           <div className="space-y-4 pl-2">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm">Messages</p>
-                <p className="text-xs text-muted-foreground">Agent replies in conversations</p>
+                <p className="text-sm">{t("settings.notifications.messages")}</p>
+                <p className="text-xs text-muted-foreground">{t("settings.notifications.messagesDesc")}</p>
               </div>
               <Switch
                 checked={prefs.messageEnabled}
@@ -589,8 +597,8 @@ function NotificationPanel() {
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm">App Activity</p>
-                <p className="text-xs text-muted-foreground">Updates from apps you use</p>
+                <p className="text-sm">{t("settings.notifications.appActivity")}</p>
+                <p className="text-xs text-muted-foreground">{t("settings.notifications.appActivityDesc")}</p>
               </div>
               <Switch
                 checked={prefs.appActivityEnabled}
@@ -606,8 +614,8 @@ function NotificationPanel() {
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium">Quiet Hours</p>
-              <p className="text-xs text-muted-foreground">Pause notifications during set hours</p>
+              <p className="text-sm font-medium">{t("settings.notifications.quietHours")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.notifications.quietHoursDesc")}</p>
             </div>
           </div>
           <Switch
@@ -619,7 +627,7 @@ function NotificationPanel() {
         {quietHoursEnabled && (
           <div className="flex items-center gap-3 pl-8">
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">From</label>
+              <label className="text-xs text-muted-foreground">{t("settings.notifications.from")}</label>
               <Input
                 type="time"
                 value={prefs.quietHoursStart ?? "22:00"}
@@ -631,7 +639,7 @@ function NotificationPanel() {
             </div>
             <span className="mt-4 text-muted-foreground">&mdash;</span>
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">To</label>
+              <label className="text-xs text-muted-foreground">{t("settings.notifications.to")}</label>
               <Input
                 type="time"
                 value={prefs.quietHoursEnd ?? "08:00"}
@@ -651,6 +659,7 @@ function NotificationPanel() {
 // ───── Privacy Panel ─────
 
 function PrivacyPanel() {
+  const { t } = useTranslation();
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
@@ -684,14 +693,14 @@ function PrivacyPanel() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold">Privacy</h2>
-        <p className="text-sm text-muted-foreground">Manage blocked users and privacy settings.</p>
+        <h2 className="text-2xl font-bold">{t("settings.privacy.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("settings.privacy.subtitle")}</p>
       </div>
 
       <div>
         <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
           <ShieldBan className="h-5 w-5 text-muted-foreground" />
-          Blocked Users
+          {t("settings.privacy.blockedUsers")}
         </h3>
 
         {loading ? (
@@ -699,7 +708,7 @@ function PrivacyPanel() {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : blockedUsers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No blocked users</p>
+          <p className="text-sm text-muted-foreground">{t("settings.privacy.noBlocked")}</p>
         ) : (
           <div className="space-y-2">
             {blockedUsers.map((user) => (
@@ -730,7 +739,7 @@ function PrivacyPanel() {
                   {unblockingId === user.id ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
-                    "Unblock"
+                    t("common.unblock")
                   )}
                 </Button>
               </div>
@@ -745,6 +754,7 @@ function PrivacyPanel() {
 // ───── Settings Layout ─────
 
 function SettingsContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [signingOut, setSigningOut] = useState(false);
@@ -778,7 +788,7 @@ function SettingsContent() {
       {/* Settings Sidebar — desktop */}
       <div className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
         <div className="p-5">
-          <PageTitle title="Settings" subtitle="Customize your experience" icon={Settings} />
+          <PageTitle title={t("settings.title")} subtitle={t("settings.subtitle")} icon={Settings} />
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
@@ -794,7 +804,7 @@ function SettingsContent() {
               )}
             >
               {item.icon}
-              <span className="flex-1 text-left">{item.label}</span>
+              <span className="flex-1 text-left">{t(item.labelKey)}</span>
               {activeSection === item.id && <ChevronRight className="h-4 w-4" />}
             </button>
           ))}
@@ -812,7 +822,7 @@ function SettingsContent() {
             ) : (
               <LogOut className="h-4 w-4" />
             )}
-            Sign Out
+            {t("common.signOut")}
           </Button>
         </div>
       </div>
@@ -821,7 +831,7 @@ function SettingsContent() {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Mobile header */}
         <div className="border-b border-border px-4 py-3 md:hidden">
-          <PageTitle title="Settings" subtitle="Customize your experience" icon={Settings} />
+          <PageTitle title={t("settings.title")} subtitle={t("settings.subtitle")} icon={Settings} />
         </div>
 
         {/* Mobile nav tabs */}
@@ -838,7 +848,7 @@ function SettingsContent() {
               )}
             >
               {item.icon}
-              {item.label}
+              {t(item.labelKey)}
             </button>
           ))}
         </div>
@@ -863,7 +873,7 @@ function SettingsContent() {
             ) : (
               <LogOut className="h-4 w-4" />
             )}
-            Sign Out
+            {t("common.signOut")}
           </Button>
         </div>
 

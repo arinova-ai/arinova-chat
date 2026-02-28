@@ -5,8 +5,10 @@ import { Search, MessageCircle } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { ConversationList } from "./conversation-list";
 import { PageTitle } from "@/components/ui/page-title";
+import { useTranslation } from "@/lib/i18n";
 
 export function Sidebar() {
+  const { t } = useTranslation();
   const searchMessages = useChatStore((s) => s.searchMessages);
   const storeSearchQuery = useChatStore((s) => s.searchQuery);
   const [localQuery, setLocalQuery] = useState("");
@@ -24,8 +26,8 @@ export function Sidebar() {
       {/* Header */}
       <div className="shrink-0 px-4 pb-2">
         <PageTitle
-          title="Chat"
-          subtitle="Connect with your team instantly"
+          title={t("nav.chat")}
+          subtitle={t("chat.subtitle")}
           icon={MessageCircle}
         />
       </div>
@@ -35,7 +37,7 @@ export function Sidebar() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            placeholder="Search conversations..."
+            placeholder={t("chat.searchPlaceholder")}
             value={localQuery}
             onChange={(e) => setLocalQuery(e.target.value)}
             onCompositionStart={() => { composingRef.current = true; }}

@@ -9,6 +9,7 @@ import {
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 /** Lucide icon per nav id — active/inactive styling via parent text color */
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -19,6 +20,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
 };
 
 export function MobileBottomNav() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const [fanOpen, setFanOpen] = useState(false);
@@ -51,11 +53,11 @@ export function MobileBottomNav() {
   const activeId = getActiveId();
 
   const sheetItems = [
-    { id: "spaces", icon: Globe, label: "Spaces", href: "/spaces" },
-    { id: "marketplace", icon: Store, label: "Marketplace", href: "/marketplace" },
-    { id: "community", icon: Users, label: "Community", href: "/community" },
-    { id: "wallet", icon: Wallet, label: "Wallet", href: "/wallet" },
-    { id: "office-theme", icon: Palette, label: "Theme Store", href: "/office/themes" },
+    { id: "spaces", icon: Globe, label: t("nav.spaces"), href: "/spaces" },
+    { id: "marketplace", icon: Store, label: t("nav.marketplace"), href: "/marketplace" },
+    { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
+    { id: "wallet", icon: Wallet, label: t("nav.wallet"), href: "/wallet" },
+    { id: "office-theme", icon: Palette, label: t("nav.themeStore"), href: "/office/themes" },
   ];
 
   return (
@@ -68,7 +70,7 @@ export function MobileBottomNav() {
           className="rounded-t-2xl border-t border-border bg-card px-0 pt-2 pb-0 md:hidden"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
-          <SheetTitle className="sr-only">Menu</SheetTitle>
+          <SheetTitle className="sr-only">{t("common.menu")}</SheetTitle>
           <nav className="flex flex-col">
             {sheetItems.map((item) => {
               const Icon = item.icon;
@@ -105,7 +107,7 @@ export function MobileBottomNav() {
         {/* Chat */}
         <NavButton
           iconId="chat"
-          label="Chat"
+          label={t("nav.chat")}
           active={activeId === "chat"}
           onClick={() => router.push("/")}
         />
@@ -113,7 +115,7 @@ export function MobileBottomNav() {
         {/* Office */}
         <NavButton
           iconId="office"
-          label="Office"
+          label={t("nav.office")}
           active={activeId === "office"}
           onClick={() => router.push("/office")}
         />
@@ -129,7 +131,7 @@ export function MobileBottomNav() {
               "shadow-[0_0_16px_rgba(59,130,246,0.4)] border-2 border-brand-border-strong",
               "transition-transform duration-300"
             )}
-            aria-label={fanOpen ? "Close menu" : "Open menu"}
+            aria-label={fanOpen ? t("common.closeMenu") : t("common.openMenu")}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -146,7 +148,7 @@ export function MobileBottomNav() {
         <div className="relative">
           <NavButton
             iconId="friends"
-            label="Friends"
+            label={t("nav.friends")}
             active={activeId === "friends"}
             onClick={() => router.push("/friends")}
           />
@@ -160,7 +162,7 @@ export function MobileBottomNav() {
         {/* Settings */}
         <NavButton
           iconId="settings"
-          label="Settings"
+          label={t("nav.settings")}
           active={activeId === "settings"}
           onClick={() => router.push("/settings")}
         />

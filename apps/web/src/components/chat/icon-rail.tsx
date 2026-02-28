@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 /** Lucide icon per nav id — active/inactive styling via parent text color */
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -31,6 +32,7 @@ interface NavEntry {
 }
 
 export function IconRail() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
@@ -64,28 +66,28 @@ export function IconRail() {
   const activeId = getActiveId();
 
   const mainItems: NavEntry[] = [
-    { id: "chat", label: "Chat", href: "/" },
-    { id: "office", label: "Office", href: "/office" },
-    { id: "spaces", label: "Spaces", href: "/spaces" },
-    { id: "apps", label: "Apps", href: "/apps" },
+    { id: "chat", label: t("nav.chat"), href: "/" },
+    { id: "office", label: t("nav.office"), href: "/office" },
+    { id: "spaces", label: t("nav.spaces"), href: "/spaces" },
+    { id: "apps", label: t("nav.apps"), href: "/apps" },
   ];
 
   const friendsItem: NavEntry = {
     id: "friends",
-    label: "Friends",
+    label: t("nav.friends"),
     href: "/friends",
   };
 
   const secondaryItems: NavEntry[] = [
-    { id: "community", label: "Community", href: "/community" },
-    { id: "theme", label: "Theme", href: "/office/themes" },
-    { id: "market", label: "Market", href: "/marketplace" },
-    { id: "wallet", label: "Wallet", href: "/wallet" },
+    { id: "community", label: t("nav.community"), href: "/community" },
+    { id: "theme", label: t("nav.theme"), href: "/office/themes" },
+    { id: "market", label: t("nav.market"), href: "/marketplace" },
+    { id: "wallet", label: t("nav.wallet"), href: "/wallet" },
   ];
 
   const settingsItem: NavEntry = {
     id: "settings",
-    label: "Settings",
+    label: t("nav.settings"),
     href: "/settings",
   };
 
