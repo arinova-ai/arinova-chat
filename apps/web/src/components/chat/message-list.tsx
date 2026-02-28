@@ -160,8 +160,8 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Load older when scrolled near top
-    if (el.scrollTop < 100 && hasMoreUp && !loadingUpRef.current) {
+    // Load older when scrolled within 80% of viewport height from top
+    if (el.scrollTop < el.clientHeight * 0.8 && hasMoreUp && !loadingUpRef.current) {
       loadOlder();
     }
     // Load newer when scrolled near bottom
