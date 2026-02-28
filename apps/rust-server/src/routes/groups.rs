@@ -1189,9 +1189,37 @@ async fn update_listen_mode(
 /// GET /api/conversations/:id/agents/:agentId/allowed-users
 async fn get_allowed_users(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path((id, agent_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
+    // Check ownership
+    let member = sqlx::query_as::<_, (Option<String>,)>(
+        r#"SELECT owner_user_id FROM conversation_members
+           WHERE conversation_id = $1 AND agent_id = $2"#,
+    )
+    .bind(id)
+    .bind(agent_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match member {
+        Ok(Some((Some(owner_id),))) if owner_id == user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Only the agent owner can view allowed users"})),
+            )
+                .into_response();
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Agent not found in conversation"})),
+            )
+                .into_response();
+        }
+    }
+
     let rows = sqlx::query_as::<_, (String,)>(
         "SELECT user_id FROM agent_listen_allowed_users WHERE agent_id = $1 AND conversation_id = $2",
     )
@@ -1205,9 +1233,11 @@ async fn get_allowed_users(
             let user_ids: Vec<String> = rows.into_iter().map(|(uid,)| uid).collect();
             Json(json!({"allowedUsers": user_ids})).into_response()
         }
-        Err(_) => {
-            Json(json!({"allowedUsers": []})).into_response()
-        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -1245,26 +1275,59 @@ async fn set_allowed_users(
         }
     }
 
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
     // Delete existing allowed users
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "DELETE FROM agent_listen_allowed_users WHERE agent_id = $1 AND conversation_id = $2",
     )
     .bind(agent_id)
     .bind(id)
-    .execute(&state.db)
-    .await;
+    .execute(&mut *tx)
+    .await
+    {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response();
+    }
 
     // Insert new allowed users
     for uid in &body.user_ids {
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             r#"INSERT INTO agent_listen_allowed_users (agent_id, conversation_id, user_id)
                VALUES ($1, $2, $3) ON CONFLICT DO NOTHING"#,
         )
         .bind(agent_id)
         .bind(id)
         .bind(uid)
-        .execute(&state.db)
-        .await;
+        .execute(&mut *tx)
+        .await
+        {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response();
     }
 
     Json(json!({"allowedUsers": body.user_ids})).into_response()
