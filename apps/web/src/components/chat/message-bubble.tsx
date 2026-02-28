@@ -161,7 +161,7 @@ function MessageAvatar({ message, isOwn, clickable, onClick }: MessageAvatarProp
       {isAgent && (
         <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
       )}
-      {!isAgent && message.senderUserImage && (
+      {!isAgent && !isOwn && message.senderUserImage && (
         <AvatarImage src={assetUrl(message.senderUserImage)} alt={message.senderUserName ?? "User"} className="object-cover" />
       )}
       <AvatarFallback
