@@ -7,6 +7,10 @@ import { officeState } from "./state.js";
  * Each hook normalizes the raw event and feeds it into the state store.
  */
 export function registerHooks(api: OpenClawPluginApi): void {
+  // accountId may not be on all SDK context types yet — extract safely
+  const acct = (ctx: Record<string, unknown>) =>
+    ctx.accountId as string | undefined;
+
   // ── Session lifecycle ──────────────────────────────────
 
   api.on("session_start", (event, ctx) => {
@@ -16,7 +20,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
       sessionId: event.sessionId,
       timestamp: Date.now(),
       data: { resumedFrom: event.resumedFrom },
-    });
+    }, acct(ctx));
   });
 
   api.on("session_end", (event, ctx) => {
@@ -29,7 +33,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         messageCount: event.messageCount,
         durationMs: event.durationMs,
       },
-    });
+    }, acct(ctx));
   });
 
   // ── LLM activity ──────────────────────────────────────
@@ -44,7 +48,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         model: event.model,
         provider: event.provider,
       },
-    });
+    }, acct(ctx));
   });
 
   api.on("llm_output", (event, ctx) => {
@@ -58,7 +62,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         provider: event.provider,
         usage: event.usage,
       },
-    });
+    }, acct(ctx));
   });
 
   // ── Tool calls ────────────────────────────────────────
@@ -75,7 +79,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         durationMs: event.durationMs,
         error: event.error,
       },
-    });
+    }, acct(ctx));
 
     // Persistent tool errors → blocked
     if (hasError) {
@@ -85,7 +89,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         sessionId: ctx.sessionKey ?? "",
         timestamp: Date.now(),
         data: { error: event.error, toolName: event.toolName },
-      });
+      }, acct(ctx));
     }
   });
 
@@ -100,7 +104,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
       sessionId: ctx.conversationId ?? "",
       timestamp: event.timestamp ?? Date.now(),
       data: { from: event.from, channelId: ctx.channelId },
-    });
+    }, ctx.accountId);
   });
 
   api.on("message_sent", (event, ctx) => {
@@ -111,7 +115,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
       sessionId: ctx.conversationId ?? "",
       timestamp: Date.now(),
       data: { to: event.to, success: event.success, error: event.error, channelId: ctx.channelId },
-    });
+    }, ctx.accountId);
   });
 
   // ── Agent run completion ──────────────────────────────
@@ -124,7 +128,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         sessionId: ctx.sessionKey ?? "",
         timestamp: Date.now(),
         data: { error: event.error, durationMs: event.durationMs },
-      });
+      }, acct(ctx));
     } else {
       emit({
         type: "agent_end",
@@ -132,7 +136,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         sessionId: ctx.sessionKey ?? "",
         timestamp: Date.now(),
         data: { durationMs: event.durationMs },
-      });
+      }, acct(ctx));
     }
   });
 
@@ -152,7 +156,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         label: event.label,
         mode: event.mode,
       },
-    });
+    }, ctx.accountId as string | undefined);
   });
 
   apiAny.on("subagent_ended", (event: Record<string, unknown>, ctx: Record<string, unknown>) => {
@@ -166,35 +170,40 @@ export function registerHooks(api: OpenClawPluginApi): void {
         outcome: event.outcome,
         reason: event.reason,
       },
-    });
+    }, ctx.accountId as string | undefined);
   });
 }
 
-/** Forward URL + token for HTTP POST to Rust server */
+/** Forward URL + per-account tokens for HTTP POST to Rust server */
 let forwardUrl: string | null = null;
-let forwardToken: string | null = null;
+let accountTokens: Map<string, string> = new Map();
 
-export function setForwardTarget(url: string, token: string): void {
+export function setForwardTarget(url: string, tokens: Map<string, string>): void {
   forwardUrl = url;
-  forwardToken = token;
+  accountTokens = tokens;
 }
 
-function emit(event: InternalEvent): void {
+function emit(event: InternalEvent, accountId?: string): void {
   officeState.ingest(event);
 
-  // Forward to Rust server if configured
-  if (forwardUrl && forwardToken) {
-    fetch(forwardUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${forwardToken}`,
-      },
-      body: JSON.stringify(event),
-    }).catch(() => {
-      // Swallow — server may be temporarily unavailable
-    });
-  }
+  if (!forwardUrl) return;
+
+  // Find token for this account, fallback to any available token
+  const token =
+    (accountId && accountTokens.get(accountId)) ||
+    accountTokens.values().next().value;
+  if (!token) return;
+
+  fetch(forwardUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(event),
+  }).catch(() => {
+    // Swallow — server may be temporarily unavailable
+  });
 }
 
 /**
@@ -205,6 +214,7 @@ export function ingestHookEvent(
   sessionId: string,
   agentId: string,
   data: Record<string, unknown> = {},
+  accountId?: string,
 ): void {
   emit({
     type,
@@ -212,5 +222,5 @@ export function ingestHookEvent(
     agentId,
     timestamp: Date.now(),
     data,
-  });
+  }, accountId);
 }

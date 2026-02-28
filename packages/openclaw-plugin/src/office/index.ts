@@ -21,9 +21,10 @@ export function isHealthy(): boolean {
 /**
  * Configure HTTP forwarding so every hook event is also POSTed to a remote
  * server (e.g. the Rust backend's POST /api/office/event endpoint).
+ * Manual override — pass a single token that applies to all accounts.
  */
 export function configure(opts: { forwardUrl: string; forwardToken: string }): void {
-  setForwardTarget(opts.forwardUrl, opts.forwardToken);
+  setForwardTarget(opts.forwardUrl, new Map([["default", opts.forwardToken]]));
 }
 
 /**
@@ -60,21 +61,27 @@ export function registerOffice(api: OpenClawPluginApi): void {
   const arinova = channels?.["openclaw-arinova-ai"];
   const apiUrl = arinova?.apiUrl as string | undefined;
 
-  // Try direct botToken first (single-agent), then accounts structure (multi-agent)
-  let botToken = arinova?.botToken as string | undefined;
-  if (!botToken && arinova?.accounts) {
+  const tokens = new Map<string, string>();
+
+  // Single-agent: direct botToken
+  const directToken = arinova?.botToken as string | undefined;
+  if (directToken) {
+    tokens.set("default", directToken);
+  }
+
+  // Multi-agent: accounts structure
+  if (arinova?.accounts) {
     const accounts = arinova.accounts as Record<string, Record<string, unknown>>;
-    for (const acc of Object.values(accounts)) {
+    for (const [accountId, acc] of Object.entries(accounts)) {
       if (acc.enabled !== false && acc.botToken) {
-        botToken = acc.botToken as string;
-        break;
+        tokens.set(accountId, acc.botToken as string);
       }
     }
   }
 
-  if (apiUrl && botToken) {
+  if (apiUrl && tokens.size > 0) {
     const forwardUrl = apiUrl.replace(/\/+$/, "") + "/api/office/event";
-    setForwardTarget(forwardUrl, botToken);
+    setForwardTarget(forwardUrl, tokens);
   }
 
   registerOfficeHooks(api);
