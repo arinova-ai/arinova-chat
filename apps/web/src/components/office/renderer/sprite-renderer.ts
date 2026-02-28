@@ -688,9 +688,10 @@ export class SpriteRenderer implements OfficeRenderer {
       this.pinching = true;
       this.pinchStartDist = this.touchDist(e);
       this.pinchStartScale = this.scale;
+      const rect = this.root!.getBoundingClientRect();
       const [a, b] = [e.touches[0], e.touches[1]];
-      this.pinchMidX = (a.clientX + b.clientX) / 2;
-      this.pinchMidY = (a.clientY + b.clientY) / 2;
+      this.pinchMidX = (a.clientX + b.clientX) / 2 - rect.left;
+      this.pinchMidY = (a.clientY + b.clientY) / 2 - rect.top;
       this.panStartX = this.panX;
       this.panStartY = this.panY;
       return;
@@ -709,6 +710,7 @@ export class SpriteRenderer implements OfficeRenderer {
     // Pinch zoom
     if (this.pinching && "touches" in e && e.touches.length === 2) {
       e.preventDefault();
+      if (this.pinchStartDist <= 0) return;
       const dist = this.touchDist(e);
       const ratio = dist / this.pinchStartDist;
       const newScale = Math.min(
@@ -716,9 +718,10 @@ export class SpriteRenderer implements OfficeRenderer {
         Math.max(SpriteRenderer.MIN_SCALE, this.pinchStartScale * ratio),
       );
 
-      // Zoom toward the pinch midpoint
-      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      // Zoom toward the pinch midpoint (container-relative)
+      const rect = this.root!.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
       // Adjust pan so the pinch center stays in place
       this.panX = midX - (this.pinchMidX - this.panStartX) * (newScale / this.pinchStartScale);
       this.panY = midY - (this.pinchMidY - this.panStartY) * (newScale / this.pinchStartScale);
