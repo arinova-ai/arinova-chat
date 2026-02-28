@@ -91,6 +91,9 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const ttsEnabled = useChatStore((s) => s.ttsEnabled);
   const setTtsEnabled = useChatStore((s) => s.setTtsEnabled);
   const conversationMembers = useChatStore((s) => s.conversationMembers);
+  const inputDrafts = useChatStore((s) => s.inputDrafts);
+  const setInputDraft = useChatStore((s) => s.setInputDraft);
+  const clearInputDraft = useChatStore((s) => s.clearInputDraft);
 
   // Get the active conversation
   const activeConversation = conversations.find(
@@ -128,6 +131,20 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     }
     onDropHandled?.();
   }, [droppedFile, onDropHandled]);
+
+  // Restore draft when switching conversations
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const draft = inputDrafts[activeConversationId] ?? "";
+    setValue(draft);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      if (draft) {
+        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 160) + "px";
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId]);
 
   // ---------- Slash popup logic ----------
 
@@ -265,10 +282,11 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     setValue("");
     setMentionQuery(null);
     setMentionStart(-1);
+    if (activeConversationId) clearInputDraft(activeConversationId);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, []);
+  }, [activeConversationId, clearInputDraft]);
 
   const selectMention = useCallback(
     (item: MentionItem) => {
@@ -640,6 +658,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setValue(newValue);
+    if (activeConversationId) setInputDraft(activeConversationId, newValue);
 
     // Detect @mention trigger
     const cursorPos = e.target.selectionStart ?? newValue.length;

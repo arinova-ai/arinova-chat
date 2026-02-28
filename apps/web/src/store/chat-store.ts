@@ -108,6 +108,7 @@ interface ChatState {
   replyingTo: Message | null;
   blockedUserIds: Set<string>;
   currentUserId: string | null;
+  inputDrafts: Record<string, string>;
 
   // Thread state
   activeThreadId: string | null;
@@ -186,6 +187,8 @@ interface ChatState {
   closeThread: () => void;
   loadThreadMessages: (conversationId: string, threadId: string) => Promise<void>;
   sendThreadMessage: (content: string) => void;
+  setInputDraft: (conversationId: string, text: string) => void;
+  clearInputDraft: (conversationId: string) => void;
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -226,12 +229,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
   replyingTo: null,
   blockedUserIds: new Set<string>(),
   currentUserId: null,
+  inputDrafts: {},
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
 
   setCurrentUserId: (id) => set({ currentUserId: id }),
   setReplyingTo: (message) => set({ replyingTo: message }),
+  setInputDraft: (conversationId, text) => {
+    const drafts = { ...get().inputDrafts };
+    if (text) {
+      drafts[conversationId] = text;
+    } else {
+      delete drafts[conversationId];
+    }
+    set({ inputDrafts: drafts });
+  },
+  clearInputDraft: (conversationId) => {
+    const drafts = { ...get().inputDrafts };
+    delete drafts[conversationId];
+    set({ inputDrafts: drafts });
+  },
 
   setActiveConversation: (id) => {
     if (id === null) {
