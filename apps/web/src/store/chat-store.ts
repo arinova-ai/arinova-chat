@@ -1582,6 +1582,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Message already exists from chunks — update status
       if (threadId) {
         const threadMsgs = get().threadMessages[threadId] ?? [];
+        const threadMsg = threadMsgs.find((m) => m.id === messageId);
+        const shouldReplaceThreadContent =
+          finalContent !== undefined &&
+          threadMsg &&
+          finalContent !== threadMsg.content;
         set({
           threadMessages: {
             ...get().threadMessages,
@@ -1589,7 +1594,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               m.id === messageId
                 ? {
                     ...m,
-                    ...(finalContent !== undefined ? { content: finalContent } : {}),
+                    ...(shouldReplaceThreadContent ? { content: finalContent } : {}),
                     status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
                     updatedAt: new Date(),
                   }
@@ -1600,6 +1605,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } else {
         const current = get().messagesByConversation[conversationId] ?? [];
         const completedMsg = current.find((m) => m.id === messageId);
+        // Only replace content if finalContent actually differs from the
+        // streamed accumulation. Skipping avoids an unnecessary re-render
+        // that can cause GFM tables to break in the markdown renderer.
+        const shouldReplaceContent =
+          finalContent !== undefined &&
+          completedMsg &&
+          finalContent !== completedMsg.content;
 
         set({
           messagesByConversation: {
@@ -1608,7 +1620,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               m.id === messageId
                 ? {
                     ...m,
-                    ...(finalContent !== undefined ? { content: finalContent } : {}),
+                    ...(shouldReplaceContent ? { content: finalContent } : {}),
                     status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
                     updatedAt: new Date(),
                   }
@@ -1622,7 +1634,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   lastMessage: completedMsg
                     ? {
                         ...completedMsg,
-                        ...(finalContent !== undefined ? { content: finalContent } : {}),
+                        ...(shouldReplaceContent ? { content: finalContent } : {}),
                         status: "completed" as const,
                         updatedAt: new Date(),
                       }
