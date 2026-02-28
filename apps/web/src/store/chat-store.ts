@@ -91,6 +91,7 @@ interface ChatState {
   searchActive: boolean;
   highlightMessageId: string | null;
   loading: boolean;
+  loadingMessages: boolean;
   unreadCounts: Record<string, number>;
   agentHealth: Record<
     string,
@@ -202,6 +203,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   searchActive: false,
   highlightMessageId: null,
   loading: false,
+  loadingMessages: false,
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
@@ -365,31 +367,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadMessages: async (conversationId) => {
-    // Always load fresh messages (no cache guard)
-    const data = await api<{ messages: Message[]; hasMore: boolean }>(
-      `/api/conversations/${conversationId}/messages`
-    );
-    set({
-      messagesByConversation: {
-        ...get().messagesByConversation,
-        [conversationId]: data.messages,
-      },
-    });
-
-    // Send mark_read with max seq from loaded messages
-    if (get().activeConversationId === conversationId) {
-      const maxSeq = data.messages.reduce(
-        (max, m) => Math.max(max, m.seq ?? 0),
-        0
+    set({ loadingMessages: true });
+    try {
+      // Always load fresh messages (no cache guard)
+      const data = await api<{ messages: Message[]; hasMore: boolean }>(
+        `/api/conversations/${conversationId}/messages`
       );
-      if (maxSeq > 0) {
-        wsManager.send({
-          type: "mark_read",
-          conversationId,
-          seq: maxSeq,
-        });
-        wsManager.updateLastSeq(conversationId, maxSeq);
+      set({
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [conversationId]: data.messages,
+        },
+      });
+
+      // Send mark_read with max seq from loaded messages
+      if (get().activeConversationId === conversationId) {
+        const maxSeq = data.messages.reduce(
+          (max, m) => Math.max(max, m.seq ?? 0),
+          0
+        );
+        if (maxSeq > 0) {
+          wsManager.send({
+            type: "mark_read",
+            conversationId,
+            seq: maxSeq,
+          });
+          wsManager.updateLastSeq(conversationId, maxSeq);
+        }
       }
+    } finally {
+      set({ loadingMessages: false });
     }
   },
 

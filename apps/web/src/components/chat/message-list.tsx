@@ -16,7 +16,32 @@ interface MessageListProps {
   isGroupConversation?: boolean;
 }
 
+function MessageSkeleton() {
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-4">
+      {/* Alternating left/right placeholder bubbles */}
+      <div className="flex justify-start">
+        <div className="h-10 w-48 animate-pulse rounded-2xl bg-muted" />
+      </div>
+      <div className="flex justify-end">
+        <div className="h-10 w-56 animate-pulse rounded-2xl bg-muted" />
+      </div>
+      <div className="flex justify-start">
+        <div className="h-16 w-64 animate-pulse rounded-2xl bg-muted" />
+      </div>
+      <div className="flex justify-end">
+        <div className="h-10 w-40 animate-pulse rounded-2xl bg-muted" />
+      </div>
+      <div className="flex justify-start">
+        <div className="h-10 w-52 animate-pulse rounded-2xl bg-muted" />
+      </div>
+    </div>
+  );
+}
+
 export function MessageList({ messages: rawMessages, agentName, isGroupConversation }: MessageListProps) {
+  const loadingMessages = useChatStore((s) => s.loadingMessages);
+
   // Filter out thread messages (they display in the thread panel only) + deduplicate
   const messages = rawMessages
     .filter((m) => !m.threadId)
@@ -170,6 +195,16 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       loadNewer();
     }
   }, [hasMoreUp, hasMoreDown, loadOlder, loadNewer, scrollRef]);
+
+  if (messages.length === 0 && loadingMessages) {
+    return (
+      <div className="relative flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto overflow-x-hidden py-4">
+          <MessageSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex-1 overflow-hidden">
