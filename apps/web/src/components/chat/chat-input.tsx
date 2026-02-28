@@ -538,58 +538,50 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       }
 
       // Promote the optimistic message with real data from the server
-      const { message: realMsg } = await res.json() as {
-        message: {
-          id: string;
-          conversationId: string;
-          seq: number;
-          role: string;
-          content: string;
-          status: string;
-          senderUserId?: string;
-          senderAgentId?: string;
-          createdAt: string;
-          updatedAt: string;
-          attachments?: Array<{
-            id: string;
-            messageId: string;
-            fileName: string;
-            fileType: string;
-            fileSize: number;
-            url: string;
-            duration?: number;
-            createdAt: string;
-          }>;
-        };
-      };
-      const s2 = useChatStore.getState();
-      const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
-      useChatStore.setState({
-        messagesByConversation: {
-          ...s2.messagesByConversation,
-          [activeConversationId]: msgs2.map((m) =>
-            m.id === tempId
-              ? {
-                  ...m,
-                  id: realMsg.id,
-                  seq: realMsg.seq,
-                  senderUserId: realMsg.senderUserId ?? m.senderUserId,
-                  attachments: realMsg.attachments?.map((a) => ({
-                    id: a.id,
-                    messageId: a.messageId,
-                    fileName: a.fileName,
-                    fileType: a.fileType,
-                    fileSize: a.fileSize,
-                    url: a.url,
-                    duration: a.duration,
-                    createdAt: new Date(a.createdAt),
-                  })) ?? m.attachments,
-                  updatedAt: new Date(realMsg.updatedAt),
-                }
-              : m
-          ),
-        },
-      });
+      const json = await res.json();
+      const realMsg = json?.message;
+      if (realMsg?.id) {
+        const s2 = useChatStore.getState();
+        const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
+        const alreadyHasReal = msgs2.some((m) => m.id === realMsg.id);
+        if (alreadyHasReal) {
+          // WS already delivered the real message — just remove the temp
+          useChatStore.setState({
+            messagesByConversation: {
+              ...s2.messagesByConversation,
+              [activeConversationId]: msgs2.filter((m) => m.id !== tempId),
+            },
+          });
+        } else {
+          // Promote temp → real
+          useChatStore.setState({
+            messagesByConversation: {
+              ...s2.messagesByConversation,
+              [activeConversationId]: msgs2.map((m) =>
+                m.id === tempId
+                  ? {
+                      ...m,
+                      id: realMsg.id,
+                      seq: realMsg.seq,
+                      senderUserId: realMsg.senderUserId ?? m.senderUserId,
+                      attachments: realMsg.attachments?.map((a: Record<string, unknown>) => ({
+                        id: a.id as string,
+                        messageId: a.messageId as string,
+                        fileName: a.fileName as string,
+                        fileType: a.fileType as string,
+                        fileSize: a.fileSize as number,
+                        url: a.url as string,
+                        duration: a.duration as number | undefined,
+                        createdAt: new Date(a.createdAt as string),
+                      })) ?? m.attachments,
+                      updatedAt: new Date(realMsg.updatedAt),
+                    }
+                  : m
+              ),
+            },
+          });
+        }
+      }
     } catch (err) {
       console.error("Upload failed:", err);
       // Remove optimistic message and restore input on failure

@@ -1818,7 +1818,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 content: m.content,
                 status: m.status,
                 senderUserId: (m as unknown as Record<string, unknown>).senderUserId as string | undefined,
-                attachments: ((m as unknown as Record<string, unknown>).attachments as Message["attachments"]) ?? [],
+                attachments: ((m as unknown as Record<string, unknown>).attachments as Array<Record<string, unknown>> | undefined)?.map((att) => ({
+                  id: att.id as string,
+                  messageId: att.messageId as string,
+                  fileName: att.fileName as string,
+                  fileType: att.fileType as string,
+                  fileSize: att.fileSize as number,
+                  url: att.url as string,
+                  duration: att.duration as number | undefined,
+                  createdAt: new Date(att.createdAt as string),
+                })) ?? [],
                 createdAt: new Date(m.createdAt),
                 updatedAt: new Date(m.createdAt),
               }) as Message
