@@ -1109,8 +1109,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         status: msg.status,
         senderUserId: msg.senderUserId,
         senderUserName: msg.senderUserName,
+        senderUserImage: (msg as Record<string, unknown>).senderUserImage as string | undefined,
         replyToId: msg.replyToId ?? undefined,
         threadId: threadId ?? undefined,
+        attachments: ((msg as Record<string, unknown>).attachments as Message["attachments"]) ?? [],
         createdAt: new Date(msg.createdAt),
         updatedAt: new Date(msg.updatedAt),
       };
