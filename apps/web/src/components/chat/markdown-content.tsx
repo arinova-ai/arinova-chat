@@ -99,7 +99,7 @@ const JS_LANGUAGES = new Set(["javascript", "js"]);
  * 1. Normalize \r\n → \n
  * 2. Ensure a blank line before GFM table header + delimiter rows
  */
-function preprocessMarkdown(raw: string): string {
+export function preprocessMarkdown(raw: string): string {
   // 1. Normalize line endings
   let s = raw.replace(/\r\n/g, "\n");
 

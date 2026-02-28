@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MessageBubble } from "./message-bubble";
+import { MessageBubble, parseStickerUrl, isOwnMessage } from "./message-bubble";
 import type { Message } from "@arinova/shared/types";
 
 // Mock zustand store
@@ -14,8 +14,16 @@ vi.mock("@/store/chat-store", () => ({
       deleteMessage: mockDeleteMessage,
       sendMessage: mockSendMessage,
       cancelStream: mockCancelStream,
+      cancelQueuedMessage: vi.fn(),
       messagesByConversation: {},
+      conversationMembers: {},
       showTimestamps: false,
+      setReplyingTo: vi.fn(),
+      toggleReaction: vi.fn(),
+      reactionsByMessage: {},
+      queuedMessageIds: {},
+      openThread: vi.fn(),
+      conversations: [],
     }),
 }));
 
@@ -25,12 +33,41 @@ vi.mock("./markdown-content", () => ({
   ),
 }));
 
+// next/dynamic loads MarkdownContent lazily — bypass dynamic() in tests
+vi.mock("next/dynamic", () => ({
+  default: () =>
+    ({ content }: { content: string }) => (
+      <div data-testid="markdown-content">{content}</div>
+    ),
+}));
+
 vi.mock("./streaming-cursor", () => ({
   StreamingCursor: () => <span data-testid="streaming-cursor" />,
 }));
 
 vi.mock("@/lib/config", () => ({
   assetUrl: (url: string) => `http://localhost:21001${url}`,
+  BACKEND_URL: "http://localhost:21001",
+  AGENT_DEFAULT_AVATAR: "/default-avatar.png",
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    back: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+}));
+
+vi.mock("@/lib/auth-client", () => ({
+  authClient: {
+    useSession: () => ({ data: { user: { id: "current-user" } } }),
+  },
+}));
+
+vi.mock("@/lib/i18n", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 function createMessage(overrides: Partial<Message> = {}): Message {
@@ -61,7 +98,7 @@ describe("MessageBubble", () => {
 
   it("renders user message with reversed layout", () => {
     render(
-      <MessageBubble message={createMessage({ role: "user" })} />
+      <MessageBubble message={createMessage({ role: "user", senderUserId: "current-user" })} />
     );
     const container = screen.getByTestId("markdown-content").closest(".group");
     expect(container).toHaveClass("flex-row-reverse");
@@ -77,7 +114,7 @@ describe("MessageBubble", () => {
   it("does not show agent name for user messages", () => {
     render(
       <MessageBubble
-        message={createMessage({ role: "user" })}
+        message={createMessage({ role: "user", senderUserId: "current-user" })}
         agentName="CodeBot"
       />
     );
@@ -203,5 +240,65 @@ describe("MessageBubble", () => {
     );
     expect(screen.queryByTitle("Copy message")).not.toBeInTheDocument();
     expect(screen.queryByTitle("Delete message")).not.toBeInTheDocument();
+  });
+});
+
+describe("parseStickerUrl", () => {
+  it("extracts sticker URL from valid sticker message", () => {
+    expect(parseStickerUrl("![sticker](/stickers/arinova-pack-01/wave.png)"))
+      .toBe("/stickers/arinova-pack-01/wave.png");
+  });
+
+  it("handles leading/trailing whitespace", () => {
+    expect(parseStickerUrl("  ![sticker](/stickers/pack/hello.png)  "))
+      .toBe("/stickers/pack/hello.png");
+  });
+
+  it("returns null for non-sticker messages", () => {
+    expect(parseStickerUrl("Hello world")).toBeNull();
+  });
+
+  it("returns null for image that isn't a sticker", () => {
+    expect(parseStickerUrl("![photo](/uploads/photo.png)")).toBeNull();
+  });
+
+  it("returns null for sticker with extra text", () => {
+    expect(parseStickerUrl("Check this out ![sticker](/stickers/pack/a.png)")).toBeNull();
+  });
+
+  it("returns null for non-PNG sticker URLs", () => {
+    expect(parseStickerUrl("![sticker](/stickers/pack/a.jpg)")).toBeNull();
+  });
+});
+
+describe("isOwnMessage", () => {
+  it("returns true for temp messages from current user", () => {
+    const msg = createMessage({ id: "temp-123", role: "user" });
+    expect(isOwnMessage(msg, "user-1")).toBe(true);
+  });
+
+  it("returns true when senderUserId matches currentUserId", () => {
+    const msg = createMessage({ id: "msg-123", role: "user", senderUserId: "user-1" });
+    expect(isOwnMessage(msg, "user-1")).toBe(true);
+  });
+
+  it("returns false for agent messages", () => {
+    const msg = createMessage({ id: "msg-123", role: "agent" });
+    expect(isOwnMessage(msg, "user-1")).toBe(false);
+  });
+
+  it("returns false for user messages from other users", () => {
+    const msg = createMessage({ id: "msg-123", role: "user", senderUserId: "user-2" });
+    expect(isOwnMessage(msg, "user-1")).toBe(false);
+  });
+
+  it("returns false for user messages without senderUserId and non-temp id", () => {
+    const msg = createMessage({ id: "msg-123", role: "user" });
+    expect(isOwnMessage(msg, "user-1")).toBe(false);
+  });
+
+  it("returns false when currentUserId is undefined", () => {
+    const msg = createMessage({ id: "msg-123", role: "user", senderUserId: "user-1" });
+    expect(isOwnMessage(msg, undefined)).toBe(false);
   });
 });

@@ -105,14 +105,14 @@ function stripAttachmentMarkdown(content: string, attachmentUrls: string[]): str
  * Messages from other users may also arrive without senderUserId during
  * WS race conditions (#28, #35, #36).
  */
-function isOwnMessage(message: Message, currentUserId: string | undefined): boolean {
+export function isOwnMessage(message: Message, currentUserId: string | undefined): boolean {
   return message.role === "user" &&
     (message.id.startsWith("temp-") || message.senderUserId === currentUserId);
 }
 
 const STICKER_RE = /^!\[sticker\]\((\/stickers\/.+\.png)\)$/;
 
-function parseStickerUrl(content: string): string | null {
+export function parseStickerUrl(content: string): string | null {
   const m = content.trim().match(STICKER_RE);
   return m ? m[1] : null;
 }

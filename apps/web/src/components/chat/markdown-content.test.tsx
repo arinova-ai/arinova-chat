@@ -8,7 +8,7 @@ vi.mock("./code-executor", () => ({
   ),
 }));
 
-import { MarkdownContent } from "./markdown-content";
+import { MarkdownContent, preprocessMarkdown } from "./markdown-content";
 
 describe("MarkdownContent", () => {
   it("renders plain text content", () => {
@@ -76,5 +76,51 @@ describe("MarkdownContent", () => {
       const href = anchor.getAttribute("href") ?? "";
       expect(href.toLowerCase()).not.toContain("javascript:");
     }
+  });
+});
+
+describe("preprocessMarkdown", () => {
+  it("normalizes \\r\\n to \\n", () => {
+    const result = preprocessMarkdown("line1\r\nline2\r\nline3");
+    expect(result).toBe("line1\nline2\nline3");
+  });
+
+  it("preserves content without \\r\\n unchanged", () => {
+    const input = "hello\nworld";
+    expect(preprocessMarkdown(input)).toBe(input);
+  });
+
+  it("inserts blank line before GFM table when missing", () => {
+    const input = "Some text\n| Header | Col |\n| --- | --- |\n| A | B |";
+    const result = preprocessMarkdown(input);
+    expect(result).toContain("\n\n| Header | Col |");
+  });
+
+  it("does not double-insert blank line if already present", () => {
+    const input = "Some text\n\n| Header | Col |\n| --- | --- |\n| A | B |";
+    const result = preprocessMarkdown(input);
+    // Should not have triple newline
+    expect(result).not.toContain("\n\n\n");
+  });
+
+  it("handles multiple tables", () => {
+    const input =
+      "Table 1:\n| A | B |\n| --- | --- |\n| 1 | 2 |\nTable 2:\n| C | D |\n| --- | --- |\n| 3 | 4 |";
+    const result = preprocessMarkdown(input);
+    expect(result).toContain("\n\n| A | B |");
+    expect(result).toContain("\n\n| C | D |");
+  });
+
+  it("does not modify pipes inside fenced code blocks", () => {
+    const input = "```\n| not | a | table |\n| --- | --- | --- |\n```";
+    const result = preprocessMarkdown(input);
+    // Should remain unchanged — no blank lines inserted inside fence
+    expect(result).toBe(input);
+  });
+
+  it("handles table with alignment markers (:---:, ---:)", () => {
+    const input = "text\n| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |";
+    const result = preprocessMarkdown(input);
+    expect(result).toContain("\n\n| Left | Center | Right |");
   });
 });
