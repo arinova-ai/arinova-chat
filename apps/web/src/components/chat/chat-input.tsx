@@ -137,6 +137,9 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     if (!activeConversationId) return;
     const draft = inputDrafts[activeConversationId] ?? "";
     setValue(draft);
+    setMentionQuery(null);
+    setMentionStart(-1);
+    setMentionIndex(0);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       if (draft) {
