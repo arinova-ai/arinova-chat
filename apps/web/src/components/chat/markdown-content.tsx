@@ -104,12 +104,19 @@ function preprocessMarkdown(raw: string): string {
 
   // 2. Ensure blank line before table blocks.
   //    Detect table delimiter row: a line whose pipe-separated cells are all :?-+:?
+  //    Skip fenced code blocks (``` or ~~~) to avoid false positives.
   const lines = s.split("\n");
   const result: string[] = [];
+  let inFence = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    // Check for delimiter row (e.g. "| --- | :---: |" or "---|---")
+    // Toggle fence state on ``` or ~~~ lines
+    if (/^(`{3,}|~{3,})/.test(line.trimStart())) {
+      inFence = !inFence;
+    }
+    // Only apply table blank-line fix outside fenced code blocks
     if (
+      !inFence &&
       i >= 1 &&
       line.includes("-") &&
       line.includes("|") &&
