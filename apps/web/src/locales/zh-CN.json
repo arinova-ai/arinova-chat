@@ -102,5 +102,13 @@
 
   "userProfile.title": "用户资料",
   "userProfile.joined": "加入于",
-  "userProfile.agentsInGroup": "群组中的 Agent"
+  "userProfile.agentsInGroup": "群组中的 Agent",
+
+  "agentProfile.listenMode": "监听模式",
+  "agentProfile.listenMode.all_mentions": "所有提及",
+  "agentProfile.listenMode.all_mentions.desc": "任何用户 @提及此 Agent 时回应",
+  "agentProfile.listenMode.owner_only": "仅限拥有者",
+  "agentProfile.listenMode.owner_only.desc": "只回应拥有者的 @提及",
+  "agentProfile.listenMode.allowed_users": "允许的用户",
+  "agentProfile.listenMode.allowed_users.desc": "只回应被允许用户的 @提及"
 }

@@ -102,5 +102,13 @@
 
   "userProfile.title": "ユーザー情報",
   "userProfile.joined": "参加日",
-  "userProfile.agentsInGroup": "グループ内のエージェント"
+  "userProfile.agentsInGroup": "グループ内のエージェント",
+
+  "agentProfile.listenMode": "リスンモード",
+  "agentProfile.listenMode.all_mentions": "全メンション",
+  "agentProfile.listenMode.all_mentions.desc": "すべてのユーザーの @メンションに応答",
+  "agentProfile.listenMode.owner_only": "オーナーのみ",
+  "agentProfile.listenMode.owner_only.desc": "オーナーの @メンションのみ応答",
+  "agentProfile.listenMode.allowed_users": "許可されたユーザー",
+  "agentProfile.listenMode.allowed_users.desc": "許可されたユーザーの @メンションのみ応答"
 }

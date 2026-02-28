@@ -102,5 +102,13 @@
 
   "userProfile.title": "User Profile",
   "userProfile.joined": "Joined",
-  "userProfile.agentsInGroup": "Agents in this group"
+  "userProfile.agentsInGroup": "Agents in this group",
+
+  "agentProfile.listenMode": "Listen Mode",
+  "agentProfile.listenMode.all_mentions": "All Mentions",
+  "agentProfile.listenMode.all_mentions.desc": "Responds when any user @mentions this agent",
+  "agentProfile.listenMode.owner_only": "Owner Only",
+  "agentProfile.listenMode.owner_only.desc": "Only responds to @mentions from the owner",
+  "agentProfile.listenMode.allowed_users": "Allowed Users",
+  "agentProfile.listenMode.allowed_users.desc": "Only responds to @mentions from allowed users"
 }

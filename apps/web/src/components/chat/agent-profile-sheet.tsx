@@ -13,9 +13,10 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, User, Pencil, Check, X, MessageSquare } from "lucide-react";
+import { Bot, User, Pencil, Check, X, MessageSquare, Radio } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { authClient } from "@/lib/auth-client";
+import { useTranslation } from "@/lib/i18n";
 
 interface AgentProfileSheetProps {
   agentId: string;
@@ -39,6 +40,7 @@ export function AgentProfileSheet({
   open,
   onOpenChange,
 }: AgentProfileSheetProps) {
+  const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
 
@@ -48,6 +50,7 @@ export function AgentProfileSheet({
   const conversations = useChatStore((s) => s.conversations);
   const thinkingAgents = useChatStore((s) => s.thinkingAgents);
   const loadAgents = useChatStore((s) => s.loadAgents);
+  const updateAgentListenMode = useChatStore((s) => s.updateAgentListenMode);
 
   // Resolve agent data from multiple sources
   const ownAgent = storeAgents.find((a) => a.id === agentId);
@@ -99,11 +102,28 @@ export function AgentProfileSheet({
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingListenMode, setSavingListenMode] = useState(false);
+
+  // Is this a group conversation?
+  const isGroupContext = conversations.find((c) => c.id === conversationId)?.type === "group";
+  const currentListenMode = groupAgent?.listenMode ?? "all_mentions";
 
   // Reset edit state when sheet closes
   useEffect(() => {
     if (!open) setEditing(false);
   }, [open]);
+
+  const handleListenModeChange = useCallback(async (mode: string) => {
+    if (!conversationId || !agentId || mode === currentListenMode) return;
+    setSavingListenMode(true);
+    try {
+      await updateAgentListenMode(conversationId, agentId, mode);
+    } catch {
+      // Error handled by api()
+    } finally {
+      setSavingListenMode(false);
+    }
+  }, [conversationId, agentId, currentListenMode, updateAgentListenMode]);
 
   const handleStartEdit = useCallback(() => {
     if (!resolved) return;
@@ -265,6 +285,38 @@ export function AgentProfileSheet({
                     {c.title ?? c.agentName}
                   </p>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Listen mode (owner in group context) */}
+        {isOwner && isGroupContext && (
+          <div className="mt-4">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+              {t("agentProfile.listenMode")}
+            </p>
+            <div className="space-y-1">
+              {(["all_mentions", "owner_only", "allowed_users"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  disabled={savingListenMode}
+                  onClick={() => handleListenModeChange(mode)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                    currentListenMode === mode
+                      ? "bg-brand/15 text-foreground"
+                      : "bg-accent/40 text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Radio className={`h-4 w-4 shrink-0 ${
+                    currentListenMode === mode ? "text-brand-text" : "text-muted-foreground"
+                  }`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{t(`agentProfile.listenMode.${mode}`)}</p>
+                    <p className="text-xs text-muted-foreground">{t(`agentProfile.listenMode.${mode}.desc`)}</p>
+                  </div>
+                </button>
               ))}
             </div>
           </div>
