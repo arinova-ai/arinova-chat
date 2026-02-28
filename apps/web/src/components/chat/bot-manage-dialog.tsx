@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { BACKEND_URL, assetUrl } from "@/lib/config";
+import { BACKEND_URL, assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 
 const CATEGORIES = [
   { value: "assistant", label: "AI Assistant" },
@@ -315,15 +315,11 @@ export function BotManageDialog({
               className="group relative flex h-20 w-20 items-center justify-center rounded-full bg-accent overflow-hidden transition-opacity hover:opacity-80"
               disabled={uploading}
             >
-              {avatarUrl ? (
-                <img
-                  src={assetUrl(avatarUrl)}
-                  alt={name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <Bot className="h-8 w-8 text-foreground/80" />
-              )}
+              <img
+                src={avatarUrl ? assetUrl(avatarUrl) : AGENT_DEFAULT_AVATAR}
+                alt={name}
+                className="h-full w-full object-cover"
+              />
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                 {uploading ? (
                   <Loader2 className="h-5 w-5 animate-spin text-white" />
