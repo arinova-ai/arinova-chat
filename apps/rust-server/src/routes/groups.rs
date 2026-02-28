@@ -1211,10 +1211,17 @@ async fn get_allowed_users(
             )
                 .into_response();
         }
-        _ => {
+        Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({"error": "Agent not found in conversation"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
             )
                 .into_response();
         }
