@@ -110,5 +110,7 @@
   "agentProfile.listenMode.owner_only": "Owner Only",
   "agentProfile.listenMode.owner_only.desc": "Only responds to @mentions from the owner",
   "agentProfile.listenMode.allowed_users": "Allowed Users",
-  "agentProfile.listenMode.allowed_users.desc": "Only responds to @mentions from allowed users"
+  "agentProfile.listenMode.allowed_users.desc": "Only responds to @mentions from allowed users",
+  "agentProfile.allowedUsers": "Allowed Users",
+  "agentProfile.allowedUsers.selected": "{count} selected"
 }

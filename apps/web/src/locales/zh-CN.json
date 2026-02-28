@@ -110,5 +110,7 @@
   "agentProfile.listenMode.owner_only": "仅限拥有者",
   "agentProfile.listenMode.owner_only.desc": "只回应拥有者的 @提及",
   "agentProfile.listenMode.allowed_users": "允许的用户",
-  "agentProfile.listenMode.allowed_users.desc": "只回应被允许用户的 @提及"
+  "agentProfile.listenMode.allowed_users.desc": "只回应被允许用户的 @提及",
+  "agentProfile.allowedUsers": "允许的用户",
+  "agentProfile.allowedUsers.selected": "已选 {count} 人"
 }

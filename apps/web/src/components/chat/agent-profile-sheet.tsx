@@ -13,7 +13,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, User, Pencil, Check, X, MessageSquare, Radio } from "lucide-react";
+import { Bot, User, Pencil, Check, X, MessageSquare, Radio, Loader2 } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { authClient } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
@@ -51,6 +51,7 @@ export function AgentProfileSheet({
   const thinkingAgents = useChatStore((s) => s.thinkingAgents);
   const loadAgents = useChatStore((s) => s.loadAgents);
   const updateAgentListenMode = useChatStore((s) => s.updateAgentListenMode);
+  const setAgentAllowedUsers = useChatStore((s) => s.setAgentAllowedUsers);
 
   // Resolve agent data from multiple sources
   const ownAgent = storeAgents.find((a) => a.id === agentId);
@@ -103,6 +104,9 @@ export function AgentProfileSheet({
   const [editDesc, setEditDesc] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingListenMode, setSavingListenMode] = useState(false);
+  const [allowedUserIds, setAllowedUserIds] = useState<Set<string>>(new Set());
+  const [loadingAllowed, setLoadingAllowed] = useState(false);
+  const [savingAllowed, setSavingAllowed] = useState(false);
 
   // Is this a group conversation?
   const isGroupContext = conversations.find((c) => c.id === conversationId)?.type === "group";
@@ -112,6 +116,24 @@ export function AgentProfileSheet({
   useEffect(() => {
     if (!open) setEditing(false);
   }, [open]);
+
+  // Fetch allowed users when mode is allowed_users
+  useEffect(() => {
+    if (!open || !isOwner || !isGroupContext || currentListenMode !== "allowed_users") return;
+    let cancelled = false;
+    setLoadingAllowed(true);
+    api<{ allowedUsers: string[] }>(
+      `/api/conversations/${conversationId}/agents/${agentId}/allowed-users`
+    )
+      .then((data) => {
+        if (!cancelled) setAllowedUserIds(new Set(data.allowedUsers));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingAllowed(false);
+      });
+    return () => { cancelled = true; };
+  }, [open, isOwner, isGroupContext, currentListenMode, conversationId, agentId]);
 
   const handleListenModeChange = useCallback(async (mode: string) => {
     if (!conversationId || !agentId || mode === currentListenMode) return;
@@ -124,6 +146,22 @@ export function AgentProfileSheet({
       setSavingListenMode(false);
     }
   }, [conversationId, agentId, currentListenMode, updateAgentListenMode]);
+
+  const handleToggleAllowedUser = useCallback(async (userId: string) => {
+    const next = new Set(allowedUserIds);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    setAllowedUserIds(next);
+    setSavingAllowed(true);
+    try {
+      await setAgentAllowedUsers(conversationId, agentId, Array.from(next));
+    } catch {
+      // Revert on error
+      setAllowedUserIds(allowedUserIds);
+    } finally {
+      setSavingAllowed(false);
+    }
+  }, [allowedUserIds, conversationId, agentId, setAgentAllowedUsers]);
 
   const handleStartEdit = useCallback(() => {
     if (!resolved) return;
@@ -319,6 +357,60 @@ export function AgentProfileSheet({
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Allowed users whitelist */}
+        {isOwner && isGroupContext && currentListenMode === "allowed_users" && (
+          <div className="mt-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+              {t("agentProfile.allowedUsers")}
+            </p>
+            {loadingAllowed ? (
+              <div className="flex justify-center py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {groupMembers?.users
+                    .filter((u) => u.userId !== currentUserId)
+                    .map((u) => (
+                      <button
+                        key={u.userId}
+                        type="button"
+                        disabled={savingAllowed}
+                        onClick={() => handleToggleAllowedUser(u.userId)}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors bg-accent/40 hover:bg-accent"
+                      >
+                        <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          allowedUserIds.has(u.userId)
+                            ? "border-brand-text bg-brand/15"
+                            : "border-muted-foreground/40"
+                        }`}>
+                          {allowedUserIds.has(u.userId) && (
+                            <Check className="h-3 w-3 text-brand-text" />
+                          )}
+                        </div>
+                        <Avatar className="h-6 w-6 shrink-0">
+                          {u.image ? (
+                            <AvatarImage src={assetUrl(u.image)} alt={u.name ?? u.username ?? ""} />
+                          ) : null}
+                          <AvatarFallback className="text-[10px] bg-muted">
+                            {(u.name ?? u.username ?? "?").charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-foreground truncate">{u.name}</p>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t("agentProfile.allowedUsers.selected").replace("{count}", String(allowedUserIds.size))}
+                </p>
+              </>
+            )}
           </div>
         )}
 
