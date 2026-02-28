@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Multipart, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Redirect, Response},
     routing::{get, post},
@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/callback/google", get(google_callback))
         .route("/api/auth/callback/github", get(github_callback))
         .route("/api/auth/update-user", post(update_user))
+        .route("/api/auth/upload-avatar", post(upload_user_avatar))
 }
 
 #[derive(Deserialize)]
@@ -525,6 +526,94 @@ fn sanitize_display_name(raw: &str) -> String {
     } else {
         trimmed.to_string()
     }
+}
+
+async fn upload_user_avatar(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    mut multipart: Multipart,
+) -> Response {
+    let cookie_header = headers
+        .get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let token = match extract_session_token(cookie_header) {
+        Some(t) => t,
+        None => {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Not authenticated"}))).into_response();
+        }
+    };
+
+    let sess = match validate_session(&state.db, &token).await {
+        Ok(Some(s)) => s,
+        _ => {
+            return (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid session"}))).into_response();
+        }
+    };
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let content_type = field.content_type().unwrap_or("").to_string();
+        if !content_type.starts_with("image/") {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Only image files are allowed"})),
+            )
+                .into_response();
+        }
+
+        let filename = field.file_name().unwrap_or("avatar.jpg").to_string();
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response();
+            }
+        };
+
+        if data.len() > 5 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Avatar must be under 5MB"}))).into_response();
+        }
+
+        let ext = filename.rsplit('.').next().unwrap_or("jpg");
+        let stored = format!("user_{}_{}.{}", sess.user_id, chrono::Utc::now().timestamp(), ext);
+        let r2_key = format!("avatars/{}", stored);
+
+        let avatar_url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(
+                s3,
+                &state.config.r2_bucket,
+                &r2_key,
+                data.to_vec(),
+                &content_type,
+                &state.config.r2_public_url,
+            )
+            .await
+            {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("avatars");
+                    let _ = tokio::fs::create_dir_all(&dir).await;
+                    let _ = tokio::fs::write(dir.join(&stored), &data).await;
+                    format!("/uploads/avatars/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("avatars");
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            let _ = tokio::fs::write(dir.join(&stored), &data).await;
+            format!("/uploads/avatars/{}", stored)
+        };
+
+        let _ = sqlx::query(r#"UPDATE "user" SET image = $1, updated_at = NOW() WHERE id = $2"#)
+            .bind(&avatar_url)
+            .bind(&sess.user_id)
+            .execute(&state.db)
+            .await;
+
+        return Json(json!({"imageUrl": avatar_url})).into_response();
+    }
+
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response()
 }
 
 fn extract_session_token(cookie_header: &str) -> Option<String> {

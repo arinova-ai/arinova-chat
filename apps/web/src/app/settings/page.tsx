@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { authClient } from "@/lib/auth-client";
@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { api } from "@/lib/api";
-import { assetUrl } from "@/lib/config";
+import { assetUrl, BACKEND_URL } from "@/lib/config";
 import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 import { useChatStore } from "@/store/chat-store";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -78,6 +78,9 @@ function ProfilePanel() {
   const [nameSuccess, setNameSuccess] = useState("");
   const [nameError, setNameError] = useState("");
 
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -111,6 +114,34 @@ function ProfilePanel() {
       setNameError("An unexpected error occurred");
     } finally {
       setNameLoading(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setNameError("Avatar must be under 5MB");
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Upload failed");
+      }
+      const data = await res.json();
+      await authClient.updateUser({ image: data.imageUrl });
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : "Avatar upload failed");
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -154,7 +185,12 @@ function ProfilePanel() {
 
       {/* Avatar */}
       <div className="flex items-center gap-6">
-        <div className="relative group">
+        <button
+          type="button"
+          className="relative group"
+          onClick={() => avatarInputRef.current?.click()}
+          disabled={avatarUploading}
+        >
           <Avatar className="h-24 w-24 border-2 border-[oklch(0.55_0.2_250/30%)]">
             {session?.user?.image ? (
               <AvatarImage src={assetUrl(session.user.image)} alt={session?.user?.name ?? ""} />
@@ -164,9 +200,24 @@ function ProfilePanel() {
             </AvatarFallback>
           </Avatar>
           <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 cursor-pointer">
-            <Camera className="h-6 w-6 text-white" />
+            {avatarUploading ? (
+              <Loader2 className="h-6 w-6 text-white animate-spin" />
+            ) : (
+              <Camera className="h-6 w-6 text-white" />
+            )}
           </div>
-        </div>
+        </button>
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleAvatarUpload(file);
+            e.target.value = "";
+          }}
+        />
         <p className="text-sm text-muted-foreground">Change Avatar</p>
       </div>
 
