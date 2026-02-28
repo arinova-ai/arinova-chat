@@ -59,12 +59,10 @@ function formatTimestamp(date: Date | string): string {
 export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
-  // "isUser" means "is this MY message" — for human DMs both sides have role "user",
-  // so we check senderUserId to distinguish own vs other's messages.
-  // If senderUserId is set, compare directly. If missing, only treat as own when
-  // we also don't know who we are (legacy/unauthenticated edge case).
+  // "isUser" means "is this MY message" — optimistic messages don't have senderUserId yet,
+  // so treat missing senderUserId as "own message" (the common case).
   const isUser = message.role === "user" &&
-    (message.senderUserId != null ? message.senderUserId === currentUserId : !currentUserId);
+    (!message.senderUserId || message.senderUserId === currentUserId);
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
   const isCancelled = message.status === "cancelled";
