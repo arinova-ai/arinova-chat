@@ -121,10 +121,19 @@ const markdownComponents = {
   },
   table(props: ComponentProps<"table">) {
     return (
-      <div className="overflow-x-auto">
-        <table {...props} />
+      <div className="my-2 overflow-x-auto rounded-md border border-border">
+        <table {...props} className="w-full border-collapse text-sm" />
       </div>
     );
+  },
+  thead(props: ComponentProps<"thead">) {
+    return <thead {...props} className="bg-muted/50" />;
+  },
+  th(props: ComponentProps<"th">) {
+    return <th {...props} className="border-b border-border px-3 py-2 text-left font-semibold whitespace-nowrap" />;
+  },
+  td(props: ComponentProps<"td">) {
+    return <td {...props} className="border-b border-border/50 px-3 py-1.5" />;
   },
   pre(props: ComponentProps<"pre">) {
     const { children, ...rest } = props;
