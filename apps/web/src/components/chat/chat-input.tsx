@@ -2,7 +2,12 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Paperclip, X, FileText, ImageIcon, Mic } from "lucide-react";
+import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { VoiceRecorder } from "./voice-recorder";
 import { useChatStore } from "@/store/chat-store";
 import { useRouter } from "next/navigation";
@@ -69,6 +74,8 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
+  const [stickers, setStickers] = useState<Array<{ id: string; filename: string; emoji: string }>>([]);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -727,6 +734,25 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     [activeConversationId]
   );
 
+  // Sticker pack — fetch manifest once
+  useEffect(() => {
+    fetch("/stickers/arinova-pack-01/manifest.json")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.stickers) setStickers(data.stickers);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleStickerSend = useCallback(
+    (filename: string) => {
+      if (!activeConversationId) return;
+      sendMessage(`![sticker](/stickers/arinova-pack-01/${filename})`);
+      setStickerOpen(false);
+    },
+    [activeConversationId, sendMessage]
+  );
+
   const handleSend = useCallback(() => {
     if (selectedFile) {
       handleUpload();
@@ -1031,6 +1057,48 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav"
               onChange={handleFileSelect}
             />
+
+            {/* Sticker picker */}
+            {stickers.length > 0 && (
+              <Popover open={stickerOpen} onOpenChange={setStickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-xl"
+                    title="Stickers"
+                  >
+                    <Smile className="h-5 w-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-[280px] border-border bg-background p-2"
+                  align="start"
+                  sideOffset={8}
+                  side="top"
+                >
+                  <div className="grid grid-cols-5 gap-1 max-h-[240px] overflow-y-auto">
+                    {stickers.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleStickerSend(s.filename)}
+                        className="rounded-lg p-1 transition-colors hover:bg-accent"
+                        title={s.emoji}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/stickers/arinova-pack-01/${s.filename}`}
+                          alt={s.id}
+                          className="h-12 w-12 object-contain"
+                          loading="lazy"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
 
             <textarea
               ref={textareaRef}
