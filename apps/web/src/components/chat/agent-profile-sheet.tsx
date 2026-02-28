@@ -1,7 +1,7 @@
 "use client";
 
 import { useChatStore } from "@/store/chat-store";
-import { assetUrl } from "@/lib/config";
+import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import {
   Sheet,
   SheetContent,
@@ -50,17 +50,11 @@ export function AgentProfileSheet({
 
         {/* Agent info */}
         <div className="flex items-center gap-3">
-          {agent.agentAvatarUrl ? (
-            <img
-              src={assetUrl(agent.agentAvatarUrl)}
-              alt={agent.agentName}
-              className="h-14 w-14 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent">
-              <Bot className="h-7 w-7" />
-            </div>
-          )}
+          <img
+            src={agent.agentAvatarUrl ? assetUrl(agent.agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
+            alt={agent.agentName}
+            className="h-14 w-14 shrink-0 rounded-full object-cover"
+          />
           <div className="min-w-0 flex-1">
             <p className="text-base font-semibold text-foreground truncate">
               {agent.agentName}

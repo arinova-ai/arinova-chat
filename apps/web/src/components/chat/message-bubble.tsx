@@ -10,7 +10,7 @@ const MarkdownContent = dynamic(
   { ssr: false, loading: () => <div className="text-sm opacity-50">...</div> }
 );
 import { StreamingCursor } from "./streaming-cursor";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useChatStore, type ReactionInfo } from "@/store/chat-store";
 import { ImageLightbox } from "./image-lightbox";
@@ -31,7 +31,7 @@ import {
   Reply,
   MessageSquare,
 } from "lucide-react";
-import { assetUrl } from "@/lib/config";
+import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
@@ -146,6 +146,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           onClick={() => setProfileOpen(true)}
         >
           <Avatar className="h-8 w-8 shrink-0">
+            {message.role !== "user" && (
+              <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
+            )}
             <AvatarFallback className="text-xs bg-accent text-foreground/80">
               {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
             </AvatarFallback>
@@ -153,6 +156,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         </button>
       ) : (
         <Avatar className="h-8 w-8 shrink-0">
+          {!isUser && message.role !== "user" && (
+            <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
+          )}
           <AvatarFallback
             className={cn(
               "text-xs",

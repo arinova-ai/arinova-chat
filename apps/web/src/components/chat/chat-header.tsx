@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useVoiceCallStore } from "@/store/voice-call-store";
-import { assetUrl } from "@/lib/config";
+import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { MicPermissionDialog } from "@/components/voice/mic-permission";
 import type { ConversationType } from "@arinova/shared/types";
@@ -124,21 +124,18 @@ export function ChatHeader({
       >
         <div className="relative">
           <Avatar className="h-8 w-8">
-            {agentAvatarUrl ? (
-              <img
-                src={assetUrl(agentAvatarUrl)}
-                alt={displayName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <AvatarFallback className="bg-accent text-foreground/80 text-xs">
-                {type === "group" ? (
-                  <Users className="h-4 w-4" />
-                ) : (
-                  <Bot className="h-4 w-4" />
-                )}
-              </AvatarFallback>
-            )}
+            <img
+              src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
+              alt={displayName}
+              className="h-full w-full object-cover"
+            />
+            <AvatarFallback className="bg-accent text-foreground/80 text-xs">
+              {type === "group" ? (
+                <Users className="h-4 w-4" />
+              ) : (
+                <Bot className="h-4 w-4" />
+              )}
+            </AvatarFallback>
           </Avatar>
           {isOnline !== undefined && (
             <span

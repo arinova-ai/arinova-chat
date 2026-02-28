@@ -15,7 +15,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { BotManageDialog } from "./bot-manage-dialog";
 import type { Agent } from "@arinova/shared/types";
-import { assetUrl } from "@/lib/config";
+import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 
 interface NewChatDialogProps {
   open: boolean;
@@ -118,17 +118,11 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   onClick={() => handleSelectAgent(agent.id)}
                   className="flex flex-1 items-center gap-3 rounded-lg px-3 py-3 text-left hover:bg-accent transition-colors"
                 >
-                  {agent.avatarUrl ? (
-                    <img
-                      src={assetUrl(agent.avatarUrl)}
-                      alt={agent.name}
-                      className="h-10 w-10 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent">
-                      <Bot className="h-5 w-5" />
-                    </div>
-                  )}
+                  <img
+                    src={agent.avatarUrl ? assetUrl(agent.avatarUrl) : AGENT_DEFAULT_AVATAR}
+                    alt={agent.name}
+                    className="h-10 w-10 shrink-0 rounded-full object-cover"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <p className="text-sm font-medium">{agent.name}</p>
@@ -329,17 +323,11 @@ function CreateGroupDialog({
                       : "hover:bg-accent"
                   )}
                 >
-                  {agent.avatarUrl ? (
-                    <img
-                      src={assetUrl(agent.avatarUrl)}
-                      alt={agent.name}
-                      className="h-8 w-8 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                  )}
+                  <img
+                    src={agent.avatarUrl ? assetUrl(agent.avatarUrl) : AGENT_DEFAULT_AVATAR}
+                    alt={agent.name}
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{agent.name}</p>
                     {agent.description && (
