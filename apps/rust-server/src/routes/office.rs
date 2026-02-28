@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Json, Response,
@@ -14,7 +14,7 @@ use std::convert::Infallible;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use crate::auth::middleware::AuthUser;
+use crate::auth::middleware::{AuthAgent, AuthUser};
 use crate::services::office::InternalEvent;
 use crate::AppState;
 
@@ -87,38 +87,12 @@ async fn office_stream(State(state): State<AppState>, _user: AuthUser) -> Respon
 }
 
 /// POST /api/office/event — receive hook events from the OpenClaw plugin.
-/// Authenticated via `Authorization: Bearer <OFFICE_EVENT_TOKEN>`.
+/// Authenticated via `Authorization: Bearer <botToken>` (same as agent endpoints).
 async fn office_ingest(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _agent: AuthAgent,
     Json(event): Json<InternalEvent>,
 ) -> Response {
-    let expected = &state.config.office_event_token;
-
-    // Require a non-empty token to be configured
-    if expected.is_empty() {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"error": "OFFICE_EVENT_TOKEN not configured"})),
-        )
-            .into_response();
-    }
-
-    // Validate bearer token
-    let provided = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .unwrap_or("");
-
-    if provided != expected {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Invalid token"})),
-        )
-            .into_response();
-    }
-
     state.office.ingest(event);
     StatusCode::NO_CONTENT.into_response()
 }

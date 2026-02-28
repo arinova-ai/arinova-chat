@@ -49,13 +49,21 @@ export function shutdown(): void {
 /**
  * Register office hooks with the OpenClaw plugin API and start the tick loop.
  * Called from the main arinova plugin's register().
+ *
+ * Derives forwarding config from the channel's apiUrl + botToken so no extra
+ * environment variables are needed.
  */
 export function registerOffice(api: OpenClawPluginApi): void {
-  // Auto-configure HTTP forwarding from env vars
-  const url = process.env.OFFICE_FORWARD_URL;
-  const token = process.env.OFFICE_EVENT_TOKEN;
-  if (url && token) {
-    setForwardTarget(url, token);
+  const channels = (api.config as Record<string, unknown>).channels as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  const arinova = channels?.["openclaw-arinova-ai"];
+  const apiUrl = arinova?.apiUrl as string | undefined;
+  const botToken = arinova?.botToken as string | undefined;
+
+  if (apiUrl && botToken) {
+    const forwardUrl = apiUrl.replace(/\/+$/, "") + "/api/office/event";
+    setForwardTarget(forwardUrl, botToken);
   }
 
   registerOfficeHooks(api);
