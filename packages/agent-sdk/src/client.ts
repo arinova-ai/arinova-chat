@@ -289,6 +289,18 @@ export class ArinovaAgent {
     }, TASK_HEARTBEAT_INTERVAL);
     const stopHeartbeat = () => clearInterval(heartbeatTimer);
 
+    // Guard: ensure sendComplete/sendError only fires once per task.
+    // After cancel_task, the background handler may still call sendComplete
+    // when the LLM finishes — the guard prevents duplicate events.
+    let taskFinished = false;
+    const markFinished = () => {
+      if (taskFinished) return false;
+      taskFinished = true;
+      stopHeartbeat();
+      this.taskAbortControllers.delete(taskId);
+      return true;
+    };
+
     const ctx: TaskContext = {
       taskId,
       conversationId: data.conversationId as string,
@@ -300,10 +312,12 @@ export class ArinovaAgent {
       replyTo: data.replyTo as { role: string; content: string; senderAgentName?: string } | undefined,
       history: data.history as { role: string; content: string; senderAgentName?: string; senderUsername?: string; createdAt: string }[] | undefined,
       attachments: data.attachments as TaskAttachment[] | undefined,
-      sendChunk: (delta: string) => this.send({ type: "agent_chunk", taskId, chunk: delta }),
+      sendChunk: (delta: string) => {
+        if (taskFinished) return;
+        this.send({ type: "agent_chunk", taskId, chunk: delta });
+      },
       sendComplete: (fullContent: string, options?: { mentions?: string[] }) => {
-        stopHeartbeat();
-        this.taskAbortControllers.delete(taskId);
+        if (!markFinished()) return;
         this.send({
           type: "agent_complete",
           taskId,
@@ -312,8 +326,7 @@ export class ArinovaAgent {
         });
       },
       sendError: (error: string) => {
-        stopHeartbeat();
-        this.taskAbortControllers.delete(taskId);
+        if (!markFinished()) return;
         this.send({ type: "agent_error", taskId, error });
       },
       signal: abortController.signal,
@@ -321,8 +334,12 @@ export class ArinovaAgent {
         this.uploadFile(data.conversationId as string, file, fileName, fileType),
     };
 
-    // Stop heartbeat if task is aborted (user cancelled)
-    abortController.signal.addEventListener("abort", stopHeartbeat, { once: true });
+    // When task is aborted (user cancelled), immediately send cancellation
+    // error so the server knows this agent is free for new tasks.
+    abortController.signal.addEventListener("abort", () => {
+      if (!markFinished()) return;
+      this.send({ type: "agent_error", taskId, error: "cancelled" });
+    }, { once: true });
 
     Promise.resolve(this.taskHandler(ctx)).catch((err) => {
       const errorMsg = err instanceof Error ? err.message : String(err);

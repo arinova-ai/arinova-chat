@@ -201,10 +201,23 @@ export async function handleArinovaChatInbound(params: {
   // Track final content from block delivery
   let finalText = "";
   let aborted = false;
+  // Guard: ensure we only send completion once.  The abort handler sends
+  // completion immediately so the agent is freed; any later natural
+  // completion from the LLM is silently discarded.
+  let completionSent = false;
 
-  // Wire abort signal to stop generation early
+  // Wire abort signal to stop generation early and immediately complete
   if (signal) {
-    signal.addEventListener("abort", () => { aborted = true; }, { once: true });
+    signal.addEventListener("abort", () => {
+      aborted = true;
+      if (!completionSent) {
+        completionSent = true;
+        // Send whatever we accumulated so far — the agent SDK's guard
+        // will also prevent duplicates, but we short-circuit here to
+        // avoid waiting for the (potentially slow) LLM to finish.
+        sendComplete(finalText || "");
+      }
+    }, { once: true });
   }
 
   await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
@@ -251,8 +264,11 @@ export async function handleArinovaChatInbound(params: {
     },
   });
 
+  // If abort already sent completion, skip post-processing entirely
+  if (completionSent) return;
+
   // Post-process completed text: upload local images → R2, resolve @mentions
-  let completedText = aborted ? finalText || "" : finalText;
+  let completedText = finalText;
 
   if (uploadFile && completedText) {
     try {
@@ -263,6 +279,7 @@ export async function handleArinovaChatInbound(params: {
   }
 
   const mentionedIds = resolveMentions(completedText, message.members);
+  completionSent = true;
   sendComplete(completedText, mentionedIds.length ? { mentions: mentionedIds } : undefined);
 }
 
