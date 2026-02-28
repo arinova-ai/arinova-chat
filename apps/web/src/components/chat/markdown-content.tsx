@@ -85,8 +85,29 @@ function extractLanguageFromChildren(children: React.ReactNode): string | null {
 
 const JS_LANGUAGES = new Set(["javascript", "js"]);
 
+/**
+ * Custom remark plugin: strip `break` nodes inside `table` elements.
+ * remark-breaks converts single \n to <br>, but table rows use \n as
+ * structural delimiters — the extra <br> breaks table rendering.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripBreaksFromNode(node: any): void {
+  if (!node.children) return;
+  node.children = node.children.filter((child: { type: string }) => child.type !== "break");
+  for (const child of node.children) stripBreaksFromNode(child);
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function findTables(node: any): void {
+  if (node.type === "table") { stripBreaksFromNode(node); return; }
+  if (node.children) for (const child of node.children) findTables(child);
+}
+function remarkStripTableBreaks() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (tree: any) => findTables(tree);
+}
+
 // Stable plugin arrays — avoid re-creating on every render
-const remarkPluginList = [remarkGfm, remarkBreaks];
+const remarkPluginList = [remarkGfm, remarkBreaks, remarkStripTableBreaks];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rehypePluginList: any[] = [rehypeHighlight, [rehypeSanitize, sanitizeSchema]];
 
