@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, LayoutGrid, UserPlus,
   Palette, Users, Store, Wallet, Settings, type LucideIcon,
 } from "lucide-react";
-import { FriendsDialog } from "../friends/friends-dialog";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +33,6 @@ interface NavEntry {
 export function IconRail() {
   const router = useRouter();
   const pathname = usePathname();
-  const [friendsOpen, setFriendsOpen] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
   useEffect(() => {
@@ -54,6 +52,7 @@ export function IconRail() {
     if (pathname.startsWith("/office")) return "office";
     if (pathname.startsWith("/spaces")) return "spaces";
     if (pathname.startsWith("/apps")) return "apps";
+    if (pathname.startsWith("/friends")) return "friends";
     if (pathname.startsWith("/community")) return "community";
     if (pathname.startsWith("/marketplace")) return "market";
     if (pathname.startsWith("/creator")) return "market";
@@ -74,7 +73,7 @@ export function IconRail() {
   const friendsItem: NavEntry = {
     id: "friends",
     label: "Friends",
-    action: () => setFriendsOpen(true),
+    href: "/friends",
   };
 
   const secondaryItems: NavEntry[] = [
@@ -145,7 +144,6 @@ export function IconRail() {
         {renderButton(settingsItem)}
       </div>
 
-      <FriendsDialog open={friendsOpen} onOpenChange={setFriendsOpen} />
     </div>
   );
 }

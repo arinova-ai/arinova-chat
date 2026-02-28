@@ -6,7 +6,6 @@ import {
   MessageSquare, Building2, Globe, Users, UserPlus, Wallet,
   Palette, Store, Settings, type LucideIcon,
 } from "lucide-react";
-import { FriendsDialog } from "../friends/friends-dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -22,7 +21,6 @@ const NAV_ICONS: Record<string, LucideIcon> = {
 export function MobileBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
-  const [friendsOpen, setFriendsOpen] = useState(false);
   const [fanOpen, setFanOpen] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
@@ -45,6 +43,7 @@ export function MobileBottomNav() {
   const getActiveId = () => {
     if (pathname === "/" || pathname.startsWith("/chat")) return "chat";
     if (pathname.startsWith("/office")) return "office";
+    if (pathname.startsWith("/friends")) return "friends";
     if (pathname.startsWith("/settings")) return "settings";
     return "chat";
   };
@@ -148,8 +147,8 @@ export function MobileBottomNav() {
           <NavButton
             iconId="friends"
             label="Friends"
-            active={false}
-            onClick={() => setFriendsOpen(true)}
+            active={activeId === "friends"}
+            onClick={() => router.push("/friends")}
           />
           {pendingRequestCount > 0 && (
             <span className="absolute -top-0.5 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white">
@@ -167,7 +166,6 @@ export function MobileBottomNav() {
         />
       </nav>
 
-      <FriendsDialog open={friendsOpen} onOpenChange={setFriendsOpen} />
     </>
   );
 }
