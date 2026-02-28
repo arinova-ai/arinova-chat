@@ -1365,6 +1365,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ...get().thinkingAgents,
           [conversationId]: [...prev, thinking],
         },
+        conversations: get().conversations.map((c) =>
+          c.id === conversationId
+            ? {
+                ...c,
+                lastMessage: {
+                  id: messageId,
+                  conversationId,
+                  seq: seq ?? 0,
+                  role: "agent" as const,
+                  content: "...",
+                  status: "streaming" as const,
+                  senderAgentId: senderAgentId ?? undefined,
+                  senderAgentName: senderAgentName ?? undefined,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                },
+                updatedAt: new Date(),
+              }
+            : c
+        ),
       });
 
       // Remove the queued user message from queuedMessageIds
@@ -1431,6 +1451,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ...get().thinkingAgents,
               [conversationId]: thinking.filter((t) => t.messageId !== messageId),
             },
+            conversations: get().conversations.map((c) =>
+              c.id === conversationId
+                ? { ...c, lastMessage: agentMsg, updatedAt: new Date() }
+                : c
+            ),
           });
         }
       } else {
@@ -1454,6 +1479,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 m.id === messageId ? { ...m, content: m.content + chunk } : m
               ),
             },
+            conversations: get().conversations.map((c) =>
+              c.id === conversationId && c.lastMessage?.id === messageId
+                ? { ...c, lastMessage: { ...c.lastMessage, content: c.lastMessage.content + chunk } }
+                : c
+            ),
           });
         }
       }
