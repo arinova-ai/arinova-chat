@@ -6,10 +6,9 @@ import StatusBar from "./status-bar";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
 import { useOfficeStream } from "@/hooks/use-office-stream";
-import { MOCK_AGENTS } from "./mock-data";
-import { ThemeProvider, useTheme } from "./theme-context";
+import { useTheme } from "./theme-context";
 import { THEME_REGISTRY } from "./theme-registry";
-import type { Agent, AgentStatus } from "./types";
+import type { Agent } from "./types";
 
 // Dynamic import — PixiJS only works client-side
 const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
@@ -19,27 +18,7 @@ function OfficeViewInner() {
   const { manifest, themeId } = useTheme();
   const themeEntry = THEME_REGISTRY.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
-  const isDemoMode = stream.agents.length === 0;
-  const allAgents = isDemoMode ? MOCK_AGENTS : stream.agents;
-  const agents = allAgents.slice(0, maxAgents);
-
-  const [demoStatus, setDemoStatus] = useState<AgentStatus>("working");
-
-  useEffect(() => {
-    if (!isDemoMode) return;
-    const interval = setInterval(() => {
-      setDemoStatus((prev) => {
-        if (prev === "working") return "idle";
-        if (prev === "idle") return "blocked";
-        return "working";
-      });
-    }, 10_000);
-    return () => clearInterval(interval);
-  }, [isDemoMode]);
-
-  const displayAgents = isDemoMode
-    ? agents.map((a) => ({ ...a, status: demoStatus, collaboratingWith: undefined }))
-    : agents;
+  const displayAgents = stream.agents.slice(0, maxAgents);
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
@@ -119,9 +98,5 @@ function OfficeViewInner() {
 }
 
 export function OfficeView() {
-  return (
-    <ThemeProvider>
-      <OfficeViewInner />
-    </ThemeProvider>
-  );
+  return <OfficeViewInner />;
 }
