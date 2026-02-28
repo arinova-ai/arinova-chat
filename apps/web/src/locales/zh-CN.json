@@ -98,5 +98,9 @@
   "settings.privacy.title": "隐私",
   "settings.privacy.subtitle": "管理屏蔽的用户与隐私设置。",
   "settings.privacy.blockedUsers": "已屏蔽的用户",
-  "settings.privacy.noBlocked": "没有已屏蔽的用户"
+  "settings.privacy.noBlocked": "没有已屏蔽的用户",
+
+  "userProfile.title": "用户资料",
+  "userProfile.joined": "加入于",
+  "userProfile.agentsInGroup": "群组中的 Agent"
 }

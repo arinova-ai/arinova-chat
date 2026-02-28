@@ -86,8 +86,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const showUserProfile = useMemo(
-    () => isGroupConversation && !isUser && !!message.senderUserId,
-    [isGroupConversation, isUser, message.senderUserId]
+    () => !isUser && message.role === "user" && !!message.senderUserId,
+    [isUser, message.role, message.senderUserId]
   );
   // Resolve agentId: prefer senderAgentId, fall back to conversation's agentId
   const resolvedAgentId = useMemo(() => {
@@ -156,6 +156,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           <Avatar className="h-8 w-8 shrink-0">
             {message.role !== "user" && (
               <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
+            )}
+            {message.role === "user" && message.senderUserImage && (
+              <AvatarImage src={assetUrl(message.senderUserImage)} alt={message.senderUserName ?? "User"} className="object-cover" />
             )}
             <AvatarFallback className="text-xs bg-accent text-foreground/80">
               {message.role === "user" ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}

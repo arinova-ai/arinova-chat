@@ -141,16 +141,16 @@ async fn with_attachments(
 
     // Fetch sender user names for user messages in groups
     let sender_user_ids: Vec<String> = items.iter().filter_map(|m| m.sender_user_id.clone()).collect();
-    let sender_user_names: std::collections::HashMap<String, (String, Option<String>)> = if !sender_user_ids.is_empty() {
-        sqlx::query_as::<_, (String, String, Option<String>)>(
-            r#"SELECT id, name, username FROM "user" WHERE id = ANY($1)"#,
+    let sender_user_names: std::collections::HashMap<String, (String, Option<String>, Option<String>)> = if !sender_user_ids.is_empty() {
+        sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
+            r#"SELECT id, name, username, image FROM "user" WHERE id = ANY($1)"#,
         )
         .bind(&sender_user_ids)
         .fetch_all(db)
         .await
         .unwrap_or_default()
         .into_iter()
-        .map(|(id, name, username)| (id, (name, username)))
+        .map(|(id, name, username, image)| (id, (name, username, image)))
         .collect()
     } else {
         std::collections::HashMap::new()
@@ -242,8 +242,9 @@ async fn with_attachments(
 
             {
                 let sender_user_info = m.sender_user_id.as_ref().and_then(|uid| sender_user_names.get(uid));
-                let sender_username = sender_user_info.and_then(|(_, u)| u.clone());
-                let sender_user_name = sender_user_info.map(|(n, _)| n.clone());
+                let sender_username = sender_user_info.and_then(|(_, u, _)| u.clone());
+                let sender_user_name = sender_user_info.map(|(n, _, _)| n.clone());
+                let sender_user_image = sender_user_info.and_then(|(_, _, img)| img.clone());
 
                 let thread_summary = thread_summary_data.get(&m.id).map(|(count, last, parts, preview)| {
                     json!({
@@ -268,6 +269,7 @@ async fn with_attachments(
                     "senderUserId": m.sender_user_id,
                     "senderUsername": sender_username,
                     "senderUserName": sender_user_name,
+                    "senderUserImage": sender_user_image,
                     "replyToId": m.reply_to_id,
                     "replyTo": reply_to,
                     "threadId": m.thread_id,

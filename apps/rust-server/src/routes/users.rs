@@ -1,10 +1,11 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
+use chrono::NaiveDateTime;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -18,6 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/users/username/check", get(check_username))
         .route("/api/users/search", get(search_users))
         .route("/api/users/me", get(get_me))
+        .route("/api/users/{userId}", get(get_user_by_id))
 }
 
 #[derive(Deserialize)]
@@ -177,6 +179,43 @@ async fn search_users(
                 .collect();
             Json(json!(users)).into_response()
         }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/users/:userId — Get public user profile by ID
+async fn get_user_by_id(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(user_id): Path<String>,
+) -> Response {
+    let result = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, NaiveDateTime)>(
+        r#"SELECT id, name, image, username, created_at FROM "user" WHERE id = $1"#,
+    )
+    .bind(&user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match result {
+        Ok(Some((id, name, image, username, created_at))) => {
+            Json(json!({
+                "id": id,
+                "name": name,
+                "image": image,
+                "username": username,
+                "createdAt": created_at.and_utc().to_rfc3339(),
+            }))
+            .into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "User not found"})),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),

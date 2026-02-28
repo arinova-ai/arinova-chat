@@ -839,8 +839,8 @@ pub async fn trigger_agent_response(
             }
 
             // Fetch sender info for broadcast
-            let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>)>(
-                r#"SELECT name, username FROM "user" WHERE id = $1"#,
+            let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+                r#"SELECT name, username, image FROM "user" WHERE id = $1"#,
             )
             .bind(user_id)
             .fetch_optional(db)
@@ -848,8 +848,9 @@ pub async fn trigger_agent_response(
             .ok()
             .flatten();
 
-            let sender_name = sender_info.as_ref().and_then(|(n, _)| n.as_deref()).unwrap_or("");
-            let sender_username = sender_info.as_ref().and_then(|(_, u)| u.as_deref()).unwrap_or("");
+            let sender_name = sender_info.as_ref().and_then(|(n, _, _)| n.as_deref()).unwrap_or("");
+            let sender_username = sender_info.as_ref().and_then(|(_, u, _)| u.as_deref()).unwrap_or("");
+            let sender_image = sender_info.as_ref().and_then(|(_, _, img)| img.as_deref());
 
             // Broadcast new message to all conversation members
             let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
@@ -867,6 +868,7 @@ pub async fn trigger_agent_response(
                     "senderUserId": user_id,
                     "senderUserName": sender_name,
                     "senderUsername": sender_username,
+                    "senderUserImage": sender_image,
                     "replyToId": reply_to_id,
                     "threadId": thread_id,
                     "createdAt": chrono::Utc::now().to_rfc3339(),
@@ -976,8 +978,8 @@ pub async fn trigger_agent_response(
 
         // Broadcast user message to all conversation members (for group visibility)
         if conv_type == "group" {
-            let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>)>(
-                r#"SELECT name, username FROM "user" WHERE id = $1"#,
+            let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+                r#"SELECT name, username, image FROM "user" WHERE id = $1"#,
             )
             .bind(user_id)
             .fetch_optional(db)
@@ -985,8 +987,9 @@ pub async fn trigger_agent_response(
             .ok()
             .flatten();
 
-            let sender_name = sender_info.as_ref().and_then(|(n, _)| n.as_deref()).unwrap_or("");
-            let sender_username = sender_info.as_ref().and_then(|(_, u)| u.as_deref()).unwrap_or("");
+            let sender_name = sender_info.as_ref().and_then(|(n, _, _)| n.as_deref()).unwrap_or("");
+            let sender_username = sender_info.as_ref().and_then(|(_, u, _)| u.as_deref()).unwrap_or("");
+            let sender_image = sender_info.as_ref().and_then(|(_, _, img)| img.as_deref());
 
             let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
             let user_msg_event = json!({
@@ -1003,6 +1006,7 @@ pub async fn trigger_agent_response(
                     "senderUserId": user_id,
                     "senderUserName": sender_name,
                     "senderUsername": sender_username,
+                    "senderUserImage": sender_image,
                     "replyToId": reply_to_id,
                     "threadId": thread_id,
                     "createdAt": now.to_rfc3339(),

@@ -98,5 +98,9 @@
   "settings.privacy.title": "プライバシー",
   "settings.privacy.subtitle": "ブロックしたユーザーとプライバシー設定を管理します。",
   "settings.privacy.blockedUsers": "ブロックしたユーザー",
-  "settings.privacy.noBlocked": "ブロックしたユーザーはいません"
+  "settings.privacy.noBlocked": "ブロックしたユーザーはいません",
+
+  "userProfile.title": "ユーザー情報",
+  "userProfile.joined": "参加日",
+  "userProfile.agentsInGroup": "グループ内のエージェント"
 }

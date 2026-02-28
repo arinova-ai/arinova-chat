@@ -98,5 +98,9 @@
   "settings.privacy.title": "Privacy",
   "settings.privacy.subtitle": "Manage blocked users and privacy settings.",
   "settings.privacy.blockedUsers": "Blocked Users",
-  "settings.privacy.noBlocked": "No blocked users"
+  "settings.privacy.noBlocked": "No blocked users",
+
+  "userProfile.title": "User Profile",
+  "userProfile.joined": "Joined",
+  "userProfile.agentsInGroup": "Agents in this group"
 }
