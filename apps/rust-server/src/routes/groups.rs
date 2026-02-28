@@ -45,7 +45,7 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/conversations/{id}/agents/{agentId}/allowed-users",
-            axum::routing::put(set_allowed_users),
+            get(get_allowed_users).put(set_allowed_users),
         )
         .route(
             "/api/conversations/{id}/agents/{agentId}/withdraw",
@@ -1183,6 +1183,31 @@ async fn update_listen_mode(
             Json(json!({"error": e.to_string()})),
         )
             .into_response(),
+    }
+}
+
+/// GET /api/conversations/:id/agents/:agentId/allowed-users
+async fn get_allowed_users(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path((id, agent_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    let rows = sqlx::query_as::<_, (String,)>(
+        "SELECT user_id FROM agent_listen_allowed_users WHERE agent_id = $1 AND conversation_id = $2",
+    )
+    .bind(agent_id)
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let user_ids: Vec<String> = rows.into_iter().map(|(uid,)| uid).collect();
+            Json(json!({"allowedUsers": user_ids})).into_response()
+        }
+        Err(_) => {
+            Json(json!({"allowedUsers": []})).into_response()
+        }
     }
 }
 
