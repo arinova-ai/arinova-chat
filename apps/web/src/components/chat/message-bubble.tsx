@@ -60,9 +60,11 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
   // "isUser" means "is this MY message" — for human DMs both sides have role "user",
-  // so we check senderUserId to distinguish own vs other's messages
+  // so we check senderUserId to distinguish own vs other's messages.
+  // If senderUserId is set, compare directly. If missing, only treat as own when
+  // we also don't know who we are (legacy/unauthenticated edge case).
   const isUser = message.role === "user" &&
-    (!message.senderUserId || message.senderUserId === currentUserId);
+    (message.senderUserId != null ? message.senderUserId === currentUserId : !currentUserId);
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
   const isCancelled = message.status === "cancelled";
