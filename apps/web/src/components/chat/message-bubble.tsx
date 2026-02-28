@@ -62,7 +62,11 @@ function normalizeUrlForCompare(raw: string): string {
     const url = new URL(raw, "https://_");
     return decodeURIComponent(url.pathname).replace(/\/+$/, "");
   } catch {
-    return decodeURIComponent(raw).replace(/\/+$/, "");
+    try {
+      return decodeURIComponent(raw).replace(/\/+$/, "");
+    } catch {
+      return raw.replace(/\/+$/, "");
+    }
   }
 }
 
