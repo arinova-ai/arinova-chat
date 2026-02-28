@@ -92,6 +92,7 @@ interface ChatState {
   highlightMessageId: string | null;
   loading: boolean;
   loadingMessages: boolean;
+  loadingRequestId: number;
   unreadCounts: Record<string, number>;
   agentHealth: Record<
     string,
@@ -207,6 +208,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   highlightMessageId: null,
   loading: false,
   loadingMessages: false,
+  loadingRequestId: 0,
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
@@ -385,7 +387,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   loadMessages: async (conversationId) => {
-    set({ loadingMessages: true });
+    const requestId = Date.now();
+    set({ loadingMessages: true, loadingRequestId: requestId });
     try {
       // Always load fresh messages (no cache guard)
       const data = await api<{ messages: Message[]; hasMore: boolean }>(
@@ -414,7 +417,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
     } finally {
-      set({ loadingMessages: false });
+      // Only clear loading if this is still the latest request
+      if (get().loadingRequestId === requestId) {
+        set({ loadingMessages: false });
+      }
     }
   },
 
