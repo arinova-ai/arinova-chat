@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { authClient } from "@/lib/auth-client";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Loader2,
   User,
@@ -22,6 +23,8 @@ import {
   ChevronRight,
   Monitor,
   Zap,
+  ZoomIn,
+  ZoomOut,
   Settings,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
@@ -70,6 +73,197 @@ const NAV_ITEMS: { id: SettingsSection; labelKey: string; icon: React.ReactNode 
   { id: "privacy", labelKey: "settings.nav.privacy", icon: <ShieldBan className="h-4 w-4" /> },
 ];
 
+// ───── Avatar Crop Dialog ─────
+
+const CROP_SIZE = 512;
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 3;
+
+function cropImageToBlob(
+  img: HTMLImageElement,
+  offsetX: number,
+  offsetY: number,
+  scale: number,
+  viewSize: number,
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = CROP_SIZE;
+    canvas.height = CROP_SIZE;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return reject(new Error("Canvas not supported"));
+
+    // Map viewport coords to source image coords
+    const ratio = CROP_SIZE / viewSize;
+    const dx = offsetX * ratio;
+    const dy = offsetY * ratio;
+    const scaledW = img.naturalWidth * scale * ratio;
+    const scaledH = img.naturalHeight * scale * ratio;
+
+    ctx.drawImage(img, dx, dy, scaledW, scaledH);
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("Canvas toBlob failed"))),
+      "image/png",
+    );
+  });
+}
+
+function AvatarCropDialog({
+  file,
+  onConfirm,
+  onCancel,
+}: {
+  file: File;
+  onConfirm: (blob: Blob) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+  const viewSize = 280;
+
+  // Load image
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setImgSrc(url);
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      // Center the image — fit shorter dimension to viewSize
+      const fitScale = viewSize / Math.min(img.naturalWidth, img.naturalHeight);
+      setScale(fitScale);
+      setOffset({
+        x: (viewSize - img.naturalWidth * fitScale) / 2,
+        y: (viewSize - img.naturalHeight * fitScale) / 2,
+      });
+    };
+    img.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const handlePointerDown = (e: ReactPointerEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: ReactPointerEvent) => {
+    if (!dragging) return;
+    setOffset({
+      x: dragStart.current.ox + (e.clientX - dragStart.current.x),
+      y: dragStart.current.oy + (e.clientY - dragStart.current.y),
+    });
+  };
+
+  const handlePointerUp = () => setDragging(false);
+
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s - e.deltaY * 0.002)));
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
+
+  const adjustScale = (delta: number) => {
+    setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s + delta)));
+  };
+
+  const handleConfirm = async () => {
+    const img = imgRef.current;
+    if (!img) return;
+    try {
+      const blob = await cropImageToBlob(img, offset.x, offset.y, scale, viewSize);
+      onConfirm(blob);
+    } catch {
+      onCancel();
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogTitle>{t("settings.profile.cropAvatar")}</DialogTitle>
+
+        {/* Crop area */}
+        <div className="flex flex-col items-center gap-4">
+          <div
+            ref={containerRef}
+            className="relative overflow-hidden rounded-full border-2 border-border cursor-grab active:cursor-grabbing select-none touch-none"
+            style={{ width: viewSize, height: viewSize }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
+            {imgSrc && (
+              <img
+                src={imgSrc}
+                alt=""
+                draggable={false}
+                className="pointer-events-none absolute"
+                style={{
+                  left: offset.x,
+                  top: offset.y,
+                  width: imgRef.current ? imgRef.current.naturalWidth * scale : "auto",
+                  height: imgRef.current ? imgRef.current.naturalHeight * scale : "auto",
+                  maxWidth: "none",
+                }}
+              />
+            )}
+          </div>
+
+          {/* Zoom controls */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => adjustScale(-0.15)}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </button>
+            <input
+              type="range"
+              min={MIN_SCALE}
+              max={MAX_SCALE}
+              step={0.01}
+              value={scale}
+              onChange={(e) => setScale(Number(e.target.value))}
+              className="w-32 accent-brand"
+            />
+            <button
+              type="button"
+              onClick={() => adjustScale(0.15)}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="ghost" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button className="brand-gradient-btn" onClick={handleConfirm}>
+            {t("common.confirm")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ───── Profile Panel ─────
 
 function ProfilePanel() {
@@ -81,6 +275,7 @@ function ProfilePanel() {
   const [nameError, setNameError] = useState("");
 
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -119,16 +314,11 @@ function ProfilePanel() {
     }
   };
 
-  const handleAvatarUpload = async (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setNameError(t("settings.profile.avatarTooLarge"));
-      return;
-    }
+  const handleAvatarUpload = async (blob: Blob) => {
     setAvatarUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", blob, "avatar.png");
       const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
         method: "POST",
         credentials: "include",
@@ -216,12 +406,31 @@ function ProfilePanel() {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleAvatarUpload(file);
+            if (file) {
+              if (!file.type.startsWith("image/")) return;
+              if (file.size > 5 * 1024 * 1024) {
+                setNameError(t("settings.profile.avatarTooLarge"));
+                return;
+              }
+              setCropFile(file);
+            }
             e.target.value = "";
           }}
         />
         <p className="text-sm text-muted-foreground">{t("settings.profile.changeAvatar")}</p>
       </div>
+
+      {/* Avatar crop dialog */}
+      {cropFile && (
+        <AvatarCropDialog
+          file={cropFile}
+          onConfirm={(blob) => {
+            setCropFile(null);
+            handleAvatarUpload(blob);
+          }}
+          onCancel={() => setCropFile(null)}
+        />
+      )}
 
       {/* Profile form */}
       <form onSubmit={handleUpdateName} className="space-y-6">

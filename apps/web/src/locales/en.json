@@ -14,6 +14,7 @@
 
   "common.save": "Save Changes",
   "common.cancel": "Cancel",
+  "common.confirm": "Confirm",
   "common.delete": "Delete",
   "common.loading": "Loading...",
   "common.unblock": "Unblock",
@@ -41,6 +42,7 @@
   "settings.profile.title": "Profile",
   "settings.profile.subtitle": "Manage your personal information and preferences.",
   "settings.profile.changeAvatar": "Change Avatar",
+  "settings.profile.cropAvatar": "Crop Avatar",
   "settings.profile.displayName": "Display Name",
   "settings.profile.displayNamePlaceholder": "Enter your display name",
   "settings.profile.email": "Email",

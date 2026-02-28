@@ -14,6 +14,7 @@
 
   "common.save": "保存更改",
   "common.cancel": "取消",
+  "common.confirm": "确认",
   "common.delete": "删除",
   "common.loading": "加载中...",
   "common.unblock": "解除屏蔽",
@@ -41,6 +42,7 @@
   "settings.profile.title": "个人资料",
   "settings.profile.subtitle": "管理你的个人信息与偏好设置。",
   "settings.profile.changeAvatar": "更换头像",
+  "settings.profile.cropAvatar": "裁切头像",
   "settings.profile.displayName": "显示名称",
   "settings.profile.displayNamePlaceholder": "输入你的显示名称",
   "settings.profile.email": "电子邮件",
