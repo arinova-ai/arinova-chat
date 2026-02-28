@@ -82,7 +82,21 @@ async fn upload_file(
         }
 
         if field_name == "duration_seconds" {
-            duration_seconds = field.text().await.ok().and_then(|v| v.parse().ok());
+            let raw = field.text().await.unwrap_or_default();
+            if !raw.is_empty() {
+                match raw.parse::<i32>() {
+                    Ok(v) if v >= 0 && v <= 3600 => {
+                        duration_seconds = Some(v);
+                    }
+                    _ => {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(json!({"error": "Invalid duration_seconds: must be an integer between 0 and 3600"})),
+                        )
+                            .into_response();
+                    }
+                }
+            }
             continue;
         }
 

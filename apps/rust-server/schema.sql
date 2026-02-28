@@ -198,6 +198,7 @@ CREATE TABLE attachments (
     file_type VARCHAR(100) NOT NULL,
     file_size INTEGER NOT NULL,
     storage_path TEXT NOT NULL,
+    duration_seconds INTEGER,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
