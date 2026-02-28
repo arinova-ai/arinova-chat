@@ -76,6 +76,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const [isRecording, setIsRecording] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [stickers, setStickers] = useState<Array<{ id: string; filename: string; emoji: string }>>([]);
+  const [selectedSticker, setSelectedSticker] = useState<{ id: string; filename: string; emoji: string } | null>(null);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -744,14 +745,12 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       .catch(() => {});
   }, []);
 
-  const handleStickerSend = useCallback(
-    (filename: string) => {
-      if (!activeConversationId) return;
-      sendMessage(`![sticker](/stickers/arinova-pack-01/${filename})`);
-      setStickerOpen(false);
-    },
-    [activeConversationId, sendMessage]
-  );
+  const handleStickerSend = useCallback(() => {
+    if (!activeConversationId || !selectedSticker) return;
+    sendMessage(`![sticker](/stickers/arinova-pack-01/${selectedSticker.filename})`);
+    setStickerOpen(false);
+    setSelectedSticker(null);
+  }, [activeConversationId, sendMessage, selectedSticker]);
 
   const handleSend = useCallback(() => {
     if (selectedFile) {
@@ -1060,7 +1059,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
 
             {/* Sticker picker */}
             {stickers.length > 0 && (
-              <Popover open={stickerOpen} onOpenChange={setStickerOpen}>
+              <Popover open={stickerOpen} onOpenChange={(open) => { setStickerOpen(open); if (!open) setSelectedSticker(null); }}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="ghost"
@@ -1072,18 +1071,42 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-[280px] border-border bg-background p-2"
+                  className="w-[320px] border-border bg-background p-2"
                   align="start"
                   sideOffset={8}
                   side="top"
                 >
-                  <div className="grid grid-cols-5 gap-1 max-h-[240px] overflow-y-auto">
+                  {/* Preview area */}
+                  <div className="flex items-center gap-3 rounded-lg bg-secondary/60 px-3 py-2 mb-2 min-h-[72px]">
+                    {selectedSticker ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/stickers/arinova-pack-01/${selectedSticker.filename}`}
+                          alt={selectedSticker.id}
+                          className="h-16 w-16 object-contain shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{selectedSticker.emoji} {selectedSticker.id}</p>
+                        </div>
+                        <Button size="sm" className="shrink-0 gap-1.5" onClick={handleStickerSend}>
+                          <SendHorizontal className="h-3.5 w-3.5" />
+                          Send
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground w-full text-center">Select a sticker</p>
+                    )}
+                  </div>
+
+                  {/* Sticker grid */}
+                  <div className="grid grid-cols-5 gap-1 max-h-[200px] overflow-y-auto">
                     {stickers.map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        onClick={() => handleStickerSend(s.filename)}
-                        className="rounded-lg p-1 transition-colors hover:bg-accent"
+                        onClick={() => setSelectedSticker(s)}
+                        className={`rounded-lg p-1 transition-colors ${selectedSticker?.id === s.id ? "bg-accent ring-2 ring-brand" : "hover:bg-accent"}`}
                         title={s.emoji}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1095,6 +1118,17 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                         />
                       </button>
                     ))}
+                  </div>
+
+                  {/* Pack tabs */}
+                  <div className="flex items-center gap-1 border-t border-border mt-2 pt-2">
+                    <button
+                      type="button"
+                      className="rounded-md px-2 py-1 text-xs font-medium bg-accent text-foreground"
+                      title="Arinova Pack 01"
+                    >
+                      {stickers[0]?.emoji ?? "🎨"}
+                    </button>
                   </div>
                 </PopoverContent>
               </Popover>
