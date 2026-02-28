@@ -25,6 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/agents/{id}/skills", get(get_skills))
         .route("/api/agents/{id}/avatar", post(upload_avatar))
         .route("/api/agents/{id}/regenerate-token", post(regenerate_token))
+        .route("/api/agents/{id}/profile", get(get_agent_profile))
         .route("/api/agents/{id}/stats", get(get_stats))
         .route("/api/agents/{id}/history", delete(clear_history))
         .route("/api/agents/{id}/export", get(export_history))
@@ -125,6 +126,48 @@ async fn get_agent(
 
     match agent {
         Ok(Some(agent)) => Json(json!(agent)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Agent not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/agents/:id/profile — Public agent profile (any authenticated user)
+async fn get_agent_profile(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let agent = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, String, bool, Option<String>, i32, bool, chrono::NaiveDateTime)>(
+        "SELECT id, name, description, avatar_url, owner_id, is_public, category, usage_count, voice_capable, created_at FROM agents WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match agent {
+        Ok(Some((id, name, description, avatar_url, owner_id, is_public, category, usage_count, voice_capable, created_at))) => {
+            Json(json!({
+                "id": id,
+                "name": name,
+                "description": description,
+                "avatarUrl": avatar_url,
+                "ownerId": owner_id,
+                "isPublic": is_public,
+                "category": category,
+                "usageCount": usage_count,
+                "voiceCapable": voice_capable,
+                "createdAt": created_at.and_utc().to_rfc3339(),
+            }))
+            .into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Agent not found"})),

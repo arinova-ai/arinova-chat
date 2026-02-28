@@ -20,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/users/search", get(search_users))
         .route("/api/users/me", get(get_me))
         .route("/api/users/{userId}", get(get_user_by_id))
+        .route("/api/users/{userId}/agents", get(get_user_agents))
 }
 
 #[derive(Deserialize)]
@@ -216,6 +217,44 @@ async fn get_user_by_id(
             Json(json!({"error": "User not found"})),
         )
             .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/users/:userId/agents — List agents owned by a user (public fields)
+async fn get_user_agents(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(user_id): Path<String>,
+) -> Response {
+    let result = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, Option<String>, Option<String>, bool)>(
+        "SELECT id, name, description, avatar_url, category, voice_capable FROM agents WHERE owner_id = $1 ORDER BY created_at",
+    )
+    .bind(&user_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            let agents: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|(id, name, description, avatar_url, category, voice_capable)| {
+                    json!({
+                        "id": id,
+                        "name": name,
+                        "description": description,
+                        "avatarUrl": avatar_url,
+                        "category": category,
+                        "voiceCapable": voice_capable,
+                    })
+                })
+                .collect();
+            Json(json!(agents)).into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),

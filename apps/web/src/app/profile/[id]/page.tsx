@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore } from "@/store/chat-store";
-import { ArrowLeft, Bot, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
 interface UserProfile {
@@ -35,22 +35,13 @@ function UserProfileContent() {
   const router = useRouter();
   const userId = params.id as string;
 
-  const agents = useChatStore((s) => s.agents);
   const agentHealth = useChatStore((s) => s.agentHealth);
 
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [ownedAgents, setOwnedAgents] = useState<OwnedAgent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // User's own agents visible in the store
-  const ownedAgents: OwnedAgent[] = agents
-    .filter((a) => a.ownerId === userId)
-    .map((a) => ({
-      id: a.id,
-      name: a.name,
-      description: a.description,
-      avatarUrl: a.avatarUrl,
-    }));
-
+  // Fetch user profile
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -62,6 +53,19 @@ function UserProfileContent() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // Fetch user's agents from API
+  useEffect(() => {
+    let cancelled = false;
+    api<OwnedAgent[]>(`/api/users/${userId}/agents`)
+      .then((data) => {
+        if (!cancelled) setOwnedAgents(data);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

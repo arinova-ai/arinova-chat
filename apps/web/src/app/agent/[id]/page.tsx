@@ -10,9 +10,22 @@ import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import type { Agent } from "@arinova/shared/types";
 import { ArrowLeft, MessageSquare, Loader2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+
+/** Public agent profile returned by /api/agents/:id/profile */
+interface AgentProfile {
+  id: string;
+  name: string;
+  description: string | null;
+  avatarUrl: string | null;
+  ownerId: string;
+  isPublic: boolean;
+  category: string | null;
+  usageCount: number;
+  voiceCapable: boolean;
+  createdAt: string;
+}
 
 interface AgentStats {
   totalMessages: number;
@@ -27,19 +40,17 @@ function AgentProfileContent() {
   const agentId = params.id as string;
 
   const { data: session } = authClient.useSession();
-  const storeAgents = useChatStore((s) => s.agents);
   const agentHealth = useChatStore((s) => s.agentHealth);
   const conversations = useChatStore((s) => s.conversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
 
-  const storeAgent = storeAgents.find((a) => a.id === agentId);
   const health = agentHealth[agentId];
   const isOnline = health?.status === "online";
 
-  const [agent, setAgent] = useState<Agent | null>(storeAgent ?? null);
+  const [agent, setAgent] = useState<AgentProfile | null>(null);
   const [stats, setStats] = useState<AgentStats | null>(null);
-  const [loading, setLoading] = useState(!storeAgent);
+  const [loading, setLoading] = useState(true);
   const [ownerName, setOwnerName] = useState<string | null>(null);
 
   const isOwner = !!(
@@ -48,16 +59,11 @@ function AgentProfileContent() {
     session.user.id === agent.ownerId
   );
 
-  // Fetch agent details if not in store
+  // Fetch agent profile (public endpoint — works for any authenticated user)
   useEffect(() => {
-    if (storeAgent) {
-      setAgent(storeAgent);
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
     setLoading(true);
-    api<Agent>(`/api/agents/${agentId}`)
+    api<AgentProfile>(`/api/agents/${agentId}/profile`)
       .then((data) => {
         if (!cancelled) setAgent(data);
       })
@@ -68,13 +74,13 @@ function AgentProfileContent() {
     return () => {
       cancelled = true;
     };
-  }, [agentId, storeAgent]);
+  }, [agentId]);
 
-  // Fetch stats
+  // Fetch stats (owner-only — silently fails for non-owners)
   useEffect(() => {
     if (!agent) return;
     let cancelled = false;
-    api<AgentStats>(`/api/agents/${agentId}/stats`)
+    api<AgentStats>(`/api/agents/${agentId}/stats`, { silent: true })
       .then((data) => {
         if (!cancelled) setStats(data);
       })
@@ -254,7 +260,7 @@ function AgentProfileContent() {
                     </div>
                   )}
 
-                  {/* Stats */}
+                  {/* Stats (owner only) */}
                   {stats && (
                     <>
                       <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-4 py-3">
