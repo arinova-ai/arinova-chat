@@ -40,7 +40,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem("arinova-app-theme");if(t==="light")document.documentElement.classList.remove("dark");})();`,
+            __html: `(function(){try{var t=localStorage.getItem("arinova-app-theme");if(t==="light")document.documentElement.classList.remove("dark")}catch(e){}})();`,
           }}
         />
       </head>

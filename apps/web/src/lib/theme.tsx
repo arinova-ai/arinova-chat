@@ -23,19 +23,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Read stored theme on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-      applyThemeClass(stored);
-    } else {
-      applyThemeClass(DEFAULT_THEME);
-    }
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored === "light" || stored === "dark") {
+        setTheme(stored);
+        applyThemeClass(stored);
+        return;
+      }
+    } catch {}
+    applyThemeClass(DEFAULT_THEME);
   }, []);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next = prev === "dark" ? "light" : "dark";
-      localStorage.setItem(STORAGE_KEY, next);
+      try { localStorage.setItem(STORAGE_KEY, next); } catch {}
       applyThemeClass(next);
       return next;
     });
