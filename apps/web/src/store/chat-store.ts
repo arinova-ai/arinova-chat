@@ -1136,7 +1136,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversationId: msg.conversationId,
         seq: msg.seq,
         role: msg.role,
-        content: msg.content,
+        content: msg.content?.replace(/\r\n/g, "\n") ?? msg.content,
         status: msg.status,
         senderUserId: msg.senderUserId,
         senderUserName: msg.senderUserName,
@@ -1493,7 +1493,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "stream_end") {
       const { conversationId, messageId, seq } = event;
       const { activeConversationId, unreadCounts } = get();
-      const finalContent = event.content;
+      // Normalize \r\n → \n to prevent GFM table formatting differences
+      // between streamed chunks (which use \n) and backend final content
+      const finalContent = event.content?.replace(/\r\n/g, "\n");
       const threadId = event.threadId;
 
       // Check if still in thinkingAgents (no chunks ever arrived)
