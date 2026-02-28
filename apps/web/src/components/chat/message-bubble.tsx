@@ -110,6 +110,13 @@ function isOwnMessage(message: Message, currentUserId: string | undefined): bool
     (message.id.startsWith("temp-") || message.senderUserId === currentUserId);
 }
 
+const STICKER_RE = /^!\[sticker\]\((\/stickers\/.+\.png)\)$/;
+
+function parseStickerUrl(content: string): string | null {
+  const m = content.trim().match(STICKER_RE);
+  return m ? m[1] : null;
+}
+
 interface SenderDisplayInfo {
   name: string;
   color: string;
@@ -455,6 +462,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
   const isQueued = isUser && queuedMessageIds[message.conversationId]?.has(message.id);
+  const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -511,6 +519,17 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
         <div className="relative min-w-0" {...doubleTapHandlers}>
+          {stickerUrl ? (
+            /* Sticker: no bubble frame, transparent background */
+            <div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={stickerUrl}
+                alt="sticker"
+                className="h-32 w-32 object-contain"
+              />
+            </div>
+          ) : (
           <div
             className={cn(
               "rounded-2xl px-4 py-2.5 overflow-hidden",
@@ -557,6 +576,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               isStreaming={isStreaming}
             />
           </div>
+          )}
 
           {/* Reaction badges */}
           <ReactionBadges
