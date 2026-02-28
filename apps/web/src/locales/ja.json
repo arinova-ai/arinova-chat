@@ -45,6 +45,7 @@
   "settings.profile.cropAvatar": "アバターを切り抜き",
   "settings.profile.displayName": "表示名",
   "settings.profile.displayNamePlaceholder": "表示名を入力",
+  "settings.profile.username": "ユーザー名",
   "settings.profile.email": "メールアドレス",
   "settings.profile.emailPlaceholder": "user@example.com",
   "settings.profile.bio": "自己紹介",

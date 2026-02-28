@@ -454,6 +454,15 @@ function ProfilePanel() {
         </div>
 
         <div className="space-y-2">
+          <label className="text-sm font-medium">{t("settings.profile.username")}</label>
+          <Input
+            value={(session?.user as Record<string, unknown> | undefined)?.username ? `@${(session?.user as Record<string, unknown>).username}` : ""}
+            readOnly
+            className="bg-secondary border-border text-muted-foreground"
+          />
+        </div>
+
+        <div className="space-y-2">
           <label className="text-sm font-medium">{t("settings.profile.email")}</label>
           <Input
             value={session?.user?.email ?? ""}

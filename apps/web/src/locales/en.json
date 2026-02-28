@@ -45,6 +45,7 @@
   "settings.profile.cropAvatar": "Crop Avatar",
   "settings.profile.displayName": "Display Name",
   "settings.profile.displayNamePlaceholder": "Enter your display name",
+  "settings.profile.username": "Username",
   "settings.profile.email": "Email",
   "settings.profile.emailPlaceholder": "user@example.com",
   "settings.profile.bio": "Bio",

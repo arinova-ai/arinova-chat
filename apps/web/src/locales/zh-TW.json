@@ -45,6 +45,7 @@
   "settings.profile.cropAvatar": "裁切頭像",
   "settings.profile.displayName": "顯示名稱",
   "settings.profile.displayNamePlaceholder": "輸入你的顯示名稱",
+  "settings.profile.username": "使用者名稱",
   "settings.profile.email": "電子郵件",
   "settings.profile.emailPlaceholder": "user@example.com",
   "settings.profile.bio": "個人簡介",
