@@ -1,0 +1,153 @@
+{
+  "id": "arinova-pack-01",
+  "name": "Arinova Official Pack 01",
+  "name_zh": "Arinova 官方貼圖包 第一套",
+  "version": "1.0.0",
+  "author": "Arinova",
+  "character": "Arinova Doll",
+  "count": 20,
+  "size": "512x512",
+  "format": "png",
+  "stickers": [
+    {
+      "id": "01-hello",
+      "filename": "01-hello.png",
+      "emoji": "👋",
+      "description_en": "Hello / Waving hand",
+      "description_zh": "打招呼 / 揮手"
+    },
+    {
+      "id": "02-thumbsup",
+      "filename": "02-thumbsup.png",
+      "emoji": "👍",
+      "description_en": "Thumbs up / Like",
+      "description_zh": "讚 / 比讚"
+    },
+    {
+      "id": "03-love",
+      "filename": "03-love.png",
+      "emoji": "❤️",
+      "description_en": "Love / Heart hands",
+      "description_zh": "愛心 / 雙手比愛心"
+    },
+    {
+      "id": "04-happy",
+      "filename": "04-happy.png",
+      "emoji": "😄",
+      "description_en": "Happy / Jumping with joy",
+      "description_zh": "開心 / 開心跳躍"
+    },
+    {
+      "id": "05-sad",
+      "filename": "05-sad.png",
+      "emoji": "😢",
+      "description_en": "Sad / Crying",
+      "description_zh": "難過 / 流淚"
+    },
+    {
+      "id": "06-angry",
+      "filename": "06-angry.png",
+      "emoji": "😠",
+      "description_en": "Angry / Fuming",
+      "description_zh": "生氣 / 生氣冒煙"
+    },
+    {
+      "id": "07-surprised",
+      "filename": "07-surprised.png",
+      "emoji": "😮",
+      "description_en": "Surprised / Shocked",
+      "description_zh": "驚訝 / 驚嘆號"
+    },
+    {
+      "id": "08-thinking",
+      "filename": "08-thinking.png",
+      "emoji": "🤔",
+      "description_en": "Thinking / Pondering",
+      "description_zh": "思考 / 手托下巴"
+    },
+    {
+      "id": "09-sleepy",
+      "filename": "09-sleepy.png",
+      "emoji": "😴",
+      "description_en": "Sleepy / Dozing off",
+      "description_zh": "睡覺 / 打瞌睡 ZZZ"
+    },
+    {
+      "id": "10-celebrate",
+      "filename": "10-celebrate.png",
+      "emoji": "🎉",
+      "description_en": "Celebrate / Party",
+      "description_zh": "慶祝 / 撒花"
+    },
+    {
+      "id": "11-fighting",
+      "filename": "11-fighting.png",
+      "emoji": "💪",
+      "description_en": "Fighting / Cheer up",
+      "description_zh": "加油 / 握拳加油"
+    },
+    {
+      "id": "12-please",
+      "filename": "12-please.png",
+      "emoji": "🙏",
+      "description_en": "Please / Begging",
+      "description_zh": "拜託 / 雙手合十"
+    },
+    {
+      "id": "13-ok",
+      "filename": "13-ok.png",
+      "emoji": "👌",
+      "description_en": "OK / Got it",
+      "description_zh": "OK / 沒問題"
+    },
+    {
+      "id": "14-awkward",
+      "filename": "14-awkward.png",
+      "emoji": "😅",
+      "description_en": "Awkward / Nervous smile",
+      "description_zh": "尷尬 / 尷尬笑+冒汗"
+    },
+    {
+      "id": "15-hug",
+      "filename": "15-hug.png",
+      "emoji": "🤗",
+      "description_en": "Hug / Open arms",
+      "description_zh": "抱抱 / 張開雙手要抱抱"
+    },
+    {
+      "id": "16-sparkle",
+      "filename": "16-sparkle.png",
+      "emoji": "✨",
+      "description_en": "Sparkle / Shining eyes",
+      "description_zh": "閃亮 / 眼睛發光+星星"
+    },
+    {
+      "id": "17-busy",
+      "filename": "17-busy.png",
+      "emoji": "📱",
+      "description_en": "Busy / Working hard",
+      "description_zh": "忙碌 / 打電腦"
+    },
+    {
+      "id": "18-coffee",
+      "filename": "18-coffee.png",
+      "emoji": "☕",
+      "description_en": "Coffee break / Relaxing",
+      "description_zh": "喝咖啡 / 休息一下"
+    },
+    {
+      "id": "19-goodnight",
+      "filename": "19-goodnight.png",
+      "emoji": "🌙",
+      "description_en": "Good night / Sleep well",
+      "description_zh": "晚安 / 戴睡帽+月亮"
+    },
+    {
+      "id": "20-amazing",
+      "filename": "20-amazing.png",
+      "emoji": "🔥",
+      "description_en": "Amazing / On fire",
+      "description_zh": "厲害 / 帥氣pose+火焰"
+    }
+  ]
+}
