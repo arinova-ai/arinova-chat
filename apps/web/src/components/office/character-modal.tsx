@@ -24,7 +24,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, Link2, Link2Off, Bot } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
-import { authClient } from "@/lib/auth-client";
+import { api } from "@/lib/api";
 import type { Agent } from "./types";
 
 const STATUS_BADGE: Record<string, { label: string; dot: string; bg: string; text: string }> = {
@@ -50,37 +50,17 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-function bindingsKey(userId: string): string {
-  return `office-agent-bindings:${userId}`;
-}
-
-function getBindings(userId: string | undefined): Record<string, string> {
-  if (typeof window === "undefined" || !userId) return {};
-  try {
-    return JSON.parse(localStorage.getItem(bindingsKey(userId)) ?? "{}");
-  } catch {
-    return {};
-  }
-}
-
-function setBinding(userId: string | undefined, characterId: string, agentId: string | null) {
-  if (typeof window === "undefined" || !userId) return;
-  const bindings = getBindings(userId);
-  if (agentId) {
-    bindings[characterId] = agentId;
-  } else {
-    delete bindings[characterId];
-  }
-  localStorage.setItem(bindingsKey(userId), JSON.stringify(bindings));
-}
-
 interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
   agent: Agent | null;
   agents?: Agent[];
-  /** Character identifier for agent binding (defaults to "default") */
-  characterId?: string;
+  themeId: string;
+  slotIndex: number;
+  /** Currently bound chat-agent ID (from parent's API state) */
+  boundAgentId?: string | null;
+  /** Called after bind/unbind so the parent can refetch bindings */
+  onBindingChange?: () => void;
 }
 
 const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
@@ -118,21 +98,13 @@ function CharacterDetailOffline() {
   );
 }
 
-function CharacterDetail({ agent, agents, characterId }: { agent: Agent; agents: Agent[]; characterId: string }) {
+function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBindingChange }: {
+  agent: Agent; agents: Agent[]; themeId: string; slotIndex: number; boundAgentId?: string | null; onBindingChange?: () => void;
+}) {
   const badge = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
-  const { data: session } = authClient.useSession();
-  const currentUserId = session?.user?.id;
   const chatAgents = useChatStore((s) => s.agents);
   const loadAgents = useChatStore((s) => s.loadAgents);
-  const [boundAgentId, setBoundAgentId] = useState<string | null>(() => getBindings(currentUserId)[characterId] ?? null);
   const [bindOpen, setBindOpen] = useState(false);
-
-  // Re-sync from localStorage when userId becomes available
-  useEffect(() => {
-    if (currentUserId) {
-      setBoundAgentId(getBindings(currentUserId)[characterId] ?? null);
-    }
-  }, [currentUserId, characterId]);
 
   const boundChatAgent = boundAgentId ? chatAgents.find((a) => a.id === boundAgentId) : null;
 
@@ -140,16 +112,25 @@ function CharacterDetail({ agent, agents, characterId }: { agent: Agent; agents:
     if (chatAgents.length === 0) loadAgents();
   }, [chatAgents.length, loadAgents]);
 
-  const handleBind = useCallback((agentId: string) => {
-    setBinding(currentUserId, characterId, agentId);
-    setBoundAgentId(agentId);
+  const handleBind = useCallback(async (agentId: string) => {
+    try {
+      await api("/api/office/bindings", {
+        method: "PUT",
+        body: JSON.stringify({ themeId, slotIndex, agentId }),
+      });
+      onBindingChange?.();
+    } catch { /* api() shows toast */ }
     setBindOpen(false);
-  }, [currentUserId, characterId]);
+  }, [themeId, slotIndex, onBindingChange]);
 
-  const handleUnbind = useCallback(() => {
-    setBinding(currentUserId, characterId, null);
-    setBoundAgentId(null);
-  }, [currentUserId, characterId]);
+  const handleUnbind = useCallback(async () => {
+    try {
+      await api(`/api/office/bindings/${encodeURIComponent(themeId)}/${slotIndex}`, {
+        method: "DELETE",
+      });
+      onBindingChange?.();
+    } catch { /* api() shows toast */ }
+  }, [themeId, slotIndex, onBindingChange]);
 
   const displayName = boundChatAgent?.name ?? agent.name;
 
@@ -393,7 +374,7 @@ function CharacterDetail({ agent, agents, characterId }: { agent: Agent; agents:
   );
 }
 
-export function CharacterModal({ isOpen, onClose, agent, agents = [], characterId = "default" }: CharacterModalProps) {
+export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, slotIndex, boundAgentId, onBindingChange }: CharacterModalProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -406,7 +387,7 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], characterI
 
   const title = agent?.name || "Arinova Assistant";
   const content = agent
-    ? <CharacterDetail agent={agent} agents={agents} characterId={characterId} />
+    ? <CharacterDetail agent={agent} agents={agents} themeId={themeId} slotIndex={slotIndex} boundAgentId={boundAgentId} onBindingChange={onBindingChange} />
     : <CharacterDetailOffline />;
 
   if (isMobile) {

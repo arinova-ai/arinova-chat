@@ -8,7 +8,15 @@ import { CharacterModal } from "./character-modal";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { useTheme } from "./theme-context";
 import { THEME_REGISTRY } from "./theme-registry";
+import { api } from "@/lib/api";
 import type { Agent } from "./types";
+
+interface BindingRow {
+  slotIndex: number;
+  agentId: string;
+  agentName: string | null;
+  agentAvatarUrl: string | null;
+}
 
 // Dynamic import — PixiJS only works client-side
 const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
@@ -25,12 +33,42 @@ function OfficeViewInner() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
-  const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
+  // ── Slot bindings (API-backed) ──────────────────────────
+  const [bindings, setBindings] = useState<BindingRow[]>([]);
+  const autoBindAttempted = useRef(false);
 
-  // For v3 single-character themes, use the first real agent or a demo fallback
-  const characterAgent: Agent | null = displayAgents.length > 0
-    ? displayAgents[0]
-    : null;
+  const fetchBindings = useCallback(async () => {
+    try {
+      const rows = await api<BindingRow[]>(
+        `/api/office/bindings?themeId=${encodeURIComponent(themeId)}`,
+        { silent: true },
+      );
+      setBindings(rows);
+    } catch { /* ignore — user may not be logged in yet */ }
+  }, [themeId]);
+
+  useEffect(() => {
+    fetchBindings();
+  }, [fetchBindings]);
+
+  // Auto-bind first display agent to slot 0 when no bindings exist
+  useEffect(() => {
+    if (bindings.length > 0 || displayAgents.length === 0 || autoBindAttempted.current) return;
+    autoBindAttempted.current = true;
+    api("/api/office/bindings", {
+      method: "PUT",
+      body: JSON.stringify({ themeId, slotIndex: 0, agentId: displayAgents[0].id }),
+      silent: true,
+    }).then(() => fetchBindings()).catch(() => {});
+  }, [bindings.length, displayAgents, themeId, fetchBindings]);
+
+  // Derive character agent from binding → display agents
+  const slot0Binding = bindings.find((b) => b.slotIndex === 0);
+  const characterAgent: Agent | null = slot0Binding
+    ? displayAgents.find((a) => a.id === slot0Binding.agentId) ?? null
+    : displayAgents[0] ?? null;
+
+  const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
 
   const selectAgent = useCallback((id: string | null) => {
     setSelectedAgentId(id);
@@ -92,6 +130,10 @@ function OfficeViewInner() {
         onClose={closeCharacterModal}
         agent={characterAgent}
         agents={displayAgents}
+        themeId={themeId}
+        slotIndex={0}
+        boundAgentId={slot0Binding?.agentId ?? null}
+        onBindingChange={fetchBindings}
       />
     </div>
   );
