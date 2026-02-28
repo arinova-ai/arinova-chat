@@ -188,10 +188,8 @@ function emit(event: InternalEvent, accountId?: string): void {
 
   if (!forwardUrl) return;
 
-  // Find token for this account, fallback to any available token
-  const token =
-    (accountId && accountTokens.get(accountId)) ||
-    accountTokens.values().next().value;
+  // Only forward with the exact account's token — no fallback
+  const token = accountId ? accountTokens.get(accountId) : undefined;
   if (!token) return;
 
   fetch(forwardUrl, {
