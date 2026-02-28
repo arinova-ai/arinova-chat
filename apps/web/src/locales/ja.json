@@ -113,5 +113,19 @@
   "agentProfile.listenMode.allowed_users": "許可されたユーザー",
   "agentProfile.listenMode.allowed_users.desc": "許可されたユーザーの @メンションのみ応答",
   "agentProfile.allowedUsers": "許可されたユーザー",
-  "agentProfile.allowedUsers.selected": "{count} 人選択済み"
+  "agentProfile.allowedUsers.selected": "{count} 人選択済み",
+
+  "profilePage.userNotFound": "ユーザーが見つかりません",
+  "profilePage.ownedAgents": "エージェント",
+  "profilePage.agentProfile": "エージェント情報",
+  "profilePage.agentNotFound": "エージェントが見つかりません",
+  "profilePage.online": "オンライン",
+  "profilePage.offline": "オフライン",
+  "profilePage.chat": "チャット",
+  "profilePage.owner": "オーナー",
+  "profilePage.category": "カテゴリ",
+  "profilePage.totalMessages": "メッセージ数",
+  "profilePage.totalConversations": "会話数",
+  "profilePage.lastActive": "最終アクティブ",
+  "profilePage.voiceCapable": "音声"
 }

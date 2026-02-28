@@ -113,5 +113,19 @@
   "agentProfile.listenMode.allowed_users": "Allowed Users",
   "agentProfile.listenMode.allowed_users.desc": "Only responds to @mentions from allowed users",
   "agentProfile.allowedUsers": "Allowed Users",
-  "agentProfile.allowedUsers.selected": "{count} selected"
+  "agentProfile.allowedUsers.selected": "{count} selected",
+
+  "profilePage.userNotFound": "User not found",
+  "profilePage.ownedAgents": "Agents",
+  "profilePage.agentProfile": "Agent Profile",
+  "profilePage.agentNotFound": "Agent not found",
+  "profilePage.online": "Online",
+  "profilePage.offline": "Offline",
+  "profilePage.chat": "Chat",
+  "profilePage.owner": "Owner",
+  "profilePage.category": "Category",
+  "profilePage.totalMessages": "Messages",
+  "profilePage.totalConversations": "Conversations",
+  "profilePage.lastActive": "Last Active",
+  "profilePage.voiceCapable": "Voice"
 }

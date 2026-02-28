@@ -113,5 +113,19 @@
   "agentProfile.listenMode.allowed_users": "允许的用户",
   "agentProfile.listenMode.allowed_users.desc": "只回应被允许用户的 @提及",
   "agentProfile.allowedUsers": "允许的用户",
-  "agentProfile.allowedUsers.selected": "已选 {count} 人"
+  "agentProfile.allowedUsers.selected": "已选 {count} 人",
+
+  "profilePage.userNotFound": "未找到用户",
+  "profilePage.ownedAgents": "Agent",
+  "profilePage.agentProfile": "Agent 资料",
+  "profilePage.agentNotFound": "未找到 Agent",
+  "profilePage.online": "在线",
+  "profilePage.offline": "离线",
+  "profilePage.chat": "聊天",
+  "profilePage.owner": "拥有者",
+  "profilePage.category": "分类",
+  "profilePage.totalMessages": "消息数",
+  "profilePage.totalConversations": "对话数",
+  "profilePage.lastActive": "最近活动",
+  "profilePage.voiceCapable": "语音"
 }

@@ -113,5 +113,19 @@
   "agentProfile.listenMode.allowed_users": "允許的使用者",
   "agentProfile.listenMode.allowed_users.desc": "只回應被允許使用者的 @提及",
   "agentProfile.allowedUsers": "允許的使用者",
-  "agentProfile.allowedUsers.selected": "已選 {count} 人"
+  "agentProfile.allowedUsers.selected": "已選 {count} 人",
+
+  "profilePage.userNotFound": "找不到使用者",
+  "profilePage.ownedAgents": "Agent",
+  "profilePage.agentProfile": "Agent 資料",
+  "profilePage.agentNotFound": "找不到 Agent",
+  "profilePage.online": "線上",
+  "profilePage.offline": "離線",
+  "profilePage.chat": "聊天",
+  "profilePage.owner": "擁有者",
+  "profilePage.category": "分類",
+  "profilePage.totalMessages": "訊息數",
+  "profilePage.totalConversations": "對話數",
+  "profilePage.lastActive": "最近活動",
+  "profilePage.voiceCapable": "語音"
 }

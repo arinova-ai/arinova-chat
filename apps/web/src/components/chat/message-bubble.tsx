@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import type { Message, Attachment } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
@@ -37,8 +38,6 @@ import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
-import { UserProfileSheet } from "./user-profile-sheet";
-import { AgentProfileSheet } from "./agent-profile-sheet";
 import { useDoubleTap } from "@/hooks/use-double-tap";
 
 // ============================================================
@@ -434,8 +433,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
 
   const conversations = useChatStore((s) => s.conversations);
+  const router = useRouter();
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const showUserProfile = useMemo(
     () => !isUser && message.role === "user" && !!message.senderUserId,
     [isUser, message.role, message.senderUserId]
@@ -501,7 +500,13 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         message={message}
         isOwn={isUser}
         clickable={showProfileClick}
-        onClick={() => setProfileOpen(true)}
+        onClick={() => {
+          if (showUserProfile && message.senderUserId) {
+            router.push(`/profile/${message.senderUserId}`);
+          } else if (showAgentProfile && resolvedAgentId) {
+            router.push(`/agent/${resolvedAgentId}`);
+          }
+        }}
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
@@ -646,22 +651,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         onReact={(emoji) => toggleReaction(message.id, emoji)}
       />
 
-      {showUserProfile && message.senderUserId && (
-        <UserProfileSheet
-          userId={message.senderUserId}
-          conversationId={message.conversationId}
-          open={profileOpen}
-          onOpenChange={setProfileOpen}
-        />
-      )}
-      {showAgentProfile && resolvedAgentId && (
-        <AgentProfileSheet
-          agentId={resolvedAgentId}
-          conversationId={message.conversationId}
-          open={profileOpen}
-          onOpenChange={setProfileOpen}
-        />
-      )}
     </div>
   );
 }
