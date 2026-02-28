@@ -28,7 +28,7 @@ import { voiceWsRoutes } from "./ws/voice-handler.js";
 import { spaceRoutes } from "./routes/spaces.js";
 import { officeRoutes } from "./routes/office.js";
 import { userRoutes } from "./routes/users.js";
-import { initialize as initOfficePlugin } from "@arinova-ai/openclaw-office-plugin";
+import { initializeOffice as initOfficePlugin } from "@arinova-ai/openclaw-arinova-ai";
 // Phase 2+ routes (on features/platform-extras branch)
 // import { marketplaceRoutes } from "./routes/marketplace.js";
 // import { communityRoutes } from "./routes/communities.js";

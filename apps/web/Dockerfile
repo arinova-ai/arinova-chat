@@ -13,7 +13,6 @@ COPY packages/agent-sdk/package.json ./packages/agent-sdk/
 COPY packages/app-sdk/package.json ./packages/app-sdk/
 COPY packages/spaces-sdk/package.json ./packages/spaces-sdk/
 COPY packages/openclaw-plugin/package.json ./packages/openclaw-plugin/
-COPY packages/openclaw-office-plugin/package.json ./packages/openclaw-office-plugin/
 
 # --ignore-scripts: skip mediasoup native build (server-only dep, not needed for web)
 RUN pnpm install --frozen-lockfile --ignore-scripts

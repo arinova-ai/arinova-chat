@@ -1,5 +1,5 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { registerHooks, setForwardTarget } from "./hooks.js";
+import { registerHooks as registerOfficeHooks, setForwardTarget } from "./hooks.js";
 import { officeState } from "./state.js";
 
 // Re-export public API
@@ -13,7 +13,7 @@ export type { HookEvent, HookEventType } from "./types.js";
 /** Idle-check interval handle */
 let tickInterval: NodeJS.Timeout | null = null;
 
-/** Returns true when the tick loop is running (plugin registered or standalone init) */
+/** Returns true when the tick loop is running */
 export function isHealthy(): boolean {
   return tickInterval !== null;
 }
@@ -27,7 +27,7 @@ export function configure(opts: { forwardUrl: string; forwardToken: string }): v
 }
 
 /**
- * Start the idle-check tick loop without full OpenClaw plugin registration.
+ * Start the idle-check tick loop.
  * Call this from the server process so isHealthy() returns true and
  * events fed via ingestHookEvent() are properly aged out.
  */
@@ -38,7 +38,7 @@ export function initialize(): void {
   }, 15_000);
 }
 
-/** Stop the tick loop (inverse of initialize / destroy). */
+/** Stop the tick loop. */
 export function shutdown(): void {
   if (tickInterval) {
     clearInterval(tickInterval);
@@ -46,26 +46,18 @@ export function shutdown(): void {
   }
 }
 
-const plugin = {
-  id: "openclaw-office-plugin",
-  name: "Virtual Office",
-  description: "Tracks agent session activity and exposes real-time status via SSE for the Virtual Office UI.",
+/**
+ * Register office hooks with the OpenClaw plugin API and start the tick loop.
+ * Called from the main arinova plugin's register().
+ */
+export function registerOffice(api: OpenClawPluginApi): void {
+  // Auto-configure HTTP forwarding from env vars
+  const url = process.env.OFFICE_FORWARD_URL;
+  const token = process.env.OFFICE_EVENT_TOKEN;
+  if (url && token) {
+    setForwardTarget(url, token);
+  }
 
-  register(api: OpenClawPluginApi): void {
-    // Auto-configure HTTP forwarding from env vars
-    const url = process.env.OFFICE_FORWARD_URL;
-    const token = process.env.OFFICE_EVENT_TOKEN;
-    if (url && token) {
-      setForwardTarget(url, token);
-    }
-
-    registerHooks(api);
-    initialize(); // reuse standalone init
-  },
-
-  destroy(): void {
-    shutdown(); // reuse standalone shutdown
-  },
-};
-
-export default plugin;
+  registerOfficeHooks(api);
+  initialize();
+}

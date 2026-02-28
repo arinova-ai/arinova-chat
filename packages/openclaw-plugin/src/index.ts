@@ -3,6 +3,7 @@ import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 import { arinovaChatPlugin } from "./channel.js";
 import { setArinovaChatRuntime } from "./runtime.js";
 import { exchangeBotToken } from "./auth.js";
+import { registerOffice, shutdown as shutdownOffice } from "./office/index.js";
 
 const plugin: {
   id: string;
@@ -10,14 +11,18 @@ const plugin: {
   description: string;
   configSchema: ReturnType<typeof emptyPluginConfigSchema>;
   register: (api: OpenClawPluginApi) => void;
+  destroy: () => void;
 } = {
   id: "openclaw-arinova-ai",
   name: "Arinova Chat",
-  description: "Arinova Chat channel plugin (A2A protocol with native streaming)",
+  description: "Arinova Chat channel plugin with Virtual Office integration (A2A protocol with native streaming)",
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi) {
     setArinovaChatRuntime(api.runtime);
     api.registerChannel({ plugin: arinovaChatPlugin });
+
+    // Virtual Office: register hooks and start tick loop
+    registerOffice(api);
 
     // Hint on gateway start if not configured
     api.on("gateway_start", () => {
@@ -85,6 +90,15 @@ const plugin: {
       { commands: ["arinova-setup"] },
     );
   },
+
+  destroy() {
+    shutdownOffice();
+  },
 };
+
+// Office integration re-exports
+export { officeState, handleSSEConnection, ingestHookEvent, configure as configureOffice } from "./office/index.js";
+export { initialize as initializeOffice, shutdown as shutdownOffice } from "./office/index.js";
+export type { AgentState, AgentStatus, TokenUsage, OfficeStatusEvent, InternalEvent, InternalEventType } from "./office/types.js";
 
 export default plugin;
