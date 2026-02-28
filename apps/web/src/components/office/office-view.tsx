@@ -62,10 +62,22 @@ function OfficeViewInner() {
     }).then(() => fetchBindings()).catch(() => {});
   }, [bindings.length, displayAgents, themeId, fetchBindings]);
 
-  // Derive character agent from binding → display agents
+  // Derive character agent from binding → all stream agents (not just displayAgents,
+  // which may be capped by maxAgents). If the bound agent isn't streaming office
+  // events at all, create a minimal fallback from the binding metadata so the
+  // character modal shows agent info with "Idle" status instead of "not connected".
   const slot0Binding = bindings.find((b) => b.slotIndex === 0);
   const characterAgent: Agent | null = slot0Binding
-    ? displayAgents.find((a) => a.id === slot0Binding.agentId) ?? null
+    ? stream.agents.find((a) => a.id === slot0Binding.agentId)
+      ?? (slot0Binding.agentName ? {
+          id: slot0Binding.agentId,
+          name: slot0Binding.agentName,
+          role: "",
+          emoji: "\u{1F916}",
+          color: "#64748b",
+          status: "idle" as const,
+          recentActivity: [],
+        } : null)
     : displayAgents[0] ?? null;
 
   const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
