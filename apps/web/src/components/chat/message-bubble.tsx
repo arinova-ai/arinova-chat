@@ -81,15 +81,22 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const reactionsByMessage = useChatStore((s) => s.reactionsByMessage);
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
 
+  const conversations = useChatStore((s) => s.conversations);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const showUserProfile = useMemo(
     () => isGroupConversation && !isUser && !!message.senderUserId,
     [isGroupConversation, isUser, message.senderUserId]
   );
+  // Resolve agentId: prefer senderAgentId, fall back to conversation's agentId
+  const resolvedAgentId = useMemo(() => {
+    if (message.senderAgentId) return message.senderAgentId;
+    const conv = conversations.find((c) => c.id === message.conversationId);
+    return conv?.agentId ?? null;
+  }, [message.senderAgentId, message.conversationId, conversations]);
   const showAgentProfile = useMemo(
-    () => isGroupConversation && !isUser && message.role === "agent" && !!message.senderAgentId,
-    [isGroupConversation, isUser, message.role, message.senderAgentId]
+    () => !isUser && message.role === "agent" && !!resolvedAgentId,
+    [isUser, message.role, resolvedAgentId]
   );
   const showProfileClick = showUserProfile || showAgentProfile;
   const doubleTapHandlers = useDoubleTap(() => {
@@ -412,9 +419,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           onOpenChange={setProfileOpen}
         />
       )}
-      {showAgentProfile && message.senderAgentId && (
+      {showAgentProfile && resolvedAgentId && (
         <AgentProfileSheet
-          agentId={message.senderAgentId}
+          agentId={resolvedAgentId}
           conversationId={message.conversationId}
           open={profileOpen}
           onOpenChange={setProfileOpen}
