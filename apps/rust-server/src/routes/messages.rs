@@ -58,6 +58,7 @@ struct AttachmentRow {
     file_type: String,
     file_size: i32,
     storage_path: String,
+    duration_seconds: Option<i32>,
     created_at: NaiveDateTime,
 }
 
@@ -104,7 +105,7 @@ async fn with_attachments(
     let message_ids: Vec<Uuid> = items.iter().map(|m| m.id).collect();
 
     let attachments = sqlx::query_as::<_, AttachmentRow>(
-        "SELECT id, message_id, file_name, file_type, file_size, storage_path, created_at
+        "SELECT id, message_id, file_name, file_type, file_size, storage_path, duration_seconds, created_at
          FROM attachments
          WHERE message_id = ANY($1)",
     )
@@ -220,6 +221,7 @@ async fn with_attachments(
                         "fileType": a.file_type,
                         "fileSize": a.file_size,
                         "url": url,
+                        "duration": a.duration_seconds,
                         "createdAt": a.created_at.and_utc().to_rfc3339(),
                     })
                 })

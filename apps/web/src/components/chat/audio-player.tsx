@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 interface AudioPlayerProps {
   src: string;
+  duration?: number;
   className?: string;
 }
 
@@ -16,11 +17,11 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function AudioPlayer({ src, className }: AudioPlayerProps) {
+export function AudioPlayer({ src, duration: initialDuration, className }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState(initialDuration ?? 0);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {

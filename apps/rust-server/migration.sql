@@ -481,4 +481,7 @@ CREATE TABLE IF NOT EXISTS thread_reads (
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_thread_summaries_last ON thread_summaries(last_reply_at DESC);
 
+-- #41 Voice recording duration
+ALTER TABLE attachments ADD COLUMN IF NOT EXISTS duration_seconds INTEGER;
+
 COMMIT;

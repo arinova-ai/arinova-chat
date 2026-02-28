@@ -245,6 +245,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                     <AudioPlayer
                       key={att.id}
                       src={assetUrl(att.url)}
+                      duration={att.duration}
                     />
                   ) : (
                     <a

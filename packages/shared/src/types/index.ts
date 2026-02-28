@@ -103,6 +103,7 @@ export interface Attachment {
   fileType: string;
   fileSize: number;
   url: string;
+  duration?: number;
   createdAt: Date;
 }
 

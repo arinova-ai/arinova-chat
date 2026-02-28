@@ -70,6 +70,7 @@ async fn upload_file(
 
     // --- Phase 1: Read all multipart fields ---
     let mut caption = String::new();
+    let mut duration_seconds: Option<i32> = None;
     let mut file_data: Option<(String, String, bytes::Bytes)> = None; // (file_name, content_type, data)
 
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -77,6 +78,11 @@ async fn upload_file(
 
         if field_name == "caption" {
             caption = field.text().await.unwrap_or_default();
+            continue;
+        }
+
+        if field_name == "duration_seconds" {
+            duration_seconds = field.text().await.ok().and_then(|v| v.parse().ok());
             continue;
         }
 
@@ -237,8 +243,8 @@ async fn upload_file(
     };
 
     let att_result = sqlx::query_as::<_, crate::db::models::Attachment>(
-        r#"INSERT INTO attachments (id, message_id, file_name, file_type, file_size, storage_path)
-           VALUES ($1, $2, $3, $4, $5, $6)
+        r#"INSERT INTO attachments (id, message_id, file_name, file_type, file_size, storage_path, duration_seconds)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING *"#,
     )
     .bind(attachment_id)
@@ -247,6 +253,7 @@ async fn upload_file(
     .bind(&content_type)
     .bind(file_size)
     .bind(&storage_path)
+    .bind(duration_seconds)
     .fetch_one(&state.db)
     .await;
 
@@ -322,6 +329,7 @@ async fn upload_file(
                     "fileType": attachment.file_type,
                     "fileSize": attachment.file_size,
                     "url": attachment.storage_path,
+                    "duration": attachment.duration_seconds,
                     "createdAt": attachment.created_at.and_utc().to_rfc3339(),
                 }]
             }

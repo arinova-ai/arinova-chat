@@ -414,7 +414,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   }, [selectedFile, activeConversationId, value, sendMessage, clearInput]);
 
   const handleVoiceUpload = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, durationSeconds?: number) => {
       setIsRecording(false);
       if (!activeConversationId) return;
 
@@ -427,6 +427,9 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       try {
         const formData = new FormData();
         formData.append("file", file);
+        if (durationSeconds != null) {
+          formData.append("duration_seconds", String(Math.round(durationSeconds)));
+        }
 
         const res = await fetch(
           `${BACKEND_URL}/api/conversations/${activeConversationId}/upload`,
@@ -688,7 +691,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
         {isRecording ? (
           <div className="flex items-end gap-2">
             <VoiceRecorder
-              onRecordingComplete={(blob) => handleVoiceUpload(blob)}
+              onRecordingComplete={(blob, duration) => handleVoiceUpload(blob, duration)}
               onCancel={() => setIsRecording(false)}
             />
           </div>

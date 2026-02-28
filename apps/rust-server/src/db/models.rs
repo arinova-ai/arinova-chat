@@ -284,6 +284,7 @@ pub struct Attachment {
     pub file_type: String,
     pub file_size: i32,
     pub storage_path: String,
+    pub duration_seconds: Option<i32>,
     pub created_at: NaiveDateTime,
 }
 
