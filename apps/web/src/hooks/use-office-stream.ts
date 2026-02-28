@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { OFFICE_STREAM_URL } from "@/lib/office-config";
 import type { Agent } from "@/components/office/types";
+import { useChatStore } from "@/store/chat-store";
 
 /** Shape of the SSE status event from the office plugin */
 interface OfficeStatusEvent {
@@ -82,6 +83,46 @@ export function useOfficeStream() {
       es.close();
       esRef.current = null;
     };
+  }, []);
+
+  // Monitor chat-store thinkingAgents: when an agent stops streaming
+  // (removed from thinkingAgents), proactively set it to idle in the
+  // office view instead of waiting for the 60s SSE server-side timeout.
+  const prevThinkingIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const unsub = useChatStore.subscribe((state) => {
+      const { thinkingAgents } = state;
+
+      // Collect all currently-thinking agent IDs
+      const currentIds = new Set<string>();
+      for (const entries of Object.values(thinkingAgents)) {
+        for (const entry of entries) {
+          currentIds.add(entry.agentId);
+        }
+      }
+
+      // Find agents that were thinking but are no longer
+      const stoppedIds: string[] = [];
+      for (const id of prevThinkingIdsRef.current) {
+        if (!currentIds.has(id)) {
+          stoppedIds.push(id);
+        }
+      }
+      prevThinkingIdsRef.current = currentIds;
+
+      // Set stopped agents to idle immediately
+      if (stoppedIds.length > 0) {
+        setAgents((prev) =>
+          prev.map((a) =>
+            stoppedIds.includes(a.id) && a.status === "working"
+              ? { ...a, status: "idle" as const }
+              : a
+          )
+        );
+      }
+    });
+    return unsub;
   }, []);
 
   return { agents, connected };
