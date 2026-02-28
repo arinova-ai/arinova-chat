@@ -188,6 +188,12 @@
   "creator.payoutAmount": "金額（最低 100）",
   "creator.confirmPayout": "確認提領",
   "creator.payoutNote": "提領申請將於 3-5 個工作日內處理。",
+  "creator.status.active": "上架中",
+  "creator.status.draft": "草稿",
+  "creator.status.archived": "已封存",
+  "creator.status.pending_review": "待審核",
+  "creator.status.under_review": "審核中",
+  "creator.status.suspended": "已停權",
 
   "spaces.title": "空間",
   "spaces.subtitle": "遊戲與社交體驗",

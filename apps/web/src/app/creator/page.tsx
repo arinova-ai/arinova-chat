@@ -264,7 +264,7 @@ function StickersTab({ t }: { t: (k: string) => string }) {
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold truncate">{pack.name}</h3>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(pack.status)}`}>
-                  {pack.status.replace("_", " ")}
+                  {t(`creator.status.${pack.status}`)}
                 </span>
               </div>
               <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
@@ -358,7 +358,7 @@ function AgentsTab({
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold truncate">{agent.agentName}</h3>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(agent.status)}`}>
-                    {agent.status}
+                    {t(`creator.status.${agent.status}`)}
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
@@ -435,7 +435,7 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold truncate">{theme.name}</h3>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(theme.status)}`}>
-                  {theme.status}
+                  {t(`creator.status.${theme.status}`)}
                 </span>
               </div>
               <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">

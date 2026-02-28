@@ -188,6 +188,12 @@
   "creator.payoutAmount": "金额（最低 100）",
   "creator.confirmPayout": "确认提现",
   "creator.payoutNote": "提现申请将在 3-5 个工作日内处理。",
+  "creator.status.active": "已上架",
+  "creator.status.draft": "草稿",
+  "creator.status.archived": "已归档",
+  "creator.status.pending_review": "待审核",
+  "creator.status.under_review": "审核中",
+  "creator.status.suspended": "已停用",
 
   "spaces.title": "空间",
   "spaces.subtitle": "游戏与社交体验",

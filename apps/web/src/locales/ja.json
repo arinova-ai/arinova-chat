@@ -188,6 +188,12 @@
   "creator.payoutAmount": "金額（最低 100）",
   "creator.confirmPayout": "出金を確認",
   "creator.payoutNote": "出金申請は3〜5営業日以内に処理されます。",
+  "creator.status.active": "公開中",
+  "creator.status.draft": "下書き",
+  "creator.status.archived": "アーカイブ済み",
+  "creator.status.pending_review": "審査待ち",
+  "creator.status.under_review": "審査中",
+  "creator.status.suspended": "停止中",
 
   "spaces.title": "スペース",
   "spaces.subtitle": "ゲーム＆ソーシャル体験",

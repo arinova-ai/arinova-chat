@@ -188,6 +188,12 @@
   "creator.payoutAmount": "Amount (min 100)",
   "creator.confirmPayout": "Confirm Payout",
   "creator.payoutNote": "Payout requests are processed within 3-5 business days.",
+  "creator.status.active": "Active",
+  "creator.status.draft": "Draft",
+  "creator.status.archived": "Archived",
+  "creator.status.pending_review": "Pending Review",
+  "creator.status.under_review": "Under Review",
+  "creator.status.suspended": "Suspended",
 
   "spaces.title": "Spaces",
   "spaces.subtitle": "Games & social experiences",
