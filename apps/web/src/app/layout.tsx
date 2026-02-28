@@ -36,7 +36,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full" suppressHydrationWarning>
+    <html lang="en" className="dark h-full" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem("arinova-app-theme");if(t==="light")document.documentElement.classList.remove("dark");})();`,
+          }}
+        />
+      </head>
       <body className={`${inter.className} h-full antialiased`}>
         <Providers>{children}</Providers>
         <script

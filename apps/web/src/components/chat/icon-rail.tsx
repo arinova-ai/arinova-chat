@@ -118,7 +118,7 @@ export function IconRail() {
   };
 
   return (
-    <div className="flex h-full w-16 shrink-0 flex-col items-center border-r border-border bg-[oklch(0.14_0.025_260)] py-4">
+    <div className="flex h-full w-16 shrink-0 flex-col items-center border-r border-border bg-sidebar py-4">
       {/* Logo */}
       <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-gradient-end">
         <img src="/assets/nav/logo-arinova-white.svg" alt="Arinova" width={28} height={28} className="h-7 w-7" />

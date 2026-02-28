@@ -36,6 +36,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
 import { useTranslation, type Locale } from "@/lib/i18n";
+import { useAppTheme } from "@/lib/theme";
 
 // ───── Types ─────
 
@@ -569,6 +570,7 @@ function useCurrentThemeRenderer(): string | null {
 
 function AppearancePanel() {
   const { t, locale, setLocale } = useTranslation();
+  const { theme, toggleTheme } = useAppTheme();
   const [quality, setQuality] = useState<"high" | "performance">(readThemeQuality);
   const themeRenderer = useCurrentThemeRenderer();
 
@@ -589,7 +591,7 @@ function AppearancePanel() {
           <label className="text-sm font-medium">{t("settings.appearance.theme")}</label>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">{t("settings.appearance.light")}</span>
-            <Switch checked={true} />
+            <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
             <span className="text-sm">{t("settings.appearance.dark")}</span>
           </div>
         </div>
@@ -1008,7 +1010,7 @@ function SettingsContent() {
               className={cn(
                 "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
                 activeSection === item.id
-                  ? "bg-[oklch(0.55_0.2_250/15%)] text-[oklch(0.7_0.18_250)]"
+                  ? "bg-brand/15 text-brand-text"
                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
               )}
             >
@@ -1022,7 +1024,7 @@ function SettingsContent() {
         <div className="p-3">
           <Button
             variant="ghost"
-            className="w-full justify-start gap-2 text-red-400 hover:bg-red-950/30 hover:text-red-300"
+            className="w-full justify-start gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={handleSignOut}
             disabled={signingOut}
           >
@@ -1052,7 +1054,7 @@ function SettingsContent() {
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
                 activeSection === item.id
-                  ? "bg-[oklch(0.55_0.2_250)] text-white"
+                  ? "bg-brand text-white"
                   : "bg-secondary text-muted-foreground"
               )}
             >

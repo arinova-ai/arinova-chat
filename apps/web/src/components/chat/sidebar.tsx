@@ -47,7 +47,7 @@ export function Sidebar() {
                 searchMessages(localQuery.trim());
               }
             }}
-            className="h-9 w-full rounded-lg border-none bg-[oklch(0.2_0.03_260)] pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[oklch(0.6_0.15_250)]"
+            className="h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
       </div>
