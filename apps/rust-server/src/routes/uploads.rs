@@ -38,21 +38,32 @@ async fn upload_file(
     Path(conversation_id): Path<Uuid>,
     mut multipart: Multipart,
 ) -> Response {
-    // Verify the user owns this conversation
-    let conv = sqlx::query_as::<_, (Uuid,)>(
-        "SELECT id FROM conversations WHERE id = $1 AND user_id = $2",
+    // Verify the user is a member of this conversation
+    let is_member = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
     )
     .bind(conversation_id)
     .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
 
-    if matches!(conv, Ok(None) | Err(_)) {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Conversation not found"})),
+    if !matches!(is_member, Ok(Some(_))) {
+        // Fallback: check conversations.user_id for backward compatibility
+        let is_owner = sqlx::query_as::<_, (Uuid,)>(
+            "SELECT id FROM conversations WHERE id = $1 AND user_id = $2",
         )
-            .into_response();
+        .bind(conversation_id)
+        .bind(&user.id)
+        .fetch_optional(&state.db)
+        .await;
+
+        if !matches!(is_owner, Ok(Some(_))) {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Conversation not found"})),
+            )
+                .into_response();
+        }
     }
 
     let max_size = state.config.max_file_size;
