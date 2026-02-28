@@ -371,6 +371,11 @@ export class SpriteRenderer implements OfficeRenderer {
   private pinchMidX = 0;
   private pinchMidY = 0;
 
+  // Idle → sleep timer (10 min idle triggers sleeping scene)
+  private static IDLE_SLEEP_MS = 10 * 60 * 1000;
+  private idleSince: number | null = null;
+  private idleTimerId: ReturnType<typeof setInterval> | null = null;
+
   async init(
     container: HTMLDivElement,
     _width: number,
@@ -453,6 +458,10 @@ export class SpriteRenderer implements OfficeRenderer {
   }
 
   destroy(): void {
+    if (this.idleTimerId) {
+      clearInterval(this.idleTimerId);
+      this.idleTimerId = null;
+    }
     this.unbindPanEvents();
     if (this.hitboxEl) {
       this.hitboxEl.removeEventListener("click", this.handleHitboxClick);
@@ -512,8 +521,42 @@ export class SpriteRenderer implements OfficeRenderer {
 
     this.firstAgentId = agent.id;
     const target = statusToScene(agent.status);
+
+    if (target === "idle") {
+      // Track when we entered idle
+      if (this.idleSince === null) {
+        this.idleSince = Date.now();
+      }
+      // Start periodic check if not running
+      if (!this.idleTimerId) {
+        this.idleTimerId = setInterval(() => this.checkIdleSleep(), 30_000);
+      }
+      // Don't override a sleeping scene triggered by idle timeout
+      if (this.currentScene === "sleeping") return;
+    } else {
+      // Agent is active — reset idle tracking and restore scene
+      this.idleSince = null;
+      if (this.idleTimerId) {
+        clearInterval(this.idleTimerId);
+        this.idleTimerId = null;
+      }
+    }
+
     if (target !== this.currentScene) {
       this.transitionTo(target);
+    }
+  }
+
+  private checkIdleSleep(): void {
+    if (this.idleSince && Date.now() - this.idleSince >= SpriteRenderer.IDLE_SLEEP_MS) {
+      if (this.currentScene !== "sleeping") {
+        this.transitionTo("sleeping");
+      }
+      // Stop checking once asleep
+      if (this.idleTimerId) {
+        clearInterval(this.idleTimerId);
+        this.idleTimerId = null;
+      }
     }
   }
 
