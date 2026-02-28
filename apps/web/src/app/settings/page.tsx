@@ -36,7 +36,6 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
 import { useTranslation, type Locale } from "@/lib/i18n";
-import { useAppTheme } from "@/lib/theme";
 
 // ───── Types ─────
 
@@ -570,7 +569,6 @@ function useCurrentThemeRenderer(): string | null {
 
 function AppearancePanel() {
   const { t, locale, setLocale } = useTranslation();
-  const { theme, toggleTheme } = useAppTheme();
   const [quality, setQuality] = useState<"high" | "performance">(readThemeQuality);
   const themeRenderer = useCurrentThemeRenderer();
 
@@ -587,15 +585,6 @@ function AppearancePanel() {
       </div>
 
       <div className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("settings.appearance.theme")}</label>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">{t("settings.appearance.light")}</span>
-            <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
-            <span className="text-sm">{t("settings.appearance.dark")}</span>
-          </div>
-        </div>
-
         {themeRenderer === "threejs" && (
           <div className="space-y-2">
             <label className="text-sm font-medium">{t("settings.appearance.quality")}</label>
