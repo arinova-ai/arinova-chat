@@ -30,6 +30,8 @@ import {
   Square,
   Reply,
   MessageSquare,
+  Clock,
+  X,
 } from "lucide-react";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
@@ -410,6 +412,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const mentionNames = members.length > 0 ? members.map((m) => m.agentName) : undefined;
   const sendMessage = useChatStore((s) => s.sendMessage);
   const cancelStream = useChatStore((s) => s.cancelStream);
+  const cancelQueuedMessage = useChatStore((s) => s.cancelQueuedMessage);
+  const queuedMessageIds = useChatStore((s) => s.queuedMessageIds);
   const openThread = useChatStore((s) => s.openThread);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const showTimestamps = useChatStore((s) => s.showTimestamps);
@@ -439,6 +443,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   });
 
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
+  const isQueued = isUser && queuedMessageIds[message.conversationId]?.has(message.id);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -555,6 +560,22 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
                 {message.threadSummary.replyCount === 1 ? "reply" : "replies"}
               </span>
             </button>
+          )}
+
+          {/* Queued indicator */}
+          {isQueued && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-yellow-500">
+              <Clock className="h-3 w-3" />
+              <span>Queued</span>
+              <button
+                type="button"
+                onClick={() => cancelQueuedMessage(message.conversationId, message.id)}
+                className="ml-0.5 rounded-full p-0.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                aria-label="Cancel queued message"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
           )}
 
           {/* Timestamp + Read receipt */}

@@ -110,6 +110,7 @@ interface ChatState {
   blockedUserIds: Set<string>;
   currentUserId: string | null;
   inputDrafts: Record<string, string>;
+  queuedMessageIds: Record<string, Set<string>>; // conversationId → set of user message IDs
 
   // Thread state
   activeThreadId: string | null;
@@ -132,6 +133,7 @@ interface ChatState {
   sendMessage: (content: string, mentions?: string[]) => void;
   cancelStream: (messageId?: string) => void;
   cancelAgentStream: (conversationId: string, messageId: string) => void;
+  cancelQueuedMessage: (conversationId: string, messageId: string) => void;
   createAgent: (data: {
     name: string;
     description?: string;
@@ -232,6 +234,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   blockedUserIds: new Set<string>(),
   currentUserId: null,
   inputDrafts: {},
+  queuedMessageIds: {},
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
@@ -544,6 +547,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       });
     }
+  },
+
+  cancelQueuedMessage: (conversationId, messageId) => {
+    wsManager.send({
+      type: "cancel_queued",
+      conversationId,
+      messageId,
+    });
+    // Optimistically remove from queuedMessageIds
+    const prevSet = get().queuedMessageIds[conversationId];
+    if (prevSet) {
+      const next = new Set(prevSet);
+      next.delete(messageId);
+      set({
+        queuedMessageIds: {
+          ...get().queuedMessageIds,
+          [conversationId]: next,
+        },
+      });
+    }
+    // Also remove any matching queued thinkingAgent entry
+    const prev = get().thinkingAgents[conversationId] ?? [];
+    set({
+      thinkingAgents: {
+        ...get().thinkingAgents,
+        [conversationId]: prev.filter((t) => !(t.queued && t.messageId === messageId)),
+      },
+    });
   },
 
   createAgent: async (data) => {
@@ -1241,8 +1272,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_queued") {
       const { conversationId, agentId, agentName } = event;
+      const userMessageId = (event as { messageId?: string }).messageId ?? "";
       const queued: ThinkingAgent = {
-        messageId: "",
+        messageId: userMessageId,
         agentId: agentId ?? "",
         agentName: agentName ?? "Agent",
         seq: 0,
@@ -1259,6 +1291,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         });
       }
+
+      // Track the queued user message ID for per-message indicators
+      if (userMessageId) {
+        const prevSet = get().queuedMessageIds[conversationId] ?? new Set<string>();
+        const next = new Set(prevSet);
+        next.add(userMessageId);
+        set({
+          queuedMessageIds: {
+            ...get().queuedMessageIds,
+            [conversationId]: next,
+          },
+        });
+      }
+      return;
+    }
+
+    if (event.type === "queued_cancelled") {
+      const { conversationId, messageId } = event;
+      // Remove from queuedMessageIds
+      const prevSet = get().queuedMessageIds[conversationId];
+      if (prevSet) {
+        const next = new Set(prevSet);
+        next.delete(messageId);
+        set({
+          queuedMessageIds: {
+            ...get().queuedMessageIds,
+            [conversationId]: next,
+          },
+        });
+      }
+      // Remove matching queued thinkingAgent entry
+      const prev = get().thinkingAgents[conversationId] ?? [];
+      set({
+        thinkingAgents: {
+          ...get().thinkingAgents,
+          [conversationId]: prev.filter((t) => !(t.queued && t.messageId === messageId)),
+        },
+      });
       return;
     }
 
@@ -1273,14 +1343,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
         startedAt: new Date(),
       };
       // Replace any queued entry for this agent with the actual thinking entry
-      const prev = (get().thinkingAgents[conversationId] ?? [])
-        .filter((t) => !(t.queued && t.agentId === (senderAgentId ?? "")));
+      // Also capture the queued entry's messageId so we can clean up queuedMessageIds
+      const prevThinking = get().thinkingAgents[conversationId] ?? [];
+      const queuedEntry = prevThinking.find(
+        (t) => t.queued && t.agentId === (senderAgentId ?? "")
+      );
+      const prev = prevThinking.filter(
+        (t) => !(t.queued && t.agentId === (senderAgentId ?? ""))
+      );
+
       set({
         thinkingAgents: {
           ...get().thinkingAgents,
           [conversationId]: [...prev, thinking],
         },
       });
+
+      // Remove the queued user message from queuedMessageIds
+      if (queuedEntry?.messageId) {
+        const prevSet = get().queuedMessageIds[conversationId];
+        if (prevSet?.has(queuedEntry.messageId)) {
+          const next = new Set(prevSet);
+          next.delete(queuedEntry.messageId);
+          set({
+            queuedMessageIds: {
+              ...get().queuedMessageIds,
+              [conversationId]: next,
+            },
+          });
+        }
+      }
       return;
     }
 

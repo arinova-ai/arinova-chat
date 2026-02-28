@@ -422,6 +422,31 @@ async fn handle_message(
                 let _ = cancel_tx.send(true);
             }
         }
+        "cancel_queued" => {
+            let message_id = event.get("messageId").and_then(|v| v.as_str()).unwrap_or("");
+            let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
+
+            if message_id.is_empty() || conversation_id.is_empty() {
+                return;
+            }
+
+            // Find and remove the queued item matching this user message ID
+            let prefix = format!("{}:", conversation_id);
+            for mut entry in ws_state.agent_response_queues.iter_mut() {
+                let key = entry.key().clone();
+                if key.starts_with(&prefix) {
+                    let queue = entry.value_mut();
+                    queue.retain(|q| q.user_message_id.as_deref() != Some(message_id));
+                }
+            }
+
+            // Send confirmation back to the user
+            ws_state.send_to_user(user_id, &json!({
+                "type": "queued_cancelled",
+                "conversationId": conversation_id,
+                "messageId": message_id
+            }));
+        }
         "sync" => {
             let conversations = event.get("conversations").cloned().unwrap_or(json!({}));
             handle_sync(user_id, &conversations, ws_state, db, redis).await;
@@ -941,6 +966,7 @@ pub async fn trigger_agent_response(
     );
 
     // Save user message immediately
+    let mut saved_user_msg_id: Option<String> = None;
     if !skip_user_message {
         let user_seq = match get_next_seq(db, conversation_id).await {
             Ok(s) => s,
@@ -948,6 +974,7 @@ pub async fn trigger_agent_response(
         };
 
         let user_msg_id = uuid::Uuid::new_v4();
+        saved_user_msg_id = Some(user_msg_id.to_string());
         let now = chrono::Utc::now();
         let _ = sqlx::query(
             r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, thread_id, created_at, updated_at)
@@ -1034,6 +1061,7 @@ pub async fn trigger_agent_response(
                     content: content.to_string(),
                     reply_to_id: reply_to_id.clone(),
                     thread_id: thread_id.clone(),
+                    user_message_id: saved_user_msg_id.clone(),
                 });
 
             // Notify the user that this agent's response is queued
@@ -1053,6 +1081,7 @@ pub async fn trigger_agent_response(
                 "conversationId": conversation_id,
                 "agentId": agent_id,
                 "agentName": agent_name,
+                "messageId": saved_user_msg_id,
             }));
 
             continue;

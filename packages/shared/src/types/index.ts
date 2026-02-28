@@ -384,6 +384,7 @@ export interface AppPurchase {
 export type WSClientEvent =
   | { type: "send_message"; conversationId: string; content: string; replyToId?: string; threadId?: string; mentions?: string[] }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
+  | { type: "cancel_queued"; conversationId: string; messageId: string }
   | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
   | { type: "mark_read"; conversationId: string; seq: number }
   | { type: "focus"; visible: boolean }
@@ -491,6 +492,12 @@ export type WSServerEvent =
       conversationId: string;
       agentId: string;
       agentName: string;
+      messageId?: string;
+    }
+  | {
+      type: "queued_cancelled";
+      conversationId: string;
+      messageId: string;
     }
   | { type: "kicked_from_group"; conversationId: string }
   | { type: "pong" };

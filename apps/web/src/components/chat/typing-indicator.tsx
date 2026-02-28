@@ -9,7 +9,9 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
 
   if (!thinking || thinking.length === 0) return null;
 
-  const queued = thinking.filter((t) => t.queued);
+  // Only show queued agents WITHOUT a messageId in the global indicator
+  // (agents with messageId are shown per-message in message-bubble.tsx)
+  const queued = thinking.filter((t) => t.queued && !t.messageId);
   const active = thinking.filter((t) => !t.queued);
 
   return (
