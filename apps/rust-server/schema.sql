@@ -591,3 +591,15 @@ CREATE INDEX idx_kb_creator ON agent_knowledge_bases(creator_id);
 CREATE INDEX idx_kb_chunks_kb_id ON knowledge_base_chunks(kb_id);
 CREATE INDEX idx_kb_chunks_embedding ON knowledge_base_chunks
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Office slot bindings (server-synced agent↔slot mapping)
+CREATE TABLE office_slot_bindings (
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  theme_id TEXT NOT NULL,
+  slot_index INT NOT NULL,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, theme_id, slot_index),
+  UNIQUE (user_id, theme_id, agent_id)
+);

@@ -484,4 +484,16 @@ CREATE INDEX IF NOT EXISTS idx_thread_summaries_last ON thread_summaries(last_re
 -- #41 Voice recording duration
 ALTER TABLE attachments ADD COLUMN IF NOT EXISTS duration_seconds INTEGER;
 
+-- #54 Office slot bindings (server-synced agent↔slot mapping)
+CREATE TABLE IF NOT EXISTS office_slot_bindings (
+  user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  theme_id TEXT NOT NULL,
+  slot_index INT NOT NULL,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, theme_id, slot_index),
+  UNIQUE (user_id, theme_id, agent_id)
+);
+
 COMMIT;
