@@ -59,6 +59,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const loadingDownRef = useRef(false);
   const highlightRef = useRef<HTMLDivElement>(null);
   const prependHeightRef = useRef<number | null>(null);
+  const isRestoringScrollRef = useRef(false);
 
   const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
@@ -178,15 +179,19 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     prependHeightRef.current = null;
     const el = scrollRef.current;
     if (el) {
+      isRestoringScrollRef.current = true;
       el.scrollTop += el.scrollHeight - prevHeight;
+      requestAnimationFrame(() => {
+        isRestoringScrollRef.current = false;
+      });
     }
   });
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    // Load older when scrolled within 80% of viewport height from top
-    if (el.scrollTop < el.clientHeight * 0.8 && hasMoreUp && !loadingUpRef.current) {
+    if (!el || isRestoringScrollRef.current) return;
+    // Load older when scrolled within 30% of viewport height from top
+    if (el.scrollTop < el.clientHeight * 0.3 && hasMoreUp && !loadingUpRef.current) {
       loadOlder();
     }
     // Load newer when scrolled near bottom
