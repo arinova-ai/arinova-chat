@@ -461,6 +461,17 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     if (!selectedFile || !activeConversationId) return;
 
     const trimmed = value.trim();
+    const prevFile = selectedFile;
+
+    // Create data URL for instant image preview in optimistic message
+    let previewUrl: string | undefined;
+    if (prevFile.type.startsWith("image/")) {
+      previewUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(prevFile);
+      });
+    }
 
     // Optimistic message so it shows immediately
     const tempId = `temp-${Date.now()}`;
@@ -474,6 +485,21 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       senderUserId: useChatStore.getState().currentUserId ?? undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
+      ...(previewUrl
+        ? {
+            attachments: [
+              {
+                id: `temp-att-${Date.now()}`,
+                messageId: tempId,
+                fileName: prevFile.name,
+                fileType: prevFile.type,
+                fileSize: prevFile.size,
+                url: previewUrl,
+                createdAt: new Date(),
+              },
+            ],
+          }
+        : {}),
     };
     const store = useChatStore.getState();
     const current = store.messagesByConversation[activeConversationId] ?? [];
@@ -484,7 +510,6 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       },
     });
 
-    const prevFile = selectedFile;
     const prevValue = value;
     setSelectedFile(null);
     clearInput();

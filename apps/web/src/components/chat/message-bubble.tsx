@@ -206,14 +206,32 @@ function AttachmentRenderer({ attachments }: { attachments: Attachment[] }) {
   return (
     <div className="mb-1 space-y-1">
       {attachments.map((att) =>
-        att.fileType.startsWith("image/") ? (
-          <ImageLightbox
-            key={att.id}
-            src={assetUrl(att.url)}
-            alt={att.fileName}
-            className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
-          />
-        ) : att.fileType.startsWith("audio/") ? (
+        att.fileType.startsWith("image/") ? (() => {
+          const isUploading = att.url.startsWith("data:");
+          return (
+            <div key={att.id} className="relative inline-block">
+              {isUploading ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={att.url}
+                  alt={att.fileName}
+                  className="max-w-full max-h-64 rounded-lg object-contain"
+                />
+              ) : (
+                <ImageLightbox
+                  src={assetUrl(att.url)}
+                  alt={att.fileName}
+                  className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
+                />
+              )}
+              {isUploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-lg">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                </div>
+              )}
+            </div>
+          );
+        })() : att.fileType.startsWith("audio/") ? (
           <AudioPlayer
             key={att.id}
             src={assetUrl(att.url)}
