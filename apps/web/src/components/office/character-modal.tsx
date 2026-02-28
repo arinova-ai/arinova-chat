@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +49,17 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+function InfoRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-200 max-w-[60%] text-right">
+        {value ?? <span className="text-slate-500">—</span>}
+      </span>
+    </div>
+  );
 }
 
 interface CharacterModalProps {
@@ -178,91 +189,51 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
         </div>
       </div>
 
-      {/* Plugin stats: model, tokens, session, tool */}
-      {(agent.model || agent.tokenUsage || agent.sessionDurationMs != null || agent.currentToolDetail) && (
-        <div className="space-y-2.5">
-          {agent.model && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Model</span>
-              <span className="text-slate-200 font-mono text-xs">{agent.model}</span>
-            </div>
-          )}
-          {agent.tokenUsage && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Tokens</span>
-              <span className="text-slate-200 text-xs">
-                {formatTokens(agent.tokenUsage.input)} in / {formatTokens(agent.tokenUsage.output)} out
-              </span>
-            </div>
-          )}
-          {agent.sessionDurationMs != null && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Session</span>
-              <span className="text-slate-200 text-xs">{formatDuration(agent.sessionDurationMs)}</span>
-            </div>
-          )}
-          {agent.currentToolDetail && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Tool</span>
-              <span className="text-slate-200 font-mono text-xs truncate ml-2">{agent.currentToolDetail}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Current Task */}
-      {agent.currentTask && (
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Current Task
-          </h3>
-          <div className="space-y-2.5 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="rounded bg-yellow-500/15 px-1.5 py-0.5 font-mono text-xs text-yellow-400">
-                {agent.currentTask.priority}
-              </span>
-              <span className="font-medium text-slate-100">{agent.currentTask.title}</span>
-            </div>
-            <div className="text-xs text-slate-400">
-              Due: {agent.currentTask.due} &middot; Assigned by: {agent.currentTask.assignedBy}
-            </div>
-
-            {/* Progress bar */}
-            <div className="flex items-center gap-2">
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-700">
-                <div
-                  className="h-full rounded-full bg-amber-500 transition-all duration-300"
-                  style={{ width: `${agent.currentTask.progress}%` }}
-                />
-              </div>
-              <span className="w-8 text-right text-xs text-slate-400">
-                {agent.currentTask.progress}%
-              </span>
-            </div>
-
-            {/* Subtasks */}
-            <div className="space-y-1">
-              {agent.currentTask.subtasks.map((st, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className={st.done ? "text-green-400" : "text-slate-500"}>
-                    {st.done ? "✓" : "○"}
-                  </span>
-                  <span className={st.done ? "text-slate-500 line-through" : "text-slate-300"}>
-                    {st.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Info fields — always shown */}
+      <div className="space-y-2.5">
+        <InfoRow label="Model" value={agent.model ? <span className="font-mono text-xs">{agent.model}</span> : null} />
+        <InfoRow
+          label="Tokens"
+          value={agent.tokenUsage ? (
+            <span className="text-xs">
+              {formatTokens(agent.tokenUsage.input)} in / {formatTokens(agent.tokenUsage.output)} out
+              {agent.tokenUsage.cacheRead != null && ` / ${formatTokens(agent.tokenUsage.cacheRead)} cache`}
+            </span>
+          ) : null}
+        />
+        <InfoRow
+          label="Session"
+          value={agent.sessionDurationMs != null ? <span className="text-xs">{formatDuration(agent.sessionDurationMs)}</span> : null}
+        />
+        <InfoRow
+          label="Tool"
+          value={agent.currentToolDetail ? <span className="font-mono text-xs truncate">{agent.currentToolDetail}</span> : null}
+        />
+        <InfoRow
+          label="Current Task"
+          value={agent.currentTask ? <span className="text-xs">{agent.currentTask.title}</span> : null}
+        />
+        <InfoRow
+          label="Collaborating With"
+          value={agent.collaboratingWith && agent.collaboratingWith.length > 0 ? (
+            <span className="text-xs">{agent.collaboratingWith.map((id) => {
+              const partner = agents.find((a) => a.id === id);
+              return partner?.name ?? id;
+            }).join(", ")}</span>
+          ) : null}
+        />
+        <InfoRow
+          label="Agent ID"
+          value={<span className="font-mono text-xs">{agent.id}</span>}
+        />
+      </div>
 
       {/* Recent Activity */}
-      {agent.recentActivity.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Recent Activity
-          </h3>
+      <div>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Recent Activity
+        </h3>
+        {agent.recentActivity.length > 0 ? (
           <div className="space-y-1.5">
             {agent.recentActivity.map((act, i) => (
               <div key={i} className="flex items-start gap-2 text-xs">
@@ -271,30 +242,10 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Collaborators */}
-      {agent.status === "collaborating" && agent.collaboratingWith && (
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Collaborators
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {agent.collaboratingWith.map((id) => {
-              const partner = agents.find((a) => a.id === id);
-              return (
-                <span
-                  key={id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-xs text-blue-400"
-                >
-                  {partner?.emoji ?? "🤖"} {partner?.name ?? id}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-slate-500">—</p>
+        )}
+      </div>
 
       {/* Bound Agent */}
       {boundChatAgent && (
