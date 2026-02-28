@@ -19,6 +19,7 @@ const sanitizeSchema = {
     code: [...(defaultSchema.attributes?.code ?? []), "className"],
     span: [...(defaultSchema.attributes?.span ?? []), "className"],
     pre: [...(defaultSchema.attributes?.pre ?? []), "className"],
+    img: [...(defaultSchema.attributes?.img ?? []), "alt", "title"],
   },
 };
 
