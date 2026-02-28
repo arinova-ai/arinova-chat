@@ -106,6 +106,7 @@ interface ChatState {
   thinkingAgents: Record<string, ThinkingAgent[]>;
   replyingTo: Message | null;
   blockedUserIds: Set<string>;
+  currentUserId: string | null;
 
   // Thread state
   activeThreadId: string | null;
@@ -113,6 +114,7 @@ interface ChatState {
   threadLoading: boolean;
 
   // Actions
+  setCurrentUserId: (id: string | null) => void;
   setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
   setSidebarOpen: (open: boolean) => void;
@@ -221,10 +223,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   thinkingAgents: {},
   replyingTo: null,
   blockedUserIds: new Set<string>(),
+  currentUserId: null,
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
 
+  setCurrentUserId: (id) => set({ currentUserId: id }),
   setReplyingTo: (message) => set({ replyingTo: message }),
 
   setActiveConversation: (id) => {
@@ -1077,7 +1081,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ...get().threadMessages,
               [threadId]: threadMsgs.map((m) =>
                 m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role
-                  ? newMsg : m
+                  ? { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined } : m
               ),
             },
           });
@@ -1131,7 +1135,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...get().messagesByConversation,
             [conversationId]: current.map((m) =>
               m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role
-                ? newMsg
+                ? { ...newMsg, senderUserId: newMsg.senderUserId || get().currentUserId || undefined }
                 : m
             ),
           },

@@ -10,6 +10,7 @@ import { NewChatDialog } from "./new-chat-dialog";
 import { CallIndicator } from "@/components/voice/call-indicator";
 import { NotificationBanner } from "@/components/notification-banner";
 import { useChatStore } from "@/store/chat-store";
+import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 
 export function ChatLayout() {
@@ -21,7 +22,14 @@ export function ChatLayout() {
   const loadConversations = useChatStore((s) => s.loadConversations);
   const loadAgentHealth = useChatStore((s) => s.loadAgentHealth);
   const initWS = useChatStore((s) => s.initWS);
+  const setCurrentUserId = useChatStore((s) => s.setCurrentUserId);
   const prevConvRef = useRef<string | null>(null);
+
+  // Sync current user ID into the store for message ownership checks
+  const { data: session } = authClient.useSession();
+  useEffect(() => {
+    setCurrentUserId(session?.user?.id ?? null);
+  }, [session?.user?.id, setCurrentUserId]);
 
   useEffect(() => {
     loadAgents();

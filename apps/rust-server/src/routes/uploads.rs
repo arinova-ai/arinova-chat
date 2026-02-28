@@ -202,14 +202,15 @@ async fn upload_file(
 
     let message_id = Uuid::new_v4();
     let msg_result = sqlx::query_as::<_, crate::db::models::Message>(
-        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, created_at, updated_at)
-           VALUES ($1, $2, $3, 'user', $4, 'completed', NOW(), NOW())
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, created_at, updated_at)
+           VALUES ($1, $2, $3, 'user', $4, 'completed', $5, NOW(), NOW())
            RETURNING *"#,
     )
     .bind(message_id)
     .bind(conversation_id)
     .bind(seq)
     .bind(&caption)
+    .bind(&user.id)
     .fetch_one(&state.db)
     .await;
 
