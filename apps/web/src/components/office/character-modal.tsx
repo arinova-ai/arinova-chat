@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,15 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Check, Link2, Link2Off, Bot } from "lucide-react";
+import { useChatStore } from "@/store/chat-store";
+import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import type { Agent } from "./types";
 
 const STATUS_BADGE: Record<string, { label: string; dot: string; bg: string; text: string }> = {
@@ -40,11 +49,33 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+const BINDINGS_KEY = "office-agent-bindings";
+
+function getBindings(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(BINDINGS_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function setBinding(characterId: string, agentId: string | null) {
+  const bindings = getBindings();
+  if (agentId) {
+    bindings[characterId] = agentId;
+  } else {
+    delete bindings[characterId];
+  }
+  localStorage.setItem(BINDINGS_KEY, JSON.stringify(bindings));
+}
+
 interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
   agent: Agent | null;
   agents?: Agent[];
+  /** Character identifier for agent binding (defaults to "default") */
+  characterId?: string;
 }
 
 const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
@@ -82,8 +113,31 @@ function CharacterDetailOffline() {
   );
 }
 
-function CharacterDetail({ agent, agents }: { agent: Agent; agents: Agent[] }) {
+function CharacterDetail({ agent, agents, characterId }: { agent: Agent; agents: Agent[]; characterId: string }) {
   const badge = STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle;
+  const chatAgents = useChatStore((s) => s.agents);
+  const loadAgents = useChatStore((s) => s.loadAgents);
+  const [boundAgentId, setBoundAgentId] = useState<string | null>(() => getBindings()[characterId] ?? null);
+  const [bindOpen, setBindOpen] = useState(false);
+
+  const boundChatAgent = boundAgentId ? chatAgents.find((a) => a.id === boundAgentId) : null;
+
+  useEffect(() => {
+    if (chatAgents.length === 0) loadAgents();
+  }, [chatAgents.length, loadAgents]);
+
+  const handleBind = useCallback((agentId: string) => {
+    setBinding(characterId, agentId);
+    setBoundAgentId(agentId);
+    setBindOpen(false);
+  }, [characterId]);
+
+  const handleUnbind = useCallback(() => {
+    setBinding(characterId, null);
+    setBoundAgentId(null);
+  }, [characterId]);
+
+  const displayName = boundChatAgent?.name ?? agent.name;
 
   return (
     <div className="space-y-5">
@@ -97,7 +151,7 @@ function CharacterDetail({ agent, agents }: { agent: Agent; agents: Agent[] }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-100">{agent.name}</span>
+            <span className="font-semibold text-slate-100">{displayName}</span>
             {agent.role && (
               <span className="text-sm text-slate-400">{agent.role}</span>
             )}
@@ -229,6 +283,41 @@ function CharacterDetail({ agent, agents }: { agent: Agent; agents: Agent[] }) {
         </div>
       )}
 
+      {/* Bound Agent */}
+      {boundChatAgent && (
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Bound Agent
+          </h3>
+          <div className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+            <Avatar className="h-8 w-8">
+              <AvatarImage
+                src={boundChatAgent.avatarUrl ? assetUrl(boundChatAgent.avatarUrl) : AGENT_DEFAULT_AVATAR}
+                alt={boundChatAgent.name}
+                className="object-cover"
+              />
+              <AvatarFallback className="bg-slate-700 text-slate-300 text-xs">
+                <Bot className="h-4 w-4" />
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-slate-100">{boundChatAgent.name}</div>
+              {boundChatAgent.description && (
+                <div className="truncate text-xs text-slate-400">{boundChatAgent.description}</div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleUnbind}
+              className="shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+              title="Unbind agent"
+            >
+              <Link2Off className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex gap-2">
         <button
@@ -237,12 +326,60 @@ function CharacterDetail({ agent, agents }: { agent: Agent; agents: Agent[] }) {
         >
           Chat
         </button>
+        <Popover open={bindOpen} onOpenChange={setBindOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
+              title="Bind to Agent"
+            >
+              <Link2 className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-64 border-slate-700 bg-slate-900 p-0"
+            align="end"
+            sideOffset={8}
+          >
+            <div className="border-b border-slate-700 px-3 py-2">
+              <p className="text-xs font-semibold text-slate-300">Bind to Agent</p>
+            </div>
+            <div className="max-h-48 overflow-y-auto py-1">
+              {chatAgents.length === 0 && (
+                <p className="px-3 py-2 text-xs text-slate-500">No agents available</p>
+              )}
+              {chatAgents.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => handleBind(a.id)}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-slate-800"
+                >
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage
+                      src={a.avatarUrl ? assetUrl(a.avatarUrl) : AGENT_DEFAULT_AVATAR}
+                      alt={a.name}
+                      className="object-cover"
+                    />
+                    <AvatarFallback className="bg-slate-700 text-slate-300 text-[10px]">
+                      <Bot className="h-3 w-3" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="min-w-0 flex-1 truncate text-sm text-slate-200">{a.name}</span>
+                  {boundAgentId === a.id && (
+                    <Check className="h-4 w-4 shrink-0 text-amber-400" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
   );
 }
 
-export function CharacterModal({ isOpen, onClose, agent, agents = [] }: CharacterModalProps) {
+export function CharacterModal({ isOpen, onClose, agent, agents = [], characterId = "default" }: CharacterModalProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -255,7 +392,7 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [] }: Characte
 
   const title = agent?.name || "Arinova Assistant";
   const content = agent
-    ? <CharacterDetail agent={agent} agents={agents} />
+    ? <CharacterDetail agent={agent} agents={agents} characterId={characterId} />
     : <CharacterDetailOffline />;
 
   if (isMobile) {
