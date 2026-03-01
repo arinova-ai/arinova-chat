@@ -229,10 +229,6 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
             }).join(", ")}</span>
           ) : null}
         />
-        <InfoRow
-          label="Agent ID"
-          value={<span className="font-mono text-xs">{agent.id}</span>}
-        />
       </div>
 
       {/* Recent Activity */}
@@ -363,7 +359,8 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const title = agent?.name || "Arinova Assistant";
+  const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
+  const title = (!agent?.name || isUuidName) ? "Arinova Assistant" : agent.name;
   const content = agent
     ? <CharacterDetail agent={agent} agents={agents} themeId={themeId} slotIndex={slotIndex} boundAgentId={boundAgentId} onBindingChange={onBindingChange} onOpenChat={onOpenChat} />
     : <CharacterDetailOffline />;

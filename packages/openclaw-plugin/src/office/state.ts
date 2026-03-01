@@ -76,7 +76,7 @@ class OfficeStateStore {
     const existing = this.agents.get(event.agentId);
     this.agents.set(event.agentId, {
       agentId: event.agentId,
-      name: existing?.name ?? event.agentId,
+      name: existing?.name ?? "Agent",
       status: "working",
       lastActivity: event.timestamp,
       collaboratingWith: existing?.collaboratingWith ?? [],
@@ -283,7 +283,7 @@ class OfficeStateStore {
     if (!agent) {
       agent = {
         agentId,
-        name: agentId,
+        name: "Agent",
         status: "working",
         lastActivity: timestamp,
         collaboratingWith: [],

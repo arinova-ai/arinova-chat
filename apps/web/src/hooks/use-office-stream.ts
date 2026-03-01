@@ -28,11 +28,25 @@ interface OfficeStatusEvent {
 const DEFAULT_EMOJI = "🤖";
 const DEFAULT_COLOR = "#64748b";
 
+/** Detect UUID-style names that should be replaced with a friendly fallback */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Map plugin AgentState to the UI Agent type */
 function toAgent(raw: OfficeStatusEvent["agents"][number]): Agent {
+  const name = UUID_RE.test(raw.name) ? "Agent" : raw.name;
+
+  // Build recentActivity from available state instead of leaving it empty
+  const recentActivity: { time: string; text: string }[] = [];
+  if (raw.currentToolDetail) {
+    recentActivity.push({ time: "now", text: raw.currentToolDetail });
+  }
+  if (raw.currentTask && raw.currentTask !== raw.currentToolDetail?.split(" (")[0]) {
+    recentActivity.push({ time: "", text: `Task: ${raw.currentTask}` });
+  }
+
   return {
     id: raw.agentId,
-    name: raw.name,
+    name,
     role: "",
     emoji: DEFAULT_EMOJI,
     color: DEFAULT_COLOR,
@@ -41,7 +55,7 @@ function toAgent(raw: OfficeStatusEvent["agents"][number]): Agent {
     currentTask: raw.currentTask
       ? { title: raw.currentTask, priority: "", due: "", assignedBy: "", progress: 0, subtasks: [] }
       : undefined,
-    recentActivity: [],
+    recentActivity,
     model: raw.model ?? undefined,
     tokenUsage: raw.tokenUsage ?? undefined,
     sessionDurationMs: raw.sessionDurationMs ?? undefined,
