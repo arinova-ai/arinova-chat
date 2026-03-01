@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -108,7 +109,7 @@ function GameCard({ game, t }: { game: Game; t: (k: string) => string }) {
   const categoryClass = CATEGORY_COLORS[game.category] ?? "bg-gray-500/15 text-gray-400";
 
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card transition-colors hover:border-brand-border">
+    <Link href={`/spaces/${game.id}`} className="flex flex-col rounded-xl border border-border bg-card transition-colors hover:border-brand-border">
       {/* Cover placeholder */}
       <div className="flex aspect-[4/3] items-center justify-center rounded-t-xl bg-secondary/50 text-4xl">
         {GAME_EMOJIS[game.id] ?? "\ud83c\udfae"}
@@ -139,7 +140,7 @@ function GameCard({ game, t }: { game: Game; t: (k: string) => string }) {
           </Button>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
