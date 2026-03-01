@@ -17,7 +17,6 @@ import {
   Bell,
   BellOff,
   Phone,
-  Video,
   Menu,
   UserPlus,
   UsersRound,
@@ -171,20 +170,20 @@ export function ChatHeader({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground"
-              disabled
-              title="Video call (coming soon)"
+              className={cn("h-8 w-8", showTimestamps && "text-blue-400")}
+              onClick={toggleTimestamps}
+              title={showTimestamps ? "Hide timestamps" : "Show timestamps"}
             >
-              <Video className="h-4 w-4" />
+              <Clock className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground"
-              disabled
-              title="Voice call (coming soon)"
+              className={cn("h-8 w-8", isMuted && "text-red-400")}
+              onClick={handleMuteToggle}
+              title={isMuted ? "Unmute conversation" : "Mute conversation"}
             >
-              <Phone className="h-4 w-4" />
+              {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
             </Button>
             {onMembersClick && (
               <Button
