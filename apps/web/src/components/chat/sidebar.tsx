@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Search, MessageCircle } from "lucide-react";
+import { Search, MessageCircle, SquarePen } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { ConversationList } from "./conversation-list";
 import { PageTitle } from "@/components/ui/page-title";
@@ -24,12 +24,20 @@ export function Sidebar() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* Header */}
-      <div className="shrink-0 px-4 pb-2">
+      <div className="shrink-0 px-4 pb-2 flex items-start justify-between">
         <PageTitle
           title={t("nav.chat")}
           subtitle={t("chat.subtitle")}
           icon={MessageCircle}
         />
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("arinova:new-chat"))}
+          className="mt-1 rounded-lg p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+          aria-label={t("chat.newChat")}
+        >
+          <SquarePen className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Search */}
