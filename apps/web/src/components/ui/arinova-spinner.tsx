@@ -1,10 +1,12 @@
 "use client";
 
-const SIZE_MAP = {
-  sm: "h-8 w-8",
-  md: "h-16 w-16",
-  lg: "h-32 w-32",
+const SPRITE_CONFIG = {
+  sm: { src: "/assets/spinner/lobster-run-64.png", size: 64, frames: 8 },
+  md: { src: "/assets/spinner/lobster-run-128.png", size: 128, frames: 8 },
+  lg: { src: "/assets/spinner/lobster-run-128.png", size: 128, frames: 8 },
 } as const;
+
+const SIZE_PX = { sm: 32, md: 64, lg: 128 } as const;
 
 export function ArinovaSpinner({
   size = "md",
@@ -13,14 +15,22 @@ export function ArinovaSpinner({
   size?: "sm" | "md" | "lg";
   message?: string;
 }) {
+  const config = SPRITE_CONFIG[size];
+  const displayPx = SIZE_PX[size];
+  const sheetWidth = config.size * config.frames;
+  const scale = displayPx / config.size;
+
   return (
     <div className="flex flex-col items-center justify-center gap-3">
-      {/* Placeholder — will be replaced with Arinova mascot running animation */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/assets/branding/arinova-logo-128.png"
-        alt="Loading"
-        className={`${SIZE_MAP[size]} animate-bounce`}
+      <div
+        style={{
+          width: displayPx,
+          height: displayPx,
+          overflow: "hidden",
+          backgroundImage: `url(${config.src})`,
+          backgroundSize: `${sheetWidth * scale}px ${displayPx}px`,
+          animation: "sprite-run 0.8s steps(8) infinite",
+        }}
       />
       {message && (
         <p className="text-sm text-muted-foreground animate-pulse">{message}</p>

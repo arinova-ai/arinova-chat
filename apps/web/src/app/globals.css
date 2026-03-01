@@ -241,6 +241,11 @@
   border-radius: var(--radius);
 }
 
+/* Lobster sprite sheet running animation */
+@keyframes sprite-run {
+  to { background-position-x: -100%; }
+}
+
 /* iOS/PWA viewport fallback: prefer dvh, fallback to fill-available */
 .app-dvh {
   height: calc(var(--app-height, 100dvh) + env(safe-area-inset-bottom, 0px));
