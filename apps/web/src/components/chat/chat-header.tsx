@@ -37,7 +37,6 @@ interface ChatHeaderProps {
   agentName: string;
   agentDescription: string | null;
   agentAvatarUrl?: string | null;
-  isOnline?: boolean;
   type?: ConversationType;
   conversationId?: string;
   agentId?: string;
@@ -55,7 +54,6 @@ export function ChatHeader({
   agentName,
   agentDescription,
   agentAvatarUrl,
-  isOnline,
   type = "direct",
   conversationId,
   agentId,
@@ -136,25 +134,12 @@ export function ChatHeader({
               )}
             </AvatarFallback>
           </Avatar>
-          {isOnline !== undefined && (
-            <span
-              className={cn(
-                "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background",
-                isOnline ? "bg-green-500" : "bg-muted-foreground"
-              )}
-            />
-          )}
         </div>
         <div className="min-w-0 text-left">
           <h2 className="text-sm font-semibold truncate">{displayName}</h2>
           {type === "group" ? (
             <p className="text-xs text-muted-foreground truncate">
               {memberCount ? `${memberCount} members` : "Group"}
-            </p>
-          ) : isOnline !== undefined ? (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span className={cn("inline-block h-1.5 w-1.5 rounded-full", isOnline ? "bg-green-500" : "bg-muted-foreground")} />
-              {isOnline ? "Online" : "Offline"}
             </p>
           ) : agentDescription ? (
             <p className="text-xs text-muted-foreground truncate">

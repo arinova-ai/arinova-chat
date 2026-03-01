@@ -21,7 +21,7 @@ export function ChatArea() {
   const conversations = useChatStore((s) => s.conversations);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const agents = useChatStore((s) => s.agents);
-  const agentHealth = useChatStore((s) => s.agentHealth);
+
   const conversationMembers = useChatStore((s) => s.conversationMembers);
 
   const callState = useVoiceCallStore((s) => s.callState);
@@ -89,11 +89,6 @@ export function ChatArea() {
     ? agents.find((a) => a.id === conversation.agentId)
     : undefined;
 
-  const health = conversation.agentId
-    ? agentHealth[conversation.agentId]
-    : undefined;
-  const isOnline = health?.status === "online";
-
   const showCallOverlay =
     callState !== "idle" && callConversationId === activeConversationId;
 
@@ -122,7 +117,6 @@ export function ChatArea() {
         agentName={conversation.agentName}
         agentDescription={conversation.agentDescription}
         agentAvatarUrl={conversation.agentAvatarUrl}
-        isOnline={conversation.type === "direct" ? isOnline : undefined}
         type={conversation.type}
         conversationId={conversation.id}
         agentId={conversation.agentId ?? undefined}
