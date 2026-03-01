@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
-import { useChatStore } from "@/store/chat-store";
+import { useChatStore, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import { ArrowLeft, MessageSquare } from "lucide-react";
+import { ArrowLeft, MessageSquare, Radio } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
 
@@ -34,17 +34,24 @@ interface AgentStats {
   lastActive: string | null;
 }
 
+const LISTEN_MODES = ["all_mentions", "owner_only", "allowed_users"] as const;
+type ListenMode = (typeof LISTEN_MODES)[number];
+
 function AgentProfileContent() {
   const { t } = useTranslation();
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const agentId = params.id as string;
+  const convId = searchParams.get("convId");
 
   const { data: session } = authClient.useSession();
   const agentHealth = useChatStore((s) => s.agentHealth);
   const conversations = useChatStore((s) => s.conversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const updateAgentListenMode = useChatStore((s) => s.updateAgentListenMode);
+  const setAgentAllowedUsers = useChatStore((s) => s.setAgentAllowedUsers);
 
   const health = agentHealth[agentId];
   const isOnline = health?.status === "online";
@@ -53,6 +60,12 @@ function AgentProfileContent() {
   const [stats, setStats] = useState<AgentStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [ownerName, setOwnerName] = useState<string | null>(null);
+
+  // Listen mode state (group context only)
+  const [groupMembers, setGroupMembers] = useState<GroupMembers | null>(null);
+  const [listenMode, setListenMode] = useState<ListenMode>("all_mentions");
+  const [allowedUserIds, setAllowedUserIds] = useState<Set<string>>(new Set());
+  const [listenModeLoading, setListenModeLoading] = useState(false);
 
   const isOwner = !!(
     session?.user?.id &&
@@ -108,6 +121,60 @@ function AgentProfileContent() {
       cancelled = true;
     };
   }, [agent?.ownerId, session?.user?.id, session?.user?.name]);
+
+  // Load group members for listen mode (when navigated from group)
+  useEffect(() => {
+    if (!convId) return;
+    let cancelled = false;
+    api<GroupMembers>(`/api/conversations/${convId}/members`, { silent: true })
+      .then((data) => {
+        if (cancelled) return;
+        setGroupMembers(data);
+        const agentMember = data.agents.find((a) => a.agentId === agentId);
+        if (agentMember) {
+          setListenMode(agentMember.listenMode as ListenMode);
+        }
+      })
+      .catch(() => {});
+    // Also load allowed users
+    api<{ userIds: string[] }>(`/api/conversations/${convId}/agents/${agentId}/allowed-users`, { silent: true })
+      .then((data) => {
+        if (!cancelled && data?.userIds) {
+          setAllowedUserIds(new Set(data.userIds));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [convId, agentId]);
+
+  const isAgentOwner = !!(
+    session?.user?.id &&
+    agent?.ownerId &&
+    session.user.id === agent.ownerId
+  );
+
+  const handleListenModeChange = useCallback(async (mode: ListenMode) => {
+    if (!convId) return;
+    setListenModeLoading(true);
+    try {
+      await updateAgentListenMode(convId, agentId, mode);
+      setListenMode(mode);
+    } catch { /* ignore */ }
+    finally { setListenModeLoading(false); }
+  }, [convId, agentId, updateAgentListenMode]);
+
+  const handleToggleAllowedUser = useCallback(async (userId: string) => {
+    if (!convId) return;
+    const next = new Set(allowedUserIds);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    setAllowedUserIds(next);
+    try {
+      await setAgentAllowedUsers(convId, agentId, [...next]);
+    } catch { /* revert on error */
+      setAllowedUserIds(allowedUserIds);
+    }
+  }, [convId, agentId, allowedUserIds, setAgentAllowedUsers]);
 
   const handleChat = useCallback(async () => {
     if (!agent) return;
@@ -302,6 +369,116 @@ function AgentProfileContent() {
                     </div>
                   )}
                 </div>
+
+                {/* Listen Mode (group context, agent owner only) */}
+                {convId && isAgentOwner && groupMembers && (
+                  <div className="mt-6 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Radio className="h-4 w-4 text-brand-text" />
+                      <h3 className="text-sm font-semibold">
+                        {t("agentProfile.listenMode")}
+                      </h3>
+                    </div>
+
+                    <div className="space-y-2">
+                      {LISTEN_MODES.map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          disabled={listenModeLoading}
+                          onClick={() => handleListenModeChange(mode)}
+                          className={`flex w-full items-start gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+                            listenMode === mode
+                              ? "bg-brand/10 ring-1 ring-brand/40"
+                              : "bg-secondary/60 hover:bg-secondary"
+                          }`}
+                        >
+                          <div
+                            className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 flex items-center justify-center ${
+                              listenMode === mode
+                                ? "border-brand"
+                                : "border-muted-foreground/40"
+                            }`}
+                          >
+                            {listenMode === mode && (
+                              <div className="h-2 w-2 rounded-full bg-brand" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">
+                              {t(`agentProfile.listenMode.${mode}`)}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {t(`agentProfile.listenMode.${mode}.desc`)}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Allowed users list (only when allowed_users mode) */}
+                    {listenMode === "allowed_users" && (
+                      <div className="mt-3 space-y-1.5">
+                        <p className="text-xs font-medium text-muted-foreground px-1">
+                          {t("agentProfile.listenMode.allowed_users")}
+                        </p>
+                        {groupMembers.users
+                          .filter((u) => u.userId !== session?.user?.id)
+                          .map((user) => (
+                            <button
+                              key={user.userId}
+                              type="button"
+                              onClick={() => handleToggleAllowedUser(user.userId)}
+                              className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left transition-colors ${
+                                allowedUserIds.has(user.userId)
+                                  ? "bg-brand/10 ring-1 ring-brand/30"
+                                  : "bg-secondary/60 hover:bg-secondary"
+                              }`}
+                            >
+                              {user.image ? (
+                                <img
+                                  src={assetUrl(user.image)}
+                                  alt={user.name}
+                                  className="h-7 w-7 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-semibold">
+                                  {(user.name ?? "?").charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <span className="text-sm flex-1 truncate">
+                                {user.name}
+                              </span>
+                              <div
+                                className={`h-4 w-4 rounded border-2 flex items-center justify-center ${
+                                  allowedUserIds.has(user.userId)
+                                    ? "border-brand bg-brand"
+                                    : "border-muted-foreground/40"
+                                }`}
+                              >
+                                {allowedUserIds.has(user.userId) && (
+                                  <svg
+                                    viewBox="0 0 12 12"
+                                    className="h-2.5 w-2.5 text-white"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M2 6l3 3 5-5" />
+                                  </svg>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        {groupMembers.users.filter((u) => u.userId !== session?.user?.id).length === 0 && (
+                          <p className="text-xs text-muted-foreground text-center py-3">
+                            No other users in this group
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

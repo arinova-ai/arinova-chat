@@ -518,7 +518,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           } else if (showUserProfile && message.senderUserId) {
             router.push(`/profile/${message.senderUserId}`);
           } else if (showAgentProfile && resolvedAgentId) {
-            router.push(`/agent/${resolvedAgentId}`);
+            const conv = conversations.find((c) => c.id === message.conversationId);
+            const suffix = conv?.type === "group" ? `?convId=${message.conversationId}` : "";
+            router.push(`/agent/${resolvedAgentId}${suffix}`);
           }
         }}
       />

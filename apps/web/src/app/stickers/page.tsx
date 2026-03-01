@@ -40,6 +40,8 @@ interface StickerPack {
 
 const MOCK_PACKS: StickerPack[] = [
   { id: "arinova-official", name: "Arinova Official", author: "Arinova", price: 0, downloads: 2300, category: "cute", stickers: 20, coverUrl: "/stickers/arinova-pack-01/01-hello.png" },
+  { id: "lobster-pack-01", name: "Lobster Baby Pack", author: "Arinova", price: 0, downloads: 1500, category: "cute", stickers: 20, coverUrl: "/stickers/lobster-pack-01/01-happy-wave.png" },
+  { id: "cat-pack-01", name: "Arinova Cat Pack", author: "Arinova", price: 0, downloads: 1900, category: "cute", stickers: 20, coverUrl: "/stickers/cat-pack-01/01-happy-wave.png" },
   { id: "cute-animals", name: "Cute Animals", author: "StudioCat", price: 50, downloads: 1800, category: "cute", stickers: 16, coverUrl: "/stickers/arinova-pack-01/04-happy.png" },
   { id: "emoji-remix", name: "Emoji Remix", author: "EmojiCo", price: 0, downloads: 5100, category: "funny", stickers: 24, coverUrl: "/stickers/arinova-pack-01/03-love.png" },
   { id: "spring-vibes", name: "Spring Vibes", author: "PastelDreams", price: 30, downloads: 890, category: "seasonal", stickers: 12, coverUrl: "/stickers/arinova-pack-01/05-sad.png" },
@@ -184,15 +186,44 @@ function PackCard({ pack, onClick, onGift, t }: { pack: StickerPack; onClick: ()
 // Pack Detail Dialog
 // ---------------------------------------------------------------------------
 
-const STICKER_FILES = Array.from({ length: 20 }, (_, i) => {
-  const num = String(i + 1).padStart(2, "0");
-  const names = [
+const STICKER_NAMES: Record<string, string[]> = {
+  "arinova-official": [
     "hello", "thumbsup", "love", "happy", "sad", "angry", "surprised",
     "thinking", "sleepy", "celebrate", "fighting", "please", "ok",
     "awkward", "hug", "sparkle", "busy", "coffee", "goodnight", "amazing",
-  ];
-  return `/stickers/arinova-pack-01/${num}-${names[i]}.png`;
-});
+  ],
+  "lobster-pack-01": [
+    "happy-wave", "laughing", "angry", "crying", "love", "sleeping", "thumbsup",
+    "surprised", "cool", "shy", "eating", "thinking", "celebrate",
+    "scared", "heart", "dancing", "sick", "bow", "strong", "bye",
+  ],
+  "cat-pack-01": [
+    "happy-wave", "laughing", "angry", "crying", "love", "sleeping", "thumbsup",
+    "surprised", "cool", "shy", "eating", "thinking", "celebrate",
+    "scared", "heart", "dancing", "sick", "bow", "strong", "bye",
+  ],
+};
+
+function getStickerFiles(packId: string, count: number): string[] {
+  const names = STICKER_NAMES[packId];
+  if (names) {
+    const dir = packId === "arinova-official" ? "arinova-pack-01" : packId;
+    return names.slice(0, count).map((name, i) => {
+      const num = String(i + 1).padStart(2, "0");
+      return `/stickers/${dir}/${num}-${name}.png`;
+    });
+  }
+  // Fallback: use arinova-pack-01 placeholder
+  return Array.from({ length: Math.min(count, 20) }, (_, i) => {
+    const num = String(i + 1).padStart(2, "0");
+    const fallbackNames = [
+      "hello", "thumbsup", "love", "happy", "sad", "angry", "surprised",
+      "thinking", "sleepy", "celebrate", "fighting", "please", "ok",
+      "awkward", "hug", "sparkle", "busy", "coffee", "goodnight", "amazing",
+    ];
+    return `/stickers/arinova-pack-01/${num}-${fallbackNames[i]}.png`;
+  });
+}
 
 function PackDetailDialog({
   pack,
@@ -209,7 +240,7 @@ function PackDetailDialog({
 }) {
   if (!pack) return null;
 
-  const previewStickers = STICKER_FILES.slice(0, pack.stickers);
+  const previewStickers = getStickerFiles(pack.id, pack.stickers);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>

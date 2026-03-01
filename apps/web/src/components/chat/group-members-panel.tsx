@@ -383,6 +383,7 @@ function MembersTab({
                 key={agent.agentId}
                 agent={agent}
                 currentUserId={currentUserId}
+                conversationId={conversationId}
                 actionLoading={actionLoading}
                 onClosePanel={onClosePanel}
                 onUpdateListenMode={onUpdateListenMode}
@@ -588,6 +589,7 @@ const LISTEN_MODE_LABELS: Record<string, string> = {
 function AgentMemberRow({
   agent,
   currentUserId,
+  conversationId,
   actionLoading,
   onClosePanel,
   onUpdateListenMode,
@@ -595,6 +597,7 @@ function AgentMemberRow({
 }: {
   agent: GroupAgentMember;
   currentUserId: string | undefined;
+  conversationId: string;
   actionLoading: string | null;
   onClosePanel: () => void;
   onUpdateListenMode: (agentId: string, mode: string) => void;
@@ -605,8 +608,8 @@ function AgentMemberRow({
 
   const handleProfileClick = useCallback(() => {
     onClosePanel();
-    router.push(`/agent/${agent.agentId}`);
-  }, [onClosePanel, router, agent.agentId]);
+    router.push(`/agent/${agent.agentId}?convId=${conversationId}`);
+  }, [onClosePanel, router, agent.agentId, conversationId]);
 
   return (
     <div className="rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors">

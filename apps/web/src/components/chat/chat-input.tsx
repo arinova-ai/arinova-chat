@@ -78,8 +78,9 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const [uploading, setUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
-  const [stickers, setStickers] = useState<Array<{ id: string; filename: string; emoji: string }>>([]);
-  const [selectedSticker, setSelectedSticker] = useState<{ id: string; filename: string; emoji: string } | null>(null);
+  const [stickerPacks, setStickerPacks] = useState<Array<{ packId: string; name: string; stickers: Array<{ id: string; filename: string; emoji: string }> }>>([]);
+  const [activePackIndex, setActivePackIndex] = useState(0);
+  const [selectedSticker, setSelectedSticker] = useState<{ id: string; filename: string; emoji: string; packId: string } | null>(null);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -739,19 +740,29 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     [activeConversationId]
   );
 
-  // Sticker pack — fetch manifest once
+  // Sticker packs — fetch all manifests once
+  const STICKER_PACK_IDS = ["arinova-pack-01", "lobster-pack-01", "cat-pack-01"];
   useEffect(() => {
-    fetch("/stickers/arinova-pack-01/manifest.json")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (data?.stickers) setStickers(data.stickers);
-      })
-      .catch(() => {});
+    let cancelled = false;
+    Promise.all(
+      STICKER_PACK_IDS.map((packId) =>
+        fetch(`/stickers/${packId}/manifest.json`)
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => data ? { packId, name: data.name ?? packId, stickers: data.stickers ?? [] } : null)
+          .catch(() => null)
+      )
+    ).then((results) => {
+      if (!cancelled) {
+        setStickerPacks(results.filter(Boolean) as typeof stickerPacks);
+      }
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleStickerSend = useCallback(() => {
     if (!activeConversationId || !selectedSticker) return;
-    sendMessage(`![sticker](/stickers/arinova-pack-01/${selectedSticker.filename})`);
+    sendMessage(`![sticker](/stickers/${selectedSticker.packId}/${selectedSticker.filename})`);
     setStickerOpen(false);
     setSelectedSticker(null);
   }, [activeConversationId, sendMessage, selectedSticker]);
@@ -1075,7 +1086,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
             />
 
             {/* Sticker picker */}
-            {stickers.length > 0 && (
+            {stickerPacks.length > 0 && (
               <Popover open={stickerOpen} onOpenChange={(open) => { setStickerOpen(open); if (!open) setSelectedSticker(null); }}>
                 <PopoverTrigger asChild>
                   <Button
@@ -1099,7 +1110,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={`/stickers/arinova-pack-01/${selectedSticker.filename}`}
+                          src={`/stickers/${selectedSticker.packId}/${selectedSticker.filename}`}
                           alt={selectedSticker.id}
                           className="h-16 w-16 object-contain shrink-0"
                         />
@@ -1118,34 +1129,46 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
 
                   {/* Sticker grid */}
                   <div className="grid grid-cols-5 gap-1 max-h-[200px] overflow-y-auto">
-                    {stickers.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setSelectedSticker(s)}
-                        className={`rounded-lg p-1 transition-colors ${selectedSticker?.id === s.id ? "bg-accent ring-2 ring-brand" : "hover:bg-accent"}`}
-                        title={s.emoji}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/stickers/arinova-pack-01/${s.filename}`}
-                          alt={s.id}
-                          className="h-12 w-12 object-contain"
-                          loading="lazy"
-                        />
-                      </button>
-                    ))}
+                    {(stickerPacks[activePackIndex]?.stickers ?? []).map((s) => {
+                      const packId = stickerPacks[activePackIndex].packId;
+                      const isSelected = selectedSticker?.id === s.id && selectedSticker?.packId === packId;
+                      return (
+                        <button
+                          key={`${packId}-${s.id}`}
+                          type="button"
+                          onClick={() => setSelectedSticker({ ...s, packId })}
+                          className={`rounded-lg p-1 transition-colors ${isSelected ? "bg-accent ring-2 ring-brand" : "hover:bg-accent"}`}
+                          title={s.emoji}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/stickers/${packId}/${s.filename}`}
+                            alt={s.id}
+                            className="h-12 w-12 object-contain"
+                            loading="lazy"
+                          />
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Pack tabs */}
                   <div className="flex items-center gap-1 border-t border-border mt-2 pt-2">
-                    <button
-                      type="button"
-                      className="rounded-md px-2 py-1 text-xs font-medium bg-accent text-foreground"
-                      title="Arinova Pack 01"
-                    >
-                      {stickers[0]?.emoji ?? "🎨"}
-                    </button>
+                    {stickerPacks.map((pack, idx) => (
+                      <button
+                        key={pack.packId}
+                        type="button"
+                        onClick={() => { setActivePackIndex(idx); setSelectedSticker(null); }}
+                        className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                          activePackIndex === idx
+                            ? "bg-accent text-foreground"
+                            : "text-muted-foreground hover:bg-accent/50"
+                        }`}
+                        title={pack.name}
+                      >
+                        {pack.stickers[0]?.emoji ?? "🎨"}
+                      </button>
+                    ))}
                   </div>
                 </PopoverContent>
               </Popover>
