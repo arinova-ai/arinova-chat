@@ -559,4 +559,14 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- OAuth App: who-is-killer
+INSERT INTO oauth_apps (client_id, client_secret, name, redirect_uri, description)
+VALUES (
+  'who-is-killer',
+  'wik-secret-v1',
+  'Who Is Killer?',
+  'http://192.168.68.83:21010/callback',
+  'AI Mystery Game — 3 detectives find the killer'
+) ON CONFLICT (client_id) DO NOTHING;
+
 COMMIT;

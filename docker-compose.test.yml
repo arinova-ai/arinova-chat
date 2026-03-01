@@ -145,6 +145,32 @@ services:
     depends_on:
       - server
 
+  who-is-killer:
+    build:
+      context: ../who-is-killer
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://192.168.68.83:21011
+        NEXT_PUBLIC_WS_URL: ws://192.168.68.83:21011
+        NEXT_PUBLIC_ARINOVA_URL: http://192.168.68.83:21001
+        NEXT_PUBLIC_ARINOVA_CLIENT_ID: who-is-killer
+    container_name: arinova-test-killer
+    restart: unless-stopped
+    ports:
+      - "21010:3000"
+      - "21011:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - ARINOVA_URL=http://server:21001
+      - ARINOVA_CLIENT_ID=who-is-killer
+      - ARINOVA_CLIENT_SECRET=wik-secret-v1
+      - LLM_PROVIDER=openai
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+    depends_on:
+      - server
+
 volumes:
   test_postgres_data:
   test_redis_data:

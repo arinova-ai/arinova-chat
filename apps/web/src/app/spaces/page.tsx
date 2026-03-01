@@ -22,10 +22,13 @@ interface Game {
   plays: number;
   rating: number;
   featured?: boolean;
+  iframeUrl?: string;
+  status?: "live" | "coming_soon";
 }
 
 const MOCK_GAMES: Game[] = [
-  { id: "draw-together", name: "Draw Together", desc: "Social drawing game \u2014 draw and guess with friends", category: "social", plays: 340000, rating: 4.6, featured: true },
+  { id: "who-is-killer", name: "Who Is Killer?", desc: "AI 推理對決 — 3 位偵探各帶 AI 嫌疑犯，找出兇手！", category: "social", plays: 0, rating: 0, iframeUrl: "http://192.168.68.83:21010", status: "live", featured: true },
+  { id: "draw-together", name: "Draw Together", desc: "Social drawing game \u2014 draw and guess with friends", category: "social", plays: 340000, rating: 4.6 },
   { id: "pixel-dungeon", name: "Pixel Dungeon", desc: "Action RPG with roguelike elements", category: "action", plays: 120000, rating: 4.5 },
   { id: "word-chain", name: "Word Chain", desc: "Word puzzle \u2014 connect letters to form words", category: "puzzle", plays: 89000, rating: 4.2 },
   { id: "chess-arena", name: "Chess Arena", desc: "Classic chess with ranked matchmaking", category: "strategy", plays: 200000, rating: 4.8 },
@@ -46,6 +49,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const GAME_EMOJIS: Record<string, string> = {
+  "who-is-killer": "\ud83d\udd2a",
   "draw-together": "\ud83c\udfa8",
   "pixel-dungeon": "\u2694\ufe0f",
   "word-chain": "\ud83d\udcdd",

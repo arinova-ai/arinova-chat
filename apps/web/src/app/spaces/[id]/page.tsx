@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTranslation } from "@/lib/i18n";
@@ -16,6 +16,7 @@ import {
   Gamepad2,
   Gauge,
   Layers,
+  X,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -34,9 +35,28 @@ interface GameDetail {
   description: string[];
   screenshots: string[]; // placeholder colors
   related: string[];
+  iframeUrl?: string;
 }
 
 const GAME_DETAILS: Record<string, GameDetail> = {
+  "who-is-killer": {
+    id: "who-is-killer",
+    name: "Who Is Killer?",
+    emoji: "\ud83d\udd2a",
+    category: "social",
+    plays: 0,
+    rating: 0,
+    players: "3 players",
+    difficulty: "Medium",
+    description: [
+      "Who Is Killer? is an AI-powered mystery deduction game. Three detectives each bring their own AI suspect into a murder case. Through rounds of public testimonies, private interrogations, and detective meetings, players must find the real killer.",
+      "Each suspect is controlled by an AI agent with its own personality and secrets. The killer's agent will try to deceive the detectives while innocent agents may have their own hidden motives. Use clues, cross-examine testimonies, and collaborate with fellow detectives to crack the case.",
+      "Features Arinova AI agent integration \u2014 bring your own custom AI agent to play as your suspect character!",
+    ],
+    screenshots: ["bg-red-900/40", "bg-slate-900/40", "bg-amber-900/40"],
+    related: ["trivia-battle", "draw-together"],
+    iframeUrl: "http://192.168.68.83:21010",
+  },
   "draw-together": {
     id: "draw-together",
     name: "Draw Together",
@@ -219,6 +239,7 @@ function GameDetailContent({ id }: { id: string }) {
   const router = useRouter();
   const { t } = useTranslation();
   const game = GAME_DETAILS[id];
+  const [showIframe, setShowIframe] = useState(false);
 
   if (!game) {
     return (
@@ -280,7 +301,10 @@ function GameDetailContent({ id }: { id: string }) {
                     </span>
                   </div>
                   <div className="mt-4">
-                    <Button className="brand-gradient-btn gap-2">
+                    <Button
+                      className="brand-gradient-btn gap-2"
+                      onClick={() => game.iframeUrl && setShowIframe(true)}
+                    >
                       <Play className="h-4 w-4" />
                       {t("spaces.playNow")}
                     </Button>
@@ -362,6 +386,23 @@ function GameDetailContent({ id }: { id: string }) {
 
         <MobileBottomNav />
       </div>
+
+      {/* Fullscreen iframe overlay */}
+      {showIframe && game.iframeUrl && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <button
+            onClick={() => setShowIframe(false)}
+            className="absolute top-4 right-4 z-10 rounded-full bg-black/60 p-2 text-white backdrop-blur-sm transition hover:bg-black/80"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <iframe
+            src={game.iframeUrl}
+            className="h-full w-full border-none"
+            allow="microphone; camera"
+          />
+        </div>
+      )}
     </div>
   );
 }
