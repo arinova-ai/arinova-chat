@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Palette, Check, Lock, Users, Search } from "lucide-react";
+import { PageTitle } from "@/components/ui/page-title";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -164,16 +165,12 @@ function ThemesGrid() {
 
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
-        <div className="shrink-0 border-b border-border px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/15">
-              <Palette className="h-5 w-5 text-brand-text" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold">Office Themes</h1>
-              <p className="text-xs text-muted-foreground">Browse and apply themes to your virtual office</p>
-            </div>
-          </div>
+        <div className="shrink-0 border-b border-border px-6 py-5">
+          <PageTitle
+            title="Office Themes"
+            subtitle="Browse and apply themes to your virtual office"
+            icon={Palette}
+          />
         </div>
 
         {/* Search + filters */}
