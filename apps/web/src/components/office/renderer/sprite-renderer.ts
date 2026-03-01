@@ -339,7 +339,7 @@ export class SpriteRenderer implements OfficeRenderer {
   private manifest: ThemeManifest | null = null;
   private themeId = "";
 
-  private currentScene: SceneKey = "working";
+  private currentScene: SceneKey = "sleeping";
   private bgLayers: Map<SceneKey, HTMLDivElement> = new Map();
   private overlayContainer: HTMLDivElement | null = null;
   private hitboxEl: HTMLDivElement | null = null;
@@ -507,13 +507,18 @@ export class SpriteRenderer implements OfficeRenderer {
 
   updateAgents(agents: Agent[]): void {
     const agent = agents[0];
-    if (!agent) return;
+
+    if (!agent) {
+      // Agent not in SSE data → sleeping
+      if (this.currentScene !== "sleeping") {
+        this.transitionTo("sleeping");
+      }
+      return;
+    }
 
     this.firstAgentId = agent.id;
 
-    // Offline agents show the sleeping scene regardless of status
-    const target: SceneKey = agent.online === false ? "sleeping" : statusToScene(agent.status);
-
+    const target: SceneKey = statusToScene(agent.status);
     if (target !== this.currentScene) {
       this.transitionTo(target);
     }
