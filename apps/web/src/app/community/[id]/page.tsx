@@ -34,7 +34,7 @@ interface Community {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "lounge" | "hub";
+  type: "lounge" | "club";
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -477,7 +477,7 @@ function CommunityDetailContent() {
                       : "bg-purple-500/15 text-purple-400"
                   )}
                 >
-                  {community.type === "lounge" ? "Lounge" : "Hub"}
+                  {community.type === "lounge" ? "Lounge" : "Club"}
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground flex items-center gap-2">

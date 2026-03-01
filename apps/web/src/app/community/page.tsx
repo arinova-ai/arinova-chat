@@ -18,7 +18,7 @@ interface CommunityItem {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "lounge" | "hub";
+  type: "lounge" | "club";
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -35,7 +35,7 @@ interface BrowseResponse {
   total: number;
 }
 
-const TYPE_FILTERS = ["all", "lounge", "hub"] as const;
+const TYPE_FILTERS = ["all", "lounge", "club"] as const;
 type TypeFilter = (typeof TYPE_FILTERS)[number];
 
 const TABS = ["browse", "my", "joined"] as const;
@@ -281,7 +281,7 @@ function CommunityCard({
                   : "bg-purple-500/15 text-purple-400"
               )}
             >
-              {c.type === "lounge" ? t("community.type.lounge") : t("community.type.hub")}
+              {c.type === "lounge" ? t("community.type.lounge") : t("community.type.club")}
             </span>
           </div>
           {c.description && (

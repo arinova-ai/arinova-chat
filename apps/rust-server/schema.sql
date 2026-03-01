@@ -253,14 +253,14 @@ CREATE TABLE notification_preferences (
     quiet_hours_end VARCHAR(5)
 );
 
--- ===== Community Tables (Lounge + Hub) =====
+-- ===== Community Tables (Lounge + Club) =====
 
 CREATE TABLE communities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     creator_id TEXT NOT NULL REFERENCES "user"(id),
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    type TEXT NOT NULL DEFAULT 'lounge' CHECK (type IN ('lounge', 'hub')),
+    type TEXT NOT NULL DEFAULT 'lounge' CHECK (type IN ('lounge', 'club')),
     -- Pricing (credits)
     join_fee INTEGER NOT NULL DEFAULT 0,
     monthly_fee INTEGER NOT NULL DEFAULT 0,

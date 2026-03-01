@@ -14,7 +14,7 @@ function CreateCommunityContent() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [communityType, setCommunityType] = useState<"lounge" | "hub">("lounge");
+  const [communityType, setCommunityType] = useState<"lounge" | "club">("lounge");
   const [joinFee, setJoinFee] = useState(0);
   const [monthlyFee, setMonthlyFee] = useState(0);
   const [agentCallFee, setAgentCallFee] = useState(0);
@@ -109,7 +109,7 @@ function CreateCommunityContent() {
                 Type
               </label>
               <div className="flex gap-2">
-                {(["lounge", "hub"] as const).map((t) => (
+                {(["lounge", "club"] as const).map((t) => (
                   <button
                     key={t}
                     type="button"

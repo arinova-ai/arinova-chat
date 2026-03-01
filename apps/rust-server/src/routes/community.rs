@@ -291,10 +291,10 @@ async fn create(
     }
 
     let community_type = body.community_type.as_deref().unwrap_or("lounge");
-    if community_type != "lounge" && community_type != "hub" {
+    if community_type != "lounge" && community_type != "club" {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Type must be 'lounge' or 'hub'" })),
+            Json(json!({ "error": "Type must be 'lounge' or 'club'" })),
         );
     }
 

@@ -345,13 +345,16 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Add CHECK constraints matching schema.sql
+-- Rename community type 'hub' → 'club'
+UPDATE communities SET type = 'club' WHERE type = 'hub';
+ALTER TABLE communities DROP CONSTRAINT IF EXISTS communities_type_check;
+
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'communities_type_check'
   ) THEN
     ALTER TABLE communities ADD CONSTRAINT communities_type_check
-      CHECK (type IN ('lounge', 'hub'));
+      CHECK (type IN ('lounge', 'club'));
   END IF;
 END $$;
 
