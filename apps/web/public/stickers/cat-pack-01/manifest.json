@@ -1,0 +1,33 @@
+{
+  "id": "cat-pack-01",
+  "name": "Arinova Cat Pack 01",
+  "name_zh": "Arinova 貓咪貼圖包",
+  "version": "1.0.0",
+  "author": "Arinova",
+  "character": "Arinova Cat",
+  "count": 20,
+  "size": "512x512",
+  "format": "png",
+  "stickers": [
+    { "id": "01-happy-wave", "filename": "01-happy-wave.png", "emoji": "👋", "description_en": "Happy waving", "description_zh": "開心揮手" },
+    { "id": "02-laughing", "filename": "02-laughing.png", "emoji": "😂", "description_en": "Laughing hard", "description_zh": "大笑" },
+    { "id": "03-angry", "filename": "03-angry.png", "emoji": "😠", "description_en": "Angry", "description_zh": "生氣" },
+    { "id": "04-crying", "filename": "04-crying.png", "emoji": "😢", "description_en": "Crying", "description_zh": "哭哭" },
+    { "id": "05-love", "filename": "05-love.png", "emoji": "😍", "description_en": "Heart eyes love", "description_zh": "愛心眼" },
+    { "id": "06-sleeping", "filename": "06-sleeping.png", "emoji": "😴", "description_en": "Sleeping", "description_zh": "睡覺" },
+    { "id": "07-thumbsup", "filename": "07-thumbsup.png", "emoji": "👍", "description_en": "Thumbs up", "description_zh": "讚" },
+    { "id": "08-surprised", "filename": "08-surprised.png", "emoji": "😮", "description_en": "Surprised", "description_zh": "驚訝" },
+    { "id": "09-cool", "filename": "09-cool.png", "emoji": "😎", "description_en": "Cool sunglasses", "description_zh": "戴墨鏡耍酷" },
+    { "id": "10-shy", "filename": "10-shy.png", "emoji": "🙈", "description_en": "Shy blushing", "description_zh": "害羞" },
+    { "id": "11-eating", "filename": "11-eating.png", "emoji": "🍽️", "description_en": "Eating fish", "description_zh": "吃魚" },
+    { "id": "12-thinking", "filename": "12-thinking.png", "emoji": "🤔", "description_en": "Thinking", "description_zh": "思考中" },
+    { "id": "13-celebrate", "filename": "13-celebrate.png", "emoji": "🎉", "description_en": "Celebrating", "description_zh": "慶祝" },
+    { "id": "14-scared", "filename": "14-scared.png", "emoji": "😨", "description_en": "Scared", "description_zh": "害怕" },
+    { "id": "15-heart", "filename": "15-heart.png", "emoji": "❤️", "description_en": "Holding heart", "description_zh": "捧愛心" },
+    { "id": "16-dancing", "filename": "16-dancing.png", "emoji": "💃", "description_en": "Dancing", "description_zh": "跳舞" },
+    { "id": "17-sick", "filename": "17-sick.png", "emoji": "🤒", "description_en": "Sick", "description_zh": "生病" },
+    { "id": "18-bow", "filename": "18-bow.png", "emoji": "🙏", "description_en": "Bowing politely", "description_zh": "鞠躬" },
+    { "id": "19-strong", "filename": "19-strong.png", "emoji": "💪", "description_en": "Flexing muscles", "description_zh": "展現力量" },
+    { "id": "20-bye", "filename": "20-bye.png", "emoji": "👋", "description_en": "Waving goodbye", "description_zh": "拜拜" }
+  ]
+}
