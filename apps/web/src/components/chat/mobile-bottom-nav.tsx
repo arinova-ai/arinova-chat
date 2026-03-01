@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, Users, UserPlus, Wallet,
-  Palette, Store, Settings, type LucideIcon,
+  Palette, Store, Settings, Smile, PenTool, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
@@ -54,6 +54,8 @@ export function MobileBottomNav() {
 
   const sheetItems = [
     { id: "spaces", icon: Globe, label: t("nav.spaces"), href: "/spaces" },
+    { id: "stickers", icon: Smile, label: t("nav.stickers"), href: "/stickers" },
+    { id: "creator", icon: PenTool, label: t("nav.creator"), href: "/creator" },
     { id: "marketplace", icon: Store, label: t("nav.marketplace"), href: "/marketplace" },
     { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
     { id: "wallet", icon: Wallet, label: t("nav.wallet"), href: "/wallet" },
