@@ -263,6 +263,7 @@ export const joinSpaceSessionSchema = z.object({
 export const wsClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("send_message"),
+    id: z.string().uuid().optional(),
     conversationId: z.string().uuid(),
     content: z.string().min(1).max(32000),
   }),

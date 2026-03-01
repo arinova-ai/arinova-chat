@@ -322,6 +322,7 @@ async fn upload_file(
             None,
             None, // thread_id
             &[],
+            None, // client_msg_id — N/A for uploads
             &ws,
             &db,
             &redis,

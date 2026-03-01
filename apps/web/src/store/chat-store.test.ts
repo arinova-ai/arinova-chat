@@ -99,7 +99,7 @@ describe("useChatStore", () => {
       expect(messages).toHaveLength(1);
 
       const [msg] = messages;
-      expect(msg.id).toMatch(/^temp-/);
+      expect(msg.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(msg.role).toBe("user");
       expect(msg.content).toBe("hello");
       expect(msg.conversationId).toBe("conv-1");

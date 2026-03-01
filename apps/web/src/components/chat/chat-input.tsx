@@ -487,7 +487,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     }
 
     // Optimistic message so it shows immediately
-    const tempId = `temp-${Date.now()}`;
+    const tempId = crypto.randomUUID();
     const optimisticMsg: Message = {
       id: tempId,
       seq: 0,
@@ -502,7 +502,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
         ? {
             attachments: [
               {
-                id: `temp-att-${Date.now()}`,
+                id: crypto.randomUUID(),
                 messageId: tempId,
                 fileName: prevFile.name,
                 fileType: prevFile.type,
@@ -625,7 +625,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       });
 
       // Optimistic message with audio attachment placeholder
-      const tempId = `temp-${Date.now()}`;
+      const tempId = crypto.randomUUID();
       const optimisticMsg: Message = {
         id: tempId,
         seq: 0,
@@ -636,7 +636,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
         senderUserId: useChatStore.getState().currentUserId ?? undefined,
         attachments: [
           {
-            id: `temp-att-${Date.now()}`,
+            id: crypto.randomUUID(),
             messageId: tempId,
             fileName: file.name,
             fileType: file.type || "audio/webm",

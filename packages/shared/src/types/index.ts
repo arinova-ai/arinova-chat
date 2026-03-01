@@ -382,7 +382,7 @@ export interface AppPurchase {
 
 // ===== WebSocket Events (User ↔ Backend) =====
 export type WSClientEvent =
-  | { type: "send_message"; conversationId: string; content: string; replyToId?: string; threadId?: string; mentions?: string[] }
+  | { type: "send_message"; id?: string; conversationId: string; content: string; replyToId?: string; threadId?: string; mentions?: string[] }
   | { type: "cancel_stream"; conversationId: string; messageId: string }
   | { type: "cancel_queued"; conversationId: string; messageId: string }
   | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq

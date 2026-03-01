@@ -446,9 +446,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { activeConversationId, replyingTo } = get();
     if (!activeConversationId) return;
 
-    // Optimistic: add user message to UI
+    // Optimistic: add user message to UI with stable UUID
+    const clientMsgId = crypto.randomUUID();
     const userMsg: Message = {
-      id: `temp-${Date.now()}`,
+      id: clientMsgId,
       conversationId: activeConversationId,
       seq: 0,
       role: "user",
@@ -486,9 +487,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       replyingTo: null,
     });
 
-    // Send via WebSocket
+    // Send via WebSocket with client-generated UUID
     wsManager.send({
       type: "send_message",
+      id: clientMsgId,
       conversationId: activeConversationId,
       content,
       ...(replyingTo ? { replyToId: replyingTo.id } : {}),
@@ -1084,9 +1086,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { activeConversationId, activeThreadId } = get();
     if (!activeConversationId || !activeThreadId) return;
 
-    // Optimistic: add user message to thread
+    // Optimistic: add user message to thread with stable UUID
+    const clientThreadMsgId = crypto.randomUUID();
     const userMsg: Message = {
-      id: `temp-${Date.now()}`,
+      id: clientThreadMsgId,
       conversationId: activeConversationId,
       seq: 0,
       role: "user",
@@ -1105,9 +1108,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       },
     });
 
-    // Send via WebSocket with threadId
+    // Send via WebSocket with threadId + client UUID
     wsManager.send({
       type: "send_message",
+      id: clientThreadMsgId,
       conversationId: activeConversationId,
       content,
       threadId: activeThreadId,

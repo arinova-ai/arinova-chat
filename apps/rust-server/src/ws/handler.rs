@@ -364,6 +364,9 @@ async fn handle_message(
             send_event(tx, &json!({"type": "pong"}));
         }
         "send_message" => {
+            let client_msg_id = event.get("id").and_then(|v| v.as_str())
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+                .map(|u| u.to_string());
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
             let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let reply_to_id = event.get("replyToId").and_then(|v| v.as_str()).map(|s| s.to_string());
@@ -399,6 +402,7 @@ async fn handle_message(
                 reply_to_id,
                 thread_id,
                 &mentions,
+                client_msg_id,
                 ws_state,
                 db,
                 redis,
@@ -786,6 +790,7 @@ pub async fn trigger_agent_response(
     reply_to_id: Option<String>,
     thread_id: Option<String>,
     mentions: &[String],
+    client_msg_id: Option<String>,
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
@@ -836,7 +841,9 @@ pub async fn trigger_agent_response(
                 Err(_) => return,
             };
 
-            let msg_id = uuid::Uuid::new_v4();
+            let msg_id = client_msg_id.as_deref()
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+                .unwrap_or_else(uuid::Uuid::new_v4);
             let _ = sqlx::query(
                 r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, thread_id, created_at, updated_at)
                    VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, $7::uuid, NOW(), NOW())"#,
@@ -973,7 +980,9 @@ pub async fn trigger_agent_response(
             Err(_) => return,
         };
 
-        let user_msg_id = uuid::Uuid::new_v4();
+        let user_msg_id = client_msg_id.as_deref()
+            .and_then(|s| uuid::Uuid::parse_str(s).ok())
+            .unwrap_or_else(uuid::Uuid::new_v4);
         saved_user_msg_id = Some(user_msg_id.to_string());
         let now = chrono::Utc::now();
         let _ = sqlx::query(
