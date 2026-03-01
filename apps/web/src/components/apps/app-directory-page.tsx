@@ -9,11 +9,11 @@ import { PageTitle } from "@/components/ui/page-title";
 import {
   Search,
   ExternalLink,
-  Loader2,
   Package,
   Check,
   X,
 } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
@@ -160,7 +160,7 @@ export function AppDirectoryPage() {
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <ArinovaSpinner size="sm" />
             </div>
           ) : apps.length === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">

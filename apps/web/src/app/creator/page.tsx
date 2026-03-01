@@ -9,6 +9,7 @@ import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
 import { useTranslation } from "@/lib/i18n";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import {
   Loader2,
   Plus,
@@ -302,7 +303,7 @@ function AgentsTab({
   if (loading) {
     return (
       <div className="flex h-40 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <ArinovaSpinner size="sm" />
       </div>
     );
   }

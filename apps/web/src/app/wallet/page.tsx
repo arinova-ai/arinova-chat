@@ -15,6 +15,7 @@ import {
   Sparkles,
   Wallet,
 } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 
 interface Transaction {
   id: string;
@@ -101,7 +102,7 @@ function WalletContent() {
         <div className="flex-1 overflow-y-auto p-6 pb-24 md:pb-6">
           {loading ? (
             <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <ArinovaSpinner size="sm" />
             </div>
           ) : (
             <div className="mx-auto max-w-3xl space-y-8">

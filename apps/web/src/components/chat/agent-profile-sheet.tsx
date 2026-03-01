@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bot, User, Pencil, Check, X, MessageSquare, Radio, Loader2 } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { VisuallyHidden } from "radix-ui";
 import { authClient } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
@@ -368,7 +369,7 @@ export function AgentProfileSheet({
             </p>
             {loadingAllowed ? (
               <div className="flex justify-center py-3">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <ArinovaSpinner size="sm" />
               </div>
             ) : (
               <>

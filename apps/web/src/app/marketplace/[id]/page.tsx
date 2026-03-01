@@ -18,6 +18,7 @@ import {
   Sparkles,
   Send,
 } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 
 interface AgentDetail {
   id: string;
@@ -118,7 +119,7 @@ function AgentDetailContent() {
   if (loading) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <ArinovaSpinner />
       </div>
     );
   }

@@ -8,11 +8,11 @@ import { useSpacesStore } from "@/store/spaces-store";
 import {
   ArrowLeft,
   Search,
-  Loader2,
   Gamepad2,
   Users,
   Plus,
 } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 
 const CATEGORIES = [
   "All",
@@ -116,7 +116,7 @@ export function SpacesListPage() {
       <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
           <div className="flex h-40 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <ArinovaSpinner size="sm" />
           </div>
         ) : spaces.length === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">

@@ -9,6 +9,7 @@ import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
 import { Loader2, Search, Plus, Users, Coins } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { cn } from "@/lib/utils";
 
 interface CommunityItem {
@@ -188,7 +189,7 @@ function CommunityBrowseContent() {
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {loading && communities.length === 0 ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <ArinovaSpinner />
             </div>
           ) : communities.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { MessageSquare, UserMinus, Loader2 } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import type { Conversation } from "@arinova/shared/types";
@@ -78,7 +79,7 @@ export function FriendsPanel({ onStartConversation }: FriendsPanelProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <ArinovaSpinner size="sm" />
       </div>
     );
   }

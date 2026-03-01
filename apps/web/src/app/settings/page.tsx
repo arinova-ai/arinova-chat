@@ -28,6 +28,7 @@ import {
   Settings,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { api } from "@/lib/api";
 import { assetUrl, BACKEND_URL } from "@/lib/config";
 import { getPushStatus, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
@@ -733,7 +734,7 @@ function NotificationPanel() {
           <p className="text-sm text-muted-foreground">{t("settings.notifications.subtitle")}</p>
         </div>
         <div className="flex justify-center py-8">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <ArinovaSpinner size="sm" />
         </div>
       </div>
     );
@@ -915,7 +916,7 @@ function PrivacyPanel() {
 
         {loading ? (
           <div className="flex justify-center py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <ArinovaSpinner size="sm" />
           </div>
         ) : blockedUsers.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("settings.privacy.noBlocked")}</p>

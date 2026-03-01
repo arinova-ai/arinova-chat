@@ -10,7 +10,8 @@ import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import { ArrowLeft, MessageSquare, Loader2 } from "lucide-react";
+import { ArrowLeft, MessageSquare } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
 
 /** Public agent profile returned by /api/agents/:id/profile */
@@ -158,7 +159,7 @@ function AgentProfileContent() {
           <div className="mx-auto max-w-2xl px-4 py-6">
             {loading && (
               <div className="flex justify-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <ArinovaSpinner />
               </div>
             )}
 

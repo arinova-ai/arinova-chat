@@ -10,7 +10,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, Crown, ShieldCheck, Loader2 } from "lucide-react";
+import { Bot, Crown, ShieldCheck } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
@@ -107,7 +108,7 @@ export function UserProfileSheet({
 
         {loading && (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <ArinovaSpinner size="sm" />
           </div>
         )}
 

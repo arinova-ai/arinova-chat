@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { ArrowLeft, ExternalLink, Loader2, Package } from "lucide-react";
+import { ArrowLeft, ExternalLink, Package } from "lucide-react";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 
 interface AppDetail {
   id: string;
@@ -47,7 +48,7 @@ export function AppDetailPage({ appId }: { appId: string }) {
   if (loading) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <ArinovaSpinner />
       </div>
     );
   }
