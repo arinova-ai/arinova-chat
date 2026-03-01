@@ -324,6 +324,7 @@ async fn get_session(State(state): State<AppState>, headers: axum::http::HeaderM
                 "name": s.name,
                 "email": s.email,
                 "image": s.image,
+                "bio": s.bio,
                 "username": s.username,
             },
             "session": {
@@ -417,6 +418,7 @@ async fn github_callback(
 struct UpdateUserBody {
     name: Option<String>,
     image: Option<String>,
+    bio: Option<String>,
 }
 
 async fn update_user(
@@ -452,6 +454,10 @@ async fn update_user(
     }
     if body.image.is_some() {
         sets.push(format!("image = ${idx}"));
+        idx += 1;
+    }
+    if body.bio.is_some() {
+        sets.push(format!("bio = ${idx}"));
     }
 
     let query_str = format!(
@@ -467,6 +473,9 @@ async fn update_user(
     if let Some(ref image) = body.image {
         q = q.bind(image);
     }
+    if let Some(ref bio) = body.bio {
+        q = q.bind(bio);
+    }
 
     match q.execute(&state.db).await {
         Ok(_) => {
@@ -476,6 +485,7 @@ async fn update_user(
                     "name": body.name.as_deref().unwrap_or(&session.name),
                     "email": session.email,
                     "image": body.image.as_deref().or(session.image.as_deref()),
+                    "bio": body.bio.as_deref().or(session.bio.as_deref()),
                 }
             }))
             .into_response()

@@ -75,6 +75,7 @@ pub struct ValidatedSession {
     pub email: String,
     pub name: String,
     pub image: Option<String>,
+    pub bio: Option<String>,
     pub username: Option<String>,
     pub session_id: String,
     pub expires_at: NaiveDateTime,
@@ -122,19 +123,20 @@ pub async fn validate_session(
     }
 
     // Fetch user
-    let user = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
-        r#"SELECT email, name, image, username FROM "user" WHERE id = $1"#,
+    let user = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>)>(
+        r#"SELECT email, name, image, bio, username FROM "user" WHERE id = $1"#,
     )
     .bind(&user_id)
     .fetch_optional(pool)
     .await?;
 
     match user {
-        Some((email, name, image, username)) => Ok(Some(ValidatedSession {
+        Some((email, name, image, bio, username)) => Ok(Some(ValidatedSession {
             user_id,
             email,
             name,
             image,
+            bio,
             username,
             session_id,
             expires_at,

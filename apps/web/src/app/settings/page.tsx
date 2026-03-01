@@ -271,7 +271,10 @@ function AvatarCropDialog({
 function ProfilePanel() {
   const { t } = useTranslation();
   const { data: session, isPending: sessionPending } = authClient.useSession();
-  const [name, setName] = useState(session?.user?.name ?? "");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sessionUser = session?.user as Record<string, any> | undefined;
+  const [name, setName] = useState(sessionUser?.name ?? "");
+  const [bio, setBio] = useState(sessionUser?.bio ?? "");
   const [nameLoading, setNameLoading] = useState(false);
   const [nameSuccess, setNameSuccess] = useState("");
   const [nameError, setNameError] = useState("");
@@ -288,8 +291,9 @@ function ProfilePanel() {
   const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
-    if (session?.user?.name) setName(session.user.name);
-  }, [session?.user?.name]);
+    if (sessionUser?.name) setName(sessionUser.name);
+    if (typeof sessionUser?.bio === "string") setBio(sessionUser.bio);
+  }, [sessionUser?.name, sessionUser?.bio]);
 
   const handleUpdateName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,9 +306,15 @@ function ProfilePanel() {
     }
     setNameLoading(true);
     try {
-      const result = await authClient.updateUser({ name: trimmed });
-      if (result.error) {
-        setNameError(result.error.message ?? t("settings.profile.nameUpdateFailed"));
+      const res = await fetch(`${BACKEND_URL}/api/auth/update-user`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed, bio: bio.trim() || null }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setNameError(body.error ?? t("settings.profile.nameUpdateFailed"));
       } else {
         setNameSuccess(t("settings.profile.nameUpdated"));
         setTimeout(() => setNameSuccess(""), 3000);
@@ -477,6 +487,9 @@ function ProfilePanel() {
         <div className="space-y-2">
           <label className="text-sm font-medium">{t("settings.profile.bio")}</label>
           <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            maxLength={500}
             placeholder={t("settings.profile.bioPlaceholder")}
             className="min-h-[100px] w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
           />

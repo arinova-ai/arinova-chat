@@ -36,6 +36,7 @@ CREATE TABLE "user" (
     email TEXT NOT NULL,
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     image TEXT,
+    bio TEXT,
     username VARCHAR(32) UNIQUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
