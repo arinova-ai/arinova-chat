@@ -103,7 +103,8 @@ function cropImageToBlob(
     ctx.drawImage(img, dx, dy, scaledW, scaledH);
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error("Canvas toBlob failed"))),
-      "image/png",
+      "image/jpeg",
+      0.9,
     );
   });
 }
@@ -318,7 +319,7 @@ function ProfilePanel() {
     setAvatarUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", blob, "avatar.png");
+      formData.append("file", blob, "avatar.jpg");
       const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
         method: "POST",
         credentials: "include",

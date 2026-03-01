@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useChatStore } from "@/store/chat-store";
+import { compressImage } from "@/lib/image-compress";
 import {
   Dialog,
   DialogContent,
@@ -170,8 +171,9 @@ export function BotManageDialog({
     setUploading(true);
     setError("");
     try {
+      const compressed = await compressImage(file, { maxWidth: 512, maxHeight: 512, quality: 0.9 });
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", compressed);
       const result = await api<{ avatarUrl: string }>(
         `/api/agents/${agent.id}/avatar`,
         { method: "POST", body: formData }

@@ -22,6 +22,7 @@ import {
   type CommandCategory,
 } from "@/lib/platform-commands";
 import { BACKEND_URL } from "@/lib/config";
+import { compressImage } from "@/lib/image-compress";
 import type { Message } from "@arinova/shared/types";
 import { useToastStore } from "@/store/toast-store";
 import { MentionPopup, type MentionItem } from "./mention-popup";
@@ -526,7 +527,8 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", prevFile);
+      const fileToUpload = await compressImage(prevFile);
+      formData.append("file", fileToUpload);
 
       // Include text as caption so backend combines them into one message
       if (trimmed) {
