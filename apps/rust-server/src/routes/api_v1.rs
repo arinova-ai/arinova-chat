@@ -65,7 +65,7 @@ async fn user_agents(
     State(state): State<AppState>,
     auth: AuthOAuthToken,
 ) -> Response {
-    if !auth.scope.split(',').any(|s| s.trim() == "agents") {
+    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "agents") {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "insufficient_scope", "error_description": "Scope 'agents' required"})),
@@ -119,7 +119,7 @@ async fn agent_chat(
     auth: AuthOAuthToken,
     Json(body): Json<AgentChatBody>,
 ) -> Response {
-    if !auth.scope.split(',').any(|s| s.trim() == "agents") {
+    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "agents") {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "insufficient_scope", "error_description": "Scope 'agents' required"})),
@@ -178,7 +178,7 @@ async fn agent_chat_stream(
     auth: AuthOAuthToken,
     Json(body): Json<AgentChatBody>,
 ) -> Response {
-    if !auth.scope.split(',').any(|s| s.trim() == "agents") {
+    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "agents") {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "insufficient_scope", "error_description": "Scope 'agents' required"})),
