@@ -670,7 +670,8 @@ CREATE TABLE stickers (
   description_en TEXT,
   description_zh TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(pack_id, filename)
 );
 
 CREATE TABLE user_stickers (

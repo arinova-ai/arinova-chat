@@ -588,8 +588,17 @@ CREATE TABLE IF NOT EXISTS stickers (
   description_en TEXT,
   description_zh TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(pack_id, filename)
 );
+
+-- Deduplicate stickers if duplicate rows exist from prior migrations
+DELETE FROM stickers a USING stickers b
+  WHERE a.id > b.id AND a.pack_id = b.pack_id AND a.filename = b.filename;
+
+-- Ensure unique constraint on (pack_id, filename) for idempotent seeding
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stickers_pack_filename
+  ON stickers(pack_id, filename);
 
 CREATE TABLE IF NOT EXISTS user_stickers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -636,7 +645,7 @@ INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, 
   ('a1b2c3d4-0001-4000-8000-000000000001', '18-coffee.png', '☕', 'Coffee time', '喝咖啡', 18),
   ('a1b2c3d4-0001-4000-8000-000000000001', '19-goodnight.png', '🌙', 'Good night', '晚安', 19),
   ('a1b2c3d4-0001-4000-8000-000000000001', '20-eating.png', '🍽️', 'Eating', '吃東西', 20)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (pack_id, filename) DO NOTHING;
 
 -- Seed: ito-ghost-01 stickers
 INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
@@ -660,7 +669,7 @@ INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, 
   ('a1b2c3d4-0002-4000-8000-000000000002', '18-sick.png', '🤒', 'Sick', '不舒服', 18),
   ('a1b2c3d4-0002-4000-8000-000000000002', '19-pointing.png', '👉', 'Pointing', '指向', 19),
   ('a1b2c3d4-0002-4000-8000-000000000002', '20-goodbye.png', '👋', 'Goodbye', '再見', 20)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (pack_id, filename) DO NOTHING;
 
 -- Seed: shinkai-girl-01 stickers
 INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
@@ -684,6 +693,6 @@ INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, 
   ('a1b2c3d4-0003-4000-8000-000000000003', '18-looking-at-phone.png', '📱', 'Looking at phone', '看手機', 18),
   ('a1b2c3d4-0003-4000-8000-000000000003', '19-stargazing.png', '⭐', 'Stargazing', '看星星', 19),
   ('a1b2c3d4-0003-4000-8000-000000000003', '20-goodnight.png', '🌙', 'Good night', '晚安', 20)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (pack_id, filename) DO NOTHING;
 
 COMMIT;
