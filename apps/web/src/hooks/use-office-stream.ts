@@ -51,6 +51,7 @@ function toAgent(raw: OfficeStatusEvent["agents"][number]): Agent {
     emoji: DEFAULT_EMOJI,
     color: DEFAULT_COLOR,
     status: raw.status,
+    online: raw.online,
     collaboratingWith: raw.collaboratingWith.length > 0 ? raw.collaboratingWith : undefined,
     currentTask: raw.currentTask
       ? { title: raw.currentTask, priority: "", due: "", assignedBy: "", progress: 0, subtasks: [] }

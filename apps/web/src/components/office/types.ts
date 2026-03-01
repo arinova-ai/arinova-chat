@@ -29,6 +29,7 @@ export interface Agent {
   emoji: string;
   color: string;
   status: AgentStatus;
+  online?: boolean;
   collaboratingWith?: string[];
   currentTask?: AgentTask;
   recentActivity: AgentActivity[];
