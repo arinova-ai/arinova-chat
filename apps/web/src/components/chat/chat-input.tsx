@@ -771,9 +771,22 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       return;
     }
 
-    sendMessage(trimmed);
+    // Extract @mentions and resolve to agent IDs
+    const mentionPattern = /@(\w+)/g;
+    const mentionIds = new Set<string>();
+    let match;
+    while ((match = mentionPattern.exec(trimmed)) !== null) {
+      const name = match[1].toLowerCase();
+      if (name === "all") continue;
+      const member = activeMembers.find(
+        (m) => m.agentName.toLowerCase() === name,
+      );
+      if (member?.agentId) mentionIds.add(member.agentId);
+    }
+
+    sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
     clearInput();
-  }, [value, sendMessage, selectedFile, handleUpload, tryExecuteSlashCommand, clearInput]);
+  }, [value, sendMessage, selectedFile, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
 
   // ---------- Keyboard handling ----------
 
