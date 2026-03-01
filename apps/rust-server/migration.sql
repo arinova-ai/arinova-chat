@@ -565,7 +565,7 @@ VALUES (
   'who-is-killer',
   'wik-secret-v1',
   'Who Is Killer?',
-  'http://192.168.68.83:21010/callback',
+  'https://who-is-killer-cyan.vercel.app/callback',
   'AI Mystery Game — 3 detectives find the killer'
 ) ON CONFLICT (client_id) DO NOTHING;
 

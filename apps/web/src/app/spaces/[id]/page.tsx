@@ -55,7 +55,7 @@ const GAME_DETAILS: Record<string, GameDetail> = {
     ],
     screenshots: ["bg-red-900/40", "bg-slate-900/40", "bg-amber-900/40"],
     related: ["trivia-battle", "draw-together"],
-    iframeUrl: "http://192.168.68.83:21010",
+    iframeUrl: "https://who-is-killer-cyan.vercel.app",
   },
   "draw-together": {
     id: "draw-together",

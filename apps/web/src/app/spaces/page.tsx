@@ -27,7 +27,7 @@ interface Game {
 }
 
 const MOCK_GAMES: Game[] = [
-  { id: "who-is-killer", name: "Who Is Killer?", desc: "AI 推理對決 — 3 位偵探各帶 AI 嫌疑犯，找出兇手！", category: "social", plays: 0, rating: 0, iframeUrl: "http://192.168.68.83:21010", status: "live", featured: true },
+  { id: "who-is-killer", name: "Who Is Killer?", desc: "AI 推理對決 — 3 位偵探各帶 AI 嫌疑犯，找出兇手！", category: "social", plays: 0, rating: 0, iframeUrl: "https://who-is-killer-cyan.vercel.app", status: "live", featured: true },
   { id: "draw-together", name: "Draw Together", desc: "Social drawing game \u2014 draw and guess with friends", category: "social", plays: 340000, rating: 4.6 },
   { id: "pixel-dungeon", name: "Pixel Dungeon", desc: "Action RPG with roguelike elements", category: "action", plays: 120000, rating: 4.5 },
   { id: "word-chain", name: "Word Chain", desc: "Word puzzle \u2014 connect letters to form words", category: "puzzle", plays: 89000, rating: 4.2 },
