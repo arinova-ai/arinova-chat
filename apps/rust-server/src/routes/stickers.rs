@@ -5,7 +5,7 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -48,8 +48,8 @@ struct PackRow {
     status: String,
     downloads: i32,
     cover_image: Option<String>,
-    created_at: NaiveDateTime,
-    updated_at: NaiveDateTime,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -65,8 +65,8 @@ struct PackWithCount {
     status: String,
     downloads: i32,
     cover_image: Option<String>,
-    created_at: NaiveDateTime,
-    updated_at: NaiveDateTime,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     sticker_count: Option<i64>,
     creator_name: Option<String>,
 }
@@ -80,7 +80,7 @@ struct StickerRow {
     description_en: Option<String>,
     description_zh: Option<String>,
     sort_order: i32,
-    created_at: NaiveDateTime,
+    created_at: DateTime<Utc>,
 }
 
 fn pack_to_json(p: &PackWithCount) -> Value {
@@ -98,8 +98,8 @@ fn pack_to_json(p: &PackWithCount) -> Value {
         "downloads": p.downloads,
         "coverImage": p.cover_image,
         "stickerCount": p.sticker_count.unwrap_or(0),
-        "createdAt": p.created_at.and_utc().to_rfc3339(),
-        "updatedAt": p.updated_at.and_utc().to_rfc3339(),
+        "createdAt": p.created_at.to_rfc3339(),
+        "updatedAt": p.updated_at.to_rfc3339(),
     })
 }
 
@@ -112,7 +112,7 @@ fn sticker_to_json(s: &StickerRow) -> Value {
         "descriptionEn": s.description_en,
         "descriptionZh": s.description_zh,
         "sortOrder": s.sort_order,
-        "createdAt": s.created_at.and_utc().to_rfc3339(),
+        "createdAt": s.created_at.to_rfc3339(),
     })
 }
 
