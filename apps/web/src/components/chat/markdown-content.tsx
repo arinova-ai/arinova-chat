@@ -96,12 +96,12 @@ const JS_LANGUAGES = new Set(["javascript", "js"]);
  * text, rendering the table as plain characters.
  *
  * This preprocessing ensures tables are always parseable:
- * 1. Normalize \r\n → \n
+ * 1. Normalize \r\n and \r → \n
  * 2. Ensure a blank line before GFM table header + delimiter rows
  */
 export function preprocessMarkdown(raw: string): string {
   // 1. Normalize line endings
-  let s = raw.replace(/\r\n/g, "\n");
+  let s = raw.replace(/\r\n?/g, "\n");
 
   // 2. Ensure blank line before table blocks.
   //    Detect table delimiter row: a line whose pipe-separated cells are all :?-+:?
@@ -330,4 +330,3 @@ export function MarkdownContent({ content, highlightQuery, mentionNames, streami
     </div>
   );
 }
-

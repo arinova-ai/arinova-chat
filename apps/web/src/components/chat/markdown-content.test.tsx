@@ -77,6 +77,34 @@ describe("MarkdownContent", () => {
       expect(href.toLowerCase()).not.toContain("javascript:");
     }
   });
+
+  it("renders GFM table without outer pipes", () => {
+    const { container } = render(
+      <MarkdownContent content={"A | B\n--- | ---\n1 | 2"} />
+    );
+    expect(container.querySelector("table")).toBeInTheDocument();
+  });
+
+  it("renders GFM table inside blockquote", () => {
+    const { container } = render(
+      <MarkdownContent content={"> quote\n> | A | B |\n> | --- | --- |\n> | 1 | 2 |"} />
+    );
+    expect(container.querySelector("table")).toBeInTheDocument();
+  });
+
+  it("renders GFM table after list item", () => {
+    const { container } = render(
+      <MarkdownContent content={"- item\n| A | B |\n| --- | --- |\n| 1 | 2 |"} />
+    );
+    expect(container.querySelector("table")).toBeInTheDocument();
+  });
+
+  it("renders GFM table with lone carriage-return line endings", () => {
+    const { container } = render(
+      <MarkdownContent content={"| A | B |\r| --- | --- |\r| 1 | 2 |"} />
+    );
+    expect(container.querySelector("table")).toBeInTheDocument();
+  });
 });
 
 describe("preprocessMarkdown", () => {
@@ -122,5 +150,10 @@ describe("preprocessMarkdown", () => {
     const input = "text\n| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |";
     const result = preprocessMarkdown(input);
     expect(result).toContain("\n\n| Left | Center | Right |");
+  });
+
+  it("normalizes lone carriage returns (\\r) to \\n", () => {
+    const result = preprocessMarkdown("A\rB\rC");
+    expect(result).toBe("A\nB\nC");
   });
 });
