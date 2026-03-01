@@ -545,4 +545,18 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- #114 step 5: Economy — extend coin_transaction_type for OAuth apps
+DO $$ BEGIN
+  ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'charge';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'award';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TYPE coin_transaction_type ADD VALUE IF NOT EXISTS 'platform_fee';
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 COMMIT;

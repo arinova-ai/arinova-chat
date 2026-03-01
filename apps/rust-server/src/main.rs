@@ -130,6 +130,7 @@ async fn main() {
         .merge(routes::knowledge_base::router())
         .merge(routes::community::router())
         .merge(routes::oauth::router())
+        .merge(routes::api_v1::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)
