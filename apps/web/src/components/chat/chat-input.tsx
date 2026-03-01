@@ -1099,20 +1099,20 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-[320px] border-border bg-background p-2"
+                  className="w-[calc(100vw-2rem)] sm:w-[400px] border-border bg-background p-2"
                   align="start"
                   sideOffset={8}
                   side="top"
                 >
                   {/* Preview area */}
-                  <div className="flex items-center gap-3 rounded-lg bg-secondary/60 px-3 py-2 mb-2 min-h-[72px]">
+                  <div className="flex items-center gap-3 rounded-lg bg-secondary/60 px-3 py-2 mb-2 min-h-[100px]">
                     {selectedSticker ? (
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={`/stickers/${selectedSticker.packId}/${selectedSticker.filename}`}
                           alt={selectedSticker.id}
-                          className="h-16 w-16 object-contain shrink-0"
+                          className="h-24 w-24 object-contain shrink-0"
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{selectedSticker.emoji} {selectedSticker.id}</p>
@@ -1128,7 +1128,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                   </div>
 
                   {/* Sticker grid */}
-                  <div className="grid grid-cols-5 gap-1 max-h-[200px] overflow-y-auto">
+                  <div className="grid grid-cols-5 gap-1 max-h-[280px] overflow-y-auto">
                     {(stickerPacks[activePackIndex]?.stickers ?? []).map((s) => {
                       const packId = stickerPacks[activePackIndex].packId;
                       const isSelected = selectedSticker?.id === s.id && selectedSticker?.packId === packId;
@@ -1144,7 +1144,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                           <img
                             src={`/stickers/${packId}/${s.filename}`}
                             alt={s.id}
-                            className="h-12 w-12 object-contain"
+                            className="h-14 w-14 object-contain"
                             loading="lazy"
                           />
                         </button>
@@ -1159,14 +1159,15 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                         key={pack.packId}
                         type="button"
                         onClick={() => { setActivePackIndex(idx); setSelectedSticker(null); }}
-                        className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                        className={`rounded-md p-1 transition-colors ${
                           activePackIndex === idx
-                            ? "bg-accent text-foreground"
-                            : "text-muted-foreground hover:bg-accent/50"
+                            ? "bg-accent ring-2 ring-brand"
+                            : "hover:bg-accent/50"
                         }`}
                         title={pack.name}
                       >
-                        {pack.stickers[0]?.emoji ?? "🎨"}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/stickers/${pack.packId}/${pack.stickers[0]?.filename}`} alt={pack.name} className="h-8 w-8 object-contain" />
                       </button>
                     ))}
                   </div>
