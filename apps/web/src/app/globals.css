@@ -243,7 +243,7 @@
 
 /* Lobster sprite sheet running animation */
 @keyframes sprite-run {
-  to { background-position-x: -100%; }
+  to { background-position-x: var(--sprite-end, -100%); }
 }
 
 /* iOS/PWA viewport fallback: prefer dvh, fallback to fill-available */

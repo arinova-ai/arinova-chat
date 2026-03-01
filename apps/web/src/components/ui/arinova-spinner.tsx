@@ -29,8 +29,10 @@ export function ArinovaSpinner({
           overflow: "hidden",
           backgroundImage: `url(${config.src})`,
           backgroundSize: `${sheetWidth * scale}px ${displayPx}px`,
+          backgroundRepeat: "no-repeat",
+          "--sprite-end": `-${sheetWidth * scale}px`,
           animation: "sprite-run 0.8s steps(8) infinite",
-        }}
+        } as React.CSSProperties}
       />
       {message && (
         <p className="text-sm text-muted-foreground animate-pulse">{message}</p>
