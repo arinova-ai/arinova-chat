@@ -28,6 +28,7 @@ import {
   Settings,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
+import { compressImage } from "@/lib/image-compress";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { api } from "@/lib/api";
 import { assetUrl, BACKEND_URL } from "@/lib/config";
@@ -329,8 +330,14 @@ function ProfilePanel() {
   const handleAvatarUpload = async (blob: Blob) => {
     setAvatarUploading(true);
     try {
+      const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+      const compressed = await compressImage(file, { maxWidth: 512, maxHeight: 512, quality: 0.9 });
+      if (compressed.size > 5 * 1024 * 1024) {
+        setNameError(t("settings.profile.avatarTooLarge"));
+        return;
+      }
       const formData = new FormData();
-      formData.append("file", blob, "avatar.jpg");
+      formData.append("file", compressed, "avatar.jpg");
       const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
         method: "POST",
         credentials: "include",
@@ -420,10 +427,6 @@ function ProfilePanel() {
             const file = e.target.files?.[0];
             if (file) {
               if (!file.type.startsWith("image/")) return;
-              if (file.size > 5 * 1024 * 1024) {
-                setNameError(t("settings.profile.avatarTooLarge"));
-                return;
-              }
               setCropFile(file);
             }
             e.target.value = "";
