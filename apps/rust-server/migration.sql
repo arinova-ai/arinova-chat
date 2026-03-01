@@ -60,6 +60,9 @@ BEGIN;
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS username VARCHAR(32) UNIQUE;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_username_lower ON "user" (LOWER(username));
 
+-- #89 bio column
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio TEXT;
+
 -- agents: add voice_capable column
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS voice_capable BOOLEAN NOT NULL DEFAULT FALSE;
 
@@ -270,11 +273,14 @@ CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding ON knowledge_base_chunks
 -- Add model column (OpenRouter model ID format: 'provider/model-name')
 ALTER TABLE agent_listings ADD COLUMN IF NOT EXISTS model TEXT;
 
--- Backfill model from existing model_provider + model_id (only if old columns still exist)
+-- Backfill model from existing model_provider + model_id (only if BOTH old columns still exist)
 DO $$ BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'agent_listings' AND column_name = 'model_provider'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'agent_listings' AND column_name = 'model_id'
   ) THEN
     UPDATE agent_listings
     SET model = model_provider || '/' || model_id
