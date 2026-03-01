@@ -79,9 +79,9 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const [uploading, setUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
-  const [stickerPacks, setStickerPacks] = useState<Array<{ packId: string; name: string; stickers: Array<{ id: string; filename: string; emoji: string }> }>>([]);
+  const [stickerPacks, setStickerPacks] = useState<Array<{ packId: string; dir: string; name: string; stickers: Array<{ id: string; filename: string; emoji: string }> }>>([]);
   const [activePackIndex, setActivePackIndex] = useState(0);
-  const [selectedSticker, setSelectedSticker] = useState<{ id: string; filename: string; emoji: string; packId: string } | null>(null);
+  const [selectedSticker, setSelectedSticker] = useState<{ id: string; filename: string; emoji: string; packId: string; dir: string } | null>(null);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -744,18 +744,25 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   // Sticker packs — fetch user's owned packs from API
   useEffect(() => {
     let cancelled = false;
-    api<{ packs: Array<{ id: string; name: string; stickers?: Array<{ id: string; filename: string; emoji: string | null }> }> }>("/api/user/stickers", { silent: true })
+    api<{ packs: Array<{ id: string; name: string; coverImage?: string | null; stickers?: Array<{ id: string; filename: string; emoji: string | null }> }> }>("/api/user/stickers", { silent: true })
       .then((data) => {
         if (cancelled) return;
-        const mapped = data.packs.map((p) => ({
-          packId: p.id,
-          name: p.name,
-          stickers: (p.stickers ?? []).map((s) => ({
-            id: s.id,
-            filename: s.filename,
-            emoji: s.emoji ?? "",
-          })),
-        }));
+        const mapped = data.packs.map((p) => {
+          // Derive directory from coverImage: "/stickers/pixel-cat-01/01-hello.png" -> "pixel-cat-01"
+          const cover = p.coverImage ?? "";
+          const parts = cover.split("/");
+          const dir = parts.length >= 3 ? parts[parts.length - 2] : p.id;
+          return {
+            packId: p.id,
+            dir,
+            name: p.name,
+            stickers: (p.stickers ?? []).map((s) => ({
+              id: s.id,
+              filename: s.filename,
+              emoji: s.emoji ?? "",
+            })),
+          };
+        });
         setStickerPacks(mapped);
       })
       .catch(() => {});
@@ -765,7 +772,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
 
   const handleStickerSend = useCallback(() => {
     if (!activeConversationId || !selectedSticker) return;
-    sendMessage(`![sticker](/stickers/${selectedSticker.packId}/${selectedSticker.filename})`);
+    sendMessage(`![sticker](/stickers/${selectedSticker.dir}/${selectedSticker.filename})`);
     setStickerOpen(false);
     setSelectedSticker(null);
   }, [activeConversationId, sendMessage, selectedSticker]);
@@ -1113,7 +1120,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={`/stickers/${selectedSticker.packId}/${selectedSticker.filename}`}
+                          src={`/stickers/${selectedSticker.dir}/${selectedSticker.filename}`}
                           alt={selectedSticker.id}
                           className="h-24 w-24 object-contain shrink-0"
                         />
@@ -1133,19 +1140,19 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                   {/* Sticker grid */}
                   <div className="grid grid-cols-5 gap-1 max-h-[280px] overflow-y-auto">
                     {(stickerPacks[activePackIndex]?.stickers ?? []).map((s) => {
-                      const packId = stickerPacks[activePackIndex].packId;
-                      const isSelected = selectedSticker?.id === s.id && selectedSticker?.packId === packId;
+                      const pack = stickerPacks[activePackIndex];
+                      const isSelected = selectedSticker?.id === s.id && selectedSticker?.packId === pack.packId;
                       return (
                         <button
-                          key={`${packId}-${s.id}`}
+                          key={`${pack.packId}-${s.id}`}
                           type="button"
-                          onClick={() => setSelectedSticker({ ...s, packId })}
+                          onClick={() => setSelectedSticker({ ...s, packId: pack.packId, dir: pack.dir })}
                           className={`rounded-lg p-1 transition-colors ${isSelected ? "bg-accent ring-2 ring-brand" : "hover:bg-accent"}`}
                           title={s.emoji}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={`/stickers/${packId}/${s.filename}`}
+                            src={`/stickers/${pack.dir}/${s.filename}`}
                             alt={s.id}
                             className="h-14 w-14 object-contain"
                             loading="lazy"
@@ -1170,7 +1177,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                         title={pack.name}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={`/stickers/${pack.packId}/${pack.stickers[0]?.filename}`} alt={pack.name} className="h-8 w-8 object-contain" />
+                        <img src={`/stickers/${pack.dir}/${pack.stickers[0]?.filename}`} alt={pack.name} className="h-8 w-8 object-contain" />
                       </button>
                     ))}
                   </div>

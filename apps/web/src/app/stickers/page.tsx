@@ -31,6 +31,7 @@ import { useTranslation } from "@/lib/i18n";
 
 interface StickerPack {
   id: string;
+  dir: string; // directory name under /stickers/ (derived from coverImage)
   name: string;
   author: string;
   price: number;
@@ -61,9 +62,17 @@ interface ApiSticker {
   sortOrder: number;
 }
 
+function packDirFromCover(coverImage: string | null): string {
+  // Extract directory name: "/stickers/pixel-cat-01/01-hello.png" -> "pixel-cat-01"
+  if (!coverImage) return "arinova-pack-01";
+  const parts = coverImage.split("/");
+  return parts.length >= 3 ? parts[parts.length - 2] : "arinova-pack-01";
+}
+
 function apiPackToStickerPack(p: ApiPack): StickerPack {
   return {
     id: p.id,
+    dir: packDirFromCover(p.coverImage),
     name: p.name,
     author: p.creatorName ?? "Unknown",
     price: p.price,
@@ -267,14 +276,14 @@ function PackDetailDialog({
     if (!pack || !open) return;
     // If pack has inline sticker files from API, build URLs
     if (pack.stickerFiles && pack.stickerFiles.length > 0) {
-      setDetailStickers(pack.stickerFiles.map((s) => `/stickers/${pack.id}/${s.filename}`));
+      setDetailStickers(pack.stickerFiles.map((s) => `/stickers/${pack.dir}/${s.filename}`));
       return;
     }
     // Otherwise fetch from API
     setDetailLoading(true);
     api<{ stickers: ApiSticker[] }>(`/api/stickers/${pack.id}`)
       .then((data) => {
-        setDetailStickers(data.stickers.map((s) => `/stickers/${pack.id}/${s.filename}`));
+        setDetailStickers(data.stickers.map((s) => `/stickers/${pack.dir}/${s.filename}`));
       })
       .catch(() => {
         // Fallback to legacy file naming

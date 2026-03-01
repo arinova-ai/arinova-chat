@@ -612,4 +612,84 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_push_sub_user_endpoint
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id
   ON push_subscriptions(user_id);
 
+-- Seed: paid sticker packs
+INSERT INTO sticker_packs (id, creator_id, name, name_zh, description, character_name, category, price, cover_image, status)
+VALUES
+  ('a1b2c3d4-0001-4000-8000-000000000001', 'system', 'Pixel Cat Pack', '像素貓咪貼圖包', 'Adorable pixel-art cat stickers for every mood', 'Pixel Cat', 'cute', 100, '/stickers/pixel-cat-01/01-hello.png', 'active'),
+  ('a1b2c3d4-0002-4000-8000-000000000002', 'system', 'Ito Ghost Pack', '伊藤潤二風女鬼貼圖包', 'Junji Ito inspired ghost stickers — creepy yet charming', 'Ito Ghost', 'anime', 100, '/stickers/ito-ghost-01/01-sinister-smile.png', 'active'),
+  ('a1b2c3d4-0003-4000-8000-000000000003', 'system', 'Shinkai Girl Pack', '新海誠風女高校生貼圖包', 'Makoto Shinkai style high school girl stickers', 'Shinkai Girl', 'anime', 100, '/stickers/shinkai-girl-01/01-hello.png', 'active')
+ON CONFLICT (id) DO NOTHING;
+
+-- Seed: pixel-cat-01 stickers
+INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
+  ('a1b2c3d4-0001-4000-8000-000000000001', '01-hello.png', '👋', 'Hello wave', '嗨', 1),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '02-thumbsup.png', '👍', 'Thumbs up', '讚', 2),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '03-love.png', '😍', 'Love hearts', '愛心', 3),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '04-happy.png', '😊', 'Happy', '開心', 4),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '05-sad.png', '😢', 'Sad', '傷心', 5),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '06-angry.png', '😠', 'Angry', '生氣', 6),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '07-surprised.png', '😮', 'Surprised', '驚訝', 7),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '08-thinking.png', '🤔', 'Thinking', '思考', 8),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '09-sleepy.png', '😴', 'Sleepy', '想睡', 9),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '10-celebrate.png', '🎉', 'Celebrate', '慶祝', 10),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '11-fighting.png', '💪', 'Fighting', '加油', 11),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '12-please.png', '🙏', 'Please', '拜託', 12),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '13-ok.png', '👌', 'OK', '好的', 13),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '14-awkward.png', '😅', 'Awkward', '尷尬', 14),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '15-hug.png', '🤗', 'Hug', '擁抱', 15),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '16-sparkle.png', '✨', 'Sparkle', '閃亮', 16),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '17-busy.png', '💼', 'Busy', '忙碌', 17),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '18-coffee.png', '☕', 'Coffee time', '喝咖啡', 18),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '19-goodnight.png', '🌙', 'Good night', '晚安', 19),
+  ('a1b2c3d4-0001-4000-8000-000000000001', '20-eating.png', '🍽️', 'Eating', '吃東西', 20)
+ON CONFLICT DO NOTHING;
+
+-- Seed: ito-ghost-01 stickers
+INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
+  ('a1b2c3d4-0002-4000-8000-000000000002', '01-sinister-smile.png', '😈', 'Sinister smile', '陰險微笑', 1),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '02-hollow-stare.png', '👁️', 'Hollow stare', '空洞凝視', 2),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '03-hair-cover.png', '🙈', 'Hair covering face', '頭髮遮臉', 3),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '04-screaming.png', '😱', 'Screaming', '尖叫', 4),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '05-crawling.png', '🕷️', 'Crawling', '爬行', 5),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '06-spiral-eyes.png', '🌀', 'Spiral eyes', '漩渦眼', 6),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '07-melting.png', '🫠', 'Melting', '融化', 7),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '08-eerie-wave.png', '👋', 'Eerie wave', '詭異揮手', 8),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '09-thumbsup.png', '👍', 'Creepy thumbs up', '詭異讚', 9),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '10-crying.png', '😭', 'Crying blood', '哭泣', 10),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '11-love.png', '❤️', 'Twisted love', '扭曲的愛', 11),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '12-sleeping.png', '😴', 'Sleeping', '沉睡', 12),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '13-angry.png', '😡', 'Angry', '憤怒', 13),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '14-thinking.png', '🤔', 'Thinking', '思考', 14),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '15-bow.png', '🙏', 'Bowing', '鞠躬', 15),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '16-peeking.png', '👀', 'Peeking', '偷看', 16),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '17-dancing.png', '💃', 'Dancing', '跳舞', 17),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '18-sick.png', '🤒', 'Sick', '不舒服', 18),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '19-pointing.png', '👉', 'Pointing', '指向', 19),
+  ('a1b2c3d4-0002-4000-8000-000000000002', '20-goodbye.png', '👋', 'Goodbye', '再見', 20)
+ON CONFLICT DO NOTHING;
+
+-- Seed: shinkai-girl-01 stickers
+INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
+  ('a1b2c3d4-0003-4000-8000-000000000003', '01-hello.png', '👋', 'Hello', '嗨', 1),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '02-thumbsup.png', '👍', 'Thumbs up', '讚', 2),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '03-love.png', '😍', 'Love', '愛心', 3),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '04-happy.png', '😊', 'Happy', '開心', 4),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '05-sad.png', '😢', 'Sad', '傷心', 5),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '06-angry.png', '😠', 'Angry', '生氣', 6),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '07-surprised.png', '😮', 'Surprised', '驚訝', 7),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '08-thinking.png', '🤔', 'Thinking', '思考', 8),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '09-sleepy.png', '😴', 'Sleepy', '想睡', 9),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '10-celebrate.png', '🎉', 'Celebrate', '慶祝', 10),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '11-running.png', '🏃', 'Running', '奔跑', 11),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '12-blushing.png', '😊', 'Blushing', '臉紅', 12),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '13-studying.png', '📖', 'Studying', '讀書', 13),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '14-waving-goodbye.png', '👋', 'Waving goodbye', '揮手道別', 14),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '15-eating-lunch.png', '🍱', 'Eating lunch', '吃午餐', 15),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '16-peace-sign.png', '✌️', 'Peace sign', '比耶', 16),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '17-umbrella-rain.png', '☂️', 'Umbrella in rain', '撐傘', 17),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '18-looking-at-phone.png', '📱', 'Looking at phone', '看手機', 18),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '19-stargazing.png', '⭐', 'Stargazing', '看星星', 19),
+  ('a1b2c3d4-0003-4000-8000-000000000003', '20-goodnight.png', '🌙', 'Good night', '晚安', 20)
+ON CONFLICT DO NOTHING;
+
 COMMIT;
