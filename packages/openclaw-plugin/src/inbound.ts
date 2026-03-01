@@ -200,6 +200,10 @@ export async function handleArinovaChatInbound(params: {
 
   // Track final content from block delivery
   let finalText = "";
+  // Track the full accumulated text from onPartialReply — this preserves
+  // original line breaks (e.g. inside markdown tables) that get corrupted
+  // when blocks are joined with "\n\n" in the deliver callback.
+  let lastAccumulatedText = "";
   let aborted = false;
   // Guard: ensure we only send completion once.  The abort handler sends
   // completion immediately so the agent is freed; any later natural
@@ -255,6 +259,8 @@ export async function handleArinovaChatInbound(params: {
         // so we must NOT prepend finalText — that would duplicate completed blocks.
         const text = (payload as { text?: string }).text ?? "";
         if (text) {
+          // Preserve the full accumulated text for completion (fixes table corruption)
+          lastAccumulatedText = text;
           // Strip MEDIA: lines so raw tokens don't flash during streaming
           const cleaned = stripMediaLines(text);
           if (!cleaned.trim()) return;
@@ -268,7 +274,9 @@ export async function handleArinovaChatInbound(params: {
   if (completionSent) return;
 
   // Post-process completed text: upload local images → R2, resolve @mentions
-  let completedText = finalText;
+  // Prefer the accumulated text from onPartialReply (preserves original formatting)
+  // over the block-joined finalText (which inserts \n\n between blocks).
+  let completedText = lastAccumulatedText || finalText;
 
   if (uploadFile && completedText) {
     try {
