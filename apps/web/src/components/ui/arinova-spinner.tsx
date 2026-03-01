@@ -1,9 +1,9 @@
 "use client";
 
 const SPRITE_CONFIG = {
-  sm: { src: "/assets/spinner/lobster-run-64.png", size: 64, frames: 8 },
-  md: { src: "/assets/spinner/lobster-run-128.png", size: 128, frames: 8 },
-  lg: { src: "/assets/spinner/lobster-run-128.png", size: 128, frames: 8 },
+  sm: { src: "/assets/spinner/arinova-run-64.png", size: 64, frames: 8 },
+  md: { src: "/assets/spinner/arinova-run-128.png", size: 128, frames: 8 },
+  lg: { src: "/assets/spinner/arinova-run-128.png", size: 128, frames: 8 },
 } as const;
 
 const SIZE_PX = { sm: 32, md: 64, lg: 128 } as const;
