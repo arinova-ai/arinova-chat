@@ -8,8 +8,7 @@ import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
-import { useChatStore } from "@/store/chat-store";
+import { assetUrl } from "@/lib/config";
 import { ArrowLeft } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
@@ -23,23 +22,13 @@ interface UserProfile {
   createdAt?: string;
 }
 
-interface OwnedAgent {
-  id: string;
-  name: string;
-  description: string | null;
-  avatarUrl: string | null;
-}
-
 function UserProfileContent() {
   const { t } = useTranslation();
   const params = useParams();
   const router = useRouter();
   const userId = params.id as string;
 
-  const agentHealth = useChatStore((s) => s.agentHealth);
-
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [ownedAgents, setOwnedAgents] = useState<OwnedAgent[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch user profile
@@ -54,19 +43,6 @@ function UserProfileContent() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  // Fetch user's agents from API
-  useEffect(() => {
-    let cancelled = false;
-    api<OwnedAgent[]>(`/api/users/${userId}/agents`)
-      .then((data) => {
-        if (!cancelled) setOwnedAgents(data);
-      })
-      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -151,55 +127,6 @@ function UserProfileContent() {
                   )}
                 </div>
 
-                {/* Owned agents */}
-                {ownedAgents.length > 0 && (
-                  <div className="mt-8">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
-                      {t("profilePage.ownedAgents")} ({ownedAgents.length})
-                    </p>
-                    <div className="space-y-1">
-                      {ownedAgents.map((agent) => {
-                        const health = agentHealth[agent.id];
-                        const isOnline = health?.status === "online";
-                        return (
-                          <button
-                            key={agent.id}
-                            type="button"
-                            onClick={() => router.push(`/agent/${agent.id}`)}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 bg-secondary/60 hover:bg-secondary transition-colors text-left"
-                          >
-                            <div className="relative shrink-0">
-                              <img
-                                src={
-                                  agent.avatarUrl
-                                    ? assetUrl(agent.avatarUrl)
-                                    : AGENT_DEFAULT_AVATAR
-                                }
-                                alt={agent.name}
-                                className="h-10 w-10 rounded-full object-cover"
-                              />
-                              <span
-                                className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-secondary ${
-                                  isOnline ? "bg-emerald-500" : "bg-zinc-500"
-                                }`}
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-foreground truncate">
-                                {agent.name}
-                              </p>
-                              {agent.description && (
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {agent.description}
-                                </p>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </>
             )}
           </div>
