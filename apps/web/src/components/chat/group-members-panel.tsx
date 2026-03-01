@@ -58,6 +58,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useTranslation } from "@/lib/i18n";
 
 export type PanelTab = "members" | "settings";
 
@@ -74,6 +75,7 @@ export function GroupMembersPanel({
   conversationId,
   initialTab,
 }: GroupMembersPanelProps) {
+  const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
 
@@ -115,7 +117,7 @@ export function GroupMembersPanel({
     try {
       await loadGroupMembersV2(conversationId);
     } catch {
-      setError("Failed to load members");
+      setError(t("group.failedLoad"));
     } finally {
       setLoading(false);
     }
@@ -184,7 +186,7 @@ export function GroupMembersPanel({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-80 sm:max-w-sm p-0 flex flex-col">
         <SheetHeader className="px-4 pt-4 pb-2">
-          <SheetTitle className="text-base">Group Info</SheetTitle>
+          <SheetTitle className="text-base">{t("group.title")}</SheetTitle>
         </SheetHeader>
 
         {/* Tab Switcher */}
@@ -198,7 +200,7 @@ export function GroupMembersPanel({
             )}
             onClick={() => setTab("members")}
           >
-            Members
+            {t("group.members")}
           </button>
           {isAdmin && (
             <button
@@ -210,7 +212,7 @@ export function GroupMembersPanel({
               )}
               onClick={() => setTab("settings")}
             >
-              Settings
+              {t("group.settings")}
             </button>
           )}
         </div>
@@ -274,7 +276,7 @@ export function GroupMembersPanel({
               ) : (
                 <Link2 className="h-4 w-4" />
               )}
-              {inviteCopied ? "Copied!" : "Copy Invite Link"}
+              {inviteCopied ? t("group.copied") : t("group.copyInvite")}
             </Button>
           )}
           {/* Leave group: not shown to admin unless they transfer first */}
@@ -285,7 +287,7 @@ export function GroupMembersPanel({
               onClick={handleLeave}
             >
               <LogOut className="h-4 w-4" />
-              Leave Group
+              {t("group.leaveGroup")}
             </Button>
           )}
         </div>
@@ -335,6 +337,8 @@ function MembersTab({
   onUpdateListenMode: (agentId: string, mode: string) => void;
   onWithdrawAgent: (agentId: string) => void;
 }) {
+  const { t } = useTranslation();
+
   if (!members) return null;
 
   return (
@@ -342,7 +346,7 @@ function MembersTab({
       {/* User Members */}
       <div>
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-          Users ({members.users.length})
+          {t("group.users")} ({members.users.length})
         </p>
         <div className="space-y-1">
           {members.users.map((user) => (
@@ -373,7 +377,7 @@ function MembersTab({
           className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2"
           onClick={() => setShowAgents(!showAgents)}
         >
-          <span>Agents ({members.agents.length})</span>
+          <span>{t("group.agents")} ({members.agents.length})</span>
           {showAgents ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </button>
         {showAgents && (
@@ -400,11 +404,13 @@ function MembersTab({
 // ===== User Member Row =====
 
 function RoleBadge({ role }: { role: string }) {
+  const { t } = useTranslation();
+
   if (role === "admin") {
     return (
       <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
         <Crown className="h-2.5 w-2.5" />
-        Admin
+        {t("group.admin")}
       </span>
     );
   }
@@ -412,7 +418,7 @@ function RoleBadge({ role }: { role: string }) {
     return (
       <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
         <ShieldCheck className="h-2.5 w-2.5" />
-        Vice-Admin
+        {t("group.viceAdmin")}
       </span>
     );
   }
@@ -446,6 +452,7 @@ function UserMemberRow({
   onTransferAdmin: (userId: string) => void;
   onBlock: (userId: string) => void;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
 
@@ -478,7 +485,7 @@ function UserMemberRow({
         <button type="button" onClick={handleProfileClick} className="min-w-0 flex-1 text-left cursor-pointer">
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-medium truncate hover:underline">
-              {user.name}{isCurrentUser ? " (you)" : ""}
+              {user.name}{isCurrentUser ? ` ${t("group.you")}` : ""}
             </p>
             <RoleBadge role={user.role} />
           </div>
@@ -502,13 +509,13 @@ function UserMemberRow({
               {showAdminMenu && isAdmin && user.role === "member" && (
                 <DropdownMenuItem onClick={() => onPromote(user.userId)}>
                   <ShieldCheck className="h-4 w-4" />
-                  Promote to Vice-Admin
+                  {t("group.promoteVice")}
                 </DropdownMenuItem>
               )}
               {showAdminMenu && isAdmin && user.role === "vice_admin" && (
                 <DropdownMenuItem onClick={() => onDemote(user.userId)}>
                   <Shield className="h-4 w-4" />
-                  Demote to Member
+                  {t("group.demoteMember")}
                 </DropdownMenuItem>
               )}
               {showAdminMenu && isAdmin && (
@@ -516,7 +523,7 @@ function UserMemberRow({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => onTransferAdmin(user.userId)}>
                     <ArrowRightLeft className="h-4 w-4" />
-                    Transfer Admin
+                    {t("group.transferAdmin")}
                   </DropdownMenuItem>
                 </>
               )}
@@ -528,7 +535,7 @@ function UserMemberRow({
                     onClick={() => onKick(user.userId)}
                   >
                     <UserMinus className="h-4 w-4" />
-                    Kick
+                    {t("group.kick")}
                   </DropdownMenuItem>
                 </>
               )}
@@ -540,7 +547,7 @@ function UserMemberRow({
                     onClick={() => setBlockConfirmOpen(true)}
                   >
                     <ShieldBan className="h-4 w-4" />
-                    Block User
+                    {t("group.blockUser")}
                   </DropdownMenuItem>
                 </>
               )}
@@ -553,14 +560,14 @@ function UserMemberRow({
       <Dialog open={blockConfirmOpen} onOpenChange={setBlockConfirmOpen}>
         <DialogContent showCloseButton={false} className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Block {user.name}?</DialogTitle>
+            <DialogTitle>{t("group.blockConfirm")} {user.name}?</DialogTitle>
             <DialogDescription>
-              They won&apos;t be able to send you messages. You can unblock them later from Settings.
+              {t("group.blockDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBlockConfirmOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -569,7 +576,7 @@ function UserMemberRow({
                 onBlock(user.userId);
               }}
             >
-              Block
+              {t("group.block")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -580,11 +587,14 @@ function UserMemberRow({
 
 // ===== Agent Member Row =====
 
-const LISTEN_MODE_LABELS: Record<string, string> = {
-  owner_only: "Owner Only",
-  allowed_users: "Allowed Users",
-  all_mentions: "All Mentions",
-};
+function useListenModeLabels() {
+  const { t } = useTranslation();
+  return {
+    owner_only: t("group.ownerOnly"),
+    allowed_users: t("group.allowedUsers"),
+    all_mentions: t("group.allMentions"),
+  } as Record<string, string>;
+}
 
 function AgentMemberRow({
   agent,
@@ -603,6 +613,8 @@ function AgentMemberRow({
   onUpdateListenMode: (agentId: string, mode: string) => void;
   onWithdrawAgent: (agentId: string) => void;
 }) {
+  const { t } = useTranslation();
+  const LISTEN_MODE_LABELS = useListenModeLabels();
   const router = useRouter();
   const isOwner = agent.ownerUserId === currentUserId;
 
@@ -634,7 +646,7 @@ function AgentMemberRow({
               {LISTEN_MODE_LABELS[agent.listenMode] ?? agent.listenMode}
             </span>
             {isOwner && (
-              <span className="text-[10px] text-blue-400">(yours)</span>
+              <span className="text-[10px] text-blue-400">{t("group.yours")}</span>
             )}
           </div>
         </button>
@@ -652,7 +664,7 @@ function AgentMemberRow({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <div className="px-2 py-1.5">
-                <p className="text-xs font-medium mb-1.5">Listen Mode</p>
+                <p className="text-xs font-medium mb-1.5">{t("group.listenMode")}</p>
                 <Select
                   value={agent.listenMode}
                   onValueChange={(val) => onUpdateListenMode(agent.agentId, val)}
@@ -661,9 +673,9 @@ function AgentMemberRow({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner_only">Owner Only</SelectItem>
-                    <SelectItem value="allowed_users">Allowed Users</SelectItem>
-                    <SelectItem value="all_mentions">All Mentions</SelectItem>
+                    <SelectItem value="owner_only">{t("group.ownerOnly")}</SelectItem>
+                    <SelectItem value="allowed_users">{t("group.allowedUsers")}</SelectItem>
+                    <SelectItem value="all_mentions">{t("group.allMentions")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -673,7 +685,7 @@ function AgentMemberRow({
                 onClick={() => onWithdrawAgent(agent.agentId)}
               >
                 <LogOut className="h-4 w-4" />
-                Withdraw Agent
+                {t("group.withdrawAgent")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -704,6 +716,7 @@ function SettingsTab({
   onSave: () => Promise<void>;
   onUpdateSettings: (id: string, settings: { title?: string; inviteEnabled?: boolean; mentionOnly?: boolean }) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [mentionOnly, setMentionOnly] = useState(conversation?.mentionOnly ?? true);
 
   const handleMentionOnlyToggle = async (checked: boolean) => {
@@ -718,13 +731,13 @@ function SettingsTab({
   return (
     <div className="px-4 py-3 space-y-4">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Group Name</label>
+        <label className="text-sm font-medium">{t("group.groupName")}</label>
         <div className="flex gap-2">
           <Input
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
             className="bg-secondary border-none text-sm"
-            placeholder="Group name"
+            placeholder={t("group.groupNamePlaceholder")}
           />
           <Button
             size="sm"
@@ -740,9 +753,9 @@ function SettingsTab({
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium">Mention Only</p>
+          <p className="text-sm font-medium">{t("group.mentionOnly")}</p>
           <p className="text-xs text-muted-foreground">
-            Only @mentioned agents respond
+            {t("group.mentionOnlyDesc")}
           </p>
         </div>
         <Switch

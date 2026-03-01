@@ -6,8 +6,12 @@ import en from "@/locales/en.json";
 import zhTW from "@/locales/zh-TW.json";
 import zhCN from "@/locales/zh-CN.json";
 import ja from "@/locales/ja.json";
+import es from "@/locales/es.json";
+import ko from "@/locales/ko.json";
+import fr from "@/locales/fr.json";
+import ms from "@/locales/ms.json";
 
-export type Locale = "en" | "zh-TW" | "zh-CN" | "ja";
+export type Locale = "en" | "zh-TW" | "zh-CN" | "ja" | "es" | "ko" | "fr" | "ms";
 
 const STORAGE_KEY = "preferred-locale";
 
@@ -16,6 +20,10 @@ const translations: Record<Locale, Record<string, string>> = {
   "zh-TW": zhTW as Record<string, string>,
   "zh-CN": zhCN as Record<string, string>,
   ja: ja as Record<string, string>,
+  es: es as Record<string, string>,
+  ko: ko as Record<string, string>,
+  fr: fr as Record<string, string>,
+  ms: ms as Record<string, string>,
 };
 
 function readLocale(): Locale {

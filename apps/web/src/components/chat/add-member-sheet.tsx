@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bot, Loader2, Plus, Check, Search, Users } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Friend {
   id: string;
@@ -34,6 +35,7 @@ export function AddMemberSheet({
   onOpenChange,
   conversationId,
 }: AddMemberSheetProps) {
+  const { t } = useTranslation();
   const agents = useChatStore((s) => s.agents);
   const addGroupMember = useChatStore((s) => s.addGroupMember);
   const addGroupUser = useChatStore((s) => s.addGroupUser);
@@ -124,7 +126,7 @@ export function AddMemberSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-80 sm:max-w-sm p-0 flex flex-col">
         <SheetHeader className="px-4 pt-4 pb-2">
-          <SheetTitle className="text-base">Add Member</SheetTitle>
+          <SheetTitle className="text-base">{t("addMember.title")}</SheetTitle>
         </SheetHeader>
 
         {/* Search */}
@@ -134,7 +136,7 @@ export function AddMemberSheet({
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search friends or agents..."
+              placeholder={t("addMember.searchPlaceholder")}
               className="bg-secondary border-none text-sm pl-8 h-9"
             />
           </div>
@@ -158,7 +160,7 @@ export function AddMemberSheet({
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
                     <Users className="h-3 w-3" />
-                    Friends ({availableFriends.length})
+                    {t("addMember.friends")} ({availableFriends.length})
                   </p>
                   <div className="space-y-1">
                     {availableFriends.map((friend) => (
@@ -204,7 +206,7 @@ export function AddMemberSheet({
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
                     <Bot className="h-3 w-3" />
-                    My Agents ({availableAgents.length})
+                    {t("addMember.myAgents")} ({availableAgents.length})
                   </p>
                   <div className="space-y-1">
                     {availableAgents.map((agent) => (
@@ -252,8 +254,8 @@ export function AddMemberSheet({
               {availableFriends.length === 0 && availableAgents.length === 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                   {search
-                    ? "No matches found"
-                    : "All friends and agents are already members"}
+                    ? t("addMember.noMatches")
+                    : t("addMember.allAdded")}
                 </div>
               )}
             </div>

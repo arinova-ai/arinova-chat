@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -42,6 +43,7 @@ type Tab = (typeof TABS)[number];
 
 function CommunityBrowseContent() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("browse");
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -121,32 +123,32 @@ function CommunityBrowseContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-3">
-            <PageTitle icon={Users} title="Community" subtitle="Connect with creators and communities" />
+            <PageTitle icon={Users} title={t("community.title")} subtitle={t("community.subtitle")} />
             <Button
               size="sm"
               className="brand-gradient-btn gap-1"
               onClick={() => router.push("/community/create")}
             >
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Create</span>
+              <span className="hidden sm:inline">{t("community.create")}</span>
             </Button>
           </div>
 
           {/* Tabs */}
           <div className="mt-3 flex gap-1">
-            {TABS.map((t) => (
+            {TABS.map((tb) => (
               <button
-                key={t}
+                key={tb}
                 type="button"
-                onClick={() => setTab(t)}
+                onClick={() => setTab(tb)}
                 className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors",
-                  tab === t
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  tab === tb
                     ? "bg-brand text-white"
                     : "bg-secondary text-muted-foreground hover:text-foreground"
                 )}
               >
-                {t === "my" ? "My Communities" : t === "joined" ? "Joined" : "Browse"}
+                {tb === "my" ? t("community.tabMyCommunities") : tb === "joined" ? t("community.tabJoined") : t("community.tabBrowse")}
               </button>
             ))}
           </div>
@@ -160,7 +162,7 @@ function CommunityBrowseContent() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search communities..."
+                  placeholder={t("community.searchPlaceholder")}
                   className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
@@ -194,13 +196,13 @@ function CommunityBrowseContent() {
           ) : communities.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
               <Users className="h-12 w-12 mb-3 opacity-40" />
-              <p className="text-sm font-medium">No communities found</p>
+              <p className="text-sm font-medium">{t("community.notFound")}</p>
               <p className="text-xs mt-1">
                 {tab === "browse"
-                  ? "Try adjusting your search or filters"
+                  ? t("community.notFoundHint")
                   : tab === "my"
-                  ? "You haven't created any communities yet"
-                  : "You haven't joined any communities yet"}
+                  ? t("community.noCreated")
+                  : t("community.noJoined")}
               </p>
             </div>
           ) : (
@@ -227,7 +229,7 @@ function CommunityBrowseContent() {
                     {loading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      "Load More"
+                      t("common.loadMore")
                     )}
                   </Button>
                 </div>
@@ -249,6 +251,7 @@ function CommunityCard({
   community: CommunityItem;
   onClick: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -278,7 +281,7 @@ function CommunityCard({
                   : "bg-purple-500/15 text-purple-400"
               )}
             >
-              {c.type === "lounge" ? "Lounge" : "Hub"}
+              {c.type === "lounge" ? t("community.type.lounge") : t("community.type.hub")}
             </span>
           </div>
           {c.description && (
@@ -297,13 +300,13 @@ function CommunityCard({
         <span className="flex items-center gap-1">
           <Coins className="h-3 w-3 text-yellow-500" />
           {c.monthlyFee > 0
-            ? `${c.monthlyFee}/mo`
+            ? `${c.monthlyFee}${t("community.perMonth")}`
             : c.joinFee > 0
-            ? `${c.joinFee} join`
-            : "Free"}
+            ? `${c.joinFee} ${t("community.joinFee")}`
+            : t("common.free")}
         </span>
         {c.creatorName && (
-          <span className="ml-auto truncate">by {c.creatorName}</span>
+          <span className="ml-auto truncate">{t("community.by")} {c.creatorName}</span>
         )}
       </div>
     </button>

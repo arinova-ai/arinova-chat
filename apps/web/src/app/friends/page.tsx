@@ -10,6 +10,7 @@ import { UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import { UserSearch } from "@/components/friends/user-search";
 import { FriendsPanel } from "@/components/friends/friends-panel";
 import { PendingRequests } from "@/components/friends/pending-requests";
@@ -18,6 +19,7 @@ type TabId = "friends" | "requests" | "add";
 
 function FriendsContent() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>("friends");
   const [pendingCount, setPendingCount] = useState(0);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -43,9 +45,9 @@ function FriendsContent() {
   }, []);
 
   const tabs: { id: TabId; label: string; badge?: number }[] = [
-    { id: "friends", label: "Friends" },
-    { id: "requests", label: "Requests", badge: pendingCount },
-    { id: "add", label: "Add Friend" },
+    { id: "friends", label: t("friends.tabFriends") },
+    { id: "requests", label: t("friends.tabRequests"), badge: pendingCount },
+    { id: "add", label: t("friends.tabAdd") },
   ];
 
   return (
@@ -59,8 +61,8 @@ function FriendsContent() {
         <div className="shrink-0 border-b border-border px-4 py-3">
           <PageTitle
             icon={UserPlus}
-            title="Friends"
-            subtitle="Connect and socialize"
+            title={t("friends.title")}
+            subtitle={t("friends.subtitle")}
           />
 
           {/* Tab bar */}

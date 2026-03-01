@@ -39,6 +39,7 @@ import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
 import { useDoubleTap } from "@/hooks/use-double-tap";
+import { useTranslation } from "@/lib/i18n";
 
 // ============================================================
 // Utilities
@@ -333,6 +334,7 @@ function MessageActions({
   onReact,
   onOpenThread,
 }: MessageActionsProps) {
+  const { t } = useTranslation();
   return (
     <div
       className={cn(
@@ -345,7 +347,7 @@ function MessageActions({
         size="icon-xs"
         onClick={onCopy}
         className="h-6 w-6 text-muted-foreground hover:text-foreground"
-        title="Copy message"
+        title={t("chat.actions.copy")}
       >
         {copied ? (
           <Check className="h-3 w-3 text-green-400" />
@@ -361,7 +363,7 @@ function MessageActions({
         size="icon-xs"
         onClick={onReply}
         className="h-6 w-6 text-muted-foreground hover:text-blue-400"
-        title="Reply"
+        title={t("chat.actions.reply")}
       >
         <Reply className="h-3 w-3" />
       </Button>
@@ -372,7 +374,7 @@ function MessageActions({
           size="icon-xs"
           onClick={() => onOpenThread(message.id)}
           className="h-6 w-6 text-muted-foreground hover:text-blue-400"
-          title="Start thread"
+          title={t("chat.actions.startThread")}
         >
           <MessageSquare className="h-3 w-3" />
         </Button>
@@ -383,7 +385,7 @@ function MessageActions({
         size="icon-xs"
         onClick={onDelete}
         className="h-6 w-6 text-muted-foreground hover:text-red-400"
-        title="Delete message"
+        title={t("chat.actions.delete")}
       >
         <Trash2 className="h-3 w-3" />
       </Button>
@@ -394,7 +396,7 @@ function MessageActions({
           size="icon-xs"
           onClick={onRetry}
           className="h-6 w-6 text-muted-foreground hover:text-blue-400"
-          title="Retry message"
+          title={t("chat.actions.retry")}
         >
           <RotateCcw className="h-3 w-3" />
         </Button>
@@ -416,6 +418,7 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
+  const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
   const isUser = isOwnMessage(message, currentUserId);
@@ -553,13 +556,13 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             {isError && (
               <div className="mb-1 flex items-center gap-1 text-xs text-red-400">
                 <AlertCircle className="h-3 w-3" />
-                <span>Error</span>
+                <span>{t("chat.status.error")}</span>
               </div>
             )}
             {isCancelled && (
               <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
                 <Square className="h-2.5 w-2.5 fill-current" />
-                <span>Stopped</span>
+                <span>{t("chat.status.stopped")}</span>
               </div>
             )}
 
@@ -567,7 +570,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             {message.replyTo && (
               <div className="mb-1.5 rounded-lg bg-white/5 px-3 py-1.5 border-l-2 border-blue-400/50">
                 <p className="text-[11px] font-medium text-blue-400/70">
-                  {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? "You" : agentName ?? "Agent")}
+                  {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? t("common.you") : agentName ?? "Agent")}
                 </p>
                 <p className="text-xs text-muted-foreground line-clamp-2">
                   {message.replyTo.content}
@@ -602,7 +605,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               <MessageSquare className="h-3.5 w-3.5" />
               <span>
                 {message.threadSummary.replyCount}{" "}
-                {message.threadSummary.replyCount === 1 ? "reply" : "replies"}
+                {message.threadSummary.replyCount === 1 ? t("chat.replies.one") : t("chat.replies.other")}
               </span>
             </button>
           )}
@@ -611,12 +614,12 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           {isQueued && (
             <div className="mt-1 flex items-center gap-1.5 text-xs text-yellow-500">
               <Clock className="h-3 w-3" />
-              <span>Queued</span>
+              <span>{t("chat.status.queued")}</span>
               <button
                 type="button"
                 onClick={() => cancelQueuedMessage(message.conversationId, message.id)}
                 className="ml-0.5 rounded-full p-0.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                aria-label="Cancel queued message"
+                aria-label={t("chat.actions.cancelQueued")}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -661,7 +664,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             size="icon-xs"
             onClick={() => cancelStream(message.id)}
             className="mb-1 h-7 w-7 shrink-0 rounded-full border border-neutral-600 text-muted-foreground hover:border-red-500 hover:text-red-400"
-            title="Stop generating"
+            title={t("chat.actions.stopGenerating")}
           >
             <Square className="h-3 w-3 fill-current" />
           </Button>

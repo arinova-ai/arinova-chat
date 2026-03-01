@@ -3,20 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Plus, Upload, X } from "lucide-react";
 
-const CATEGORIES = [
-  "Productivity",
-  "Development",
-  "Education",
-  "Creative",
-  "Analytics",
-  "Support",
-  "Other",
+const CATEGORY_KEYS = [
+  "productivity",
+  "development",
+  "education",
+  "creative",
+  "analytics",
+  "support",
+  "other",
 ];
 
 const MODELS = [
@@ -30,6 +31,7 @@ const MODELS = [
 
 function NewAgentContent() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
 
   // Form state
@@ -178,7 +180,7 @@ function NewAgentContent() {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-lg font-bold">Create New Agent</h1>
+          <h1 className="text-lg font-bold">{t("creator.createNewAgent")}</h1>
         </div>
 
         {/* Form */}
@@ -190,33 +192,33 @@ function NewAgentContent() {
             {/* Basic info */}
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Basic Info
+                {t("creator.basicInfo")}
               </h2>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Name *</label>
+                <label className="text-sm font-medium">{t("creator.form.name")}</label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={100}
-                  placeholder="My Awesome Agent"
+                  placeholder={t("creator.form.namePlaceholder")}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Description *</label>
+                <label className="text-sm font-medium">{t("creator.form.description")}</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
-                  placeholder="What does this agent do?"
+                  placeholder={t("creator.form.descPlaceholder")}
                   className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Avatar URL</label>
+                <label className="text-sm font-medium">{t("creator.form.avatarUrl")}</label>
                 <input
                   value={avatarUrl}
                   onChange={(e) => setAvatarUrl(e.target.value)}
@@ -226,15 +228,15 @@ function NewAgentContent() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Category *</label>
+                <label className="text-sm font-medium">{t("creator.form.category")}</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c.toLowerCase()}>
-                      {c}
+                  {CATEGORY_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {t(`creator.cat.${key}`)}
                     </option>
                   ))}
                 </select>
@@ -245,33 +247,33 @@ function NewAgentContent() {
             {/* AI Config */}
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                AI Configuration
+                {t("creator.aiConfiguration")}
               </h2>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">System Prompt *</label>
+                <label className="text-sm font-medium">{t("creator.form.systemPrompt")}</label>
                 <textarea
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   rows={5}
-                  placeholder="You are a helpful assistant that..."
+                  placeholder={t("creator.form.systemPromptPlaceholder")}
                   className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Welcome Message</label>
+                <label className="text-sm font-medium">{t("creator.form.welcomeMessage")}</label>
                 <input
                   value={welcomeMessage}
                   onChange={(e) => setWelcomeMessage(e.target.value)}
-                  placeholder="Hi! How can I help you today?"
+                  placeholder={t("creator.form.welcomeMessagePlaceholder")}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Model *</label>
+                  <label className="text-sm font-medium">{t("creator.form.model")}</label>
                   <select
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
@@ -285,7 +287,7 @@ function NewAgentContent() {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Input Char Limit</label>
+                  <label className="text-sm font-medium">{t("creator.form.inputCharLimit")}</label>
                   <input
                     type="number"
                     min={1}
@@ -297,7 +299,7 @@ function NewAgentContent() {
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Max characters per user message (1–20,000)
+                    {t("creator.form.inputCharLimitHint")}
                   </p>
                 </div>
               </div>
@@ -306,18 +308,16 @@ function NewAgentContent() {
             {/* Knowledge Base */}
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Knowledge Base
+                {t("creator.knowledgeBase")}
               </h2>
               <p className="text-xs text-muted-foreground">
-                Upload files to give your agent domain-specific knowledge via RAG.
-                Supported: .txt, .md, .csv, .json (max 5 MB each).
-                Each file upload costs 10 credits.
+                {t("creator.knowledgeBaseHint")}
               </p>
 
               <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 py-6 cursor-pointer hover:border-muted-foreground transition-colors">
                 <Upload className="h-5 w-5 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">
-                  Click to select files
+                  {t("creator.clickToSelect")}
                 </span>
                 <input
                   type="file"
@@ -366,13 +366,13 @@ function NewAgentContent() {
             {/* Pricing */}
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Pricing
+                {t("creator.pricing")}
               </h2>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">
-                    Credits per Message
+                    {t("creator.form.creditsPerMessage")}
                   </label>
                   <input
                     type="number"
@@ -384,12 +384,12 @@ function NewAgentContent() {
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    0 = free agent
+                    {t("creator.form.freeAgentHint")}
                   </p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">
-                    Free Trial Messages
+                    {t("creator.form.freeTrialMessages")}
                   </label>
                   <input
                     type="number"
@@ -408,7 +408,7 @@ function NewAgentContent() {
             <section className="space-y-4 rounded-xl border border-border bg-card p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Example Conversations
+                  {t("creator.exampleConversations")}
                 </h2>
                 <Button
                   type="button"
@@ -418,14 +418,13 @@ function NewAgentContent() {
                   className="text-xs gap-1"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Add
+                  {t("common.add")}
                 </Button>
               </div>
 
               {exampleConversations.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Add example Q&A pairs to showcase your agent on its detail
-                  page.
+                  {t("creator.form.exampleHint")}
                 </p>
               )}
 
@@ -436,7 +435,7 @@ function NewAgentContent() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-muted-foreground">
-                      Example {i + 1}
+                      {t("creator.form.example")} {i + 1}
                     </span>
                     <button
                       type="button"
@@ -449,13 +448,13 @@ function NewAgentContent() {
                   <input
                     value={ex.question}
                     onChange={(e) => updateExample(i, "question", e.target.value)}
-                    placeholder="User question..."
+                    placeholder={t("creator.form.questionPlaceholder")}
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                   <textarea
                     value={ex.answer}
                     onChange={(e) => updateExample(i, "answer", e.target.value)}
-                    placeholder="Agent answer..."
+                    placeholder={t("creator.form.answerPlaceholder")}
                     rows={2}
                     className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   />
@@ -470,7 +469,7 @@ function NewAgentContent() {
                 variant="secondary"
                 onClick={() => router.push("/creator")}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="submit"
@@ -480,7 +479,7 @@ function NewAgentContent() {
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Create Agent"
+                  t("creator.createAgent")
                 )}
               </Button>
             </div>

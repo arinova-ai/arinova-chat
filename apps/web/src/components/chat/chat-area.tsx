@@ -14,8 +14,10 @@ import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { Upload } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export function ChatArea() {
+  const { t } = useTranslation();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const searchActive = useChatStore((s) => s.searchActive);
   const conversations = useChatStore((s) => s.conversations);
@@ -109,7 +111,7 @@ export function ChatArea() {
         <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 pointer-events-none">
           <div className="flex flex-col items-center gap-2 text-primary">
             <Upload className="h-12 w-12" />
-            <p className="text-lg font-medium">Drop file to upload</p>
+            <p className="text-lg font-medium">{t("chat.dragDrop")}</p>
           </div>
         </div>
       )}

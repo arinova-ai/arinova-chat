@@ -2,8 +2,10 @@
 
 import { useChatStore } from "@/store/chat-store";
 import { Bot, Clock, X } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export function TypingIndicator({ conversationId }: { conversationId: string }) {
+  const { t } = useTranslation();
   const thinking = useChatStore((s) => s.thinkingAgents[conversationId]);
   const cancelAgentStream = useChatStore((s) => s.cancelAgentStream);
 
@@ -11,8 +13,8 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
 
   // Only show queued agents WITHOUT a messageId in the global indicator
   // (agents with messageId are shown per-message in message-bubble.tsx)
-  const queued = thinking.filter((t) => t.queued && !t.messageId);
-  const active = thinking.filter((t) => !t.queued);
+  const queued = thinking.filter((a) => a.queued && !a.messageId);
+  const active = thinking.filter((a) => !a.queued);
 
   return (
     <>
@@ -20,7 +22,7 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
         <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
           <Clock className="h-4 w-4 text-yellow-500" />
           <span>
-            {queued.map((t) => t.agentName).join(", ")} queued
+            {queued.map((a) => a.agentName).join(", ")} {t("chat.status.queuedLabel")}
           </span>
         </div>
       )}
@@ -28,16 +30,16 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
         <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
           <Bot className="h-4 w-4 animate-pulse" />
           <span className="flex items-center gap-1.5 flex-wrap">
-            {active.map((t, i) => (
-              <span key={t.agentId} className="inline-flex items-center">
+            {active.map((a, i) => (
+              <span key={a.agentId} className="inline-flex items-center">
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
-                  {t.agentName}
-                  {t.messageId && (
+                  {a.agentName}
+                  {a.messageId && (
                     <button
                       type="button"
-                      onClick={() => cancelAgentStream(conversationId, t.messageId)}
+                      onClick={() => cancelAgentStream(conversationId, a.messageId)}
                       className="ml-0.5 rounded-full p-0.5 hover:bg-destructive/20 hover:text-destructive transition-colors"
-                      aria-label={`Stop ${t.agentName}`}
+                      aria-label={`Stop ${a.agentName}`}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -47,7 +49,7 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
               </span>
             ))}
             <span>
-              thinking
+              {t("chat.status.thinking")}
               <span className="inline-flex w-6">
                 <span className="animate-pulse">...</span>
               </span>

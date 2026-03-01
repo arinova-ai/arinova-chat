@@ -32,6 +32,7 @@ import { MicPermissionDialog } from "@/components/voice/mic-permission";
 import type { ConversationType } from "@arinova/shared/types";
 import type { VoiceMode } from "@/lib/voice-types";
 import { getPushStatus, subscribeToPush } from "@/lib/push";
+import { useTranslation } from "@/lib/i18n";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -65,6 +66,7 @@ export function ChatHeader({
   onSettingsClick,
   onAddMemberClick,
 }: ChatHeaderProps) {
+  const { t } = useTranslation();
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const showTimestamps = useChatStore((s) => s.showTimestamps);
   const toggleTimestamps = useChatStore((s) => s.toggleTimestamps);
@@ -139,7 +141,7 @@ export function ChatHeader({
           <h2 className="text-sm font-semibold truncate">{displayName}</h2>
           {type === "group" ? (
             <p className="text-xs text-muted-foreground truncate">
-              {memberCount ? `${memberCount} members` : "Group"}
+              {memberCount ? `${memberCount} ${t("chat.header.members")}` : t("chat.header.group")}
             </p>
           ) : agentDescription ? (
             <p className="text-xs text-muted-foreground truncate">
@@ -157,7 +159,7 @@ export function ChatHeader({
               size="icon"
               className={cn("h-8 w-8", showTimestamps && "text-blue-400")}
               onClick={toggleTimestamps}
-              title={showTimestamps ? "Hide timestamps" : "Show timestamps"}
+              title={showTimestamps ? t("chat.header.hideTimestamps") : t("chat.header.showTimestamps")}
             >
               <Clock className="h-4 w-4" />
             </Button>
@@ -166,7 +168,7 @@ export function ChatHeader({
               size="icon"
               className={cn("h-8 w-8", isMuted && "text-red-400")}
               onClick={handleMuteToggle}
-              title={isMuted ? "Unmute conversation" : "Mute conversation"}
+              title={isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
             >
               {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
             </Button>
@@ -176,7 +178,7 @@ export function ChatHeader({
                 size="icon"
                 className="h-8 w-8"
                 onClick={onMembersClick}
-                title="Members"
+                title={t("chat.header.members")}
               >
                 <UsersRound className="h-4 w-4" />
               </Button>
@@ -187,7 +189,7 @@ export function ChatHeader({
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  title="More options"
+                  title={t("chat.header.moreOptions")}
                 >
                   <Menu className="h-4 w-4" />
                 </Button>
@@ -196,21 +198,21 @@ export function ChatHeader({
                 {onMembersClick && (
                   <DropdownMenuItem onClick={onMembersClick}>
                     <UsersRound className="h-4 w-4" />
-                    Members
+                    {t("chat.header.members")}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={() => alert("Photos coming soon")}>
+                <DropdownMenuItem onClick={() => alert(t("chat.header.photosSoon"))}>
                   <Image className="h-4 w-4" />
-                  Photos
+                  {t("chat.header.photos")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => alert("Files coming soon")}>
+                <DropdownMenuItem onClick={() => alert(t("chat.header.filesSoon"))}>
                   <FileText className="h-4 w-4" />
-                  Files
+                  {t("chat.header.files")}
                 </DropdownMenuItem>
                 {onSettingsClick && (
                   <DropdownMenuItem onClick={onSettingsClick}>
                     <Settings className="h-4 w-4" />
-                    Settings
+                    {t("chat.header.settings")}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -223,7 +225,7 @@ export function ChatHeader({
               size="icon"
               className={cn("h-8 w-8", showTimestamps && "text-blue-400")}
               onClick={toggleTimestamps}
-              title={showTimestamps ? "Hide timestamps" : "Show timestamps"}
+              title={showTimestamps ? t("chat.header.hideTimestamps") : t("chat.header.showTimestamps")}
             >
               <Clock className="h-4 w-4" />
             </Button>
@@ -233,7 +235,7 @@ export function ChatHeader({
                 size="icon"
                 className={cn("h-8 w-8", isMuted && "text-red-400")}
                 onClick={handleMuteToggle}
-                title={isMuted ? "Unmute conversation" : "Mute conversation"}
+                title={isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
               >
                 {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
               </Button>
@@ -244,7 +246,7 @@ export function ChatHeader({
                 size="icon"
                 className="h-8 w-8 text-green-400 hover:text-green-300"
                 onClick={() => setMicDialogOpen(true)}
-                title="Voice call"
+                title={t("chat.header.voiceCall")}
               >
                 <Phone className="h-4 w-4" />
               </Button>
@@ -254,7 +256,7 @@ export function ChatHeader({
                 size="icon"
                 className="h-8 w-8 text-muted-foreground opacity-50 cursor-not-allowed"
                 disabled
-                title={callState !== "idle" ? "In call" : "Voice call unavailable"}
+                title={callState !== "idle" ? t("chat.header.inCall") : t("chat.header.voiceUnavailable")}
               >
                 <Phone className="h-4 w-4" />
               </Button>

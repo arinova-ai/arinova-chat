@@ -169,7 +169,7 @@ function PackCard({ pack, onClick, onGift, t }: { pack: StickerPack; onClick: ()
         <button
           onClick={(e) => { e.stopPropagation(); onGift(); }}
           className="ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-brand-text"
-          title="Gift"
+          title={t("stickerShop.gift")}
         >
           <Gift className="h-3.5 w-3.5" />
         </button>
@@ -272,7 +272,7 @@ function PackDetailDialog({
               onClick={() => onGift(pack)}
             >
               <Gift className="h-3.5 w-3.5" />
-              Gift
+              {t("stickerShop.gift")}
             </Button>
           </div>
         </div>
@@ -338,7 +338,7 @@ function GiftDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Gift className="h-5 w-5 text-brand-text" />
-            Gift this sticker pack
+            {t("stickerShop.giftTitle")}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             Send &ldquo;{pack.name}&rdquo; to a friend
@@ -349,13 +349,13 @@ function GiftDialog({
         {sent ? (
           <div className="flex flex-col items-center gap-2 py-6">
             <span className="text-3xl">🎉</span>
-            <p className="text-sm font-medium text-green-400">Gift sent!</p>
+            <p className="text-sm font-medium text-green-400">{t("stickerShop.giftSent")}</p>
           </div>
         ) : (
           <div className="space-y-4 pt-2">
             {/* Friend selection */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Choose a friend</label>
+              <label className="text-xs font-medium text-muted-foreground">{t("stickerShop.chooseFriend")}</label>
               <div className="space-y-1">
                 {MOCK_FRIENDS.map((f) => (
                   <button
@@ -378,12 +378,12 @@ function GiftDialog({
 
             {/* Optional message */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Message (optional)</label>
+              <label className="text-xs font-medium text-muted-foreground">{t("stickerShop.messageOptional")}</label>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 maxLength={200}
-                placeholder="Add a personal message..."
+                placeholder={t("stickerShop.messagePlaceholder")}
                 className="min-h-[60px] w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
               />
             </div>
@@ -395,7 +395,7 @@ function GiftDialog({
               className="brand-gradient-btn w-full gap-1.5"
             >
               <Gift className="h-4 w-4" />
-              Send Gift
+              {t("stickerShop.sendGift")}
             </Button>
           </div>
         )}

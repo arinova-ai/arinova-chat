@@ -24,6 +24,7 @@ import {
 import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users } from "lucide-react";
 import type { ConversationType } from "@arinova/shared/types";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
+import { useTranslation } from "@/lib/i18n";
 
 interface ConversationItemProps {
   id: string;
@@ -44,7 +45,7 @@ interface ConversationItemProps {
   onDelete: () => void;
 }
 
-function formatTime(date: Date): string {
+function formatTime(date: Date, t: (key: string) => string): string {
   const d = new Date(date);
   const now = new Date();
   const diff = now.getTime() - d.getTime();
@@ -53,7 +54,7 @@ function formatTime(date: Date): string {
   if (days === 0) {
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-  if (days === 1) return "Yesterday";
+  if (days === 1) return t("time.yesterday");
   if (days < 7) {
     return d.toLocaleDateString([], { weekday: "short" });
   }
@@ -83,9 +84,10 @@ export function ConversationItem({
   onPin,
   onDelete,
 }: ConversationItemProps) {
+  const { t } = useTranslation();
   const preview = lastMessage
     ? truncate(lastMessage.content.replace(/\n/g, " "), 50)
-    : "No messages yet";
+    : t("chat.noMessages");
 
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(title ?? agentName);
@@ -175,7 +177,7 @@ export function ConversationItem({
               {!renaming && (
                 <span className="flex items-center gap-1.5 shrink-0">
                   <span className="text-xs text-muted-foreground">
-                    {formatTime(updatedAt)}
+                    {formatTime(updatedAt, t)}
                   </span>
                   {unreadCount > 0 && (
                     <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
@@ -197,7 +199,7 @@ export function ConversationItem({
             ) : (
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
                 {isThinking ? (
-                  <span className="text-blue-400">Thinking...</span>
+                  <span className="text-blue-400">{t("chat.thinking")}</span>
                 ) : (
                   preview
                 )}
@@ -230,7 +232,7 @@ export function ConversationItem({
               }}
             >
               <Pencil className="h-4 w-4" />
-              Rename
+              {t("conversation.rename")}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={(e) => {
@@ -241,12 +243,12 @@ export function ConversationItem({
               {isPinned ? (
                 <>
                   <PinOff className="h-4 w-4" />
-                  Unpin
+                  {t("conversation.unpin")}
                 </>
               ) : (
                 <>
                   <Pin className="h-4 w-4" />
-                  Pin
+                  {t("conversation.pin")}
                 </>
               )}
             </DropdownMenuItem>
@@ -259,7 +261,7 @@ export function ConversationItem({
               }}
             >
               <Trash2 className="h-4 w-4" />
-              Delete
+              {t("common.delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -269,10 +271,9 @@ export function ConversationItem({
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete conversation</DialogTitle>
+            <DialogTitle>{t("conversation.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this conversation? This action
-              cannot be undone and all messages will be permanently removed.
+              {t("conversation.deleteDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -280,10 +281,10 @@ export function ConversationItem({
               variant="outline"
               onClick={() => setDeleteConfirmOpen(false)}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={handleConfirmDelete}>
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

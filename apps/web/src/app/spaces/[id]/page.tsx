@@ -3,6 +3,7 @@
 import { use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useTranslation } from "@/lib/i18n";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -216,15 +217,16 @@ function RelatedGameCard({ game }: { game: GameDetail }) {
 
 function GameDetailContent({ id }: { id: string }) {
   const router = useRouter();
+  const { t } = useTranslation();
   const game = GAME_DETAILS[id];
 
   if (!game) {
     return (
       <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-background">
         <Gamepad2 className="h-12 w-12 text-muted-foreground" />
-        <p className="text-muted-foreground">Game not found</p>
+        <p className="text-muted-foreground">{t("spaces.gameNotFound")}</p>
         <Button variant="secondary" onClick={() => router.push("/spaces")}>
-          Back to Spaces
+          {t("spaces.backToSpaces")}
         </Button>
       </div>
     );
@@ -249,7 +251,7 @@ function GameDetailContent({ id }: { id: string }) {
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Spaces
+            {t("spaces.backToSpaces")}
           </button>
         </div>
 
@@ -274,13 +276,13 @@ function GameDetailContent({ id }: { id: string }) {
                     </span>
                     <span className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Users className="h-4 w-4" />
-                      {formatPlays(game.plays)} plays
+                      {formatPlays(game.plays)} {t("spaces.plays")}
                     </span>
                   </div>
                   <div className="mt-4">
                     <Button className="brand-gradient-btn gap-2">
                       <Play className="h-4 w-4" />
-                      Play Now
+                      {t("spaces.playNow")}
                     </Button>
                   </div>
                 </div>
@@ -291,22 +293,22 @@ function GameDetailContent({ id }: { id: string }) {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-xl border border-border bg-card p-3 text-center">
                 <Layers className="mx-auto h-5 w-5 text-muted-foreground" />
-                <p className="mt-1.5 text-xs text-muted-foreground">Category</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">{t("common.category")}</p>
                 <p className="text-sm font-semibold capitalize">{game.category}</p>
               </div>
               <div className="rounded-xl border border-border bg-card p-3 text-center">
                 <Users className="mx-auto h-5 w-5 text-muted-foreground" />
-                <p className="mt-1.5 text-xs text-muted-foreground">Players</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">{t("spaces.players")}</p>
                 <p className="text-sm font-semibold">{game.players}</p>
               </div>
               <div className="rounded-xl border border-border bg-card p-3 text-center">
                 <Gauge className="mx-auto h-5 w-5 text-muted-foreground" />
-                <p className="mt-1.5 text-xs text-muted-foreground">Difficulty</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">{t("spaces.difficulty")}</p>
                 <p className="text-sm font-semibold">{game.difficulty}</p>
               </div>
               <div className="rounded-xl border border-border bg-card p-3 text-center">
                 <Star className="mx-auto h-5 w-5 text-muted-foreground" />
-                <p className="mt-1.5 text-xs text-muted-foreground">Rating</p>
+                <p className="mt-1.5 text-xs text-muted-foreground">{t("spaces.rating")}</p>
                 <p className="text-sm font-semibold">{game.rating} / 5</p>
               </div>
             </div>
@@ -314,7 +316,7 @@ function GameDetailContent({ id }: { id: string }) {
             {/* Description */}
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                About
+                {t("spaces.about")}
               </h2>
               <div className="space-y-3">
                 {game.description.map((para, i) => (
@@ -328,7 +330,7 @@ function GameDetailContent({ id }: { id: string }) {
             {/* Screenshots */}
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Screenshots
+                {t("spaces.screenshots")}
               </h2>
               <div className="grid grid-cols-2 gap-3">
                 {game.screenshots.map((bg, i) => (
@@ -346,7 +348,7 @@ function GameDetailContent({ id }: { id: string }) {
             {relatedGames.length > 0 && (
               <div className="space-y-3">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  You might also like
+                  {t("spaces.youMightLike")}
                 </h2>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {relatedGames.map((g) => (

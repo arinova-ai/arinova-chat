@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import { BACKEND_URL, assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 
 const CATEGORIES = [
@@ -81,6 +82,7 @@ export function BotManageDialog({
   open,
   onOpenChange,
 }: BotManageDialogProps) {
+  const { t } = useTranslation();
   const updateAgent = useChatStore((s) => s.updateAgent);
   const deleteAgent = useChatStore((s) => s.deleteAgent);
   const loadConversations = useChatStore((s) => s.loadConversations);
@@ -299,7 +301,7 @@ export function BotManageDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="top-[calc(env(safe-area-inset-top,0px)+2.25rem)] translate-y-0 sm:top-[50%] sm:translate-y-[-50%] sm:max-w-md max-h-[calc(100dvh-env(safe-area-inset-top,0px)-3.25rem)] sm:max-h-[85vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle>Manage Bot</DialogTitle>
+          <DialogTitle>{t("botManage.title")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 min-w-0">
@@ -341,27 +343,27 @@ export function BotManageDialog({
                 e.target.value = "";
               }}
             />
-            <p className="text-xs text-muted-foreground">Click to change avatar</p>
+            <p className="text-xs text-muted-foreground">{t("botManage.clickChangeAvatar")}</p>
           </div>
 
           {/* Name */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Name</label>
+            <label className="text-sm font-medium">{t("botManage.name")}</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Bot name"
+              placeholder={t("botManage.namePlaceholder")}
               className="bg-secondary border-none"
             />
           </div>
 
           {/* Description */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Description</label>
+            <label className="text-sm font-medium">{t("botManage.description")}</label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this bot do?"
+              placeholder={t("botManage.descPlaceholder")}
               className="bg-secondary border-none min-h-[60px] resize-none"
               rows={2}
             />
@@ -369,10 +371,10 @@ export function BotManageDialog({
 
           {/* Category */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Category</label>
+            <label className="text-sm font-medium">{t("botManage.category")}</label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="bg-secondary border-none">
-                <SelectValue placeholder="Select category" />
+                <SelectValue placeholder={t("botManage.selectCategory")} />
               </SelectTrigger>
               <SelectContent>
                 {CATEGORIES.map((c) => (
@@ -386,26 +388,26 @@ export function BotManageDialog({
 
           {/* System Prompt */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">System Prompt</label>
+            <label className="text-sm font-medium">{t("botManage.systemPrompt")}</label>
             <Textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="Define the bot's behavior, role, language..."
+              placeholder={t("botManage.systemPromptPlaceholder")}
               className="bg-secondary border-none min-h-[80px] resize-none text-sm"
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
-              Prepended to every message sent to this bot.
+              {t("botManage.systemPromptHint")}
             </p>
           </div>
 
           {/* Welcome Message */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Welcome Message</label>
+            <label className="text-sm font-medium">{t("botManage.welcomeMessage")}</label>
             <Textarea
               value={welcomeMessage}
               onChange={(e) => setWelcomeMessage(e.target.value)}
-              placeholder="Auto-sent when a new conversation starts..."
+              placeholder={t("botManage.welcomeMessagePlaceholder")}
               className="bg-secondary border-none min-h-[60px] resize-none text-sm"
               rows={2}
             />
@@ -414,7 +416,7 @@ export function BotManageDialog({
           {/* Quick Replies */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              Quick Replies
+              {t("botManage.quickReplies")}
               <span className="ml-1 text-xs text-muted-foreground">
                 ({quickReplies.length}/10)
               </span>
@@ -485,7 +487,7 @@ export function BotManageDialog({
                 ) : (
                   <BellOff className="h-4 w-4 text-muted-foreground" />
                 )}
-                <span className="text-sm">Notifications</span>
+                <span className="text-sm">{t("botManage.notifications")}</span>
               </div>
               <div
                 className={cn(
@@ -514,12 +516,12 @@ export function BotManageDialog({
                 )}
                 <div className="text-left">
                   <span className="text-sm">
-                    {isPublic ? "Public" : "Private"}
+                    {isPublic ? t("botManage.public") : t("botManage.private")}
                   </span>
                   <p className="text-xs text-muted-foreground">
                     {isPublic
-                      ? "Discoverable in Agent Hub"
-                      : "Only you can use this bot"}
+                      ? t("botManage.publicDesc")
+                      : t("botManage.privateDesc")}
                   </p>
                 </div>
               </div>
@@ -542,19 +544,19 @@ export function BotManageDialog({
           {/* Usage Stats */}
           {stats && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Usage</label>
+              <label className="text-sm font-medium">{t("botManage.usage")}</label>
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-secondary/50 px-3 py-2 text-center">
                   <p className="text-lg font-semibold">{stats.totalMessages}</p>
-                  <p className="text-xs text-muted-foreground">Messages</p>
+                  <p className="text-xs text-muted-foreground">{t("botManage.messages")}</p>
                 </div>
                 <div className="rounded-lg bg-secondary/50 px-3 py-2 text-center">
                   <p className="text-lg font-semibold">{stats.totalConversations}</p>
-                  <p className="text-xs text-muted-foreground">Chats</p>
+                  <p className="text-xs text-muted-foreground">{t("botManage.chats")}</p>
                 </div>
                 <div className="rounded-lg bg-secondary/50 px-3 py-2 text-center">
                   <p className="text-sm font-semibold">{formatLastActive(stats.lastActive)}</p>
-                  <p className="text-xs text-muted-foreground">Last Active</p>
+                  <p className="text-xs text-muted-foreground">{t("botManage.lastActive")}</p>
                 </div>
               </div>
             </div>
@@ -562,7 +564,7 @@ export function BotManageDialog({
 
           {/* Connection status */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Connection</label>
+            <label className="text-sm font-medium">{t("botManage.connection")}</label>
             <div className="rounded-lg bg-secondary/50 px-4 py-3">
               <div className="flex items-center gap-2">
                 <Circle
@@ -572,7 +574,7 @@ export function BotManageDialog({
                   )}
                 />
                 <span className="text-sm">
-                  {isConnected ? "Connected" : "Not connected"}
+                  {isConnected ? t("botManage.connected") : t("botManage.notConnected")}
                 </span>
               </div>
             </div>
@@ -606,7 +608,7 @@ export function BotManageDialog({
 
             return (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Bot Token</label>
+                <label className="text-sm font-medium">{t("botManage.botToken")}</label>
                 {localToken ? (
                   <>
                     <div className="flex items-center gap-2">
@@ -621,15 +623,15 @@ export function BotManageDialog({
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Permanent token. Use in OpenClaw config to connect this bot.
+                      {t("botManage.tokenHint")}
                     </p>
                     <Button variant="outline" size="sm" onClick={handleRegenerateToken} disabled={regeneratingToken} className="gap-2">
                       {regeneratingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      Regenerate Token
+                      {t("botManage.regenerateToken")}
                     </Button>
                   </>
                 ) : (
-                  <p className="text-xs text-muted-foreground">No token available.</p>
+                  <p className="text-xs text-muted-foreground">{t("botManage.noToken")}</p>
                 )}
               </div>
             );
@@ -642,19 +644,19 @@ export function BotManageDialog({
             className="w-full"
           >
             {saving ? (
-              "Saving..."
+              t("common.saving")
             ) : saved ? (
               <span className="flex items-center gap-2">
-                <Check className="h-4 w-4" /> Saved
+                <Check className="h-4 w-4" /> {t("common.saved")}
               </span>
             ) : (
-              "Save Changes"
+              t("common.save")
             )}
           </Button>
 
           {/* Export */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Export</label>
+            <label className="text-sm font-medium">{t("common.export")}</label>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -679,7 +681,7 @@ export function BotManageDialog({
 
           {/* Danger zone */}
           <div className="space-y-3 rounded-lg border border-destructive/30 p-3 sm:p-4">
-            <p className="text-sm font-medium text-destructive">Danger Zone</p>
+            <p className="text-sm font-medium text-destructive">{t("botManage.dangerZone")}</p>
 
             {/* Clear History */}
             {!clearConfirm ? (
@@ -689,19 +691,19 @@ export function BotManageDialog({
                 onClick={() => setClearConfirm(true)}
               >
                 <Trash2 className="h-4 w-4" />
-                Clear All History
+                {t("botManage.clearHistory")}
               </Button>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Delete all conversations with this bot?
+                  {t("botManage.clearHistoryConfirm")}
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => setClearConfirm(false)}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button variant="destructive" className="flex-1" disabled={clearing} onClick={handleClearHistory}>
-                    {clearing ? "Clearing..." : "Confirm"}
+                    {clearing ? t("common.clearing") : t("common.confirm")}
                   </Button>
                 </div>
               </div>
@@ -714,19 +716,19 @@ export function BotManageDialog({
                 className="w-full"
                 onClick={() => setDeleteConfirm(true)}
               >
-                Delete Bot
+                {t("botManage.deleteBot")}
               </Button>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Are you sure? This will delete all conversations with this bot.
+                  {t("botManage.deleteBotConfirm")}
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirm(false)}>
-                    Cancel
+                    {t("common.cancel")}
                   </Button>
                   <Button variant="destructive" className="flex-1" disabled={deleting} onClick={handleDelete}>
-                    {deleting ? "Deleting..." : "Confirm Delete"}
+                    {deleting ? t("common.deleting") : t("botManage.confirmDelete")}
                   </Button>
                 </div>
               </div>

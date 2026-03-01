@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp, Settings, UserPlus, Loader2, ArrowLeft, User } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 import { BotManageDialog } from "./bot-manage-dialog";
 import type { Agent } from "@arinova/shared/types";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
@@ -25,6 +26,7 @@ interface NewChatDialogProps {
 type DialogView = "select" | "add-agent" | "create-group" | "friend";
 
 export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
+  const { t } = useTranslation();
   const agents = useChatStore((s) => s.agents);
   const createConversation = useChatStore((s) => s.createConversation);
   const createGroupConversation = useChatStore(
@@ -104,12 +106,12 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New Conversation</DialogTitle>
+          <DialogTitle>{t("newChat.title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
           {agents.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
-              No agents yet. Add one to start chatting.
+              {t("newChat.noAgents")}
             </p>
           ) : (
             agents.map((agent) => (
@@ -168,7 +170,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               onClick={() => setView("add-agent")}
             >
               <Plus className="h-4 w-4" />
-              Create Bot
+              {t("newChat.createBot")}
             </Button>
             <Button
               variant="outline"
@@ -176,7 +178,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               onClick={() => setView("create-group")}
             >
               <Users className="h-4 w-4" />
-              New Group
+              {t("newChat.newGroup")}
             </Button>
             <Button
               variant="outline"
@@ -184,7 +186,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               onClick={() => setView("friend")}
             >
               <User className="h-4 w-4" />
-              Friend
+              {t("newChat.friend")}
             </Button>
           </div>
         </div>
@@ -223,6 +225,7 @@ function CreateGroupDialog({
   agents: { id: string; name: string; description: string | null; avatarUrl: string | null }[];
   onCreateGroup: (agentIds: string[], title: string, userIds?: string[]) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set());
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -263,11 +266,11 @@ function CreateGroupDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedAgentIds.size < 1 && selectedUserIds.size < 1) {
-      setError("Select at least 1 agent or 1 friend");
+      setError(t("newChat.selectAtLeast"));
       return;
     }
     if (!title.trim()) {
-      setError("Group name is required");
+      setError(t("newChat.groupNameRequired"));
       return;
     }
     setError("");
@@ -288,7 +291,7 @@ function CreateGroupDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create Group Chat</DialogTitle>
+          <DialogTitle>{t("newChat.createGroup")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -297,18 +300,18 @@ function CreateGroupDialog({
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Group Name</label>
+            <label className="text-sm font-medium">{t("newChat.groupName")}</label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Dev Team"
+              placeholder={t("newChat.groupNamePlaceholder")}
               required
               className="bg-secondary border-none"
             />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              Select Agents ({selectedAgentIds.size} selected)
+              {t("newChat.selectAgents")} ({selectedAgentIds.size} {t("newChat.selected")})
             </label>
             <div className="max-h-36 space-y-1 overflow-y-auto">
               {agents.map((agent) => (
@@ -352,9 +355,9 @@ function CreateGroupDialog({
               className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <UserPlus className="h-3.5 w-3.5" />
-              Add Friends
+              {t("newChat.addFriends")}
               {selectedUserIds.size > 0 && (
-                <span className="text-xs text-blue-400">({selectedUserIds.size} selected)</span>
+                <span className="text-xs text-blue-400">({selectedUserIds.size} {t("newChat.selected")})</span>
               )}
               {showFriends ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
@@ -366,7 +369,7 @@ function CreateGroupDialog({
                   </div>
                 ) : friends.length === 0 ? (
                   <p className="py-3 text-center text-xs text-muted-foreground">
-                    No friends yet
+                    {t("newChat.noFriends")}
                   </p>
                 ) : (
                   friends.map((friend) => (
@@ -417,14 +420,14 @@ function CreateGroupDialog({
               onClick={onBack}
               className="flex-1"
             >
-              Back
+              {t("common.back")}
             </Button>
             <Button
               type="submit"
               disabled={loading || (selectedAgentIds.size < 1 && selectedUserIds.size < 1)}
               className="flex-1"
             >
-              {loading ? "Creating..." : "Create Group"}
+              {loading ? t("common.creating") : t("newChat.createGroup.btn")}
             </Button>
           </div>
         </form>
@@ -442,6 +445,7 @@ function AddAgentDialog({
   onOpenChange: (open: boolean) => void;
   onBack: () => void;
 }) {
+  const { t } = useTranslation();
   const createAgent = useChatStore((s) => s.createAgent);
   const createConversation = useChatStore((s) => s.createConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -489,19 +493,18 @@ function AddAgentDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Bot Created</DialogTitle>
+            <DialogTitle>{t("newChat.botCreated")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex items-center gap-3 rounded-lg bg-green-500/10 px-4 py-3">
               <Check className="h-5 w-5 text-green-500 shrink-0" />
               <p className="text-sm">
-                <span className="font-medium">{createdAgent.name}</span> has
-                been created successfully.
+                <span className="font-medium">{createdAgent.name}</span> {t("newChat.botCreatedDesc")}
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Bot Token</label>
+              <label className="text-sm font-medium">{t("newChat.botToken")}</label>
               <div className="flex items-center gap-2">
                 <code className="min-w-0 flex-1 rounded-lg bg-secondary px-3 py-2 text-xs font-mono truncate select-all">
                   {createdAgent.secretToken ?? createdAgent.id}
@@ -522,9 +525,9 @@ function AddAgentDialog({
             </div>
 
             <div className="rounded-lg bg-secondary/50 px-4 py-3 text-sm text-muted-foreground space-y-3">
-              <p className="font-medium text-foreground">Next steps:</p>
+              <p className="font-medium text-foreground">{t("newChat.nextSteps")}</p>
               <p>
-                Use this bot token to connect your AI agent via OpenClaw.
+                {t("newChat.botTokenHint")}
               </p>
               <pre className="rounded-md bg-card px-3 py-2 text-xs font-mono overflow-x-auto whitespace-pre">{`openclaw arinova-setup --token ${createdAgent.secretToken ?? "<bot-token>"}`}</pre>
             </div>
@@ -537,7 +540,7 @@ function AddAgentDialog({
               }}
               className="w-full"
             >
-              Start Chat
+              {t("newChat.startChat")}
             </Button>
           </div>
         </DialogContent>
@@ -549,7 +552,7 @@ function AddAgentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create Bot</DialogTitle>
+          <DialogTitle>{t("newChat.createBot")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
@@ -558,21 +561,21 @@ function AddAgentDialog({
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Name</label>
+            <label className="text-sm font-medium">{t("common.name")}</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. CodeBot"
+              placeholder={t("newChat.botNamePlaceholder")}
               required
               className="bg-secondary border-none"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Description</label>
+            <label className="text-sm font-medium">{t("common.description")}</label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this agent do?"
+              placeholder={t("newChat.botDescPlaceholder")}
               className="bg-secondary border-none"
             />
           </div>
@@ -587,15 +590,15 @@ function AddAgentDialog({
             ) : (
               <ChevronDown className="h-3 w-3" />
             )}
-            Advanced: Connect existing agent
+            {t("newChat.advancedConnect")}
           </button>
 
           {showAdvanced && (
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                A2A Endpoint{" "}
+                {t("newChat.a2aEndpoint")}{" "}
                 <span className="text-muted-foreground font-normal">
-                  (optional)
+                  {t("newChat.optional")}
                 </span>
               </label>
               <Input
@@ -606,7 +609,7 @@ function AddAgentDialog({
                 className="bg-secondary border-none"
               />
               <p className="text-xs text-muted-foreground">
-                Leave empty to create a bot first, then connect an agent later.
+                {t("newChat.a2aHint")}
               </p>
             </div>
           )}
@@ -618,10 +621,10 @@ function AddAgentDialog({
               onClick={onBack}
               className="flex-1"
             >
-              Back
+              {t("common.back")}
             </Button>
             <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Creating..." : "Create Bot"}
+              {loading ? t("common.creating") : t("newChat.createBot")}
             </Button>
           </div>
         </form>
@@ -641,6 +644,7 @@ function FriendDmDialog({
   onBack: () => void;
   onSelect: (friendUserId: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [friends, setFriends] = useState<FriendItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<string | null>(null);
@@ -668,7 +672,7 @@ function FriendDmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Chat with Friend</DialogTitle>
+          <DialogTitle>{t("newChat.chatWithFriend")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
           {loading ? (
@@ -677,7 +681,7 @@ function FriendDmDialog({
             </div>
           ) : friends.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No friends yet. Add friends first to start a conversation.
+              {t("newChat.noFriendsHint")}
             </p>
           ) : (
             <div className="max-h-64 space-y-1 overflow-y-auto">
@@ -719,7 +723,7 @@ function FriendDmDialog({
             className="w-full"
             onClick={onBack}
           >
-            Back
+            {t("common.cancel")}
           </Button>
         </div>
       </DialogContent>

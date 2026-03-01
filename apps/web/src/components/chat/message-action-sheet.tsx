@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/sheet";
 import { Copy, Trash2, RotateCcw, Reply } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
+import { useTranslation } from "@/lib/i18n";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🤔", "👀"];
 
@@ -35,6 +36,7 @@ export function MessageActionSheet({
   onReply,
   onReact,
 }: MessageActionSheetProps) {
+  const { t } = useTranslation();
   if (!message) return null;
 
   const isError = message.status === "error";
@@ -52,7 +54,7 @@ export function MessageActionSheet({
         className="rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3"
       >
         <VisuallyHidden.Root>
-          <SheetTitle>Message actions</SheetTitle>
+          <SheetTitle>{t("chat.messageActions")}</SheetTitle>
         </VisuallyHidden.Root>
 
         {/* Drag handle */}
@@ -76,21 +78,21 @@ export function MessageActionSheet({
         <div className="mt-1 flex flex-col">
           <button className={ACTION_BUTTON} onClick={() => handle(onCopy)}>
             <Copy className="h-4 w-4 text-muted-foreground" />
-            Copy
+            {t("common.copy")}
           </button>
           <button className={ACTION_BUTTON} onClick={() => handle(onReply)}>
             <Reply className="h-4 w-4 text-blue-400" />
-            <span className="text-blue-400">Reply</span>
+            <span className="text-blue-400">{t("chat.actions.reply")}</span>
           </button>
           {isError && (
             <button className={ACTION_BUTTON} onClick={() => handle(onRetry)}>
               <RotateCcw className="h-4 w-4 text-blue-400" />
-              <span className="text-blue-400">Retry</span>
+              <span className="text-blue-400">{t("common.retry")}</span>
             </button>
           )}
           <button className={ACTION_BUTTON} onClick={() => handle(onDelete)}>
             <Trash2 className="h-4 w-4 text-red-400" />
-            <span className="text-red-400">Delete</span>
+            <span className="text-red-400">{t("common.delete")}</span>
           </button>
         </div>
       </SheetContent>

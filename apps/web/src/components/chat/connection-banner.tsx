@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { wsManager, type ConnectionStatus } from "@/lib/ws";
 import { WifiOff, RefreshCw } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export function ConnectionBanner() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<ConnectionStatus>(wsManager.status);
 
   useEffect(() => {
@@ -18,12 +20,12 @@ export function ConnectionBanner() {
       {status === "syncing" ? (
         <>
           <RefreshCw className="h-3 w-3 animate-spin" />
-          <span>Syncing...</span>
+          <span>{t("connection.syncing")}</span>
         </>
       ) : (
         <>
           <WifiOff className="h-3 w-3" />
-          <span>Reconnecting...</span>
+          <span>{t("connection.reconnecting")}</span>
         </>
       )}
     </div>

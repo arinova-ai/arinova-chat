@@ -8,10 +8,12 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { X, Send, Loader2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 const EMPTY: never[] = [];
 
 export function ThreadPanel() {
+  const { t } = useTranslation();
   const activeThreadId = useChatStore((s) => s.activeThreadId);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const closeThread = useChatStore((s) => s.closeThread);
@@ -100,7 +102,7 @@ export function ThreadPanel() {
           <div className="flex items-center justify-between">
             <SheetTitle className="text-sm flex items-center gap-1.5">
               <MessageSquare className="h-4 w-4" />
-              Thread
+              {t("chat.thread.title")}
             </SheetTitle>
             <Button variant="ghost" size="icon-xs" onClick={closeThread} className="h-6 w-6">
               <X className="h-4 w-4" />
@@ -135,8 +137,8 @@ export function ThreadPanel() {
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <MessageSquare className="h-8 w-8 mb-2 opacity-40" />
-              <p className="text-sm">No replies yet</p>
-              <p className="text-xs mt-1">Start the discussion below</p>
+              <p className="text-sm">{t("chat.thread.noReplies")}</p>
+              <p className="text-xs mt-1">{t("chat.thread.startDiscussion")}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -172,7 +174,7 @@ export function ThreadPanel() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Reply in thread..."
+              placeholder={t("chat.thread.placeholder")}
               rows={1}
               className={cn(
                 "flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm",

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -31,26 +32,32 @@ interface BrowseResponse {
   total: number;
 }
 
-const CATEGORIES = [
-  "All",
-  "Productivity",
-  "Development",
-  "Education",
-  "Creative",
-  "Analytics",
-  "Support",
-  "Other",
-];
+const CATEGORY_KEYS = [
+  "all",
+  "productivity",
+  "development",
+  "education",
+  "creative",
+  "analytics",
+  "support",
+  "other",
+] as const;
 
-const SORTS = [
-  { value: "popular", label: "Popular" },
-  { value: "newest", label: "Newest" },
-  { value: "rating", label: "Rating" },
-  { value: "price", label: "Price" },
-];
+const SORT_KEYS = ["popular", "newest", "rating", "price"] as const;
 
 function AgentHubContent() {
   const router = useRouter();
+  const { t } = useTranslation();
+
+  const CATEGORIES = CATEGORY_KEYS.map((key) => ({
+    value: key === "all" ? "All" : key.charAt(0).toUpperCase() + key.slice(1),
+    label: t(`agentHub.cat.${key}`),
+  }));
+
+  const SORTS = SORT_KEYS.map((key) => ({
+    value: key,
+    label: t(`agentHub.sort.${key}`),
+  }));
   const [listings, setListings] = useState<AgentListing[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -112,8 +119,8 @@ function AgentHubContent() {
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
             <PageTitle
-              title="Agent Hub"
-              subtitle="Discover & chat with AI agents"
+              title={t("agentHub.title")}
+              subtitle={t("agentHub.subtitle")}
               icon={Store}
             />
             <div className="flex-1" />
@@ -123,12 +130,12 @@ function AgentHubContent() {
               onClick={() => router.push("/creator/new")}
             >
               <Plus className="h-4 w-4" />
-              Create Agent
+              {t("agentHub.createAgent")}
             </Button>
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                placeholder="Search agents..."
+                placeholder={t("agentHub.searchPlaceholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -144,7 +151,7 @@ function AgentHubContent() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                placeholder="Search agents..."
+                placeholder={t("agentHub.searchPlaceholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
@@ -160,18 +167,18 @@ function AgentHubContent() {
             <div className="flex flex-1 flex-wrap gap-2">
               {CATEGORIES.map((cat) => (
                 <button
-                  key={cat}
+                  key={cat.value}
                   onClick={() => {
-                    setCategory(cat);
+                    setCategory(cat.value);
                     setOffset(0);
                   }}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    category === cat
+                    category === cat.value
                       ? "bg-brand text-white"
                       : "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
                   }`}
                 >
-                  {cat}
+                  {cat.label}
                 </button>
               ))}
             </div>
@@ -201,7 +208,7 @@ function AgentHubContent() {
           ) : listings.length === 0 ? (
             <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
               <MessageSquare className="h-10 w-10 opacity-40" />
-              <p className="text-sm">No agents found</p>
+              <p className="text-sm">{t("agentHub.noAgents")}</p>
             </div>
           ) : (
             <>
@@ -240,8 +247,8 @@ function AgentHubContent() {
                       <span className="flex items-center gap-1 font-medium text-foreground">
                         <Coins className="h-3.5 w-3.5 text-yellow-500" />
                         {agent.pricePerMessage === 0
-                          ? "Free"
-                          : `${agent.pricePerMessage}/msg`}
+                          ? t("common.free")
+                          : `${agent.pricePerMessage}${t("agentHub.perMsg")}`}
                       </span>
                       {agent.avgRating !== null && (
                         <span className="flex items-center gap-0.5">
@@ -254,11 +261,11 @@ function AgentHubContent() {
                       </span>
                       {agent.freeTrialMessages > 0 && (
                         <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] text-green-400">
-                          {agent.freeTrialMessages} free
+                          {agent.freeTrialMessages} {t("agentHub.freeTrials")}
                         </span>
                       )}
                       <span className="ml-auto">
-                        {agent.salesCount} chats
+                        {agent.salesCount} {t("creator.chats")}
                       </span>
                     </div>
                   </div>
@@ -273,7 +280,7 @@ function AgentHubContent() {
                     size="sm"
                     onClick={() => setOffset((o) => o + limit)}
                   >
-                    Load More
+                    {t("common.loadMore")}
                   </Button>
                 </div>
               )}

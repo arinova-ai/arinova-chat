@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -26,13 +27,14 @@ interface Transaction {
 }
 
 const TOPUP_PLANS = [
-  { id: "starter", label: "Starter", price: "$5", coins: 500, bonus: null },
-  { id: "standard", label: "Standard", price: "$10", coins: 1100, bonus: "10% bonus" },
-  { id: "advanced", label: "Advanced", price: "$25", coins: 3000, bonus: "20% bonus" },
-  { id: "pro", label: "Pro", price: "$50", coins: 6500, bonus: "30% bonus" },
+  { id: "starter", labelKey: "wallet.plan.starter", price: "$5", coins: 500, bonus: null },
+  { id: "standard", labelKey: "wallet.plan.standard", price: "$10", coins: 1100, bonus: "10% bonus" },
+  { id: "advanced", labelKey: "wallet.plan.advanced", price: "$25", coins: 3000, bonus: "20% bonus" },
+  { id: "pro", labelKey: "wallet.plan.pro", price: "$50", coins: 6500, bonus: "30% bonus" },
 ];
 
 function WalletContent() {
+  const { t } = useTranslation();
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +97,7 @@ function WalletContent() {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
-          <PageTitle icon={Wallet} title="Wallet" subtitle="Manage your credits" />
+          <PageTitle icon={Wallet} title={t("wallet.title")} subtitle={t("wallet.subtitle")} />
         </div>
 
         {/* Content */}
@@ -108,20 +110,20 @@ function WalletContent() {
             <div className="mx-auto max-w-3xl space-y-8">
               {/* Balance card */}
               <div className="rounded-2xl border border-border bg-card p-6 text-center">
-                <p className="text-sm text-muted-foreground">Current Balance</p>
+                <p className="text-sm text-muted-foreground">{t("wallet.currentBalance")}</p>
                 <div className="mt-2 flex items-center justify-center gap-3">
                   <Coins className="h-8 w-8 text-yellow-500" />
                   <span className="text-4xl font-bold">
                     {(balance ?? 0).toLocaleString()}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">credits</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("wallet.credits")}</p>
               </div>
 
               {/* Top-up plans */}
               <div className="space-y-3">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Top Up
+                  {t("wallet.topUp")}
                 </h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {TOPUP_PLANS.map((plan) => (
@@ -131,7 +133,7 @@ function WalletContent() {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-semibold">{plan.label}</h3>
+                          <h3 className="font-semibold">{t(plan.labelKey)}</h3>
                           <p className="text-2xl font-bold text-brand-text">
                             {plan.price}
                           </p>
@@ -159,7 +161,7 @@ function WalletContent() {
                         {topupLoading === plan.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          "Purchase"
+                          t("common.purchase")
                         )}
                       </Button>
                     </div>
@@ -170,11 +172,11 @@ function WalletContent() {
               {/* Transaction history */}
               <div className="space-y-3">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Transaction History
+                  {t("wallet.transactionHistory")}
                 </h2>
                 {transactions.length === 0 ? (
                   <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-                    No transactions yet
+                    {t("wallet.noTransactions")}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -216,7 +218,7 @@ function WalletContent() {
                           disabled={txPage === 0}
                           onClick={() => setTxPage((p) => p - 1)}
                         >
-                          Previous
+                          {t("common.previous")}
                         </Button>
                         <span className="text-xs text-muted-foreground">
                           Page {txPage + 1} of {Math.ceil(txTotal / txLimit)}
@@ -227,7 +229,7 @@ function WalletContent() {
                           disabled={(txPage + 1) * txLimit >= txTotal}
                           onClick={() => setTxPage((p) => p + 1)}
                         >
-                          Next
+                          {t("common.next")}
                         </Button>
                       </div>
                     )}

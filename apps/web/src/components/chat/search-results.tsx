@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bot, Loader2, SearchX, User } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
+import { useTranslation } from "@/lib/i18n";
 
 /** Highlight keyword matches in text, returning React elements */
 function HighlightedSnippet({
@@ -58,6 +59,7 @@ function HighlightedSnippet({
 }
 
 export function SearchResults() {
+  const { t } = useTranslation();
   const searchResults = useChatStore((s) => s.searchResults);
   const searchTotal = useChatStore((s) => s.searchTotal);
   const searchLoading = useChatStore((s) => s.searchLoading);
@@ -74,11 +76,11 @@ export function SearchResults() {
         </Button>
         <div className="min-w-0">
           <h2 className="text-sm font-semibold truncate">
-            Search: &quot;{searchQuery}&quot;
+            {t("chat.search.title")}: &quot;{searchQuery}&quot;
           </h2>
           {!searchLoading && (
             <p className="text-xs text-muted-foreground">
-              {searchTotal} result{searchTotal !== 1 ? "s" : ""}
+              {searchTotal} {searchTotal !== 1 ? t("chat.search.results") : t("chat.search.result")}
             </p>
           )}
         </div>
@@ -93,7 +95,7 @@ export function SearchResults() {
         ) : searchResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
             <SearchX className="h-10 w-10" />
-            <p className="text-sm">No messages found</p>
+            <p className="text-sm">{t("chat.search.noResults")}</p>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -126,10 +128,10 @@ export function SearchResults() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-sm font-medium truncate">
-                      {result.role === "user" ? "You" : (result.agentName ?? "Agent")}
+                      {result.role === "user" ? t("common.you") : (result.agentName ?? "Agent")}
                     </span>
                     <span className="text-xs text-muted-foreground shrink-0">
-                      {result.conversationTitle ?? "Untitled"}
+                      {result.conversationTitle ?? t("common.untitled")}
                     </span>
                   </div>
                   <div className="mt-0.5">
