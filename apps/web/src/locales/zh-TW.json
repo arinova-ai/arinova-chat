@@ -265,6 +265,7 @@
   "settings.profile.subtitle": "管理你的個人資訊與偏好設定。",
   "settings.profile.changeAvatar": "更換頭像",
   "settings.profile.cropAvatar": "裁切頭像",
+  "settings.profile.cropBanner": "裁切背景圖",
   "settings.profile.displayName": "顯示名稱",
   "settings.profile.displayNamePlaceholder": "輸入你的顯示名稱",
   "settings.profile.username": "使用者名稱",

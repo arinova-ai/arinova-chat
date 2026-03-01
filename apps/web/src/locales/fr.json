@@ -265,6 +265,7 @@
   "settings.profile.subtitle": "Gérez vos informations personnelles et vos préférences.",
   "settings.profile.changeAvatar": "Changer l'avatar",
   "settings.profile.cropAvatar": "Recadrer l'avatar",
+  "settings.profile.cropBanner": "Recadrer la bannière",
   "settings.profile.displayName": "Nom d'affichage",
   "settings.profile.displayNamePlaceholder": "Saisissez votre nom d'affichage",
   "settings.profile.username": "Nom d'utilisateur",

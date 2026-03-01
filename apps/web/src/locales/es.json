@@ -265,6 +265,7 @@
   "settings.profile.subtitle": "Administra tu informacion personal y preferencias.",
   "settings.profile.changeAvatar": "Cambiar Avatar",
   "settings.profile.cropAvatar": "Recortar Avatar",
+  "settings.profile.cropBanner": "Recortar Banner",
   "settings.profile.displayName": "Nombre para Mostrar",
   "settings.profile.displayNamePlaceholder": "Ingresa tu nombre para mostrar",
   "settings.profile.username": "Nombre de usuario",

@@ -265,6 +265,7 @@
   "settings.profile.subtitle": "개인 정보 및 환경 설정을 관리하세요.",
   "settings.profile.changeAvatar": "아바타 변경",
   "settings.profile.cropAvatar": "아바타 자르기",
+  "settings.profile.cropBanner": "배너 자르기",
   "settings.profile.displayName": "표시 이름",
   "settings.profile.displayNamePlaceholder": "표시 이름을 입력하세요",
   "settings.profile.username": "사용자 이름",

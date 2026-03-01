@@ -267,6 +267,202 @@ function AvatarCropDialog({
   );
 }
 
+// ───── Banner Crop Dialog ─────
+
+const BANNER_OUT_W = 1200;
+const BANNER_OUT_H = 400;
+const BANNER_ASPECT = BANNER_OUT_W / BANNER_OUT_H; // 3:1
+
+function cropBannerToBlob(
+  img: HTMLImageElement,
+  offsetX: number,
+  offsetY: number,
+  scale: number,
+  viewW: number,
+  viewH: number,
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = BANNER_OUT_W;
+    canvas.height = BANNER_OUT_H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return reject(new Error("Canvas not supported"));
+
+    const ratioX = BANNER_OUT_W / viewW;
+    const ratioY = BANNER_OUT_H / viewH;
+    const dx = offsetX * ratioX;
+    const dy = offsetY * ratioY;
+    const scaledW = img.naturalWidth * scale * ratioX;
+    const scaledH = img.naturalHeight * scale * ratioY;
+
+    ctx.drawImage(img, dx, dy, scaledW, scaledH);
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("Canvas toBlob failed"))),
+      "image/jpeg",
+      0.85,
+    );
+  });
+}
+
+function BannerCropDialog({
+  file,
+  onConfirm,
+  onCancel,
+}: {
+  file: File;
+  onConfirm: (blob: Blob) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+  const viewW = 360;
+  const viewH = Math.round(viewW / BANNER_ASPECT); // 120
+
+  // Load image
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setImgSrc(url);
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      // Fit so the image covers the crop area
+      const scaleW = viewW / img.naturalWidth;
+      const scaleH = viewH / img.naturalHeight;
+      const fitScale = Math.max(scaleW, scaleH);
+      setScale(fitScale);
+      setOffset({
+        x: (viewW - img.naturalWidth * fitScale) / 2,
+        y: (viewH - img.naturalHeight * fitScale) / 2,
+      });
+    };
+    img.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file, viewH]);
+
+  const handlePointerDown = (e: ReactPointerEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: ReactPointerEvent) => {
+    if (!dragging) return;
+    setOffset({
+      x: dragStart.current.ox + (e.clientX - dragStart.current.x),
+      y: dragStart.current.oy + (e.clientY - dragStart.current.y),
+    });
+  };
+
+  const handlePointerUp = () => setDragging(false);
+
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s - e.deltaY * 0.002)));
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
+
+  const adjustScale = (delta: number) => {
+    setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s + delta)));
+  };
+
+  const handleConfirm = async () => {
+    const img = imgRef.current;
+    if (!img) return;
+    try {
+      const blob = await cropBannerToBlob(img, offset.x, offset.y, scale, viewW, viewH);
+      onConfirm(blob);
+    } catch {
+      onCancel();
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogTitle>{t("settings.profile.cropBanner")}</DialogTitle>
+
+        {/* Crop area */}
+        <div className="flex flex-col items-center gap-4">
+          <div
+            ref={containerRef}
+            className="relative overflow-hidden rounded-lg border-2 border-border cursor-grab active:cursor-grabbing select-none touch-none"
+            style={{ width: viewW, height: viewH }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
+            {imgSrc && (
+              <img
+                src={imgSrc}
+                alt=""
+                draggable={false}
+                className="pointer-events-none absolute"
+                style={{
+                  left: offset.x,
+                  top: offset.y,
+                  width: imgRef.current ? imgRef.current.naturalWidth * scale : "auto",
+                  height: imgRef.current ? imgRef.current.naturalHeight * scale : "auto",
+                  maxWidth: "none",
+                }}
+              />
+            )}
+          </div>
+
+          {/* Zoom controls */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => adjustScale(-0.15)}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </button>
+            <input
+              type="range"
+              min={MIN_SCALE}
+              max={MAX_SCALE}
+              step={0.01}
+              value={scale}
+              onChange={(e) => setScale(Number(e.target.value))}
+              className="w-32 accent-brand"
+            />
+            <button
+              type="button"
+              onClick={() => adjustScale(0.15)}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="ghost" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button className="brand-gradient-btn" onClick={handleConfirm}>
+            {t("common.confirm")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ───── Profile Panel ─────
 
 function ProfilePanel() {
@@ -284,6 +480,7 @@ function ProfilePanel() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
+  const [coverCropFile, setCoverCropFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -370,15 +567,18 @@ function ProfilePanel() {
     }
   };
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file?.type.startsWith("image/")) return;
+    setCoverCropFile(file);
+  };
+
+  const handleCoverUpload = async (blob: Blob) => {
     setCoverUploading(true);
     try {
-      const compressed = await compressImage(file, { maxWidth: 1920, maxHeight: 400, quality: 0.85 });
       const formData = new FormData();
-      formData.append("file", compressed, "cover.jpg");
+      formData.append("file", new File([blob], "cover.jpg", { type: "image/jpeg" }), "cover.jpg");
       const res = await fetch(`${BACKEND_URL}/api/auth/upload-cover`, {
         method: "POST",
         credentials: "include",
@@ -476,7 +676,7 @@ function ProfilePanel() {
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
             className="hidden"
-            onChange={handleCoverUpload}
+            onChange={handleCoverFileSelect}
           />
 
           {/* Profile content area */}
@@ -572,6 +772,18 @@ function ProfilePanel() {
             handleAvatarUpload(blob);
           }}
           onCancel={() => setCropFile(null)}
+        />
+      )}
+
+      {/* Banner crop dialog */}
+      {coverCropFile && (
+        <BannerCropDialog
+          file={coverCropFile}
+          onConfirm={(blob) => {
+            setCoverCropFile(null);
+            handleCoverUpload(blob);
+          }}
+          onCancel={() => setCoverCropFile(null)}
         />
       )}
 

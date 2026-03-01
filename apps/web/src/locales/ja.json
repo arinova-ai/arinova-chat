@@ -265,6 +265,7 @@
   "settings.profile.subtitle": "個人情報と設定を管理します。",
   "settings.profile.changeAvatar": "アバターを変更",
   "settings.profile.cropAvatar": "アバターを切り抜き",
+  "settings.profile.cropBanner": "バナーを切り抜き",
   "settings.profile.displayName": "表示名",
   "settings.profile.displayNamePlaceholder": "表示名を入力",
   "settings.profile.username": "ユーザー名",

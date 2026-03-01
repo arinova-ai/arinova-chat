@@ -265,6 +265,7 @@
   "settings.profile.subtitle": "Manage your personal information and preferences.",
   "settings.profile.changeAvatar": "Change Avatar",
   "settings.profile.cropAvatar": "Crop Avatar",
+  "settings.profile.cropBanner": "Crop Banner",
   "settings.profile.displayName": "Display Name",
   "settings.profile.displayNamePlaceholder": "Enter your display name",
   "settings.profile.username": "Username",
