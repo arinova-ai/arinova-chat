@@ -1,7 +1,7 @@
 use axum::{
     extract::{FromRequestParts, Query, State},
     http::{request::Parts, StatusCode},
-    response::{IntoResponse, Json, Response},
+    response::{IntoResponse, Json, Redirect, Response},
     routing::{get, post},
     Router,
 };
@@ -35,15 +35,15 @@ async fn authorize(
     Query(q): Query<AuthorizeQuery>,
 ) -> Response {
     // Validate client_id and redirect_uri
-    let app = sqlx::query_as::<_, (Uuid, String)>(
-        "SELECT id, redirect_uri FROM oauth_apps WHERE client_id = $1",
+    let app = sqlx::query_as::<_, (Uuid, String, String)>(
+        "SELECT id, redirect_uri, name FROM oauth_apps WHERE client_id = $1",
     )
     .bind(&q.client_id)
     .fetch_optional(&state.db)
     .await;
 
-    let (app_id, registered_uri) = match app {
-        Ok(Some(row)) => (row.0, row.1),
+    let (_app_id, registered_uri, app_name) = match app {
+        Ok(Some(row)) => (row.0, row.1, row.2),
         Ok(None) => {
             return (
                 StatusCode::BAD_REQUEST,
@@ -68,40 +68,32 @@ async fn authorize(
             .into_response();
     }
 
-    // Check if user is logged in via session cookie — we need the raw request parts
-    // but axum already extracted them. We'll use a helper to try session validation.
-    // Since we can't access cookies from Query extractor, we use a workaround:
-    // The authorize endpoint is also callable with an Authorization header or cookie.
-    // For now, return a JSON response that the frontend can use to redirect.
-    // The actual flow: frontend calls this, if user is logged in the frontend sends
-    // the session cookie, we validate it and issue a code.
-
-    // This endpoint is called by the browser with cookies, so we need to validate
-    // the session from the cookie. We'll parse it from state context.
-    // Actually, we need to accept the cookie from the request. Let's use a different approach:
-    // Make authorize accept an optional AuthUser.
-
-    // Since we can't use the AuthUser extractor (it rejects if no session),
-    // we return a redirect to the login page if not authenticated.
-    // The frontend login page should redirect back here after login.
+    // Redirect to the frontend consent page
+    let frontend_url = state
+        .config
+        .cors_origins()
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "http://localhost:21000".to_string());
 
     let scope = q.scope.unwrap_or_else(|| "profile".to_string());
 
-    // We need the code + redirect, but we don't have access to cookies here
-    // through the Query extractor. Return JSON for the frontend to handle.
-    // The frontend consent page will POST to complete the flow.
+    let consent_params = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("client_id", &q.client_id)
+        .append_pair("redirect_uri", &q.redirect_uri)
+        .append_pair("scope", &scope)
+        .append_pair("app_name", &app_name)
+        .finish();
 
-    (
-        StatusCode::OK,
-        Json(json!({
-            "app_id": app_id,
-            "client_id": q.client_id,
-            "redirect_uri": q.redirect_uri,
-            "scope": scope,
-            "state": q.state,
-        })),
-    )
-        .into_response()
+    let mut consent_url = format!("{}/oauth/authorize?{}", frontend_url, consent_params);
+    if let Some(ref st) = q.state {
+        consent_url.push_str(&format!(
+            "&state={}",
+            url::form_urlencoded::byte_serialize(st.as_bytes()).collect::<String>()
+        ));
+    }
+
+    Redirect::temporary(&consent_url).into_response()
 }
 
 // ── POST /oauth/token ───────────────────────────────────────────

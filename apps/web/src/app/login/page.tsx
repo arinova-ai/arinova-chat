@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { Loader2, Mail, Lock, EyeOff, Eye } from "lucide-react";
@@ -38,8 +38,10 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") ?? "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -65,7 +67,7 @@ export default function LoginPage() {
 
       // Ensure the session cookie is persisted before redirecting
       await authClient.getSession();
-      router.push("/");
+      router.push(redirectTo);
     } catch {
       setError("An unexpected error occurred");
       setLoading(false);
@@ -76,7 +78,7 @@ export default function LoginPage() {
     try {
       await authClient.signIn.social({
         provider,
-        callbackURL: "/",
+        callbackURL: redirectTo,
       });
     } catch {
       setError(`Failed to sign in with ${provider}`);
@@ -201,5 +203,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-dvh items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
