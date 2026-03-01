@@ -605,4 +605,11 @@ CREATE TABLE IF NOT EXISTS user_stickers (
   UNIQUE(user_id, pack_id)
 );
 
+-- Fix push_subscriptions: add UNIQUE constraint for ON CONFLICT clause
+CREATE UNIQUE INDEX IF NOT EXISTS idx_push_sub_user_endpoint
+  ON push_subscriptions(user_id, endpoint);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id
+  ON push_subscriptions(user_id);
+
 COMMIT;

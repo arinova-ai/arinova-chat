@@ -35,8 +35,11 @@ pub async fn send_push_to_user(
     .await?;
 
     if subs.is_empty() {
+        tracing::debug!(user_id, "no push subscriptions found");
         return Ok(());
     }
+
+    tracing::info!(user_id, count = subs.len(), "sending push to subscriptions");
 
     let json_payload = serde_json::to_string(payload)?;
     let mut expired_ids: Vec<String> = Vec::new();
@@ -56,11 +59,14 @@ pub async fn send_push_to_user(
         {
             Ok(status) => {
                 if status == 404 || status == 410 {
+                    tracing::info!(endpoint, status, "removing expired push subscription");
                     expired_ids.push(id.clone());
+                } else if status >= 400 {
+                    tracing::warn!(endpoint, status, "push service returned error");
                 }
             }
             Err(e) => {
-                tracing::warn!("Push notification failed for {}: {}", endpoint, e);
+                tracing::warn!(endpoint, error = %e, "push notification failed");
             }
         }
     }
@@ -76,16 +82,28 @@ pub async fn send_push_to_user(
     Ok(())
 }
 
-/// Send a single web push notification.
+/// Send a single web push notification with RFC 8291 aes128gcm encryption.
 /// Returns the HTTP status code.
 async fn send_web_push(
     client: &reqwest::Client,
     config: &Config,
     endpoint: &str,
-    _p256dh: &str,
-    _auth: &str,
+    p256dh: &str,
+    auth: &str,
     payload: &[u8],
 ) -> Result<u16, anyhow::Error> {
+    // Decode subscriber keys from base64url
+    let pub_key = URL_SAFE_NO_PAD
+        .decode(p256dh)
+        .map_err(|e| anyhow::anyhow!("invalid p256dh key: {}", e))?;
+    let auth_secret = URL_SAFE_NO_PAD
+        .decode(auth)
+        .map_err(|e| anyhow::anyhow!("invalid auth secret: {}", e))?;
+
+    // Encrypt payload using RFC 8291 aes128gcm
+    let ciphertext = ece::encrypt(&pub_key, &auth_secret, payload)
+        .map_err(|e| anyhow::anyhow!("ece encrypt failed: {:?}", e))?;
+
     // For web push, we need VAPID JWT authorization
     let jwt = create_vapid_jwt(endpoint, &config.vapid_subject, &config.vapid_private_key)?;
 
@@ -99,12 +117,16 @@ async fn send_web_push(
         .post(endpoint)
         .header("Authorization", vapid_header)
         .header("Content-Type", "application/octet-stream")
+        .header("Content-Encoding", "aes128gcm")
         .header("TTL", "86400")
-        .body(payload.to_vec())
+        .body(ciphertext)
         .send()
         .await?;
 
-    Ok(resp.status().as_u16())
+    let status = resp.status().as_u16();
+    tracing::debug!(endpoint, status, "web push sent");
+
+    Ok(status)
 }
 
 /// Create a VAPID JWT for web push authorization (ES256 / P-256 ECDSA).

@@ -238,8 +238,11 @@ CREATE TABLE push_subscriptions (
     p256dh TEXT NOT NULL,
     auth TEXT NOT NULL,
     device_info TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, endpoint)
 );
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id);
 
 CREATE TABLE notification_preferences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
