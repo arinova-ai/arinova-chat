@@ -276,13 +276,16 @@ function ProfilePanel() {
   const sessionUser = session?.user as Record<string, any> | undefined;
   const [name, setName] = useState(sessionUser?.name ?? "");
   const [bio, setBio] = useState(sessionUser?.bio ?? "");
-  const [nameLoading, setNameLoading] = useState(false);
-  const [nameSuccess, setNameSuccess] = useState("");
-  const [nameError, setNameError] = useState("");
+  const [coverImage, setCoverImage] = useState<string | null>(sessionUser?.coverImage ?? null);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -294,18 +297,29 @@ function ProfilePanel() {
   useEffect(() => {
     if (sessionUser?.name) setName(sessionUser.name);
     if (typeof sessionUser?.bio === "string") setBio(sessionUser.bio);
-  }, [sessionUser?.name, sessionUser?.bio]);
+    if (typeof sessionUser?.coverImage === "string") setCoverImage(sessionUser.coverImage);
+  }, [sessionUser?.name, sessionUser?.bio, sessionUser?.coverImage]);
 
-  const handleUpdateName = async (e: React.FormEvent) => {
+  // Fetch cover image from user profile API (session may not include it)
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    api<{ coverImage?: string | null }>(`/api/users/${session.user.id}`)
+      .then((data) => {
+        if (data.coverImage) setCoverImage(data.coverImage);
+      })
+      .catch(() => {});
+  }, [session?.user?.id]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setNameError("");
-    setNameSuccess("");
+    setSaveError("");
+    setSaveSuccess("");
     const trimmed = name.trim();
     if (!trimmed) {
-      setNameError(t("settings.profile.nameEmpty"));
+      setSaveError(t("settings.profile.nameEmpty"));
       return;
     }
-    setNameLoading(true);
+    setSaving(true);
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/update-user`, {
         method: "POST",
@@ -315,15 +329,15 @@ function ProfilePanel() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setNameError(body.error ?? t("settings.profile.nameUpdateFailed"));
+        setSaveError(body.error ?? t("settings.profile.nameUpdateFailed"));
       } else {
-        setNameSuccess(t("settings.profile.nameUpdated"));
-        setTimeout(() => setNameSuccess(""), 3000);
+        setSaveSuccess(t("settings.profile.nameUpdated"));
+        setTimeout(() => setSaveSuccess(""), 3000);
       }
     } catch {
-      setNameError(t("settings.profile.unexpectedError"));
+      setSaveError(t("settings.profile.unexpectedError"));
     } finally {
-      setNameLoading(false);
+      setSaving(false);
     }
   };
 
@@ -333,7 +347,7 @@ function ProfilePanel() {
       const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
       const compressed = await compressImage(file, { maxWidth: 512, maxHeight: 512, quality: 0.9 });
       if (compressed.size > 5 * 1024 * 1024) {
-        setNameError(t("settings.profile.avatarTooLarge"));
+        setSaveError(t("settings.profile.avatarTooLarge"));
         return;
       }
       const formData = new FormData();
@@ -350,9 +364,36 @@ function ProfilePanel() {
       const data = await res.json();
       await authClient.updateUser({ image: data.imageUrl });
     } catch (err) {
-      setNameError(err instanceof Error ? err.message : "Avatar upload failed");
+      setSaveError(err instanceof Error ? err.message : "Avatar upload failed");
     } finally {
       setAvatarUploading(false);
+    }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file?.type.startsWith("image/")) return;
+    setCoverUploading(true);
+    try {
+      const compressed = await compressImage(file, { maxWidth: 1920, maxHeight: 400, quality: 0.85 });
+      const formData = new FormData();
+      formData.append("file", compressed, "cover.jpg");
+      const res = await fetch(`${BACKEND_URL}/api/auth/upload-cover`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Upload failed");
+      }
+      const data = await res.json();
+      setCoverImage(data.imageUrl);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Cover upload failed");
+    } finally {
+      setCoverUploading(false);
     }
   };
 
@@ -387,6 +428,8 @@ function ProfilePanel() {
     }
   };
 
+  const username = (sessionUser?.username as string) ?? null;
+
   return (
     <div className="space-y-8">
       <div>
@@ -394,46 +437,131 @@ function ProfilePanel() {
         <p className="text-sm text-muted-foreground">{t("settings.profile.subtitle")}</p>
       </div>
 
-      {/* Avatar */}
-      <div className="flex items-center gap-6">
-        <button
-          type="button"
-          className="relative group"
-          onClick={() => avatarInputRef.current?.click()}
-          disabled={avatarUploading}
-        >
-          <Avatar className="h-24 w-24 border-2 border-[oklch(0.55_0.2_250/30%)]">
-            {session?.user?.image ? (
-              <AvatarImage src={assetUrl(session.user.image)} alt={session?.user?.name ?? ""} />
-            ) : null}
-            <AvatarFallback className="bg-secondary text-2xl">
-              {sessionPending ? "" : (session?.user?.name ?? "?").charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 cursor-pointer">
-            {avatarUploading ? (
-              <Loader2 className="h-6 w-6 text-white animate-spin" />
+      {/* WYSIWYG Profile Preview */}
+      <form onSubmit={handleSaveProfile}>
+        {saveError && (
+          <div className="mb-4 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{saveError}</div>
+        )}
+        {saveSuccess && (
+          <div className="mb-4 rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-400">{saveSuccess}</div>
+        )}
+
+        <div className="rounded-xl border border-border overflow-hidden">
+          {/* Banner — clickable to upload cover */}
+          <button
+            type="button"
+            className="relative w-full h-32 md:h-44 group cursor-pointer"
+            onClick={() => coverInputRef.current?.click()}
+            disabled={coverUploading}
+          >
+            {coverImage ? (
+              <img
+                src={assetUrl(coverImage)}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             ) : (
-              <Camera className="h-6 w-6 text-white" />
+              <div className="h-full w-full bg-gradient-to-r from-brand/30 via-brand/15 to-accent/30" />
             )}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+              {coverUploading ? (
+                <Loader2 className="h-6 w-6 text-white animate-spin" />
+              ) : (
+                <Camera className="h-6 w-6 text-white" />
+              )}
+            </div>
+          </button>
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="hidden"
+            onChange={handleCoverUpload}
+          />
+
+          {/* Profile content area */}
+          <div className="px-6 pb-6">
+            {/* Avatar overlapping banner */}
+            <div className="flex items-end">
+              <button
+                type="button"
+                className="relative -mt-10 group"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarUploading}
+              >
+                <Avatar className="h-20 w-20 ring-4 ring-background">
+                  {session?.user?.image ? (
+                    <AvatarImage src={assetUrl(session.user.image)} alt={session?.user?.name ?? ""} />
+                  ) : null}
+                  <AvatarFallback className="bg-secondary text-2xl">
+                    {sessionPending ? "" : (session?.user?.name ?? "?").charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 cursor-pointer">
+                  {avatarUploading ? (
+                    <Loader2 className="h-5 w-5 text-white animate-spin" />
+                  ) : (
+                    <Camera className="h-5 w-5 text-white" />
+                  )}
+                </div>
+              </button>
+            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  if (!file.type.startsWith("image/")) return;
+                  setCropFile(file);
+                }
+                e.target.value = "";
+              }}
+            />
+
+            {/* Editable name */}
+            <div className="mt-3">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("settings.profile.displayNamePlaceholder")}
+                required
+                className="w-full bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 border-none outline-none focus:ring-1 focus:ring-ring rounded px-1 -ml-1"
+              />
+            </div>
+
+            {/* Username (read-only) */}
+            {username && (
+              <p className="text-sm text-muted-foreground mt-0.5 px-1">
+                @{username}
+              </p>
+            )}
+
+            {/* Editable bio */}
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={500}
+              placeholder={t("settings.profile.bioPlaceholder")}
+              rows={2}
+              className="mt-3 w-full bg-transparent text-sm text-foreground/80 placeholder:text-muted-foreground/50 border-none outline-none focus:ring-1 focus:ring-ring rounded px-1 -ml-1 resize-none"
+            />
+
+            {/* Email (read-only) */}
+            <p className="mt-2 text-xs text-muted-foreground px-1">
+              {session?.user?.email}
+            </p>
           </div>
-        </button>
-        <input
-          ref={avatarInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              if (!file.type.startsWith("image/")) return;
-              setCropFile(file);
-            }
-            e.target.value = "";
-          }}
-        />
-        <p className="text-sm text-muted-foreground">{t("settings.profile.changeAvatar")}</p>
-      </div>
+        </div>
+
+        {/* Save button */}
+        <Button type="submit" className="brand-gradient-btn w-full mt-4" disabled={saving}>
+          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {t("common.save")}
+        </Button>
+      </form>
 
       {/* Avatar crop dialog */}
       {cropFile && (
@@ -446,63 +574,6 @@ function ProfilePanel() {
           onCancel={() => setCropFile(null)}
         />
       )}
-
-      {/* Profile form */}
-      <form onSubmit={handleUpdateName} className="space-y-6">
-        {nameError && (
-          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{nameError}</div>
-        )}
-        {nameSuccess && (
-          <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-400">{nameSuccess}</div>
-        )}
-
-        <div className="space-y-2">
-          <label htmlFor="displayName" className="text-sm font-medium">{t("settings.profile.displayName")}</label>
-          <Input
-            id="displayName"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("settings.profile.displayNamePlaceholder")}
-            required
-            className="bg-secondary border-border"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("settings.profile.username")}</label>
-          <Input
-            value={(session?.user as Record<string, unknown> | undefined)?.username ? `@${(session?.user as Record<string, unknown>).username}` : ""}
-            readOnly
-            className="bg-secondary border-border text-muted-foreground"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("settings.profile.email")}</label>
-          <Input
-            value={session?.user?.email ?? ""}
-            readOnly
-            className="bg-secondary border-border text-muted-foreground"
-            placeholder="user@example.com"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("settings.profile.bio")}</label>
-          <textarea
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            maxLength={500}
-            placeholder={t("settings.profile.bioPlaceholder")}
-            className="min-h-[100px] w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-          />
-        </div>
-
-        <Button type="submit" className="brand-gradient-btn w-full" disabled={nameLoading}>
-          {nameLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t("common.save")}
-        </Button>
-      </form>
 
       <Separator />
 

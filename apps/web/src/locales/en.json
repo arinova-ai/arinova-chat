@@ -105,6 +105,7 @@
 
   "userProfile.title": "User Profile",
   "userProfile.joined": "Joined",
+  "userProfile.editProfile": "Edit Profile",
   "userProfile.agentsInGroup": "Agents in this group",
 
   "agentProfile.listenMode": "Listen Mode",

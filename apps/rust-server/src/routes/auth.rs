@@ -29,6 +29,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/callback/github", get(github_callback))
         .route("/api/auth/update-user", post(update_user))
         .route("/api/auth/upload-avatar", post(upload_user_avatar))
+        .route("/api/auth/upload-cover", post(upload_cover_image))
 }
 
 #[derive(Deserialize)]
@@ -419,6 +420,7 @@ struct UpdateUserBody {
     name: Option<String>,
     image: Option<String>,
     bio: Option<String>,
+    cover_image: Option<String>,
 }
 
 async fn update_user(
@@ -458,6 +460,10 @@ async fn update_user(
     }
     if body.bio.is_some() {
         sets.push(format!("bio = ${idx}"));
+        idx += 1;
+    }
+    if body.cover_image.is_some() {
+        sets.push(format!("cover_image = ${idx}"));
     }
 
     let query_str = format!(
@@ -476,6 +482,9 @@ async fn update_user(
     if let Some(ref bio) = body.bio {
         q = q.bind(bio);
     }
+    if let Some(ref cover_image) = body.cover_image {
+        q = q.bind(cover_image);
+    }
 
     match q.execute(&state.db).await {
         Ok(_) => {
@@ -486,6 +495,7 @@ async fn update_user(
                     "email": session.email,
                     "image": body.image.as_deref().or(session.image.as_deref()),
                     "bio": body.bio.as_deref().or(session.bio.as_deref()),
+                    "coverImage": body.cover_image.as_deref(),
                 }
             }))
             .into_response()
@@ -638,6 +648,110 @@ async fn upload_user_avatar(
             })?;
 
         return Ok(Json(json!({"imageUrl": avatar_url})).into_response());
+    }
+
+    Err((StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response())
+}
+
+async fn upload_cover_image(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    mut multipart: Multipart,
+) -> Result<Response, Response> {
+    let cookie_header = headers
+        .get("cookie")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let token = match extract_session_token(cookie_header) {
+        Some(t) => t,
+        None => {
+            return Err((StatusCode::UNAUTHORIZED, Json(json!({"error": "Not authenticated"}))).into_response());
+        }
+    };
+
+    let sess = match validate_session(&state.db, &token).await {
+        Ok(Some(s)) => s,
+        _ => {
+            return Err((StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid session"}))).into_response());
+        }
+    };
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => {
+                return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response());
+            }
+        };
+
+        if data.len() > 5 * 1024 * 1024 {
+            return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "Cover image must be under 5MB"}))).into_response());
+        }
+
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.starts_with(&[0x47, 0x49, 0x46]) {
+            ("gif", "image/gif")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Only PNG, JPEG, GIF, and WebP images are allowed"})),
+            )
+                .into_response());
+        };
+
+        let stored = format!("cover_{}_{}.{}", sess.user_id, chrono::Utc::now().timestamp(), ext);
+        let r2_key = format!("covers/{}", stored);
+
+        let cover_url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(
+                s3,
+                &state.config.r2_bucket,
+                &r2_key,
+                data.to_vec(),
+                content_type,
+                &state.config.r2_public_url,
+            )
+            .await
+            {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("covers");
+                    tokio::fs::create_dir_all(&dir).await.map_err(|e| {
+                        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to create directory: {}", e)}))).into_response()
+                    })?;
+                    tokio::fs::write(dir.join(&stored), &data).await.map_err(|e| {
+                        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to write file: {}", e)}))).into_response()
+                    })?;
+                    format!("/uploads/covers/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("covers");
+            tokio::fs::create_dir_all(&dir).await.map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to create directory: {}", e)}))).into_response()
+            })?;
+            tokio::fs::write(dir.join(&stored), &data).await.map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to write file: {}", e)}))).into_response()
+            })?;
+            format!("/uploads/covers/{}", stored)
+        };
+
+        sqlx::query(r#"UPDATE "user" SET cover_image = $1, updated_at = NOW() WHERE id = $2"#)
+            .bind(&cover_url)
+            .bind(&sess.user_id)
+            .execute(&state.db)
+            .await
+            .map_err(|e| {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to update cover: {}", e)}))).into_response()
+            })?;
+
+        return Ok(Json(json!({"imageUrl": cover_url})).into_response());
     }
 
     Err((StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response())

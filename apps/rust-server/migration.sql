@@ -502,4 +502,7 @@ CREATE TABLE IF NOT EXISTS office_slot_bindings (
   UNIQUE (user_id, theme_id, agent_id)
 );
 
+-- #105 User cover image
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS cover_image TEXT;
+
 COMMIT;

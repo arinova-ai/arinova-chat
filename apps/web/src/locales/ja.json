@@ -105,6 +105,7 @@
 
   "userProfile.title": "ユーザー情報",
   "userProfile.joined": "参加日",
+  "userProfile.editProfile": "プロフィールを編集",
   "userProfile.agentsInGroup": "グループ内のエージェント",
 
   "agentProfile.listenMode": "リスンモード",

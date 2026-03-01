@@ -455,7 +455,11 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
     () => !isUser && message.role === "agent" && !!resolvedAgentId,
     [isUser, message.role, resolvedAgentId]
   );
-  const showProfileClick = showUserProfile || showAgentProfile;
+  const showOwnProfile = useMemo(
+    () => isUser && !!currentUserId,
+    [isUser, currentUserId]
+  );
+  const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile;
   const doubleTapHandlers = useDoubleTap(() => {
     if (!isStreaming) setActionSheetOpen(true);
   });
@@ -509,7 +513,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         isOwn={isUser}
         clickable={showProfileClick}
         onClick={() => {
-          if (showUserProfile && message.senderUserId) {
+          if (showOwnProfile && currentUserId) {
+            router.push(`/profile/${currentUserId}`);
+          } else if (showUserProfile && message.senderUserId) {
             router.push(`/profile/${message.senderUserId}`);
           } else if (showAgentProfile && resolvedAgentId) {
             router.push(`/agent/${resolvedAgentId}`);

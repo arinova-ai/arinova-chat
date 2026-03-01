@@ -194,20 +194,22 @@ async fn get_user_by_id(
     _user: AuthUser,
     Path(user_id): Path<String>,
 ) -> Response {
-    let result = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, NaiveDateTime)>(
-        r#"SELECT id, name, image, username, created_at FROM "user" WHERE id = $1"#,
+    let result = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, Option<String>, NaiveDateTime)>(
+        r#"SELECT id, name, image, username, bio, cover_image, created_at FROM "user" WHERE id = $1"#,
     )
     .bind(&user_id)
     .fetch_optional(&state.db)
     .await;
 
     match result {
-        Ok(Some((id, name, image, username, created_at))) => {
+        Ok(Some((id, name, image, username, bio, cover_image, created_at))) => {
             Json(json!({
                 "id": id,
                 "name": name,
                 "image": image,
                 "username": username,
+                "bio": bio,
+                "coverImage": cover_image,
                 "createdAt": created_at.and_utc().to_rfc3339(),
             }))
             .into_response()

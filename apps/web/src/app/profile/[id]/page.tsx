@@ -9,9 +9,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CalendarDays, Settings } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
+import { authClient } from "@/lib/auth-client";
 
 interface UserProfile {
   id: string;
@@ -19,6 +20,7 @@ interface UserProfile {
   image: string | null;
   username: string | null;
   bio?: string | null;
+  coverImage?: string | null;
   createdAt?: string;
 }
 
@@ -27,11 +29,12 @@ function UserProfileContent() {
   const params = useParams();
   const router = useRouter();
   const userId = params.id as string;
+  const { data: session } = authClient.useSession();
+  const isOwnProfile = session?.user?.id === userId;
 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch user profile
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -72,7 +75,7 @@ function UserProfileContent() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl px-4 py-6">
+          <div className="mx-auto max-w-2xl">
             {loading && (
               <div className="flex justify-center py-16">
                 <ArinovaSpinner />
@@ -87,46 +90,80 @@ function UserProfileContent() {
 
             {user && (
               <>
-                {/* Profile card */}
-                <div className="flex flex-col items-center text-center">
-                  <Avatar className="h-20 w-20">
-                    {user.image ? (
-                      <AvatarImage
-                        src={assetUrl(user.image)}
-                        alt={user.name ?? user.username ?? ""}
-                      />
-                    ) : null}
-                    <AvatarFallback className="text-2xl bg-accent">
-                      {(user.name ?? user.username ?? "?")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <h2 className="mt-3 text-lg font-semibold text-foreground">
-                    {user.name}
-                  </h2>
-
-                  {user.username && (
-                    <p className="text-sm text-muted-foreground">
-                      @{user.username}
-                    </p>
+                {/* Banner / Cover */}
+                <div className="relative h-32 md:h-44 overflow-hidden">
+                  {user.coverImage ? (
+                    <img
+                      src={assetUrl(user.coverImage)}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-r from-brand/30 via-brand/15 to-accent/30" />
                   )}
+                </div>
 
+                {/* Profile info */}
+                <div className="px-6 pb-6">
+                  {/* Avatar overlapping banner */}
+                  <div className="flex items-end justify-between">
+                    <Avatar className="h-20 w-20 -mt-10 ring-4 ring-background">
+                      {user.image ? (
+                        <AvatarImage
+                          src={assetUrl(user.image)}
+                          alt={user.name ?? user.username ?? ""}
+                        />
+                      ) : null}
+                      <AvatarFallback className="text-2xl bg-accent">
+                        {(user.name ?? user.username ?? "?")
+                          .charAt(0)
+                          .toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    {isOwnProfile && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 gap-1.5"
+                        onClick={() => router.push("/settings")}
+                      >
+                        <Settings className="h-3.5 w-3.5" />
+                        {t("userProfile.editProfile")}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Name + username */}
+                  <div className="mt-3">
+                    <h2 className="text-xl font-bold text-foreground">
+                      {user.name}
+                    </h2>
+                    {user.username && (
+                      <p className="text-sm text-muted-foreground">
+                        @{user.username}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Bio */}
                   {user.bio && (
-                    <p className="mt-2 text-sm text-muted-foreground max-w-md">
+                    <p className="mt-3 text-sm text-foreground/80 whitespace-pre-wrap">
                       {user.bio}
                     </p>
                   )}
 
+                  {/* Join date */}
                   {user.createdAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("userProfile.joined")}{" "}
-                      {new Date(user.createdAt).toLocaleDateString()}
-                    </p>
+                    <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      <span>
+                        {t("userProfile.joined")}{" "}
+                        {new Date(user.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
                   )}
                 </div>
-
               </>
             )}
           </div>

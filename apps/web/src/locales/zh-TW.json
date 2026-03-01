@@ -105,6 +105,7 @@
 
   "userProfile.title": "使用者資訊",
   "userProfile.joined": "加入於",
+  "userProfile.editProfile": "編輯個人資料",
   "userProfile.agentsInGroup": "群組中的 Agent",
 
   "agentProfile.listenMode": "聆聽模式",
