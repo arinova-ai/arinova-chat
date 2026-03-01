@@ -593,6 +593,43 @@ CREATE INDEX idx_kb_chunks_kb_id ON knowledge_base_chunks(kb_id);
 CREATE INDEX idx_kb_chunks_embedding ON knowledge_base_chunks
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
+-- OAuth2 Provider
+CREATE TABLE oauth_apps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id TEXT UNIQUE NOT NULL,
+  client_secret TEXT NOT NULL,
+  name TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  description TEXT,
+  icon_url TEXT,
+  created_by TEXT REFERENCES "user"(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE oauth_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  user_id TEXT NOT NULL REFERENCES "user"(id),
+  app_id UUID NOT NULL REFERENCES oauth_apps(id),
+  redirect_uri TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'profile',
+  state TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE oauth_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES "user"(id),
+  app_id UUID NOT NULL REFERENCES oauth_apps(id),
+  access_token TEXT UNIQUE NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'profile',
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Office slot bindings (server-synced agent↔slot mapping)
 CREATE TABLE office_slot_bindings (
   user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,

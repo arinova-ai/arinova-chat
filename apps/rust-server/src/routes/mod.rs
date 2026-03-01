@@ -22,6 +22,7 @@ pub mod agent_hub_chat;
 pub mod knowledge_base;
 pub mod wallet;
 pub mod community;
+pub mod oauth;
 pub mod themes;
 
 use axum::Router;
@@ -53,6 +54,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(creator::router())
         .merge(knowledge_base::router())
         .merge(community::router())
+        .merge(oauth::router())
         .merge(themes::router())
         .with_state(state)
 }

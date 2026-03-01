@@ -508,4 +508,41 @@ CREATE TABLE IF NOT EXISTS office_slot_bindings (
 -- #105 User cover image
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS cover_image TEXT;
 
+-- #114 OAuth2 Provider
+CREATE TABLE IF NOT EXISTS oauth_apps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id TEXT UNIQUE NOT NULL,
+  client_secret TEXT NOT NULL,
+  name TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  description TEXT,
+  icon_url TEXT,
+  created_by TEXT REFERENCES "user"(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS oauth_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  user_id TEXT NOT NULL REFERENCES "user"(id),
+  app_id UUID NOT NULL REFERENCES oauth_apps(id),
+  redirect_uri TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'profile',
+  state TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES "user"(id),
+  app_id UUID NOT NULL REFERENCES oauth_apps(id),
+  access_token TEXT UNIQUE NOT NULL,
+  scope TEXT NOT NULL DEFAULT 'profile',
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 COMMIT;
