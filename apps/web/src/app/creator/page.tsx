@@ -85,11 +85,14 @@ const MOCK_ACTIVITY = [
   { text: 'Theme "Ocean Blue" approved', time: "1d ago", icon: "check" as const },
 ];
 
-const MOCK_STICKER_LISTINGS = [
-  { name: "Arinova Official", sales: 2300, revenue: 0, status: "active" },
-  { name: "Cute Animals", sales: 1800, revenue: 90.00, status: "active" },
-  { name: "Pixel Art", sales: 2100, revenue: 126.00, status: "under_review" },
-];
+interface CreatorStickerPack {
+  id: string;
+  name: string;
+  downloads: number;
+  price: number;
+  status: string;
+  stickerCount: number;
+}
 
 const MOCK_THEME_LISTINGS = [
   { name: "Ocean Blue", sales: 450, revenue: 67.50, status: "active" },
@@ -241,44 +244,64 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
 // ---------------------------------------------------------------------------
 
 function StickersTab({ t }: { t: (k: string) => string }) {
+  const [stickerPacks, setStickerPacks] = useState<CreatorStickerPack[]>([]);
+  const [sLoading, setSLoading] = useState(true);
+
+  useEffect(() => {
+    setSLoading(true);
+    api<{ packs: Array<{ id: string; name: string; downloads: number; price: number; status: string; stickerCount: number }> }>("/api/creator/stickers")
+      .then((data) => setStickerPacks(data.packs))
+      .catch(() => {})
+      .finally(() => setSLoading(false));
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          {t("creator.yourStickerPacks")} ({MOCK_STICKER_LISTINGS.length})
+          {t("creator.yourStickerPacks")} ({stickerPacks.length})
         </h2>
-        <Button size="sm" variant="secondary" className="gap-1" disabled>
+        <Button size="sm" variant="secondary" className="gap-1">
           <Plus className="h-3.5 w-3.5" />
           {t("creator.newStickerPack")}
         </Button>
       </div>
-      <div className="space-y-2">
-        {MOCK_STICKER_LISTINGS.map((pack) => (
-          <div
-            key={pack.name}
-            className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
-              <Sticker className="h-5 w-5 text-brand-text" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold truncate">{pack.name}</h3>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(pack.status)}`}>
-                  {t(`creator.status.${pack.status}`)}
-                </span>
+      {sLoading ? (
+        <div className="flex h-20 items-center justify-center">
+          <ArinovaSpinner size="sm" />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {stickerPacks.map((pack) => (
+            <div
+              key={pack.id}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
+                <Sticker className="h-5 w-5 text-brand-text" />
               </div>
-              <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span>{pack.sales.toLocaleString()} {t("creator.sales")}</span>
-                <span className="flex items-center gap-0.5">
-                  <Coins className="h-3 w-3 text-yellow-500" />
-                  ${pack.revenue.toFixed(2)}
-                </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold truncate">{pack.name}</h3>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(pack.status)}`}>
+                    {t(`creator.status.${pack.status}`)}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span>{pack.downloads.toLocaleString()} {t("creator.sales")}</span>
+                  <span className="flex items-center gap-0.5">
+                    <Coins className="h-3 w-3 text-yellow-500" />
+                    {pack.stickerCount} stickers
+                  </span>
+                  <span className="flex items-center gap-0.5">
+                    {pack.price === 0 ? t("stickerShop.free") : `${pack.price} coins`}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

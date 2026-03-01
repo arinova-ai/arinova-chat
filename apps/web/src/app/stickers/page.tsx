@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { api } from "@/lib/api";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -24,7 +26,7 @@ import {
 import { useTranslation } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Types
 // ---------------------------------------------------------------------------
 
 interface StickerPack {
@@ -36,22 +38,42 @@ interface StickerPack {
   category: string;
   stickers: number;
   coverUrl: string;
+  stickerFiles?: ApiSticker[];
 }
 
-const MOCK_PACKS: StickerPack[] = [
-  { id: "arinova-official", name: "Arinova Official", author: "Arinova", price: 0, downloads: 2300, category: "cute", stickers: 20, coverUrl: "/stickers/arinova-pack-01/01-hello.png" },
-  { id: "lobster-pack-01", name: "Lobster Baby Pack", author: "Arinova", price: 0, downloads: 1500, category: "cute", stickers: 20, coverUrl: "/stickers/lobster-pack-01/01-happy-wave.png" },
-  { id: "cat-pack-01", name: "Arinova Cat Pack", author: "Arinova", price: 0, downloads: 1900, category: "cute", stickers: 20, coverUrl: "/stickers/cat-pack-01/01-happy-wave.png" },
-  { id: "cute-animals", name: "Cute Animals", author: "StudioCat", price: 50, downloads: 1800, category: "cute", stickers: 16, coverUrl: "/stickers/arinova-pack-01/04-happy.png" },
-  { id: "emoji-remix", name: "Emoji Remix", author: "EmojiCo", price: 0, downloads: 5100, category: "funny", stickers: 24, coverUrl: "/stickers/arinova-pack-01/03-love.png" },
-  { id: "spring-vibes", name: "Spring Vibes", author: "PastelDreams", price: 30, downloads: 890, category: "seasonal", stickers: 12, coverUrl: "/stickers/arinova-pack-01/05-sad.png" },
-  { id: "anime-expressions", name: "Anime Expressions", author: "AnimeArtists", price: 80, downloads: 3200, category: "anime", stickers: 20, coverUrl: "/stickers/arinova-pack-01/06-angry.png" },
-  { id: "meme-lords", name: "Meme Lords", author: "MemeHub", price: 0, downloads: 7500, category: "meme", stickers: 30, coverUrl: "/stickers/arinova-pack-01/07-surprised.png" },
-  { id: "holiday-special", name: "Holiday Special", author: "SeasonalDesigns", price: 40, downloads: 1200, category: "seasonal", stickers: 16, coverUrl: "/stickers/arinova-pack-01/10-celebrate.png" },
-  { id: "pixel-art", name: "Pixel Art", author: "RetroPixels", price: 60, downloads: 2100, category: "funny", stickers: 24, coverUrl: "/stickers/arinova-pack-01/08-thinking.png" },
-];
+interface ApiPack {
+  id: string;
+  creatorName: string | null;
+  name: string;
+  nameZh: string | null;
+  category: string;
+  price: number;
+  downloads: number;
+  coverImage: string | null;
+  stickerCount: number;
+  stickers?: ApiSticker[];
+}
 
-const FEATURED_PACKS = MOCK_PACKS.slice(0, 3);
+interface ApiSticker {
+  id: string;
+  filename: string;
+  emoji: string | null;
+  sortOrder: number;
+}
+
+function apiPackToStickerPack(p: ApiPack): StickerPack {
+  return {
+    id: p.id,
+    name: p.name,
+    author: p.creatorName ?? "Unknown",
+    price: p.price,
+    downloads: p.downloads,
+    category: p.category,
+    stickers: p.stickerCount,
+    coverUrl: p.coverImage ?? "/stickers/arinova-pack-01/01-hello.png",
+    stickerFiles: p.stickers,
+  };
+}
 
 const CATEGORY_KEYS = ["all", "cute", "funny", "anime", "meme", "seasonal"] as const;
 
@@ -238,9 +260,32 @@ function PackDetailDialog({
   onGift: (pack: StickerPack) => void;
   t: (k: string) => string;
 }) {
+  const [detailStickers, setDetailStickers] = useState<string[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  useEffect(() => {
+    if (!pack || !open) return;
+    // If pack has inline sticker files from API, build URLs
+    if (pack.stickerFiles && pack.stickerFiles.length > 0) {
+      setDetailStickers(pack.stickerFiles.map((s) => `/stickers/${pack.id}/${s.filename}`));
+      return;
+    }
+    // Otherwise fetch from API
+    setDetailLoading(true);
+    api<{ stickers: ApiSticker[] }>(`/api/stickers/${pack.id}`)
+      .then((data) => {
+        setDetailStickers(data.stickers.map((s) => `/stickers/${pack.id}/${s.filename}`));
+      })
+      .catch(() => {
+        // Fallback to legacy file naming
+        setDetailStickers(getStickerFiles(pack.id, pack.stickers));
+      })
+      .finally(() => setDetailLoading(false));
+  }, [pack, open]);
+
   if (!pack) return null;
 
-  const previewStickers = getStickerFiles(pack.id, pack.stickers);
+  const previewStickers = detailStickers.length > 0 ? detailStickers : getStickerFiles(pack.id, pack.stickers);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -414,9 +459,29 @@ function StickerShopContent() {
   const [category, setCategory] = useState("all");
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [giftPack, setGiftPack] = useState<StickerPack | null>(null);
+  const [packs, setPacks] = useState<StickerPack[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPacks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api<{ packs: ApiPack[] }>("/api/stickers");
+      setPacks(data.packs.map(apiPackToStickerPack));
+    } catch {
+      // auto-handled
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPacks();
+  }, [fetchPacks]);
+
+  const featuredPacks = useMemo(() => packs.slice(0, 3), [packs]);
 
   const filtered = useMemo(() => {
-    let list = MOCK_PACKS;
+    let list = packs;
     if (category !== "all") {
       list = list.filter((p) => p.category === category);
     }
@@ -429,7 +494,7 @@ function StickerShopContent() {
       );
     }
     return list;
-  }, [category, search]);
+  }, [packs, category, search]);
 
   return (
     <div className="app-dvh flex bg-background">
@@ -477,10 +542,14 @@ function StickerShopContent() {
         <div className="flex-1 overflow-y-auto p-4 pb-24 md:p-6 md:pb-6">
           <div className="mx-auto max-w-5xl space-y-6">
             {/* Featured carousel */}
-            <FeaturedCarousel packs={FEATURED_PACKS} t={t} />
+            {featuredPacks.length > 0 && <FeaturedCarousel packs={featuredPacks} t={t} />}
 
             {/* Grid */}
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="flex h-40 items-center justify-center">
+                <ArinovaSpinner size="sm" />
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Sticker className="h-10 w-10 opacity-40 mb-2" />
                 <p className="text-sm">{t("stickerShop.noPacks")}</p>

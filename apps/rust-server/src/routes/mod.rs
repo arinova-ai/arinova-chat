@@ -25,6 +25,7 @@ pub mod community;
 pub mod oauth;
 pub mod api_v1;
 pub mod themes;
+pub mod stickers;
 
 use axum::Router;
 use crate::AppState;
@@ -58,5 +59,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(oauth::router())
         .merge(api_v1::router())
         .merge(themes::router())
+        .merge(stickers::router())
         .with_state(state)
 }

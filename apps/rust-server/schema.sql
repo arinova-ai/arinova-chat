@@ -641,3 +641,39 @@ CREATE TABLE office_slot_bindings (
   PRIMARY KEY (user_id, theme_id, slot_index),
   UNIQUE (user_id, theme_id, agent_id)
 );
+
+-- Sticker Store
+CREATE TABLE sticker_packs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  name_zh TEXT,
+  description TEXT,
+  character_name TEXT,
+  category TEXT NOT NULL DEFAULT 'cute',
+  price INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',
+  downloads INTEGER NOT NULL DEFAULT 0,
+  cover_image TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE stickers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pack_id UUID NOT NULL REFERENCES sticker_packs(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  emoji TEXT,
+  description_en TEXT,
+  description_zh TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_stickers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  pack_id UUID NOT NULL REFERENCES sticker_packs(id),
+  purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, pack_id)
+);

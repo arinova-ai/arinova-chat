@@ -22,6 +22,7 @@ import {
   type CommandCategory,
 } from "@/lib/platform-commands";
 import { BACKEND_URL } from "@/lib/config";
+import { api } from "@/lib/api";
 import { compressImage } from "@/lib/image-compress";
 import type { Message } from "@arinova/shared/types";
 import { useToastStore } from "@/store/toast-store";
@@ -740,22 +741,24 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     [activeConversationId]
   );
 
-  // Sticker packs — fetch all manifests once
-  const STICKER_PACK_IDS = ["arinova-pack-01", "lobster-pack-01", "cat-pack-01"];
+  // Sticker packs — fetch user's owned packs from API
   useEffect(() => {
     let cancelled = false;
-    Promise.all(
-      STICKER_PACK_IDS.map((packId) =>
-        fetch(`/stickers/${packId}/manifest.json`)
-          .then((r) => r.ok ? r.json() : null)
-          .then((data) => data ? { packId, name: data.name ?? packId, stickers: data.stickers ?? [] } : null)
-          .catch(() => null)
-      )
-    ).then((results) => {
-      if (!cancelled) {
-        setStickerPacks(results.filter(Boolean) as typeof stickerPacks);
-      }
-    });
+    api<{ packs: Array<{ id: string; name: string; stickers?: Array<{ id: string; filename: string; emoji: string | null }> }> }>("/api/user/stickers", { silent: true })
+      .then((data) => {
+        if (cancelled) return;
+        const mapped = data.packs.map((p) => ({
+          packId: p.id,
+          name: p.name,
+          stickers: (p.stickers ?? []).map((s) => ({
+            id: s.id,
+            filename: s.filename,
+            emoji: s.emoji ?? "",
+          })),
+        }));
+        setStickerPacks(mapped);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
