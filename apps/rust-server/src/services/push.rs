@@ -1,4 +1,5 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use p256::ecdsa::{signature::Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -106,11 +107,11 @@ async fn send_web_push(
     Ok(resp.status().as_u16())
 }
 
-/// Create a VAPID JWT for web push authorization.
+/// Create a VAPID JWT for web push authorization (ES256 / P-256 ECDSA).
 fn create_vapid_jwt(
     endpoint: &str,
     subject: &str,
-    _private_key: &str,
+    private_key: &str,
 ) -> Result<String, anyhow::Error> {
     // Extract audience from endpoint URL
     let url: url::Url = endpoint.parse()?;
@@ -133,8 +134,17 @@ fn create_vapid_jwt(
     let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_string(&header)?.as_bytes());
     let claims_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_string(&claims)?.as_bytes());
 
-    // For a proper implementation, we'd sign with the VAPID private key using ES256
-    // For now, return unsigned JWT - full ECDSA signing needs the p256 crate
-    let token = format!("{}.{}.{}", header_b64, claims_b64, "signature_placeholder");
-    Ok(token)
+    let message = format!("{}.{}", header_b64, claims_b64);
+
+    // Decode base64url private key (raw 32-byte P-256 scalar)
+    let key_bytes = URL_SAFE_NO_PAD.decode(private_key)?;
+    let secret_key = p256::SecretKey::from_slice(&key_bytes)
+        .map_err(|e| anyhow::anyhow!("invalid VAPID private key: {}", e))?;
+    let signing_key = SigningKey::from(secret_key);
+
+    // ES256 sign (ECDSA P-256 + SHA-256, RFC 6979 deterministic)
+    let signature: p256::ecdsa::Signature = signing_key.sign(message.as_bytes());
+    let sig_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+
+    Ok(format!("{}.{}", message, sig_b64))
 }

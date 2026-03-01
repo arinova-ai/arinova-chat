@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { IconRail } from "./icon-rail";
 import { MobileBottomNav } from "./mobile-bottom-nav";
@@ -12,6 +13,7 @@ import { NotificationBanner } from "@/components/notification-banner";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
+import { refreshPushSubscription, setupNotificationClickHandler } from "@/lib/push";
 
 export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -24,6 +26,7 @@ export function ChatLayout() {
   const initWS = useChatStore((s) => s.initWS);
   const setCurrentUserId = useChatStore((s) => s.setCurrentUserId);
   const prevConvRef = useRef<string | null>(null);
+  const router = useRouter();
 
   // Sync current user ID into the store for message ownership checks
   const { data: session } = authClient.useSession();
@@ -47,6 +50,13 @@ export function ChatLayout() {
       clearInterval(healthInterval);
     };
   }, [loadAgents, loadConversations, loadAgentHealth, initWS]);
+
+  // Push notification setup: refresh subscription + wire click handler
+  useEffect(() => {
+    refreshPushSubscription();
+    const cleanup = setupNotificationClickHandler((url) => router.push(url));
+    return cleanup;
+  }, [router]);
 
   // Listen for global new-chat event (e.g. from sidebar header button)
   useEffect(() => {
