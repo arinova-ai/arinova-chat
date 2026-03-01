@@ -61,7 +61,10 @@ export async function compressImage(
       | CanvasRenderingContext2D
       | OffscreenCanvasRenderingContext2D
       | null;
-    if (!ctx) return file;
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
 
     ctx.drawImage(bitmap, 0, 0, targetW, targetH);
     bitmap.close();
