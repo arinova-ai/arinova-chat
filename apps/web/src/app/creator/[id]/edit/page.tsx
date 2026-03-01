@@ -107,7 +107,7 @@ function EditAgentContent() {
     (async () => {
       try {
         const data = await api<AgentManage>(
-          `/api/marketplace/agents/${id}/manage`,
+          `/api/agent-hub/agents/${id}/manage`,
         );
         setName(data.agentName);
         setDescription(data.description);
@@ -123,7 +123,7 @@ function EditAgentContent() {
         // Load KB files
         try {
           const kb = await api<{ files: KbFile[] }>(
-            `/api/marketplace/agents/${id}/knowledge-base`,
+            `/api/agent-hub/agents/${id}/knowledge-base`,
           );
           setKbFiles(kb.files);
         } catch {
@@ -179,7 +179,7 @@ function EditAgentContent() {
 
   const handleDeleteKb = async (kbId: string) => {
     try {
-      await api(`/api/marketplace/agents/${id}/knowledge-base/${kbId}`, {
+      await api(`/api/agent-hub/agents/${id}/knowledge-base/${kbId}`, {
         method: "DELETE",
       });
       setKbFiles((prev) => prev.filter((f) => f.id !== kbId));
@@ -197,7 +197,7 @@ function EditAgentContent() {
         fd.append("file", file);
         try {
           const uploaded = await api<KbFile>(
-            `/api/marketplace/agents/${id}/knowledge-base`,
+            `/api/agent-hub/agents/${id}/knowledge-base`,
             { method: "POST", body: fd },
           );
           setKbFiles((prev) => [uploaded, ...prev]);
@@ -217,7 +217,7 @@ function EditAgentContent() {
     setInputCharLimit(clampedCharLimit);
     setSaving(true);
     try {
-      await api(`/api/marketplace/agents/${id}`, {
+      await api(`/api/agent-hub/agents/${id}`, {
         method: "PUT",
         body: JSON.stringify({
           name,

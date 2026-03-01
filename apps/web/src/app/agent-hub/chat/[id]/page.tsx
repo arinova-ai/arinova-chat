@@ -32,7 +32,7 @@ interface Message {
   ttsAudioUrl?: string;
 }
 
-function MarketplaceChatContent() {
+function AgentHubChatContent() {
   const { id: agentListingId } = useParams<{ id: string }>();
   const router = useRouter();
   const [agent, setAgent] = useState<AgentListing | null>(null);
@@ -51,7 +51,7 @@ function MarketplaceChatContent() {
     (async () => {
       try {
         const data = await api<AgentListing>(
-          `/api/marketplace/agents/${agentListingId}`
+          `/api/agent-hub/agents/${agentListingId}`
         );
         setAgent(data);
       } catch {
@@ -92,7 +92,7 @@ function MarketplaceChatContent() {
 
     try {
       const res = await fetch(
-        `${BACKEND_URL}/api/marketplace/agents/${agentListingId}/chat`,
+        `${BACKEND_URL}/api/agent-hub/agents/${agentListingId}/chat`,
         {
           method: "POST",
           credentials: "include",
@@ -212,9 +212,9 @@ function MarketplaceChatContent() {
           </p>
           <Button
             variant="secondary"
-            onClick={() => router.push("/marketplace")}
+            onClick={() => router.push("/agent-hub")}
           >
-            Back to Marketplace
+            Back to Agent Hub
           </Button>
         </div>
       </div>
@@ -231,7 +231,7 @@ function MarketplaceChatContent() {
         {/* Chat header */}
         <div className="shrink-0 border-b border-border px-4 py-3 flex items-center gap-3">
           <button
-            onClick={() => router.push(`/marketplace/${agentListingId}`)}
+            onClick={() => router.push(`/agent-hub/${agentListingId}`)}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -376,10 +376,10 @@ function MarketplaceChatContent() {
   );
 }
 
-export default function MarketplaceChatPage() {
+export default function AgentHubChatPage() {
   return (
     <AuthGuard>
-      <MarketplaceChatContent />
+      <AgentHubChatContent />
     </AuthGuard>
   );
 }

@@ -1,4 +1,4 @@
-// @arinova/app-sdk — Client SDK for Arinova Chat marketplace apps
+// @arinova/app-sdk — Client SDK for Arinova Chat Agent Hub apps
 
 export interface ActionDefinition {
   name: string;

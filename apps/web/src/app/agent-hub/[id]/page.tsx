@@ -64,7 +64,7 @@ function AgentDetailContent() {
   const fetchReviews = useCallback(async () => {
     try {
       const data = await api<{ reviews: Review[]; total: number }>(
-        `/api/marketplace/agents/${id}/reviews?limit=20`,
+        `/api/agent-hub/agents/${id}/reviews?limit=20`,
         { silent: true },
       );
       setReviews(data.reviews);
@@ -77,7 +77,7 @@ function AgentDetailContent() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await api<AgentDetail>(`/api/marketplace/agents/${id}`);
+        const data = await api<AgentDetail>(`/api/agent-hub/agents/${id}`);
         setAgent(data);
       } catch {
         // auto-handled
@@ -92,7 +92,7 @@ function AgentDetailContent() {
     if (reviewRating === 0) return;
     setSubmittingReview(true);
     try {
-      await api(`/api/marketplace/agents/${id}/reviews`, {
+      await api(`/api/agent-hub/agents/${id}/reviews`, {
         method: "POST",
         body: JSON.stringify({
           rating: reviewRating,
@@ -103,7 +103,7 @@ function AgentDetailContent() {
       setReviewComment("");
       fetchReviews();
       // Refresh agent to get updated avgRating/reviewCount
-      const updated = await api<AgentDetail>(`/api/marketplace/agents/${id}`);
+      const updated = await api<AgentDetail>(`/api/agent-hub/agents/${id}`);
       setAgent(updated);
     } catch {
       // auto-handled
@@ -113,7 +113,7 @@ function AgentDetailContent() {
   };
 
   const handleStartChat = async () => {
-    router.push(`/marketplace/chat/${id}`);
+    router.push(`/agent-hub/chat/${id}`);
   };
 
   if (loading) {
@@ -131,8 +131,8 @@ function AgentDetailContent() {
           <p className="text-lg font-semibold text-muted-foreground">
             Agent not found
           </p>
-          <Button variant="secondary" onClick={() => router.push("/marketplace")}>
-            Back to Marketplace
+          <Button variant="secondary" onClick={() => router.push("/agent-hub")}>
+            Back to Agent Hub
           </Button>
         </div>
       </div>
@@ -149,11 +149,11 @@ function AgentDetailContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-4">
           <button
-            onClick={() => router.push("/marketplace")}
+            onClick={() => router.push("/agent-hub")}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Marketplace
+            Back to Agent Hub
           </button>
         </div>
 

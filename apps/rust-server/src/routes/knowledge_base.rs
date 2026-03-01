@@ -24,11 +24,11 @@ const ALLOWED_EXTENSIONS: &[&str] = &["txt", "md", "csv", "json", "pdf"];
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
-            "/api/marketplace/agents/{listing_id}/knowledge-base",
+            "/api/agent-hub/agents/{listing_id}/knowledge-base",
             post(upload_file).get(list_files),
         )
         .route(
-            "/api/marketplace/agents/{listing_id}/knowledge-base/{kb_id}",
+            "/api/agent-hub/agents/{listing_id}/knowledge-base/{kb_id}",
             delete(delete_file),
         )
 }
@@ -117,7 +117,7 @@ fn extension_from_filename(name: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/marketplace/agents/{listing_id}/knowledge-base
+// POST /api/agent-hub/agents/{listing_id}/knowledge-base
 // ---------------------------------------------------------------------------
 
 async fn upload_file(
@@ -382,7 +382,7 @@ async fn upload_file(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/agents/{listing_id}/knowledge-base
+// GET /api/agent-hub/agents/{listing_id}/knowledge-base
 // ---------------------------------------------------------------------------
 
 async fn list_files(
@@ -420,7 +420,7 @@ async fn list_files(
 }
 
 // ---------------------------------------------------------------------------
-// DELETE /api/marketplace/agents/{listing_id}/knowledge-base/{kb_id}
+// DELETE /api/agent-hub/agents/{listing_id}/knowledge-base/{kb_id}
 // ---------------------------------------------------------------------------
 
 async fn delete_file(

@@ -313,7 +313,7 @@ export interface AppManifest {
 export type AppStatus = "draft" | "submitted" | "scanning" | "in_review" | "published" | "rejected" | "suspended";
 export type AppVersionStatus = "submitted" | "scanning" | "in_review" | "published" | "rejected";
 
-export interface MarketplaceApp {
+export interface AgentHubApp {
   id: string;
   developerId: string;
   appId: string; // manifest id

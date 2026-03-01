@@ -313,7 +313,7 @@ function AdminReviewContent() {
             </DialogTitle>
             <DialogDescription>
               {actionType === "approve"
-                ? `"${actionApp?.name}" will be published to the marketplace.`
+                ? `"${actionApp?.name}" will be published to Agent Hub.`
                 : `"${actionApp?.name}" will be rejected. A reason is required.`}
             </DialogDescription>
           </DialogHeader>

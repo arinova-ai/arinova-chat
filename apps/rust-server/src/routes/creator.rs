@@ -179,7 +179,7 @@ async fn dashboard(
         r#"SELECT id, amount, description, created_at
            FROM coin_transactions
            WHERE user_id = $1 AND type = 'earning'
-             AND description LIKE 'Marketplace earning%'
+             AND description LIKE 'Agent Hub earning%'
            ORDER BY created_at DESC
            LIMIT 10"#,
     )

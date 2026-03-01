@@ -107,7 +107,7 @@ function NewAgentContent() {
     setInputCharLimit(clampedCharLimit);
     setSaving(true);
     try {
-      const created = await api<{ id: string }>("/api/marketplace/agents", {
+      const created = await api<{ id: string }>("/api/agent-hub/agents", {
         method: "POST",
         body: JSON.stringify({
           name,
@@ -133,7 +133,7 @@ function NewAgentContent() {
           const fd = new FormData();
           fd.append("file", file);
           try {
-            await api(`/api/marketplace/agents/${created.id}/knowledge-base`, {
+            await api(`/api/agent-hub/agents/${created.id}/knowledge-base`, {
               method: "POST",
               body: fd,
             });

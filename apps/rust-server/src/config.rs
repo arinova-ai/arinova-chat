@@ -26,7 +26,7 @@ pub struct Config {
     pub sentry_dsn: String,
     /// OpenAI API key for embedding generation (RAG).
     pub openai_api_key: Option<String>,
-    /// OpenRouter API key for marketplace chat LLM calls.
+    /// OpenRouter API key for agent hub chat LLM calls.
     pub openrouter_api_key: Option<String>,
 }
 

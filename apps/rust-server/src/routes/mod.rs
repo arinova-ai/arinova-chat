@@ -17,8 +17,8 @@ pub mod agent_health;
 pub mod agent_send;
 pub mod agent_uploads;
 pub mod creator;
-pub mod marketplace;
-pub mod marketplace_chat;
+pub mod agent_hub;
+pub mod agent_hub_chat;
 pub mod knowledge_base;
 pub mod wallet;
 pub mod community;
@@ -48,8 +48,8 @@ pub fn create_router(state: AppState) -> Router {
         .merge(friends::router())
         .merge(blocking::router())
         .merge(wallet::router())
-        .merge(marketplace::router())
-        .merge(marketplace_chat::router())
+        .merge(agent_hub::router())
+        .merge(agent_hub_chat::router())
         .merge(creator::router())
         .merge(knowledge_base::router())
         .merge(community::router())

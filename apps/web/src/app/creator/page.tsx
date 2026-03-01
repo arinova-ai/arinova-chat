@@ -490,7 +490,7 @@ function CreatorConsoleContent() {
 
   const handleArchive = async (agentId: string) => {
     try {
-      await api(`/api/marketplace/agents/${agentId}`, { method: "DELETE" });
+      await api(`/api/agent-hub/agents/${agentId}`, { method: "DELETE" });
       setAgents((prev) =>
         prev.map((a) => (a.id === agentId ? { ...a, status: "archived" } : a)),
       );

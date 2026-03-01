@@ -518,7 +518,7 @@ export function BotManageDialog({
                   </span>
                   <p className="text-xs text-muted-foreground">
                     {isPublic
-                      ? "Discoverable in marketplace"
+                      ? "Discoverable in Agent Hub"
                       : "Only you can use this bot"}
                   </p>
                 </div>

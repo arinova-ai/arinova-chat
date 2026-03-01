@@ -15,17 +15,17 @@ use crate::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/marketplace/agents", post(create_listing).get(browse))
+        .route("/api/agent-hub/agents", post(create_listing).get(browse))
         .route(
-            "/api/marketplace/agents/{id}",
+            "/api/agent-hub/agents/{id}",
             get(get_detail).put(update_listing).delete(archive_listing),
         )
-        .route("/api/marketplace/agents/{id}/manage", get(manage_detail))
+        .route("/api/agent-hub/agents/{id}/manage", get(manage_detail))
         .route(
-            "/api/marketplace/agents/{id}/reviews",
+            "/api/agent-hub/agents/{id}/reviews",
             post(create_review).get(list_reviews),
         )
-        .route("/api/marketplace/manage", get(my_listings))
+        .route("/api/agent-hub/manage", get(my_listings))
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ fn check_content(texts: &[&str]) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/marketplace/agents — Create
+// POST /api/agent-hub/agents — Create
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -322,7 +322,7 @@ async fn create_listing(
 }
 
 // ---------------------------------------------------------------------------
-// PUT /api/marketplace/agents/{id} — Update
+// PUT /api/agent-hub/agents/{id} — Update
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -476,7 +476,7 @@ async fn update_listing(
 }
 
 // ---------------------------------------------------------------------------
-// DELETE /api/marketplace/agents/{id} — Archive (soft delete)
+// DELETE /api/agent-hub/agents/{id} — Archive (soft delete)
 // ---------------------------------------------------------------------------
 
 async fn archive_listing(
@@ -509,7 +509,7 @@ async fn archive_listing(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/agents — Browse / Search (public)
+// GET /api/agent-hub/agents — Browse / Search (public)
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -633,7 +633,7 @@ async fn browse(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/agents/{id} — Public Detail
+// GET /api/agent-hub/agents/{id} — Public Detail
 // ---------------------------------------------------------------------------
 
 async fn get_detail(
@@ -674,7 +674,7 @@ async fn get_detail(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/agents/{id}/manage — Creator Manage View (single, auth)
+// GET /api/agent-hub/agents/{id}/manage — Creator Manage View (single, auth)
 // ---------------------------------------------------------------------------
 
 async fn manage_detail(
@@ -715,7 +715,7 @@ async fn manage_detail(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/manage — Creator's own listings (list, auth)
+// GET /api/agent-hub/manage — Creator's own listings (list, auth)
 // ---------------------------------------------------------------------------
 
 async fn my_listings(
@@ -757,7 +757,7 @@ async fn my_listings(
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/marketplace/agents/{id}/reviews — Create a review
+// POST /api/agent-hub/agents/{id}/reviews — Create a review
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -911,7 +911,7 @@ struct ReviewListingCheck {
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/agents/{id}/reviews — List reviews
+// GET /api/agent-hub/agents/{id}/reviews — List reviews
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]

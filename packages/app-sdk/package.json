@@ -1,7 +1,7 @@
 {
   "name": "@arinova/app-sdk",
   "version": "0.0.1",
-  "description": "SDK for building Arinova Chat marketplace apps",
+  "description": "SDK for building Arinova Chat Agent Hub apps",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

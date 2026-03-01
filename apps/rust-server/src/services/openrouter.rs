@@ -1,6 +1,6 @@
 //! OpenRouter proxy service — platform-managed LLM calls via OpenRouter.
 //!
-//! All marketplace chat requests are routed through OpenRouter using the
+//! All agent hub chat requests are routed through OpenRouter using the
 //! platform's API key. The API is OpenAI-compatible; SSE chunk parsing
 //! reuses `llm::parse_openai_chunk`.
 

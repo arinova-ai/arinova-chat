@@ -49,7 +49,7 @@ const SORTS = [
   { value: "price", label: "Price" },
 ];
 
-function MarketplaceContent() {
+function AgentHubContent() {
   const router = useRouter();
   const [listings, setListings] = useState<AgentListing[]>([]);
   const [total, setTotal] = useState(0);
@@ -71,7 +71,7 @@ function MarketplaceContent() {
       params.set("offset", String(currentOffset));
 
       const data = await api<BrowseResponse>(
-        `/api/marketplace/agents?${params.toString()}`
+        `/api/agent-hub/agents?${params.toString()}`
       );
       setListings((prev) =>
         currentOffset === 0 ? data.listings : [...prev, ...data.listings]
@@ -112,8 +112,8 @@ function MarketplaceContent() {
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
             <PageTitle
-              title="Marketplace"
-              subtitle="Agent Store"
+              title="Agent Hub"
+              subtitle="Discover & chat with AI agents"
               icon={Store}
             />
             <div className="flex-1" />
@@ -210,7 +210,7 @@ function MarketplaceContent() {
                   <div
                     key={agent.id}
                     className="group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-colors hover:border-brand-border cursor-pointer"
-                    onClick={() => router.push(`/marketplace/${agent.id}`)}
+                    onClick={() => router.push(`/agent-hub/${agent.id}`)}
                   >
                     {/* Avatar + Name */}
                     <div className="flex items-start gap-3">
@@ -287,10 +287,10 @@ function MarketplaceContent() {
   );
 }
 
-export default function MarketplacePage() {
+export default function AgentHubPage() {
   return (
     <AuthGuard>
-      <MarketplaceContent />
+      <AgentHubContent />
     </AuthGuard>
   );
 }

@@ -367,7 +367,7 @@ pub struct CommunityMessage {
     pub created_at: DateTime<Utc>,
 }
 
-// ===== Marketplace tables =====
+// ===== Agent Hub tables =====
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct DeveloperAccount {

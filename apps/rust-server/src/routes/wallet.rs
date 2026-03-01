@@ -324,7 +324,7 @@ async fn purchase(
     // Record earning transaction (creator)
     if let Err(e) = sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, related_app_id, description)
-           VALUES ($1, 'earning', $2, $3, 'Marketplace earning: agent sale')"#,
+           VALUES ($1, 'earning', $2, $3, 'Agent Hub earning: agent sale')"#,
     )
     .bind(&creator_id)
     .bind(creator_share)

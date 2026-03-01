@@ -22,10 +22,10 @@ use crate::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/marketplace/agents/{id}/chat", post(chat))
-        .route("/api/marketplace/conversations", get(list_conversations))
+        .route("/api/agent-hub/agents/{id}/chat", post(chat))
+        .route("/api/agent-hub/conversations", get(list_conversations))
         .route(
-            "/api/marketplace/conversations/{id}/messages",
+            "/api/agent-hub/conversations/{id}/messages",
             get(get_messages),
         )
 }
@@ -65,7 +65,7 @@ struct ConversationListRow {
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/marketplace/agents/{id}/chat — SSE streaming
+// POST /api/agent-hub/agents/{id}/chat — SSE streaming
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -501,7 +501,7 @@ async fn chat(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/conversations — List user's conversations
+// GET /api/agent-hub/conversations — List user's conversations
 // ---------------------------------------------------------------------------
 
 async fn list_conversations(
@@ -552,7 +552,7 @@ async fn list_conversations(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/marketplace/conversations/{id}/messages — Get conversation messages
+// GET /api/agent-hub/conversations/{id}/messages — Get conversation messages
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]

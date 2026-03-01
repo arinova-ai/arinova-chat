@@ -56,7 +56,7 @@ export function IconRail() {
     if (pathname.startsWith("/apps")) return "apps";
     if (pathname.startsWith("/friends")) return "friends";
     if (pathname.startsWith("/community")) return "community";
-    if (pathname.startsWith("/marketplace")) return "market";
+    if (pathname.startsWith("/agent-hub")) return "market";
     if (pathname.startsWith("/creator")) return "market";
     if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/settings")) return "settings";
@@ -81,7 +81,7 @@ export function IconRail() {
   const secondaryItems: NavEntry[] = [
     { id: "community", label: t("nav.community"), href: "/community" },
     { id: "theme", label: t("nav.theme"), href: "/office/themes" },
-    { id: "market", label: t("nav.market"), href: "/marketplace" },
+    { id: "market", label: t("nav.market"), href: "/agent-hub" },
     { id: "wallet", label: t("nav.wallet"), href: "/wallet" },
   ];
 

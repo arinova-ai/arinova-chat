@@ -30,10 +30,10 @@ import { officeRoutes } from "./routes/office.js";
 import { userRoutes } from "./routes/users.js";
 import { initializeOffice as initOfficePlugin } from "@arinova-ai/openclaw-arinova-ai";
 // Phase 2+ routes (on features/platform-extras branch)
-// import { marketplaceRoutes } from "./routes/marketplace.js";
+// import { agentHubRoutes } from "./routes/agent-hub.js";
 // import { communityRoutes } from "./routes/communities.js";
 // import { appSubmissionRoutes } from "./routes/app-submissions.js";
-// import { appMarketplaceRoutes } from "./routes/app-marketplace.js";
+// import { appAgentHubRoutes } from "./routes/app-agent-hub.js";
 // import { walletRoutes } from "./routes/wallet.js";
 // import { developerRoutes } from "./routes/developer.js";
 
@@ -110,10 +110,10 @@ await app.register(officeRoutes);
 await app.register(userRoutes);
 initOfficePlugin();
 // Phase 2+ routes (on features/platform-extras branch)
-// await app.register(marketplaceRoutes);
+// await app.register(agentHubRoutes);
 // await app.register(communityRoutes);
 // await app.register(appSubmissionRoutes);
-// await app.register(appMarketplaceRoutes);
+// await app.register(appAgentHubRoutes);
 // await app.register(walletRoutes);
 // await app.register(developerRoutes);
 

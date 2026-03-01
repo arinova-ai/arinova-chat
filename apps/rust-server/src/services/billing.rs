@@ -1,4 +1,4 @@
-//! Billing engine for marketplace per-message pricing.
+//! Billing engine for agent hub per-message pricing.
 //!
 //! Provides:
 //! - `check_billing()` — determine if user can send a message (free trial or paid)
@@ -28,7 +28,7 @@ pub struct BillingResult {
 // check_billing
 // ---------------------------------------------------------------------------
 
-/// Check whether the user can send a message to the given marketplace listing.
+/// Check whether the user can send a message to the given agent hub listing.
 ///
 /// Logic:
 /// 1. Fetch `price_per_message` and `free_trial_messages` from `agent_listings`.
@@ -220,7 +220,7 @@ pub async fn deduct_coins(
     // 2. Record purchase transaction (buyer, negative amount)
     if let Err(e) = sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, related_app_id, description)
-           VALUES ($1, 'purchase', $2, $3, 'Marketplace message payment')"#,
+           VALUES ($1, 'purchase', $2, $3, 'Agent Hub message payment')"#,
     )
     .bind(user_id)
     .bind(-price)
@@ -251,7 +251,7 @@ pub async fn deduct_coins(
     // 4. Record earning transaction (creator, positive amount)
     if let Err(e) = sqlx::query(
         r#"INSERT INTO coin_transactions (user_id, type, amount, related_app_id, description)
-           VALUES ($1, 'earning', $2, $3, 'Marketplace message earning')"#,
+           VALUES ($1, 'earning', $2, $3, 'Agent Hub message earning')"#,
     )
     .bind(&creator_id)
     .bind(creator_share)
