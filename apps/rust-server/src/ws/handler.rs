@@ -214,6 +214,11 @@ async fn handle_ws(socket: WebSocket, state: AppState, cookie_header: String) {
         _ => return,
     };
 
+    // Reject banned users from establishing WS connections
+    if session.banned {
+        return;
+    }
+
     let user_id = session.user_id.clone();
     let conn_id = uuid::Uuid::new_v4().to_string();
 
@@ -364,6 +369,29 @@ async fn handle_message(
             send_event(tx, &json!({"type": "pong"}));
         }
         "send_message" => {
+            // Check if user is banned before allowing message send
+            let is_banned = sqlx::query_as::<_, (bool,)>(
+                r#"SELECT COALESCE(banned, false) FROM "user" WHERE id = $1"#,
+            )
+            .bind(user_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+            .map(|(b,)| b)
+            .unwrap_or(false);
+
+            if is_banned {
+                send_event(tx, &json!({
+                    "type": "stream_error",
+                    "conversationId": "",
+                    "messageId": "",
+                    "seq": 0,
+                    "error": "Your account has been banned"
+                }));
+                return;
+            }
+
             let client_msg_id = event.get("id").and_then(|v| v.as_str())
                 .and_then(|s| uuid::Uuid::parse_str(s).ok())
                 .map(|u| u.to_string());
