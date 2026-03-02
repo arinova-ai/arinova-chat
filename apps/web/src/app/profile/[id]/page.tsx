@@ -12,7 +12,6 @@ import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import { ArrowLeft, CalendarDays, Settings, X } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
-import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
 
@@ -92,8 +91,19 @@ function UserProfileContent() {
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-2xl">
             {loading && (
-              <div className="flex justify-center py-16">
-                <ArinovaSpinner />
+              <div>
+                {/* Skeleton banner */}
+                <div className="h-32 md:h-44 animate-pulse bg-muted" />
+                <div className="px-6 pb-6">
+                  <div className="flex items-end justify-between">
+                    <div className="h-20 w-20 -mt-10 rounded-full animate-pulse bg-muted ring-4 ring-background" />
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+                    <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                    <div className="mt-3 h-4 w-64 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
               </div>
             )}
 
