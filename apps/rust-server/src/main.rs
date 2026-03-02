@@ -133,6 +133,7 @@ async fn main() {
         .merge(routes::api_v1::router())
         .merge(routes::themes::router())
         .merge(routes::stickers::router())
+        .merge(routes::admin::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

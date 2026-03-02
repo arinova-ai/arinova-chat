@@ -18,6 +18,36 @@ pub struct AuthUser {
     pub is_verified: bool,
 }
 
+/// Authenticated admin user. Checks that the user's email is in ADMIN_EMAILS.
+#[derive(Debug, Clone, Serialize)]
+pub struct AuthAdmin {
+    pub id: String,
+    pub email: String,
+}
+
+impl<S> FromRequestParts<S> for AuthAdmin
+where
+    S: Send + Sync,
+    AppState: FromRef<S>,
+{
+    type Rejection = (StatusCode, Json<serde_json::Value>);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth_user = AuthUser::from_request_parts(parts, state).await?;
+        let app_state = AppState::from_ref(state);
+        if !app_state.config.admin_emails.contains(&auth_user.email) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({"error": "Admin access required"})),
+            ));
+        }
+        Ok(AuthAdmin {
+            id: auth_user.id,
+            email: auth_user.email,
+        })
+    }
+}
+
 /// Authenticated agent extracted from `Authorization: Bearer <botToken>` header.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuthAgent {
