@@ -1,10 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
+import { MessageCirclePlus } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { ConversationItem } from "./conversation-item";
+import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/lib/i18n";
 
 export function ConversationList() {
+  const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -30,9 +34,18 @@ export function ConversationList() {
   return (
     <div className="flex-1 min-w-0 overflow-y-auto px-2 py-1">
       {sorted.length === 0 ? (
-        <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-          No conversations yet
-        </p>
+        <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+          <MessageCirclePlus className="h-10 w-10 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">
+            {t("chat.noConversations")}
+          </p>
+          <Button
+            size="sm"
+            onClick={() => window.dispatchEvent(new Event("arinova:new-chat"))}
+          >
+            {t("chat.newChat")}
+          </Button>
+        </div>
       ) : (
         <div className="flex min-w-0 flex-col gap-0.5">
           {sorted.map((conv) => (

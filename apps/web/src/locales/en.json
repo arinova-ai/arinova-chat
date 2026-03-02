@@ -61,6 +61,8 @@
   "chat.stickers": "Stickers",
   "chat.selectSticker": "Select a sticker",
   "chat.noMessages": "No messages yet",
+  "chat.noConversations": "No conversations yet. Start a new chat!",
+  "chat.newChat": "New Chat",
   "chat.thinking": "Thinking...",
   "chat.emptyState.title": "No conversation selected",
   "chat.emptyState.description": "Choose a conversation from the sidebar to start chatting",

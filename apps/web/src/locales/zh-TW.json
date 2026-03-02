@@ -61,6 +61,8 @@
   "chat.stickers": "貼圖",
   "chat.selectSticker": "選擇貼圖",
   "chat.noMessages": "尚無訊息",
+  "chat.noConversations": "還沒有對話，開始新的聊天吧！",
+  "chat.newChat": "新對話",
   "chat.thinking": "思考中...",
   "chat.emptyState.title": "尚未選擇對話",
   "chat.emptyState.description": "從側邊欄選擇一個對話來開始聊天",
