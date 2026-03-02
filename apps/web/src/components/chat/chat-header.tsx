@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +42,7 @@ interface ChatHeaderProps {
   type?: ConversationType;
   conversationId?: string;
   agentId?: string;
+  peerUserId?: string | null;
   voiceCapable?: boolean;
   mentionOnly?: boolean;
   title?: string | null;
@@ -58,6 +60,7 @@ export function ChatHeader({
   type = "direct",
   conversationId,
   agentId,
+  peerUserId,
   voiceCapable,
   title,
   memberCount,
@@ -78,6 +81,11 @@ export function ChatHeader({
   const startCall = useVoiceCallStore((s) => s.startCall);
 
   const [micDialogOpen, setMicDialogOpen] = useState(false);
+
+  const router = useRouter();
+
+  // For human DMs without an explicit onClick, navigate to the peer's profile
+  const effectiveOnClick = onClick ?? (peerUserId ? () => router.push(`/profile/${peerUserId}`) : undefined);
 
   const canCall = voiceCapable && conversationId && agentId && type === "direct" && callState === "idle";
 
@@ -115,10 +123,10 @@ export function ChatHeader({
       </Button>
       <button
         type="button"
-        onClick={onClick}
+        onClick={effectiveOnClick}
         className={cn(
           "flex items-center gap-3 min-w-0 rounded-lg px-2 py-1 -ml-2 transition-colors",
-          onClick && "cursor-pointer hover:bg-accent/60"
+          effectiveOnClick && "cursor-pointer hover:bg-accent/60"
         )}
       >
         <div className="relative">

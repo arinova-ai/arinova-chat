@@ -472,7 +472,7 @@ async fn list_conversations(
         .map(|r| r.id)
         .collect();
 
-    let mut peer_user_names: std::collections::HashMap<Uuid, (String, Option<String>, bool)> =
+    let mut peer_user_names: std::collections::HashMap<Uuid, (String, String, Option<String>, bool)> =
         std::collections::HashMap::new();
 
     if !human_dm_ids.is_empty() {
@@ -482,7 +482,7 @@ async fn list_conversations(
             .map(|(i, _)| format!("${}", i + 1))
             .collect();
         let query_str = format!(
-            r#"SELECT cum.conversation_id, u.name, u.image, u.is_verified
+            r#"SELECT cum.conversation_id, u.id, u.name, u.image, u.is_verified
                FROM conversation_user_members cum
                JOIN "user" u ON u.id = cum.user_id
                WHERE cum.conversation_id IN ({}) AND cum.user_id != ${}"#,
@@ -490,15 +490,15 @@ async fn list_conversations(
             human_dm_ids.len() + 1
         );
 
-        let mut q = sqlx::query_as::<_, (Uuid, String, Option<String>, bool)>(&query_str);
+        let mut q = sqlx::query_as::<_, (Uuid, String, String, Option<String>, bool)>(&query_str);
         for gid in &human_dm_ids {
             q = q.bind(gid);
         }
         q = q.bind(&user.id);
 
         if let Ok(peers) = q.fetch_all(&state.db).await {
-            for (conv_id, name, image, is_verified) in peers {
-                peer_user_names.insert(conv_id, (name, image, is_verified));
+            for (conv_id, user_id, name, image, is_verified) in peers {
+                peer_user_names.insert(conv_id, (user_id, name, image, is_verified));
             }
         }
     }
@@ -535,7 +535,7 @@ async fn list_conversations(
                 (name, Some(desc))
             } else if row.agent_id.is_none() {
                 // Human-to-human DM: show peer user's name
-                if let Some((peer_name, _, _)) = peer_user_names.get(&row.id) {
+                if let Some((_, peer_name, _, _)) = peer_user_names.get(&row.id) {
                     (peer_name.clone(), None)
                 } else {
                     ("Direct Message".to_string(), None)
@@ -564,16 +564,23 @@ async fn list_conversations(
 
             // For human DMs, use peer's avatar; otherwise use agent's
             let avatar_url = if row.agent_id.is_none() {
-                peer_user_names.get(&row.id).and_then(|(_, img, _)| img.clone())
+                peer_user_names.get(&row.id).and_then(|(_, _, img, _)| img.clone())
             } else {
                 row.agent_avatar_url.clone()
             };
 
             // Determine verified status: for human DMs use peer's, for agent convos use owner's
             let is_verified = if row.agent_id.is_none() {
-                peer_user_names.get(&row.id).map(|(_, _, v)| *v).unwrap_or(false)
+                peer_user_names.get(&row.id).map(|(_, _, _, v)| *v).unwrap_or(false)
             } else {
                 row.agent_owner_is_verified.unwrap_or(false)
+            };
+
+            // For human DMs, include peer user ID for profile navigation
+            let peer_user_id = if row.agent_id.is_none() {
+                peer_user_names.get(&row.id).map(|(uid, _, _, _)| uid.clone())
+            } else {
+                None
             };
 
             json!({
@@ -582,6 +589,7 @@ async fn list_conversations(
                 "type": row.conv_type,
                 "userId": row.user_id,
                 "agentId": row.agent_id,
+                "peerUserId": peer_user_id,
                 "mentionOnly": row.mention_only,
                 "pinnedAt": row.pinned_at.map(|t| t.and_utc().to_rfc3339()),
                 "createdAt": row.created_at.and_utc().to_rfc3339(),

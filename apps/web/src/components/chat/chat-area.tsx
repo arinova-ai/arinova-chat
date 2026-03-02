@@ -122,6 +122,7 @@ export function ChatArea() {
         type={conversation.type}
         conversationId={conversation.id}
         agentId={conversation.agentId ?? undefined}
+        peerUserId={conversation.peerUserId}
         voiceCapable={agent?.voiceCapable}
         mentionOnly={conversation.mentionOnly}
         title={conversation.title}
