@@ -22,6 +22,7 @@ import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { ThemeProvider, useTheme } from "@/components/office/theme-context";
 import { loadTheme } from "@/components/office/theme-loader";
 import { THEME_REGISTRY, type ThemeEntry } from "@/components/office/theme-registry";
+import { useTranslation } from "@/lib/i18n";
 
 // ── Mock data for detail page ───────────────────────────────────
 
@@ -80,6 +81,7 @@ function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
 
 function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: ThemeDetails }) {
   const { themeId, switchTheme } = useTheme();
+  const { t } = useTranslation();
   const [toast, setToast] = useState(false);
   const [liked, setLiked] = useState(false);
   const [activeThumb, setActiveThumb] = useState(0);
@@ -122,7 +124,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to themes
+            {t("theme.backToThemes")}
           </Link>
         </div>
 
@@ -142,7 +144,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                   priority
                 />
                 <span className="absolute top-3 left-3 rounded-md bg-black/60 backdrop-blur-sm px-2.5 py-1 text-xs text-slate-400">
-                  Preview
+                  {t("theme.preview")}
                 </span>
               </div>
 
@@ -175,16 +177,16 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
               <div className="flex gap-2">
                 {details.renderer.includes("3D") && (
                   <span className="rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-400">
-                    3D Theme
+                    {t("theme.badge3d")}
                   </span>
                 )}
                 {isFree ? (
                   <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
-                    Free
+                    {t("theme.filter.free")}
                   </span>
                 ) : (
                   <span className="rounded-full bg-brand/20 px-2.5 py-0.5 text-[11px] font-semibold text-brand-text">
-                    Premium
+                    {t("theme.premium")}
                   </span>
                 )}
               </div>
@@ -209,7 +211,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                   {details.rating} ({details.reviewCount})
                 </span>
                 <span className="text-[13px] text-muted-foreground">
-                  · {details.userCount} users
+                  · {details.userCount} {t("theme.users")}
                 </span>
               </div>
 
@@ -222,9 +224,9 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
               <div className="flex items-center gap-3 rounded-xl bg-brand/[0.08] border border-brand/15 p-3.5">
                 <Users className="h-6 w-6 text-brand-text shrink-0" />
                 <div>
-                  <div className="text-xs font-semibold text-brand-text">Agent Capacity</div>
+                  <div className="text-xs font-semibold text-brand-text">{t("theme.agentCapacity")}</div>
                   <div className="text-sm text-foreground">
-                    {entry.maxAgents} {entry.maxAgents === 1 ? "Agent" : "Agents"} · {details.roomSize} Room
+                    {entry.maxAgents} {entry.maxAgents === 1 ? t("theme.agent") : t("theme.agents")} · {details.roomSize} {t("theme.room")}
                   </div>
                 </div>
               </div>
@@ -232,15 +234,15 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
               {/* Specifications */}
               <div className="pb-5 border-b border-white/[0.06]">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Specifications
+                  {t("theme.specifications")}
                 </h3>
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { icon: Monitor, label: "Renderer", value: details.renderer },
-                    { icon: Clapperboard, label: "Animations", value: String(details.animationCount) },
-                    { icon: Maximize, label: "Room Size", value: details.roomSize },
-                    { icon: Tag, label: "Version", value: details.version },
-                    { icon: Sparkles, label: "Quality Modes", value: qualityModes },
+                    { icon: Monitor, label: t("theme.spec.renderer"), value: details.renderer },
+                    { icon: Clapperboard, label: t("theme.spec.animations"), value: String(details.animationCount) },
+                    { icon: Maximize, label: t("theme.spec.roomSize"), value: details.roomSize },
+                    { icon: Tag, label: t("theme.spec.version"), value: details.version },
+                    { icon: Sparkles, label: t("theme.spec.qualityModes"), value: qualityModes },
                   ].map((spec) => (
                     <div key={spec.label} className="rounded-[10px] bg-white/[0.03] border border-white/[0.04] p-3">
                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1">
@@ -256,13 +258,13 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
               {/* Price */}
               <div>
                 {isFree ? (
-                  <div className="text-[32px] font-extrabold">Free</div>
+                  <div className="text-[32px] font-extrabold">{t("theme.filter.free")}</div>
                 ) : (
                   <>
                     <div className="text-[32px] font-extrabold">
-                      {entry.price} <span className="text-lg font-normal text-muted-foreground">credits</span>
+                      {entry.price} <span className="text-lg font-normal text-muted-foreground">{t("theme.credits").toLowerCase()}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">One-time purchase · Lifetime access</p>
+                    <p className="text-xs text-muted-foreground">{t("theme.lifetimeAccess")}</p>
                   </>
                 )}
               </div>
@@ -275,14 +277,14 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                     className="flex-1 rounded-xl bg-emerald-500/15 py-3.5 text-base font-bold text-emerald-400 flex items-center justify-center gap-2"
                   >
                     <Check className="h-5 w-5" />
-                    Applied
+                    {t("theme.applied")}
                   </button>
                 ) : isFree ? (
                   <button
                     onClick={handleApply}
                     className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90"
                   >
-                    Apply Theme
+                    {t("theme.applyTheme")}
                   </button>
                 ) : (
                   <button
@@ -290,7 +292,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                     className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white opacity-80 flex items-center justify-center gap-2"
                   >
                     <Lock className="h-4 w-4" />
-                    Purchase & Apply
+                    {t("theme.purchaseAndApply")}
                   </button>
                 )}
                 <button
@@ -309,7 +311,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
               {/* Toast */}
               {toast && (
                 <p className="text-center text-xs font-medium text-emerald-400 animate-pulse">
-                  Theme applied!
+                  {t("theme.themeApplied")}
                 </p>
               )}
 
@@ -346,11 +348,13 @@ function ReviewsSection({
   reviews: ThemeDetails["reviews"];
   reviewCount: number;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-bold">Reviews</h2>
-        <span className="text-[13px] text-muted-foreground">{reviewCount} reviews</span>
+        <h2 className="text-base font-bold">{t("theme.reviews")}</h2>
+        <span className="text-[13px] text-muted-foreground">{reviewCount} {t("theme.reviewsCount")}</span>
       </div>
       <div className="space-y-2.5">
         {reviews.map((review) => (
@@ -379,18 +383,20 @@ function ReviewsSection({
 }
 
 function NotFoundContent() {
+  const { t } = useTranslation();
+
   return (
     <div className="app-dvh flex bg-background">
       <div className="hidden h-full md:block">
         <IconRail />
       </div>
       <div className="flex flex-1 flex-col items-center justify-center gap-4 min-w-0">
-        <p className="text-muted-foreground">Theme not found.</p>
+        <p className="text-muted-foreground">{t("theme.notFound")}</p>
         <Link
           href="/office/themes"
           className="text-sm text-brand-text hover:underline"
         >
-          Back to themes
+          {t("theme.backToThemes")}
         </Link>
         <MobileBottomNav />
       </div>
@@ -404,7 +410,7 @@ export default function ThemeDetailPage({
   params: Promise<{ themeId: string }>;
 }) {
   const { themeId } = use(params);
-  const entry = THEME_REGISTRY.find((t) => t.id === themeId);
+  const entry = THEME_REGISTRY.find((e) => e.id === themeId);
   const details = entry ? THEME_DETAILS[entry.id] : undefined;
 
   return (
