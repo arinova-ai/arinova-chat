@@ -462,6 +462,54 @@ async fn handle_message(
                 handle_mark_read(user_id, conversation_id, seq, db).await;
             }
         }
+        "typing" => {
+            let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
+            if conversation_id.is_empty() { return; }
+
+            // Only broadcast in group conversations
+            let conv_type = sqlx::query_as::<_, (String,)>(
+                r#"SELECT type::text FROM conversations WHERE id = $1::uuid"#
+            )
+            .bind(conversation_id)
+            .fetch_optional(db)
+            .await;
+
+            if let Ok(Some((conv_type,))) = conv_type {
+                if conv_type == "group" {
+                    // Get member IDs to broadcast to (excluding sender)
+                    let member_ids: Vec<String> = sqlx::query_as::<_, (String,)>(
+                        r#"SELECT user_id FROM conversation_user_members WHERE conversation_id = $1::uuid AND user_id != $2"#
+                    )
+                    .bind(conversation_id)
+                    .bind(user_id)
+                    .fetch_all(db)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|r| r.0)
+                    .collect();
+
+                    // Get sender name
+                    let sender_name = sqlx::query_as::<_, (String,)>(
+                        r#"SELECT name FROM "user" WHERE id = $1"#
+                    )
+                    .bind(user_id)
+                    .fetch_optional(db)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|r| r.0)
+                    .unwrap_or_else(|| "User".to_string());
+
+                    ws_state.broadcast_to_members(&member_ids, &json!({
+                        "type": "user_typing",
+                        "conversationId": conversation_id,
+                        "userId": user_id,
+                        "userName": sender_name
+                    }), redis);
+                }
+            }
+        }
         "focus" => {
             let visible = event.get("visible").and_then(|v| v.as_bool()).unwrap_or(false);
             let prev = ws_state.socket_visible.get(conn_id).map(|v| *v).unwrap_or(false);

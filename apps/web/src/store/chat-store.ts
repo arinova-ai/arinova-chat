@@ -112,6 +112,7 @@ interface ChatState {
   blockedUserIds: Set<string>;
   currentUserId: string | null;
   inputDrafts: Record<string, string>;
+  typingUsers: Record<string, { userId: string; userName: string; expiresAt: number }[]>;
   queuedMessageIds: Record<string, Set<string>>; // conversationId → set of user message IDs
 
   // Thread state
@@ -236,6 +237,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   blockedUserIds: new Set<string>(),
   currentUserId: null,
   inputDrafts: {},
+  typingUsers: {},
   queuedMessageIds: {},
   activeThreadId: null,
   threadMessages: {},
@@ -1283,6 +1285,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
         wsManager.send({ type: "mark_read", conversationId, seq: msg.seq });
         wsManager.updateLastSeq(conversationId, msg.seq);
       }
+      return;
+    }
+
+    if (event.type === "user_typing") {
+      const { conversationId, userId, userName } = event;
+      const now = Date.now();
+      const expiresAt = now + 5000;
+      const prev = get().typingUsers[conversationId] ?? [];
+      const filtered = prev.filter((u) => u.userId !== userId && u.expiresAt > now);
+      set({
+        typingUsers: {
+          ...get().typingUsers,
+          [conversationId]: [...filtered, { userId, userName, expiresAt }],
+        },
+      });
+      setTimeout(() => {
+        const current = get().typingUsers[conversationId] ?? [];
+        set({
+          typingUsers: {
+            ...get().typingUsers,
+            [conversationId]: current.filter((u) => u.expiresAt > Date.now()),
+          },
+        });
+      }, 5100);
       return;
     }
 

@@ -27,6 +27,7 @@ import { compressImage } from "@/lib/image-compress";
 import type { Message } from "@arinova/shared/types";
 import { useToastStore } from "@/store/toast-store";
 import { MentionPopup, type MentionItem } from "./mention-popup";
+import { wsManager } from "@/lib/ws";
 
 // ---------- Popup item types ----------
 
@@ -89,6 +90,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const lastTypingSentRef = useRef(0);
   const router = useRouter();
 
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -897,6 +899,13 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     const newValue = e.target.value;
     setValue(newValue);
     if (activeConversationId) setInputDraft(activeConversationId, newValue);
+
+    // Send typing indicator (debounced to every 3 seconds)
+    const now = Date.now();
+    if (now - lastTypingSentRef.current > 3000 && activeConversationId) {
+      lastTypingSentRef.current = now;
+      wsManager.send({ type: "typing", conversationId: activeConversationId });
+    }
 
     // Detect @mention trigger
     const cursorPos = e.target.selectionStart ?? newValue.length;

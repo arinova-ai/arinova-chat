@@ -8,13 +8,17 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
   const { t } = useTranslation();
   const thinking = useChatStore((s) => s.thinkingAgents[conversationId]);
   const cancelAgentStream = useChatStore((s) => s.cancelAgentStream);
+  const typingUsers = useChatStore((s) => s.typingUsers[conversationId] ?? []);
 
-  if (!thinking || thinking.length === 0) return null;
+  const activeTypingUsers = typingUsers.filter((u) => u.expiresAt > Date.now());
+  const hasThinking = thinking && thinking.length > 0;
+
+  if (!hasThinking && activeTypingUsers.length === 0) return null;
 
   // Only show queued agents WITHOUT a messageId in the global indicator
   // (agents with messageId are shown per-message in message-bubble.tsx)
-  const queued = thinking.filter((a) => a.queued && !a.messageId);
-  const active = thinking.filter((a) => !a.queued);
+  const queued = hasThinking ? thinking.filter((a) => a.queued && !a.messageId) : [];
+  const active = hasThinking ? thinking.filter((a) => !a.queued) : [];
 
   return (
     <>
@@ -55,6 +59,12 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
               </span>
             </span>
           </span>
+        </div>
+      )}
+      {activeTypingUsers.length > 0 && (
+        <div className="flex items-center gap-1 px-4 py-1 text-xs text-muted-foreground">
+          <span>{activeTypingUsers.map((u) => u.userName).join(", ")} is typing</span>
+          <span className="animate-pulse">...</span>
         </div>
       )}
     </>
