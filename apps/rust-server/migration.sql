@@ -778,4 +778,9 @@ ON CONFLICT (pack_id, filename) DO NOTHING;
 -- Add verified badge column
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Arinova Official Account
+INSERT INTO "user" (id, name, email, email_verified, username, is_verified, created_at, updated_at)
+VALUES ('arinova-official', 'Arinova', 'official@arinova.ai', TRUE, 'arinova', TRUE, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET is_verified = TRUE, name = 'Arinova', username = 'arinova';
+
 COMMIT;
