@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { AuthGuard } from "@/components/auth-guard";
@@ -22,6 +23,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Gift,
+  X,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
@@ -271,6 +273,18 @@ function PackDetailDialog({
 }) {
   const [detailStickers, setDetailStickers] = useState<string[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [zoomedSticker, setZoomedSticker] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!zoomedSticker) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoomedSticker(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoomedSticker]);
+
+  useEffect(() => {
+    if (!open) setZoomedSticker(null);
+  }, [open]);
 
   useEffect(() => {
     if (!pack || !open) return;
@@ -334,14 +348,39 @@ function PackDetailDialog({
         {/* Sticker grid */}
         <div className="grid grid-cols-4 gap-2 p-4 sm:grid-cols-5 max-h-[50vh] overflow-y-auto">
           {previewStickers.map((url, i) => (
-            <div
+            <button
               key={i}
-              className="flex aspect-square items-center justify-center rounded-lg bg-secondary/50 p-2"
+              type="button"
+              onClick={() => setZoomedSticker(url)}
+              className="flex aspect-square items-center justify-center rounded-lg bg-secondary/50 p-2 cursor-zoom-in hover:bg-secondary/80 transition-colors"
             >
               <img src={url} alt={`sticker-${i + 1}`} className="h-full w-full object-contain" />
-            </div>
+            </button>
           ))}
         </div>
+
+        {/* Sticker lightbox */}
+        {zoomedSticker &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+              onClick={() => setZoomedSticker(null)}
+            >
+              <button
+                className="absolute top-4 right-4 rounded-full bg-card/80 p-2 text-white hover:bg-accent transition-colors"
+                onClick={(e) => { e.stopPropagation(); setZoomedSticker(null); }}
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <img
+                src={zoomedSticker}
+                alt="sticker preview"
+                className="max-h-[80vh] max-w-[80vw] object-contain animate-in zoom-in-95 duration-150"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>,
+            document.body,
+          )}
       </DialogContent>
     </Dialog>
   );
