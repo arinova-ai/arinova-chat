@@ -16,7 +16,7 @@ pub struct OgMeta {
 
 /// Extract up to `limit` HTTP(S) URLs from text content.
 pub fn extract_urls(content: &str, limit: usize) -> Vec<String> {
-    let re = Regex::new(r"https?://[^\s<>\)\]\}\"'`,]+").unwrap();
+    let re = Regex::new(r#"https?://[^\s<>\)\]\}\\"'`,]+"#).unwrap();
     let mut urls: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for m in re.find_iter(content) {

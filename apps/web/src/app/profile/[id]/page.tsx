@@ -254,7 +254,7 @@ function UserProfileContent() {
                         ) : (
                           <ShieldBan className="h-3.5 w-3.5" />
                         )}
-                        {isBlocked ? t("userProfile.unblock") : t("userProfile.block")}
+                        {isBlocked ? "Unblock" : "Block"}
                       </Button>
                       <Button
                         variant="outline"
@@ -268,7 +268,7 @@ function UserProfileContent() {
                         ) : (
                           <VolumeX className="h-3.5 w-3.5" />
                         )}
-                        {isMuted ? t("userProfile.unmute") : t("userProfile.mute")}
+                        {isMuted ? "Unmute" : "Mute"}
                       </Button>
                     </div>
                   )}
