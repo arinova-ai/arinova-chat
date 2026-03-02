@@ -5,18 +5,10 @@ import { X, Minimize2, Gamepad2 } from "lucide-react";
 import { useSpacesStore } from "@/store/spaces-store";
 
 // ---------------------------------------------------------------------------
-// Draggable PIP bubble — collapsed circular button
+// Shared draggable hook
 // ---------------------------------------------------------------------------
 
-function PipBubble({
-  gameName,
-  onExpand,
-  onClose,
-}: {
-  gameName: string | null;
-  onExpand: () => void;
-  onClose: () => void;
-}) {
+function useDraggable(size: number, initialPos?: { x: number; y: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const dragState = useRef({
     startX: 0,
@@ -28,13 +20,14 @@ function PipBubble({
   const [pos, setPos] = useState({ x: -1, y: -1 });
   const didDrag = useRef(false);
 
-  // Initialise bottom-right
   useEffect(() => {
-    setPos({
-      x: window.innerWidth - 76,
-      y: window.innerHeight - 160,
-    });
-  }, []);
+    setPos(
+      initialPos ?? {
+        x: window.innerWidth - size - 20,
+        y: window.innerHeight - size - 100,
+      },
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -54,28 +47,49 @@ function PipBubble({
     [pos],
   );
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragState.current.dragging) return;
-    const dx = e.clientX - dragState.current.startX;
-    const dy = e.clientY - dragState.current.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag.current = true;
-    const size = 56;
-    const newX = Math.max(
-      0,
-      Math.min(window.innerWidth - size, dragState.current.origX + dx),
-    );
-    const newY = Math.max(
-      0,
-      Math.min(window.innerHeight - size, dragState.current.origY + dy),
-    );
-    setPos({ x: newX, y: newY });
-  }, []);
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragState.current.dragging) return;
+      const dx = e.clientX - dragState.current.startX;
+      const dy = e.clientY - dragState.current.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didDrag.current = true;
+      const newX = Math.max(
+        0,
+        Math.min(window.innerWidth - size, dragState.current.origX + dx),
+      );
+      const newY = Math.max(
+        0,
+        Math.min(window.innerHeight - size, dragState.current.origY + dy),
+      );
+      setPos({ x: newX, y: newY });
+    },
+    [size],
+  );
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     const el = ref.current;
     if (el) el.releasePointerCapture(e.pointerId);
     dragState.current.dragging = false;
   }, []);
+
+  return { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp };
+}
+
+// ---------------------------------------------------------------------------
+// Draggable PIP bubble — collapsed circular button
+// ---------------------------------------------------------------------------
+
+function PipBubble({
+  gameName,
+  onExpand,
+  onClose,
+}: {
+  gameName: string | null;
+  onExpand: () => void;
+  onClose: () => void;
+}) {
+  const { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp } =
+    useDraggable(56);
 
   if (pos.x < 0) return null;
 
@@ -115,18 +129,34 @@ function PipBubble({
 }
 
 // ---------------------------------------------------------------------------
-// Fullscreen minimize button
+// Draggable fullscreen minimize button
 // ---------------------------------------------------------------------------
 
 function FullscreenMinimizeButton({ onMinimize }: { onMinimize: () => void }) {
+  const { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp } =
+    useDraggable(48);
+
+  if (pos.x < 0) return null;
+
   return (
-    <button
-      onClick={onMinimize}
-      className="fixed bottom-6 right-6 z-[60] flex h-12 w-12 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/90 active:scale-95"
-      title="Minimize"
+    <div
+      ref={ref}
+      className="fixed z-[60] select-none touch-none"
+      style={{ left: pos.x, top: pos.y }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
     >
-      <Minimize2 className="h-5 w-5" />
-    </button>
+      <button
+        onClick={() => {
+          if (!didDrag.current) onMinimize();
+        }}
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/90 active:scale-95"
+        title="Minimize"
+      >
+        <Minimize2 className="h-5 w-5" />
+      </button>
+    </div>
   );
 }
 
