@@ -4,11 +4,13 @@ import { useChatStore } from "@/store/chat-store";
 import { Bot, Clock, X } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
+const EMPTY_TYPING_USERS: { userId: string; userName: string; expiresAt: number }[] = [];
+
 export function TypingIndicator({ conversationId }: { conversationId: string }) {
   const { t } = useTranslation();
   const thinking = useChatStore((s) => s.thinkingAgents[conversationId]);
   const cancelAgentStream = useChatStore((s) => s.cancelAgentStream);
-  const typingUsers = useChatStore((s) => s.typingUsers[conversationId] ?? []);
+  const typingUsers = useChatStore((s) => s.typingUsers[conversationId] ?? EMPTY_TYPING_USERS);
 
   const activeTypingUsers = typingUsers.filter((u) => u.expiresAt > Date.now());
   const hasThinking = thinking && thinking.length > 0;

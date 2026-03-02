@@ -452,7 +452,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const sendMessage = useChatStore((s) => s.sendMessage);
   const cancelStream = useChatStore((s) => s.cancelStream);
   const cancelQueuedMessage = useChatStore((s) => s.cancelQueuedMessage);
-  const queuedMessageIds = useChatStore((s) => s.queuedMessageIds);
+  const isQueued = useChatStore((s) => isUser && (s.queuedMessageIds[message.conversationId]?.has(message.id) ?? false));
   const openThread = useChatStore((s) => s.openThread);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const showTimestamps = useChatStore((s) => s.showTimestamps);
@@ -460,7 +460,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const reactionsByMessage = useChatStore((s) => s.reactionsByMessage);
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
 
-  const conversations = useChatStore((s) => s.conversations);
+  const conversation = useChatStore((s) => s.conversations.find((c) => c.id === message.conversationId));
   const router = useRouter();
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -489,9 +489,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   );
   const resolvedAgentId = useMemo(() => {
     if (message.senderAgentId) return message.senderAgentId;
-    const conv = conversations.find((c) => c.id === message.conversationId);
-    return conv?.agentId ?? null;
-  }, [message.senderAgentId, message.conversationId, conversations]);
+    return conversation?.agentId ?? null;
+  }, [message.senderAgentId, conversation]);
   const showAgentProfile = useMemo(
     () => !isUser && message.role === "agent" && !!resolvedAgentId,
     [isUser, message.role, resolvedAgentId]
@@ -506,7 +505,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   });
 
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
-  const isQueued = isUser && queuedMessageIds[message.conversationId]?.has(message.id);
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
   const handleCopy = useCallback(async () => {
@@ -559,8 +557,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           } else if (showUserProfile && message.senderUserId) {
             router.push(`/profile/${message.senderUserId}`);
           } else if (showAgentProfile && resolvedAgentId) {
-            const conv = conversations.find((c) => c.id === message.conversationId);
-            const suffix = conv?.type === "group" ? `?convId=${message.conversationId}` : "";
+            const suffix = conversation?.type === "group" ? `?convId=${message.conversationId}` : "";
             router.push(`/agent/${resolvedAgentId}${suffix}`);
           }
         }}
