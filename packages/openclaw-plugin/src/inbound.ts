@@ -211,6 +211,7 @@ export async function handleArinovaChatInbound(params: {
   // original line breaks (e.g. inside markdown tables) that get corrupted
   // when blocks are joined with "\n\n" in the deliver callback.
   let lastAccumulatedText = "";
+  let lastSentLength = 0;
   let aborted = false;
   // Guard: ensure we only send completion once.  The abort handler sends
   // completion immediately so the agent is freed; any later natural
@@ -271,7 +272,12 @@ export async function handleArinovaChatInbound(params: {
           // Strip MEDIA: lines so raw tokens don't flash during streaming
           const cleaned = stripMediaLines(text);
           if (!cleaned.trim()) return;
-          sendChunk(collapseToolBlocks(cleaned));
+          const collapsed = collapseToolBlocks(cleaned);
+          if (collapsed.length > lastSentLength) {
+            const delta = collapsed.slice(lastSentLength);
+            lastSentLength = collapsed.length;
+            sendChunk(delta);
+          }
         }
       },
     },
