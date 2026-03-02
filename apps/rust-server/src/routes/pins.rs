@@ -175,9 +175,32 @@ async fn unpin_message(
 /// GET /api/conversations/:convId/pins — List pinned messages
 async fn list_pins(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(conv_id): Path<String>,
 ) -> Response {
+    // Verify membership: conversation_user_members OR conversation owner
+    let is_member = sqlx::query_as::<_, (i64,)>(
+        r#"SELECT COUNT(*) FROM conversation_user_members
+           WHERE conversation_id = $1::uuid AND user_id = $2
+           UNION ALL
+           SELECT COUNT(*) FROM conversations
+           WHERE id = $1::uuid AND user_id = $2"#,
+    )
+    .bind(&conv_id)
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .map(|rows| rows.iter().any(|(c,)| *c > 0))
+    .unwrap_or(false);
+
+    if !is_member {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
     let results = sqlx::query_as::<_, (String, String, String, String, chrono::NaiveDateTime, String)>(
         r#"SELECT pm.message_id, m.content, m.role, pm.pinned_by,
                   pm.pinned_at, COALESCE(u.name, 'Unknown')

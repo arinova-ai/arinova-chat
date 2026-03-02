@@ -1,6 +1,7 @@
 use regex_lite::Regex;
 use serde::Serialize;
 use sqlx::PgPool;
+use std::net::IpAddr;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
@@ -30,8 +31,57 @@ pub fn extract_urls(content: &str, limit: usize) -> Vec<String> {
     urls
 }
 
+/// Check if an IP address is private/reserved (SSRF protection).
+fn is_private_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()                        // 127.0.0.0/8
+                || v4.is_private()                   // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+                || v4.is_link_local()                // 169.254.0.0/16 (includes AWS metadata 169.254.169.254)
+                || v4.is_broadcast()                 // 255.255.255.255
+                || v4.is_unspecified()               // 0.0.0.0
+                || v4.octets()[0] == 100 && v4.octets()[1] >= 64 && v4.octets()[1] <= 127  // 100.64.0.0/10 (CGNAT)
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()                         // ::1
+                || v6.is_unspecified()               // ::
+                // IPv4-mapped IPv6: check the embedded v4 address
+                || v6.to_ipv4_mapped().map(|v4| {
+                    v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified()
+                }).unwrap_or(false)
+        }
+    }
+}
+
+/// Validate that a URL is safe to fetch (not targeting internal resources).
+fn validate_url_safe(target_url: &str) -> Option<()> {
+    let parsed = url::Url::parse(target_url).ok()?;
+
+    let host = parsed.host_str()?;
+
+    // Block obvious localhost variants
+    if host == "localhost" || host == "0.0.0.0" || host == "127.0.0.1" || host == "::1" || host == "[::1]" {
+        return None;
+    }
+
+    // DNS resolve and check all IPs
+    use std::net::ToSocketAddrs;
+    let port = parsed.port().unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+    let addrs = format!("{}:{}", host, port).to_socket_addrs().ok()?;
+    for addr in addrs {
+        if is_private_ip(&addr.ip()) {
+            return None;
+        }
+    }
+
+    Some(())
+}
+
 /// Fetch OG metadata from a URL. Returns None on failure.
 pub async fn fetch_og_metadata(target_url: &str) -> Option<OgMeta> {
+    // SSRF protection: block private/internal IPs
+    validate_url_safe(target_url)?;
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::limited(5))
@@ -44,6 +94,14 @@ pub async fn fetch_og_metadata(target_url: &str) -> Option<OgMeta> {
         .send()
         .await
         .ok()?;
+
+    // After redirect, verify the final URL is also safe
+    let final_url = resp.url().as_str();
+    if final_url != target_url {
+        if validate_url_safe(final_url).is_none() {
+            return None;
+        }
+    }
 
     if !resp.status().is_success() {
         return None;

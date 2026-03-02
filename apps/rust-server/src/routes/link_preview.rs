@@ -38,6 +38,22 @@ async fn fetch_preview(
             .into_response();
     }
 
+    // Block known dangerous hosts at the route level
+    if let Ok(parsed) = url::Url::parse(target_url) {
+        if let Some(host) = parsed.host_str() {
+            let h = host.to_lowercase();
+            if h == "localhost" || h == "127.0.0.1" || h == "::1" || h == "[::1]"
+                || h == "0.0.0.0" || h == "169.254.169.254" || h.ends_with(".internal")
+            {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "URL targets a restricted address"})),
+                )
+                    .into_response();
+            }
+        }
+    }
+
     match link_preview::get_or_fetch(&state.db, target_url).await {
         Some(meta) => Json(json!({
             "url": meta.url,
