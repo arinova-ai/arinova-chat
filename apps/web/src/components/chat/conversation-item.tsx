@@ -31,6 +31,7 @@ interface ConversationItemProps {
   id: string;
   title: string | null;
   agentName: string;
+  agentDescription?: string | null;
   agentAvatarUrl?: string | null;
   type?: ConversationType;
   lastMessage: Message | null;
@@ -72,6 +73,7 @@ export function ConversationItem({
   id,
   title,
   agentName,
+  agentDescription,
   agentAvatarUrl,
   type = "direct",
   lastMessage,
@@ -177,6 +179,9 @@ export function ConversationItem({
                 )}
                 {renaming ? null : (title ?? agentName)}
                 {!renaming && isVerified && <VerifiedBadge className="h-3.5 w-3.5 text-blue-500" />}
+                {!renaming && agentDescription && (
+                  <span className="text-xs text-muted-foreground ml-1 truncate">{agentDescription}</span>
+                )}
               </span>
               {!renaming && (
                 <span className="flex items-center gap-1.5 shrink-0">

@@ -41,6 +41,7 @@ export function ConversationList() {
               id={conv.id}
               title={conv.title}
               agentName={conv.agentName}
+              agentDescription={conv.agentDescription}
               agentAvatarUrl={conv.agentAvatarUrl}
               type={conv.type}
               lastMessage={conv.lastMessage}
