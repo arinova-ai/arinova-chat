@@ -111,47 +111,58 @@ const MOCK_FRIENDS = [
 
 function FeaturedCarousel({ packs, t }: { packs: StickerPack[]; t: (k: string) => string }) {
   const [idx, setIdx] = useState(0);
-  const pack = packs[idx];
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-brand/20 to-blue-600/10 border border-brand/20 p-5 md:p-6">
-      <div className="flex items-center gap-4">
-        <img
-          src={pack.coverUrl}
-          alt={pack.name}
-          className="h-16 w-16 md:h-20 md:w-20 shrink-0 rounded-lg object-contain bg-white/5 p-1"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-brand-text uppercase tracking-wide">{t("stickerShop.featured")}</p>
-          <h3 className="mt-0.5 text-lg font-bold truncate">{pack.name}</h3>
-          <p className="text-xs text-muted-foreground">
-            {pack.author} &middot; {pack.stickers} {t("stickerShop.stickersCount")}
-          </p>
-          <div className="mt-2">
-            <PriceBadge price={pack.price} t={t} />
+    <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-brand/20 to-blue-600/10 border border-brand/20">
+      {/* Sliding container */}
+      <div
+        className="flex transition-transform duration-400 ease-in-out"
+        style={{ transform: `translateX(-${idx * 100}%)` }}
+      >
+        {packs.map((pack) => (
+          <div key={pack.id} className="w-full shrink-0 p-5 md:p-6">
+            <div className="flex items-center gap-4">
+              <img
+                src={pack.coverUrl}
+                alt={pack.name}
+                className="h-16 w-16 md:h-20 md:w-20 shrink-0 rounded-lg object-contain bg-white/5 p-1"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-brand-text uppercase tracking-wide">{t("stickerShop.featured")}</p>
+                <h3 className="mt-0.5 text-lg font-bold truncate">{pack.name}</h3>
+                <p className="text-xs text-muted-foreground">
+                  {pack.author} &middot; {pack.stickers} {t("stickerShop.stickersCount")}
+                </p>
+                <div className="mt-2">
+                  <PriceBadge price={pack.price} t={t} />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
       {packs.length > 1 && (
         <>
           <button
             onClick={() => setIdx((i) => (i - 1 + packs.length) % packs.length)}
-            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-background/60 p-1 text-foreground hover:bg-background/80"
+            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-background/60 p-1 text-foreground hover:bg-background/80 z-10"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             onClick={() => setIdx((i) => (i + 1) % packs.length)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-background/60 p-1 text-foreground hover:bg-background/80"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-background/60 p-1 text-foreground hover:bg-background/80 z-10"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
             {packs.map((_, i) => (
-              <span
+              <button
                 key={i}
-                className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                  i === idx ? "bg-brand" : "bg-muted-foreground/30"
+                type="button"
+                onClick={() => setIdx(i)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i === idx ? "w-4 bg-brand" : "w-1.5 bg-muted-foreground/30"
                 }`}
               />
             ))}
