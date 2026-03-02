@@ -9,6 +9,7 @@ interface ConversationWithAgent extends Conversation {
   agentDescription: string | null;
   agentAvatarUrl: string | null;
   lastMessage: Message | null;
+  isVerified?: boolean;
 }
 
 interface GroupMember {

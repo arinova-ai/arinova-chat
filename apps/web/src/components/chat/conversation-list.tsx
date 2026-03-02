@@ -53,6 +53,7 @@ export function ConversationList() {
               unreadCount={unreadCounts[conv.id] ?? 0}
               isOnline={conv.agentId ? agentHealth[conv.agentId]?.status === "online" : false}
               isThinking={(thinkingAgents[conv.id]?.length ?? 0) > 0}
+              isVerified={conv.isVerified}
               onDelete={() => deleteConversation(conv.id)}
             />
           ))}

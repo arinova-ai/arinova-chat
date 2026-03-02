@@ -25,6 +25,7 @@ import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users } from "lucide-re
 import type { ConversationType } from "@arinova/shared/types";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 
 interface ConversationItemProps {
   id: string;
@@ -42,6 +43,7 @@ interface ConversationItemProps {
   unreadCount?: number;
   isOnline?: boolean;
   isThinking?: boolean;
+  isVerified?: boolean;
   onDelete: () => void;
 }
 
@@ -80,6 +82,7 @@ export function ConversationItem({
   unreadCount = 0,
   isOnline = false,
   isThinking = false,
+  isVerified = false,
   onRename,
   onPin,
   onDelete,
@@ -173,6 +176,7 @@ export function ConversationItem({
                   <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
                 )}
                 {renaming ? null : (title ?? agentName)}
+                {!renaming && isVerified && <VerifiedBadge className="h-3.5 w-3.5 text-blue-500" />}
               </span>
               {!renaming && (
                 <span className="flex items-center gap-1.5 shrink-0">
