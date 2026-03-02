@@ -783,4 +783,7 @@ INSERT INTO "user" (id, name, email, email_verified, username, is_verified, crea
 VALUES ('arinova-official', 'Arinova', 'official@arinova.ai', TRUE, 'arinova', TRUE, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET is_verified = TRUE, name = 'Arinova', username = 'arinova';
 
+-- Add banned column for user banning
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT FALSE;
+
 COMMIT;

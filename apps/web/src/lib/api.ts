@@ -33,6 +33,14 @@ export async function api<T>(
     const message = body.error ?? `HTTP ${res.status}`;
     const error = new ApiError(res.status, message);
 
+    // Handle banned account — redirect to sign-in with banned indicator
+    if (res.status === 403 && body.code === "ACCOUNT_BANNED") {
+      if (typeof window !== "undefined") {
+        window.location.href = "/login?banned=1";
+      }
+      throw error;
+    }
+
     // Auto-show toast unless silent mode or auth redirect
     if (!options?.silent && res.status !== 401) {
       useToastStore.getState().addToast(message);

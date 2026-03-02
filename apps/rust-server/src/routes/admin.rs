@@ -18,6 +18,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/stats", get(stats))
         .route("/api/admin/users", get(list_users))
         .route("/api/admin/users/{id}/verify", patch(set_verify))
+        .route("/api/admin/users/{id}/ban", post(ban_user))
+        .route("/api/admin/users/{id}/unban", post(unban_user))
 }
 
 // ── Broadcast ──────────────────────────────────────────────────────────
@@ -244,8 +246,8 @@ async fn list_users(
 
     let (rows, total) = if let Some(ref search) = params.search {
         let pattern = format!("%{}%", search.to_lowercase());
-        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, chrono::NaiveDateTime)>(
-            r#"SELECT id, name, email, username, image, is_verified, created_at
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, chrono::NaiveDateTime)>(
+            r#"SELECT id, name, email, username, image, is_verified, banned, created_at
                FROM "user"
                WHERE LOWER(name) LIKE $1 OR LOWER(email) LIKE $1 OR LOWER(username) LIKE $1
                ORDER BY created_at DESC
@@ -269,8 +271,8 @@ async fn list_users(
 
         (rows, total)
     } else {
-        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, chrono::NaiveDateTime)>(
-            r#"SELECT id, name, email, username, image, is_verified, created_at
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, chrono::NaiveDateTime)>(
+            r#"SELECT id, name, email, username, image, is_verified, banned, created_at
                FROM "user"
                ORDER BY created_at DESC
                LIMIT $1 OFFSET $2"#,
@@ -293,7 +295,7 @@ async fn list_users(
         Ok(rows) => {
             let users: Vec<serde_json::Value> = rows
                 .into_iter()
-                .map(|(id, name, email, username, image, is_verified, created_at)| {
+                .map(|(id, name, email, username, image, is_verified, banned, created_at)| {
                     json!({
                         "id": id,
                         "name": name,
@@ -301,6 +303,7 @@ async fn list_users(
                         "username": username,
                         "image": image,
                         "isVerified": is_verified,
+                        "isBanned": banned,
                         "createdAt": created_at.and_utc().to_rfc3339(),
                     })
                 })
@@ -347,6 +350,52 @@ async fn set_verify(
     match result {
         Ok(r) if r.rows_affected() > 0 => {
             Json(json!({"success": true, "isVerified": body.verified})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "User not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+// ── Ban / Unban ───────────────────────────────────────────────────────
+
+/// POST /api/admin/users/:id/ban — Ban a user
+async fn ban_user(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Path(user_id): Path<String>,
+) -> Response {
+    set_banned(&state, &user_id, true).await
+}
+
+/// POST /api/admin/users/:id/unban — Unban a user
+async fn unban_user(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Path(user_id): Path<String>,
+) -> Response {
+    set_banned(&state, &user_id, false).await
+}
+
+async fn set_banned(state: &AppState, user_id: &str, banned: bool) -> Response {
+    let result = sqlx::query(
+        r#"UPDATE "user" SET banned = $1, updated_at = NOW() WHERE id = $2"#,
+    )
+    .bind(banned)
+    .bind(user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => {
+            Json(json!({"success": true, "isBanned": banned})).into_response()
         }
         Ok(_) => (
             StatusCode::NOT_FOUND,

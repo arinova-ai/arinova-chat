@@ -14,7 +14,10 @@ import {
   ChevronRight,
   BadgeCheck,
   BadgeMinus,
+  Ban,
+  ShieldCheck,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface UserItem {
   id: string;
@@ -23,6 +26,7 @@ interface UserItem {
   username: string | null;
   image: string | null;
   isVerified: boolean;
+  isBanned: boolean;
   createdAt: string;
 }
 
@@ -39,6 +43,7 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [banningId, setBanningId] = useState<string | null>(null);
   const limit = 20;
 
   const fetchUsers = useCallback(async () => {
@@ -85,6 +90,29 @@ export default function AdminUsersPage() {
       // api() auto-toasts
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const toggleBan = async (user: UserItem) => {
+    setBanningId(user.id);
+    try {
+      const action = user.isBanned ? "unban" : "ban";
+      await api(`/api/admin/users/${user.id}/${action}`, {
+        method: "POST",
+      });
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          users: prev.users.map((u) =>
+            u.id === user.id ? { ...u, isBanned: !u.isBanned } : u
+          ),
+        };
+      });
+    } catch {
+      // api() auto-toasts
+    } finally {
+      setBanningId(null);
     }
   };
 
@@ -150,6 +178,11 @@ export default function AdminUsersPage() {
                           {user.name}
                         </span>
                         {user.isVerified && <VerifiedBadge />}
+                        {user.isBanned && (
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                            Banned
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         {user.username && <span>@{user.username}</span>}
@@ -161,6 +194,27 @@ export default function AdminUsersPage() {
                       {new Date(user.createdAt).toLocaleDateString()}
                     </span>
 
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 gap-1.5"
+                      disabled={banningId === user.id}
+                      onClick={() => toggleBan(user)}
+                    >
+                      {banningId === user.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : user.isBanned ? (
+                        <>
+                          <ShieldCheck className="h-4 w-4" />
+                          <span className="hidden sm:inline">Unban</span>
+                        </>
+                      ) : (
+                        <>
+                          <Ban className="h-4 w-4" />
+                          <span className="hidden sm:inline">Ban</span>
+                        </>
+                      )}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

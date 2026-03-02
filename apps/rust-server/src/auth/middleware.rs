@@ -86,6 +86,14 @@ where
 
         match validate_session(&app_state.db, &token).await {
             Ok(Some(session)) => {
+                // Check if user is banned
+                if session.banned {
+                    return Err((
+                        StatusCode::FORBIDDEN,
+                        Json(serde_json::json!({"error": "Your account has been banned", "code": "ACCOUNT_BANNED"})),
+                    ));
+                }
+
                 let user = AuthUser {
                     id: session.user_id,
                     email: session.email,
