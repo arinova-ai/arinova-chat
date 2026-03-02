@@ -10,7 +10,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { ArrowLeft, CalendarDays, Settings, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Settings, X, ShieldBan, VolumeX, Loader2 } from "lucide-react";
+import { useChatStore } from "@/store/chat-store";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
@@ -37,6 +38,11 @@ function UserProfileContent() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const blockedUserIds = useChatStore((s) => s.blockedUserIds);
 
   const closeLightbox = useCallback(() => setLightboxOpen(false), []);
 
@@ -64,6 +70,43 @@ function UserProfileContent() {
       cancelled = true;
     };
   }, [userId]);
+
+  // Check block/mute status
+  useEffect(() => {
+    if (isOwnProfile) return;
+    setIsBlocked(blockedUserIds.has(userId));
+    api<Array<{ id: string }>>("/api/users/muted")
+      .then((list) => setIsMuted(list.some((u) => u.id === userId)))
+      .catch(() => {});
+  }, [userId, isOwnProfile, blockedUserIds]);
+
+  const handleToggleBlock = async () => {
+    setActionLoading("block");
+    try {
+      if (isBlocked) {
+        await useChatStore.getState().unblockUser(userId);
+        setIsBlocked(false);
+      } else {
+        await useChatStore.getState().blockUser(userId);
+        setIsBlocked(true);
+      }
+    } catch {}
+    setActionLoading(null);
+  };
+
+  const handleToggleMute = async () => {
+    setActionLoading("mute");
+    try {
+      if (isMuted) {
+        await api(`/api/users/${userId}/mute`, { method: "DELETE" });
+        setIsMuted(false);
+      } else {
+        await api(`/api/users/${userId}/mute`, { method: "POST" });
+        setIsMuted(true);
+      }
+    } catch {}
+    setActionLoading(null);
+  };
 
   return (
     <div className="app-dvh flex bg-background">
@@ -193,6 +236,40 @@ function UserProfileContent() {
                         {t("userProfile.joined")}{" "}
                         {new Date(user.createdAt).toLocaleDateString()}
                       </span>
+                    </div>
+                  )}
+
+                  {/* Block / Mute actions (not shown on own profile) */}
+                  {!isOwnProfile && (
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`gap-1.5 ${isBlocked ? "text-red-400 border-red-500/40" : ""}`}
+                        disabled={actionLoading === "block"}
+                        onClick={handleToggleBlock}
+                      >
+                        {actionLoading === "block" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ShieldBan className="h-3.5 w-3.5" />
+                        )}
+                        {isBlocked ? t("userProfile.unblock") : t("userProfile.block")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`gap-1.5 ${isMuted ? "text-orange-400 border-orange-500/40" : ""}`}
+                        disabled={actionLoading === "mute"}
+                        onClick={handleToggleMute}
+                      >
+                        {actionLoading === "mute" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <VolumeX className="h-3.5 w-3.5" />
+                        )}
+                        {isMuted ? t("userProfile.unmute") : t("userProfile.mute")}
+                      </Button>
                     </div>
                   )}
                 </div>

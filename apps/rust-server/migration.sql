@@ -786,4 +786,24 @@ ON CONFLICT (id) DO UPDATE SET is_verified = TRUE, name = 'Arinova', username = 
 -- Add banned column for user banning
 ALTER TABLE "user" ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- User mutes table (user-level muting, separate from conversation mute)
+CREATE TABLE IF NOT EXISTS user_mutes (
+    user_id TEXT NOT NULL,
+    muted_user_id TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, muted_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_user_mutes_user_id ON user_mutes(user_id);
+
+-- Pinned messages table
+CREATE TABLE IF NOT EXISTS pinned_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    pinned_by TEXT NOT NULL,
+    pinned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(conversation_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pinned_messages_conv ON pinned_messages(conversation_id);
+
 COMMIT;

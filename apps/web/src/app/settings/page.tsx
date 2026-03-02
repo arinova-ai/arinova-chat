@@ -26,6 +26,7 @@ import {
   ZoomIn,
   ZoomOut,
   Settings,
+  VolumeX,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { compressImage } from "@/lib/image-compress";
@@ -1175,15 +1176,21 @@ function NotificationPanel() {
 function PrivacyPanel() {
   const { t } = useTranslation();
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [mutedUsers, setMutedUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [unmutingId, setUnmutingId] = useState<string | null>(null);
   const unblockUser = useChatStore((s) => s.unblockUser);
 
   useEffect(() => {
     (async () => {
       try {
-        const data = await api<BlockedUser[]>("/api/users/blocked");
-        setBlockedUsers(data);
+        const [blocked, muted] = await Promise.all([
+          api<BlockedUser[]>("/api/users/blocked"),
+          api<BlockedUser[]>("/api/users/muted"),
+        ]);
+        setBlockedUsers(blocked);
+        setMutedUsers(muted);
       } catch {
         // ignore
       } finally {
@@ -1254,6 +1261,65 @@ function PrivacyPanel() {
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
                     t("common.unblock")
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Muted Users */}
+      <div>
+        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+          <VolumeX className="h-5 w-5 text-muted-foreground" />
+          {t("settings.privacy.mutedUsers")}
+        </h3>
+
+        {loading ? (
+          <div className="flex justify-center py-4">
+            <ArinovaSpinner size="sm" />
+          </div>
+        ) : mutedUsers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("settings.privacy.noMuted")}</p>
+        ) : (
+          <div className="space-y-2">
+            {mutedUsers.map((user) => (
+              <div
+                key={user.id}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/50 transition-colors"
+              >
+                <Avatar className="h-8 w-8 shrink-0">
+                  {user.image ? (
+                    <AvatarImage src={assetUrl(user.image)} alt={user.username ?? user.name ?? ""} />
+                  ) : null}
+                  <AvatarFallback className="text-xs bg-secondary">
+                    {(user.name ?? user.username ?? "?").charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{user.name ?? user.username ?? "Unknown"}</p>
+                  {user.username && (
+                    <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setUnmutingId(user.id);
+                    try {
+                      await api(`/api/users/${user.id}/mute`, { method: "DELETE" });
+                      setMutedUsers((prev) => prev.filter((u) => u.id !== user.id));
+                    } catch {}
+                    setUnmutingId(null);
+                  }}
+                  disabled={unmutingId === user.id}
+                >
+                  {unmutingId === user.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("common.unmute")
                   )}
                 </Button>
               </div>
