@@ -14,6 +14,7 @@ pub mod sandbox;
 pub mod uploads;
 pub mod users;
 pub mod agent_health;
+pub mod agent_messages;
 pub mod agent_send;
 pub mod agent_uploads;
 pub mod creator;
@@ -46,6 +47,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(notifications::router())
         .merge(sandbox::router())
         .merge(agent_health::router())
+        .merge(agent_messages::router())
         .merge(agent_send::router())
         .merge(agent_uploads::router())
         .merge(office::router())

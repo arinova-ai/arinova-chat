@@ -7,4 +7,7 @@ export type {
   TaskHandler,
   AgentEvent,
   AgentEventListener,
+  HistoryMessage,
+  FetchHistoryOptions,
+  FetchHistoryResult,
 } from "./types.js";

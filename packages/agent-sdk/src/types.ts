@@ -58,6 +58,8 @@ export interface TaskContext {
     fileName: string,
     fileType?: string,
   ) => Promise<UploadResult>;
+  /** Fetch full conversation history with pagination. */
+  fetchHistory: (options?: FetchHistoryOptions) => Promise<FetchHistoryResult>;
 }
 
 /** An attachment from the user's message. */
@@ -76,6 +78,44 @@ export interface UploadResult {
   fileName: string;
   fileType: string;
   fileSize: number;
+}
+
+/** A message returned by fetchHistory(). */
+export interface HistoryMessage {
+  id: string;
+  conversationId: string;
+  seq: number;
+  role: string;
+  content: string;
+  status: string;
+  senderAgentId?: string;
+  senderAgentName?: string;
+  senderUserId?: string;
+  senderUsername?: string;
+  replyToId?: string;
+  threadId?: string;
+  createdAt: string;
+  updatedAt: string;
+  attachments?: TaskAttachment[];
+}
+
+/** Options for fetchHistory(). */
+export interface FetchHistoryOptions {
+  /** Fetch messages before this message ID (for backward pagination). */
+  before?: string;
+  /** Fetch messages after this message ID (for forward pagination). */
+  after?: string;
+  /** Fetch messages around this message ID. */
+  around?: string;
+  /** Max messages to return (default 50, max 100). */
+  limit?: number;
+}
+
+/** Result from fetchHistory(). */
+export interface FetchHistoryResult {
+  messages: HistoryMessage[];
+  hasMore: boolean;
+  nextCursor?: string;
 }
 
 /** Task handler function. */

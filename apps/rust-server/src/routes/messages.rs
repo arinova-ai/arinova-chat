@@ -35,23 +35,23 @@ pub fn router() -> Router<AppState> {
 // ── Row types for SQL queries ──────────────────────────────────────────
 
 #[derive(Debug, FromRow)]
-struct MessageRow {
-    id: Uuid,
-    conversation_id: Uuid,
-    seq: i32,
-    role: crate::db::models::MessageRole,
-    content: String,
-    status: crate::db::models::MessageStatus,
-    sender_agent_id: Option<Uuid>,
-    sender_user_id: Option<String>,
-    reply_to_id: Option<Uuid>,
-    thread_id: Option<Uuid>,
-    created_at: NaiveDateTime,
-    updated_at: NaiveDateTime,
+pub(crate) struct MessageRow {
+    pub(crate) id: Uuid,
+    pub(crate) conversation_id: Uuid,
+    pub(crate) seq: i32,
+    pub(crate) role: crate::db::models::MessageRole,
+    pub(crate) content: String,
+    pub(crate) status: crate::db::models::MessageStatus,
+    pub(crate) sender_agent_id: Option<Uuid>,
+    pub(crate) sender_user_id: Option<String>,
+    pub(crate) reply_to_id: Option<Uuid>,
+    pub(crate) thread_id: Option<Uuid>,
+    pub(crate) created_at: NaiveDateTime,
+    pub(crate) updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, FromRow)]
-struct AttachmentRow {
+pub(crate) struct AttachmentRow {
     id: Uuid,
     message_id: Uuid,
     file_name: String,
@@ -81,8 +81,8 @@ struct CountRow {
 }
 
 #[derive(Debug, FromRow)]
-struct CursorTimestamp {
-    created_at: NaiveDateTime,
+pub(crate) struct CursorTimestamp {
+    pub(crate) created_at: NaiveDateTime,
 }
 
 #[derive(Debug, FromRow)]
@@ -93,7 +93,7 @@ struct ConvCheck {
 // ── Attachment enrichment ──────────────────────────────────────────────
 
 /// Fetch attachments for a batch of messages and merge them into JSON values.
-async fn with_attachments(
+pub(crate) async fn with_attachments(
     db: &PgPool,
     config: &crate::config::Config,
     items: &[MessageRow],

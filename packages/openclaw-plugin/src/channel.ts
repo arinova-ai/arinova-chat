@@ -283,6 +283,7 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
             replyTo: task.replyTo,
             history: task.history,
             attachments: task.attachments,
+            fetchHistory: task.fetchHistory,
           },
           sendChunk: task.sendChunk,
           sendComplete: task.sendComplete,

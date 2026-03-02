@@ -60,6 +60,8 @@ export type ArinovaChatInboundMessage = {
   history?: { role: string; content: string; senderAgentName?: string; senderUsername?: string; createdAt: string }[];
   /** Attachments from the user's message. */
   attachments?: { id: string; fileName: string; fileType: string; fileSize: number; url: string }[];
+  /** Fetch full conversation history with pagination. */
+  fetchHistory?: (options?: { before?: string; after?: string; around?: string; limit?: number }) => Promise<{ messages: unknown[]; hasMore: boolean; nextCursor?: string }>;
 };
 
 /** Result from sending a message via Arinova REST API. */

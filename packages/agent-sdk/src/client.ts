@@ -7,6 +7,8 @@ import type {
   AgentEvent,
   AgentEventListener,
   UploadResult,
+  FetchHistoryOptions,
+  FetchHistoryResult,
 } from "./types.js";
 
 const DEFAULT_RECONNECT_INTERVAL = 5_000;
@@ -276,6 +278,43 @@ export class ArinovaAgent {
     return res.json() as Promise<UploadResult>;
   }
 
+  /**
+   * Fetch conversation history via the agent messages endpoint.
+   * @param conversationId - The conversation to fetch messages from.
+   * @param options - Pagination options (before, after, around, limit).
+   */
+  async fetchHistory(
+    conversationId: string,
+    options?: FetchHistoryOptions,
+  ): Promise<FetchHistoryResult> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const params = new URLSearchParams();
+    if (options?.before) params.set("before", options.before);
+    if (options?.after) params.set("after", options.after);
+    if (options?.around) params.set("around", options.around);
+    if (options?.limit != null) params.set("limit", String(options.limit));
+
+    const qs = params.toString();
+    const url = `${httpUrl}/api/agent/messages/${conversationId}${qs ? `?${qs}` : ""}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`fetchHistory failed (${res.status}): ${body}`);
+    }
+
+    return res.json() as Promise<FetchHistoryResult>;
+  }
+
   private handleTask(data: Record<string, unknown>): void {
     if (!this.taskHandler) return;
 
@@ -332,6 +371,8 @@ export class ArinovaAgent {
       signal: abortController.signal,
       uploadFile: (file, fileName, fileType?) =>
         this.uploadFile(data.conversationId as string, file, fileName, fileType),
+      fetchHistory: (options?) =>
+        this.fetchHistory(data.conversationId as string, options),
     };
 
     // When task is aborted (user cancelled), immediately send cancellation
