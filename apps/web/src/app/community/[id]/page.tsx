@@ -117,19 +117,40 @@ function CommunityDetailContent() {
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [notFound, setNotFound] = useState(false);
+
   // ------ Load data ------
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Fetch community first — if it doesn't exist, show error immediately
+      let communityData: Community;
       try {
-        const [communityData, membersData, agentsData] = await Promise.all([
-          api<Community>(`/api/communities/${id}`),
+        communityData = await api<Community>(`/api/communities/${id}`);
+      } catch {
+        // Retry once after a short delay (handles DB replication lag)
+        await new Promise((r) => setTimeout(r, 800));
+        try {
+          communityData = await api<Community>(`/api/communities/${id}`);
+        } catch {
+          if (!cancelled) {
+            setNotFound(true);
+            setLoading(false);
+          }
+          return;
+        }
+      }
+      if (cancelled) return;
+      setCommunity(communityData);
+
+      // Then fetch members and agents in parallel
+      try {
+        const [membersData, agentsData] = await Promise.all([
           api<{ members: Member[] }>(`/api/communities/${id}/members`),
           api<{ agents: Agent[] }>(`/api/communities/${id}/agents`),
         ]);
         if (cancelled) return;
-        setCommunity(communityData);
         setMembers(membersData.members);
         setAgents(agentsData.agents);
 
@@ -150,7 +171,7 @@ function CommunityDetailContent() {
           }
         }
       } catch {
-        // auto-handled
+        // members/agents may fail — community still renders
       } finally {
         if (!cancelled) setLoading(false);
       }
