@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import type { Message, Attachment } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
@@ -44,6 +43,8 @@ import { useDoubleTap } from "@/hooks/use-double-tap";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { UserProfileSheet } from "./user-profile-sheet";
+import { AgentProfileSheet } from "./agent-profile-sheet";
 
 // ============================================================
 // Utilities
@@ -461,7 +462,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
 
   const conversation = useChatStore((s) => s.conversations.find((c) => c.id === message.conversationId));
-  const router = useRouter();
+  const [profileSheet, setProfileSheet] = useState<{ type: "user" | "agent"; id: string } | null>(null);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
@@ -553,12 +554,11 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         clickable={showProfileClick}
         onClick={() => {
           if (showOwnProfile && currentUserId) {
-            router.push(`/profile/${currentUserId}`);
+            setProfileSheet({ type: "user", id: currentUserId });
           } else if (showUserProfile && message.senderUserId) {
-            router.push(`/profile/${message.senderUserId}`);
+            setProfileSheet({ type: "user", id: message.senderUserId });
           } else if (showAgentProfile && resolvedAgentId) {
-            const suffix = conversation?.type === "group" ? `?convId=${message.conversationId}` : "";
-            router.push(`/agent/${resolvedAgentId}${suffix}`);
+            setProfileSheet({ type: "agent", id: resolvedAgentId });
           }
         }}
       />
@@ -745,6 +745,22 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         </DialogContent>
       </Dialog>
 
+      {profileSheet?.type === "user" && (
+        <UserProfileSheet
+          userId={profileSheet.id}
+          conversationId={message.conversationId}
+          open
+          onOpenChange={(open) => { if (!open) setProfileSheet(null); }}
+        />
+      )}
+      {profileSheet?.type === "agent" && (
+        <AgentProfileSheet
+          agentId={profileSheet.id}
+          conversationId={message.conversationId}
+          open
+          onOpenChange={(open) => { if (!open) setProfileSheet(null); }}
+        />
+      )}
     </div>
   );
 }
