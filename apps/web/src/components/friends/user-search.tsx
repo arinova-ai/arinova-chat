@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Search, UserPlus, Loader2, Check } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 
@@ -13,6 +14,7 @@ interface SearchUser {
   username: string;
   name: string | null;
   image: string | null;
+  isVerified?: boolean;
 }
 
 interface UserSearchProps {
@@ -139,8 +141,9 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">
+                  <p className="flex items-center gap-1 text-sm font-medium truncate">
                     {user.name ?? user.username}
+                    {user.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     @{user.username}

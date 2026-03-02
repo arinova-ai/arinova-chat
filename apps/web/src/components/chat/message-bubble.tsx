@@ -12,6 +12,7 @@ const MarkdownContent = dynamic(
 );
 import { StreamingCursor } from "./streaming-cursor";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { Button } from "@/components/ui/button";
 import { useChatStore, type ReactionInfo } from "@/store/chat-store";
 import { ImageLightbox } from "./image-lightbox";
@@ -121,6 +122,7 @@ export function parseStickerUrl(content: string): string | null {
 interface SenderDisplayInfo {
   name: string;
   color: string;
+  isVerified?: boolean;
 }
 
 /**
@@ -142,10 +144,10 @@ function getSenderDisplayInfo(
     return { name: message.senderAgentName || agentName!, color: "text-blue-400" };
   }
   if (!isOwn && !message.senderAgentName && !agentName && message.senderUserId) {
-    return { name: message.senderUserName || message.senderUsername || "User", color: "text-emerald-400" };
+    return { name: message.senderUserName || message.senderUsername || "User", color: "text-emerald-400", isVerified: message.senderIsVerified };
   }
   if (isOwn && isGroupConversation && message.senderUserId) {
-    return { name: message.senderUserName || message.senderUsername || "User", color: "text-emerald-400" };
+    return { name: message.senderUserName || message.senderUsername || "User", color: "text-emerald-400", isVerified: message.senderIsVerified };
   }
   return null;
 }
@@ -208,8 +210,9 @@ function MessageAvatar({ message, isOwn, clickable, onClick }: MessageAvatarProp
 function SenderLabel({ info }: { info: SenderDisplayInfo | null }) {
   if (!info) return null;
   return (
-    <p className={`mb-1 text-xs font-medium ${info.color}`}>
+    <p className={`mb-1 flex items-center gap-1 text-xs font-medium ${info.color}`}>
       {info.name}
+      {info.isVerified && <VerifiedBadge className="h-3.5 w-3.5 text-blue-500" />}
     </p>
   );
 }

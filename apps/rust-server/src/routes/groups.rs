@@ -319,9 +319,9 @@ async fn list_members(
     .unwrap_or_default();
 
     // Fetch user members
-    let user_members = sqlx::query_as::<_, (Uuid, String, String, chrono::NaiveDateTime, String, Option<String>, Option<String>)>(
+    let user_members = sqlx::query_as::<_, (Uuid, String, String, chrono::NaiveDateTime, String, Option<String>, Option<String>, bool)>(
         r#"SELECT cum.id, cum.user_id, cum.role::text, cum.joined_at,
-                  u.name, u.image, u.username
+                  u.name, u.image, u.username, u.is_verified
            FROM conversation_user_members cum
            JOIN "user" u ON u.id = cum.user_id
            WHERE cum.conversation_id = $1
@@ -359,6 +359,7 @@ async fn list_members(
                 "name": r.4,
                 "image": r.5,
                 "username": r.6,
+                "isVerified": r.7,
             })
         })
         .collect();

@@ -237,8 +237,8 @@ async fn list_friends(
     State(state): State<AppState>,
     user: AuthUser,
 ) -> Response {
-    let results = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
-        r#"SELECT u.id, u.name, u.image, u.username
+    let results = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
+        r#"SELECT u.id, u.name, u.image, u.username, u.is_verified
            FROM friendships f
            JOIN "user" u ON u.id = CASE
                WHEN f.requester_id = $1 THEN f.addressee_id
@@ -256,12 +256,13 @@ async fn list_friends(
         Ok(rows) => {
             let friends: Vec<serde_json::Value> = rows
                 .into_iter()
-                .map(|(id, name, image, username)| {
+                .map(|(id, name, image, username, is_verified)| {
                     json!({
                         "id": id,
                         "name": name,
                         "image": image,
                         "username": username,
+                        "isVerified": is_verified,
                     })
                 })
                 .collect();
@@ -281,8 +282,8 @@ async fn list_requests(
     user: AuthUser,
 ) -> Response {
     // Incoming requests (I am addressee)
-    let incoming = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>)>(
-        r#"SELECT f.id, u.id, u.name, u.image, u.username
+    let incoming = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>, bool)>(
+        r#"SELECT f.id, u.id, u.name, u.image, u.username, u.is_verified
            FROM friendships f
            JOIN "user" u ON u.id = f.requester_id
            WHERE f.addressee_id = $1 AND f.status = 'pending'
@@ -294,8 +295,8 @@ async fn list_requests(
     .unwrap_or_default();
 
     // Outgoing requests (I am requester)
-    let outgoing = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>)>(
-        r#"SELECT f.id, u.id, u.name, u.image, u.username
+    let outgoing = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>, bool)>(
+        r#"SELECT f.id, u.id, u.name, u.image, u.username, u.is_verified
            FROM friendships f
            JOIN "user" u ON u.id = f.addressee_id
            WHERE f.requester_id = $1 AND f.status = 'pending'
@@ -308,26 +309,28 @@ async fn list_requests(
 
     let incoming_json: Vec<serde_json::Value> = incoming
         .into_iter()
-        .map(|(fid, uid, name, image, username)| {
+        .map(|(fid, uid, name, image, username, is_verified)| {
             json!({
                 "id": fid,
                 "userId": uid,
                 "name": name,
                 "image": image,
                 "username": username,
+                "isVerified": is_verified,
             })
         })
         .collect();
 
     let outgoing_json: Vec<serde_json::Value> = outgoing
         .into_iter()
-        .map(|(fid, uid, name, image, username)| {
+        .map(|(fid, uid, name, image, username, is_verified)| {
             json!({
                 "id": fid,
                 "userId": uid,
                 "name": name,
                 "image": image,
                 "username": username,
+                "isVerified": is_verified,
             })
         })
         .collect();

@@ -40,6 +40,7 @@ export interface GroupUserMember {
   name: string;
   image: string | null;
   username: string | null;
+  isVerified?: boolean;
 }
 
 export interface GroupMembers {
@@ -1146,6 +1147,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         senderUserId: msg.senderUserId,
         senderUserName: msg.senderUserName,
         senderUserImage: (msg as Record<string, unknown>).senderUserImage as string | undefined,
+        senderIsVerified: (msg as Record<string, unknown>).senderIsVerified as boolean | undefined,
         replyToId: msg.replyToId ?? undefined,
         threadId: threadId ?? undefined,
         attachments: ((msg as Record<string, unknown>).attachments as Message["attachments"]) ?? [],

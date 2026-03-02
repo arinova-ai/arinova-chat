@@ -15,6 +15,7 @@ pub struct AuthUser {
     pub email: String,
     pub name: String,
     pub username: Option<String>,
+    pub is_verified: bool,
 }
 
 /// Authenticated agent extracted from `Authorization: Bearer <botToken>` header.
@@ -60,6 +61,7 @@ where
                     email: session.email,
                     name: session.name,
                     username: session.username.clone(),
+                    is_verified: session.is_verified,
                 };
 
                 // Require username for most API routes

@@ -108,6 +108,7 @@ pub struct User {
     pub email_verified: bool,
     pub image: Option<String>,
     pub username: Option<String>,
+    pub is_verified: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

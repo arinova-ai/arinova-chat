@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp, Settings, UserPlus, Loader2, ArrowLeft, User } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
@@ -210,6 +211,7 @@ interface FriendItem {
   name: string | null;
   username: string | null;
   image: string | null;
+  isVerified?: boolean;
 }
 
 function CreateGroupDialog({
@@ -396,8 +398,9 @@ function CreateGroupDialog({
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">
+                        <p className="flex items-center gap-1 text-sm font-medium">
                           {friend.name ?? friend.username ?? "Unknown"}
+                          {friend.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           @{friend.username ?? "unknown"}
@@ -704,8 +707,9 @@ function FriendDmDialog({
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
+                    <p className="flex items-center gap-1 text-sm font-medium">
                       {friend.name ?? friend.username ?? "Unknown"}
+                      {friend.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       @{friend.username ?? "unknown"}

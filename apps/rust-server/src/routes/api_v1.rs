@@ -33,8 +33,8 @@ async fn user_profile(
     State(state): State<AppState>,
     auth: AuthOAuthToken,
 ) -> Response {
-    let user = sqlx::query_as::<_, (String, String, String, Option<String>)>(
-        r#"SELECT id, name, email, image FROM "user" WHERE id = $1"#,
+    let user = sqlx::query_as::<_, (String, String, String, Option<String>, bool)>(
+        r#"SELECT id, name, email, image, is_verified FROM "user" WHERE id = $1"#,
     )
     .bind(&auth.user_id)
     .fetch_optional(&state.db)
@@ -46,6 +46,7 @@ async fn user_profile(
             "name": u.1,
             "email": u.2,
             "image": u.3,
+            "isVerified": u.4,
         }))
         .into_response(),
         Ok(None) => (

@@ -775,4 +775,7 @@ INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, 
   ('f0000000-0003-4000-8000-000000000003', '20-bye.png', '👋', 'Bye', '拜拜', 20)
 ON CONFLICT (pack_id, filename) DO NOTHING;
 
+-- Add verified badge column
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
 COMMIT;

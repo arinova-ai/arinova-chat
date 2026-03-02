@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import { ArrowLeft, CalendarDays, Settings } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
@@ -22,6 +23,7 @@ interface UserProfile {
   bio?: string | null;
   coverImage?: string | null;
   createdAt?: string;
+  isVerified?: boolean;
 }
 
 function UserProfileContent() {
@@ -136,8 +138,9 @@ function UserProfileContent() {
 
                   {/* Name + username */}
                   <div className="mt-3">
-                    <h2 className="text-xl font-bold text-foreground">
+                    <h2 className="flex items-center gap-1.5 text-xl font-bold text-foreground">
                       {user.name}
+                      {user.isVerified && <VerifiedBadge className="h-5 w-5 text-blue-500" />}
                     </h2>
                     {user.username && (
                       <p className="text-sm text-muted-foreground">

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { MessageSquare, UserMinus, Loader2 } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
@@ -14,6 +15,7 @@ interface Friend {
   name: string | null;
   username: string | null;
   image: string | null;
+  isVerified?: boolean;
 }
 
 interface FriendsPanelProps {
@@ -121,8 +123,9 @@ export function FriendsPanel({ onStartConversation }: FriendsPanelProps) {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">
+                  <p className="flex items-center gap-1 text-sm font-medium truncate">
                     {friend.name ?? friend.username ?? "Unknown"}
+                    {friend.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     @{friend.username ?? "unknown"}

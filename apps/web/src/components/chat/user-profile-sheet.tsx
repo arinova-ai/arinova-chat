@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bot, Crown, ShieldCheck } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
@@ -29,6 +30,7 @@ interface UserProfile {
   username: string | null;
   role?: string;
   createdAt?: string;
+  isVerified?: boolean;
 }
 
 function RoleBadge({ role }: { role: string }) {
@@ -89,7 +91,7 @@ export function UserProfileSheet({
   }, [open, userId, groupUser]);
 
   const user: UserProfile | null = groupUser
-    ? { id: groupUser.userId, name: groupUser.name, image: groupUser.image, username: groupUser.username, role: groupUser.role }
+    ? { id: groupUser.userId, name: groupUser.name, image: groupUser.image, username: groupUser.username, role: groupUser.role, isVerified: groupUser.isVerified }
     : apiUser;
 
   return (
@@ -129,6 +131,7 @@ export function UserProfileSheet({
                   <p className="text-base font-semibold text-foreground truncate">
                     {user.name}
                   </p>
+                  {user.isVerified && <VerifiedBadge />}
                   {user.role && <RoleBadge role={user.role} />}
                 </div>
                 {user.username && (

@@ -49,6 +49,7 @@ async fn get_me(
         "email": user.email,
         "name": user.name,
         "username": user.username,
+        "isVerified": user.is_verified,
     }))
     .into_response()
 }
@@ -154,8 +155,8 @@ async fn search_users(
     let limit = params.limit.unwrap_or(20).min(50);
     let pattern = format!("{}%", params.q.to_lowercase());
 
-    let results = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
-        r#"SELECT id, name, image, username FROM "user"
+    let results = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
+        r#"SELECT id, name, image, username, is_verified FROM "user"
            WHERE username ILIKE $1
            ORDER BY username
            LIMIT $2"#,
@@ -169,12 +170,13 @@ async fn search_users(
         Ok(rows) => {
             let users: Vec<serde_json::Value> = rows
                 .into_iter()
-                .map(|(id, name, image, username)| {
+                .map(|(id, name, image, username, is_verified)| {
                     json!({
                         "id": id,
                         "name": name,
                         "image": image,
                         "username": username,
+                        "isVerified": is_verified,
                     })
                 })
                 .collect();
@@ -194,15 +196,15 @@ async fn get_user_by_id(
     _user: AuthUser,
     Path(user_id): Path<String>,
 ) -> Response {
-    let result = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, Option<String>, NaiveDateTime)>(
-        r#"SELECT id, name, image, username, bio, cover_image, created_at FROM "user" WHERE id = $1"#,
+    let result = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, Option<String>, NaiveDateTime, bool)>(
+        r#"SELECT id, name, image, username, bio, cover_image, created_at, is_verified FROM "user" WHERE id = $1"#,
     )
     .bind(&user_id)
     .fetch_optional(&state.db)
     .await;
 
     match result {
-        Ok(Some((id, name, image, username, bio, cover_image, created_at))) => {
+        Ok(Some((id, name, image, username, bio, cover_image, created_at, is_verified))) => {
             Json(json!({
                 "id": id,
                 "name": name,
@@ -211,6 +213,7 @@ async fn get_user_by_id(
                 "bio": bio,
                 "coverImage": cover_image,
                 "createdAt": created_at.and_utc().to_rfc3339(),
+                "isVerified": is_verified,
             }))
             .into_response()
         }

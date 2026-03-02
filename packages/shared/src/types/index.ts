@@ -83,6 +83,7 @@ export interface Message {
   senderUsername?: string;
   senderUserName?: string;
   senderUserImage?: string;
+  senderIsVerified?: boolean;
   replyToId?: string;
   replyTo?: {
     role: MessageRole;

@@ -81,6 +81,7 @@ struct ListingDetailRow {
     updated_at: NaiveDateTime,
     creator_name: Option<String>,
     creator_username: Option<String>,
+    creator_is_verified: bool,
 }
 
 /// Creator manage view — includes system_prompt, no creator join.
@@ -161,6 +162,7 @@ fn detail_row_to_json(r: &ListingDetailRow) -> Value {
         "updatedAt": r.updated_at.and_utc().to_rfc3339(),
         "creatorName": r.creator_name,
         "creatorUsername": r.creator_username,
+        "creatorIsVerified": r.creator_is_verified,
     })
 }
 
@@ -592,7 +594,8 @@ async fn browse(
                   al.avg_rating::float8 AS avg_rating, al.review_count,
                   al.total_messages, al.total_revenue,
                   al.example_conversations, al.created_at, al.updated_at,
-                  u.name AS creator_name, u.username AS creator_username
+                  u.name AS creator_name, u.username AS creator_username,
+                  COALESCE(u.is_verified, false) AS creator_is_verified
            FROM agent_listings al
            LEFT JOIN "user" u ON u.id = al.creator_id
            WHERE {}
@@ -648,7 +651,8 @@ async fn get_detail(
                   al.avg_rating::float8 AS avg_rating, al.review_count,
                   al.total_messages, al.total_revenue,
                   al.example_conversations, al.created_at, al.updated_at,
-                  u.name AS creator_name, u.username AS creator_username
+                  u.name AS creator_name, u.username AS creator_username,
+                  COALESCE(u.is_verified, false) AS creator_is_verified
            FROM agent_listings al
            LEFT JOIN "user" u ON u.id = al.creator_id
            WHERE al.id = $1 AND al.status = 'active'"#,

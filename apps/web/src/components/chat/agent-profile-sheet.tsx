@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bot, User, Pencil, Check, X, MessageSquare, Radio, Loader2 } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { VisuallyHidden } from "radix-ui";
 import { authClient } from "@/lib/auth-client";
@@ -431,8 +432,9 @@ export function AgentProfileSheet({
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground truncate">
+                <p className="flex items-center gap-1 text-sm font-medium text-foreground truncate">
                   {groupOwner.name}
+                  {groupOwner.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
                 </p>
                 {groupOwner.username && (
                   <p className="text-xs text-muted-foreground truncate">@{groupOwner.username}</p>

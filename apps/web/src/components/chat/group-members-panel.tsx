@@ -50,6 +50,7 @@ import {
   ChevronUp,
   Settings,
 } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import {
   Dialog,
   DialogContent,
@@ -487,6 +488,7 @@ function UserMemberRow({
             <p className="text-sm font-medium truncate hover:underline">
               {user.name}{isCurrentUser ? ` ${t("group.you")}` : ""}
             </p>
+            {user.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
             <RoleBadge role={user.role} />
           </div>
           {user.username && (
