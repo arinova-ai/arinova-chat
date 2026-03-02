@@ -35,6 +35,7 @@ import {
   Clock,
   X,
   Flag,
+  Pin,
 } from "lucide-react";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
@@ -325,6 +326,7 @@ interface MessageActionsProps {
   onReact: (emoji: string) => void;
   onOpenThread: (messageId: string) => void;
   onReport?: () => void;
+  onPin?: () => void;
 }
 
 /** Hover action toolbar (copy, react, reply, thread, delete, retry). */
@@ -341,6 +343,7 @@ function MessageActions({
   onReact,
   onOpenThread,
   onReport,
+  onPin,
 }: MessageActionsProps) {
   const { t } = useTranslation();
   return (
@@ -387,6 +390,16 @@ function MessageActions({
           <MessageSquare className="h-3 w-3" />
         </Button>
       )}
+
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={onPin}
+        className="h-6 w-6 text-muted-foreground hover:text-yellow-400"
+        title="Pin"
+      >
+        <Pin className="h-3 w-3" />
+      </Button>
 
       <Button
         variant="ghost"
@@ -540,10 +553,21 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
     setReplyingTo(message);
   }, [setReplyingTo, message]);
 
+  const handlePin = useCallback(async () => {
+    try {
+      await api(`/api/conversations/${message.conversationId}/pin/${message.id}`, {
+        method: "POST",
+      });
+    } catch {
+      // pin failed silently
+    }
+  }, [message.conversationId, message.id]);
+
   return (
     <div
+      data-message-id={message.id}
       className={cn(
-        "group relative flex gap-3 px-4",
+        "group relative flex gap-3 px-4 transition-shadow",
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
@@ -695,6 +719,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               onReact={(emoji) => toggleReaction(message.id, emoji)}
               onOpenThread={openThread}
               onReport={() => setReportOpen(true)}
+              onPin={handlePin}
             />
           )}
         </div>
@@ -722,6 +747,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         onRetry={handleRetry}
         onReply={handleReply}
         onReact={(emoji) => toggleReaction(message.id, emoji)}
+        onPin={handlePin}
       />
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>

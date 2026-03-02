@@ -13,6 +13,7 @@ import { ActiveCall } from "@/components/voice/active-call";
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
+import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
@@ -132,6 +133,7 @@ export function ChatArea() {
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
       />
+      <PinnedMessagesBar conversationId={activeConversationId} />
       <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
       <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
 

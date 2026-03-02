@@ -6,7 +6,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Copy, Trash2, RotateCcw, Reply } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Reply, Pin } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
@@ -21,6 +21,7 @@ interface MessageActionSheetProps {
   onRetry: () => void;
   onReply: () => void;
   onReact: (emoji: string) => void;
+  onPin?: () => void;
 }
 
 const ACTION_BUTTON =
@@ -35,6 +36,7 @@ export function MessageActionSheet({
   onRetry,
   onReply,
   onReact,
+  onPin,
 }: MessageActionSheetProps) {
   const { t } = useTranslation();
   if (!message) return null;
@@ -84,6 +86,12 @@ export function MessageActionSheet({
             <Reply className="h-4 w-4 text-blue-400" />
             <span className="text-blue-400">{t("chat.actions.reply")}</span>
           </button>
+          {onPin && (
+            <button className={ACTION_BUTTON} onClick={() => handle(onPin)}>
+              <Pin className="h-4 w-4 text-yellow-400" />
+              <span className="text-yellow-400">Pin</span>
+            </button>
+          )}
           {isError && (
             <button className={ACTION_BUTTON} onClick={() => handle(onRetry)}>
               <RotateCcw className="h-4 w-4 text-blue-400" />

@@ -29,6 +29,7 @@ pub mod themes;
 pub mod stickers;
 pub mod admin;
 pub mod reports;
+pub mod pins;
 
 use axum::Router;
 use crate::AppState;
@@ -66,5 +67,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(stickers::router())
         .merge(admin::router())
         .merge(reports::router())
+        .merge(pins::router())
         .with_state(state)
 }
