@@ -319,6 +319,7 @@ function PackDetailDialog({
   const previewStickers = detailStickers.length > 0 ? detailStickers : getStickerFiles(pack.id, pack.stickers);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v && !zoomedSticker) onClose(); }}>
       <DialogContent className="max-w-lg border-border bg-card p-0 gap-0">
         {/* Banner */}
@@ -367,31 +368,34 @@ function PackDetailDialog({
           ))}
         </div>
 
-        {/* Sticker lightbox */}
-        {zoomedSticker &&
-          createPortal(
-            <div
-              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
-              onClick={() => setZoomedSticker(null)}
-            >
-              <button
-                className="absolute right-4 rounded-full bg-card/80 p-2 text-white hover:bg-accent transition-colors"
-                style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
-                onClick={(e) => { e.stopPropagation(); setZoomedSticker(null); }}
-              >
-                <X className="h-5 w-5" />
-              </button>
-              <img
-                src={zoomedSticker}
-                alt="sticker preview"
-                className="max-h-[80vh] max-w-[80vw] object-contain animate-in zoom-in-95 duration-150"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>,
-            document.body,
-          )}
       </DialogContent>
     </Dialog>
+
+    {/* Sticker lightbox — rendered outside Dialog to avoid Radix focus trap */}
+    {zoomedSticker &&
+      createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+          style={{ pointerEvents: "auto" }}
+          onClick={() => setZoomedSticker(null)}
+        >
+          <button
+            className="absolute right-4 rounded-full bg-card/80 p-3 text-white hover:bg-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
+            onClick={(e) => { e.stopPropagation(); setZoomedSticker(null); }}
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={zoomedSticker}
+            alt="sticker preview"
+            className="max-h-[80vh] max-w-[80vw] object-contain animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
