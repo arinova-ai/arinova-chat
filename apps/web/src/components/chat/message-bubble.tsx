@@ -565,6 +565,24 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
         <div className="relative min-w-0" {...doubleTapHandlers}>
+          {/* Reply quote — above the bubble (Telegram/Discord style) */}
+          {message.replyTo && (
+            <div className={cn(
+              "mb-1 flex items-center gap-1.5 text-xs",
+              isUser ? "justify-end" : "justify-start"
+            )}>
+              <Reply className="h-3 w-3 text-blue-400/60 shrink-0" />
+              <div className="min-w-0 rounded-lg bg-accent/60 px-2.5 py-1 border-l-2 border-blue-400/50">
+                <p className="text-[11px] font-medium text-blue-400/70 truncate">
+                  {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? t("common.you") : agentName ?? "Agent")}
+                </p>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {message.replyTo.content}
+                </p>
+              </div>
+            </div>
+          )}
+
           {stickerUrl ? (
             /* Sticker: no bubble frame, transparent background */
             <div>
@@ -601,18 +619,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               </div>
             )}
 
-            {/* Reply quote */}
-            {message.replyTo && (
-              <div className="mb-1.5 rounded-lg bg-white/5 px-3 py-1.5 border-l-2 border-blue-400/50">
-                <p className="text-[11px] font-medium text-blue-400/70">
-                  {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? t("common.you") : agentName ?? "Agent")}
-                </p>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {message.replyTo.content}
-                </p>
-              </div>
-            )}
-
             <AttachmentRenderer attachments={message.attachments ?? []} />
 
             <MessageContent
@@ -635,9 +641,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             <button
               type="button"
               onClick={() => openThread(message.id)}
-              className="mt-1.5 flex items-center gap-1.5 text-xs text-primary hover:underline"
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand-text hover:bg-brand/20 transition-colors"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
+              <MessageSquare className="h-3 w-3" />
               <span>
                 {message.threadSummary.replyCount}{" "}
                 {message.threadSummary.replyCount === 1 ? t("chat.replies.one") : t("chat.replies.other")}
