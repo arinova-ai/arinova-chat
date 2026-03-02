@@ -115,6 +115,9 @@ interface ChatState {
   typingUsers: Record<string, { userId: string; userName: string; expiresAt: number }[]>;
   queuedMessageIds: Record<string, Set<string>>; // conversationId → set of user message IDs
 
+  // Pagination hints from jumpToMessage
+  jumpPagination: { hasMoreUp: boolean; hasMoreDown: boolean } | null;
+
   // Thread state
   activeThreadId: string | null;
   threadMessages: Record<string, Message[]>;
@@ -239,6 +242,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   inputDrafts: {},
   typingUsers: {},
   queuedMessageIds: {},
+  jumpPagination: null,
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
@@ -270,6 +274,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sidebarOpen: false,
       searchActive: false,
       activeThreadId: null,
+      jumpPagination: null,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,
@@ -370,6 +375,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeConversationId: conversationId,
       sidebarOpen: false,
       highlightMessageId: messageId,
+      jumpPagination: { hasMoreUp: data.hasMoreUp, hasMoreDown: data.hasMoreDown },
       unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,

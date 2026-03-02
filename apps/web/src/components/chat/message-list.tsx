@@ -51,10 +51,11 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);
   const searchQuery = useChatStore((s) => s.searchQuery);
   const thinkingCount = useChatStore((s) => activeConversationId ? (s.thinkingAgents[activeConversationId]?.length ?? 0) : 0);
+  const jumpPagination = useChatStore((s) => s.jumpPagination);
   const [loadingUp, setLoadingUp] = useState(false);
   const [loadingDown, setLoadingDown] = useState(false);
-  const [hasMoreUp, setHasMoreUp] = useState(true);
-  const [hasMoreDown, setHasMoreDown] = useState(false);
+  const [hasMoreUp, setHasMoreUp] = useState(jumpPagination?.hasMoreUp ?? true);
+  const [hasMoreDown, setHasMoreDown] = useState(jumpPagination?.hasMoreDown ?? false);
   const loadingUpRef = useRef(false);
   const loadingDownRef = useRef(false);
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -65,6 +66,14 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
     { conversationId: activeConversationId, skipScroll: !!highlightMessageId, messageCount: messages.length },
   );
+
+  // Sync pagination from jumpToMessage
+  useEffect(() => {
+    if (jumpPagination) {
+      setHasMoreUp(jumpPagination.hasMoreUp);
+      setHasMoreDown(jumpPagination.hasMoreDown);
+    }
+  }, [jumpPagination]);
 
   // Scroll to highlighted message (and matching text within it) when it appears
   useEffect(() => {
