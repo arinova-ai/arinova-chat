@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { MessageSquare, UserMinus, Loader2 } from "lucide-react";
@@ -23,6 +24,7 @@ interface FriendsPanelProps {
 }
 
 export function FriendsPanel({ onStartConversation }: FriendsPanelProps) {
+  const router = useRouter();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -109,28 +111,34 @@ export function FriendsPanel({ onStartConversation }: FriendsPanelProps) {
                 key={friend.id}
                 className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-accent transition-colors"
               >
-                <Avatar>
-                  {friend.image ? (
-                    <AvatarImage
-                      src={assetUrl(friend.image)}
-                      alt={friend.username ?? ""}
-                    />
-                  ) : null}
-                  <AvatarFallback>
-                    {(friend.name ?? friend.username ?? "?")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1 text-sm font-medium truncate">
-                    {friend.name ?? friend.username ?? "Unknown"}
-                    {friend.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    @{friend.username ?? "unknown"}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/profile/${friend.id}`)}
+                  className="flex items-center gap-3 min-w-0 flex-1 rounded-lg -ml-1 px-1 py-0.5 transition-colors hover:bg-accent/60 cursor-pointer"
+                >
+                  <Avatar>
+                    {friend.image ? (
+                      <AvatarImage
+                        src={assetUrl(friend.image)}
+                        alt={friend.username ?? ""}
+                      />
+                    ) : null}
+                    <AvatarFallback>
+                      {(friend.name ?? friend.username ?? "?")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="flex items-center gap-1 text-sm font-medium truncate">
+                      {friend.name ?? friend.username ?? "Unknown"}
+                      {friend.isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      @{friend.username ?? "unknown"}
+                    </p>
+                  </div>
+                </button>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {isConfirming ? (
                     <>
