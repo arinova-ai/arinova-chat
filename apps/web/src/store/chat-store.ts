@@ -1299,7 +1299,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
       const prev = get().thinkingAgents[conversationId] ?? [];
       // Don't add duplicate queued entries for same agent
-      if (!prev.some((t) => t.queued && t.agentId === agentId)) {
+      if (!prev.some((t) => t.queued && t.messageId === userMessageId)) {
         set({
           thinkingAgents: {
             ...get().thinkingAgents,
@@ -1669,6 +1669,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
           seq,
         });
       }
+
+      // Safety cleanup: clear stale queued message indicators when no thinking agents remain
+      const remainingThinking = get().thinkingAgents[conversationId] ?? [];
+      if (!remainingThinking.some((t) => t.queued)) {
+        const prevQueued = get().queuedMessageIds[conversationId];
+        if (prevQueued && prevQueued.size > 0) {
+          set({
+            queuedMessageIds: {
+              ...get().queuedMessageIds,
+              [conversationId]: new Set<string>(),
+            },
+          });
+        }
+      }
       return;
     }
 
@@ -1746,6 +1760,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ),
           },
         });
+      }
+
+      // Safety cleanup: clear stale queued message indicators when no thinking agents remain
+      const remainingThinkingErr = get().thinkingAgents[conversationId] ?? [];
+      if (!remainingThinkingErr.some((t) => t.queued)) {
+        const prevQueuedErr = get().queuedMessageIds[conversationId];
+        if (prevQueuedErr && prevQueuedErr.size > 0) {
+          set({
+            queuedMessageIds: {
+              ...get().queuedMessageIds,
+              [conversationId]: new Set<string>(),
+            },
+          });
+        }
       }
       return;
     }
