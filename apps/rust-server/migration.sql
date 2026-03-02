@@ -695,4 +695,84 @@ INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, 
   ('a1b2c3d4-0003-4000-8000-000000000003', '20-goodnight.png', '🌙', 'Good night', '晚安', 20)
 ON CONFLICT (pack_id, filename) DO NOTHING;
 
+-- Seed: free sticker packs (price=0, available to all users)
+INSERT INTO sticker_packs (id, creator_id, name, name_zh, description, character_name, category, price, cover_image, status)
+VALUES
+  ('f0000000-0001-4000-8000-000000000001', 'system', 'Arinova Official Pack 01', 'Arinova 官方貼圖包', 'Official Arinova mascot stickers', 'Arinova Doll', 'cute', 0, '/stickers/arinova-pack-01/01-hello.png', 'active'),
+  ('f0000000-0002-4000-8000-000000000002', 'system', 'Lobster Baby Pack 01', '龍蝦寶寶貼圖包', 'Adorable lobster baby stickers', 'Lobster Baby', 'cute', 0, '/stickers/lobster-pack-01/01-happy-wave.png', 'active'),
+  ('f0000000-0003-4000-8000-000000000003', 'system', 'Arinova Cat Pack 01', 'Arinova 貓咪貼圖包', 'Cute blue cat stickers', 'Arinova Cat', 'cute', 0, '/stickers/cat-pack-01/01-happy-wave.png', 'active')
+ON CONFLICT (id) DO NOTHING;
+
+-- Seed: arinova-pack-01 stickers
+INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
+  ('f0000000-0001-4000-8000-000000000001', '01-hello.png', '👋', 'Hello', '打招呼', 1),
+  ('f0000000-0001-4000-8000-000000000001', '02-thumbsup.png', '👍', 'Thumbs up', '讚', 2),
+  ('f0000000-0001-4000-8000-000000000001', '03-love.png', '❤️', 'Love', '愛心', 3),
+  ('f0000000-0001-4000-8000-000000000001', '04-happy.png', '😄', 'Happy', '開心', 4),
+  ('f0000000-0001-4000-8000-000000000001', '05-sad.png', '😢', 'Sad', '難過', 5),
+  ('f0000000-0001-4000-8000-000000000001', '06-angry.png', '😠', 'Angry', '生氣', 6),
+  ('f0000000-0001-4000-8000-000000000001', '07-surprised.png', '😮', 'Surprised', '驚訝', 7),
+  ('f0000000-0001-4000-8000-000000000001', '08-thinking.png', '🤔', 'Thinking', '思考', 8),
+  ('f0000000-0001-4000-8000-000000000001', '09-sleepy.png', '😴', 'Sleepy', '睡覺', 9),
+  ('f0000000-0001-4000-8000-000000000001', '10-celebrate.png', '🎉', 'Celebrate', '慶祝', 10),
+  ('f0000000-0001-4000-8000-000000000001', '11-fighting.png', '💪', 'Fighting', '加油', 11),
+  ('f0000000-0001-4000-8000-000000000001', '12-please.png', '🙏', 'Please', '拜託', 12),
+  ('f0000000-0001-4000-8000-000000000001', '13-ok.png', '👌', 'OK', 'OK', 13),
+  ('f0000000-0001-4000-8000-000000000001', '14-awkward.png', '😅', 'Awkward', '尷尬', 14),
+  ('f0000000-0001-4000-8000-000000000001', '15-hug.png', '🤗', 'Hug', '抱抱', 15),
+  ('f0000000-0001-4000-8000-000000000001', '16-sparkle.png', '✨', 'Sparkle', '閃亮', 16),
+  ('f0000000-0001-4000-8000-000000000001', '17-busy.png', '📱', 'Busy', '忙碌', 17),
+  ('f0000000-0001-4000-8000-000000000001', '18-coffee.png', '☕', 'Coffee', '喝咖啡', 18),
+  ('f0000000-0001-4000-8000-000000000001', '19-goodnight.png', '🌙', 'Good night', '晚安', 19),
+  ('f0000000-0001-4000-8000-000000000001', '20-amazing.png', '🔥', 'Amazing', '厲害', 20)
+ON CONFLICT (pack_id, filename) DO NOTHING;
+
+-- Seed: lobster-pack-01 stickers
+INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
+  ('f0000000-0002-4000-8000-000000000002', '01-happy-wave.png', '👋', 'Happy waving', '開心揮手', 1),
+  ('f0000000-0002-4000-8000-000000000002', '02-laughing.png', '😂', 'Laughing', '大笑', 2),
+  ('f0000000-0002-4000-8000-000000000002', '03-angry.png', '😠', 'Angry', '生氣', 3),
+  ('f0000000-0002-4000-8000-000000000002', '04-crying.png', '😢', 'Crying', '哭哭', 4),
+  ('f0000000-0002-4000-8000-000000000002', '05-love.png', '😍', 'Love', '愛心眼', 5),
+  ('f0000000-0002-4000-8000-000000000002', '06-sleeping.png', '😴', 'Sleeping', '睡覺', 6),
+  ('f0000000-0002-4000-8000-000000000002', '07-thumbsup.png', '👍', 'Thumbs up', '讚', 7),
+  ('f0000000-0002-4000-8000-000000000002', '08-surprised.png', '😮', 'Surprised', '驚訝', 8),
+  ('f0000000-0002-4000-8000-000000000002', '09-cool.png', '😎', 'Cool', '耍酷', 9),
+  ('f0000000-0002-4000-8000-000000000002', '10-shy.png', '🙈', 'Shy', '害羞', 10),
+  ('f0000000-0002-4000-8000-000000000002', '11-eating.png', '🍽️', 'Eating', '吃東西', 11),
+  ('f0000000-0002-4000-8000-000000000002', '12-thinking.png', '🤔', 'Thinking', '思考', 12),
+  ('f0000000-0002-4000-8000-000000000002', '13-celebrate.png', '🎉', 'Celebrating', '慶祝', 13),
+  ('f0000000-0002-4000-8000-000000000002', '14-scared.png', '😨', 'Scared', '害怕', 14),
+  ('f0000000-0002-4000-8000-000000000002', '15-heart.png', '❤️', 'Heart', '愛心', 15),
+  ('f0000000-0002-4000-8000-000000000002', '16-dancing.png', '💃', 'Dancing', '跳舞', 16),
+  ('f0000000-0002-4000-8000-000000000002', '17-sick.png', '🤒', 'Sick', '生病', 17),
+  ('f0000000-0002-4000-8000-000000000002', '18-bow.png', '🙏', 'Bowing', '鞠躬', 18),
+  ('f0000000-0002-4000-8000-000000000002', '19-strong.png', '💪', 'Strong', '展現力量', 19),
+  ('f0000000-0002-4000-8000-000000000002', '20-bye.png', '👋', 'Bye', '拜拜', 20)
+ON CONFLICT (pack_id, filename) DO NOTHING;
+
+-- Seed: cat-pack-01 stickers
+INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order) VALUES
+  ('f0000000-0003-4000-8000-000000000003', '01-happy-wave.png', '👋', 'Happy waving', '開心揮手', 1),
+  ('f0000000-0003-4000-8000-000000000003', '02-laughing.png', '😂', 'Laughing', '大笑', 2),
+  ('f0000000-0003-4000-8000-000000000003', '03-angry.png', '😠', 'Angry', '生氣', 3),
+  ('f0000000-0003-4000-8000-000000000003', '04-crying.png', '😢', 'Crying', '哭哭', 4),
+  ('f0000000-0003-4000-8000-000000000003', '05-love.png', '😍', 'Love', '愛心眼', 5),
+  ('f0000000-0003-4000-8000-000000000003', '06-sleeping.png', '😴', 'Sleeping', '睡覺', 6),
+  ('f0000000-0003-4000-8000-000000000003', '07-thumbsup.png', '👍', 'Thumbs up', '讚', 7),
+  ('f0000000-0003-4000-8000-000000000003', '08-surprised.png', '😮', 'Surprised', '驚訝', 8),
+  ('f0000000-0003-4000-8000-000000000003', '09-cool.png', '😎', 'Cool', '耍酷', 9),
+  ('f0000000-0003-4000-8000-000000000003', '10-shy.png', '🙈', 'Shy', '害羞', 10),
+  ('f0000000-0003-4000-8000-000000000003', '11-eating.png', '🍽️', 'Eating', '吃東西', 11),
+  ('f0000000-0003-4000-8000-000000000003', '12-thinking.png', '🤔', 'Thinking', '思考', 12),
+  ('f0000000-0003-4000-8000-000000000003', '13-celebrate.png', '🎉', 'Celebrating', '慶祝', 13),
+  ('f0000000-0003-4000-8000-000000000003', '14-scared.png', '😨', 'Scared', '害怕', 14),
+  ('f0000000-0003-4000-8000-000000000003', '15-heart.png', '❤️', 'Heart', '愛心', 15),
+  ('f0000000-0003-4000-8000-000000000003', '16-dancing.png', '💃', 'Dancing', '跳舞', 16),
+  ('f0000000-0003-4000-8000-000000000003', '17-sick.png', '🤒', 'Sick', '生病', 17),
+  ('f0000000-0003-4000-8000-000000000003', '18-bow.png', '🙏', 'Bowing', '鞠躬', 18),
+  ('f0000000-0003-4000-8000-000000000003', '19-strong.png', '💪', 'Strong', '展現力量', 19),
+  ('f0000000-0003-4000-8000-000000000003', '20-bye.png', '👋', 'Bye', '拜拜', 20)
+ON CONFLICT (pack_id, filename) DO NOTHING;
+
 COMMIT;
