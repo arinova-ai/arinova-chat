@@ -277,9 +277,17 @@ function PackDetailDialog({
 
   useEffect(() => {
     if (!zoomedSticker) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoomedSticker(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        setZoomedSticker(null);
+      }
+    };
+    // Use capture phase to intercept before Radix Dialog
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, [zoomedSticker]);
 
   useEffect(() => {
@@ -311,7 +319,7 @@ function PackDetailDialog({
   const previewStickers = detailStickers.length > 0 ? detailStickers : getStickerFiles(pack.id, pack.stickers);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v && !zoomedSticker) onClose(); }}>
       <DialogContent className="max-w-lg border-border bg-card p-0 gap-0">
         {/* Banner */}
         <div className="relative bg-gradient-to-r from-brand/20 to-blue-600/10 p-5">
