@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, LayoutGrid, UserPlus,
-  Palette, Users, Store, Wallet, Settings, type LucideIcon,
+  Palette, Users, Store, Wallet, Settings, Smile,
+  LayoutDashboard, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,8 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   office: Building2,
   spaces: Globe,
   apps: LayoutGrid,
+  stickers: Smile,
+  creator: LayoutDashboard,
   friends: UserPlus,
   theme: Palette,
   community: Users,
@@ -54,10 +57,11 @@ export function IconRail() {
     if (pathname.startsWith("/office")) return "office";
     if (pathname.startsWith("/spaces")) return "spaces";
     if (pathname.startsWith("/apps")) return "apps";
+    if (pathname.startsWith("/stickers")) return "stickers";
+    if (pathname.startsWith("/creator")) return "creator";
     if (pathname.startsWith("/friends")) return "friends";
     if (pathname.startsWith("/community")) return "community";
     if (pathname.startsWith("/agent-hub")) return "market";
-    if (pathname.startsWith("/creator")) return "market";
     if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/settings")) return "settings";
     return "chat";
@@ -79,6 +83,7 @@ export function IconRail() {
   };
 
   const secondaryItems: NavEntry[] = [
+    { id: "stickers", label: t("nav.stickers"), href: "/stickers" },
     { id: "community", label: t("nav.community"), href: "/community" },
     { id: "theme", label: t("nav.theme"), href: "/office/themes" },
     { id: "market", label: t("nav.market"), href: "/agent-hub" },
