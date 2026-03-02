@@ -66,6 +66,20 @@ Response: {"url": "https://...", "fileName": "...", "fileType": "...", "fileSize
 
 ## Sending Images
 After uploading, use markdown image syntax in your message: ![description](url)
+
+## Conversation History
+To fetch conversation history (cursor-based pagination, newest first):
+\`\`\`
+curl -s "${apiUrl}/api/agent/messages/<CONVERSATION_ID>?limit=50" \\
+  -H "Authorization: Bearer ${botToken}"
+\`\`\`
+Query parameters (all optional):
+- \`limit\` — Number of messages (default 50, max 100)
+- \`before\` — Message ID cursor, fetch messages older than this
+- \`after\` — Message ID cursor, fetch messages newer than this
+- \`around\` — Message ID cursor, fetch messages around this one
+Response: {"messages": [...], "hasMore": true/false, "nextCursor": "<id>"}
+Use nextCursor as the \`before\` parameter to paginate backward.
 `,
       };
     });
