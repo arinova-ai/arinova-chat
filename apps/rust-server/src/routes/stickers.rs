@@ -429,7 +429,7 @@ async fn user_packs(
            LEFT JOIN "user" u ON u.id = sp.creator_id
            WHERE us.user_id = $1
            GROUP BY sp.id, u.name
-           ORDER BY us.purchased_at DESC"#,
+           ORDER BY MAX(us.purchased_at) DESC"#,
     )
     .bind(&user.id)
     .fetch_all(&state.db)
