@@ -11,6 +11,7 @@ import {
   Megaphone,
   Shield,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/admin/review", label: "Review", icon: Shield },
+  { href: "/admin/reports", label: "Reports", icon: AlertTriangle },
 ];
 
 function AdminGuard({ children }: { children: React.ReactNode }) {

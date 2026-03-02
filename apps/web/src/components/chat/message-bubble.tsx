@@ -34,6 +34,7 @@ import {
   MessageSquare,
   Clock,
   X,
+  Flag,
 } from "lucide-react";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
@@ -41,6 +42,8 @@ import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
 import { useDoubleTap } from "@/hooks/use-double-tap";
 import { useTranslation } from "@/lib/i18n";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { api } from "@/lib/api";
 
 // ============================================================
 // Utilities
@@ -321,6 +324,7 @@ interface MessageActionsProps {
   onReply: () => void;
   onReact: (emoji: string) => void;
   onOpenThread: (messageId: string) => void;
+  onReport?: () => void;
 }
 
 /** Hover action toolbar (copy, react, reply, thread, delete, retry). */
@@ -336,6 +340,7 @@ function MessageActions({
   onReply,
   onReact,
   onOpenThread,
+  onReport,
 }: MessageActionsProps) {
   const { t } = useTranslation();
   return (
@@ -382,6 +387,16 @@ function MessageActions({
           <MessageSquare className="h-3 w-3" />
         </Button>
       )}
+
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={onReport}
+        className="h-6 w-6 text-muted-foreground hover:text-orange-400"
+        title="Report"
+      >
+        <Flag className="h-3 w-3" />
+      </Button>
 
       <Button
         variant="ghost"
@@ -448,6 +463,26 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const conversations = useChatStore((s) => s.conversations);
   const router = useRouter();
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDesc, setReportDesc] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+
+  const handleReport = async () => {
+    if (!reportReason) return;
+    setReportLoading(true);
+    try {
+      await api(`/api/messages/${message.id}/report`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reportReason, description: reportDesc || undefined }),
+      });
+      setReportOpen(false);
+      setReportReason("");
+      setReportDesc("");
+    } catch {}
+    setReportLoading(false);
+  };
+
   const showUserProfile = useMemo(
     () => !isUser && message.role === "user" && !!message.senderUserId,
     [isUser, message.role, message.senderUserId]
@@ -656,6 +691,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               onReply={handleReply}
               onReact={(emoji) => toggleReaction(message.id, emoji)}
               onOpenThread={openThread}
+              onReport={() => setReportOpen(true)}
             />
           )}
         </div>
@@ -684,6 +720,33 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         onReply={handleReply}
         onReact={(emoji) => toggleReaction(message.id, emoji)}
       />
+
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Report Message</DialogTitle>
+            <DialogDescription>Why are you reporting this message?</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <select value={reportReason} onChange={(e) => setReportReason(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm">
+              <option value="">Select a reason...</option>
+              <option value="spam">Spam</option>
+              <option value="harassment">Harassment</option>
+              <option value="explicit">Explicit / NSFW</option>
+              <option value="misinformation">Misinformation</option>
+              <option value="hate_speech">Hate Speech</option>
+              <option value="other">Other</option>
+            </select>
+            <textarea value={reportDesc} onChange={(e) => setReportDesc(e.target.value)} placeholder="Additional details (optional)" className="w-full rounded-md border bg-background px-3 py-2 text-sm" rows={3} maxLength={500} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReportOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleReport} disabled={!reportReason || reportLoading}>
+              {reportLoading ? "Reporting..." : "Report"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
