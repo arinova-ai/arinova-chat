@@ -182,10 +182,17 @@ export async function handleArinovaChatInbound(params: {
     CommandAuthorized: true,
   });
 
+  const persistedSessionKey = ctxPayload.SessionKey ?? route.sessionKey;
   await core.channel.session.recordInboundSession({
     storePath,
-    sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
+    sessionKey: persistedSessionKey,
     ctx: ctxPayload,
+    updateLastRoute: {
+      sessionKey: persistedSessionKey,
+      channel: CHANNEL_ID,
+      to: `openclaw-arinova-ai:${peerId}`,
+      accountId: route.accountId,
+    },
     onRecordError: (err) => {
       runtime.error?.(`openclaw-arinova-ai: failed updating session meta: ${String(err)}`);
     },
