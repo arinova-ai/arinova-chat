@@ -1972,6 +1972,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
         mutedConversations: newMuted,
         thinkingAgents: {},
       });
+
+      // HTTP fallback: pull latest messages for the active conversation
+      // to cover any gaps the WS sync may have missed (e.g. long offline)
+      const activeId = get().activeConversationId;
+      if (activeId) {
+        const activeMessages = newMessagesByConv[activeId] ?? [];
+        const lastMsg = activeMessages[activeMessages.length - 1];
+        if (lastMsg) {
+          api<{ messages: Message[]; hasMoreDown: boolean }>(
+            `/api/conversations/${activeId}/messages?after=${lastMsg.id}&limit=50`
+          )
+            .then((data) => {
+              if (data.messages.length > 0) {
+                const store = get();
+                const current = store.messagesByConversation[activeId] ?? [];
+                const existingIds = new Set(current.map((m) => m.id));
+                const fresh = data.messages.filter((m) => !existingIds.has(m.id));
+                if (fresh.length > 0) {
+                  set({
+                    messagesByConversation: {
+                      ...store.messagesByConversation,
+                      [activeId]: [...current, ...fresh].sort((a, b) => {
+                        if (a.seq && b.seq) return a.seq - b.seq;
+                        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                      }),
+                    },
+                  });
+                }
+              }
+            })
+            .catch(() => {});
+        }
+      }
       return;
     }
   },

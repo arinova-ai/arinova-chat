@@ -186,6 +186,8 @@ class WebSocketManager {
       this.sendSync();
       return;
     }
+    // Force close any stale socket in CONNECTING or CLOSING state
+    this.cleanupSocket();
     // Cancel any pending reconnect and connect immediately
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -219,6 +221,7 @@ class WebSocketManager {
   // --- Visibility and online event listeners ---
 
   private visibilityHandler: (() => void) | null = null;
+  private pageshowHandler: ((e: PageTransitionEvent) => void) | null = null;
   private onlineHandler: (() => void) | null = null;
 
   setupVisibilityListeners() {
@@ -232,6 +235,14 @@ class WebSocketManager {
     };
     document.addEventListener("visibilitychange", this.visibilityHandler);
 
+    // iOS Safari bfcache: pageshow fires when restoring from cache
+    this.pageshowHandler = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        this.reconnect();
+      }
+    };
+    window.addEventListener("pageshow", this.pageshowHandler);
+
     // Reconnect when network comes back online
     this.onlineHandler = () => {
       this.reconnect();
@@ -243,6 +254,10 @@ class WebSocketManager {
     if (this.visibilityHandler) {
       document.removeEventListener("visibilitychange", this.visibilityHandler);
       this.visibilityHandler = null;
+    }
+    if (this.pageshowHandler) {
+      window.removeEventListener("pageshow", this.pageshowHandler as EventListener);
+      this.pageshowHandler = null;
     }
     if (this.onlineHandler) {
       window.removeEventListener("online", this.onlineHandler);
