@@ -81,6 +81,7 @@ export function IconRail() {
 
   const secondaryItems: NavEntry[] = [
     { id: "stickers", label: t("nav.stickers"), href: "/stickers" },
+    { id: "creator", label: t("nav.creator"), href: "/creator" },
     { id: "community", label: t("nav.community"), href: "/community" },
     { id: "theme", label: t("nav.theme"), href: "/office/themes" },
     { id: "market", label: t("nav.market"), href: "/agent-hub" },
