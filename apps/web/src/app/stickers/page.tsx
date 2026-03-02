@@ -367,7 +367,8 @@ function PackDetailDialog({
               onClick={() => setZoomedSticker(null)}
             >
               <button
-                className="absolute top-4 right-4 rounded-full bg-card/80 p-2 text-white hover:bg-accent transition-colors"
+                className="absolute right-4 rounded-full bg-card/80 p-2 text-white hover:bg-accent transition-colors"
+                style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
                 onClick={(e) => { e.stopPropagation(); setZoomedSticker(null); }}
               >
                 <X className="h-5 w-5" />
