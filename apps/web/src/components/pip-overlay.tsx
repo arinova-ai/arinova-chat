@@ -8,7 +8,11 @@ import { useSpacesStore } from "@/store/spaces-store";
 // Shared draggable hook
 // ---------------------------------------------------------------------------
 
-function useDraggable(size: number, initialPos?: { x: number; y: number }) {
+function useDraggable(
+  size: number,
+  initialPos?: { x: number; y: number } | null,
+  onPosChange?: (pos: { x: number; y: number }) => void,
+) {
   const ref = useRef<HTMLDivElement>(null);
   const dragState = useRef({
     startX: 0,
@@ -19,6 +23,8 @@ function useDraggable(size: number, initialPos?: { x: number; y: number }) {
   });
   const [pos, setPos] = useState({ x: -1, y: -1 });
   const didDrag = useRef(false);
+  const onPosChangeRef = useRef(onPosChange);
+  onPosChangeRef.current = onPosChange;
 
   useEffect(() => {
     setPos(
@@ -70,6 +76,9 @@ function useDraggable(size: number, initialPos?: { x: number; y: number }) {
     const el = ref.current;
     if (el) el.releasePointerCapture(e.pointerId);
     dragState.current.dragging = false;
+    if (didDrag.current) {
+      onPosChangeRef.current?.({ x: dragState.current.origX + (e.clientX - dragState.current.startX), y: dragState.current.origY + (e.clientY - dragState.current.startY) });
+    }
   }, []);
 
   return { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp };
@@ -88,8 +97,10 @@ function PipBubble({
   onExpand: () => void;
   onClose: () => void;
 }) {
+  const pipBtnPos = useSpacesStore((s) => s.pipBtnPos);
+  const setPipBtnPos = useSpacesStore((s) => s.setPipBtnPos);
   const { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp } =
-    useDraggable(56);
+    useDraggable(56, pipBtnPos, setPipBtnPos);
 
   if (pos.x < 0) return null;
 
@@ -133,8 +144,10 @@ function PipBubble({
 // ---------------------------------------------------------------------------
 
 function FullscreenMinimizeButton({ onMinimize }: { onMinimize: () => void }) {
+  const pipBtnPos = useSpacesStore((s) => s.pipBtnPos);
+  const setPipBtnPos = useSpacesStore((s) => s.setPipBtnPos);
   const { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp } =
-    useDraggable(48);
+    useDraggable(48, pipBtnPos, setPipBtnPos);
 
   if (pos.x < 0) return null;
 
