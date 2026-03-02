@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -9,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { ArrowLeft, CalendarDays, Settings } from "lucide-react";
+import { ArrowLeft, CalendarDays, Settings, X } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
@@ -36,6 +37,18 @@ function UserProfileContent() {
 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  const closeLightbox = useCallback(() => setLightboxOpen(false), []);
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeLightbox();
+    };
+    document.addEventListener("keydown", handleKey, true);
+    return () => document.removeEventListener("keydown", handleKey, true);
+  }, [lightboxOpen, closeLightbox]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,19 +122,25 @@ function UserProfileContent() {
                 <div className="px-6 pb-6">
                   {/* Avatar overlapping banner */}
                   <div className="flex items-end justify-between">
-                    <Avatar className="h-20 w-20 -mt-10 ring-4 ring-background">
-                      {user.image ? (
-                        <AvatarImage
-                          src={assetUrl(user.image)}
-                          alt={user.name ?? user.username ?? ""}
-                        />
-                      ) : null}
-                      <AvatarFallback className="text-2xl bg-accent">
-                        {(user.name ?? user.username ?? "?")
-                          .charAt(0)
-                          .toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <button
+                      type="button"
+                      onClick={() => { if (user.image) setLightboxOpen(true); }}
+                      className={user.image ? "cursor-pointer" : "cursor-default"}
+                    >
+                      <Avatar className="h-20 w-20 -mt-10 ring-4 ring-background">
+                        {user.image ? (
+                          <AvatarImage
+                            src={assetUrl(user.image)}
+                            alt={user.name ?? user.username ?? ""}
+                          />
+                        ) : null}
+                        <AvatarFallback className="text-2xl bg-accent">
+                          {(user.name ?? user.username ?? "?")
+                            .charAt(0)
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
 
                     {isOwnProfile && (
                       <Button
@@ -174,6 +193,30 @@ function UserProfileContent() {
 
         <MobileBottomNav />
       </div>
+
+      {lightboxOpen && user?.image &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={closeLightbox}
+          >
+            <button
+              className="absolute right-4 rounded-full bg-card/80 p-3 text-white hover:bg-accent transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+              style={{ top: "max(1rem, env(safe-area-inset-top, 1rem))" }}
+              onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={assetUrl(user.image)}
+              alt={user.name ?? user.username ?? ""}
+              className="max-h-[80vh] max-w-[80vw] object-contain animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
