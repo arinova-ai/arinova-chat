@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  MessageSquare, Building2, Globe, LayoutGrid, UserPlus,
+  MessageSquare, Building2, Globe, UserPlus,
   Palette, Users, Store, Wallet, Settings, Smile,
   LayoutDashboard, type LucideIcon,
 } from "lucide-react";
@@ -16,7 +16,6 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   chat: MessageSquare,
   office: Building2,
   spaces: Globe,
-  apps: LayoutGrid,
   stickers: Smile,
   creator: LayoutDashboard,
   friends: UserPlus,
@@ -56,7 +55,6 @@ export function IconRail() {
     if (pathname.startsWith("/office/themes")) return "theme";
     if (pathname.startsWith("/office")) return "office";
     if (pathname.startsWith("/spaces")) return "spaces";
-    if (pathname.startsWith("/apps")) return "apps";
     if (pathname.startsWith("/stickers")) return "stickers";
     if (pathname.startsWith("/creator")) return "creator";
     if (pathname.startsWith("/friends")) return "friends";
@@ -73,7 +71,6 @@ export function IconRail() {
     { id: "chat", label: t("nav.chat"), href: "/" },
     { id: "office", label: t("nav.office"), href: "/office" },
     { id: "spaces", label: t("nav.spaces"), href: "/spaces" },
-    { id: "apps", label: t("nav.apps"), href: "/apps" },
   ];
 
   const friendsItem: NavEntry = {
