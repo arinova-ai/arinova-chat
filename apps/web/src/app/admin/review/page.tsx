@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
-import { AuthGuard } from "@/components/auth-guard";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,11 +12,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { PageTitle } from "@/components/ui/page-title";
 import {
-  ArrowLeft,
   Loader2,
-  Shield,
   CheckCircle,
   XCircle,
   Globe,
@@ -117,16 +112,11 @@ function AdminReviewContent() {
   };
 
   return (
-    <div className="app-dvh overflow-y-auto bg-background">
-      <div className="mx-auto max-w-3xl px-4 pb-[max(2rem,env(safe-area-inset-bottom,2rem))] pt-[max(1.25rem,env(safe-area-inset-top,1.25rem))]">
+    <div className="p-6">
+      <div className="mx-auto max-w-3xl">
         {/* Header */}
-        <div className="mb-8 flex items-center gap-3">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="h-10 w-10">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <PageTitle icon={Shield} title="App Review" subtitle="Review and approve submitted apps" className="flex-1" />
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-foreground">App Review</h2>
           <span className="rounded-full bg-orange-500/20 px-3 py-1 text-sm font-medium text-orange-400">
             {apps.length} pending
           </span>
@@ -303,7 +293,6 @@ function AdminReviewContent() {
           ))}
         </div>
       </div>
-
       {/* Approve / Reject Dialog */}
       <Dialog open={!!actionApp} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent>
@@ -360,9 +349,5 @@ function AdminReviewContent() {
 }
 
 export default function AdminReviewPage() {
-  return (
-    <AuthGuard>
-      <AdminReviewContent />
-    </AuthGuard>
-  );
+  return <AdminReviewContent />;
 }
