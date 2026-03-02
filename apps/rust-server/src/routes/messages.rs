@@ -178,6 +178,35 @@ pub(crate) async fn with_attachments(
         }
     };
 
+    // Fetch link previews for messages
+    let link_previews: std::collections::HashMap<Uuid, Vec<serde_json::Value>> = {
+        let rows: Vec<(Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)> =
+            sqlx::query_as(
+                "SELECT mlp.message_id, lp.url, lp.title, lp.description, lp.image_url, lp.favicon_url, lp.domain
+                 FROM message_link_previews mlp
+                 JOIN link_previews lp ON lp.id = mlp.preview_id
+                 WHERE mlp.message_id = ANY($1)
+                 ORDER BY mlp.sort_order"
+            )
+            .bind(&message_ids)
+            .fetch_all(db)
+            .await
+            .unwrap_or_default();
+
+        let mut by_msg: std::collections::HashMap<Uuid, Vec<serde_json::Value>> = std::collections::HashMap::new();
+        for (msg_id, url, title, description, image_url, favicon_url, domain) in rows {
+            by_msg.entry(msg_id).or_default().push(json!({
+                "url": url,
+                "title": title,
+                "description": description,
+                "imageUrl": image_url,
+                "faviconUrl": favicon_url,
+                "domain": domain,
+            }));
+        }
+        by_msg
+    };
+
     // Fetch reply-to message data
     let reply_ids: Vec<Uuid> = items.iter().filter_map(|m| m.reply_to_id).collect();
     let reply_data: std::collections::HashMap<Uuid, (String, String, Option<String>)> = if !reply_ids.is_empty() {
@@ -279,6 +308,7 @@ pub(crate) async fn with_attachments(
                     "createdAt": m.created_at.and_utc().to_rfc3339(),
                     "updatedAt": m.updated_at.and_utc().to_rfc3339(),
                     "attachments": att_json,
+                    "linkPreviews": link_previews.get(&m.id).cloned().unwrap_or_default(),
                 })
             }
         })

@@ -93,8 +93,19 @@ export interface Message {
   threadId?: string;
   threadSummary?: ThreadSummary;
   attachments?: Attachment[];
+  linkPreviews?: LinkPreview[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+// ===== Link Preview =====
+export interface LinkPreview {
+  url: string;
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  faviconUrl?: string;
+  domain?: string;
 }
 
 // ===== Attachment =====

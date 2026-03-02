@@ -806,4 +806,26 @@ CREATE TABLE IF NOT EXISTS pinned_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_pinned_messages_conv ON pinned_messages(conversation_id);
 
+-- Link previews cache (OG meta)
+CREATE TABLE IF NOT EXISTS link_previews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    url TEXT NOT NULL UNIQUE,
+    title TEXT,
+    description TEXT,
+    image_url TEXT,
+    favicon_url TEXT,
+    domain TEXT,
+    fetched_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_link_previews_url ON link_previews(url);
+
+-- Junction: which messages reference which link previews
+CREATE TABLE IF NOT EXISTS message_link_previews (
+    message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    preview_id UUID NOT NULL REFERENCES link_previews(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (message_id, preview_id)
+);
+CREATE INDEX IF NOT EXISTS idx_message_link_previews_msg ON message_link_previews(message_id);
+
 COMMIT;

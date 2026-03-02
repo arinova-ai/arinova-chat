@@ -41,6 +41,7 @@ import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
+import { LinkPreviewCards } from "./link-preview-card";
 import { useDoubleTap } from "@/hooks/use-double-tap";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -651,6 +652,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               mentionNames={mentionNames}
               isStreaming={isStreaming}
             />
+            {!isStreaming && message.content && (
+              <LinkPreviewCards content={message.content} />
+            )}
           </div>
           )}
 
