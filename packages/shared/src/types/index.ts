@@ -389,6 +389,7 @@ export type WSClientEvent =
   | { type: "sync"; conversations: Record<string, number> } // convId → lastSeq
   | { type: "mark_read"; conversationId: string; seq: number }
   | { type: "focus"; visible: boolean }
+  | { type: "typing"; conversationId: string }
   | { type: "ping" };
 
 export interface SyncConversationSummary {
@@ -501,6 +502,7 @@ export type WSServerEvent =
       messageId: string;
     }
   | { type: "kicked_from_group"; conversationId: string }
+  | { type: "user_typing"; conversationId: string; userId: string; userName: string }
   | { type: "pong" };
 
 // ===== Agent Skill =====
