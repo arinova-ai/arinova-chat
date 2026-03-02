@@ -19,6 +19,8 @@ interface SpacesListResponse {
   totalPages: number;
 }
 
+export type PipMode = "fullscreen" | "pip";
+
 interface SpacesState {
   // List
   spaces: Space[];
@@ -31,6 +33,12 @@ interface SpacesState {
   // Detail
   currentSpace: SpaceWithOwner | null;
   detailLoading: boolean;
+
+  // PIP (Picture-in-Picture)
+  pipMode: PipMode | null;
+  pipIframeUrl: string | null;
+  pipGameId: string | null;
+  pipGameName: string | null;
 
   // Actions
   fetchSpaces: () => Promise<void>;
@@ -52,6 +60,12 @@ interface SpacesState {
     agentId?: string
   ) => Promise<SpaceParticipant>;
   leaveSession: (spaceId: string, sessionId: string) => Promise<void>;
+
+  // PIP Actions
+  openPip: (gameId: string, gameName: string, iframeUrl: string) => void;
+  closePip: () => void;
+  setPipMode: (mode: PipMode) => void;
+  togglePipMode: () => void;
 }
 
 export const useSpacesStore = create<SpacesState>((set, get) => ({
@@ -63,6 +77,12 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
   category: "All",
   currentSpace: null,
   detailLoading: false,
+
+  // PIP
+  pipMode: null,
+  pipIframeUrl: null,
+  pipGameId: null,
+  pipGameName: null,
 
   fetchSpaces: async () => {
     set({ loading: true });
@@ -157,5 +177,34 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
     });
     // Refresh detail
     get().fetchSpaceDetail(spaceId);
+  },
+
+  // PIP Actions
+  openPip: (gameId, gameName, iframeUrl) => {
+    set({
+      pipMode: "fullscreen",
+      pipGameId: gameId,
+      pipGameName: gameName,
+      pipIframeUrl: iframeUrl,
+    });
+  },
+
+  closePip: () => {
+    set({
+      pipMode: null,
+      pipGameId: null,
+      pipGameName: null,
+      pipIframeUrl: null,
+    });
+  },
+
+  setPipMode: (mode) => {
+    set({ pipMode: mode });
+  },
+
+  togglePipMode: () => {
+    set((s) => ({
+      pipMode: s.pipMode === "fullscreen" ? "pip" : "fullscreen",
+    }));
   },
 }));
