@@ -24,6 +24,52 @@ const plugin: {
     // Virtual Office: register hooks and start tick loop
     registerOffice(api);
 
+    // Inject Arinova Chat tool docs into agent context
+    (api as unknown as { on: (event: string, cb: (...args: unknown[]) => unknown) => void }).on("before_prompt_build", (_event: unknown, ctx: unknown) => {
+      const ctxRec = ctx as Record<string, unknown>;
+      const provider = ctxRec.messageProvider as string | undefined;
+      if (provider !== "openclaw-arinova-ai") return;
+
+      const accountId = ctxRec.accountId as string | undefined;
+      const channels = (api.config as Record<string, unknown>).channels as Record<string, unknown> | undefined;
+      const arinova = (channels?.["openclaw-arinova-ai"] ?? {}) as Record<string, unknown>;
+      const apiUrl = (arinova.apiUrl as string) ?? "https://api.chat.arinova.ai";
+      const accounts = (arinova.accounts ?? {}) as Record<string, Record<string, unknown>>;
+      const account = accountId ? accounts[accountId] : undefined;
+      const botToken = account?.botToken as string | undefined;
+
+      if (!botToken) return;
+
+      return {
+        prependContext: `[Arinova Chat Integration]
+You are connected to Arinova Chat. Here are the APIs available to you:
+
+## Proactive Messaging
+To send a message to the user without waiting for their input:
+\`\`\`
+curl -s -X POST ${apiUrl}/api/agent/send \\
+  -H "Authorization: Bearer ${botToken}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"conversationId": "<CONVERSATION_ID>", "content": "<MESSAGE>"}'
+\`\`\`
+The conversationId is available from the inbound message context (the From field contains openclaw-arinova-ai:<conversationId>).
+
+## File Upload
+To upload a file and get a URL:
+\`\`\`
+curl -s -X POST ${apiUrl}/api/agent/upload \\
+  -H "Authorization: Bearer ${botToken}" \\
+  -F "conversationId=<CONVERSATION_ID>" \\
+  -F "file=@/path/to/file;type=image/png"
+\`\`\`
+Response: {"url": "https://...", "fileName": "...", "fileType": "...", "fileSize": 1234}
+
+## Sending Images
+After uploading, use markdown image syntax in your message: ![description](url)
+`,
+      };
+    });
+
     // Hint on gateway start if not configured
     api.on("gateway_start", () => {
       const channels = (api.config as Record<string, unknown>).channels as Record<string, unknown> | undefined;
