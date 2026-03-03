@@ -20,10 +20,6 @@ export function ChatLayout() {
   const searchActive = useChatStore((s) => s.searchActive);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const [newChatOpen, setNewChatOpen] = useState(false);
-  const loadAgents = useChatStore((s) => s.loadAgents);
-  const loadConversations = useChatStore((s) => s.loadConversations);
-  const loadAgentHealth = useChatStore((s) => s.loadAgentHealth);
-  const initWS = useChatStore((s) => s.initWS);
   const setCurrentUserId = useChatStore((s) => s.setCurrentUserId);
   const prevConvRef = useRef<string | null>(null);
   const router = useRouter();
@@ -35,21 +31,24 @@ export function ChatLayout() {
   }, [session?.user?.id, setCurrentUserId]);
 
   useEffect(() => {
-    loadAgents();
-    loadConversations();
-    loadAgentHealth();
-    const cleanup = initWS();
+    const state = useChatStore.getState();
+    state.loadAgents();
+    state.loadConversations();
+    state.loadAgentHealth();
+    const cleanup = state.initWS();
     const cleanupTTS = initVoiceTTSIntegration();
 
     // Refresh agent health every 30s
-    const healthInterval = setInterval(loadAgentHealth, 30_000);
+    const healthInterval = setInterval(() => {
+      useChatStore.getState().loadAgentHealth();
+    }, 30_000);
 
     return () => {
       cleanup();
       cleanupTTS();
       clearInterval(healthInterval);
     };
-  }, [loadAgents, loadConversations, loadAgentHealth, initWS]);
+  }, []);
 
   // Push notification setup: refresh subscription + wire click handler
   useEffect(() => {

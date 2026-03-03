@@ -59,6 +59,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const [hasMoreDown, setHasMoreDown] = useState(jumpPagination?.hasMoreDown ?? false);
   const loadingUpRef = useRef(false);
   const loadingDownRef = useRef(false);
+  const messagesRef = useRef(messages);
   const highlightRef = useRef<HTMLDivElement>(null);
   const prependHeightRef = useRef<number | null>(null);
   const isRestoringScrollRef = useRef(false);
@@ -77,11 +78,15 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false); // serialization: only one load at a time
 
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   // Sync pagination from jumpToMessage
   useEffect(() => {
     if (jumpPagination) {
-      setHasMoreUp(jumpPagination.hasMoreUp);
-      setHasMoreDown(jumpPagination.hasMoreDown);
+      setHasMoreUp((prev) => (prev === jumpPagination.hasMoreUp ? prev : jumpPagination.hasMoreUp));
+      setHasMoreDown((prev) => (prev === jumpPagination.hasMoreDown ? prev : jumpPagination.hasMoreDown));
     }
   }, [jumpPagination]);
 
@@ -125,14 +130,15 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   }, [highlightMessageId, messages, scrollRef]);
 
   const loadOlder = useCallback(async () => {
-    if (loadingRef.current || loadingUpRef.current || !hasMoreUp || !activeConversationId || messages.length === 0)
+    const currentMessages = messagesRef.current;
+    if (loadingRef.current || loadingUpRef.current || !hasMoreUp || !activeConversationId || currentMessages.length === 0)
       return;
 
     loadingRef.current = true;
     loadingUpRef.current = true;
     setLoadingUp(true);
     try {
-      const firstMsg = messages[0];
+      const firstMsg = currentMessages[0];
       const data = await api<{ messages: Message[]; hasMore: boolean }>(
         `/api/conversations/${activeConversationId}/messages?before=${firstMsg.id}&limit=50`
       );
@@ -162,17 +168,18 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       loadingUpRef.current = false;
       setLoadingUp(false);
     }
-  }, [hasMoreUp, activeConversationId, messages, scrollRef]);
+  }, [hasMoreUp, activeConversationId, scrollRef]);
 
   const loadNewer = useCallback(async () => {
-    if (loadingRef.current || loadingDownRef.current || !hasMoreDown || !activeConversationId || messages.length === 0)
+    const currentMessages = messagesRef.current;
+    if (loadingRef.current || loadingDownRef.current || !hasMoreDown || !activeConversationId || currentMessages.length === 0)
       return;
 
     loadingRef.current = true;
     loadingDownRef.current = true;
     setLoadingDown(true);
     try {
-      const lastMsg = messages[messages.length - 1];
+      const lastMsg = currentMessages[currentMessages.length - 1];
       const data = await api<{ messages: Message[]; hasMoreDown: boolean }>(
         `/api/conversations/${activeConversationId}/messages?after=${lastMsg.id}&limit=50`
       );
@@ -196,7 +203,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       loadingDownRef.current = false;
       setLoadingDown(false);
     }
-  }, [hasMoreDown, activeConversationId, messages]);
+  }, [hasMoreDown, activeConversationId]);
 
   // Restore scroll position after older messages are prepended (before paint)
   useLayoutEffect(() => {
