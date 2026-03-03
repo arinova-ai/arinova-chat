@@ -339,6 +339,10 @@
   "userProfile.title": "用户资料",
   "userProfile.joined": "加入于",
   "userProfile.editProfile": "编辑个人资料",
+  "userProfile.addFriend": "加好友",
+  "userProfile.removeFriend": "移除好友",
+  "userProfile.pendingRequest": "等待中",
+  "userProfile.acceptRequest": "接受",
   "userProfile.agentsInGroup": "群组中的 Agent",
 
   "profilePage.userNotFound": "未找到用户",

@@ -339,6 +339,10 @@
   "userProfile.title": "ユーザー情報",
   "userProfile.joined": "参加日",
   "userProfile.editProfile": "プロフィールを編集",
+  "userProfile.addFriend": "友達追加",
+  "userProfile.removeFriend": "友達解除",
+  "userProfile.pendingRequest": "申請中",
+  "userProfile.acceptRequest": "承認",
   "userProfile.agentsInGroup": "グループ内のエージェント",
 
   "profilePage.userNotFound": "ユーザーが見つかりません",

@@ -339,6 +339,10 @@
   "userProfile.title": "Profil Pengguna",
   "userProfile.joined": "Menyertai",
   "userProfile.editProfile": "Edit Profil",
+  "userProfile.addFriend": "Tambah rakan",
+  "userProfile.removeFriend": "Buang rakan",
+  "userProfile.pendingRequest": "Menunggu",
+  "userProfile.acceptRequest": "Terima",
   "userProfile.agentsInGroup": "Ejen dalam kumpulan ini",
 
   "profilePage.userNotFound": "Pengguna tidak ditemui",

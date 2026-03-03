@@ -339,6 +339,10 @@
   "userProfile.title": "Perfil de Usuario",
   "userProfile.joined": "Se unio",
   "userProfile.editProfile": "Editar Perfil",
+  "userProfile.addFriend": "Agregar amigo",
+  "userProfile.removeFriend": "Eliminar amigo",
+  "userProfile.pendingRequest": "Pendiente",
+  "userProfile.acceptRequest": "Aceptar",
   "userProfile.agentsInGroup": "Agentes en este grupo",
 
   "profilePage.userNotFound": "Usuario no encontrado",
