@@ -131,14 +131,12 @@ export function useAutoScroll<T extends HTMLElement>(
         ? el.scrollHeight - el.scrollTop - el.clientHeight < 100
         : true;
 
-      if (isNearBottom) {
+      if (isNearBottom || !userScrolledUp.current) {
         userScrolledUp.current = false;
         setShowScrollButton(false);
         setNewMessageCount(0);
       } else {
-        // showScrollButton always updates regardless of prepending
         setShowScrollButton(true);
-        // Only increment unread count for new messages, not prepended old ones
         if (!isPrepending) {
           setNewMessageCount((prev) => prev + delta);
         }
