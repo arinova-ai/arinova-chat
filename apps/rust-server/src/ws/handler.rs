@@ -93,6 +93,14 @@ pub fn filter_agents_for_dispatch(
     }
 }
 
+/// Safely truncate a string at a character boundary.
+fn safe_truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
 /// Get conversation member user IDs with caching.
 /// Returns a filtered list excluding users who have blocked (or are blocked by) sender_user_id.
 async fn get_conv_member_ids(
@@ -1002,10 +1010,13 @@ pub async fn trigger_agent_response(
                 if mid == user_id { continue; }
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
-                        let preview = if content.len() > 100 {
-                            format!("{}...", &content[..100])
-                        } else {
-                            content.to_string()
+                        let preview = {
+                            let truncated = safe_truncate(&content, 100);
+                            if truncated.len() < content.len() {
+                                format!("{}...", truncated)
+                            } else {
+                                content.to_string()
+                            }
                         };
                         let _ = send_push_to_user(
                             db,
@@ -1182,10 +1193,13 @@ pub async fn trigger_agent_response(
                 if mid == user_id { continue; }
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
-                        let preview = if content.len() > 100 {
-                            format!("{}...", &content[..100])
-                        } else {
-                            content.to_string()
+                        let preview = {
+                            let truncated = safe_truncate(&content, 100);
+                            if truncated.len() < content.len() {
+                                format!("{}...", truncated)
+                            } else {
+                                content.to_string()
+                            }
                         };
                         let _ = send_push_to_user(
                             db,
@@ -1694,10 +1708,13 @@ async fn do_trigger_agent_response(
                             for mid in &member_ids {
                                 if let Ok(false) = is_conversation_muted(&db, mid, &conversation_id).await {
                                     if let Ok(true) = should_send_push(&db, mid, "message").await {
-                                        let preview = if full_content.len() > 100 {
-                                            format!("{}...", &full_content[..100])
-                                        } else {
-                                            full_content.clone()
+                                        let preview = {
+                                            let truncated = safe_truncate(&full_content, 100);
+                                            if truncated.len() < full_content.len() {
+                                                format!("{}...", truncated)
+                                            } else {
+                                                full_content.clone()
+                                            }
                                         };
                                         let _ = send_push_to_user(
                                             &db,
