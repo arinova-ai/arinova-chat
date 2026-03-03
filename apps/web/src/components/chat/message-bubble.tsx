@@ -588,7 +588,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0" {...longPressHandlers}>
+        <div className="relative min-w-0 select-none md:select-auto" {...longPressHandlers}>
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(
