@@ -14,6 +14,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -198,6 +205,8 @@ export function ConversationItem({
 
   return (
     <>
+      <ContextMenu>
+      <ContextMenuTrigger asChild>
       <div className="relative overflow-hidden rounded-lg">
         {/* Left actions (right swipe): Pin + Mute — mobile only */}
         <div
@@ -335,15 +344,15 @@ export function ConversationItem({
           </div>
         </button>
 
-        {/* Three-dot menu button */}
+        {/* Three-dot menu button — mobile only */}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon-xs"
               className={cn(
-                "shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100",
-                menuOpen && "opacity-100"
+                "shrink-0 text-muted-foreground transition-opacity md:hidden",
+                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
               )}
               onClick={(e) => e.stopPropagation()}
             >
@@ -379,6 +388,19 @@ export function ConversationItem({
                 </>
               )}
             </DropdownMenuItem>
+            {onMuteToggle && (
+              <>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMuteToggle();
+                  }}
+                >
+                  {isMuted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                  {isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
@@ -394,6 +416,47 @@ export function ConversationItem({
         </DropdownMenu>
       </div>
       </div>
+      </ContextMenuTrigger>
+      {/* Desktop right-click context menu */}
+      <ContextMenuContent className="w-44">
+        <ContextMenuItem
+          onClick={() => {
+            setRenaming(true);
+            setRenameValue(title ?? agentName);
+          }}
+        >
+          <Pencil className="h-4 w-4" />
+          {t("conversation.rename")}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onPin(!isPinned)}>
+          {isPinned ? (
+            <>
+              <PinOff className="h-4 w-4" />
+              {t("conversation.unpin")}
+            </>
+          ) : (
+            <>
+              <Pin className="h-4 w-4" />
+              {t("conversation.pin")}
+            </>
+          )}
+        </ContextMenuItem>
+        {onMuteToggle && (
+          <ContextMenuItem onClick={() => onMuteToggle()}>
+            {isMuted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+            {isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => setDeleteConfirmOpen(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+          {t("common.delete")}
+        </ContextMenuItem>
+      </ContextMenuContent>
+      </ContextMenu>
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
