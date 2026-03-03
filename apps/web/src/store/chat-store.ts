@@ -1190,13 +1190,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadNotes: async (conversationId) => {
     try {
-      const notes = await api<Note[]>(
+      const res = await api<{ notes: Note[]; hasMore: boolean; nextCursor: string | null }>(
         `/api/conversations/${conversationId}/notes`
       );
       set({
         notesByConversation: {
           ...get().notesByConversation,
-          [conversationId]: notes,
+          [conversationId]: res.notes,
         },
       });
     } catch {
