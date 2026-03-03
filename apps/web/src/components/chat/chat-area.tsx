@@ -13,6 +13,7 @@ import { ActiveCall } from "@/components/voice/active-call";
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
+import { ThreadListSheet } from "./thread-list-sheet";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
@@ -34,6 +35,7 @@ export function ChatArea() {
   const [membersOpen, setMembersOpen] = useState(false);
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [threadListOpen, setThreadListOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef(0);
@@ -124,7 +126,6 @@ export function ChatArea() {
         conversationId={conversation.id}
         agentId={conversation.agentId ?? undefined}
         peerUserId={conversation.peerUserId}
-        voiceCapable={agent?.voiceCapable}
         mentionOnly={conversation.mentionOnly}
         title={conversation.title}
         memberCount={conversation.type === "group" ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
@@ -132,6 +133,7 @@ export function ChatArea() {
         onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
+        onThreadsClick={() => setThreadListOpen(true)}
       />
       {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
       <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
@@ -164,6 +166,11 @@ export function ChatArea() {
       )}
 
       <ThreadPanel />
+      <ThreadListSheet
+        open={threadListOpen}
+        onOpenChange={setThreadListOpen}
+        messages={messages}
+      />
     </div>
   );
 }

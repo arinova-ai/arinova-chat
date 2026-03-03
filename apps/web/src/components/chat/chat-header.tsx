@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -17,21 +17,18 @@ import {
   Clock,
   Bell,
   BellOff,
-  Phone,
   Menu,
   UserPlus,
   UsersRound,
   Image,
   FileText,
   Settings,
+  MessageSquare,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
-import { useVoiceCallStore } from "@/store/voice-call-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { cn } from "@/lib/utils";
-import { MicPermissionDialog } from "@/components/voice/mic-permission";
 import type { ConversationType } from "@arinova/shared/types";
-import type { VoiceMode } from "@/lib/voice-types";
 import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
 
@@ -43,7 +40,6 @@ interface ChatHeaderProps {
   conversationId?: string;
   agentId?: string;
   peerUserId?: string | null;
-  voiceCapable?: boolean;
   mentionOnly?: boolean;
   title?: string | null;
   memberCount?: number;
@@ -51,6 +47,7 @@ interface ChatHeaderProps {
   onMembersClick?: () => void;
   onSettingsClick?: () => void;
   onAddMemberClick?: () => void;
+  onThreadsClick?: () => void;
 }
 
 export function ChatHeader({
@@ -61,13 +58,13 @@ export function ChatHeader({
   conversationId,
   agentId,
   peerUserId,
-  voiceCapable,
   title,
   memberCount,
   onClick,
   onMembersClick,
   onSettingsClick,
   onAddMemberClick,
+  onThreadsClick,
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -77,24 +74,10 @@ export function ChatHeader({
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
   const isMuted = conversationId ? mutedConversations[conversationId] : false;
 
-  const callState = useVoiceCallStore((s) => s.callState);
-  const startCall = useVoiceCallStore((s) => s.startCall);
-
-  const [micDialogOpen, setMicDialogOpen] = useState(false);
-
   const router = useRouter();
 
   // For human DMs without an explicit onClick, navigate to the peer's profile
   const effectiveOnClick = onClick ?? (peerUserId ? () => router.push(`/profile/${peerUserId}`) : undefined);
-
-  const canCall = voiceCapable && conversationId && agentId && type === "direct" && callState === "idle";
-
-  const handleStartCall = () => {
-    if (!conversationId || !agentId) return;
-    const voiceMode: VoiceMode = "full_fallback";
-    setMicDialogOpen(false);
-    startCall(conversationId, agentId, agentName, agentAvatarUrl ?? null, voiceMode);
-  };
 
   const handleMuteToggle = useCallback(async () => {
     if (!conversationId) return;
@@ -191,6 +174,17 @@ export function ChatHeader({
                 <UsersRound className="h-4 w-4" />
               </Button>
             )}
+            {onThreadsClick && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 md:hidden"
+                onClick={onThreadsClick}
+                title={t("chat.thread.title")}
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -248,37 +242,20 @@ export function ChatHeader({
                 {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
               </Button>
             )}
-            {canCall ? (
+            {onThreadsClick && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-green-400 hover:text-green-300"
-                onClick={() => setMicDialogOpen(true)}
-                title={t("chat.header.voiceCall")}
+                className="h-8 w-8 md:hidden"
+                onClick={onThreadsClick}
+                title={t("chat.thread.title")}
               >
-                <Phone className="h-4 w-4" />
+                <MessageSquare className="h-4 w-4" />
               </Button>
-            ) : type === "direct" ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground opacity-50 cursor-not-allowed"
-                disabled
-                title={callState !== "idle" ? t("chat.header.inCall") : t("chat.header.voiceUnavailable")}
-              >
-                <Phone className="h-4 w-4" />
-              </Button>
-            ) : null}
+            )}
           </>
-
         )}
       </div>
-
-      <MicPermissionDialog
-        open={micDialogOpen}
-        onOpenChange={setMicDialogOpen}
-        onAllow={handleStartCall}
-      />
     </div>
   );
 }

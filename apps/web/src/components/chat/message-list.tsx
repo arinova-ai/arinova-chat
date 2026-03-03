@@ -237,16 +237,6 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     return () => observer.disconnect();
   }, [loadOlder, loadNewer, scrollRef]);
 
-  if (messages.length === 0 && loadingMessages) {
-    return (
-      <div className="relative flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto overflow-x-hidden py-4">
-          <MessageSkeleton />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative flex-1 overflow-hidden">
       <div
@@ -254,6 +244,9 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         className="h-full overflow-y-auto overflow-x-hidden py-4"
         style={{ overflowAnchor: "none" }}
       >
+        {messages.length === 0 && loadingMessages ? (
+          <MessageSkeleton />
+        ) : (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
           {/* Top sentinel for IntersectionObserver-based older message loading */}
           <div ref={topSentinelRef} className="h-px shrink-0" aria-hidden />
@@ -298,12 +291,13 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           {/* Bottom sentinel for IntersectionObserver-based newer message loading */}
           <div ref={bottomSentinelRef} className="h-px shrink-0" aria-hidden />
         </div>
+        )}
       </div>
 
       {showScrollButton && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-opacity hover:bg-accent"
+          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-opacity hover:bg-accent"
           aria-label="Scroll to latest"
         >
           {newMessageCount > 0 && (

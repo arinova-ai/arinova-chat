@@ -42,7 +42,7 @@ import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
 import { LinkPreviewCards } from "./link-preview-card";
-import { useDoubleTap } from "@/hooks/use-double-tap";
+import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
@@ -514,7 +514,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
     [isUser, currentUserId]
   );
   const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile;
-  const doubleTapHandlers = useDoubleTap(() => {
+  const longPressHandlers = useLongPress(() => {
     if (!isStreaming) setActionSheetOpen(true);
   });
 
@@ -594,7 +594,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0" {...doubleTapHandlers}>
+        <div className="relative min-w-0" {...longPressHandlers}>
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(
@@ -757,6 +757,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         onReply={handleReply}
         onReact={(emoji) => toggleReaction(message.id, emoji)}
         onPin={handlePin}
+        onStartThread={() => openThread(message.id)}
+        onReport={() => setReportOpen(true)}
+        isInThread={isInThread}
       />
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
