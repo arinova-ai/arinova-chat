@@ -15,6 +15,7 @@ import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 import { refreshPushSubscription, setupNotificationClickHandler } from "@/lib/push";
 import { initChatDiagnostics, useRenderDiag } from "@/lib/chat-diagnostics";
+import { ErrorBoundary } from "./error-boundary";
 
 export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -134,10 +135,12 @@ export function ChatLayout() {
 
       {/* Chat area: always visible on desktop, show on mobile when conversation or search active */}
       <div className={`h-full flex-1 min-w-0 flex flex-col bg-background ${(activeConversationId || searchActive) ? "" : "hidden md:flex md:flex-col"}`}>
-        <NotificationBanner />
-        <div className="flex-1 min-h-0 h-full">
-          <ChatArea />
-        </div>
+        <ErrorBoundary>
+          <NotificationBanner />
+          <div className="flex-1 min-h-0 h-full">
+            <ChatArea />
+          </div>
+        </ErrorBoundary>
       </div>
 
       {/* Floating call indicator (visible when navigating away from active call) */}

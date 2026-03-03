@@ -3,6 +3,7 @@
 import { Component, type ReactNode } from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { diagEvent } from "@/lib/chat-diagnostics";
 
 interface Props {
   children: ReactNode;
@@ -20,6 +21,20 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(): State {
     return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    diagEvent("react:error-boundary:caught", {
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+    if (error.message.includes("185") || error.message.includes("Maximum update depth exceeded")) {
+      diagEvent("react:error-boundary:185", {
+        message: error.message,
+        componentStack: info.componentStack,
+      });
+    }
   }
 
   handleRetry = () => {
