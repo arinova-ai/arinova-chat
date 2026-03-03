@@ -77,6 +77,31 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_conv_notes_creator ON conversation_notes(creator_id);
 
         ALTER TABLE conversation_user_members ADD COLUMN IF NOT EXISTS agent_notes_enabled BOOLEAN NOT NULL DEFAULT true;
+
+        ALTER TABLE messages ADD COLUMN IF NOT EXISTS thread_id UUID;
+
+        CREATE TABLE IF NOT EXISTS thread_summaries (
+            thread_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+            reply_count INTEGER NOT NULL DEFAULT 0,
+            last_reply_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_reply_user_id TEXT,
+            last_reply_agent_id UUID,
+            participant_ids TEXT[] NOT NULL DEFAULT '{}'
+        );
+        CREATE INDEX IF NOT EXISTS idx_thread_summaries_last ON thread_summaries(last_reply_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id) WHERE thread_id IS NOT NULL;
+
+        INSERT INTO thread_summaries (thread_id, reply_count, last_reply_at, participant_ids)
+        SELECT
+            m.thread_id,
+            COUNT(*),
+            MAX(m.created_at),
+            ARRAY_AGG(DISTINCT COALESCE(m.sender_user_id, m.sender_agent_id::text))
+                FILTER (WHERE m.sender_user_id IS NOT NULL OR m.sender_agent_id IS NOT NULL)
+        FROM messages m
+        WHERE m.thread_id IS NOT NULL
+        GROUP BY m.thread_id
+        ON CONFLICT (thread_id) DO NOTHING;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
