@@ -14,6 +14,7 @@ export function ConversationList() {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const updateConversation = useChatStore((s) => s.updateConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
+  const unreadCounts = useChatStore((s) => s.unreadCounts);
   const agentHealth = useChatStore((s) => s.agentHealth);
   const thinkingAgents = useChatStore((s) => s.thinkingAgents);
 
@@ -63,6 +64,7 @@ export function ConversationList() {
               onClick={() => setActiveConversation(conv.id)}
               onRename={(title) => updateConversation(conv.id, { title })}
               onPin={(pinned) => updateConversation(conv.id, { pinned })}
+              unreadCount={unreadCounts[conv.id] ?? 0}
               isOnline={conv.agentId ? agentHealth[conv.agentId]?.status === "online" : false}
               isThinking={(thinkingAgents[conv.id]?.length ?? 0) > 0}
               isVerified={conv.isVerified}
