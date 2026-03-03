@@ -64,7 +64,12 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
 
   const { ref: scrollRef, showScrollButton, newMessageCount, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
-    { conversationId: activeConversationId, skipScroll: !!highlightMessageId, messageCount: messages.length },
+    {
+      conversationId: activeConversationId,
+      skipScroll: !!highlightMessageId,
+      messageCount: messages.length,
+      suppressUnreadCount: loadingUp || loadingDown,
+    },
   );
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);

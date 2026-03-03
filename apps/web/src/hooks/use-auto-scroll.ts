@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useAutoScroll<T extends HTMLElement>(
   deps: unknown[],
-  options?: { conversationId?: string | null; skipScroll?: boolean; messageCount?: number },
+  options?: {
+    conversationId?: string | null;
+    skipScroll?: boolean;
+    messageCount?: number;
+    suppressUnreadCount?: boolean;
+  },
 ) {
   const ref = useRef<T>(null);
   const userScrolledUp = useRef(false);
@@ -128,7 +133,7 @@ export function useAutoScroll<T extends HTMLElement>(
         userScrolledUp.current = false;
         setShowScrollButton(false);
         setNewMessageCount(0);
-      } else {
+      } else if (!options?.suppressUnreadCount) {
         // User is scrolled up — accumulate unread count
         setNewMessageCount((prev) => prev + delta);
       }
