@@ -272,7 +272,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (get().currentUserId === id) return;
     set({ currentUserId: id });
   },
-  setReplyingTo: (message) => set({ replyingTo: message }),
+  setReplyingTo: (message) => {
+    diagCount("action:setReplyingTo");
+    if (get().replyingTo?.id === message?.id) return;
+    set({ replyingTo: message });
+  },
   setInputDraft: (conversationId, text) => {
     const drafts = { ...get().inputDrafts };
     if (text) {
@@ -336,7 +340,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  setSidebarOpen: (open) => {
+    diagCount("action:setSidebarOpen");
+    if (get().sidebarOpen === open) return;
+    set({ sidebarOpen: open });
+  },
 
   setSearchQuery: (query) => {
     diagCount("action:setSearchQuery");
@@ -1099,7 +1107,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   openThread: (threadId) => {
+    diagCount("action:openThread");
     const { activeConversationId } = get();
+    if (get().activeThreadId === threadId) return;
     set({ activeThreadId: threadId });
     if (activeConversationId) {
       get().loadThreadMessages(activeConversationId, threadId);
@@ -1107,6 +1117,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   closeThread: () => {
+    diagCount("action:closeThread");
+    if (get().activeThreadId === null) return;
     set({ activeThreadId: null });
   },
 
@@ -1165,8 +1177,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  openNotebook: () => set({ notebookOpen: true }),
-  closeNotebook: () => set({ notebookOpen: false }),
+  openNotebook: () => {
+    diagCount("action:openNotebook");
+    if (get().notebookOpen) return;
+    set({ notebookOpen: true });
+  },
+  closeNotebook: () => {
+    diagCount("action:closeNotebook");
+    if (!get().notebookOpen) return;
+    set({ notebookOpen: false });
+  },
 
   loadNotes: async (conversationId) => {
     try {
