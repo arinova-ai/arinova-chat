@@ -65,9 +65,13 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Search — expandable */}
-      {searchOpen && (
-        <div className="shrink-0 px-3 pb-3">
+      {/* Search — expandable with animation */}
+      <div
+        className={`shrink-0 overflow-hidden transition-all duration-200 ease-in-out ${
+          searchOpen ? "max-h-14 opacity-100 pb-3" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="px-3">
           <div className="relative flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -87,18 +91,20 @@ export function Sidebar() {
                   }
                 }}
                 className="h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                tabIndex={searchOpen ? 0 : -1}
               />
             </div>
             <button
               type="button"
               onClick={closeSearch}
               className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={searchOpen ? 0 : -1}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Conversation list */}
       <ConversationList />
