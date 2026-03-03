@@ -9,6 +9,7 @@ import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 import TurndownService from "turndown";
 import {
   Bold,
@@ -51,7 +52,7 @@ interface NotebookEditorProps {
 
 function markdownToHtml(md: string): string {
   if (!md) return "";
-  return marked.parse(md, { async: false }) as string;
+  return DOMPurify.sanitize(marked.parse(md, { async: false }) as string);
 }
 
 function htmlToMarkdown(html: string): string {
@@ -194,7 +195,7 @@ export function NotebookEditor({
                 editor.chain().focus().unsetLink().run();
               } else {
                 const url = window.prompt("URL:");
-                if (url) {
+                if (url && /^(https?:\/\/|mailto:)/i.test(url)) {
                   editor.chain().focus().setLink({ href: url }).run();
                 }
               }
