@@ -191,13 +191,15 @@ export function ChatArea() {
           messages={messages}
         />
       </ErrorBoundary>
-      <ErrorBoundary scope="NotebookSheet">
-        <NotebookSheet
-          open={notebookOpen}
-          onOpenChange={setNotebookOpen}
-          conversationId={activeConversationId}
-        />
-      </ErrorBoundary>
+      {notebookOpen && (
+        <ErrorBoundary scope="NotebookSheet">
+          <NotebookSheet
+            open={notebookOpen}
+            onOpenChange={setNotebookOpen}
+            conversationId={activeConversationId}
+          />
+        </ErrorBoundary>
+      )}
     </div>
   );
 }
