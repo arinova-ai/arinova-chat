@@ -124,20 +124,22 @@ export function useAutoScroll<T extends HTMLElement>(
     // we must NOT yank them back to the bottom.
     const count = options?.messageCount ?? 0;
     if (count > prevMessageCount.current) {
-      // Skip unread counting when prepending older messages (ref is
-      // synchronous, unlike state which would be stale here)
       const isPrepending = options?.isPrependingRef?.current ?? false;
-      if (!isPrepending) {
-        const delta = count - prevMessageCount.current;
-        const el = ref.current;
-        const isNearBottom = el
-          ? el.scrollHeight - el.scrollTop - el.clientHeight < 100
-          : true;
-        if (isNearBottom) {
-          userScrolledUp.current = false;
-          setShowScrollButton(false);
-          setNewMessageCount(0);
-        } else {
+      const delta = count - prevMessageCount.current;
+      const el = ref.current;
+      const isNearBottom = el
+        ? el.scrollHeight - el.scrollTop - el.clientHeight < 100
+        : true;
+
+      if (isNearBottom) {
+        userScrolledUp.current = false;
+        setShowScrollButton(false);
+        setNewMessageCount(0);
+      } else {
+        // showScrollButton always updates regardless of prepending
+        setShowScrollButton(true);
+        // Only increment unread count for new messages, not prepended old ones
+        if (!isPrepending) {
           setNewMessageCount((prev) => prev + delta);
         }
       }
