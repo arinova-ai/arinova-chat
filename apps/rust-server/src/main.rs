@@ -112,6 +112,7 @@ async fn main() {
         .merge(routes::messages::router())
         .merge(routes::groups::router())
         .merge(routes::reactions::router())
+        .merge(routes::pins::router())
         .merge(routes::uploads::router())
         .merge(routes::push::router())
         .merge(routes::notifications::router())
