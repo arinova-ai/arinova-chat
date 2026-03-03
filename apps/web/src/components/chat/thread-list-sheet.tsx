@@ -79,7 +79,7 @@ export function ThreadListSheet({ open, onOpenChange, messages }: ThreadListShee
                         {msg.threadSummary!.replyCount === 1 ? t("chat.replies.one") : t("chat.replies.other")}
                       </span>
                       <span>·</span>
-                      <span>{formatTime(msg.threadSummary!.lastReplyAt)}</span>
+                      <span suppressHydrationWarning>{formatTime(msg.threadSummary!.lastReplyAt)}</span>
                     </div>
                   </div>
                 </button>

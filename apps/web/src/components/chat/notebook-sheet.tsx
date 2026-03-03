@@ -9,6 +9,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { MarkdownContent } from "./markdown-content";
 import {
   BookOpen,
@@ -17,9 +23,13 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  Settings,
+  X,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
+import { useIsMobile } from "@/hooks/use-is-mobile";
+import { cn } from "@/lib/utils";
 
 interface NotebookSheetProps {
   open: boolean;
@@ -51,12 +61,20 @@ function formatTime(date: Date | string): string {
 
 export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSheetProps) {
   const { t } = useTranslation();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isMobileRaw = useIsMobile();
+  const isMobile = mounted ? isMobileRaw : false;
   const notes = useChatStore((s) => s.notesByConversation[conversationId] ?? []);
   const loadNotes = useChatStore((s) => s.loadNotes);
   const createNote = useChatStore((s) => s.createNote);
   const updateNote = useChatStore((s) => s.updateNote);
   const deleteNote = useChatStore((s) => s.deleteNote);
   const currentUserId = useChatStore((s) => s.currentUserId);
+  const agentNotesEnabled = useChatStore(
+    (s) => s.agentNotesEnabledByConversation[conversationId] ?? true
+  );
+  const toggleAgentNotesEnabled = useChatStore((s) => s.toggleAgentNotesEnabled);
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
@@ -64,6 +82,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const [contentInput, setContentInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Load notes when sheet opens
   useEffect(() => {
@@ -83,6 +102,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       setSelectedNote(null);
       setTitleInput("");
       setContentInput("");
+      setSettingsOpen(false);
     }
   }, [open]);
 
@@ -173,39 +193,100 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     }
   }, [selectedNote, conversationId, deleteNote]);
 
+  const handleToggleAgentNotes = useCallback(
+    (checked: boolean) => {
+      toggleAgentNotesEnabled(conversationId, checked);
+    },
+    [conversationId, toggleAgentNotesEnabled]
+  );
+
   const canEdit = selectedNote && selectedNote.creatorId === currentUserId;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side="bottom"
+        side={isMobile ? "bottom" : "right"}
         showCloseButton={false}
-        className="rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[80vh]"
+        className={cn(
+          isMobile
+            ? "rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[80vh]"
+            : "w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col bg-secondary border-border"
+        )}
       >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
+        )}
 
         {/* List View */}
         {viewMode === "list" && (
-          <>
-            <SheetHeader className="px-2 pb-3">
+          <div className={cn(!isMobile && "flex flex-col h-full")}>
+            <SheetHeader className={cn(
+              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0"
+            )}>
               <div className="flex items-center justify-between">
                 <SheetTitle className="text-sm flex items-center gap-1.5">
                   <BookOpen className="h-4 w-4" />
                   {t("chat.notebook.title")}
                 </SheetTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={handleStartCreate}
-                  title={t("chat.notebook.create")}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  {/* Settings popover */}
+                  <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title={t("chat.notebook.settings")}
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      className="w-64 p-3"
+                      side={isMobile ? "top" : "left"}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <label
+                          htmlFor="agent-notes-toggle"
+                          className="text-xs font-medium leading-tight cursor-pointer select-none flex-1"
+                        >
+                          {t("chat.notebook.agentAccess")}
+                        </label>
+                        <Switch
+                          id="agent-notes-toggle"
+                          checked={agentNotesEnabled}
+                          onCheckedChange={handleToggleAgentNotes}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={handleStartCreate}
+                    title={t("chat.notebook.create")}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  {/* Desktop close button */}
+                  {!isMobile && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </SheetHeader>
 
-            <div className="overflow-y-auto max-h-[65vh] px-1">
+            <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-1" : "flex-1 min-h-0 px-1")}>
               {loading && notes.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -235,20 +316,23 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                         <span>{note.creatorName}</span>
                         <span>&middot;</span>
-                        <span>{formatTime(note.updatedAt)}</span>
+                        <span suppressHydrationWarning>{formatTime(note.updatedAt)}</span>
                       </div>
                     </button>
                   ))}
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
 
         {/* Detail View */}
         {viewMode === "detail" && selectedNote && (
-          <>
-            <div className="flex items-center gap-2 px-2 pb-3">
+          <div className={cn(!isMobile && "flex flex-col h-full")}>
+            <div className={cn(
+              "flex items-center gap-2",
+              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0"
+            )}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -284,14 +368,24 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                     </Button>
                   </>
                 )}
+                {!isMobile && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
 
-            <div className="overflow-y-auto max-h-[65vh] px-3">
+            <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-3" : "flex-1 min-h-0 px-4 py-3")}>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 <span>{selectedNote.creatorName}</span>
                 <span>&middot;</span>
-                <span>{formatTime(selectedNote.updatedAt)}</span>
+                <span suppressHydrationWarning>{formatTime(selectedNote.updatedAt)}</span>
               </div>
               {selectedNote.content ? (
                 <MarkdownContent content={selectedNote.content} />
@@ -301,13 +395,16 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 </p>
               )}
             </div>
-          </>
+          </div>
         )}
 
         {/* Create View */}
         {viewMode === "create" && (
-          <>
-            <div className="flex items-center gap-2 px-2 pb-3">
+          <div className={cn(!isMobile && "flex flex-col h-full")}>
+            <div className={cn(
+              "flex items-center gap-2",
+              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0"
+            )}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -319,9 +416,22 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               <h3 className="text-sm font-semibold flex-1">
                 {t("chat.notebook.newNote")}
               </h3>
+              {!isMobile && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onOpenChange(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
 
-            <div className="flex flex-col gap-3 px-3 overflow-y-auto max-h-[65vh]">
+            <div className={cn(
+              "flex flex-col gap-3 overflow-y-auto",
+              isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0"
+            )}>
               <input
                 type="text"
                 placeholder={t("chat.notebook.titlePlaceholder")}
@@ -357,13 +467,16 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 </Button>
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {/* Edit View */}
         {viewMode === "edit" && selectedNote && (
-          <>
-            <div className="flex items-center gap-2 px-2 pb-3">
+          <div className={cn(!isMobile && "flex flex-col h-full")}>
+            <div className={cn(
+              "flex items-center gap-2",
+              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0"
+            )}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -375,9 +488,22 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               <h3 className="text-sm font-semibold flex-1">
                 {t("chat.notebook.editNote")}
               </h3>
+              {!isMobile && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onOpenChange(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
 
-            <div className="flex flex-col gap-3 px-3 overflow-y-auto max-h-[65vh]">
+            <div className={cn(
+              "flex flex-col gap-3 overflow-y-auto",
+              isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0"
+            )}>
               <input
                 type="text"
                 placeholder={t("chat.notebook.titlePlaceholder")}
@@ -413,7 +539,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 </Button>
               </div>
             </div>
-          </>
+          </div>
         )}
       </SheetContent>
     </Sheet>

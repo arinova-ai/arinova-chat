@@ -702,7 +702,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
           {/* Timestamp + Read receipt */}
           {showTimestamps && message.createdAt && (
-            <p className={cn(
+            <p suppressHydrationWarning className={cn(
               "mt-1 text-[10px] text-muted-foreground/60 flex items-center gap-1",
               isUser ? "justify-end" : "justify-start"
             )}>

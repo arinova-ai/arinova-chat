@@ -185,7 +185,7 @@ export function ConversationItem({
               </span>
               {!renaming && (
                 <span className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                     {formatTime(updatedAt, t)}
                   </span>
                   {unreadCount > 0 && (
