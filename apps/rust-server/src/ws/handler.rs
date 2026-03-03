@@ -996,6 +996,32 @@ pub async fn trigger_agent_response(
                 }
             });
             ws_state.broadcast_to_members(&member_ids, &msg_event, redis);
+
+            // Push notification for human message to other members
+            for mid in &member_ids {
+                if mid == user_id { continue; }
+                if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
+                    if let Ok(true) = should_send_push(db, mid, "message").await {
+                        let preview = if content.len() > 100 {
+                            format!("{}...", &content[..100])
+                        } else {
+                            content.to_string()
+                        };
+                        let _ = send_push_to_user(
+                            db,
+                            config,
+                            mid,
+                            &crate::services::push::PushPayload {
+                                notification_type: "message".into(),
+                                title: sender_name.to_string(),
+                                body: preview,
+                                url: Some(format!("/chat/{}", conversation_id)),
+                            },
+                        )
+                        .await;
+                    }
+                }
+            }
         }
         return;
     }
@@ -1150,6 +1176,32 @@ pub async fn trigger_agent_response(
                 }
             });
             ws_state.broadcast_to_members(&member_ids, &user_msg_event, redis);
+
+            // Push notification for human message to other group members
+            for mid in &member_ids {
+                if mid == user_id { continue; }
+                if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
+                    if let Ok(true) = should_send_push(db, mid, "message").await {
+                        let preview = if content.len() > 100 {
+                            format!("{}...", &content[..100])
+                        } else {
+                            content.to_string()
+                        };
+                        let _ = send_push_to_user(
+                            db,
+                            config,
+                            mid,
+                            &crate::services::push::PushPayload {
+                                notification_type: "message".into(),
+                                title: sender_name.to_string(),
+                                body: preview,
+                                url: Some(format!("/chat/{}", conversation_id)),
+                            },
+                        )
+                        .await;
+                    }
+                }
+            }
         }
     }
 
@@ -1638,10 +1690,10 @@ async fn do_trigger_agent_response(
                                 update_thread_summary(&db, tid, None, Some(&agent_id)).await;
                             }
 
-                            // Push notification
-                            if !ws_state.is_user_foreground(&user_id) {
-                                if let Ok(false) = is_conversation_muted(&db, &user_id, &conversation_id).await {
-                                    if let Ok(true) = should_send_push(&db, &user_id, "message").await {
+                            // Push notification for agent message — send to all conversation members
+                            for mid in &member_ids {
+                                if let Ok(false) = is_conversation_muted(&db, mid, &conversation_id).await {
+                                    if let Ok(true) = should_send_push(&db, mid, "message").await {
                                         let preview = if full_content.len() > 100 {
                                             format!("{}...", &full_content[..100])
                                         } else {
@@ -1650,7 +1702,7 @@ async fn do_trigger_agent_response(
                                         let _ = send_push_to_user(
                                             &db,
                                             &config,
-                                            &user_id,
+                                            mid,
                                             &crate::services::push::PushPayload {
                                                 notification_type: "message".into(),
                                                 title: agent_name.clone(),
