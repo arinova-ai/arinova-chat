@@ -59,8 +59,8 @@ export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadLi
         `/api/conversations/${conversationId}/threads?limit=50`
       );
       setThreads(data.threads);
-    } catch {
-      // keep existing threads on error
+    } catch (err) {
+      console.error("[ThreadList] Failed to fetch threads:", err);
     } finally {
       setLoading(false);
     }

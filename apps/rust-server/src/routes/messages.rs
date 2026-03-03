@@ -853,9 +853,9 @@ struct ThreadsQuery {
 #[derive(Debug, FromRow)]
 struct ThreadListRow {
     thread_id: Uuid,
-    reply_count: i32,
+    reply_count: i64,
     last_reply_at: NaiveDateTime,
-    participant_ids: Vec<String>,
+    participant_ids: Option<Vec<String>>,
     // Original message fields
     original_content: String,
     original_role: String,
@@ -915,21 +915,34 @@ async fn get_threads(
         None
     };
 
+    // Query threads directly from messages table (not thread_summaries) for reliability.
+    // This computes reply_count and participants on-the-fly from actual message data.
     let rows = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, ThreadListRow>(
             r#"SELECT
-                 ts.thread_id,
-                 ts.reply_count,
-                 ts.last_reply_at,
-                 ts.participant_ids,
-                 m.content AS original_content,
-                 m.role::text AS original_role,
-                 (SELECT name FROM agents WHERE id = m.sender_agent_id) AS original_agent_name,
-                 (SELECT content FROM messages WHERE thread_id = ts.thread_id ORDER BY created_at DESC LIMIT 1) AS last_reply_content
-               FROM thread_summaries ts
-               JOIN messages m ON m.id = ts.thread_id
-               WHERE m.conversation_id = $1 AND ts.last_reply_at < $2
-               ORDER BY ts.last_reply_at DESC
+                 r.thread_id,
+                 r.reply_count,
+                 r.last_reply_at,
+                 r.participant_ids,
+                 orig.content AS original_content,
+                 orig.role::text AS original_role,
+                 (SELECT name FROM agents WHERE id = orig.sender_agent_id) AS original_agent_name,
+                 r.last_reply_content
+               FROM (
+                 SELECT
+                   m.thread_id,
+                   COUNT(*) AS reply_count,
+                   MAX(m.created_at) AS last_reply_at,
+                   ARRAY_AGG(DISTINCT COALESCE(m.sender_user_id, m.sender_agent_id::text))
+                     FILTER (WHERE m.sender_user_id IS NOT NULL OR m.sender_agent_id IS NOT NULL) AS participant_ids,
+                   (SELECT content FROM messages m2 WHERE m2.thread_id = m.thread_id ORDER BY m2.created_at DESC LIMIT 1) AS last_reply_content
+                 FROM messages m
+                 WHERE m.conversation_id = $1 AND m.thread_id IS NOT NULL
+                 GROUP BY m.thread_id
+               ) r
+               JOIN messages orig ON orig.id = r.thread_id
+               WHERE r.last_reply_at < $2
+               ORDER BY r.last_reply_at DESC
                LIMIT $3"#,
         )
         .bind(conversation_id)
@@ -940,18 +953,28 @@ async fn get_threads(
     } else {
         sqlx::query_as::<_, ThreadListRow>(
             r#"SELECT
-                 ts.thread_id,
-                 ts.reply_count,
-                 ts.last_reply_at,
-                 ts.participant_ids,
-                 m.content AS original_content,
-                 m.role::text AS original_role,
-                 (SELECT name FROM agents WHERE id = m.sender_agent_id) AS original_agent_name,
-                 (SELECT content FROM messages WHERE thread_id = ts.thread_id ORDER BY created_at DESC LIMIT 1) AS last_reply_content
-               FROM thread_summaries ts
-               JOIN messages m ON m.id = ts.thread_id
-               WHERE m.conversation_id = $1
-               ORDER BY ts.last_reply_at DESC
+                 r.thread_id,
+                 r.reply_count,
+                 r.last_reply_at,
+                 r.participant_ids,
+                 orig.content AS original_content,
+                 orig.role::text AS original_role,
+                 (SELECT name FROM agents WHERE id = orig.sender_agent_id) AS original_agent_name,
+                 r.last_reply_content
+               FROM (
+                 SELECT
+                   m.thread_id,
+                   COUNT(*) AS reply_count,
+                   MAX(m.created_at) AS last_reply_at,
+                   ARRAY_AGG(DISTINCT COALESCE(m.sender_user_id, m.sender_agent_id::text))
+                     FILTER (WHERE m.sender_user_id IS NOT NULL OR m.sender_agent_id IS NOT NULL) AS participant_ids,
+                   (SELECT content FROM messages m2 WHERE m2.thread_id = m.thread_id ORDER BY m2.created_at DESC LIMIT 1) AS last_reply_content
+                 FROM messages m
+                 WHERE m.conversation_id = $1 AND m.thread_id IS NOT NULL
+                 GROUP BY m.thread_id
+               ) r
+               JOIN messages orig ON orig.id = r.thread_id
+               ORDER BY r.last_reply_at DESC
                LIMIT $2"#,
         )
         .bind(conversation_id)
@@ -977,7 +1000,7 @@ async fn get_threads(
                         },
                         "replyCount": r.reply_count,
                         "lastReplyAt": r.last_reply_at.and_utc().to_rfc3339(),
-                        "participants": r.participant_ids,
+                        "participants": r.participant_ids.as_deref().unwrap_or(&[]),
                         "lastReplyPreview": r.last_reply_content.as_deref().map(|c| {
                             c.chars().take(200).collect::<String>()
                         }),
