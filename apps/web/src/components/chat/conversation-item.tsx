@@ -199,9 +199,9 @@ export function ConversationItem({
   return (
     <>
       <div className="relative overflow-hidden rounded-lg">
-        {/* Left actions (right swipe): Pin + Mute */}
+        {/* Left actions (right swipe): Pin + Mute — mobile only */}
         <div
-          className="absolute inset-y-0 left-0 flex items-stretch"
+          className="absolute inset-y-0 left-0 flex items-stretch md:hidden"
           style={{ width: SWIPE_ACTION_WIDTH }}
         >
           <button
@@ -230,9 +230,9 @@ export function ConversationItem({
           )}
         </div>
 
-        {/* Right action (left swipe): Delete */}
+        {/* Right action (left swipe): Delete — mobile only */}
         <div
-          className="absolute inset-y-0 right-0 flex items-stretch"
+          className="absolute inset-y-0 right-0 flex items-stretch md:hidden"
           style={{ width: SWIPE_DELETE_WIDTH }}
         >
           <button
