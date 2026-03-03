@@ -77,7 +77,8 @@ export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadLi
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[70vh]"
+        className="rounded-t-2xl border-border bg-secondary px-2 pt-3 max-h-[70vh]"
+        style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
 

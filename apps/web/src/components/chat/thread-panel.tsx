@@ -174,7 +174,7 @@ export function ThreadPanel() {
         </div>
 
         {/* Thread Input */}
-        <div className="border-t px-3 py-3 shrink-0">
+        <div className="border-t px-3 py-3 shrink-0" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
           <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}

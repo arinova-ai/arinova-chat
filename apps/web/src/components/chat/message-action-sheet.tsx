@@ -61,7 +61,8 @@ export function MessageActionSheet({
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3"
+        className="rounded-t-2xl border-border bg-secondary px-2 pt-3"
+        style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <VisuallyHidden.Root>
           <SheetTitle>{t("chat.messageActions")}</SheetTitle>
