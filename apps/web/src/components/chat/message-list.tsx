@@ -62,13 +62,14 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const prependHeightRef = useRef<number | null>(null);
   const isRestoringScrollRef = useRef(false);
 
+  const isPrependingRef = useRef(false);
   const { ref: scrollRef, showScrollButton, newMessageCount, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
     {
       conversationId: activeConversationId,
       skipScroll: !!highlightMessageId,
       messageCount: messages.length,
-      suppressUnreadCount: loadingUp || loadingDown,
+      isPrependingRef,
     },
   );
   const topSentinelRef = useRef<HTMLDivElement>(null);
@@ -138,6 +139,9 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       if (data.messages.length > 0) {
         const el = scrollRef.current;
         prependHeightRef.current = el?.scrollHeight ?? 0;
+        // Set synchronously BEFORE store update so the auto-scroll effect
+        // sees it when triggered by the new message count
+        isPrependingRef.current = true;
 
         const store = useChatStore.getState();
         const current = store.messagesByConversation[activeConversationId] ?? [];
@@ -204,6 +208,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       el.scrollTop += el.scrollHeight - prevHeight;
       requestAnimationFrame(() => {
         isRestoringScrollRef.current = false;
+        isPrependingRef.current = false;
       });
     }
   });

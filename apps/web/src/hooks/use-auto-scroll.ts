@@ -8,7 +8,7 @@ export function useAutoScroll<T extends HTMLElement>(
     conversationId?: string | null;
     skipScroll?: boolean;
     messageCount?: number;
-    suppressUnreadCount?: boolean;
+    isPrependingRef?: React.RefObject<boolean>;
   },
 ) {
   const ref = useRef<T>(null);
@@ -124,18 +124,22 @@ export function useAutoScroll<T extends HTMLElement>(
     // we must NOT yank them back to the bottom.
     const count = options?.messageCount ?? 0;
     if (count > prevMessageCount.current) {
-      const delta = count - prevMessageCount.current;
-      const el = ref.current;
-      const isNearBottom = el
-        ? el.scrollHeight - el.scrollTop - el.clientHeight < 100
-        : true;
-      if (isNearBottom) {
-        userScrolledUp.current = false;
-        setShowScrollButton(false);
-        setNewMessageCount(0);
-      } else if (!options?.suppressUnreadCount) {
-        // User is scrolled up — accumulate unread count
-        setNewMessageCount((prev) => prev + delta);
+      // Skip unread counting when prepending older messages (ref is
+      // synchronous, unlike state which would be stale here)
+      const isPrepending = options?.isPrependingRef?.current ?? false;
+      if (!isPrepending) {
+        const delta = count - prevMessageCount.current;
+        const el = ref.current;
+        const isNearBottom = el
+          ? el.scrollHeight - el.scrollTop - el.clientHeight < 100
+          : true;
+        if (isNearBottom) {
+          userScrolledUp.current = false;
+          setShowScrollButton(false);
+          setNewMessageCount(0);
+        } else {
+          setNewMessageCount((prev) => prev + delta);
+        }
       }
     }
     prevMessageCount.current = count;
