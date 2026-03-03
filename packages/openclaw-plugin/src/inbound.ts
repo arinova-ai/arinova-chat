@@ -291,6 +291,14 @@ export async function handleArinovaChatInbound(params: {
   // over the block-joined finalText (which inserts \n\n between blocks).
   let completedText = lastAccumulatedText || finalText;
 
+  // If no content was generated (duplicate detection / fast abort skipped the LLM call),
+  // report an error instead of sending empty completion that creates a blank message.
+  if (!completedText.trim()) {
+    completionSent = true;
+    sendError("Unable to generate a response. Please try again.");
+    return;
+  }
+
   if (uploadFile && completedText) {
     try {
       completedText = await replaceImagePaths(completedText, process.cwd(), uploadFile, runtime.log);
