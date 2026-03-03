@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
 import type { Message } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -33,6 +33,15 @@ import type { ConversationType } from "@arinova/shared/types";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
+
+// Detect hover-capable device (desktop) vs touch-only (mobile)
+const hoverQuery = typeof window !== "undefined" ? window.matchMedia("(hover: hover)") : null;
+function subscribeHover(cb: () => void) {
+  hoverQuery?.addEventListener("change", cb);
+  return () => hoverQuery?.removeEventListener("change", cb);
+}
+function getHoverSnapshot() { return hoverQuery?.matches ?? false; }
+function getHoverServerSnapshot() { return false; }
 
 const SWIPE_THRESHOLD = 70;
 const SWIPE_ACTION_WIDTH = 140;
@@ -105,6 +114,7 @@ export function ConversationItem({
   onDelete,
 }: ConversationItemProps) {
   const { t } = useTranslation();
+  const isDesktop = useSyncExternalStore(subscribeHover, getHoverSnapshot, getHoverServerSnapshot);
   const preview = lastMessage
     ? truncate(lastMessage.content.replace(/\n/g, " "), 50)
     : t("chat.noMessages");
@@ -203,10 +213,7 @@ export function ConversationItem({
 
   const isPinned = pinnedAt !== null;
 
-  return (
-    <>
-      <ContextMenu>
-      <ContextMenuTrigger asChild>
+  const cardContent = (
       <div className="relative overflow-hidden rounded-lg">
         {/* Left actions (right swipe): Pin + Mute — mobile only */}
         <div
@@ -416,47 +423,57 @@ export function ConversationItem({
         </DropdownMenu>
       </div>
       </div>
-      </ContextMenuTrigger>
-      {/* Desktop right-click context menu */}
-      <ContextMenuContent className="w-44">
-        <ContextMenuItem
-          onClick={() => {
-            setRenaming(true);
-            setRenameValue(title ?? agentName);
-          }}
-        >
-          <Pencil className="h-4 w-4" />
-          {t("conversation.rename")}
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onPin(!isPinned)}>
-          {isPinned ? (
-            <>
-              <PinOff className="h-4 w-4" />
-              {t("conversation.unpin")}
-            </>
-          ) : (
-            <>
-              <Pin className="h-4 w-4" />
-              {t("conversation.pin")}
-            </>
-          )}
-        </ContextMenuItem>
-        {onMuteToggle && (
-          <ContextMenuItem onClick={() => onMuteToggle()}>
-            {isMuted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-            {isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          variant="destructive"
-          onClick={() => setDeleteConfirmOpen(true)}
-        >
-          <Trash2 className="h-4 w-4" />
-          {t("common.delete")}
-        </ContextMenuItem>
-      </ContextMenuContent>
-      </ContextMenu>
+  );
+
+  return (
+    <>
+      {isDesktop ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            {cardContent}
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem
+              onClick={() => {
+                setRenaming(true);
+                setRenameValue(title ?? agentName);
+              }}
+            >
+              <Pencil className="h-4 w-4" />
+              {t("conversation.rename")}
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onPin(!isPinned)}>
+              {isPinned ? (
+                <>
+                  <PinOff className="h-4 w-4" />
+                  {t("conversation.unpin")}
+                </>
+              ) : (
+                <>
+                  <Pin className="h-4 w-4" />
+                  {t("conversation.pin")}
+                </>
+              )}
+            </ContextMenuItem>
+            {onMuteToggle && (
+              <ContextMenuItem onClick={() => onMuteToggle()}>
+                {isMuted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                {isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
+              </ContextMenuItem>
+            )}
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              variant="destructive"
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              {t("common.delete")}
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        cardContent
+      )}
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
