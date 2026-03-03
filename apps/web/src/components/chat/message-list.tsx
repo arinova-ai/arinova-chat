@@ -62,10 +62,13 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const prependHeightRef = useRef<number | null>(null);
   const isRestoringScrollRef = useRef(false);
 
-  const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
+  const { ref: scrollRef, showScrollButton, newMessageCount, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
     { conversationId: activeConversationId, skipScroll: !!highlightMessageId, messageCount: messages.length },
   );
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false); // serialization: only one load at a time
 
   // Sync pagination from jumpToMessage
   useEffect(() => {
@@ -115,9 +118,10 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   }, [highlightMessageId, messages, scrollRef]);
 
   const loadOlder = useCallback(async () => {
-    if (loadingUpRef.current || !hasMoreUp || !activeConversationId || messages.length === 0)
+    if (loadingRef.current || loadingUpRef.current || !hasMoreUp || !activeConversationId || messages.length === 0)
       return;
 
+    loadingRef.current = true;
     loadingUpRef.current = true;
     setLoadingUp(true);
     try {
@@ -144,15 +148,17 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     } catch {
       // ignore
     } finally {
+      loadingRef.current = false;
       loadingUpRef.current = false;
       setLoadingUp(false);
     }
   }, [hasMoreUp, activeConversationId, messages, scrollRef]);
 
   const loadNewer = useCallback(async () => {
-    if (loadingDownRef.current || !hasMoreDown || !activeConversationId || messages.length === 0)
+    if (loadingRef.current || loadingDownRef.current || !hasMoreDown || !activeConversationId || messages.length === 0)
       return;
 
+    loadingRef.current = true;
     loadingDownRef.current = true;
     setLoadingDown(true);
     try {
@@ -176,6 +182,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     } catch {
       // ignore
     } finally {
+      loadingRef.current = false;
       loadingDownRef.current = false;
       setLoadingDown(false);
     }
@@ -196,19 +203,28 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     }
   });
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || isRestoringScrollRef.current) return;
-    // Load older when scrolled within 30% of viewport height from top
-    if (el.scrollTop < el.clientHeight * 0.3 && hasMoreUp && !loadingUpRef.current) {
-      loadOlder();
-    }
-    // Load newer when scrolled near bottom
-    const bottomDist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (bottomDist < 100 && hasMoreDown && !loadingDownRef.current) {
-      loadNewer();
-    }
-  }, [hasMoreUp, hasMoreDown, loadOlder, loadNewer, scrollRef]);
+  // IntersectionObserver sentinels for loading triggers (replaces scroll-event checks)
+  useEffect(() => {
+    const container = scrollRef.current;
+    const topEl = topSentinelRef.current;
+    const bottomEl = bottomSentinelRef.current;
+    if (!container || !topEl || !bottomEl) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (isRestoringScrollRef.current) return;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          if (entry.target === topEl) loadOlder();
+          if (entry.target === bottomEl) loadNewer();
+        }
+      },
+      { root: container, rootMargin: "200px 0px" }
+    );
+    observer.observe(topEl);
+    observer.observe(bottomEl);
+    return () => observer.disconnect();
+  }, [loadOlder, loadNewer, scrollRef]);
 
   if (messages.length === 0 && loadingMessages) {
     return (
@@ -226,9 +242,10 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         ref={scrollRef}
         className="h-full overflow-y-auto overflow-x-hidden py-4"
         style={{ overflowAnchor: "none" }}
-        onScroll={handleScroll}
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          {/* Top sentinel for IntersectionObserver-based older message loading */}
+          <div ref={topSentinelRef} className="h-px shrink-0" aria-hidden />
           {loadingUp && (
             <div className="flex justify-center py-2">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -267,15 +284,22 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           {activeConversationId && (
             <TypingIndicator conversationId={activeConversationId} />
           )}
+          {/* Bottom sentinel for IntersectionObserver-based newer message loading */}
+          <div ref={bottomSentinelRef} className="h-px shrink-0" aria-hidden />
         </div>
       </div>
 
       {showScrollButton && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-opacity hover:bg-accent"
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-opacity hover:bg-accent"
           aria-label="Scroll to latest"
         >
+          {newMessageCount > 0 && (
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">
+              {newMessageCount > 99 ? "99+" : newMessageCount}
+            </span>
+          )}
           <ArrowDown className="h-4 w-4" />
         </button>
       )}
