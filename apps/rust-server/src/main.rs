@@ -61,6 +61,22 @@ async fn main() {
 
         ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
         ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
+
+        CREATE TABLE IF NOT EXISTS conversation_notes (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL,
+            creator_id      TEXT NOT NULL,
+            creator_type    TEXT NOT NULL DEFAULT 'user',
+            agent_id        UUID,
+            title           VARCHAR(200) NOT NULL,
+            content         TEXT NOT NULL DEFAULT '',
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_conversation ON conversation_notes(conversation_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_creator ON conversation_notes(creator_id);
+
+        ALTER TABLE conversation_user_members ADD COLUMN IF NOT EXISTS agent_notes_enabled BOOLEAN NOT NULL DEFAULT true;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
@@ -177,6 +193,7 @@ async fn main() {
         .merge(routes::stickers::router())
         .merge(routes::admin::router())
         .merge(routes::reports::router())
+        .merge(routes::notes::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

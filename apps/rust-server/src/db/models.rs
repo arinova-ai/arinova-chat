@@ -470,3 +470,19 @@ pub struct KnowledgeBaseChunk {
     pub token_count: i32,
     pub created_at: NaiveDateTime,
 }
+
+// ===== Conversation Notes =====
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationNote {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub creator_id: String,
+    pub creator_type: String,
+    pub agent_id: Option<Uuid>,
+    pub title: String,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
