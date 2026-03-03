@@ -90,6 +90,16 @@
   "chat.thread.startDiscussion": "在下方开始讨论",
   "chat.thread.placeholder": "在讨论串中回复...",
 
+  "chat.notebook.title": "笔记",
+  "chat.notebook.empty": "暂无笔记",
+  "chat.notebook.create": "创建",
+  "chat.notebook.newNote": "新建笔记",
+  "chat.notebook.edit": "编辑",
+  "chat.notebook.editNote": "编辑笔记",
+  "chat.notebook.titlePlaceholder": "笔记标题",
+  "chat.notebook.contentPlaceholder": "用 Markdown 撰写笔记...",
+  "chat.notebook.noContent": "无内容",
+
   "chat.search.title": "搜索",
   "chat.search.results": "条结果",
   "chat.search.result": "条结果",

@@ -90,6 +90,16 @@
   "chat.thread.startDiscussion": "Mulakan perbincangan di bawah",
   "chat.thread.placeholder": "Balas dalam utas...",
 
+  "chat.notebook.title": "Nota",
+  "chat.notebook.empty": "Tiada nota lagi",
+  "chat.notebook.create": "Cipta",
+  "chat.notebook.newNote": "Nota baharu",
+  "chat.notebook.edit": "Edit",
+  "chat.notebook.editNote": "Edit nota",
+  "chat.notebook.titlePlaceholder": "Tajuk nota",
+  "chat.notebook.contentPlaceholder": "Tulis nota dalam Markdown...",
+  "chat.notebook.noContent": "Tiada kandungan",
+
   "chat.search.title": "Cari",
   "chat.search.results": "keputusan",
   "chat.search.result": "keputusan",

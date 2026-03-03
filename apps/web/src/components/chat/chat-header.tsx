@@ -24,6 +24,7 @@ import {
   FileText,
   Settings,
   MessageSquare,
+  BookOpen,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
@@ -48,6 +49,7 @@ interface ChatHeaderProps {
   onSettingsClick?: () => void;
   onAddMemberClick?: () => void;
   onThreadsClick?: () => void;
+  onNotebookClick?: () => void;
 }
 
 export function ChatHeader({
@@ -65,6 +67,7 @@ export function ChatHeader({
   onSettingsClick,
   onAddMemberClick,
   onThreadsClick,
+  onNotebookClick,
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -174,6 +177,17 @@ export function ChatHeader({
                 <UsersRound className="h-4 w-4" />
               </Button>
             )}
+            {onNotebookClick && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onNotebookClick}
+                title={t("chat.notebook.title")}
+              >
+                <BookOpen className="h-4 w-4" />
+              </Button>
+            )}
             {onThreadsClick && (
               <Button
                 variant="ghost"
@@ -240,6 +254,17 @@ export function ChatHeader({
                 title={isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
               >
                 {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              </Button>
+            )}
+            {onNotebookClick && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onNotebookClick}
+                title={t("chat.notebook.title")}
+              >
+                <BookOpen className="h-4 w-4" />
               </Button>
             )}
             {onThreadsClick && (

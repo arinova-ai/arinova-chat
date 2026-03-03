@@ -90,6 +90,16 @@
   "chat.thread.startDiscussion": "아래에서 토론을 시작하세요",
   "chat.thread.placeholder": "스레드에 답글 작성...",
 
+  "chat.notebook.title": "노트",
+  "chat.notebook.empty": "아직 노트가 없습니다",
+  "chat.notebook.create": "만들기",
+  "chat.notebook.newNote": "새 노트",
+  "chat.notebook.edit": "편집",
+  "chat.notebook.editNote": "노트 편집",
+  "chat.notebook.titlePlaceholder": "노트 제목",
+  "chat.notebook.contentPlaceholder": "Markdown으로 노트 작성...",
+  "chat.notebook.noContent": "내용 없음",
+
   "chat.search.title": "검색",
   "chat.search.results": "개 결과",
   "chat.search.result": "개 결과",

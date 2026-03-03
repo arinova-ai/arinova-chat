@@ -14,6 +14,7 @@ import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
+import { NotebookSheet } from "./notebook-sheet";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
@@ -36,6 +37,7 @@ export function ChatArea() {
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef(0);
@@ -134,6 +136,7 @@ export function ChatArea() {
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
+        onNotebookClick={() => setNotebookOpen(true)}
       />
       {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
       <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
@@ -170,6 +173,11 @@ export function ChatArea() {
         open={threadListOpen}
         onOpenChange={setThreadListOpen}
         messages={messages}
+      />
+      <NotebookSheet
+        open={notebookOpen}
+        onOpenChange={setNotebookOpen}
+        conversationId={activeConversationId}
       />
     </div>
   );

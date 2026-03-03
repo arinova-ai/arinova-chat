@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, Conversation, Message, ThreadSummary } from "@arinova/shared/types";
+import type { Agent, Conversation, Message, ThreadSummary, Note } from "@arinova/shared/types";
 import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
@@ -124,6 +124,10 @@ interface ChatState {
   threadMessages: Record<string, Message[]>;
   threadLoading: boolean;
 
+  // Notebook state
+  notesByConversation: Record<string, Note[]>;
+  notebookOpen: boolean;
+
   // Actions
   setCurrentUserId: (id: string | null) => void;
   setReplyingTo: (message: Message | null) => void;
@@ -199,6 +203,15 @@ interface ChatState {
   sendThreadMessage: (content: string) => void;
   setInputDraft: (conversationId: string, text: string) => void;
   clearInputDraft: (conversationId: string) => void;
+
+  // Notebook actions
+  openNotebook: () => void;
+  closeNotebook: () => void;
+  loadNotes: (conversationId: string) => Promise<void>;
+  createNote: (conversationId: string, title: string, content: string) => Promise<Note>;
+  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string }) => Promise<void>;
+  deleteNote: (conversationId: string, noteId: string) => Promise<void>;
+
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -247,6 +260,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
+  notesByConversation: {},
+  notebookOpen: false,
 
   setCurrentUserId: (id) => set({ currentUserId: id }),
   setReplyingTo: (message) => set({ replyingTo: message }),
@@ -1129,6 +1144,76 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  openNotebook: () => set({ notebookOpen: true }),
+  closeNotebook: () => set({ notebookOpen: false }),
+
+  loadNotes: async (conversationId) => {
+    try {
+      const notes = await api<Note[]>(
+        `/api/conversations/${conversationId}/notes`
+      );
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: notes,
+        },
+      });
+    } catch {
+      // ignore load errors
+    }
+  },
+
+  createNote: async (conversationId, title, content) => {
+    const note = await api<Note>(
+      `/api/conversations/${conversationId}/notes`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title, content }),
+      }
+    );
+    const current = get().notesByConversation[conversationId] ?? [];
+    set({
+      notesByConversation: {
+        ...get().notesByConversation,
+        [conversationId]: [note, ...current],
+      },
+    });
+    return note;
+  },
+
+  updateNote: async (conversationId, noteId, updates) => {
+    const updated = await api<Note>(
+      `/api/conversations/${conversationId}/notes/${noteId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      }
+    );
+    const current = get().notesByConversation[conversationId] ?? [];
+    set({
+      notesByConversation: {
+        ...get().notesByConversation,
+        [conversationId]: current.map((n) =>
+          n.id === noteId ? updated : n
+        ),
+      },
+    });
+  },
+
+  deleteNote: async (conversationId, noteId) => {
+    await api(
+      `/api/conversations/${conversationId}/notes/${noteId}`,
+      { method: "DELETE" }
+    );
+    const current = get().notesByConversation[conversationId] ?? [];
+    set({
+      notesByConversation: {
+        ...get().notesByConversation,
+        [conversationId]: current.filter((n) => n.id !== noteId),
+      },
+    });
+  },
+
   handleWSEvent: (event) => {
     if (event.type === "pong") return;
 
@@ -1909,6 +1994,47 @@ export const useChatStore = create<ChatState>((set, get) => ({
         reactions[messageId] = msgReactions;
         set({ reactionsByMessage: reactions });
       }
+      return;
+    }
+
+    if (event.type === "note:created") {
+      const { conversationId, note } = event;
+      const current = get().notesByConversation[conversationId] ?? [];
+      // Don't add duplicate
+      if (!current.some((n) => n.id === note.id)) {
+        set({
+          notesByConversation: {
+            ...get().notesByConversation,
+            [conversationId]: [note, ...current],
+          },
+        });
+      }
+      return;
+    }
+
+    if (event.type === "note:updated") {
+      const { conversationId, note } = event;
+      const current = get().notesByConversation[conversationId] ?? [];
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: current.map((n) =>
+            n.id === note.id ? note : n
+          ),
+        },
+      });
+      return;
+    }
+
+    if (event.type === "note:deleted") {
+      const { conversationId, noteId } = event;
+      const current = get().notesByConversation[conversationId] ?? [];
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: current.filter((n) => n.id !== noteId),
+        },
+      });
       return;
     }
 

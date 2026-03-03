@@ -90,6 +90,16 @@
   "chat.thread.startDiscussion": "Inicia la discusion a continuacion",
   "chat.thread.placeholder": "Responder en el hilo...",
 
+  "chat.notebook.title": "Notas",
+  "chat.notebook.empty": "Aun no hay notas",
+  "chat.notebook.create": "Crear",
+  "chat.notebook.newNote": "Nueva nota",
+  "chat.notebook.edit": "Editar",
+  "chat.notebook.editNote": "Editar nota",
+  "chat.notebook.titlePlaceholder": "Titulo de la nota",
+  "chat.notebook.contentPlaceholder": "Escribe tu nota en Markdown...",
+  "chat.notebook.noContent": "Sin contenido",
+
   "chat.search.title": "Buscar",
   "chat.search.results": "resultados",
   "chat.search.result": "resultado",

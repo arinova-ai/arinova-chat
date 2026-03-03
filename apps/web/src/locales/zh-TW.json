@@ -92,6 +92,16 @@
   "chat.thread.startDiscussion": "在下方開始討論",
   "chat.thread.placeholder": "在討論串中回覆...",
 
+  "chat.notebook.title": "筆記",
+  "chat.notebook.empty": "尚無筆記",
+  "chat.notebook.create": "建立",
+  "chat.notebook.newNote": "新增筆記",
+  "chat.notebook.edit": "編輯",
+  "chat.notebook.editNote": "編輯筆記",
+  "chat.notebook.titlePlaceholder": "筆記標題",
+  "chat.notebook.contentPlaceholder": "以 Markdown 撰寫筆記...",
+  "chat.notebook.noContent": "無內容",
+
   "chat.search.title": "搜尋",
   "chat.search.results": "筆結果",
   "chat.search.result": "筆結果",
