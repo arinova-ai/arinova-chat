@@ -202,7 +202,7 @@ async fn list_pins(
     }
 
     let results = sqlx::query_as::<_, (String, String, String, String, chrono::NaiveDateTime, String)>(
-        r#"SELECT pm.message_id, m.content, m.role, pm.pinned_by,
+        r#"SELECT pm.message_id, m.content, m.role::text, pm.pinned_by,
                   pm.pinned_at, COALESCE(u.name, 'Unknown')
            FROM pinned_messages pm
            JOIN messages m ON m.id = pm.message_id::uuid
