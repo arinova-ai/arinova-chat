@@ -68,6 +68,7 @@ export function NotebookEditor({
   className,
 }: NotebookEditorProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
