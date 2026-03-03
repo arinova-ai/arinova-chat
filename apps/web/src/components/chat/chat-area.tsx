@@ -133,7 +133,7 @@ export function ChatArea() {
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
       />
-      <PinnedMessagesBar conversationId={activeConversationId} />
+      {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
       <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
       <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
 

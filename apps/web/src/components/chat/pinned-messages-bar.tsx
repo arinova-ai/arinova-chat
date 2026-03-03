@@ -25,6 +25,7 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const fetchPins = useCallback(async () => {
+    if (!conversationId) return;
     try {
       const data = await api<PinnedMessage[]>(
         `/api/conversations/${conversationId}/pins`
@@ -32,16 +33,17 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
       setPins(data);
       setCurrentIndex(0);
     } catch {
-      setPins([]);
+      // Keep existing pins on refetch failure; only clear on initial load
     }
   }, [conversationId]);
 
   useEffect(() => {
+    // Clear pins and fetch fresh on conversation change
+    setPins([]);
     fetchPins();
-    // Re-fetch when pins change (pin/unpin from message bubble)
     const onPinsChanged = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (!detail || detail.conversationId === conversationId) {
+      if (detail && detail.conversationId === conversationId) {
         fetchPins();
       }
     };
