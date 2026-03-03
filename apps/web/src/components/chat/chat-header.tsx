@@ -192,7 +192,7 @@ export function ChatHeader({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 md:hidden"
+                className="h-8 w-8"
                 onClick={onThreadsClick}
                 title={t("chat.thread.title")}
               >
@@ -271,7 +271,7 @@ export function ChatHeader({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 md:hidden"
+                className="h-8 w-8"
                 onClick={onThreadsClick}
                 title={t("chat.thread.title")}
               >

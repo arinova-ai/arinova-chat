@@ -188,7 +188,7 @@ export function ChatArea() {
         <ThreadListSheet
           open={threadListOpen}
           onOpenChange={setThreadListOpen}
-          messages={messages}
+          conversationId={activeConversationId}
         />
       </ErrorBoundary>
       {notebookOpen && (
