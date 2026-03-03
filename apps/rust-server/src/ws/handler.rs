@@ -1546,6 +1546,17 @@ async fn do_trigger_agent_response(
                             }
                         }
                         Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
+                            // Fallback: if agent_complete sent empty content, use accumulated chunks
+                            let full_content = if full_content.is_empty() && !stream_accumulated.is_empty() {
+                                tracing::warn!(
+                                    "Stream complete with empty content, using accumulated chunks: conv={} agent={} msgId={} accumulated_len={}",
+                                    conversation_id, agent_id, agent_msg_id_clone, stream_accumulated.len()
+                                );
+                                stream_accumulated.clone()
+                            } else {
+                                full_content
+                            };
+
                             tracing::info!(
                                 "Stream complete: conv={} agent={} msgId={} content_len={} chunks_accumulated={}",
                                 conversation_id, agent_id, agent_msg_id_clone,
