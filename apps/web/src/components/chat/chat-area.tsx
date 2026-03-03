@@ -19,6 +19,7 @@ import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useRenderDiag } from "@/lib/chat-diagnostics";
+import { ErrorBoundary } from "./error-boundary";
 
 export function ChatArea() {
   const { t } = useTranslation();
@@ -144,9 +145,15 @@ export function ChatArea() {
         onThreadsClick={() => setThreadListOpen(true)}
         onNotebookClick={() => setNotebookOpen(true)}
       />
-      {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
-      <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
-      <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
+      <ErrorBoundary scope="PinnedMessagesBar">
+        {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
+      </ErrorBoundary>
+      <ErrorBoundary scope="MessageList">
+        <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
+      </ErrorBoundary>
+      <ErrorBoundary scope="ChatInput">
+        <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
+      </ErrorBoundary>
 
       {showCallOverlay && <ActiveCall />}
 
@@ -174,17 +181,23 @@ export function ChatArea() {
         </>
       )}
 
-      <ThreadPanel />
-      <ThreadListSheet
-        open={threadListOpen}
-        onOpenChange={setThreadListOpen}
-        messages={messages}
-      />
-      <NotebookSheet
-        open={notebookOpen}
-        onOpenChange={setNotebookOpen}
-        conversationId={activeConversationId}
-      />
+      <ErrorBoundary scope="ThreadPanel">
+        <ThreadPanel />
+      </ErrorBoundary>
+      <ErrorBoundary scope="ThreadListSheet">
+        <ThreadListSheet
+          open={threadListOpen}
+          onOpenChange={setThreadListOpen}
+          messages={messages}
+        />
+      </ErrorBoundary>
+      <ErrorBoundary scope="NotebookSheet">
+        <NotebookSheet
+          open={notebookOpen}
+          onOpenChange={setNotebookOpen}
+          conversationId={activeConversationId}
+        />
+      </ErrorBoundary>
     </div>
   );
 }

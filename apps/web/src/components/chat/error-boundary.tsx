@@ -7,6 +7,7 @@ import { diagEvent } from "@/lib/chat-diagnostics";
 
 interface Props {
   children: ReactNode;
+  scope?: string;
 }
 
 interface State {
@@ -24,13 +25,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
+    const scope = this.props.scope ?? "unknown";
     diagEvent("react:error-boundary:caught", {
+      scope,
       message: error.message,
       stack: error.stack,
       componentStack: info.componentStack,
     });
     if (error.message.includes("185") || error.message.includes("Maximum update depth exceeded")) {
       diagEvent("react:error-boundary:185", {
+        scope,
         message: error.message,
         componentStack: info.componentStack,
       });
@@ -51,7 +55,9 @@ export class ErrorBoundary extends Component<Props, State> {
               Something went wrong
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              An unexpected error occurred. Try again or refresh the page.
+              {this.props.scope
+                ? `An unexpected error occurred in ${this.props.scope}. Try again or refresh the page.`
+                : "An unexpected error occurred. Try again or refresh the page."}
             </p>
           </div>
           <Button onClick={this.handleRetry} variant="outline" className="gap-2">
