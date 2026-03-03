@@ -369,9 +369,17 @@ async fn set_verify(
 /// POST /api/admin/users/:id/ban — Ban a user
 async fn ban_user(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Path(user_id): Path<String>,
 ) -> Response {
+    // Prevent self-ban
+    if admin.id == user_id {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Cannot ban yourself"})),
+        )
+            .into_response();
+    }
     set_banned(&state, &user_id, true).await
 }
 

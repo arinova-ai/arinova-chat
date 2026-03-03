@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { ArrowDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
+import { diagCount, diagEvent, useRenderDiag } from "@/lib/chat-diagnostics";
 
 interface MessageListProps {
   messages: Message[];
@@ -45,26 +46,58 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   // Filter out thread messages (they display in the thread panel only) + deduplicate
   const messages = rawMessages
     .filter((m) => !m.threadId)
+    .filter((m) => m.status === "streaming" || m.content?.trim() || m.attachments?.length)
     .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
   const lastMessage = messages[messages.length - 1];
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);
   const searchQuery = useChatStore((s) => s.searchQuery);
   const thinkingCount = useChatStore((s) => activeConversationId ? (s.thinkingAgents[activeConversationId]?.length ?? 0) : 0);
+  const jumpPagination = useChatStore((s) => s.jumpPagination);
   const [loadingUp, setLoadingUp] = useState(false);
   const [loadingDown, setLoadingDown] = useState(false);
-  const [hasMoreUp, setHasMoreUp] = useState(true);
-  const [hasMoreDown, setHasMoreDown] = useState(false);
+  const [hasMoreUp, setHasMoreUp] = useState(jumpPagination?.hasMoreUp ?? true);
+  const [hasMoreDown, setHasMoreDown] = useState(jumpPagination?.hasMoreDown ?? false);
   const loadingUpRef = useRef(false);
   const loadingDownRef = useRef(false);
+  const messagesRef = useRef(messages);
   const highlightRef = useRef<HTMLDivElement>(null);
   const prependHeightRef = useRef<number | null>(null);
   const isRestoringScrollRef = useRef(false);
 
-  const { ref: scrollRef, showScrollButton, scrollToBottom } = useAutoScroll<HTMLDivElement>(
+  const isPrependingRef = useRef(false);
+  const { ref: scrollRef, showScrollButton, newMessageCount, scrollToBottom } = useAutoScroll<HTMLDivElement>(
     [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
-    { conversationId: activeConversationId, skipScroll: !!highlightMessageId, messageCount: messages.length },
+    {
+      conversationId: activeConversationId,
+      skipScroll: !!highlightMessageId,
+      messageCount: messages.length,
+      isPrependingRef,
+    },
   );
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false); // serialization: only one load at a time
+  useRenderDiag("MessageList", () => ({
+    activeConversationId,
+    count: messages.length,
+    hasMoreUp,
+    hasMoreDown,
+    loadingUp,
+    loadingDown,
+  }));
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Sync pagination from jumpToMessage
+  useEffect(() => {
+    if (jumpPagination) {
+      setHasMoreUp((prev) => (prev === jumpPagination.hasMoreUp ? prev : jumpPagination.hasMoreUp));
+      setHasMoreDown((prev) => (prev === jumpPagination.hasMoreDown ? prev : jumpPagination.hasMoreDown));
+    }
+  }, [jumpPagination]);
 
   // Scroll to highlighted message (and matching text within it) when it appears
   useEffect(() => {
@@ -106,13 +139,17 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   }, [highlightMessageId, messages, scrollRef]);
 
   const loadOlder = useCallback(async () => {
-    if (loadingUpRef.current || !hasMoreUp || !activeConversationId || messages.length === 0)
+    diagCount("msglist:loadOlder:attempt");
+    const currentMessages = messagesRef.current;
+    if (loadingRef.current || loadingUpRef.current || !hasMoreUp || !activeConversationId || currentMessages.length === 0)
       return;
+    diagCount("msglist:loadOlder:run");
 
+    loadingRef.current = true;
     loadingUpRef.current = true;
     setLoadingUp(true);
     try {
-      const firstMsg = messages[0];
+      const firstMsg = currentMessages[0];
       const data = await api<{ messages: Message[]; hasMore: boolean }>(
         `/api/conversations/${activeConversationId}/messages?before=${firstMsg.id}&limit=50`
       );
@@ -120,6 +157,9 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       if (data.messages.length > 0) {
         const el = scrollRef.current;
         prependHeightRef.current = el?.scrollHeight ?? 0;
+        // Set synchronously BEFORE store update so the auto-scroll effect
+        // sees it when triggered by the new message count
+        isPrependingRef.current = true;
 
         const store = useChatStore.getState();
         const current = store.messagesByConversation[activeConversationId] ?? [];
@@ -135,19 +175,24 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     } catch {
       // ignore
     } finally {
+      loadingRef.current = false;
       loadingUpRef.current = false;
       setLoadingUp(false);
     }
-  }, [hasMoreUp, activeConversationId, messages, scrollRef]);
+  }, [hasMoreUp, activeConversationId, scrollRef]);
 
   const loadNewer = useCallback(async () => {
-    if (loadingDownRef.current || !hasMoreDown || !activeConversationId || messages.length === 0)
+    diagCount("msglist:loadNewer:attempt");
+    const currentMessages = messagesRef.current;
+    if (loadingRef.current || loadingDownRef.current || !hasMoreDown || !activeConversationId || currentMessages.length === 0)
       return;
+    diagCount("msglist:loadNewer:run");
 
+    loadingRef.current = true;
     loadingDownRef.current = true;
     setLoadingDown(true);
     try {
-      const lastMsg = messages[messages.length - 1];
+      const lastMsg = currentMessages[currentMessages.length - 1];
       const data = await api<{ messages: Message[]; hasMoreDown: boolean }>(
         `/api/conversations/${activeConversationId}/messages?after=${lastMsg.id}&limit=50`
       );
@@ -167,10 +212,11 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     } catch {
       // ignore
     } finally {
+      loadingRef.current = false;
       loadingDownRef.current = false;
       setLoadingDown(false);
     }
-  }, [hasMoreDown, activeConversationId, messages]);
+  }, [hasMoreDown, activeConversationId]);
 
   // Restore scroll position after older messages are prepended (before paint)
   useLayoutEffect(() => {
@@ -183,33 +229,40 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       el.scrollTop += el.scrollHeight - prevHeight;
       requestAnimationFrame(() => {
         isRestoringScrollRef.current = false;
+        isPrependingRef.current = false;
       });
     }
   });
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || isRestoringScrollRef.current) return;
-    // Load older when scrolled within 30% of viewport height from top
-    if (el.scrollTop < el.clientHeight * 0.3 && hasMoreUp && !loadingUpRef.current) {
-      loadOlder();
-    }
-    // Load newer when scrolled near bottom
-    const bottomDist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (bottomDist < 100 && hasMoreDown && !loadingDownRef.current) {
-      loadNewer();
-    }
-  }, [hasMoreUp, hasMoreDown, loadOlder, loadNewer, scrollRef]);
+  // IntersectionObserver sentinels for loading triggers (replaces scroll-event checks)
+  useEffect(() => {
+    const container = scrollRef.current;
+    const topEl = topSentinelRef.current;
+    const bottomEl = bottomSentinelRef.current;
+    if (!container || !topEl || !bottomEl) return;
 
-  if (messages.length === 0 && loadingMessages) {
-    return (
-      <div className="relative flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto overflow-x-hidden py-4">
-          <MessageSkeleton />
-        </div>
-      </div>
+    const observer = new IntersectionObserver(
+      (entries) => {
+        diagCount("msglist:observer:callback");
+        if (isRestoringScrollRef.current) return;
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          if (entry.target === topEl) {
+            diagEvent("msglist:observer:top");
+            loadOlder();
+          }
+          if (entry.target === bottomEl) {
+            diagEvent("msglist:observer:bottom");
+            loadNewer();
+          }
+        }
+      },
+      { root: container, rootMargin: "200px 0px" }
     );
-  }
+    observer.observe(topEl);
+    observer.observe(bottomEl);
+    return () => observer.disconnect();
+  }, [loadOlder, loadNewer, scrollRef]);
 
   return (
     <div className="relative flex-1 overflow-hidden">
@@ -217,9 +270,13 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         ref={scrollRef}
         className="h-full overflow-y-auto overflow-x-hidden py-4"
         style={{ overflowAnchor: "none" }}
-        onScroll={handleScroll}
       >
+        {messages.length === 0 && loadingMessages ? (
+          <MessageSkeleton />
+        ) : (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          {/* Top sentinel for IntersectionObserver-based older message loading */}
+          <div ref={topSentinelRef} className="h-px shrink-0" aria-hidden />
           {loadingUp && (
             <div className="flex justify-center py-2">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -258,15 +315,23 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           {activeConversationId && (
             <TypingIndicator conversationId={activeConversationId} />
           )}
+          {/* Bottom sentinel for IntersectionObserver-based newer message loading */}
+          <div ref={bottomSentinelRef} className="h-px shrink-0" aria-hidden />
         </div>
+        )}
       </div>
 
       {showScrollButton && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card shadow-lg transition-opacity hover:bg-accent"
+          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-opacity hover:bg-accent"
           aria-label="Scroll to latest"
         >
+          {newMessageCount > 0 && (
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">
+              {newMessageCount > 99 ? "99+" : newMessageCount}
+            </span>
+          )}
           <ArrowDown className="h-4 w-4" />
         </button>
       )}

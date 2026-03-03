@@ -105,6 +105,16 @@ async fn agent_send(
     .execute(&state.db)
     .await;
 
+    // Spawn link preview extraction in background
+    {
+        let db2 = state.db.clone();
+        let mid = msg_id.clone();
+        let text = content.to_string();
+        tokio::spawn(async move {
+            crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+        });
+    }
+
     let _ = sqlx::query(
         r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
     )

@@ -263,16 +263,19 @@ export async function handleArinovaChatInbound(params: {
       abortSignal: signal,
       onPartialReply: (payload) => {
         if (aborted) return;
-        // onPartialReply gives the FULL accumulated text across ALL blocks,
-        // so we must NOT prepend finalText — that would duplicate completed blocks.
+        // onPartialReply gives accumulated text for the CURRENT block only —
+        // deltaBuffer resets in handleMessageEnd between tool calls.
         const text = (payload as { text?: string }).text ?? "";
         if (text) {
-          // Preserve the full accumulated text for completion (fixes table corruption)
           lastAccumulatedText = text;
           // Strip MEDIA: lines so raw tokens don't flash during streaming
           const cleaned = stripMediaLines(text);
           if (!cleaned.trim()) return;
           const collapsed = collapseToolBlocks(cleaned);
+          // Detect new block: text shortened means core reset deltaBuffer
+          if (collapsed.length < lastSentLength) {
+            lastSentLength = 0;
+          }
           if (collapsed.length > lastSentLength) {
             const delta = collapsed.slice(lastSentLength);
             lastSentLength = collapsed.length;
@@ -287,9 +290,17 @@ export async function handleArinovaChatInbound(params: {
   if (completionSent) return;
 
   // Post-process completed text: upload local images → R2, resolve @mentions
-  // Prefer the accumulated text from onPartialReply (preserves original formatting)
-  // over the block-joined finalText (which inserts \n\n between blocks).
-  let completedText = lastAccumulatedText || finalText;
+  // Use finalText (all blocks via deliver callback) as primary — lastAccumulatedText
+  // only has the LAST block's text because onPartialReply resets between tool calls.
+  let completedText = finalText || lastAccumulatedText;
+
+  // If no content was generated (duplicate detection / fast abort skipped the LLM call),
+  // report an error instead of sending empty completion that creates a blank message.
+  if (!completedText.trim()) {
+    completionSent = true;
+    sendError("Unable to generate a response. Please try again.");
+    return;
+  }
 
   if (uploadFile && completedText) {
     try {

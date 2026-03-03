@@ -27,6 +27,62 @@ async fn main() {
     let db = db::create_pool(&config.database_url).await;
     tracing::info!("PostgreSQL connected");
 
+    // Ensure required tables/columns exist (idempotent startup migration)
+    let startup_migration = r#"
+        CREATE TABLE IF NOT EXISTS pinned_messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id TEXT NOT NULL,
+            message_id TEXT NOT NULL,
+            pinned_by TEXT NOT NULL,
+            pinned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            UNIQUE(conversation_id, message_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_pinned_messages_conv ON pinned_messages(conversation_id);
+
+        CREATE TABLE IF NOT EXISTS link_previews (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            url TEXT NOT NULL UNIQUE,
+            title TEXT,
+            description TEXT,
+            image_url TEXT,
+            favicon_url TEXT,
+            domain TEXT,
+            fetched_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_link_previews_url ON link_previews(url);
+
+        CREATE TABLE IF NOT EXISTS message_link_previews (
+            message_id UUID NOT NULL,
+            preview_id UUID NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (message_id, preview_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_message_link_previews_msg ON message_link_previews(message_id);
+
+        ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
+        ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
+
+        CREATE TABLE IF NOT EXISTS conversation_notes (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL,
+            creator_id      TEXT NOT NULL,
+            creator_type    TEXT NOT NULL DEFAULT 'user',
+            agent_id        UUID,
+            title           VARCHAR(200) NOT NULL,
+            content         TEXT NOT NULL DEFAULT '',
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_conversation ON conversation_notes(conversation_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_creator ON conversation_notes(creator_id);
+
+        ALTER TABLE conversation_user_members ADD COLUMN IF NOT EXISTS agent_notes_enabled BOOLEAN NOT NULL DEFAULT true;
+    "#;
+    match sqlx::raw_sql(startup_migration).execute(&db).await {
+        Ok(_) => tracing::info!("Startup migration completed"),
+        Err(e) => tracing::warn!("Startup migration warning: {}", e),
+    }
+
     // Clean up stuck streaming messages from previous run
     match sqlx::query(
         r#"UPDATE messages SET status = 'error', content = CASE WHEN content = '' THEN 'Stream interrupted by server restart' ELSE content END, updated_at = NOW()
@@ -112,6 +168,7 @@ async fn main() {
         .merge(routes::messages::router())
         .merge(routes::groups::router())
         .merge(routes::reactions::router())
+        .merge(routes::pins::router())
         .merge(routes::uploads::router())
         .merge(routes::push::router())
         .merge(routes::notifications::router())
@@ -136,6 +193,8 @@ async fn main() {
         .merge(routes::stickers::router())
         .merge(routes::admin::router())
         .merge(routes::reports::router())
+        .merge(routes::notes::router())
+        .merge(routes::agent_notes::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

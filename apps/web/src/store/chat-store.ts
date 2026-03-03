@@ -1,13 +1,15 @@
 import { create } from "zustand";
-import type { Agent, Conversation, Message, ThreadSummary } from "@arinova/shared/types";
+import type { Agent, Conversation, Message, ThreadSummary, Note } from "@arinova/shared/types";
 import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
+import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 
 interface ConversationWithAgent extends Conversation {
   agentName: string;
   agentDescription: string | null;
   agentAvatarUrl: string | null;
+  peerUserId?: string | null;
   lastMessage: Message | null;
   isVerified?: boolean;
 }
@@ -115,10 +117,21 @@ interface ChatState {
   typingUsers: Record<string, { userId: string; userName: string; expiresAt: number }[]>;
   queuedMessageIds: Record<string, Set<string>>; // conversationId → set of user message IDs
 
+  // Pagination hints from jumpToMessage
+  jumpPagination: { hasMoreUp: boolean; hasMoreDown: boolean } | null;
+
   // Thread state
   activeThreadId: string | null;
   threadMessages: Record<string, Message[]>;
   threadLoading: boolean;
+
+  // Pin state
+  pinnedMessageIds: Record<string, Set<string>>; // conversationId → set of pinned message IDs
+
+  // Notebook state
+  notesByConversation: Record<string, Note[]>;
+  notebookOpen: boolean;
+  agentNotesEnabledByConversation: Record<string, boolean>;
 
   // Actions
   setCurrentUserId: (id: string | null) => void;
@@ -195,6 +208,20 @@ interface ChatState {
   sendThreadMessage: (content: string) => void;
   setInputDraft: (conversationId: string, text: string) => void;
   clearInputDraft: (conversationId: string) => void;
+
+  // Pin actions
+  loadPins: (conversationId: string) => Promise<void>;
+  togglePin: (conversationId: string, messageId: string) => Promise<void>;
+
+  // Notebook actions
+  openNotebook: () => void;
+  closeNotebook: () => void;
+  loadNotes: (conversationId: string) => Promise<void>;
+  createNote: (conversationId: string, title: string, content: string) => Promise<Note>;
+  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string }) => Promise<void>;
+  deleteNote: (conversationId: string, noteId: string) => Promise<void>;
+  toggleAgentNotesEnabled: (conversationId: string, enabled: boolean) => Promise<void>;
+
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
 }
@@ -239,12 +266,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
   inputDrafts: {},
   typingUsers: {},
   queuedMessageIds: {},
+  jumpPagination: null,
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
+  pinnedMessageIds: {},
+  notesByConversation: {},
+  notebookOpen: false,
+  agentNotesEnabledByConversation: {},
 
-  setCurrentUserId: (id) => set({ currentUserId: id }),
-  setReplyingTo: (message) => set({ replyingTo: message }),
+  setCurrentUserId: (id) => {
+    diagCount("action:setCurrentUserId");
+    if (get().currentUserId === id) return;
+    set({ currentUserId: id });
+  },
+  setReplyingTo: (message) => {
+    diagCount("action:setReplyingTo");
+    if (get().replyingTo?.id === message?.id) return;
+    set({ replyingTo: message });
+  },
   setInputDraft: (conversationId, text) => {
     const drafts = { ...get().inputDrafts };
     if (text) {
@@ -261,8 +301,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setActiveConversation: (id) => {
+    diagCount("action:setActiveConversation");
+    diagEvent("action:setActiveConversation:input", {
+      nextId: id,
+      currentId: get().activeConversationId,
+      searchActive: get().searchActive,
+    });
     if (id === null) {
+      if (get().activeConversationId === null) return;
       set({ activeConversationId: null });
+      return;
+    }
+    const currentState = get();
+    if (currentState.activeConversationId === id && !currentState.searchActive) {
       return;
     }
     set({
@@ -270,6 +321,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sidebarOpen: false,
       searchActive: false,
       activeThreadId: null,
+      jumpPagination: null,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,
@@ -296,9 +348,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  setSidebarOpen: (open) => {
+    diagCount("action:setSidebarOpen");
+    if (get().sidebarOpen === open) return;
+    set({ sidebarOpen: open });
+  },
 
   setSearchQuery: (query) => {
+    diagCount("action:setSearchQuery");
+    if (get().searchQuery === query) return;
     set({ searchQuery: query });
   },
 
@@ -370,6 +428,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeConversationId: conversationId,
       sidebarOpen: false,
       highlightMessageId: messageId,
+      jumpPagination: { hasMoreUp: data.hasMoreUp, hasMoreDown: data.hasMoreDown },
       unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,
@@ -1056,7 +1115,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   openThread: (threadId) => {
+    diagCount("action:openThread");
     const { activeConversationId } = get();
+    if (get().activeThreadId === threadId) return;
     set({ activeThreadId: threadId });
     if (activeConversationId) {
       get().loadThreadMessages(activeConversationId, threadId);
@@ -1064,6 +1125,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   closeThread: () => {
+    diagCount("action:closeThread");
+    if (get().activeThreadId === null) return;
     set({ activeThreadId: null });
   },
 
@@ -1122,7 +1185,162 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  loadPins: async (conversationId) => {
+    diagCount("action:loadPins");
+    try {
+      const data = await api<{ messageId: string }[]>(
+        `/api/conversations/${conversationId}/pins`
+      );
+      const ids = new Set(data.map((p) => p.messageId));
+      set({
+        pinnedMessageIds: {
+          ...get().pinnedMessageIds,
+          [conversationId]: ids,
+        },
+      });
+    } catch {
+      // keep existing
+    }
+  },
+  togglePin: async (conversationId, messageId) => {
+    diagCount("action:togglePin");
+    const current = get().pinnedMessageIds[conversationId] ?? new Set<string>();
+    const isPinned = current.has(messageId);
+    try {
+      await api(`/api/conversations/${conversationId}/pin/${messageId}`, {
+        method: isPinned ? "DELETE" : "POST",
+      });
+      const updated = new Set(current);
+      if (isPinned) {
+        updated.delete(messageId);
+      } else {
+        updated.add(messageId);
+      }
+      set({
+        pinnedMessageIds: {
+          ...get().pinnedMessageIds,
+          [conversationId]: updated,
+        },
+      });
+      // Notify PinnedMessagesBar to refresh its display
+      window.dispatchEvent(
+        new CustomEvent("pins-changed", { detail: { conversationId } })
+      );
+    } catch {
+      // pin/unpin failed
+    }
+  },
+
+  openNotebook: () => {
+    diagCount("action:openNotebook");
+    if (get().notebookOpen) return;
+    set({ notebookOpen: true });
+  },
+  closeNotebook: () => {
+    diagCount("action:closeNotebook");
+    if (!get().notebookOpen) return;
+    set({ notebookOpen: false });
+  },
+
+  loadNotes: async (conversationId) => {
+    try {
+      const res = await api<{ notes: Note[]; hasMore: boolean; nextCursor: string | null }>(
+        `/api/conversations/${conversationId}/notes`
+      );
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: res.notes,
+        },
+      });
+    } catch {
+      // ignore load errors
+    }
+  },
+
+  createNote: async (conversationId, title, content) => {
+    const note = await api<Note>(
+      `/api/conversations/${conversationId}/notes`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title, content }),
+      }
+    );
+    const current = get().notesByConversation[conversationId] ?? [];
+    // WS note:created may have already added this note
+    if (!current.some((n) => n.id === note.id)) {
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: [note, ...current],
+        },
+      });
+    }
+    return note;
+  },
+
+  updateNote: async (conversationId, noteId, updates) => {
+    const updated = await api<Note>(
+      `/api/conversations/${conversationId}/notes/${noteId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      }
+    );
+    const current = get().notesByConversation[conversationId] ?? [];
+    set({
+      notesByConversation: {
+        ...get().notesByConversation,
+        [conversationId]: current.map((n) =>
+          n.id === noteId ? updated : n
+        ),
+      },
+    });
+  },
+
+  deleteNote: async (conversationId, noteId) => {
+    await api(
+      `/api/conversations/${conversationId}/notes/${noteId}`,
+      { method: "DELETE" }
+    );
+    const current = get().notesByConversation[conversationId] ?? [];
+    set({
+      notesByConversation: {
+        ...get().notesByConversation,
+        [conversationId]: current.filter((n) => n.id !== noteId),
+      },
+    });
+  },
+
+  toggleAgentNotesEnabled: async (conversationId, enabled) => {
+    // Optimistic update
+    set({
+      agentNotesEnabledByConversation: {
+        ...get().agentNotesEnabledByConversation,
+        [conversationId]: enabled,
+      },
+    });
+    try {
+      await api(
+        `/api/conversations/${conversationId}/notes/settings`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ agentNotesEnabled: enabled }),
+        }
+      );
+    } catch {
+      // Revert on error
+      set({
+        agentNotesEnabledByConversation: {
+          ...get().agentNotesEnabledByConversation,
+          [conversationId]: !enabled,
+        },
+      });
+    }
+  },
+
   handleWSEvent: (event) => {
+    diagCount(`ws:${event.type}`);
     if (event.type === "pong") return;
 
     // If any event carries a conversationId not in our local store,
@@ -1616,76 +1834,135 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (threadId) {
         const threadMsgs = get().threadMessages[threadId] ?? [];
         const threadMsg = threadMsgs.find((m) => m.id === messageId);
-        const shouldReplaceThreadContent =
-          finalContent !== undefined &&
-          threadMsg &&
-          finalContent !== threadMsg.content;
-        set({
-          threadMessages: {
-            ...get().threadMessages,
-            [threadId]: threadMsgs.map((m) =>
-              m.id === messageId
-                ? {
-                    ...m,
-                    ...(shouldReplaceThreadContent ? { content: finalContent } : {}),
-                    status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
-                    updatedAt: new Date(),
-                  }
-                : m
-            ),
-          },
-        });
+
+        if (!threadMsg) {
+          // Message was cleared from store (conversation switch / reconnect).
+          // Re-insert as a completed message so it doesn't vanish.
+          if (finalContent) {
+            const agentMsg: Message = {
+              id: messageId,
+              conversationId,
+              seq: seq ?? 0,
+              role: "agent",
+              content: finalContent,
+              status: "completed",
+              threadId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            set({
+              threadMessages: {
+                ...get().threadMessages,
+                [threadId]: [...threadMsgs, agentMsg],
+              },
+            });
+          }
+        } else {
+          const shouldReplaceThreadContent =
+            !!finalContent &&
+            finalContent !== threadMsg.content;
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [threadId]: threadMsgs.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      ...(shouldReplaceThreadContent ? { content: finalContent } : {}),
+                      status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                      updatedAt: new Date(),
+                    }
+                  : m
+              ),
+            },
+          });
+        }
       } else {
         const current = get().messagesByConversation[conversationId] ?? [];
         const completedMsg = current.find((m) => m.id === messageId);
-        // Only replace content if finalContent actually differs from the
-        // streamed accumulation. Skipping avoids an unnecessary re-render
-        // that can cause GFM tables to break in the markdown renderer.
-        const shouldReplaceContent =
-          finalContent !== undefined &&
-          completedMsg &&
-          finalContent !== completedMsg.content;
 
-        set({
-          messagesByConversation: {
-            ...get().messagesByConversation,
-            [conversationId]: current.map((m) =>
-              m.id === messageId
+        if (!completedMsg) {
+          // Message was cleared from store (conversation switch / reconnect).
+          // Re-insert as a completed message so it doesn't vanish.
+          if (finalContent) {
+            const agentMsg: Message = {
+              id: messageId,
+              conversationId,
+              seq: seq ?? 0,
+              role: "agent",
+              content: finalContent,
+              status: "completed",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            set({
+              messagesByConversation: {
+                ...get().messagesByConversation,
+                [conversationId]: [...current, agentMsg],
+              },
+              conversations: get().conversations.map((c) =>
+                c.id === conversationId
+                  ? { ...c, lastMessage: agentMsg, updatedAt: new Date() }
+                  : c
+              ),
+              unreadCounts:
+                conversationId !== activeConversationId &&
+                !get().mutedConversations[conversationId]
+                  ? {
+                      ...unreadCounts,
+                      [conversationId]:
+                        (unreadCounts[conversationId] ?? 0) + 1,
+                    }
+                  : unreadCounts,
+            });
+          }
+        } else {
+          // Only replace content if finalContent actually differs from the
+          // streamed accumulation AND is non-empty. Never overwrite accumulated
+          // content with an empty string from a backend that didn't echo final text.
+          const shouldReplaceContent =
+            !!finalContent &&
+            finalContent !== completedMsg.content;
+
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: current.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      ...(shouldReplaceContent ? { content: finalContent } : {}),
+                      status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                      updatedAt: new Date(),
+                    }
+                  : m
+              ),
+            },
+            conversations: get().conversations.map((c) =>
+              c.id === conversationId
                 ? {
-                    ...m,
-                    ...(shouldReplaceContent ? { content: finalContent } : {}),
-                    status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                    ...c,
+                    lastMessage: {
+                      ...completedMsg,
+                      ...(shouldReplaceContent ? { content: finalContent } : {}),
+                      status: "completed" as const,
+                      updatedAt: new Date(),
+                    },
                     updatedAt: new Date(),
                   }
-                : m
+                : c
             ),
-          },
-          conversations: get().conversations.map((c) =>
-            c.id === conversationId
-              ? {
-                  ...c,
-                  lastMessage: completedMsg
-                    ? {
-                        ...completedMsg,
-                        ...(shouldReplaceContent ? { content: finalContent } : {}),
-                        status: "completed" as const,
-                        updatedAt: new Date(),
-                      }
-                    : c.lastMessage,
-                  updatedAt: new Date(),
-                }
-              : c
-          ),
-          unreadCounts:
-            conversationId !== activeConversationId &&
-            !get().mutedConversations[conversationId]
-              ? {
-                  ...unreadCounts,
-                  [conversationId]:
-                    (unreadCounts[conversationId] ?? 0) + 1,
-                }
-              : unreadCounts,
-        });
+            unreadCounts:
+              conversationId !== activeConversationId &&
+              !get().mutedConversations[conversationId]
+                ? {
+                    ...unreadCounts,
+                    [conversationId]:
+                      (unreadCounts[conversationId] ?? 0) + 1,
+                  }
+                : unreadCounts,
+          });
+        }
       }
 
       if (conversationId === activeConversationId && seq > 0) {
@@ -1693,6 +1970,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           type: "mark_read",
           conversationId,
           seq,
+        });
+      }
+
+      // Safety cleanup: ensure this messageId is removed from thinkingAgents
+      const thinkingAfter = get().thinkingAgents[conversationId] ?? [];
+      if (thinkingAfter.some((t) => t.messageId === messageId)) {
+        set({
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: thinkingAfter.filter((t) => t.messageId !== messageId),
+          },
         });
       }
 
@@ -1835,6 +2123,47 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    if (event.type === "note:created") {
+      const { conversationId, note } = event;
+      const current = get().notesByConversation[conversationId] ?? [];
+      // Don't add duplicate
+      if (!current.some((n) => n.id === note.id)) {
+        set({
+          notesByConversation: {
+            ...get().notesByConversation,
+            [conversationId]: [note, ...current],
+          },
+        });
+      }
+      return;
+    }
+
+    if (event.type === "note:updated") {
+      const { conversationId, note } = event;
+      const current = get().notesByConversation[conversationId] ?? [];
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: current.map((n) =>
+            n.id === note.id ? note : n
+          ),
+        },
+      });
+      return;
+    }
+
+    if (event.type === "note:deleted") {
+      const { conversationId, noteId } = event;
+      const current = get().notesByConversation[conversationId] ?? [];
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: current.filter((n) => n.id !== noteId),
+        },
+      });
+      return;
+    }
+
     if (event.type === "kicked_from_group") {
       const convId = event.conversationId;
       const { activeConversationId, messagesByConversation, thinkingAgents } = get();
@@ -1965,6 +2294,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
         mutedConversations: newMuted,
         thinkingAgents: {},
       });
+
+      // HTTP fallback: pull latest messages for the active conversation
+      // to cover any gaps the WS sync may have missed (e.g. long offline)
+      const activeId = get().activeConversationId;
+      if (activeId) {
+        const activeMessages = newMessagesByConv[activeId] ?? [];
+        const lastMsg = activeMessages[activeMessages.length - 1];
+        if (lastMsg) {
+          api<{ messages: Message[]; hasMoreDown: boolean }>(
+            `/api/conversations/${activeId}/messages?after=${lastMsg.id}&limit=50`
+          )
+            .then((data) => {
+              if (data.messages.length > 0) {
+                const store = get();
+                const current = store.messagesByConversation[activeId] ?? [];
+                const existingIds = new Set(current.map((m) => m.id));
+                const fresh = data.messages.filter((m) => !existingIds.has(m.id));
+                if (fresh.length > 0) {
+                  set({
+                    messagesByConversation: {
+                      ...store.messagesByConversation,
+                      [activeId]: [...current, ...fresh].sort((a, b) => {
+                        if (a.seq && b.seq) return a.seq - b.seq;
+                        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                      }),
+                    },
+                  });
+                }
+              }
+            })
+            .catch(() => {});
+        }
+      }
       return;
     }
   },

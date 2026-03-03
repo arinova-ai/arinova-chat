@@ -15,6 +15,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/users/{userId}/block", post(block_user))
         .route("/api/users/{userId}/block", delete(unblock_user))
         .route("/api/users/blocked", get(list_blocked))
+        .route("/api/users/{userId}/mute", post(mute_user))
+        .route("/api/users/{userId}/mute", delete(unmute_user))
+        .route("/api/users/muted", get(list_muted))
 }
 
 /// POST /api/users/:userId/block — Block a user
@@ -123,6 +126,110 @@ async fn list_blocked(
                 })
                 .collect();
             Json(json!(blocked)).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+// ── Mute / Unmute ──────────────────────────────────────────────────────
+
+/// POST /api/users/:userId/mute — Mute a user
+async fn mute_user(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(target_id): Path<String>,
+) -> Response {
+    if target_id == user.id {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Cannot mute yourself"})),
+        )
+            .into_response();
+    }
+
+    let result = sqlx::query(
+        r#"INSERT INTO user_mutes (user_id, muted_user_id)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id, muted_user_id) DO NOTHING"#,
+    )
+    .bind(&user.id)
+    .bind(&target_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"muted": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// DELETE /api/users/:userId/mute — Unmute a user
+async fn unmute_user(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(target_id): Path<String>,
+) -> Response {
+    let result = sqlx::query(
+        r#"DELETE FROM user_mutes WHERE user_id = $1 AND muted_user_id = $2"#,
+    )
+    .bind(&user.id)
+    .bind(&target_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => Json(json!({"muted": false})).into_response(),
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Mute record not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/users/muted — List muted users
+async fn list_muted(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Response {
+    let results = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
+        r#"SELECT u.id, u.name, u.image, u.username
+           FROM user_mutes m
+           JOIN "user" u ON u.id = m.muted_user_id
+           WHERE m.user_id = $1
+           ORDER BY m.created_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await;
+
+    match results {
+        Ok(rows) => {
+            let muted: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|(id, name, image, username)| {
+                    json!({
+                        "id": id,
+                        "name": name,
+                        "image": image,
+                        "username": username,
+                    })
+                })
+                .collect();
+            Json(json!(muted)).into_response()
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,

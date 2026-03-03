@@ -3,9 +3,11 @@
 import { Component, type ReactNode } from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { diagEvent } from "@/lib/chat-diagnostics";
 
 interface Props {
   children: ReactNode;
+  scope?: string;
 }
 
 interface State {
@@ -22,6 +24,23 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true };
   }
 
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    const scope = this.props.scope ?? "unknown";
+    diagEvent("react:error-boundary:caught", {
+      scope,
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+    if (error.message.includes("185") || error.message.includes("Maximum update depth exceeded")) {
+      diagEvent("react:error-boundary:185", {
+        scope,
+        message: error.message,
+        componentStack: info.componentStack,
+      });
+    }
+  }
+
   handleRetry = () => {
     this.setState({ hasError: false });
   };
@@ -36,7 +55,9 @@ export class ErrorBoundary extends Component<Props, State> {
               Something went wrong
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              An unexpected error occurred. Try again or refresh the page.
+              {this.props.scope
+                ? `An unexpected error occurred in ${this.props.scope}. Try again or refresh the page.`
+                : "An unexpected error occurred. Try again or refresh the page."}
             </p>
           </div>
           <Button onClick={this.handleRetry} variant="outline" className="gap-2">

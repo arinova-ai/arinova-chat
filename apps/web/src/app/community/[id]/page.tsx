@@ -95,6 +95,7 @@ function CommunityDetailContent() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isMember, setIsMember] = useState(false);
+  const [membershipChecked, setMembershipChecked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -117,26 +118,51 @@ function CommunityDetailContent() {
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const [notFound, setNotFound] = useState(false);
+
   // ------ Load data ------
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Fetch community first — if it doesn't exist, show error immediately
+      let communityData: Community;
       try {
-        const [communityData, membersData, agentsData] = await Promise.all([
-          api<Community>(`/api/communities/${id}`),
+        communityData = await api<Community>(`/api/communities/${id}`);
+      } catch {
+        // Retry once after a short delay (handles DB replication lag)
+        await new Promise((r) => setTimeout(r, 800));
+        try {
+          communityData = await api<Community>(`/api/communities/${id}`);
+        } catch {
+          if (!cancelled) {
+            setNotFound(true);
+            setLoading(false);
+          }
+          return;
+        }
+      }
+      if (cancelled) return;
+      setCommunity(communityData);
+
+      // Creator is always a member, regardless of API results or session timing
+      const isCreator = !!currentUserId && communityData.creatorId === currentUserId;
+
+      // Then fetch members and agents in parallel
+      try {
+        const [membersData, agentsData] = await Promise.all([
           api<{ members: Member[] }>(`/api/communities/${id}/members`),
           api<{ agents: Agent[] }>(`/api/communities/${id}/agents`),
         ]);
         if (cancelled) return;
-        setCommunity(communityData);
         setMembers(membersData.members);
         setAgents(agentsData.agents);
 
-        const userIsMember = membersData.members.some(
-          (m) => m.userId === currentUserId
-        );
+        const userIsMember =
+          isCreator ||
+          (!!currentUserId && membersData.members.some((m) => m.userId === currentUserId));
         setIsMember(userIsMember);
+        setMembershipChecked(true);
 
         // Load messages if member
         if (userIsMember) {
@@ -150,9 +176,16 @@ function CommunityDetailContent() {
           }
         }
       } catch {
-        // auto-handled
+        // members/agents API may fail — still grant access to creator
+        if (!cancelled && isCreator) {
+          setIsMember(true);
+          setMembershipChecked(true);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setMembershipChecked(true);
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -625,7 +658,13 @@ function CommunityDetailContent() {
           </div>
 
           {/* Input / Join gate */}
-          {!isMember ? (
+          {!membershipChecked || !currentUserId ? (
+            <div className="shrink-0 border-t border-border p-4 pb-24 md:pb-4">
+              <div className="flex justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            </div>
+          ) : !isMember ? (
             <div className="shrink-0 border-t border-border p-4 pb-24 md:pb-4">
               <div className="flex flex-col items-center gap-2 text-center">
                 <p className="text-sm font-medium">

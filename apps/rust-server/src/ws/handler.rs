@@ -214,6 +214,11 @@ async fn handle_ws(socket: WebSocket, state: AppState, cookie_header: String) {
         _ => return,
     };
 
+    // Reject banned users from establishing WS connections
+    if session.banned {
+        return;
+    }
+
     let user_id = session.user_id.clone();
     let conn_id = uuid::Uuid::new_v4().to_string();
 
@@ -364,6 +369,29 @@ async fn handle_message(
             send_event(tx, &json!({"type": "pong"}));
         }
         "send_message" => {
+            // Check if user is banned before allowing message send
+            let is_banned = sqlx::query_as::<_, (bool,)>(
+                r#"SELECT COALESCE(banned, false) FROM "user" WHERE id = $1"#,
+            )
+            .bind(user_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+            .map(|(b,)| b)
+            .unwrap_or(false);
+
+            if is_banned {
+                send_event(tx, &json!({
+                    "type": "stream_error",
+                    "conversationId": "",
+                    "messageId": "",
+                    "seq": 0,
+                    "error": "Your account has been banned"
+                }));
+                return;
+            }
+
             let client_msg_id = event.get("id").and_then(|v| v.as_str())
                 .and_then(|s| uuid::Uuid::parse_str(s).ok())
                 .map(|u| u.to_string());
@@ -906,6 +934,16 @@ pub async fn trigger_agent_response(
             .execute(db)
             .await;
 
+            // Spawn link preview extraction in background
+            {
+                let db2 = db.clone();
+                let mid = msg_id.to_string();
+                let text = content.to_string();
+                tokio::spawn(async move {
+                    crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+                });
+            }
+
             let _ = sqlx::query(
                 r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
             )
@@ -1049,6 +1087,16 @@ pub async fn trigger_agent_response(
         .bind(now.naive_utc())
         .execute(db)
         .await;
+
+        // Spawn link preview extraction in background
+        {
+            let db2 = db.clone();
+            let mid = user_msg_id.to_string();
+            let text = content.to_string();
+            tokio::spawn(async move {
+                crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+            });
+        }
 
         let _ = sqlx::query(
             r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
@@ -1518,6 +1566,17 @@ async fn do_trigger_agent_response(
                             }
                         }
                         Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
+                            // Fallback: if agent_complete sent empty content, use accumulated chunks
+                            let full_content = if full_content.is_empty() && !stream_accumulated.is_empty() {
+                                tracing::warn!(
+                                    "Stream complete with empty content, using accumulated chunks: conv={} agent={} msgId={} accumulated_len={}",
+                                    conversation_id, agent_id, agent_msg_id_clone, stream_accumulated.len()
+                                );
+                                stream_accumulated.clone()
+                            } else {
+                                full_content
+                            };
+
                             tracing::info!(
                                 "Stream complete: conv={} agent={} msgId={} content_len={} chunks_accumulated={}",
                                 conversation_id, agent_id, agent_msg_id_clone,
@@ -1529,18 +1588,41 @@ async fn do_trigger_agent_response(
                                 let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
                             }
 
-                            let _ = sqlx::query(
-                                r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
-                            )
-                            .bind(&full_content)
-                            .bind(&agent_msg_id_clone)
-                            .execute(&db)
-                            .await;
+                            if full_content.trim().is_empty() {
+                                // Empty completion — delete the placeholder message
+                                let _ = sqlx::query(
+                                    r#"DELETE FROM messages WHERE id = $1::uuid AND status = 'streaming'"#,
+                                )
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+                                tracing::info!(
+                                    "stream_end reason=empty_content (deleted placeholder) conv={} agent={} msgId={}",
+                                    conversation_id, agent_id, agent_msg_id_clone
+                                );
+                            } else {
+                                let _ = sqlx::query(
+                                    r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
+                                )
+                                .bind(&full_content)
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+                                tracing::info!(
+                                    "stream_end reason=completed conv={} agent={} msgId={} len={}",
+                                    conversation_id, agent_id, agent_msg_id_clone, full_content.len()
+                                );
 
-                            tracing::info!(
-                                "stream_end reason=completed conv={} agent={} msgId={} len={}",
-                                conversation_id, agent_id, agent_msg_id_clone, full_content.len()
-                            );
+                                // Spawn link preview extraction in background
+                                {
+                                    let db3 = db.clone();
+                                    let mid = agent_msg_id_clone.clone();
+                                    let text = full_content.clone();
+                                    tokio::spawn(async move {
+                                        crate::services::link_preview::attach_link_previews(&db3, &mid, &text).await;
+                                    });
+                                }
+                            }
                             ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_end",
                                 "conversationId": &conversation_id,

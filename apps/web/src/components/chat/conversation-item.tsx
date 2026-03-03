@@ -21,11 +21,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users } from "lucide-react";
+import { Bot, Pin, PinOff, MoreVertical, Pencil, Trash2, Users, BellOff, Bell } from "lucide-react";
 import type { ConversationType } from "@arinova/shared/types";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
+
+const SWIPE_THRESHOLD = 70;
+const SWIPE_ACTION_WIDTH = 140;
+const SWIPE_DELETE_WIDTH = 80;
 
 interface ConversationItemProps {
   id: string;
@@ -41,6 +45,8 @@ interface ConversationItemProps {
   onClick: () => void;
   onRename: (title: string) => void;
   onPin: (pinned: boolean) => void;
+  onMuteToggle?: () => void;
+  isMuted?: boolean;
   unreadCount?: number;
   isOnline?: boolean;
   isThinking?: boolean;
@@ -87,6 +93,8 @@ export function ConversationItem({
   isVerified = false,
   onRename,
   onPin,
+  onMuteToggle,
+  isMuted = false,
   onDelete,
 }: ConversationItemProps) {
   const { t } = useTranslation();
@@ -99,6 +107,59 @@ export function ConversationItem({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Swipe state
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const swipingRef = useRef(false);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    swipingRef.current = false;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+
+    // If vertical movement is larger, don't swipe (allow scroll)
+    if (!swipingRef.current && Math.abs(dy) > Math.abs(dx)) {
+      touchStartRef.current = null;
+      return;
+    }
+
+    if (Math.abs(dx) > 10) {
+      swipingRef.current = true;
+    }
+
+    if (swipingRef.current) {
+      // Right swipe: clamp to SWIPE_ACTION_WIDTH, Left swipe: clamp to -SWIPE_DELETE_WIDTH
+      const clamped = Math.max(-SWIPE_DELETE_WIDTH, Math.min(SWIPE_ACTION_WIDTH, dx));
+      setSwipeOffset(clamped);
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!swipingRef.current) {
+      touchStartRef.current = null;
+      return;
+    }
+    // Snap open or closed
+    if (swipeOffset > SWIPE_THRESHOLD) {
+      setSwipeOffset(SWIPE_ACTION_WIDTH);
+    } else if (swipeOffset < -SWIPE_THRESHOLD) {
+      setSwipeOffset(-SWIPE_DELETE_WIDTH);
+    } else {
+      setSwipeOffset(0);
+    }
+    touchStartRef.current = null;
+    swipingRef.current = false;
+  }, [swipeOffset]);
+
+  const resetSwipe = useCallback(() => setSwipeOffset(0), []);
 
   useEffect(() => {
     if (renaming && renameInputRef.current) {
@@ -137,14 +198,71 @@ export function ConversationItem({
 
   return (
     <>
-      <div
-        className={cn(
-          "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg px-3 py-3 text-left transition-colors",
-          isActive
-            ? "bg-accent text-accent-foreground"
-            : "hover:bg-accent/50 text-foreground"
-        )}
-      >
+      <div className="relative overflow-hidden rounded-lg">
+        {/* Left actions (right swipe): Pin + Mute */}
+        <div
+          className="absolute inset-y-0 left-0 flex items-stretch"
+          style={{ width: SWIPE_ACTION_WIDTH }}
+        >
+          <button
+            type="button"
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-yellow-500 text-white"
+            onClick={() => {
+              onPin(!isPinned);
+              resetSwipe();
+            }}
+          >
+            {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+            <span className="text-[10px] font-medium">{isPinned ? t("conversation.unpin") : t("conversation.pin")}</span>
+          </button>
+          {onMuteToggle && (
+            <button
+              type="button"
+              className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-blue-500 text-white"
+              onClick={() => {
+                onMuteToggle();
+                resetSwipe();
+              }}
+            >
+              {isMuted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+              <span className="text-[10px] font-medium">{isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Right action (left swipe): Delete */}
+        <div
+          className="absolute inset-y-0 right-0 flex items-stretch"
+          style={{ width: SWIPE_DELETE_WIDTH }}
+        >
+          <button
+            type="button"
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 bg-red-500 text-white"
+            onClick={() => {
+              resetSwipe();
+              setDeleteConfirmOpen(true);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+            <span className="text-[10px] font-medium">{t("common.delete")}</span>
+          </button>
+        </div>
+
+        {/* Swipeable content */}
+        <div
+          className={cn(
+            "group relative flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left bg-card",
+            swipeOffset === 0 && "transition-transform duration-200",
+            swipeOffset !== 0 && !swipingRef.current && "transition-transform duration-200",
+            isActive
+              ? "bg-accent text-accent-foreground"
+              : "hover:bg-accent/50 text-foreground"
+          )}
+          style={{ transform: `translateX(${swipeOffset}px)` }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
         <button
           onClick={onClick}
           className="flex flex-1 min-w-0 items-center gap-3 text-left"
@@ -185,7 +303,7 @@ export function ConversationItem({
               </span>
               {!renaming && (
                 <span className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                     {formatTime(updatedAt, t)}
                   </span>
                   {unreadCount > 0 && (
@@ -274,6 +392,7 @@ export function ConversationItem({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
       </div>
 
       {/* Delete confirmation dialog */}

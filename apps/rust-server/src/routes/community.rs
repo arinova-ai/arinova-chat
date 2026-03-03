@@ -136,6 +136,27 @@ struct CommunityMessageRow {
     tts_audio_url: Option<String>,
 }
 
+async fn is_member_or_creator(
+    db: &sqlx::PgPool,
+    community_id: Uuid,
+    user_id: &str,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+               SELECT 1
+               FROM communities c
+               LEFT JOIN community_members cm
+                 ON cm.community_id = c.id AND cm.user_id = $2
+               WHERE c.id = $1
+                 AND (c.creator_id = $2 OR cm.user_id IS NOT NULL)
+           )"#,
+    )
+    .bind(community_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+}
+
 fn community_json(r: &CommunityRow) -> Value {
     json!({
         "id": r.id,
@@ -609,14 +630,7 @@ async fn join(
     }
 
     // Check not already a member
-    let exists = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
-    )
-    .bind(id)
-    .bind(&user.id)
-    .fetch_one(&state.db)
-    .await
-    {
+    let exists = match is_member_or_creator(&state.db, id, &user.id).await {
         Ok(v) => v,
         Err(e) => {
             tracing::error!("Join: membership check failed: {}", e);
@@ -1192,14 +1206,7 @@ async fn send_message(
     }
 
     // Verify member
-    let is_member = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
-    )
-    .bind(id)
-    .bind(&user.id)
-    .fetch_one(&state.db)
-    .await
-    {
+    let is_member = match is_member_or_creator(&state.db, id, &user.id).await {
         Ok(v) => v,
         Err(e) => {
             tracing::error!("send_message: membership check failed: {}", e);
@@ -1275,21 +1282,16 @@ async fn agent_chat(
     Json(body): Json<AgentChatBody>,
 ) -> Result<Sse<impl futures::Stream<Item = Result<Event, Infallible>>>, (StatusCode, Json<Value>)>
 {
-    // 1. Verify member
-    let is_member = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
-    )
-    .bind(community_id)
-    .bind(&user.id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| {
-        tracing::error!("agent_chat: membership check failed: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": "Database error" })),
-        )
-    })?;
+    // 1. Verify member (or community creator)
+    let is_member = is_member_or_creator(&state.db, community_id, &user.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("agent_chat: membership check failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        })?;
 
     if !is_member {
         return Err((
@@ -1780,13 +1782,7 @@ async fn get_messages(
     Query(q): Query<MessagesQuery>,
 ) -> (StatusCode, Json<Value>) {
     // Verify membership
-    let is_member = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
-    )
-    .bind(id)
-    .bind(&user.id)
-    .fetch_one(&state.db)
-    .await;
+    let is_member = is_member_or_creator(&state.db, id, &user.id).await;
 
     match is_member {
         Ok(false) => {

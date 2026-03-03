@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { X, Send, Loader2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
+import { useRenderDiag } from "@/lib/chat-diagnostics";
 
 const EMPTY: never[] = [];
 
@@ -28,6 +29,12 @@ export function ThreadPanel() {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useRenderDiag("ThreadPanel", () => ({
+    activeThreadId,
+    activeConversationId,
+    threadLoading,
+    threadMessageCount: threadMessages.length,
+  }));
 
   // Find the original (parent) message
   const originalMessage = activeConversationId && activeThreadId

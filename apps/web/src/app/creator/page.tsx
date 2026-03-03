@@ -138,11 +138,16 @@ const ACTIVITY_ICONS = {
 // ---------------------------------------------------------------------------
 
 function OverviewTab({ t }: { t: (k: string) => string }) {
+  const router = useRouter();
   return (
     <div className="space-y-8">
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4">
+        <button
+          type="button"
+          onClick={() => router.push("/creator/revenue")}
+          className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40 cursor-pointer"
+        >
           <div className="flex items-center gap-2 text-muted-foreground">
             <Coins className="h-4 w-4 text-green-400" />
             <span className="text-xs">{t("creator.totalRevenue")}</span>
@@ -152,8 +157,12 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
             <TrendingUp className="h-3 w-3" />
             +{MOCK_CREATOR_STATS.revenueChange}%
           </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/creator/downloads")}
+          className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40 cursor-pointer"
+        >
           <div className="flex items-center gap-2 text-muted-foreground">
             <Download className="h-4 w-4 text-blue-400" />
             <span className="text-xs">{t("creator.totalDownloads")}</span>
@@ -162,8 +171,12 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
           <p className="mt-0.5 text-[11px] text-blue-400">
             +{MOCK_CREATOR_STATS.downloadsNew} {t("creator.new")}
           </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/creator/users")}
+          className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40 cursor-pointer"
+        >
           <div className="flex items-center gap-2 text-muted-foreground">
             <Users className="h-4 w-4 text-green-400" />
             <span className="text-xs">{t("creator.totalUsers")}</span>
@@ -173,8 +186,12 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
             <TrendingUp className="h-3 w-3" />
             +{MOCK_CREATOR_STATS.usersChange}%
           </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/creator/ratings")}
+          className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent/40 cursor-pointer"
+        >
           <div className="flex items-center gap-2 text-muted-foreground">
             <Star className="h-4 w-4 text-yellow-500" />
             <span className="text-xs">{t("creator.avgRating")}</span>
@@ -183,7 +200,7 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             {MOCK_CREATOR_STATS.ratingCount} {t("creator.ratings")}
           </p>
-        </div>
+        </button>
       </div>
 
       {/* Your Creations */}

@@ -198,15 +198,15 @@ async fn sign_in_email(
     State(state): State<AppState>,
     Json(body): Json<SignInBody>,
 ) -> Response {
-    // Find user by email
-    let user = sqlx::query_as::<_, (String, String)>(
-        r#"SELECT id, name FROM "user" WHERE email = $1"#,
+    // Find user by email, including ban status
+    let user = sqlx::query_as::<_, (String, String, bool)>(
+        r#"SELECT id, name, COALESCE(banned, false) FROM "user" WHERE email = $1"#,
     )
     .bind(&body.email)
     .fetch_optional(&state.db)
     .await;
 
-    let (user_id, user_name) = match user {
+    let (user_id, user_name, is_banned) = match user {
         Ok(Some(u)) => u,
         Ok(None) => {
             return (
@@ -248,6 +248,15 @@ async fn sign_in_email(
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"error": "Invalid email or password"})),
+        )
+            .into_response();
+    }
+
+    // Check if user is banned
+    if is_banned {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Your account has been banned", "code": "ACCOUNT_BANNED"})),
         )
             .into_response();
     }
@@ -370,6 +379,27 @@ async fn google_callback(
     match oauth::handle_google_callback(&state.db, &state.config, &query.code, &callback_url).await
     {
         Ok(session_data) => {
+            // Check if user is banned
+            let is_banned = sqlx::query_as::<_, (bool,)>(
+                r#"SELECT COALESCE(banned, false) FROM "user" WHERE id = $1"#,
+            )
+            .bind(&session_data.user_id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .map(|(b,)| b)
+            .unwrap_or(false);
+
+            if is_banned {
+                let _ = session::delete_session(&state.db, &session_data.token).await;
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({"error": "Your account has been banned", "code": "ACCOUNT_BANNED"})),
+                )
+                    .into_response();
+            }
+
             let secure = is_secure_context(&state.config);
             let cookie = build_session_cookie(&session_data.token, secure);
             // Redirect to frontend after successful OAuth
@@ -396,6 +426,27 @@ async fn github_callback(
 ) -> Response {
     match oauth::handle_github_callback(&state.db, &state.config, &query.code).await {
         Ok(session_data) => {
+            // Check if user is banned
+            let is_banned = sqlx::query_as::<_, (bool,)>(
+                r#"SELECT COALESCE(banned, false) FROM "user" WHERE id = $1"#,
+            )
+            .bind(&session_data.user_id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .map(|(b,)| b)
+            .unwrap_or(false);
+
+            if is_banned {
+                let _ = session::delete_session(&state.db, &session_data.token).await;
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({"error": "Your account has been banned", "code": "ACCOUNT_BANNED"})),
+                )
+                    .into_response();
+            }
+
             let secure = is_secure_context(&state.config);
             let cookie = build_session_cookie(&session_data.token, secure);
             let frontend_url = state.config.cors_origins().first().cloned().unwrap_or_else(|| "http://localhost:21000".to_string());

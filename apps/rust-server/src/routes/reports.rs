@@ -7,10 +7,60 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
+use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::auth::middleware::{AuthAdmin, AuthUser};
 use crate::AppState;
+
+#[derive(FromRow)]
+struct ReportRow {
+    id: Uuid,
+    message_id: Uuid,
+    reporter_user_id: String,
+    reason: String,
+    description: Option<String>,
+    status: String,
+    admin_notes: Option<String>,
+    created_at: chrono::NaiveDateTime,
+    reviewed_at: Option<chrono::NaiveDateTime>,
+    reviewed_by: Option<String>,
+    message_content: String,
+    reporter_name: Option<String>,
+    reporter_username: Option<String>,
+    sender_user_id: Option<String>,
+    sender_agent_id: Option<Uuid>,
+    sender_name: Option<String>,
+    sender_username: Option<String>,
+    sender_image: Option<String>,
+    sender_is_verified: Option<bool>,
+    sender_agent_name: Option<String>,
+}
+
+fn report_to_json(r: &ReportRow) -> serde_json::Value {
+    json!({
+        "id": r.id,
+        "messageId": r.message_id,
+        "reporterUserId": r.reporter_user_id,
+        "reason": r.reason,
+        "description": r.description,
+        "status": r.status,
+        "adminNotes": r.admin_notes,
+        "createdAt": r.created_at.and_utc().to_rfc3339(),
+        "reviewedAt": r.reviewed_at.map(|t| t.and_utc().to_rfc3339()),
+        "reviewedBy": r.reviewed_by,
+        "messageContent": r.message_content,
+        "reporterName": r.reporter_name,
+        "reporterUsername": r.reporter_username,
+        "senderUserId": r.sender_user_id,
+        "senderAgentId": r.sender_agent_id,
+        "senderName": r.sender_name,
+        "senderUsername": r.sender_username,
+        "senderImage": r.sender_image,
+        "senderIsVerified": r.sender_is_verified.unwrap_or(false),
+        "senderAgentName": r.sender_agent_name,
+    })
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -138,12 +188,20 @@ async fn list_reports(
                 .map(|r| r.0)
                 .unwrap_or(0);
 
-        let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<String>, String, Option<String>, chrono::NaiveDateTime, Option<chrono::NaiveDateTime>, Option<String>, String, Option<String>)>(
-            r#"SELECT r.id, r.message_id, r.reporter_user_id, r.reason, r.description, r.status, r.admin_notes, r.created_at, r.reviewed_at, r.reviewed_by,
-                      m.content AS message_content, u.name AS reporter_name
+        let rows: Vec<serde_json::Value> = sqlx::query_as::<_, ReportRow>(
+            r#"SELECT r.id, r.message_id, r.reporter_user_id, r.reason, r.description,
+                      r.status, r.admin_notes, r.created_at, r.reviewed_at, r.reviewed_by,
+                      m.content AS message_content,
+                      u.name AS reporter_name, u.username AS reporter_username,
+                      m.sender_user_id, m.sender_agent_id,
+                      sender.name AS sender_name, sender.username AS sender_username,
+                      sender.image AS sender_image, sender.is_verified AS sender_is_verified,
+                      agent.name AS sender_agent_name
                FROM message_reports r
                JOIN messages m ON r.message_id = m.id
                LEFT JOIN "user" u ON r.reporter_user_id = u.id
+               LEFT JOIN "user" sender ON m.sender_user_id = sender.id
+               LEFT JOIN agents agent ON m.sender_agent_id = agent.id
                WHERE r.status = $1
                ORDER BY r.created_at DESC
                LIMIT $2 OFFSET $3"#,
@@ -154,14 +212,8 @@ async fn list_reports(
         .fetch_all(&state.db)
         .await
         .unwrap_or_default()
-        .into_iter()
-        .map(|r| json!({
-            "id": r.0, "messageId": r.1, "reporterUserId": r.2,
-            "reason": r.3, "description": r.4, "status": r.5,
-            "adminNotes": r.6, "createdAt": r.7.and_utc().to_rfc3339(),
-            "reviewedAt": r.8.map(|t| t.and_utc().to_rfc3339()),
-            "reviewedBy": r.9, "messageContent": r.10, "reporterName": r.11,
-        }))
+        .iter()
+        .map(report_to_json)
         .collect();
 
         (rows, count)
@@ -172,12 +224,20 @@ async fn list_reports(
             .map(|r| r.0)
             .unwrap_or(0);
 
-        let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<String>, String, Option<String>, chrono::NaiveDateTime, Option<chrono::NaiveDateTime>, Option<String>, String, Option<String>)>(
-            r#"SELECT r.id, r.message_id, r.reporter_user_id, r.reason, r.description, r.status, r.admin_notes, r.created_at, r.reviewed_at, r.reviewed_by,
-                      m.content AS message_content, u.name AS reporter_name
+        let rows: Vec<serde_json::Value> = sqlx::query_as::<_, ReportRow>(
+            r#"SELECT r.id, r.message_id, r.reporter_user_id, r.reason, r.description,
+                      r.status, r.admin_notes, r.created_at, r.reviewed_at, r.reviewed_by,
+                      m.content AS message_content,
+                      u.name AS reporter_name, u.username AS reporter_username,
+                      m.sender_user_id, m.sender_agent_id,
+                      sender.name AS sender_name, sender.username AS sender_username,
+                      sender.image AS sender_image, sender.is_verified AS sender_is_verified,
+                      agent.name AS sender_agent_name
                FROM message_reports r
                JOIN messages m ON r.message_id = m.id
                LEFT JOIN "user" u ON r.reporter_user_id = u.id
+               LEFT JOIN "user" sender ON m.sender_user_id = sender.id
+               LEFT JOIN agents agent ON m.sender_agent_id = agent.id
                ORDER BY r.created_at DESC
                LIMIT $1 OFFSET $2"#,
         )
@@ -186,14 +246,8 @@ async fn list_reports(
         .fetch_all(&state.db)
         .await
         .unwrap_or_default()
-        .into_iter()
-        .map(|r| json!({
-            "id": r.0, "messageId": r.1, "reporterUserId": r.2,
-            "reason": r.3, "description": r.4, "status": r.5,
-            "adminNotes": r.6, "createdAt": r.7.and_utc().to_rfc3339(),
-            "reviewedAt": r.8.map(|t| t.and_utc().to_rfc3339()),
-            "reviewedBy": r.9, "messageContent": r.10, "reporterName": r.11,
-        }))
+        .iter()
+        .map(report_to_json)
         .collect();
 
         (rows, count)
@@ -211,12 +265,20 @@ async fn get_report(
     _admin: AuthAdmin,
     Path(report_id): Path<Uuid>,
 ) -> Response {
-    let result = sqlx::query_as::<_, (Uuid, Uuid, String, String, Option<String>, String, Option<String>, chrono::NaiveDateTime, Option<chrono::NaiveDateTime>, Option<String>, String, Option<String>)>(
-        r#"SELECT r.id, r.message_id, r.reporter_user_id, r.reason, r.description, r.status, r.admin_notes, r.created_at, r.reviewed_at, r.reviewed_by,
-                  m.content AS message_content, u.name AS reporter_name
+    let result = sqlx::query_as::<_, ReportRow>(
+        r#"SELECT r.id, r.message_id, r.reporter_user_id, r.reason, r.description,
+                  r.status, r.admin_notes, r.created_at, r.reviewed_at, r.reviewed_by,
+                  m.content AS message_content,
+                  u.name AS reporter_name, u.username AS reporter_username,
+                  m.sender_user_id, m.sender_agent_id,
+                  sender.name AS sender_name, sender.username AS sender_username,
+                  sender.image AS sender_image, sender.is_verified AS sender_is_verified,
+                  agent.name AS sender_agent_name
            FROM message_reports r
            JOIN messages m ON r.message_id = m.id
            LEFT JOIN "user" u ON r.reporter_user_id = u.id
+           LEFT JOIN "user" sender ON m.sender_user_id = sender.id
+           LEFT JOIN agents agent ON m.sender_agent_id = agent.id
            WHERE r.id = $1"#,
     )
     .bind(report_id)
@@ -226,13 +288,7 @@ async fn get_report(
     match result {
         Ok(Some(r)) => (
             StatusCode::OK,
-            Json(json!({
-                "id": r.0, "messageId": r.1, "reporterUserId": r.2,
-                "reason": r.3, "description": r.4, "status": r.5,
-                "adminNotes": r.6, "createdAt": r.7.and_utc().to_rfc3339(),
-                "reviewedAt": r.8.map(|t| t.and_utc().to_rfc3339()),
-                "reviewedBy": r.9, "messageContent": r.10, "reporterName": r.11,
-            })),
+            Json(report_to_json(&r)),
         )
             .into_response(),
         Ok(None) => (

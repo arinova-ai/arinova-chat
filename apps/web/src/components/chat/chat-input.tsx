@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic } from "lucide-react";
+import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic, Reply } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import {
   Popover,
@@ -110,6 +110,8 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   const inputDrafts = useChatStore((s) => s.inputDrafts);
   const setInputDraft = useChatStore((s) => s.setInputDraft);
   const clearInputDraft = useChatStore((s) => s.clearInputDraft);
+  const replyingTo = useChatStore((s) => s.replyingTo);
+  const setReplyingTo = useChatStore((s) => s.setReplyingTo);
 
   // Get the active conversation
   const activeConversation = conversations.find(
@@ -1051,6 +1053,31 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
                 {qr.label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Reply preview bar */}
+        {replyingTo && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2">
+            <Reply className="h-4 w-4 shrink-0 text-brand" />
+            <div className="min-w-0 flex-1 border-l-2 border-brand pl-2">
+              <p className="text-xs font-medium text-brand">
+                {replyingTo.senderAgentName ?? "You"}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {replyingTo.content.length > 120
+                  ? replyingTo.content.slice(0, 120) + "…"
+                  : replyingTo.content}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setReplyingTo(null)}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+            </Button>
           </div>
         )}
 

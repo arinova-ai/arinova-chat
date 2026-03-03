@@ -9,6 +9,11 @@ import type {
   UploadResult,
   FetchHistoryOptions,
   FetchHistoryResult,
+  Note,
+  ListNotesOptions,
+  ListNotesResult,
+  CreateNoteBody,
+  UpdateNoteBody,
 } from "./types.js";
 
 const DEFAULT_RECONNECT_INTERVAL = 5_000;
@@ -313,6 +318,134 @@ export class ArinovaAgent {
     }
 
     return res.json() as Promise<FetchHistoryResult>;
+  }
+
+  /**
+   * List notes in a conversation.
+   * @param conversationId - The conversation to list notes from.
+   * @param options - Pagination options (before, limit).
+   */
+  async listNotes(
+    conversationId: string,
+    options?: ListNotesOptions,
+  ): Promise<ListNotesResult> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const params = new URLSearchParams();
+    if (options?.before) params.set("before", options.before);
+    if (options?.limit != null) params.set("limit", String(options.limit));
+
+    const qs = params.toString();
+    const url = `${httpUrl}/api/agent/conversations/${conversationId}/notes${qs ? `?${qs}` : ""}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`listNotes failed (${res.status}): ${body}`);
+    }
+
+    return res.json() as Promise<ListNotesResult>;
+  }
+
+  /**
+   * Create a note in a conversation.
+   * @param conversationId - The conversation to create the note in.
+   * @param body - Note title and optional content.
+   */
+  async createNote(
+    conversationId: string,
+    body: CreateNoteBody,
+  ): Promise<Note> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(
+      `${httpUrl}/api/agent/conversations/${conversationId}/notes`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.botToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`createNote failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<Note>;
+  }
+
+  /**
+   * Update a note in a conversation.
+   * @param conversationId - The conversation the note belongs to.
+   * @param noteId - The note ID to update.
+   * @param body - Fields to update (title and/or content).
+   */
+  async updateNote(
+    conversationId: string,
+    noteId: string,
+    body: UpdateNoteBody,
+  ): Promise<Note> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(
+      `${httpUrl}/api/agent/conversations/${conversationId}/notes/${noteId}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${this.botToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`updateNote failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<Note>;
+  }
+
+  /**
+   * Delete a note from a conversation.
+   * @param conversationId - The conversation the note belongs to.
+   * @param noteId - The note ID to delete.
+   */
+  async deleteNote(
+    conversationId: string,
+    noteId: string,
+  ): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(
+      `${httpUrl}/api/agent/conversations/${conversationId}/notes/${noteId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${this.botToken}` },
+      },
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`deleteNote failed (${res.status}): ${text}`);
+    }
   }
 
   private handleTask(data: Record<string, unknown>): void {

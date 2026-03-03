@@ -1,4 +1,5 @@
 pub mod billing;
+pub mod link_preview;
 pub mod embedding;
 pub mod llm;
 pub mod message_seq;

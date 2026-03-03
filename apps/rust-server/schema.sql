@@ -229,6 +229,17 @@ CREATE TABLE group_settings (
     invite_enabled BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+-- ===== User Mutes =====
+
+CREATE TABLE IF NOT EXISTS user_mutes (
+    user_id TEXT NOT NULL,
+    muted_user_id TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, muted_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_mutes_user_id ON user_mutes(user_id);
+
 -- ===== Push Notification Tables =====
 
 CREATE TABLE push_subscriptions (

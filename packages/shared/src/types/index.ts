@@ -93,8 +93,19 @@ export interface Message {
   threadId?: string;
   threadSummary?: ThreadSummary;
   attachments?: Attachment[];
+  linkPreviews?: LinkPreview[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+// ===== Link Preview =====
+export interface LinkPreview {
+  url: string;
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  faviconUrl?: string;
+  domain?: string;
 }
 
 // ===== Attachment =====
@@ -503,6 +514,9 @@ export type WSServerEvent =
     }
   | { type: "kicked_from_group"; conversationId: string }
   | { type: "user_typing"; conversationId: string; userId: string; userName: string }
+  | { type: "note:created"; conversationId: string; note: Note }
+  | { type: "note:updated"; conversationId: string; note: Note }
+  | { type: "note:deleted"; conversationId: string; noteId: string }
   | { type: "pong" };
 
 // ===== Agent Skill =====
@@ -539,6 +553,21 @@ export type AgentWSServerEvent =
     }
   | { type: "cancel_task"; taskId: string }
   | { type: "pong" };
+
+// ===== Conversation Note =====
+export interface Note {
+  id: string;
+  conversationId: string;
+  creatorId: string;
+  creatorType: "user" | "agent";
+  agentId: string | null;
+  creatorName: string;
+  agentName: string | null;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // ===== Push Notifications =====
 

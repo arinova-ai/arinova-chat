@@ -6,7 +6,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Copy, Trash2, RotateCcw, Reply } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
@@ -21,6 +21,11 @@ interface MessageActionSheetProps {
   onRetry: () => void;
   onReply: () => void;
   onReact: (emoji: string) => void;
+  onPin?: () => void;
+  isPinned?: boolean;
+  onStartThread?: () => void;
+  onReport?: () => void;
+  isInThread?: boolean;
 }
 
 const ACTION_BUTTON =
@@ -35,6 +40,11 @@ export function MessageActionSheet({
   onRetry,
   onReply,
   onReact,
+  onPin,
+  isPinned,
+  onStartThread,
+  onReport,
+  isInThread,
 }: MessageActionSheetProps) {
   const { t } = useTranslation();
   if (!message) return null;
@@ -84,6 +94,28 @@ export function MessageActionSheet({
             <Reply className="h-4 w-4 text-blue-400" />
             <span className="text-blue-400">{t("chat.actions.reply")}</span>
           </button>
+          {!isInThread && onStartThread && (
+            <button className={ACTION_BUTTON} onClick={() => handle(onStartThread)}>
+              <MessageSquare className="h-4 w-4 text-blue-400" />
+              <span className="text-blue-400">{t("chat.actions.startThread")}</span>
+            </button>
+          )}
+          {onPin && (
+            <button className={ACTION_BUTTON} onClick={() => handle(onPin)}>
+              {isPinned ? (
+                <PinOff className="h-4 w-4 text-yellow-400" />
+              ) : (
+                <Pin className="h-4 w-4 text-yellow-400" />
+              )}
+              <span className="text-yellow-400">{isPinned ? "Unpin" : "Pin"}</span>
+            </button>
+          )}
+          {onReport && (
+            <button className={ACTION_BUTTON} onClick={() => handle(onReport)}>
+              <Flag className="h-4 w-4 text-orange-400" />
+              <span className="text-orange-400">Report</span>
+            </button>
+          )}
           {isError && (
             <button className={ACTION_BUTTON} onClick={() => handle(onRetry)}>
               <RotateCcw className="h-4 w-4 text-blue-400" />

@@ -13,8 +13,13 @@ import { ActiveCall } from "@/components/voice/active-call";
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
+import { ThreadListSheet } from "./thread-list-sheet";
+import { NotebookSheet } from "./notebook-sheet";
+import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useRenderDiag } from "@/lib/chat-diagnostics";
+import { ErrorBoundary } from "./error-boundary";
 
 export function ChatArea() {
   const { t } = useTranslation();
@@ -33,9 +38,16 @@ export function ChatArea() {
   const [membersOpen, setMembersOpen] = useState(false);
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [threadListOpen, setThreadListOpen] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef(0);
+  useRenderDiag("ChatArea", () => ({
+    activeConversationId,
+    searchActive,
+    conversationCount: conversations.length,
+  }));
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -122,7 +134,7 @@ export function ChatArea() {
         type={conversation.type}
         conversationId={conversation.id}
         agentId={conversation.agentId ?? undefined}
-        voiceCapable={agent?.voiceCapable}
+        peerUserId={conversation.peerUserId}
         mentionOnly={conversation.mentionOnly}
         title={conversation.title}
         memberCount={conversation.type === "group" ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
@@ -130,9 +142,18 @@ export function ChatArea() {
         onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
+        onThreadsClick={() => setThreadListOpen(true)}
+        onNotebookClick={() => setNotebookOpen(true)}
       />
-      <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
-      <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
+      <ErrorBoundary scope="PinnedMessagesBar">
+        {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
+      </ErrorBoundary>
+      <ErrorBoundary scope="MessageList">
+        <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
+      </ErrorBoundary>
+      <ErrorBoundary scope="ChatInput">
+        <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
+      </ErrorBoundary>
 
       {showCallOverlay && <ActiveCall />}
 
@@ -160,7 +181,25 @@ export function ChatArea() {
         </>
       )}
 
-      <ThreadPanel />
+      <ErrorBoundary scope="ThreadPanel">
+        <ThreadPanel />
+      </ErrorBoundary>
+      <ErrorBoundary scope="ThreadListSheet">
+        <ThreadListSheet
+          open={threadListOpen}
+          onOpenChange={setThreadListOpen}
+          conversationId={activeConversationId}
+        />
+      </ErrorBoundary>
+      {notebookOpen && (
+        <ErrorBoundary scope="NotebookSheet">
+          <NotebookSheet
+            open={notebookOpen}
+            onOpenChange={setNotebookOpen}
+            conversationId={activeConversationId}
+          />
+        </ErrorBoundary>
+      )}
     </div>
   );
 }

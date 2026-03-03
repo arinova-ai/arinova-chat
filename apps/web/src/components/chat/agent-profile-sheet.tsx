@@ -13,7 +13,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, User, Pencil, Check, X, MessageSquare, Radio, Loader2 } from "lucide-react";
+import { Bot, User, Pencil, Check, X, MessageSquare, Radio, Loader2, Settings } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { VisuallyHidden } from "radix-ui";
@@ -199,6 +200,8 @@ export function AgentProfileSheet({
     }
   }, [resolved, editName, editDesc, loadAgents]);
 
+  const router = useRouter();
+
   if (!resolved) return null;
 
   return (
@@ -306,6 +309,22 @@ export function AgentProfileSheet({
               Cancel
             </Button>
           </div>
+        )}
+
+        {/* Manage Agent button (owner only) */}
+        {isOwner && !editing && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-4 w-full gap-1.5"
+            onClick={() => {
+              onOpenChange(false);
+              router.push(`/creator/${resolved.id}/edit`);
+            }}
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Manage Agent
+          </Button>
         )}
 
         {/* Conversations */}

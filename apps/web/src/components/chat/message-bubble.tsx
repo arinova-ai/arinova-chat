@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import type { Message, Attachment } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
@@ -34,17 +35,18 @@ import {
   Clock,
   X,
   Flag,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
-import { useDoubleTap } from "@/hooks/use-double-tap";
+import { LinkPreviewCards } from "./link-preview-card";
+import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
-import { UserProfileSheet } from "./user-profile-sheet";
-import { AgentProfileSheet } from "./agent-profile-sheet";
 
 // ============================================================
 // Utilities
@@ -326,6 +328,8 @@ interface MessageActionsProps {
   onReact: (emoji: string) => void;
   onOpenThread: (messageId: string) => void;
   onReport?: () => void;
+  onPin?: () => void;
+  isPinned?: boolean;
 }
 
 /** Hover action toolbar (copy, react, reply, thread, delete, retry). */
@@ -342,6 +346,8 @@ function MessageActions({
   onReact,
   onOpenThread,
   onReport,
+  isPinned,
+  onPin,
 }: MessageActionsProps) {
   const { t } = useTranslation();
   return (
@@ -388,6 +394,16 @@ function MessageActions({
           <MessageSquare className="h-3 w-3" />
         </Button>
       )}
+
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={onPin}
+        className="h-6 w-6 text-muted-foreground hover:text-yellow-400"
+        title={isPinned ? "Unpin" : "Pin"}
+      >
+        {isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+      </Button>
 
       <Button
         variant="ghost"
@@ -460,9 +476,11 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const toggleReaction = useChatStore((s) => s.toggleReaction);
   const reactionsByMessage = useChatStore((s) => s.reactionsByMessage);
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
+  const togglePin = useChatStore((s) => s.togglePin);
+  const isPinned = useChatStore((s) => s.pinnedMessageIds[message.conversationId]?.has(message.id) ?? false);
 
   const conversation = useChatStore((s) => s.conversations.find((c) => c.id === message.conversationId));
-  const [profileSheet, setProfileSheet] = useState<{ type: "user" | "agent"; id: string } | null>(null);
+  const router = useRouter();
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
@@ -501,7 +519,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
     [isUser, currentUserId]
   );
   const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile;
-  const doubleTapHandlers = useDoubleTap(() => {
+  const longPressHandlers = useLongPress(() => {
     if (!isStreaming) setActionSheetOpen(true);
   });
 
@@ -541,10 +559,15 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
     setReplyingTo(message);
   }, [setReplyingTo, message]);
 
+  const handlePin = useCallback(async () => {
+    togglePin(message.conversationId, message.id);
+  }, [togglePin, message.conversationId, message.id]);
+
   return (
     <div
+      data-message-id={message.id}
       className={cn(
-        "group relative flex gap-3 px-4",
+        "group relative flex gap-3 px-4 transition-shadow",
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
@@ -554,17 +577,36 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         clickable={showProfileClick}
         onClick={() => {
           if (showOwnProfile && currentUserId) {
-            setProfileSheet({ type: "user", id: currentUserId });
+            router.push(`/profile/${currentUserId}`);
           } else if (showUserProfile && message.senderUserId) {
-            setProfileSheet({ type: "user", id: message.senderUserId });
+            router.push(`/profile/${message.senderUserId}`);
           } else if (showAgentProfile && resolvedAgentId) {
-            setProfileSheet({ type: "agent", id: resolvedAgentId });
+            const suffix = conversation?.type === "group" ? `?convId=${message.conversationId}` : "";
+            router.push(`/agent/${resolvedAgentId}${suffix}`);
           }
         }}
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0" {...doubleTapHandlers}>
+        <div className="relative min-w-0" {...longPressHandlers}>
+          {/* Reply quote — above the bubble (Telegram/Discord style) */}
+          {message.replyTo && (
+            <div className={cn(
+              "mb-1 flex items-center gap-1.5 text-xs",
+              isUser ? "justify-end" : "justify-start"
+            )}>
+              <Reply className="h-3 w-3 text-blue-400/60 shrink-0" />
+              <div className="min-w-0 rounded-lg bg-accent/60 px-2.5 py-1 border-l-2 border-blue-400/50">
+                <p className="text-[11px] font-medium text-blue-400/70 truncate">
+                  {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? t("common.you") : agentName ?? "Agent")}
+                </p>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {message.replyTo.content}
+                </p>
+              </div>
+            </div>
+          )}
+
           {stickerUrl ? (
             /* Sticker: no bubble frame, transparent background */
             <div>
@@ -601,18 +643,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               </div>
             )}
 
-            {/* Reply quote */}
-            {message.replyTo && (
-              <div className="mb-1.5 rounded-lg bg-white/5 px-3 py-1.5 border-l-2 border-blue-400/50">
-                <p className="text-[11px] font-medium text-blue-400/70">
-                  {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? t("common.you") : agentName ?? "Agent")}
-                </p>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {message.replyTo.content}
-                </p>
-              </div>
-            )}
-
             <AttachmentRenderer attachments={message.attachments ?? []} />
 
             <MessageContent
@@ -621,6 +651,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               mentionNames={mentionNames}
               isStreaming={isStreaming}
             />
+            {!isStreaming && message.content && (
+              <LinkPreviewCards content={message.content} />
+            )}
           </div>
           )}
 
@@ -635,9 +668,9 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
             <button
               type="button"
               onClick={() => openThread(message.id)}
-              className="mt-1.5 flex items-center gap-1.5 text-xs text-primary hover:underline"
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand-text hover:bg-brand/20 transition-colors"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
+              <MessageSquare className="h-3 w-3" />
               <span>
                 {message.threadSummary.replyCount}{" "}
                 {message.threadSummary.replyCount === 1 ? t("chat.replies.one") : t("chat.replies.other")}
@@ -663,7 +696,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
           {/* Timestamp + Read receipt */}
           {showTimestamps && message.createdAt && (
-            <p className={cn(
+            <p suppressHydrationWarning className={cn(
               "mt-1 text-[10px] text-muted-foreground/60 flex items-center gap-1",
               isUser ? "justify-end" : "justify-start"
             )}>
@@ -689,6 +722,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               onReact={(emoji) => toggleReaction(message.id, emoji)}
               onOpenThread={openThread}
               onReport={() => setReportOpen(true)}
+              onPin={handlePin}
+              isPinned={isPinned}
             />
           )}
         </div>
@@ -716,6 +751,11 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         onRetry={handleRetry}
         onReply={handleReply}
         onReact={(emoji) => toggleReaction(message.id, emoji)}
+        onPin={handlePin}
+        isPinned={isPinned}
+        onStartThread={() => openThread(message.id)}
+        onReport={() => setReportOpen(true)}
+        isInThread={isInThread}
       />
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
@@ -745,22 +785,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         </DialogContent>
       </Dialog>
 
-      {profileSheet?.type === "user" && (
-        <UserProfileSheet
-          userId={profileSheet.id}
-          conversationId={message.conversationId}
-          open
-          onOpenChange={(open) => { if (!open) setProfileSheet(null); }}
-        />
-      )}
-      {profileSheet?.type === "agent" && (
-        <AgentProfileSheet
-          agentId={profileSheet.id}
-          conversationId={message.conversationId}
-          open
-          onOpenChange={(open) => { if (!open) setProfileSheet(null); }}
-        />
-      )}
     </div>
   );
 }

@@ -92,6 +92,18 @@
   "chat.thread.startDiscussion": "Start the discussion below",
   "chat.thread.placeholder": "Reply in thread...",
 
+  "chat.notebook.title": "Notes",
+  "chat.notebook.empty": "No notes yet",
+  "chat.notebook.create": "Create",
+  "chat.notebook.newNote": "New Note",
+  "chat.notebook.edit": "Edit",
+  "chat.notebook.editNote": "Edit Note",
+  "chat.notebook.titlePlaceholder": "Note title",
+  "chat.notebook.contentPlaceholder": "Write your note in Markdown...",
+  "chat.notebook.noContent": "No content",
+  "chat.notebook.settings": "Settings",
+  "chat.notebook.agentAccess": "Allow agents to access notes",
+
   "chat.search.title": "Search",
   "chat.search.results": "results",
   "chat.search.result": "result",

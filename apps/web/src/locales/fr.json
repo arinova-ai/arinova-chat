@@ -90,6 +90,18 @@
   "chat.thread.startDiscussion": "Lancez la discussion ci-dessous",
   "chat.thread.placeholder": "Répondre dans le fil...",
 
+  "chat.notebook.title": "Notes",
+  "chat.notebook.empty": "Aucune note pour le moment",
+  "chat.notebook.create": "Creer",
+  "chat.notebook.newNote": "Nouvelle note",
+  "chat.notebook.edit": "Modifier",
+  "chat.notebook.editNote": "Modifier la note",
+  "chat.notebook.titlePlaceholder": "Titre de la note",
+  "chat.notebook.contentPlaceholder": "Redigez votre note en Markdown...",
+  "chat.notebook.noContent": "Aucun contenu",
+  "chat.notebook.settings": "Paramètres",
+  "chat.notebook.agentAccess": "Autoriser les agents à accéder aux notes",
+
   "chat.search.title": "Recherche",
   "chat.search.results": "résultats",
   "chat.search.result": "résultat",

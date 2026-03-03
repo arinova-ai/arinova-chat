@@ -1,10 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 
 export function useAutoScroll<T extends HTMLElement>(
   deps: unknown[],
-  options?: { conversationId?: string | null; skipScroll?: boolean; messageCount?: number },
+  options?: {
+    conversationId?: string | null;
+    skipScroll?: boolean;
+    messageCount?: number;
+    isPrependingRef?: React.RefObject<boolean>;
+  },
 ) {
   const ref = useRef<T>(null);
   const userScrolledUp = useRef(false);
@@ -14,6 +20,7 @@ export function useAutoScroll<T extends HTMLElement>(
   const stickyTimerRef = useRef<number | null>(null);
   const stickyUntilRef = useRef(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [newMessageCount, setNewMessageCount] = useState(0);
 
   const stopStickyScroll = useCallback(() => {
     if (stickyTimerRef.current !== null) {
@@ -74,6 +81,7 @@ export function useAutoScroll<T extends HTMLElement>(
       userScrolledUp.current = false;
       prevScrollTopRef.current = 0;
       setShowScrollButton(false);
+      setNewMessageCount(0);
       prevConversationId.current = options?.conversationId;
       startStickyScroll();
     }
@@ -111,19 +119,36 @@ export function useAutoScroll<T extends HTMLElement>(
   }, [handleScroll]);
 
   useEffect(() => {
+    diagCount("autoScroll:depsEffect");
     // New message added — reset scroll lock so user sees it.
     // Only auto-scroll if the user is already near the bottom;
     // when older messages are prepended the user is scrolled up and
     // we must NOT yank them back to the bottom.
     const count = options?.messageCount ?? 0;
     if (count > prevMessageCount.current) {
+      diagEvent("autoScroll:countIncreased", {
+        prev: prevMessageCount.current,
+        next: count,
+        conversationId: options?.conversationId ?? null,
+      });
+      const isPrepending = options?.isPrependingRef?.current ?? false;
+      const delta = count - prevMessageCount.current;
       const el = ref.current;
       const isNearBottom = el
         ? el.scrollHeight - el.scrollTop - el.clientHeight < 100
         : true;
-      if (isNearBottom) {
+
+      if (isNearBottom || !userScrolledUp.current) {
+        diagCount("autoScroll:resetToBottom");
         userScrolledUp.current = false;
         setShowScrollButton(false);
+        setNewMessageCount(0);
+      } else {
+        diagCount("autoScroll:userScrolledUp");
+        setShowScrollButton(true);
+        if (!isPrepending) {
+          setNewMessageCount((prev) => prev + delta);
+        }
       }
     }
     prevMessageCount.current = count;
@@ -137,8 +162,9 @@ export function useAutoScroll<T extends HTMLElement>(
     forceScrollToBottom("smooth");
     userScrolledUp.current = false;
     setShowScrollButton(false);
+    setNewMessageCount(0);
     startStickyScroll(800);
   }, [forceScrollToBottom, startStickyScroll]);
 
-  return { ref, showScrollButton, scrollToBottom };
+  return { ref, showScrollButton, newMessageCount, scrollToBottom };
 }

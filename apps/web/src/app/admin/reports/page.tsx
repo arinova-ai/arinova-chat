@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Bot } from "lucide-react";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 
 interface Report {
   id: string;
@@ -19,11 +22,53 @@ interface Report {
   reviewedBy: string | null;
   messageContent: string;
   reporterName: string | null;
+  reporterUsername: string | null;
+  senderUserId: string | null;
+  senderAgentId: string | null;
+  senderName: string | null;
+  senderUsername: string | null;
+  senderImage: string | null;
+  senderIsVerified: boolean;
+  senderAgentName: string | null;
 }
 
 interface ReportsResponse {
   reports: Report[];
   total: number;
+}
+
+function UserLink({ userId, name, username, isVerified }: { userId: string; name: string | null; username: string | null; isVerified?: boolean }) {
+  const display = username ? `@${username}` : name ?? userId;
+  const secondary = username && name ? ` (${name})` : "";
+  return (
+    <Link href={`/profile/${userId}`} className="inline-flex items-center gap-0.5 text-blue-400 hover:underline">
+      {display}{secondary}
+      {isVerified && <VerifiedBadge className="h-3 w-3 text-blue-500" />}
+    </Link>
+  );
+}
+
+function SenderDisplay({ report }: { report: Report }) {
+  if (report.senderAgentId && report.senderAgentName) {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm">
+        <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+        {report.senderAgentName}
+        <Badge variant="outline" className="text-[10px] px-1 py-0">Agent</Badge>
+      </span>
+    );
+  }
+  if (report.senderUserId) {
+    return (
+      <UserLink
+        userId={report.senderUserId}
+        name={report.senderName}
+        username={report.senderUsername}
+        isVerified={report.senderIsVerified}
+      />
+    );
+  }
+  return <span className="text-sm text-muted-foreground">Unknown</span>;
 }
 
 export default function AdminReportsPage() {
@@ -91,7 +136,16 @@ export default function AdminReportsPage() {
                 <span className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground truncate">{r.messageContent}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Reported by: {r.reporterName ?? r.reporterUserId}</p>
+              <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+                <span>
+                  Reported by:{" "}
+                  <UserLink userId={r.reporterUserId} name={r.reporterName} username={r.reporterUsername} />
+                </span>
+                <span className="flex items-center gap-1">
+                  Message by:{" "}
+                  <SenderDisplay report={r} />
+                </span>
+              </div>
             </div>
           ))}
           <div className="flex justify-between">
@@ -109,7 +163,16 @@ export default function AdminReportsPage() {
               <div><span className="text-sm font-medium">Reason:</span> <span className="text-sm">{selected.reason}</span></div>
               {selected.description && <div><span className="text-sm font-medium">Description:</span> <p className="text-sm text-muted-foreground">{selected.description}</p></div>}
               <div><span className="text-sm font-medium">Message:</span> <p className="text-sm bg-accent rounded p-2 mt-1">{selected.messageContent}</p></div>
-              <div><span className="text-sm font-medium">Reporter:</span> <span className="text-sm">{selected.reporterName ?? selected.reporterUserId}</span></div>
+              <div className="flex flex-col gap-1">
+                <div className="text-sm">
+                  <span className="font-medium">Reported by:</span>{" "}
+                  <UserLink userId={selected.reporterUserId} name={selected.reporterName} username={selected.reporterUsername} />
+                </div>
+                <div className="text-sm flex items-center gap-1">
+                  <span className="font-medium">Message by:</span>{" "}
+                  <SenderDisplay report={selected} />
+                </div>
+              </div>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Admin notes..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" rows={2} />
             </div>
           )}

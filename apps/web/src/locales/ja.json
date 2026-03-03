@@ -90,6 +90,18 @@
   "chat.thread.startDiscussion": "以下からディスカッションを始めましょう",
   "chat.thread.placeholder": "スレッドに返信...",
 
+  "chat.notebook.title": "ノート",
+  "chat.notebook.empty": "ノートはまだありません",
+  "chat.notebook.create": "作成",
+  "chat.notebook.newNote": "新しいノート",
+  "chat.notebook.edit": "編集",
+  "chat.notebook.editNote": "ノートを編集",
+  "chat.notebook.titlePlaceholder": "ノートのタイトル",
+  "chat.notebook.contentPlaceholder": "Markdownでノートを書く...",
+  "chat.notebook.noContent": "内容なし",
+  "chat.notebook.settings": "設定",
+  "chat.notebook.agentAccess": "エージェントにノートへのアクセスを許可",
+
   "chat.search.title": "検索",
   "chat.search.results": "件の結果",
   "chat.search.result": "件の結果",

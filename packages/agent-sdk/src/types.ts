@@ -118,6 +118,48 @@ export interface FetchHistoryResult {
   nextCursor?: string;
 }
 
+/** A conversation note. */
+export interface Note {
+  id: string;
+  conversationId: string;
+  creatorId: string;
+  creatorType: "user" | "agent";
+  creatorName: string;
+  agentId?: string;
+  agentName?: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Options for listNotes(). */
+export interface ListNotesOptions {
+  /** Cursor: fetch notes created before this note ID. */
+  before?: string;
+  /** Max notes to return (default 20, max 50). */
+  limit?: number;
+}
+
+/** Result from listNotes(). */
+export interface ListNotesResult {
+  notes: Note[];
+  hasMore: boolean;
+  nextCursor?: string;
+}
+
+/** Body for createNote(). */
+export interface CreateNoteBody {
+  title: string;
+  content?: string;
+}
+
+/** Body for updateNote(). */
+export interface UpdateNoteBody {
+  title?: string;
+  content?: string;
+}
+
 /** Task handler function. */
 export type TaskHandler = (task: TaskContext) => void | Promise<void>;
 

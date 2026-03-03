@@ -10,4 +10,9 @@ export type {
   HistoryMessage,
   FetchHistoryOptions,
   FetchHistoryResult,
+  Note,
+  ListNotesOptions,
+  ListNotesResult,
+  CreateNoteBody,
+  UpdateNoteBody,
 } from "./types.js";
