@@ -80,26 +80,6 @@ describe("ConversationItem", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it("shows unread badge with count when unreadCount > 0", () => {
-    render(<ConversationItem {...defaultProps} unreadCount={5} />);
-    expect(screen.getByText("5")).toBeInTheDocument();
-  });
-
-  it("shows '99+' when unreadCount > 99", () => {
-    render(<ConversationItem {...defaultProps} unreadCount={100} />);
-    expect(screen.getByText("99+")).toBeInTheDocument();
-  });
-
-  it("shows '99+' for exactly 100 unread messages", () => {
-    render(<ConversationItem {...defaultProps} unreadCount={100} />);
-    expect(screen.getByText("99+")).toBeInTheDocument();
-  });
-
-  it("does not show unread badge when unreadCount is 0", () => {
-    render(<ConversationItem {...defaultProps} unreadCount={0} />);
-    expect(screen.queryByText("0")).not.toBeInTheDocument();
-  });
-
   it("shows online indicator when isOnline is true", () => {
     const { container } = render(
       <ConversationItem {...defaultProps} isOnline={true} />

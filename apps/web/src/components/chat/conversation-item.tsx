@@ -41,7 +41,6 @@ interface ConversationItemProps {
   onClick: () => void;
   onRename: (title: string) => void;
   onPin: (pinned: boolean) => void;
-  unreadCount?: number;
   isOnline?: boolean;
   isThinking?: boolean;
   isVerified?: boolean;
@@ -81,7 +80,6 @@ export function ConversationItem({
   updatedAt,
   isActive,
   onClick,
-  unreadCount = 0,
   isOnline = false,
   isThinking = false,
   isVerified = false,
@@ -188,11 +186,6 @@ export function ConversationItem({
                   <span className="text-xs text-muted-foreground">
                     {formatTime(updatedAt, t)}
                   </span>
-                  {unreadCount > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  )}
                 </span>
               )}
             </div>
