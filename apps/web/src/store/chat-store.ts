@@ -125,6 +125,9 @@ interface ChatState {
   threadMessages: Record<string, Message[]>;
   threadLoading: boolean;
 
+  // Pin state
+  pinnedMessageIds: Record<string, Set<string>>; // conversationId → set of pinned message IDs
+
   // Notebook state
   notesByConversation: Record<string, Note[]>;
   notebookOpen: boolean;
@@ -206,6 +209,10 @@ interface ChatState {
   setInputDraft: (conversationId: string, text: string) => void;
   clearInputDraft: (conversationId: string) => void;
 
+  // Pin actions
+  loadPins: (conversationId: string) => Promise<void>;
+  togglePin: (conversationId: string, messageId: string) => Promise<void>;
+
   // Notebook actions
   openNotebook: () => void;
   closeNotebook: () => void;
@@ -263,6 +270,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
+  pinnedMessageIds: {},
   notesByConversation: {},
   notebookOpen: false,
   agentNotesEnabledByConversation: {},
@@ -1175,6 +1183,52 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content,
       threadId: activeThreadId,
     });
+  },
+
+  loadPins: async (conversationId) => {
+    diagCount("action:loadPins");
+    try {
+      const data = await api<{ messageId: string }[]>(
+        `/api/conversations/${conversationId}/pins`
+      );
+      const ids = new Set(data.map((p) => p.messageId));
+      set({
+        pinnedMessageIds: {
+          ...get().pinnedMessageIds,
+          [conversationId]: ids,
+        },
+      });
+    } catch {
+      // keep existing
+    }
+  },
+  togglePin: async (conversationId, messageId) => {
+    diagCount("action:togglePin");
+    const current = get().pinnedMessageIds[conversationId] ?? new Set<string>();
+    const isPinned = current.has(messageId);
+    try {
+      await api(`/api/conversations/${conversationId}/pin/${messageId}`, {
+        method: isPinned ? "DELETE" : "POST",
+      });
+      const updated = new Set(current);
+      if (isPinned) {
+        updated.delete(messageId);
+      } else {
+        updated.add(messageId);
+      }
+      set({
+        pinnedMessageIds: {
+          ...get().pinnedMessageIds,
+          [conversationId]: updated,
+        },
+      });
+      // Notify PinnedMessagesBar to refresh its display
+      window.dispatchEvent(
+        new CustomEvent("pins-changed", { detail: { conversationId } })
+      );
+    } catch {
+      // pin/unpin failed
+    }
   },
 
   openNotebook: () => {

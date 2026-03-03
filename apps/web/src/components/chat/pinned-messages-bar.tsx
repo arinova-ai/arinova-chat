@@ -5,6 +5,7 @@ import { Pin, ChevronDown, ChevronUp, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useChatStore } from "@/store/chat-store";
 
 interface PinnedMessage {
   messageId: string;
@@ -23,6 +24,12 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
   const [pins, setPins] = useState<PinnedMessage[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const setPinnedIds = useCallback((data: PinnedMessage[]) => {
+    const ids = new Set(data.map((p) => p.messageId));
+    useChatStore.setState((s) => ({
+      pinnedMessageIds: { ...s.pinnedMessageIds, [conversationId]: ids },
+    }));
+  }, [conversationId]);
 
   const fetchPins = useCallback(async () => {
     if (!conversationId) return;
@@ -31,11 +38,12 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
         `/api/conversations/${conversationId}/pins`
       );
       setPins(data);
+      setPinnedIds(data);
       setCurrentIndex(0);
     } catch {
       // Keep existing pins on refetch failure; only clear on initial load
     }
-  }, [conversationId]);
+  }, [conversationId, setPinnedIds]);
 
   useEffect(() => {
     // Clear pins and fetch fresh on conversation change
@@ -58,7 +66,9 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
           `/api/conversations/${conversationId}/pin/${messageId}`,
           { method: "DELETE" }
         );
-        setPins((prev) => prev.filter((p) => p.messageId !== messageId));
+        const updated = pins.filter((p) => p.messageId !== messageId);
+        setPins(updated);
+        setPinnedIds(updated);
         window.dispatchEvent(
           new CustomEvent("pins-changed", {
             detail: { conversationId },
@@ -68,7 +78,7 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
         // unpin failed
       }
     },
-    [conversationId]
+    [conversationId, pins, setPinnedIds]
   );
 
   const scrollToMessage = useCallback((messageId: string) => {
@@ -181,7 +191,7 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
             <Button
               variant="ghost"
               size="icon-xs"
-              className="h-5 w-5 shrink-0 opacity-0 group-hover/pin:opacity-100"
+              className="h-5 w-5 shrink-0 opacity-100 md:opacity-0 md:group-hover/pin:opacity-100"
               onClick={() => handleUnpin(pin.messageId)}
               title="Unpin"
             >

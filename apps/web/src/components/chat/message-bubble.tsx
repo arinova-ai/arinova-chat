@@ -36,6 +36,7 @@ import {
   X,
   Flag,
   Pin,
+  PinOff,
 } from "lucide-react";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
@@ -328,6 +329,7 @@ interface MessageActionsProps {
   onOpenThread: (messageId: string) => void;
   onReport?: () => void;
   onPin?: () => void;
+  isPinned?: boolean;
 }
 
 /** Hover action toolbar (copy, react, reply, thread, delete, retry). */
@@ -344,6 +346,7 @@ function MessageActions({
   onReact,
   onOpenThread,
   onReport,
+  isPinned,
   onPin,
 }: MessageActionsProps) {
   const { t } = useTranslation();
@@ -397,9 +400,9 @@ function MessageActions({
         size="icon-xs"
         onClick={onPin}
         className="h-6 w-6 text-muted-foreground hover:text-yellow-400"
-        title="Pin"
+        title={isPinned ? "Unpin" : "Pin"}
       >
-        <Pin className="h-3 w-3" />
+        {isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
       </Button>
 
       <Button
@@ -473,6 +476,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const toggleReaction = useChatStore((s) => s.toggleReaction);
   const reactionsByMessage = useChatStore((s) => s.reactionsByMessage);
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
+  const togglePin = useChatStore((s) => s.togglePin);
+  const isPinned = useChatStore((s) => s.pinnedMessageIds[message.conversationId]?.has(message.id) ?? false);
 
   const conversation = useChatStore((s) => s.conversations.find((c) => c.id === message.conversationId));
   const router = useRouter();
@@ -555,19 +560,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   }, [setReplyingTo, message]);
 
   const handlePin = useCallback(async () => {
-    try {
-      await api(`/api/conversations/${message.conversationId}/pin/${message.id}`, {
-        method: "POST",
-      });
-      window.dispatchEvent(
-        new CustomEvent("pins-changed", {
-          detail: { conversationId: message.conversationId },
-        })
-      );
-    } catch {
-      // pin failed silently
-    }
-  }, [message.conversationId, message.id]);
+    togglePin(message.conversationId, message.id);
+  }, [togglePin, message.conversationId, message.id]);
 
   return (
     <div
@@ -729,6 +723,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               onOpenThread={openThread}
               onReport={() => setReportOpen(true)}
               onPin={handlePin}
+              isPinned={isPinned}
             />
           )}
         </div>
@@ -757,6 +752,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         onReply={handleReply}
         onReact={(emoji) => toggleReaction(message.id, emoji)}
         onPin={handlePin}
+        isPinned={isPinned}
         onStartThread={() => openThread(message.id)}
         onReport={() => setReportOpen(true)}
         isInThread={isInThread}

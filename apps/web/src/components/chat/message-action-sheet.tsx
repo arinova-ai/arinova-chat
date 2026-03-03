@@ -6,7 +6,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Copy, Trash2, RotateCcw, Reply, Pin, MessageSquare, Flag } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
@@ -22,6 +22,7 @@ interface MessageActionSheetProps {
   onReply: () => void;
   onReact: (emoji: string) => void;
   onPin?: () => void;
+  isPinned?: boolean;
   onStartThread?: () => void;
   onReport?: () => void;
   isInThread?: boolean;
@@ -40,6 +41,7 @@ export function MessageActionSheet({
   onReply,
   onReact,
   onPin,
+  isPinned,
   onStartThread,
   onReport,
   isInThread,
@@ -100,8 +102,12 @@ export function MessageActionSheet({
           )}
           {onPin && (
             <button className={ACTION_BUTTON} onClick={() => handle(onPin)}>
-              <Pin className="h-4 w-4 text-yellow-400" />
-              <span className="text-yellow-400">Pin</span>
+              {isPinned ? (
+                <PinOff className="h-4 w-4 text-yellow-400" />
+              ) : (
+                <Pin className="h-4 w-4 text-yellow-400" />
+              )}
+              <span className="text-yellow-400">{isPinned ? "Unpin" : "Pin"}</span>
             </button>
           )}
           {onReport && (
