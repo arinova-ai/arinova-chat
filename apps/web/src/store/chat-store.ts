@@ -1213,12 +1213,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     );
     const current = get().notesByConversation[conversationId] ?? [];
-    set({
-      notesByConversation: {
-        ...get().notesByConversation,
-        [conversationId]: [note, ...current],
-      },
-    });
+    // WS note:created may have already added this note
+    if (!current.some((n) => n.id === note.id)) {
+      set({
+        notesByConversation: {
+          ...get().notesByConversation,
+          [conversationId]: [note, ...current],
+        },
+      });
+    }
     return note;
   },
 

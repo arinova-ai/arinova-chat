@@ -2,12 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { Note } from "@arinova/shared/types";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -37,6 +32,8 @@ interface NotebookSheetProps {
   conversationId: string;
 }
 
+const EMPTY_NOTES: Note[] = [];
+
 type ViewMode = "list" | "detail" | "edit" | "create";
 
 function formatTime(date: Date | string): string {
@@ -65,7 +62,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   useEffect(() => setMounted(true), []);
   const isMobileRaw = useIsMobile();
   const isMobile = mounted ? isMobileRaw : false;
-  const notes = useChatStore((s) => s.notesByConversation[conversationId] ?? []);
+  const notes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
   const loadNotes = useChatStore((s) => s.loadNotes);
   const createNote = useChatStore((s) => s.createNote);
   const updateNote = useChatStore((s) => s.updateNote);
@@ -202,15 +199,22 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
   const canEdit = selectedNote && selectedNote.creatorId === currentUserId;
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side={isMobile ? "bottom" : "right"}
-        showCloseButton={false}
+  if (!open) return null;
+
+  const panel = (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-50 bg-black/50 animate-in fade-in-0"
+        onClick={() => onOpenChange(false)}
+      />
+      {/* Panel */}
+      <div
         className={cn(
+          "fixed z-50 shadow-lg animate-in",
           isMobile
-            ? "rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[80vh]"
-            : "w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col bg-secondary border-border"
+            ? "inset-x-0 bottom-0 rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[80vh] slide-in-from-bottom"
+            : "inset-y-0 right-0 w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col bg-secondary border-l border-border slide-in-from-right"
         )}
       >
         {/* Mobile drag handle */}
@@ -221,14 +225,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
         {/* List View */}
         {viewMode === "list" && (
           <div className={cn(!isMobile && "flex flex-col h-full")}>
-            <SheetHeader className={cn(
+            <div className={cn(
               isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0"
             )}>
               <div className="flex items-center justify-between">
-                <SheetTitle className="text-sm flex items-center gap-1.5">
+                <h3 className="text-sm flex items-center gap-1.5">
                   <BookOpen className="h-4 w-4" />
                   {t("chat.notebook.title")}
-                </SheetTitle>
+                </h3>
                 <div className="flex items-center gap-1">
                   {/* Settings popover */}
                   <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -284,7 +288,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   )}
                 </div>
               </div>
-            </SheetHeader>
+            </div>
 
             <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-1" : "flex-1 min-h-0 px-1")}>
               {loading && notes.length === 0 ? (
@@ -541,7 +545,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
             </div>
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </div>
+    </>
   );
+
+  return typeof document !== "undefined" ? createPortal(panel, document.body) : null;
 }
