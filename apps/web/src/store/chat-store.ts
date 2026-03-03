@@ -1623,76 +1623,135 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (threadId) {
         const threadMsgs = get().threadMessages[threadId] ?? [];
         const threadMsg = threadMsgs.find((m) => m.id === messageId);
-        const shouldReplaceThreadContent =
-          finalContent !== undefined &&
-          threadMsg &&
-          finalContent !== threadMsg.content;
-        set({
-          threadMessages: {
-            ...get().threadMessages,
-            [threadId]: threadMsgs.map((m) =>
-              m.id === messageId
-                ? {
-                    ...m,
-                    ...(shouldReplaceThreadContent ? { content: finalContent } : {}),
-                    status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
-                    updatedAt: new Date(),
-                  }
-                : m
-            ),
-          },
-        });
+
+        if (!threadMsg) {
+          // Message was cleared from store (conversation switch / reconnect).
+          // Re-insert as a completed message so it doesn't vanish.
+          if (finalContent) {
+            const agentMsg: Message = {
+              id: messageId,
+              conversationId,
+              seq: seq ?? 0,
+              role: "agent",
+              content: finalContent,
+              status: "completed",
+              threadId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            set({
+              threadMessages: {
+                ...get().threadMessages,
+                [threadId]: [...threadMsgs, agentMsg],
+              },
+            });
+          }
+        } else {
+          const shouldReplaceThreadContent =
+            finalContent !== undefined &&
+            finalContent !== threadMsg.content;
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [threadId]: threadMsgs.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      ...(shouldReplaceThreadContent ? { content: finalContent } : {}),
+                      status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                      updatedAt: new Date(),
+                    }
+                  : m
+              ),
+            },
+          });
+        }
       } else {
         const current = get().messagesByConversation[conversationId] ?? [];
         const completedMsg = current.find((m) => m.id === messageId);
-        // Only replace content if finalContent actually differs from the
-        // streamed accumulation. Skipping avoids an unnecessary re-render
-        // that can cause GFM tables to break in the markdown renderer.
-        const shouldReplaceContent =
-          finalContent !== undefined &&
-          completedMsg &&
-          finalContent !== completedMsg.content;
 
-        set({
-          messagesByConversation: {
-            ...get().messagesByConversation,
-            [conversationId]: current.map((m) =>
-              m.id === messageId
+        if (!completedMsg) {
+          // Message was cleared from store (conversation switch / reconnect).
+          // Re-insert as a completed message so it doesn't vanish.
+          if (finalContent) {
+            const agentMsg: Message = {
+              id: messageId,
+              conversationId,
+              seq: seq ?? 0,
+              role: "agent",
+              content: finalContent,
+              status: "completed",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            set({
+              messagesByConversation: {
+                ...get().messagesByConversation,
+                [conversationId]: [...current, agentMsg],
+              },
+              conversations: get().conversations.map((c) =>
+                c.id === conversationId
+                  ? { ...c, lastMessage: agentMsg, updatedAt: new Date() }
+                  : c
+              ),
+              unreadCounts:
+                conversationId !== activeConversationId &&
+                !get().mutedConversations[conversationId]
+                  ? {
+                      ...unreadCounts,
+                      [conversationId]:
+                        (unreadCounts[conversationId] ?? 0) + 1,
+                    }
+                  : unreadCounts,
+            });
+          }
+        } else {
+          // Only replace content if finalContent actually differs from the
+          // streamed accumulation. Skipping avoids an unnecessary re-render
+          // that can cause GFM tables to break in the markdown renderer.
+          const shouldReplaceContent =
+            finalContent !== undefined &&
+            finalContent !== completedMsg.content;
+
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: current.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      ...(shouldReplaceContent ? { content: finalContent } : {}),
+                      status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                      updatedAt: new Date(),
+                    }
+                  : m
+              ),
+            },
+            conversations: get().conversations.map((c) =>
+              c.id === conversationId
                 ? {
-                    ...m,
-                    ...(shouldReplaceContent ? { content: finalContent } : {}),
-                    status: m.status === "cancelled" ? ("cancelled" as const) : ("completed" as const),
+                    ...c,
+                    lastMessage: {
+                      ...completedMsg,
+                      ...(shouldReplaceContent ? { content: finalContent } : {}),
+                      status: "completed" as const,
+                      updatedAt: new Date(),
+                    },
                     updatedAt: new Date(),
                   }
-                : m
+                : c
             ),
-          },
-          conversations: get().conversations.map((c) =>
-            c.id === conversationId
-              ? {
-                  ...c,
-                  lastMessage: completedMsg
-                    ? {
-                        ...completedMsg,
-                        ...(shouldReplaceContent ? { content: finalContent } : {}),
-                        status: "completed" as const,
-                        updatedAt: new Date(),
-                      }
-                    : c.lastMessage,
-                  updatedAt: new Date(),
-                }
-              : c
-          ),
-          unreadCounts:
-            conversationId !== activeConversationId &&
-            !get().mutedConversations[conversationId]
-              ? {
-                  ...unreadCounts,
-                  [conversationId]:
-                    (unreadCounts[conversationId] ?? 0) + 1,
-                }
-              : unreadCounts,
-        });
+            unreadCounts:
+              conversationId !== activeConversationId &&
+              !get().mutedConversations[conversationId]
+                ? {
+                    ...unreadCounts,
+                    [conversationId]:
+                      (unreadCounts[conversationId] ?? 0) + 1,
+                  }
+                : unreadCounts,
+          });
+        }
       }
 
       if (conversationId === activeConversationId && seq > 0) {
@@ -1700,6 +1759,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           type: "mark_read",
           conversationId,
           seq,
+        });
+      }
+
+      // Safety cleanup: ensure this messageId is removed from thinkingAgents
+      const thinkingAfter = get().thinkingAgents[conversationId] ?? [];
+      if (thinkingAfter.some((t) => t.messageId === messageId)) {
+        set({
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: thinkingAfter.filter((t) => t.messageId !== messageId),
+          },
         });
       }
 
