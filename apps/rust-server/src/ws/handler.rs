@@ -934,6 +934,16 @@ pub async fn trigger_agent_response(
             .execute(db)
             .await;
 
+            // Spawn link preview extraction in background
+            {
+                let db2 = db.clone();
+                let mid = msg_id.to_string();
+                let text = content.to_string();
+                tokio::spawn(async move {
+                    crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+                });
+            }
+
             let _ = sqlx::query(
                 r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
             )
@@ -1077,6 +1087,16 @@ pub async fn trigger_agent_response(
         .bind(now.naive_utc())
         .execute(db)
         .await;
+
+        // Spawn link preview extraction in background
+        {
+            let db2 = db.clone();
+            let mid = user_msg_id.to_string();
+            let text = content.to_string();
+            tokio::spawn(async move {
+                crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+            });
+        }
 
         let _ = sqlx::query(
             r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
@@ -1592,6 +1612,16 @@ async fn do_trigger_agent_response(
                                     "stream_end reason=completed conv={} agent={} msgId={} len={}",
                                     conversation_id, agent_id, agent_msg_id_clone, full_content.len()
                                 );
+
+                                // Spawn link preview extraction in background
+                                {
+                                    let db3 = db.clone();
+                                    let mid = agent_msg_id_clone.clone();
+                                    let text = full_content.clone();
+                                    tokio::spawn(async move {
+                                        crate::services::link_preview::attach_link_previews(&db3, &mid, &text).await;
+                                    });
+                                }
                             }
                             ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_end",
