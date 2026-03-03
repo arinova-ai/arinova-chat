@@ -110,6 +110,8 @@
   "chat.search.results": "件の結果",
   "chat.search.result": "件の結果",
   "chat.search.noResults": "メッセージが見つかりません",
+  "chat.search.inConversation": "会話内を検索",
+  "chat.search.nOfTotal": "{n} / {total}",
 
   "chat.messageActions": "メッセージ操作",
 

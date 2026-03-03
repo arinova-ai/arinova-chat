@@ -112,6 +112,8 @@
   "chat.search.results": "筆結果",
   "chat.search.result": "筆結果",
   "chat.search.noResults": "找不到訊息",
+  "chat.search.inConversation": "在對話中搜尋",
+  "chat.search.nOfTotal": "{n} / {total}",
 
   "chat.messageActions": "訊息操作",
 

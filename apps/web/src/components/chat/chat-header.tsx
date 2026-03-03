@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
   Settings,
   MessageSquare,
   BookOpen,
+  Search,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
@@ -76,6 +77,31 @@ export function ChatHeader({
   const mutedConversations = useChatStore((s) => s.mutedConversations);
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
   const isMuted = conversationId ? mutedConversations[conversationId] : false;
+  const convSearchOpen = useChatStore((s) => s.convSearchOpen);
+  const openConvSearch = useChatStore((s) => s.openConvSearch);
+  const closeConvSearch = useChatStore((s) => s.closeConvSearch);
+  const searchConversation = useChatStore((s) => s.searchConversation);
+  const convSearchResults = useChatStore((s) => s.convSearchResults);
+  const convSearchIndex = useChatStore((s) => s.convSearchIndex);
+  const convSearchLoading = useChatStore((s) => s.convSearchLoading);
+  const setConvSearchIndex = useChatStore((s) => s.setConvSearchIndex);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (convSearchOpen) {
+      setTimeout(() => searchInputRef.current?.focus(), 50);
+    } else {
+      setLocalSearchQuery("");
+    }
+  }, [convSearchOpen]);
+
+  const handleSearchSubmit = useCallback(() => {
+    if (localSearchQuery.trim()) {
+      searchConversation(localSearchQuery.trim());
+    }
+  }, [localSearchQuery, searchConversation]);
 
   const router = useRouter();
 
@@ -98,7 +124,8 @@ export function ChatHeader({
   const displayName = type === "group" && title ? title : agentName;
 
   return (
-    <div className="flex min-h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+    <div className="shrink-0 border-b border-border">
+    <div className="flex min-h-14 items-center gap-3 px-4">
       <Button
         variant="ghost"
         size="icon"
@@ -148,6 +175,15 @@ export function ChatHeader({
       <div className="ml-auto flex items-center gap-1">
         {type === "group" && conversationId ? (
           <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", convSearchOpen && "text-blue-400")}
+              onClick={convSearchOpen ? closeConvSearch : openConvSearch}
+              title={t("chat.search.inConversation")}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -239,6 +275,15 @@ export function ChatHeader({
             <Button
               variant="ghost"
               size="icon"
+              className={cn("h-8 w-8", convSearchOpen && "text-blue-400")}
+              onClick={convSearchOpen ? closeConvSearch : openConvSearch}
+              title={t("chat.search.inConversation")}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               className={cn("h-8 w-8", showTimestamps && "text-blue-400")}
               onClick={toggleTimestamps}
               title={showTimestamps ? t("chat.header.hideTimestamps") : t("chat.header.showTimestamps")}
@@ -281,6 +326,68 @@ export function ChatHeader({
           </>
         )}
       </div>
+    </div>
+
+    {/* Conversation search bar */}
+    {convSearchOpen && (
+      <div className="flex items-center gap-2 border-t border-border/50 px-4 py-2">
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={localSearchQuery}
+          onChange={(e) => setLocalSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (e.shiftKey) {
+                // Shift+Enter: go to previous result
+                if (convSearchIndex > 0) setConvSearchIndex(convSearchIndex - 1);
+              } else {
+                if (convSearchResults.length > 0 && localSearchQuery.trim() === useChatStore.getState().convSearchQuery) {
+                  // Already searched, go to next result
+                  setConvSearchIndex((convSearchIndex + 1) % convSearchResults.length);
+                } else {
+                  handleSearchSubmit();
+                }
+              }
+            } else if (e.key === "Escape") {
+              closeConvSearch();
+            }
+          }}
+          placeholder={t("chat.search.inConversation")}
+          className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+        />
+        {convSearchLoading ? (
+          <span className="text-xs text-muted-foreground animate-pulse">...</span>
+        ) : convSearchResults.length > 0 ? (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t("chat.search.nOfTotal")
+              .replace("{n}", String(convSearchIndex + 1))
+              .replace("{total}", String(convSearchResults.length))}
+          </span>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          disabled={convSearchResults.length === 0 || convSearchIndex <= 0}
+          onClick={() => setConvSearchIndex(convSearchIndex - 1)}
+          title="Previous"
+        >
+          <ArrowLeft className="h-3.5 w-3.5 rotate-90" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          disabled={convSearchResults.length === 0 || convSearchIndex >= convSearchResults.length - 1}
+          onClick={() => setConvSearchIndex(convSearchIndex + 1)}
+          title="Next"
+        >
+          <ArrowLeft className="h-3.5 w-3.5 -rotate-90" />
+        </Button>
+      </div>
+    )}
     </div>
   );
 }

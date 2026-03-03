@@ -401,6 +401,7 @@ struct SearchQuery {
     q: Option<String>,
     limit: Option<String>,
     offset: Option<String>,
+    conversation_id: Option<String>,
 }
 
 async fn search_messages(
@@ -428,22 +429,55 @@ async fn search_messages(
 
     let pattern = format!("%{}%", q);
 
-    // Get all conversation IDs belonging to this user
-    let user_convs = sqlx::query_as::<_, (Uuid,)>(
-        "SELECT id FROM conversations WHERE user_id = $1",
-    )
-    .bind(&user.id)
-    .fetch_all(&state.db)
-    .await;
+    // If conversation_id is provided, scope search to that conversation
+    let conv_ids: Vec<Uuid> = if let Some(cid) = &query.conversation_id {
+        match Uuid::parse_str(cid) {
+            Ok(cid_uuid) => {
+                // Verify user owns or is member of this conversation
+                let exists = sqlx::query_as::<_, (bool,)>(
+                    "SELECT EXISTS(
+                        SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+                        UNION ALL
+                        SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2
+                    )",
+                )
+                .bind(cid_uuid)
+                .bind(&user.id)
+                .fetch_one(&state.db)
+                .await;
 
-    let conv_ids: Vec<Uuid> = match user_convs {
-        Ok(rows) => rows.into_iter().map(|r| r.0).collect(),
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response();
+                match exists {
+                    Ok((true,)) => vec![cid_uuid],
+                    Ok((false,)) => return Json(json!({"results": [], "total": 0})).into_response(),
+                    Err(e) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"error": e.to_string()})),
+                        )
+                            .into_response();
+                    }
+                }
+            }
+            Err(_) => return Json(json!({"results": [], "total": 0})).into_response(),
+        }
+    } else {
+        // Get all conversation IDs belonging to this user
+        let user_convs = sqlx::query_as::<_, (Uuid,)>(
+            "SELECT id FROM conversations WHERE user_id = $1",
+        )
+        .bind(&user.id)
+        .fetch_all(&state.db)
+        .await;
+
+        match user_convs {
+            Ok(rows) => rows.into_iter().map(|r| r.0).collect(),
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": e.to_string()})),
+                )
+                    .into_response();
+            }
         }
     };
 

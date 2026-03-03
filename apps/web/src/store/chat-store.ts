@@ -133,6 +133,13 @@ interface ChatState {
   notebookOpen: boolean;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
+  // Conversation search state (in-conversation search bar)
+  convSearchOpen: boolean;
+  convSearchQuery: string;
+  convSearchResults: { messageId: string; content: string }[];
+  convSearchIndex: number; // current active result index
+  convSearchLoading: boolean;
+
   // Actions
   setCurrentUserId: (id: string | null) => void;
   setReplyingTo: (message: Message | null) => void;
@@ -143,6 +150,10 @@ interface ChatState {
   searchMore: () => Promise<void>;
   clearSearch: () => void;
   jumpToMessage: (conversationId: string, messageId: string) => Promise<void>;
+  openConvSearch: () => void;
+  closeConvSearch: () => void;
+  searchConversation: (query: string) => Promise<void>;
+  setConvSearchIndex: (index: number) => Promise<void>;
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
@@ -274,6 +285,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   notesByConversation: {},
   notebookOpen: false,
   agentNotesEnabledByConversation: {},
+  convSearchOpen: false,
+  convSearchQuery: "",
+  convSearchResults: [],
+  convSearchIndex: -1,
+  convSearchLoading: false,
 
   setCurrentUserId: (id) => {
     diagCount("action:setCurrentUserId");
@@ -322,6 +338,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       searchActive: false,
       activeThreadId: null,
       jumpPagination: null,
+      convSearchOpen: false,
+      convSearchQuery: "",
+      convSearchResults: [],
+      convSearchIndex: -1,
+      convSearchLoading: false,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,
@@ -409,6 +430,108 @@ export const useChatStore = create<ChatState>((set, get) => ({
       searchLoading: false,
       highlightMessageId: null,
     });
+  },
+
+  openConvSearch: () => {
+    set({ convSearchOpen: true, convSearchQuery: "", convSearchResults: [], convSearchIndex: -1 });
+  },
+
+  closeConvSearch: () => {
+    set({
+      convSearchOpen: false,
+      convSearchQuery: "",
+      convSearchResults: [],
+      convSearchIndex: -1,
+      convSearchLoading: false,
+      highlightMessageId: null,
+    });
+  },
+
+  searchConversation: async (query) => {
+    const conversationId = get().activeConversationId;
+    if (!query.trim() || !conversationId) return;
+    set({ convSearchQuery: query, convSearchLoading: true, convSearchResults: [], convSearchIndex: -1 });
+    try {
+      const data = await api<{ results: { messageId: string; content: string }[]; total: number }>(
+        `/api/messages/search?q=${encodeURIComponent(query)}&conversation_id=${conversationId}&limit=50`
+      );
+      const results = data.results.map((r) => ({ messageId: r.messageId, content: r.content }));
+      set({
+        convSearchResults: results,
+        convSearchIndex: results.length > 0 ? 0 : -1,
+        highlightMessageId: results.length > 0 ? results[0].messageId : null,
+      });
+
+      // If first result is not in loaded messages, load around it
+      if (results.length > 0) {
+        const currentMsgs = get().messagesByConversation[conversationId] ?? [];
+        if (!currentMsgs.some((m) => m.id === results[0].messageId)) {
+          try {
+            const aroundData = await api<{
+              messages: Message[];
+              hasMoreUp: boolean;
+              hasMoreDown: boolean;
+            }>(
+              `/api/conversations/${conversationId}/messages?around=${results[0].messageId}&limit=50`
+            );
+            set({
+              jumpPagination: { hasMoreUp: aroundData.hasMoreUp, hasMoreDown: aroundData.hasMoreDown },
+              messagesByConversation: {
+                ...get().messagesByConversation,
+                [conversationId]: aroundData.messages,
+              },
+            });
+          } catch {
+            // ignore — highlight will still work if message loads later
+          }
+        }
+      }
+    } catch {
+      set({ convSearchResults: [], convSearchIndex: -1 });
+    } finally {
+      set({ convSearchLoading: false });
+    }
+  },
+
+  setConvSearchIndex: async (index) => {
+    const { convSearchResults, activeConversationId } = get();
+    if (index < 0 || index >= convSearchResults.length || !activeConversationId) return;
+    const result = convSearchResults[index];
+    const currentMsgs = get().messagesByConversation[activeConversationId] ?? [];
+    const found = currentMsgs.some((m) => m.id === result.messageId);
+
+    if (found) {
+      set({ convSearchIndex: index, highlightMessageId: result.messageId });
+    } else {
+      // Message not in loaded range — fetch messages around it
+      try {
+        const data = await api<{
+          messages: Message[];
+          hasMoreUp: boolean;
+          hasMoreDown: boolean;
+        }>(
+          `/api/conversations/${activeConversationId}/messages?around=${result.messageId}&limit=50`
+        );
+        set({
+          convSearchIndex: index,
+          highlightMessageId: result.messageId,
+          jumpPagination: { hasMoreUp: data.hasMoreUp, hasMoreDown: data.hasMoreDown },
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [activeConversationId]: data.messages,
+          },
+        });
+      } catch {
+        set({ convSearchIndex: index, highlightMessageId: result.messageId });
+      }
+    }
+
+    // Clear highlight after a delay
+    setTimeout(() => {
+      if (get().highlightMessageId === result.messageId) {
+        set({ highlightMessageId: null });
+      }
+    }, 3000);
   },
 
   jumpToMessage: async (conversationId, messageId) => {

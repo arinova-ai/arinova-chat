@@ -110,6 +110,8 @@
   "chat.search.results": "resultados",
   "chat.search.result": "resultado",
   "chat.search.noResults": "No se encontraron mensajes",
+  "chat.search.inConversation": "Buscar en la conversación",
+  "chat.search.nOfTotal": "{n} de {total}",
 
   "chat.messageActions": "Acciones del mensaje",
 

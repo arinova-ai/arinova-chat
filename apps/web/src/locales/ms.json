@@ -110,6 +110,8 @@
   "chat.search.results": "keputusan",
   "chat.search.result": "keputusan",
   "chat.search.noResults": "Tiada mesej ditemui",
+  "chat.search.inConversation": "Cari dalam perbualan",
+  "chat.search.nOfTotal": "{n} daripada {total}",
 
   "chat.messageActions": "Tindakan mesej",
 
