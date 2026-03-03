@@ -1648,7 +1648,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         } else {
           const shouldReplaceThreadContent =
-            finalContent !== undefined &&
+            !!finalContent &&
             finalContent !== threadMsg.content;
           set({
             threadMessages: {
@@ -1707,10 +1707,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         } else {
           // Only replace content if finalContent actually differs from the
-          // streamed accumulation. Skipping avoids an unnecessary re-render
-          // that can cause GFM tables to break in the markdown renderer.
+          // streamed accumulation AND is non-empty. Never overwrite accumulated
+          // content with an empty string from a backend that didn't echo final text.
           const shouldReplaceContent =
-            finalContent !== undefined &&
+            !!finalContent &&
             finalContent !== completedMsg.content;
 
           set({
