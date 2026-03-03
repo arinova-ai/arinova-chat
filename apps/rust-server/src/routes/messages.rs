@@ -438,7 +438,7 @@ async fn search_messages(
                     "SELECT EXISTS(
                         SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
                         UNION ALL
-                        SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2
+                        SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
                     )",
                 )
                 .bind(cid_uuid)
