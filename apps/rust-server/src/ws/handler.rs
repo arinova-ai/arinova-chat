@@ -1568,18 +1568,31 @@ async fn do_trigger_agent_response(
                                 let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
                             }
 
-                            let _ = sqlx::query(
-                                r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
-                            )
-                            .bind(&full_content)
-                            .bind(&agent_msg_id_clone)
-                            .execute(&db)
-                            .await;
-
-                            tracing::info!(
-                                "stream_end reason=completed conv={} agent={} msgId={} len={}",
-                                conversation_id, agent_id, agent_msg_id_clone, full_content.len()
-                            );
+                            if full_content.trim().is_empty() {
+                                // Empty completion — delete the placeholder message
+                                let _ = sqlx::query(
+                                    r#"DELETE FROM messages WHERE id = $1::uuid AND status = 'streaming'"#,
+                                )
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+                                tracing::info!(
+                                    "stream_end reason=empty_content (deleted placeholder) conv={} agent={} msgId={}",
+                                    conversation_id, agent_id, agent_msg_id_clone
+                                );
+                            } else {
+                                let _ = sqlx::query(
+                                    r#"UPDATE messages SET content = $1, status = 'completed', updated_at = NOW() WHERE id = $2::uuid"#,
+                                )
+                                .bind(&full_content)
+                                .bind(&agent_msg_id_clone)
+                                .execute(&db)
+                                .await;
+                                tracing::info!(
+                                    "stream_end reason=completed conv={} agent={} msgId={} len={}",
+                                    conversation_id, agent_id, agent_msg_id_clone, full_content.len()
+                                );
+                            }
                             ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_end",
                                 "conversationId": &conversation_id,
