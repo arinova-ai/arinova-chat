@@ -288,6 +288,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setActiveConversation: (id) => {
     if (id === null) {
+      if (get().activeConversationId === null) return;
       set({ activeConversationId: null });
       return;
     }
@@ -330,6 +331,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   setSearchQuery: (query) => {
+    if (get().searchQuery === query) return;
     set({ searchQuery: query });
   },
 
