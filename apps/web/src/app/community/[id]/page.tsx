@@ -154,9 +154,9 @@ function CommunityDetailContent() {
         setMembers(membersData.members);
         setAgents(agentsData.agents);
 
-        const userIsMember = membersData.members.some(
-          (m) => m.userId === currentUserId
-        );
+        const userIsMember =
+          communityData.creatorId === currentUserId ||
+          membersData.members.some((m) => m.userId === currentUserId);
         setIsMember(userIsMember);
 
         // Load messages if member
