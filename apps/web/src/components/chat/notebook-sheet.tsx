@@ -10,7 +10,8 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { NotebookEditor } from "./notebook-editor";
+import dynamic from "next/dynamic";
+const NotebookEditor = dynamic(() => import("./notebook-editor").then((m) => m.NotebookEditor), { ssr: false });
 import {
   BookOpen,
   Plus,
