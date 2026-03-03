@@ -19,7 +19,6 @@ interface OfficeChatPanelProps {
 
 export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps) {
   const { t } = useTranslation();
-  const conversations = useChatStore((s) => s.conversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const loadMessages = useChatStore((s) => s.loadMessages);
@@ -36,10 +35,10 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
 
   // Find or create conversation when panel opens
   useEffect(() => {
-    if (!open || !agentId) return;
+    if (!open || !agentId || conversationId) return;
     let cancelled = false;
 
-    const existing = conversations.find(
+    const existing = useChatStore.getState().conversations.find(
       (c) => c.agentId === agentId && c.type === "direct"
     );
 
@@ -64,7 +63,7 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
     }
 
     return () => { cancelled = true; };
-  }, [open, agentId, conversations, createConversation, setActiveConversation, loadMessages]);
+  }, [open, agentId, conversationId, createConversation, setActiveConversation, loadMessages]);
 
   // Restore previous activeConversationId on close
   const handleClose = useCallback(() => {

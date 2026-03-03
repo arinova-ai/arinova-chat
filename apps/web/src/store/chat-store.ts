@@ -266,7 +266,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   notebookOpen: false,
   agentNotesEnabledByConversation: {},
 
-  setCurrentUserId: (id) => set({ currentUserId: id }),
+  setCurrentUserId: (id) => {
+    if (get().currentUserId === id) return;
+    set({ currentUserId: id });
+  },
   setReplyingTo: (message) => set({ replyingTo: message }),
   setInputDraft: (conversationId, text) => {
     const drafts = { ...get().inputDrafts };
@@ -286,6 +289,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setActiveConversation: (id) => {
     if (id === null) {
       set({ activeConversationId: null });
+      return;
+    }
+    const currentState = get();
+    if (currentState.activeConversationId === id && !currentState.searchActive) {
       return;
     }
     set({
