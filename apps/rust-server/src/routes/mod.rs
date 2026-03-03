@@ -31,6 +31,7 @@ pub mod admin;
 pub mod reports;
 pub mod pins;
 pub mod notes;
+pub mod agent_notes;
 pub mod link_preview;
 
 use axum::Router;
@@ -71,6 +72,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(reports::router())
         .merge(pins::router())
         .merge(notes::router())
+        .merge(agent_notes::router())
         .merge(link_preview::router())
         .with_state(state)
 }

@@ -8,25 +8,21 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::json;
-use sqlx::{FromRow, PgPool};
+use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::auth::middleware::AuthUser;
+use crate::auth::middleware::AuthAgent;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
-            "/api/conversations/{id}/notes",
-            get(list_notes).post(create_note),
+            "/api/agent/conversations/{convId}/notes",
+            get(agent_list_notes).post(agent_create_note),
         )
         .route(
-            "/api/conversations/{id}/notes/settings",
-            patch(update_notes_settings),
-        )
-        .route(
-            "/api/conversations/{id}/notes/{noteId}",
-            patch(update_note).delete(delete_note),
+            "/api/agent/conversations/{convId}/notes/{noteId}",
+            patch(agent_update_note).delete(agent_delete_note),
         )
 }
 
@@ -47,61 +43,15 @@ struct NoteRow {
     agent_name: Option<String>,
 }
 
-// ===== Helpers =====
-
-async fn is_member(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
-    let member = sqlx::query_as::<_, (i64,)>(
-        r#"SELECT COUNT(*) FROM conversation_user_members
-           WHERE conversation_id = $1 AND user_id = $2"#,
-    )
-    .bind(conv_id)
-    .bind(user_id)
-    .fetch_one(db)
-    .await
-    .map(|(c,)| c > 0)
-    .unwrap_or(false);
-
-    if member {
-        return true;
-    }
-
-    // Fallback: direct conversation owner
-    sqlx::query_as::<_, (i64,)>(
-        "SELECT COUNT(*) FROM conversations WHERE id = $1 AND user_id = $2",
-    )
-    .bind(conv_id)
-    .bind(user_id)
-    .fetch_one(db)
-    .await
-    .map(|(c,)| c > 0)
-    .unwrap_or(false)
-}
-
-async fn get_conv_member_ids(db: &PgPool, conv_id: Uuid) -> Vec<String> {
-    let members: Vec<(String,)> = sqlx::query_as(
-        "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
-    )
-    .bind(conv_id)
-    .fetch_all(db)
-    .await
-    .unwrap_or_default();
-
-    if members.is_empty() {
-        // Direct conversation: just the owner
-        sqlx::query_as::<_, (String,)>(
-            "SELECT user_id FROM conversations WHERE id = $1",
-        )
-        .bind(conv_id)
-        .fetch_optional(db)
-        .await
-        .ok()
-        .flatten()
-        .map(|(id,)| vec![id])
-        .unwrap_or_default()
-    } else {
-        members.into_iter().map(|(id,)| id).collect()
-    }
-}
+const NOTE_QUERY_BASE: &str = r#"
+    SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
+           n.title, n.content, n.created_at, n.updated_at,
+           COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
+           a.name AS agent_name
+    FROM conversation_notes n
+    LEFT JOIN "user" u ON u.id = n.creator_id
+    LEFT JOIN agents a ON a.id = n.agent_id
+"#;
 
 fn note_to_json(n: &NoteRow) -> serde_json::Value {
     json!({
@@ -119,57 +69,70 @@ fn note_to_json(n: &NoteRow) -> serde_json::Value {
     })
 }
 
-/// Check if user can edit a note (creator or agent's owner)
-async fn can_edit_note(
-    db: &PgPool,
-    user_id: &str,
-    creator_id: &str,
-    creator_type: &str,
-    agent_id: Option<Uuid>,
-) -> bool {
-    if creator_type == "user" {
-        return creator_id == user_id;
-    }
-    // Agent-created: check if user owns the agent
-    if let Some(aid) = agent_id {
-        sqlx::query_as::<_, (Uuid,)>("SELECT id FROM agents WHERE id = $1 AND owner_id = $2")
-            .bind(aid)
-            .bind(user_id)
-            .fetch_optional(db)
-            .await
-            .ok()
-            .flatten()
-            .is_some()
-    } else {
-        creator_id == user_id
-    }
-}
+// ===== Helpers =====
 
-/// Check if user is a moderator (admin or vice_admin) in a conversation
-async fn is_moderator(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
-    let role = sqlx::query_as::<_, (String,)>(
-        "SELECT role::text FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+/// Validate agent is a member of the conversation
+async fn agent_is_member(db: &sqlx::PgPool, conv_id: Uuid, agent_id: Uuid) -> bool {
+    sqlx::query_as::<_, (i64,)>(
+        r#"SELECT COUNT(*) FROM conversations c
+           WHERE c.id = $1
+             AND (
+               c.agent_id = $2
+               OR EXISTS (
+                 SELECT 1 FROM conversation_members cm
+                 WHERE cm.conversation_id = c.id AND cm.agent_id = $2
+               )
+             )"#,
     )
     .bind(conv_id)
-    .bind(user_id)
-    .fetch_optional(db)
+    .bind(agent_id)
+    .fetch_one(db)
     .await
-    .ok()
-    .flatten()
-    .map(|(r,)| r);
-
-    matches!(role.as_deref(), Some("admin") | Some("vice_admin"))
+    .map(|(c,)| c > 0)
+    .unwrap_or(false)
 }
 
-const NOTE_QUERY_BASE: &str = r#"
-    SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
-           n.title, n.content, n.created_at, n.updated_at,
-           COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
-           a.name AS agent_name
-    FROM conversation_notes n
-    LEFT JOIN "user" u ON u.id = n.creator_id
-    LEFT JOIN agents a ON a.id = n.agent_id
-"#;
+/// Check if the user who owns the conversation has agent_notes_enabled
+async fn agent_notes_allowed(db: &sqlx::PgPool, conv_id: Uuid) -> bool {
+    // Check conversation_user_members for the owner — if all members have it enabled, allow
+    // For simplicity: if ANY member has it disabled, deny
+    let disabled = sqlx::query_as::<_, (i64,)>(
+        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND agent_notes_enabled = false",
+    )
+    .bind(conv_id)
+    .fetch_one(db)
+    .await
+    .map(|(c,)| c)
+    .unwrap_or(0);
+
+    disabled == 0
+}
+
+/// Get user member IDs for WS broadcast
+async fn get_conv_member_ids(db: &sqlx::PgPool, conv_id: Uuid) -> Vec<String> {
+    let members: Vec<(String,)> = sqlx::query_as(
+        "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+    )
+    .bind(conv_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if members.is_empty() {
+        sqlx::query_as::<_, (String,)>(
+            "SELECT user_id FROM conversations WHERE id = $1",
+        )
+        .bind(conv_id)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten()
+        .map(|(id,)| vec![id])
+        .unwrap_or_default()
+    } else {
+        members.into_iter().map(|(id,)| id).collect()
+    }
+}
 
 // ===== Handlers =====
 
@@ -179,17 +142,25 @@ struct ListNotesQuery {
     limit: Option<String>,
 }
 
-/// GET /api/conversations/:id/notes
-async fn list_notes(
+/// GET /api/agent/conversations/:convId/notes
+async fn agent_list_notes(
     State(state): State<AppState>,
-    user: AuthUser,
+    agent: AuthAgent,
     Path(conv_id): Path<Uuid>,
     Query(query): Query<ListNotesQuery>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
+    if !agent_is_member(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
+            Json(json!({"error": "Agent does not belong to this conversation"})),
+        )
+            .into_response();
+    }
+
+    if !agent_notes_allowed(&state.db, conv_id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Note access is disabled by conversation owner"})),
         )
             .into_response();
     }
@@ -201,7 +172,6 @@ async fn list_notes(
         .unwrap_or(20)
         .min(50);
 
-    // Resolve cursor
     let cursor_ts: Option<DateTime<Utc>> = if let Some(ref before_id) = query.before {
         let before_uuid = match Uuid::parse_str(before_id) {
             Ok(u) => u,
@@ -284,10 +254,10 @@ struct CreateNoteBody {
     content: String,
 }
 
-/// POST /api/conversations/:id/notes
-async fn create_note(
+/// POST /api/agent/conversations/:convId/notes
+async fn agent_create_note(
     State(state): State<AppState>,
-    user: AuthUser,
+    agent: AuthAgent,
     Path(conv_id): Path<Uuid>,
     Json(body): Json<CreateNoteBody>,
 ) -> Response {
@@ -300,10 +270,18 @@ async fn create_note(
             .into_response();
     }
 
-    if !is_member(&state.db, conv_id, &user.id).await {
+    if !agent_is_member(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
+            Json(json!({"error": "Agent does not belong to this conversation"})),
+        )
+            .into_response();
+    }
+
+    if !agent_notes_allowed(&state.db, conv_id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Note access is disabled by conversation owner"})),
         )
             .into_response();
     }
@@ -311,13 +289,33 @@ async fn create_note(
     let note_id = Uuid::new_v4();
     let now = Utc::now();
 
+    // Use agent's owner ID as creator_id for DB FK constraint
+    let owner_id = sqlx::query_as::<_, (String,)>(
+        "SELECT owner_id FROM agents WHERE id = $1",
+    )
+    .bind(agent.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let creator_id = match owner_id {
+        Ok(Some((id,))) => id,
+        _ => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to resolve agent owner"})),
+            )
+                .into_response();
+        }
+    };
+
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, title, content, created_at, updated_at)
-           VALUES ($1, $2, $3, 'user', $4, $5, $6, $6)"#,
+        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, agent_id, title, content, created_at, updated_at)
+           VALUES ($1, $2, $3, 'agent', $4, $5, $6, $7, $7)"#,
     )
     .bind(note_id)
     .bind(conv_id)
-    .bind(&user.id)
+    .bind(&creator_id)
+    .bind(agent.id)
     .bind(title)
     .bind(&body.content)
     .bind(now)
@@ -329,18 +327,17 @@ async fn create_note(
             let note_json = json!({
                 "id": note_id,
                 "conversationId": conv_id,
-                "creatorId": &user.id,
-                "creatorType": "user",
-                "creatorName": &user.name,
-                "agentId": null,
-                "agentName": null,
+                "creatorId": &creator_id,
+                "creatorType": "agent",
+                "creatorName": &agent.name,
+                "agentId": agent.id,
+                "agentName": &agent.name,
                 "title": title,
                 "content": &body.content,
                 "createdAt": now.to_rfc3339(),
                 "updatedAt": now.to_rfc3339(),
             });
 
-            // Broadcast to conversation members
             let member_ids = get_conv_member_ids(&state.db, conv_id).await;
             state.ws.broadcast_to_members(
                 &member_ids,
@@ -368,10 +365,10 @@ struct UpdateNoteBody {
     content: Option<String>,
 }
 
-/// PATCH /api/conversations/:id/notes/:noteId
-async fn update_note(
+/// PATCH /api/agent/conversations/:convId/notes/:noteId
+async fn agent_update_note(
     State(state): State<AppState>,
-    user: AuthUser,
+    agent: AuthAgent,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<UpdateNoteBody>,
 ) -> Response {
@@ -383,53 +380,48 @@ async fn update_note(
             .into_response();
     }
 
-    if !is_member(&state.db, conv_id, &user.id).await {
+    if !agent_is_member(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
+            Json(json!({"error": "Agent does not belong to this conversation"})),
         )
             .into_response();
     }
 
-    // Fetch note metadata for permission check
-    let note = sqlx::query_as::<_, (String, String, Option<Uuid>)>(
-        "SELECT creator_id, creator_type, agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    // Only the agent that created the note can edit it
+    let note = sqlx::query_as::<_, (Option<Uuid>,)>(
+        "SELECT agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
     .bind(note_id)
     .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
-    let (note_creator_id, note_creator_type, note_agent_id) = match note {
-        Ok(Some(n)) => n,
+    match note {
+        Ok(Some((Some(note_agent_id),))) if note_agent_id == agent.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not authorized to edit this note"})),
+            )
+                .into_response();
+        }
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({"error": "Note not found"})),
             )
-                .into_response()
+                .into_response();
         }
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": e.to_string()})),
             )
-                .into_response()
+                .into_response();
         }
-    };
-
-    // Permission: creator or agent's owner
-    if !can_edit_note(&state.db, &user.id, &note_creator_id, &note_creator_type, note_agent_id)
-        .await
-    {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not authorized to edit this note"})),
-        )
-            .into_response();
     }
 
-    // Validate title if provided
     if let Some(ref title) = body.title {
         let title = title.trim();
         if title.is_empty() || title.len() > 200 {
@@ -441,7 +433,6 @@ async fn update_note(
         }
     }
 
-    // Dynamic UPDATE
     let now = Utc::now();
     let updated = match (&body.title, &body.content) {
         (Some(title), Some(content)) => {
@@ -483,7 +474,6 @@ async fn update_note(
 
     match updated {
         Ok(r) if r.rows_affected() > 0 => {
-            // Fetch updated note for response & broadcast
             let row = sqlx::query_as::<_, NoteRow>(&format!(
                 "{} WHERE n.id = $1",
                 NOTE_QUERY_BASE
@@ -529,58 +519,52 @@ async fn update_note(
     }
 }
 
-/// DELETE /api/conversations/:id/notes/:noteId
-async fn delete_note(
+/// DELETE /api/agent/conversations/:convId/notes/:noteId
+async fn agent_delete_note(
     State(state): State<AppState>,
-    user: AuthUser,
+    agent: AuthAgent,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
+    if !agent_is_member(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
+            Json(json!({"error": "Agent does not belong to this conversation"})),
         )
             .into_response();
     }
 
-    // Fetch note metadata
-    let note = sqlx::query_as::<_, (String, String, Option<Uuid>)>(
-        "SELECT creator_id, creator_type, agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    // Only the agent that created the note can delete it
+    let note = sqlx::query_as::<_, (Option<Uuid>,)>(
+        "SELECT agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
     .bind(note_id)
     .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
-    let (note_creator_id, note_creator_type, note_agent_id) = match note {
-        Ok(Some(n)) => n,
+    match note {
+        Ok(Some((Some(note_agent_id),))) if note_agent_id == agent.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not authorized to delete this note"})),
+            )
+                .into_response();
+        }
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({"error": "Note not found"})),
             )
-                .into_response()
+                .into_response();
         }
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": e.to_string()})),
             )
-                .into_response()
+                .into_response();
         }
-    };
-
-    // Permission: creator/owner OR moderator
-    let is_creator =
-        can_edit_note(&state.db, &user.id, &note_creator_id, &note_creator_type, note_agent_id)
-            .await;
-
-    if !is_creator && !is_moderator(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not authorized to delete this note"})),
-        )
-            .into_response();
     }
 
     let result = sqlx::query(
@@ -593,7 +577,6 @@ async fn delete_note(
 
     match result {
         Ok(r) if r.rows_affected() > 0 => {
-            // Broadcast deletion
             let member_ids = get_conv_member_ids(&state.db, conv_id).await;
             state.ws.broadcast_to_members(
                 &member_ids,
@@ -610,53 +593,6 @@ async fn delete_note(
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Note not found"})),
-        )
-            .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string()})),
-        )
-            .into_response(),
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UpdateNotesSettingsBody {
-    agent_notes_enabled: bool,
-}
-
-/// PATCH /api/conversations/:id/notes/settings
-async fn update_notes_settings(
-    State(state): State<AppState>,
-    user: AuthUser,
-    Path(conv_id): Path<Uuid>,
-    Json(body): Json<UpdateNotesSettingsBody>,
-) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
-        )
-            .into_response();
-    }
-
-    let result = sqlx::query(
-        "UPDATE conversation_user_members SET agent_notes_enabled = $1 WHERE conversation_id = $2 AND user_id = $3",
-    )
-    .bind(body.agent_notes_enabled)
-    .bind(conv_id)
-    .bind(&user.id)
-    .execute(&state.db)
-    .await;
-
-    match result {
-        Ok(r) if r.rows_affected() > 0 => {
-            Json(json!({ "agentNotesEnabled": body.agent_notes_enabled })).into_response()
-        }
-        Ok(_) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Membership record not found"})),
         )
             .into_response(),
         Err(e) => (

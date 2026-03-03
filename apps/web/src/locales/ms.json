@@ -99,6 +99,8 @@
   "chat.notebook.titlePlaceholder": "Tajuk nota",
   "chat.notebook.contentPlaceholder": "Tulis nota dalam Markdown...",
   "chat.notebook.noContent": "Tiada kandungan",
+  "chat.notebook.settings": "Tetapan",
+  "chat.notebook.agentAccess": "Benarkan ejen mengakses nota",
 
   "chat.search.title": "Cari",
   "chat.search.results": "keputusan",

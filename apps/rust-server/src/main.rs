@@ -194,6 +194,7 @@ async fn main() {
         .merge(routes::admin::router())
         .merge(routes::reports::router())
         .merge(routes::notes::router())
+        .merge(routes::agent_notes::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

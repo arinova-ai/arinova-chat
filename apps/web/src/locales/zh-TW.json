@@ -101,6 +101,8 @@
   "chat.notebook.titlePlaceholder": "筆記標題",
   "chat.notebook.contentPlaceholder": "以 Markdown 撰寫筆記...",
   "chat.notebook.noContent": "無內容",
+  "chat.notebook.settings": "設定",
+  "chat.notebook.agentAccess": "允許 Agent 存取筆記",
 
   "chat.search.title": "搜尋",
   "chat.search.results": "筆結果",

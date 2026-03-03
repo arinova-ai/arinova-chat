@@ -101,6 +101,8 @@
   "chat.notebook.titlePlaceholder": "Note title",
   "chat.notebook.contentPlaceholder": "Write your note in Markdown...",
   "chat.notebook.noContent": "No content",
+  "chat.notebook.settings": "Settings",
+  "chat.notebook.agentAccess": "Allow agents to access notes",
 
   "chat.search.title": "Search",
   "chat.search.results": "results",

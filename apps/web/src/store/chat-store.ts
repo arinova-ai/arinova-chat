@@ -127,6 +127,7 @@ interface ChatState {
   // Notebook state
   notesByConversation: Record<string, Note[]>;
   notebookOpen: boolean;
+  agentNotesEnabledByConversation: Record<string, boolean>;
 
   // Actions
   setCurrentUserId: (id: string | null) => void;
@@ -211,6 +212,7 @@ interface ChatState {
   createNote: (conversationId: string, title: string, content: string) => Promise<Note>;
   updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string }) => Promise<void>;
   deleteNote: (conversationId: string, noteId: string) => Promise<void>;
+  toggleAgentNotesEnabled: (conversationId: string, enabled: boolean) => Promise<void>;
 
   handleWSEvent: (event: WSServerEvent) => void;
   initWS: () => () => void;
@@ -262,6 +264,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   threadLoading: false,
   notesByConversation: {},
   notebookOpen: false,
+  agentNotesEnabledByConversation: {},
 
   setCurrentUserId: (id) => set({ currentUserId: id }),
   setReplyingTo: (message) => set({ replyingTo: message }),
@@ -1212,6 +1215,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: current.filter((n) => n.id !== noteId),
       },
     });
+  },
+
+  toggleAgentNotesEnabled: async (conversationId, enabled) => {
+    // Optimistic update
+    set({
+      agentNotesEnabledByConversation: {
+        ...get().agentNotesEnabledByConversation,
+        [conversationId]: enabled,
+      },
+    });
+    try {
+      await api(
+        `/api/conversations/${conversationId}/notes/settings`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ agentNotesEnabled: enabled }),
+        }
+      );
+    } catch {
+      // Revert on error
+      set({
+        agentNotesEnabledByConversation: {
+          ...get().agentNotesEnabledByConversation,
+          [conversationId]: !enabled,
+        },
+      });
+    }
   },
 
   handleWSEvent: (event) => {

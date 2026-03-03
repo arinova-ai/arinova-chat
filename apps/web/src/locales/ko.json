@@ -99,6 +99,8 @@
   "chat.notebook.titlePlaceholder": "노트 제목",
   "chat.notebook.contentPlaceholder": "Markdown으로 노트 작성...",
   "chat.notebook.noContent": "내용 없음",
+  "chat.notebook.settings": "설정",
+  "chat.notebook.agentAccess": "에이전트가 노트에 접근하도록 허용",
 
   "chat.search.title": "검색",
   "chat.search.results": "개 결과",

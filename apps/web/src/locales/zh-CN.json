@@ -99,6 +99,8 @@
   "chat.notebook.titlePlaceholder": "笔记标题",
   "chat.notebook.contentPlaceholder": "用 Markdown 撰写笔记...",
   "chat.notebook.noContent": "无内容",
+  "chat.notebook.settings": "设置",
+  "chat.notebook.agentAccess": "允许 Agent 访问笔记",
 
   "chat.search.title": "搜索",
   "chat.search.results": "条结果",

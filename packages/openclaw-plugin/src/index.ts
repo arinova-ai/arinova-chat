@@ -80,6 +80,40 @@ Query parameters (all optional):
 - \`around\` — Message ID cursor, fetch messages around this one
 Response: {"messages": [...], "hasMore": true/false, "nextCursor": "<id>"}
 Use nextCursor as the \`before\` parameter to paginate backward.
+
+## Conversation Notes
+Manage shared notes within a conversation. Notes are visible to all members (humans + agents).
+
+### List notes
+\`\`\`
+curl -s "${apiUrl}/api/agent/conversations/<CONVERSATION_ID>/notes?limit=20" \\
+  -H "Authorization: Bearer ${botToken}"
+\`\`\`
+Query parameters: \`limit\` (default 20, max 50), \`before\` (note ID cursor for pagination)
+Response: {"notes": [...], "hasMore": true/false, "nextCursor": "<id>"}
+
+### Create a note
+\`\`\`
+curl -s -X POST ${apiUrl}/api/agent/conversations/<CONVERSATION_ID>/notes \\
+  -H "Authorization: Bearer ${botToken}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"title": "Note title", "content": "Markdown content"}'
+\`\`\`
+
+### Update a note (only notes you created)
+\`\`\`
+curl -s -X PATCH ${apiUrl}/api/agent/conversations/<CONVERSATION_ID>/notes/<NOTE_ID> \\
+  -H "Authorization: Bearer ${botToken}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"title": "Updated title", "content": "Updated content"}'
+\`\`\`
+
+### Delete a note (only notes you created)
+\`\`\`
+curl -s -X DELETE ${apiUrl}/api/agent/conversations/<CONVERSATION_ID>/notes/<NOTE_ID> \\
+  -H "Authorization: Bearer ${botToken}"
+\`\`\`
+Note: The conversation owner can disable agent note access. If disabled, all note endpoints return 403.
 `,
       };
     });

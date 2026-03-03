@@ -99,6 +99,8 @@
   "chat.notebook.titlePlaceholder": "Titulo de la nota",
   "chat.notebook.contentPlaceholder": "Escribe tu nota en Markdown...",
   "chat.notebook.noContent": "Sin contenido",
+  "chat.notebook.settings": "Configuración",
+  "chat.notebook.agentAccess": "Permitir acceso de agentes a notas",
 
   "chat.search.title": "Buscar",
   "chat.search.results": "resultados",

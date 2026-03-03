@@ -99,6 +99,8 @@
   "chat.notebook.titlePlaceholder": "ノートのタイトル",
   "chat.notebook.contentPlaceholder": "Markdownでノートを書く...",
   "chat.notebook.noContent": "内容なし",
+  "chat.notebook.settings": "設定",
+  "chat.notebook.agentAccess": "エージェントにノートへのアクセスを許可",
 
   "chat.search.title": "検索",
   "chat.search.results": "件の結果",
