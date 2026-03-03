@@ -559,6 +559,11 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       await api(`/api/conversations/${message.conversationId}/pin/${message.id}`, {
         method: "POST",
       });
+      window.dispatchEvent(
+        new CustomEvent("pins-changed", {
+          detail: { conversationId: message.conversationId },
+        })
+      );
     } catch {
       // pin failed silently
     }

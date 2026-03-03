@@ -38,7 +38,16 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
 
   useEffect(() => {
     fetchPins();
-  }, [fetchPins]);
+    // Re-fetch when pins change (pin/unpin from message bubble)
+    const onPinsChanged = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || detail.conversationId === conversationId) {
+        fetchPins();
+      }
+    };
+    window.addEventListener("pins-changed", onPinsChanged);
+    return () => window.removeEventListener("pins-changed", onPinsChanged);
+  }, [fetchPins, conversationId]);
 
   const handleUnpin = useCallback(
     async (messageId: string) => {
@@ -48,6 +57,11 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
           { method: "DELETE" }
         );
         setPins((prev) => prev.filter((p) => p.messageId !== messageId));
+        window.dispatchEvent(
+          new CustomEvent("pins-changed", {
+            detail: { conversationId },
+          })
+        );
       } catch {
         // unpin failed
       }
