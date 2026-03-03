@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { ArrowDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
+import { diagCount, diagEvent, useRenderDiag } from "@/lib/chat-diagnostics";
 
 interface MessageListProps {
   messages: Message[];
@@ -77,6 +78,14 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false); // serialization: only one load at a time
+  useRenderDiag("MessageList", () => ({
+    activeConversationId,
+    count: messages.length,
+    hasMoreUp,
+    hasMoreDown,
+    loadingUp,
+    loadingDown,
+  }));
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -130,9 +139,11 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   }, [highlightMessageId, messages, scrollRef]);
 
   const loadOlder = useCallback(async () => {
+    diagCount("msglist:loadOlder:attempt");
     const currentMessages = messagesRef.current;
     if (loadingRef.current || loadingUpRef.current || !hasMoreUp || !activeConversationId || currentMessages.length === 0)
       return;
+    diagCount("msglist:loadOlder:run");
 
     loadingRef.current = true;
     loadingUpRef.current = true;
@@ -171,9 +182,11 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   }, [hasMoreUp, activeConversationId, scrollRef]);
 
   const loadNewer = useCallback(async () => {
+    diagCount("msglist:loadNewer:attempt");
     const currentMessages = messagesRef.current;
     if (loadingRef.current || loadingDownRef.current || !hasMoreDown || !activeConversationId || currentMessages.length === 0)
       return;
+    diagCount("msglist:loadNewer:run");
 
     loadingRef.current = true;
     loadingDownRef.current = true;
@@ -230,11 +243,18 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
 
     const observer = new IntersectionObserver(
       (entries) => {
+        diagCount("msglist:observer:callback");
         if (isRestoringScrollRef.current) return;
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
-          if (entry.target === topEl) loadOlder();
-          if (entry.target === bottomEl) loadNewer();
+          if (entry.target === topEl) {
+            diagEvent("msglist:observer:top");
+            loadOlder();
+          }
+          if (entry.target === bottomEl) {
+            diagEvent("msglist:observer:bottom");
+            loadNewer();
+          }
         }
       },
       { root: container, rootMargin: "200px 0px" }

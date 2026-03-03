@@ -18,6 +18,7 @@ import { NotebookSheet } from "./notebook-sheet";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useRenderDiag } from "@/lib/chat-diagnostics";
 
 export function ChatArea() {
   const { t } = useTranslation();
@@ -41,6 +42,11 @@ export function ChatArea() {
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const dragCounterRef = useRef(0);
+  useRenderDiag("ChatArea", () => ({
+    activeConversationId,
+    searchActive,
+    conversationCount: conversations.length,
+  }));
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();

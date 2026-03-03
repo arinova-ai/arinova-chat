@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 
 export function useAutoScroll<T extends HTMLElement>(
   deps: unknown[],
@@ -118,12 +119,18 @@ export function useAutoScroll<T extends HTMLElement>(
   }, [handleScroll]);
 
   useEffect(() => {
+    diagCount("autoScroll:depsEffect");
     // New message added — reset scroll lock so user sees it.
     // Only auto-scroll if the user is already near the bottom;
     // when older messages are prepended the user is scrolled up and
     // we must NOT yank them back to the bottom.
     const count = options?.messageCount ?? 0;
     if (count > prevMessageCount.current) {
+      diagEvent("autoScroll:countIncreased", {
+        prev: prevMessageCount.current,
+        next: count,
+        conversationId: options?.conversationId ?? null,
+      });
       const isPrepending = options?.isPrependingRef?.current ?? false;
       const delta = count - prevMessageCount.current;
       const el = ref.current;
@@ -132,10 +139,12 @@ export function useAutoScroll<T extends HTMLElement>(
         : true;
 
       if (isNearBottom || !userScrolledUp.current) {
+        diagCount("autoScroll:resetToBottom");
         userScrolledUp.current = false;
         setShowScrollButton(false);
         setNewMessageCount(0);
       } else {
+        diagCount("autoScroll:userScrolledUp");
         setShowScrollButton(true);
         if (!isPrepending) {
           setNewMessageCount((prev) => prev + delta);

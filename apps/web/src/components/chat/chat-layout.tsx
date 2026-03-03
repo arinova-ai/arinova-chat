@@ -14,6 +14,7 @@ import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 import { refreshPushSubscription, setupNotificationClickHandler } from "@/lib/push";
+import { initChatDiagnostics, useRenderDiag } from "@/lib/chat-diagnostics";
 
 export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -23,6 +24,11 @@ export function ChatLayout() {
   const setCurrentUserId = useChatStore((s) => s.setCurrentUserId);
   const prevConvRef = useRef<string | null>(null);
   const router = useRouter();
+  useRenderDiag("ChatLayout", () => ({
+    activeConversationId,
+    searchActive,
+    newChatOpen,
+  }));
 
   // Sync current user ID into the store for message ownership checks
   const { data: session } = authClient.useSession();
@@ -31,6 +37,7 @@ export function ChatLayout() {
   }, [session?.user?.id, setCurrentUserId]);
 
   useEffect(() => {
+    initChatDiagnostics();
     const state = useChatStore.getState();
     state.loadAgents();
     state.loadConversations();

@@ -3,6 +3,7 @@ import type { Agent, Conversation, Message, ThreadSummary, Note } from "@arinova
 import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
+import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 
 interface ConversationWithAgent extends Conversation {
   agentName: string;
@@ -267,6 +268,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   agentNotesEnabledByConversation: {},
 
   setCurrentUserId: (id) => {
+    diagCount("action:setCurrentUserId");
     if (get().currentUserId === id) return;
     set({ currentUserId: id });
   },
@@ -287,6 +289,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setActiveConversation: (id) => {
+    diagCount("action:setActiveConversation");
+    diagEvent("action:setActiveConversation:input", {
+      nextId: id,
+      currentId: get().activeConversationId,
+      searchActive: get().searchActive,
+    });
     if (id === null) {
       if (get().activeConversationId === null) return;
       set({ activeConversationId: null });
@@ -331,6 +339,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   setSearchQuery: (query) => {
+    diagCount("action:setSearchQuery");
     if (get().searchQuery === query) return;
     set({ searchQuery: query });
   },
@@ -1254,6 +1263,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   handleWSEvent: (event) => {
+    diagCount(`ws:${event.type}`);
     if (event.type === "pong") return;
 
     // If any event carries a conversationId not in our local store,
