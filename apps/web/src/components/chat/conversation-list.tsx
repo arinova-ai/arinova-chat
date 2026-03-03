@@ -17,6 +17,8 @@ export function ConversationList() {
   const unreadCounts = useChatStore((s) => s.unreadCounts);
   const agentHealth = useChatStore((s) => s.agentHealth);
   const thinkingAgents = useChatStore((s) => s.thinkingAgents);
+  const mutedConversations = useChatStore((s) => s.mutedConversations);
+  const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {
@@ -68,6 +70,8 @@ export function ConversationList() {
               isOnline={conv.agentId ? agentHealth[conv.agentId]?.status === "online" : false}
               isThinking={(thinkingAgents[conv.id]?.length ?? 0) > 0}
               isVerified={conv.isVerified}
+              isMuted={!!mutedConversations[conv.id]}
+              onMuteToggle={() => toggleMuteConversation(conv.id)}
               onDelete={() => deleteConversation(conv.id)}
             />
           ))}
