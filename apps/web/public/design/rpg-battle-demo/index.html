@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPG Battle Demo - Pixellab + PixiJS</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f1729; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Courier New', monospace; color: #e0e0e0; }
+  h1 { margin-bottom: 12px; font-size: 18px; color: #3b82f6; }
+  #game-container { border: 2px solid #334; border-radius: 8px; overflow: hidden; image-rendering: pixelated; }
+  .info { margin-top: 12px; font-size: 13px; color: #888; text-align: center; }
+  .info span { color: #3b82f6; }
+</style>
+</head>
+<body>
+<h1>RPG Battle Demo</h1>
+<div id="game-container"></div>
+<div class="info">
+  Knight: <span>idle → attack</span> loop &nbsp;|&nbsp;
+  Goblin: <span>idle → hit</span> loop &nbsp;|&nbsp;
+  Background: <span>rpg-office-bg-v3</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+<script>
+(async () => {
+  const SCALE = 1.0;
+  const FRAME_SIZE = 64;
+  const BG_PATH = '../rpg-office-bg-v3.png';
+
+  // Init PixiJS
+  const app = new PIXI.Application({
+    width: 960,
+    height: 280,
+    backgroundColor: 0x0f1729,
+    antialias: false,
+  });
+  document.getElementById('game-container').appendChild(app.view);
+
+  // Disable smoothing for pixel art
+  PIXI.BaseTexture.defaultOptions.scaleMode = PIXI.SCALE_MODES.NEAREST;
+
+  // Load background
+  const bgTex = await PIXI.Assets.load(BG_PATH);
+  const bg = new PIXI.Sprite(bgTex);
+  const bgScale = 960 / bgTex.width;
+  bg.scale.set(bgScale);
+  app.stage.addChild(bg);
+
+  // Helper: load sprite sheet frames from individual PNGs
+  async function loadFrames(basePath, prefix, count) {
+    const frames = [];
+    for (let i = 1; i <= count; i++) {
+      const num = String(i).padStart(2, '0');
+      const tex = await PIXI.Assets.load(`${basePath}/${prefix}-${num}.png`);
+      frames.push(tex);
+    }
+    return frames;
+  }
+
+  // Load all animation frames
+  const knightIdleFrames = await loadFrames('.', 'knight-idle', 4);
+  const knightAttackFrames = await loadFrames('.', 'knight-attack', 4);
+  const goblinIdleFrames = await loadFrames('.', 'goblin-idle', 4);
+  const goblinHitFrames = await loadFrames('.', 'goblin-hit', 4);
+
+  // Create animated sprites
+  const knight = new PIXI.AnimatedSprite(knightIdleFrames);
+  knight.anchor.set(0.5, 1);
+  knight.scale.set(-SCALE, SCALE); // negative X to face LEFT
+  knight.x = 330;
+  knight.y = 220;
+  knight.animationSpeed = 0.08;
+  knight.play();
+  app.stage.addChild(knight);
+
+  const goblin = new PIXI.AnimatedSprite(goblinIdleFrames);
+  goblin.anchor.set(0.5, 1);
+  goblin.scale.set(-SCALE, SCALE); // negative X to face RIGHT (originally faces left)
+  goblin.x = 200;
+  goblin.y = 220;
+  goblin.animationSpeed = 0.08;
+  goblin.play();
+  app.stage.addChild(goblin);
+
+  // Simple battle loop: idle → attack/hit → idle → repeat
+  let state = 'idle';
+  let timer = 0;
+  const IDLE_TIME = 90;
+
+  app.ticker.add(() => {
+    timer++;
+
+    if (state === 'idle' && timer >= IDLE_TIME) {
+      state = 'attack';
+      timer = 0;
+
+      // Knight plays attack
+      knight.textures = knightAttackFrames;
+      knight.animationSpeed = 0.12;
+      knight.loop = false;
+      knight.gotoAndPlay(0);
+
+      // Goblin plays hit
+      goblin.textures = goblinHitFrames;
+      goblin.animationSpeed = 0.1;
+      goblin.loop = false;
+      goblin.gotoAndPlay(0);
+
+      // Goblin flash red
+      goblin.tint = 0xff6666;
+      setTimeout(() => { goblin.tint = 0xffffff; }, 300);
+
+      // When knight attack finishes, both go back to idle
+      knight.onComplete = () => {
+        state = 'idle';
+        timer = 0;
+        knight.textures = knightIdleFrames;
+        knight.animationSpeed = 0.08;
+        knight.loop = true;
+        knight.play();
+        goblin.textures = goblinIdleFrames;
+        goblin.animationSpeed = 0.08;
+        goblin.loop = true;
+        goblin.play();
+      };
+    }
+  });
+})();
+</script>
+</body>
+</html>
