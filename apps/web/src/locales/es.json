@@ -409,7 +409,9 @@
   "stickerShop.messagePlaceholder": "Agrega un mensaje personal...",
   "stickerShop.sendGift": "Enviar Regalo",
   "stickerShop.downloaded": "Descargado",
+  "stickerShop.purchaseFailed": "Error en la compra",
   "stickerShop.noFriends": "Sin amigos aún",
+  "stickerShop.friendsError": "Error al cargar amigos",
 
   "creator.title": "Consola de Creador",
   "creator.subtitle": "Administra tus creaciones",
@@ -536,6 +538,13 @@
   "friends.tabFriends": "Amigos",
   "friends.tabRequests": "Solicitudes",
   "friends.tabAdd": "Agregar Amigo",
+  "friends.search.placeholder": "Ingresa nombre de usuario exacto...",
+  "friends.search.button": "Buscar",
+  "friends.search.noResults": "No se encontraron usuarios",
+  "friends.search.sent": "Enviado",
+  "friends.search.addFriend": "Agregar amigo",
+  "friends.search.error": "Error al buscar usuarios",
+  "friends.search.requestFailed": "Error al enviar solicitud de amistad",
 
   "community.title": "Comunidad",
   "community.subtitle": "Conecta con creadores y comunidades",

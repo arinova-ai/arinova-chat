@@ -411,7 +411,9 @@
   "stickerShop.messagePlaceholder": "Add a personal message...",
   "stickerShop.sendGift": "Send Gift",
   "stickerShop.downloaded": "Downloaded",
+  "stickerShop.purchaseFailed": "Purchase failed",
   "stickerShop.noFriends": "No friends yet",
+  "stickerShop.friendsError": "Failed to load friends",
 
   "creator.title": "Creator Console",
   "creator.subtitle": "Manage your creations",
@@ -538,6 +540,13 @@
   "friends.tabFriends": "Friends",
   "friends.tabRequests": "Requests",
   "friends.tabAdd": "Add Friend",
+  "friends.search.placeholder": "Enter exact username...",
+  "friends.search.button": "Search",
+  "friends.search.noResults": "No users found",
+  "friends.search.sent": "Sent",
+  "friends.search.addFriend": "Add Friend",
+  "friends.search.error": "Failed to search users",
+  "friends.search.requestFailed": "Failed to send friend request",
 
   "community.title": "Community",
   "community.subtitle": "Connect with creators and communities",

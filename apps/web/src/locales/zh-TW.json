@@ -411,7 +411,9 @@
   "stickerShop.messagePlaceholder": "附上一段個人訊息...",
   "stickerShop.sendGift": "送出禮物",
   "stickerShop.downloaded": "已下載",
+  "stickerShop.purchaseFailed": "購買失敗",
   "stickerShop.noFriends": "尚無好友",
+  "stickerShop.friendsError": "載入好友列表失敗",
 
   "creator.title": "創作者主控台",
   "creator.subtitle": "管理你的作品",
@@ -538,6 +540,13 @@
   "friends.tabFriends": "好友",
   "friends.tabRequests": "邀請",
   "friends.tabAdd": "新增好友",
+  "friends.search.placeholder": "輸入完整使用者名稱...",
+  "friends.search.button": "搜尋",
+  "friends.search.noResults": "找不到使用者",
+  "friends.search.sent": "已送出",
+  "friends.search.addFriend": "加好友",
+  "friends.search.error": "搜尋失敗",
+  "friends.search.requestFailed": "好友邀請送出失敗",
 
   "community.title": "社群",
   "community.subtitle": "與創作者和社群互動交流",

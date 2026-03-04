@@ -8,6 +8,7 @@ import { Search, UserPlus, Loader2, Check } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
+import { useTranslation } from "@/lib/i18n";
 
 interface SearchUser {
   id: string;
@@ -22,6 +23,7 @@ interface UserSearchProps {
 }
 
 export function UserSearch({ onRequestSent }: UserSearchProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,20 +40,16 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
     setSearched(true);
     try {
       const data = await api<SearchUser[]>(
-        `/api/users/search?q=${encodeURIComponent(q)}`
+        `/api/users/search?q=${encodeURIComponent(q)}&exact=true`
       );
-      // Exact match only — filter to users whose username matches exactly
-      const exact = data.filter(
-        (u) => u.username?.toLowerCase() === q.toLowerCase()
-      );
-      setResults(exact);
+      setResults(data);
     } catch {
       setResults([]);
-      setError("Failed to search users");
+      setError(t("friends.search.error"));
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, t]);
 
   const handleSendRequest = async (username: string) => {
     setSendingUsername(username);
@@ -65,7 +63,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
       onRequestSent?.(username);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to send friend request"
+        err instanceof Error ? err.message : t("friends.search.requestFailed")
       );
     } finally {
       setSendingUsername(null);
@@ -78,7 +76,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Enter exact username..."
+            placeholder={t("friends.search.placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") searchUsers(); }}
@@ -97,7 +95,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
           ) : (
             <Search className="h-3.5 w-3.5" />
           )}
-          Search
+          {t("friends.search.button")}
         </Button>
       </div>
 
@@ -116,7 +114,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
 
         {!loading && searched && results.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No users found
+            {t("friends.search.noResults")}
           </p>
         )}
 
@@ -153,7 +151,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
                 {isSent ? (
                   <span className="flex items-center gap-1 text-xs text-green-400">
                     <Check className="h-3.5 w-3.5" />
-                    Sent
+                    {t("friends.search.sent")}
                   </span>
                 ) : (
                   <Button
@@ -168,7 +166,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
                     ) : (
                       <UserPlus className="h-3.5 w-3.5" />
                     )}
-                    Add Friend
+                    {t("friends.search.addFriend")}
                   </Button>
                 )}
               </div>

@@ -409,7 +409,9 @@
   "stickerShop.messagePlaceholder": "メッセージを添えて...",
   "stickerShop.sendGift": "ギフトを送る",
   "stickerShop.downloaded": "ダウンロード済み",
+  "stickerShop.purchaseFailed": "購入に失敗しました",
   "stickerShop.noFriends": "フレンドがいません",
+  "stickerShop.friendsError": "フレンドリストの読み込みに失敗しました",
 
   "creator.title": "クリエイターコンソール",
   "creator.subtitle": "作品を管理する",
@@ -536,6 +538,13 @@
   "friends.tabFriends": "フレンド",
   "friends.tabRequests": "リクエスト",
   "friends.tabAdd": "フレンドを追加",
+  "friends.search.placeholder": "ユーザー名を入力...",
+  "friends.search.button": "検索",
+  "friends.search.noResults": "ユーザーが見つかりません",
+  "friends.search.sent": "送信済み",
+  "friends.search.addFriend": "フレンド追加",
+  "friends.search.error": "検索に失敗しました",
+  "friends.search.requestFailed": "フレンドリクエストの送信に失敗しました",
 
   "community.title": "コミュニティ",
   "community.subtitle": "クリエイターやコミュニティとつながろう",

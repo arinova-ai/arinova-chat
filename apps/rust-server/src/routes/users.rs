@@ -37,6 +37,7 @@ struct CheckUsernameQuery {
 struct SearchQuery {
     q: String,
     limit: Option<i64>,
+    exact: Option<bool>,
 }
 
 /// GET /api/users/me — Get current user info including username
@@ -147,24 +148,39 @@ async fn check_username(
 }
 
 /// GET /api/users/search?q=prefix — Search users by username prefix
+/// Pass `exact=true` to match username exactly instead of prefix.
 async fn search_users(
     State(state): State<AppState>,
     _user: AuthUser,
     Query(params): Query<SearchQuery>,
 ) -> Response {
     let limit = params.limit.unwrap_or(20).min(50);
-    let pattern = format!("{}%", params.q.to_lowercase());
+    let exact = params.exact.unwrap_or(false);
 
-    let results = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
-        r#"SELECT id, name, image, username, is_verified FROM "user"
-           WHERE username ILIKE $1
-           ORDER BY username
-           LIMIT $2"#,
-    )
-    .bind(&pattern)
-    .bind(limit)
-    .fetch_all(&state.db)
-    .await;
+    let results = if exact {
+        let q = params.q.to_lowercase();
+        sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
+            r#"SELECT id, name, image, username, is_verified FROM "user"
+               WHERE LOWER(username) = $1
+               LIMIT $2"#,
+        )
+        .bind(&q)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        let pattern = format!("{}%", params.q.to_lowercase());
+        sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
+            r#"SELECT id, name, image, username, is_verified FROM "user"
+               WHERE username ILIKE $1
+               ORDER BY username
+               LIMIT $2"#,
+        )
+        .bind(&pattern)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    };
 
     match results {
         Ok(rows) => {

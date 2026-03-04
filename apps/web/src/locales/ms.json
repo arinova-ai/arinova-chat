@@ -409,7 +409,9 @@
   "stickerShop.messagePlaceholder": "Tambah mesej peribadi...",
   "stickerShop.sendGift": "Hantar Hadiah",
   "stickerShop.downloaded": "Dimuat turun",
+  "stickerShop.purchaseFailed": "Pembelian gagal",
   "stickerShop.noFriends": "Tiada rakan",
+  "stickerShop.friendsError": "Gagal memuatkan senarai rakan",
 
   "creator.title": "Konsol Pencipta",
   "creator.subtitle": "Urus ciptaan anda",
@@ -536,6 +538,13 @@
   "friends.tabFriends": "Rakan",
   "friends.tabRequests": "Permintaan",
   "friends.tabAdd": "Tambah Rakan",
+  "friends.search.placeholder": "Masukkan nama pengguna tepat...",
+  "friends.search.button": "Cari",
+  "friends.search.noResults": "Tiada pengguna dijumpai",
+  "friends.search.sent": "Dihantar",
+  "friends.search.addFriend": "Tambah Rakan",
+  "friends.search.error": "Gagal mencari pengguna",
+  "friends.search.requestFailed": "Gagal menghantar permintaan rakan",
 
   "community.title": "Komuniti",
   "community.subtitle": "Berhubung dengan pencipta dan komuniti",
