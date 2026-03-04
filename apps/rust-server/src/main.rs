@@ -220,6 +220,7 @@ async fn main() {
         .merge(routes::reports::router())
         .merge(routes::notes::router())
         .merge(routes::agent_notes::router())
+        .merge(routes::link_preview::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)
