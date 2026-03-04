@@ -276,7 +276,7 @@
   "settings.subtitle": "使用体験をカスタマイズ",
 
   "settings.nav.profile": "プロフィール",
-  "settings.nav.appearance": "外観",
+  "settings.nav.language": "言語",
   "settings.nav.notifications": "通知",
   "settings.nav.privacy": "プライバシー",
 
@@ -309,6 +309,8 @@
   "settings.profile.passwordChanged": "パスワードを変更しました",
   "settings.profile.passwordChangeFailed": "パスワードの変更に失敗しました",
 
+  "settings.language.title": "言語",
+  "settings.language.subtitle": "お好みの言語を選択してください。",
   "settings.appearance.title": "外観",
   "settings.appearance.subtitle": "アプリの外観をカスタマイズします。",
   "settings.appearance.theme": "テーマ",

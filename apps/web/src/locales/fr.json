@@ -276,7 +276,7 @@
   "settings.subtitle": "Personnalisez votre expérience",
 
   "settings.nav.profile": "Profil",
-  "settings.nav.appearance": "Apparence",
+  "settings.nav.language": "Langue",
   "settings.nav.notifications": "Notifications",
   "settings.nav.privacy": "Confidentialité",
 
@@ -309,6 +309,8 @@
   "settings.profile.passwordChanged": "Mot de passe modifié avec succès",
   "settings.profile.passwordChangeFailed": "Échec du changement de mot de passe",
 
+  "settings.language.title": "Langue",
+  "settings.language.subtitle": "Choisissez votre langue preferee.",
   "settings.appearance.title": "Apparence",
   "settings.appearance.subtitle": "Personnalisez l'apparence de l'application.",
   "settings.appearance.theme": "Thème",

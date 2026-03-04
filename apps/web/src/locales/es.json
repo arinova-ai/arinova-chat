@@ -276,7 +276,7 @@
   "settings.subtitle": "Personaliza tu experiencia",
 
   "settings.nav.profile": "Perfil",
-  "settings.nav.appearance": "Apariencia",
+  "settings.nav.language": "Idioma",
   "settings.nav.notifications": "Notificaciones",
   "settings.nav.privacy": "Privacidad",
 
@@ -309,6 +309,8 @@
   "settings.profile.passwordChanged": "Contrasena cambiada exitosamente",
   "settings.profile.passwordChangeFailed": "Error al cambiar la contrasena",
 
+  "settings.language.title": "Idioma",
+  "settings.language.subtitle": "Elige tu idioma preferido.",
   "settings.appearance.title": "Apariencia",
   "settings.appearance.subtitle": "Personaliza la apariencia de la aplicacion.",
   "settings.appearance.theme": "Tema",

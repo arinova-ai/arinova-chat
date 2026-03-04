@@ -276,7 +276,7 @@
   "settings.subtitle": "Sesuaikan pengalaman anda",
 
   "settings.nav.profile": "Profil",
-  "settings.nav.appearance": "Penampilan",
+  "settings.nav.language": "Bahasa",
   "settings.nav.notifications": "Pemberitahuan",
   "settings.nav.privacy": "Privasi",
 
@@ -309,6 +309,8 @@
   "settings.profile.passwordChanged": "Kata laluan berjaya ditukar",
   "settings.profile.passwordChangeFailed": "Gagal menukar kata laluan",
 
+  "settings.language.title": "Bahasa",
+  "settings.language.subtitle": "Pilih bahasa pilihan anda.",
   "settings.appearance.title": "Penampilan",
   "settings.appearance.subtitle": "Sesuaikan rupa dan rasa aplikasi.",
   "settings.appearance.theme": "Tema",

@@ -276,7 +276,7 @@
   "settings.subtitle": "自定义你的使用体验",
 
   "settings.nav.profile": "个人资料",
-  "settings.nav.appearance": "外观",
+  "settings.nav.language": "语言",
   "settings.nav.notifications": "通知",
   "settings.nav.privacy": "隐私",
 
@@ -309,6 +309,8 @@
   "settings.profile.passwordChanged": "密码修改成功",
   "settings.profile.passwordChangeFailed": "密码修改失败",
 
+  "settings.language.title": "语言",
+  "settings.language.subtitle": "选择您偏好的语言。",
   "settings.appearance.title": "外观",
   "settings.appearance.subtitle": "自定义应用程序的外观与风格。",
   "settings.appearance.theme": "主题",

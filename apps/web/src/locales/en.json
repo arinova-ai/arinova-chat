@@ -278,7 +278,7 @@
   "settings.subtitle": "Customize your experience",
 
   "settings.nav.profile": "Profile",
-  "settings.nav.appearance": "Appearance",
+  "settings.nav.language": "Language",
   "settings.nav.notifications": "Notifications",
   "settings.nav.privacy": "Privacy",
 
@@ -311,6 +311,8 @@
   "settings.profile.passwordChanged": "Password changed successfully",
   "settings.profile.passwordChangeFailed": "Failed to change password",
 
+  "settings.language.title": "Language",
+  "settings.language.subtitle": "Choose your preferred language.",
   "settings.appearance.title": "Appearance",
   "settings.appearance.subtitle": "Customize the look and feel of the app.",
   "settings.appearance.theme": "Theme",

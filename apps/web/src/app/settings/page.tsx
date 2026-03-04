@@ -19,7 +19,7 @@ import {
   Clock,
   ShieldBan,
   Camera,
-  Palette,
+  Languages,
   ChevronRight,
   Monitor,
   Zap,
@@ -42,7 +42,7 @@ import { useTranslation, type Locale } from "@/lib/i18n";
 
 // ───── Types ─────
 
-type SettingsSection = "profile" | "appearance" | "notifications" | "privacy";
+type SettingsSection = "profile" | "language" | "notifications" | "privacy";
 
 interface NotificationPrefs {
   globalEnabled: boolean;
@@ -71,7 +71,7 @@ interface BlockedUser {
 
 const NAV_ITEMS: { id: SettingsSection; labelKey: string; icon: React.ReactNode }[] = [
   { id: "profile", labelKey: "settings.nav.profile", icon: <User className="h-4 w-4" /> },
-  { id: "appearance", labelKey: "settings.nav.appearance", icon: <Palette className="h-4 w-4" /> },
+  { id: "language", labelKey: "settings.nav.language", icon: <Languages className="h-4 w-4" /> },
   { id: "notifications", labelKey: "settings.nav.notifications", icon: <Bell className="h-4 w-4" /> },
   { id: "privacy", labelKey: "settings.nav.privacy", icon: <ShieldBan className="h-4 w-4" /> },
 ];
@@ -863,7 +863,7 @@ function ProfilePanel() {
   );
 }
 
-// ───── Appearance Panel ─────
+// ───── Language Panel ─────
 
 const THEME_QUALITY_KEY = "arinova_theme_quality";
 
@@ -885,7 +885,7 @@ function useCurrentThemeRenderer(): string | null {
   return renderer;
 }
 
-function AppearancePanel() {
+function LanguagePanel() {
   const { t, locale, setLocale } = useTranslation();
   const [quality, setQuality] = useState<"high" | "performance">(readThemeQuality);
   const themeRenderer = useCurrentThemeRenderer();
@@ -898,8 +898,8 @@ function AppearancePanel() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold">{t("settings.appearance.title")}</h2>
-        <p className="text-sm text-muted-foreground">{t("settings.appearance.subtitle")}</p>
+        <h2 className="text-2xl font-bold">{t("settings.language.title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("settings.language.subtitle")}</p>
       </div>
 
       <div className="space-y-6">
@@ -1359,7 +1359,7 @@ function SettingsContent() {
   const renderPanel = () => {
     switch (activeSection) {
       case "profile": return <ProfilePanel />;
-      case "appearance": return <AppearancePanel />;
+      case "language": return <LanguagePanel />;
       case "notifications": return <NotificationPanel />;
       case "privacy": return <PrivacyPanel />;
     }
