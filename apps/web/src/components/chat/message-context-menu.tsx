@@ -143,8 +143,9 @@ export function MessageContextMenu({
     // Emoji above clone
     const emojiTop = cloneTop - GAP - emojiH;
 
-    // Menu below clone
-    const menuTop = cloneTop + cloneH + GAP;
+    // Menu below clone — clamp so it never goes off-screen (may overlap clone, like Telegram)
+    const idealMenuTop = cloneTop + cloneH + GAP;
+    const menuTop = Math.min(idealMenuTop, vpTop + vh - menuH - VIEWPORT_PAD);
     const availableForMenu = vpTop + vh - menuTop - VIEWPORT_PAD;
     const menuMaxH = Math.min(menuH, Math.max(availableForMenu, 120));
 
@@ -241,7 +242,10 @@ export function MessageContextMenu({
   return createPortal(
     <div
       className={`fixed inset-0 z-[100] transition-opacity duration-150 ${visible ? "opacity-100" : "opacity-0"}`}
-      onClick={close}
+      onClick={() => {
+        if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) return;
+        close();
+      }}
     >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
