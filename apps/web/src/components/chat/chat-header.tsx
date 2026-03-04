@@ -14,7 +14,6 @@ import {
   ArrowLeft,
   Bot,
   Users,
-  Clock,
   Bell,
   BellOff,
   Menu,
@@ -76,8 +75,6 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
-  const showTimestamps = useChatStore((s) => s.showTimestamps);
-  const toggleTimestamps = useChatStore((s) => s.toggleTimestamps);
   const mutedConversations = useChatStore((s) => s.mutedConversations);
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
   const isMuted = conversationId ? mutedConversations[conversationId] : false;
@@ -191,15 +188,6 @@ export function ChatHeader({
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-8 w-8", showTimestamps && "text-blue-400")}
-              onClick={toggleTimestamps}
-              title={showTimestamps ? t("chat.header.hideTimestamps") : t("chat.header.showTimestamps")}
-            >
-              <Clock className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
               className={cn("h-8 w-8", isMuted && "text-red-400")}
               onClick={handleMuteToggle}
               title={isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
@@ -284,15 +272,6 @@ export function ChatHeader({
               title={t("chat.search.inConversation")}
             >
               <Search className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", showTimestamps && "text-blue-400")}
-              onClick={toggleTimestamps}
-              title={showTimestamps ? t("chat.header.hideTimestamps") : t("chat.header.showTimestamps")}
-            >
-              <Clock className="h-4 w-4" />
             </Button>
             {conversationId && (
               <Button

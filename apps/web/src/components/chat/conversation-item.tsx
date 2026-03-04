@@ -115,9 +115,20 @@ export function ConversationItem({
 }: ConversationItemProps) {
   const { t } = useTranslation();
   const isDesktop = useSyncExternalStore(subscribeHover, getHoverSnapshot, getHoverServerSnapshot);
-  const preview = lastMessage
-    ? truncate(lastMessage.content.replace(/\n/g, " "), 50)
-    : t("chat.noMessages");
+  const preview = (() => {
+    if (!lastMessage) return t("chat.noMessages");
+    const audioAtt = lastMessage.attachments?.find((a) =>
+      a.fileType.startsWith("audio/")
+    );
+    if (audioAtt) {
+      const dur = audioAtt.duration ?? 0;
+      const m = Math.floor(dur / 60);
+      const s = dur % 60;
+      const ts = `${m}:${String(s).padStart(2, "0")}`;
+      return `🎙 ${t("chat.voiceMessage")} (${ts})`;
+    }
+    return truncate(lastMessage.content.replace(/\n/g, " "), 50);
+  })();
 
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(title ?? agentName);

@@ -112,7 +112,6 @@ interface ChatState {
     { status: "online" | "offline" | "error"; latencyMs: number | null }
   >;
   agentSkills: Record<string, AgentSkill[]>;
-  showTimestamps: boolean;
   mutedConversations: Record<string, boolean>;
   ttsEnabled: boolean;
   reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
@@ -221,7 +220,6 @@ interface ChatState {
   insertSystemMessage: (content: string) => void;
   clearConversation: (conversationId: string) => Promise<void>;
   getConversationStatus: () => string;
-  toggleTimestamps: () => void;
   toggleMuteConversation: (conversationId: string) => void;
   setTtsEnabled: (enabled: boolean) => void;
   toggleReaction: (messageId: string, emoji: string) => Promise<void>;
@@ -271,10 +269,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
-  showTimestamps:
-    typeof window !== "undefined"
-      ? localStorage.getItem("arinova_timestamps") === "true"
-      : false,
   mutedConversations:
     typeof window !== "undefined"
       ? JSON.parse(localStorage.getItem("arinova_muted") || "{}")
@@ -1179,13 +1173,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return lines.join("\n");
   },
 
-  toggleTimestamps: () => {
-    const next = !get().showTimestamps;
-    set({ showTimestamps: next });
-    if (typeof window !== "undefined") {
-      localStorage.setItem("arinova_timestamps", String(next));
-    }
-  },
 
   toggleMuteConversation: (conversationId) => {
     const muted = { ...get().mutedConversations };
