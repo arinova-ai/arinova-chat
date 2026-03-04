@@ -15,6 +15,7 @@ import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
 import { NotebookSheet } from "./notebook-sheet";
+import { MediaFilesPanel, type MediaFilesTab } from "./media-files-panel";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
@@ -40,6 +41,8 @@ export function ChatArea() {
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
   const [notebookOpen, setNotebookOpen] = useState(false);
+  const [mediaFilesOpen, setMediaFilesOpen] = useState(false);
+  const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const dragCounterRef = useRef(0);
@@ -144,6 +147,8 @@ export function ChatArea() {
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
         onNotebookClick={() => setNotebookOpen(true)}
+        onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
+        onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
       />
       <ErrorBoundary scope="PinnedMessagesBar">
         {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
@@ -200,6 +205,12 @@ export function ChatArea() {
           />
         </ErrorBoundary>
       )}
+      <MediaFilesPanel
+        open={mediaFilesOpen}
+        onOpenChange={setMediaFilesOpen}
+        conversationId={conversation.id}
+        initialTab={mediaFilesTab}
+      />
     </div>
   );
 }

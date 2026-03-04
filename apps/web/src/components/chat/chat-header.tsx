@@ -51,6 +51,8 @@ interface ChatHeaderProps {
   onAddMemberClick?: () => void;
   onThreadsClick?: () => void;
   onNotebookClick?: () => void;
+  onPhotosClick?: () => void;
+  onFilesClick?: () => void;
 }
 
 export function ChatHeader({
@@ -69,6 +71,8 @@ export function ChatHeader({
   onAddMemberClick,
   onThreadsClick,
   onNotebookClick,
+  onPhotosClick,
+  onFilesClick,
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -253,11 +257,11 @@ export function ChatHeader({
                     {t("chat.header.members")}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={() => alert(t("chat.header.photosSoon"))}>
+                <DropdownMenuItem onClick={onPhotosClick}>
                   <Image className="h-4 w-4" />
                   {t("chat.header.photos")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => alert(t("chat.header.filesSoon"))}>
+                <DropdownMenuItem onClick={onFilesClick}>
                   <FileText className="h-4 w-4" />
                   {t("chat.header.files")}
                 </DropdownMenuItem>

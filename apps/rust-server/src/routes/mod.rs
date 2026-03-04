@@ -34,6 +34,7 @@ pub mod notes;
 pub mod agent_notes;
 pub mod link_preview;
 pub mod spaces;
+pub mod media;
 
 use axum::Router;
 use crate::AppState;
@@ -76,5 +77,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(agent_notes::router())
         .merge(link_preview::router())
         .merge(spaces::router())
+        .merge(media::router())
         .with_state(state)
 }
