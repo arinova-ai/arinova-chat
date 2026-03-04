@@ -7,7 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2, Coins } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function CreateCommunityContent() {
@@ -15,9 +15,6 @@ function CreateCommunityContent() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [communityType, setCommunityType] = useState<"lounge" | "club">("lounge");
-  const [joinFee, setJoinFee] = useState(0);
-  const [monthlyFee, setMonthlyFee] = useState(0);
-  const [agentCallFee, setAgentCallFee] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const isValid = name.trim().length > 0 && name.trim().length <= 100;
@@ -34,9 +31,9 @@ function CreateCommunityContent() {
           name: name.trim(),
           description: description.trim() || undefined,
           type: communityType,
-          joinFee: Math.max(0, joinFee),
-          monthlyFee: Math.max(0, monthlyFee),
-          agentCallFee: Math.max(0, agentCallFee),
+          joinFee: 0,
+          monthlyFee: 0,
+          agentCallFee: 0,
         }),
       });
       router.push(`/community/${created.id}`);
@@ -134,65 +131,13 @@ function CreateCommunityContent() {
               </div>
             </div>
 
-            {/* Pricing */}
-            <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+            {/* Pricing — communities created here are always free */}
+            <div className="rounded-xl border border-border bg-card p-5 space-y-2">
               <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Pricing
               </label>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Coins className="h-3 w-3 text-yellow-500" />
-                    Join Fee
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={joinFee}
-                    onChange={(e) =>
-                      setJoinFee(Math.max(0, parseInt(e.target.value) || 0))
-                    }
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Coins className="h-3 w-3 text-yellow-500" />
-                    Monthly Fee
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={monthlyFee}
-                    onChange={(e) =>
-                      setMonthlyFee(Math.max(0, parseInt(e.target.value) || 0))
-                    }
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Coins className="h-3 w-3 text-yellow-500" />
-                    Agent Call Fee
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={agentCallFee}
-                    onChange={(e) =>
-                      setAgentCallFee(
-                        Math.max(0, parseInt(e.target.value) || 0)
-                      )
-                    }
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-              </div>
-
-              <p className="text-[10px] text-muted-foreground">
-                Set all to 0 for a free community. You earn 70% of fees
-                collected.
+              <p className="text-sm text-muted-foreground">
+                Free community. To create a paid community, use the Creator Console.
               </p>
             </div>
 

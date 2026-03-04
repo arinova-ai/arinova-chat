@@ -8,7 +8,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { Search, Star, Store, MessageSquare, Coins, Plus } from "lucide-react";
+import { Search, Star, Store, MessageSquare, Coins } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { PageTitle } from "@/components/ui/page-title";
 
@@ -124,14 +124,6 @@ function AgentHubContent() {
               icon={Store}
             />
             <div className="flex-1" />
-            <Button
-              size="sm"
-              className="brand-gradient-btn gap-1 hidden sm:flex"
-              onClick={() => router.push("/creator/new")}
-            >
-              <Plus className="h-4 w-4" />
-              {t("agentHub.createAgent")}
-            </Button>
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
