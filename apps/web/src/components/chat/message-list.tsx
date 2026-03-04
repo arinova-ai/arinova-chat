@@ -98,7 +98,14 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       .filter(m => selectedIds.has(m.id))
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-    const text = selectedMessages.map(m => m.content).join("\n\n");
+    const text = selectedMessages.map(m => {
+      const parts: string[] = [];
+      if (m.content) parts.push(m.content);
+      if (m.attachments?.length) {
+        parts.push(...m.attachments.map((a: { url: string; filename?: string }) => a.url));
+      }
+      return parts.join("\n");
+    }).join("\n\n");
 
     try {
       await navigator.clipboard.writeText(text);

@@ -71,6 +71,72 @@ interface ChatInputProps {
   onDropHandled?: () => void;
 }
 
+// ---------- File Preview Grid (memoised object URLs) ----------
+
+function FilePreviewGrid({
+  files,
+  onRemove,
+  onClearAll,
+  label,
+}: {
+  files: File[];
+  onRemove: (idx: number) => void;
+  onClearAll: () => void;
+  label: string;
+}) {
+  const previewUrls = useMemo(
+    () => files.map((f) => (f.type.startsWith("image/") ? URL.createObjectURL(f) : null)),
+    [files],
+  );
+
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => url && URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
+
+  return (
+    <div className="mb-2 space-y-1">
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onClearAll}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        {files.map((file, idx) => (
+          <div key={`${file.name}-${idx}`} className="relative group/thumb">
+            {previewUrls[idx] ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={previewUrls[idx]}
+                alt={file.name}
+                className="h-16 w-full rounded-md object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-full items-center justify-center rounded-md bg-secondary">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => onRemove(idx)}
+              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover/thumb:opacity-100"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Component ----------
 
 export function ChatInput({ droppedFiles, onDropHandled }: ChatInputProps = {}) {
@@ -1112,49 +1178,12 @@ export function ChatInput({ droppedFiles, onDropHandled }: ChatInputProps = {}) 
 
         {/* File preview grid */}
         {pendingFiles.length > 0 && (
-          <div className="mb-2 space-y-1">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs text-muted-foreground">
-                {t("chat.imageCount").replace("{n}", String(pendingFiles.length)).replace("{max}", "9")}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setPendingFiles([])}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-            <div className="grid grid-cols-4 gap-1">
-              {pendingFiles.map((file, idx) => {
-                const isImg = file.type.startsWith("image/");
-                return (
-                  <div key={`${file.name}-${idx}`} className="relative group/thumb">
-                    {isImg ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt={file.name}
-                        className="h-16 w-full rounded-md object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-16 w-full items-center justify-center rounded-md bg-secondary">
-                        <FileText className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
-                      className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover/thumb:opacity-100"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <FilePreviewGrid
+            files={pendingFiles}
+            onRemove={(idx) => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+            onClearAll={() => setPendingFiles([])}
+            label={t("chat.imageCount").replace("{n}", String(pendingFiles.length)).replace("{max}", "9")}
+          />
         )}
 
         {isRecording ? (
