@@ -555,7 +555,6 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const isQueued = useChatStore((s) => isUser && (s.queuedMessageIds[message.conversationId]?.has(message.id) ?? false));
   const openThread = useChatStore((s) => s.openThread);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
-  const showTimestamps = useChatStore((s) => s.showTimestamps);
   const toggleReaction = useChatStore((s) => s.toggleReaction);
   const reactionsByMessage = useChatStore((s) => s.reactionsByMessage);
   const reactions = reactionsByMessage[message.id] ?? EMPTY_REACTIONS;
@@ -826,7 +825,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           )}
 
           {/* Timestamp + Read receipt */}
-          {showTimestamps && message.createdAt && (
+          {message.createdAt && (
             <p suppressHydrationWarning className={cn(
               "mt-1 text-[10px] text-muted-foreground/60 flex items-center gap-1",
               isUser ? "justify-end" : "justify-start"

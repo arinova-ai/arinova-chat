@@ -180,27 +180,27 @@ function OverviewTab({ stats, t }: { stats: DashboardStats | null; t: (k: string
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Sticker className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{stats?.creations.stickerPacks ?? 0}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations?.stickerPacks ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.stickerPacks")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Bot className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{stats?.creations.agents ?? 0}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations?.agents ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.tab.agents")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Palette className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{stats?.creations.themes ?? 0}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations?.themes ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.tab.themes")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Users className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{stats?.creations.communities ?? 0}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations?.communities ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.tab.community")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Gamepad2 className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{stats?.creations.spaces ?? 0}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations?.spaces ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.tab.spaces")}</p>
           </div>
         </div>
@@ -211,11 +211,11 @@ function OverviewTab({ stats, t }: { stats: DashboardStats | null; t: (k: string
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.recentActivity")}
         </h2>
-        {(stats?.recentEarnings.length ?? 0) === 0 ? (
+        {(stats?.recentEarnings?.length ?? 0) === 0 ? (
           <p className="text-sm text-muted-foreground">{t("creator.noActivity")}</p>
         ) : (
           <div className="space-y-2">
-            {stats!.recentEarnings.map((e) => (
+            {stats?.recentEarnings?.map((e) => (
               <div
                 key={e.id}
                 className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3"
@@ -506,6 +506,7 @@ interface CreatorCommunity {
 }
 
 function CommunityTab({ t }: { t: (k: string) => string }) {
+  const router = useRouter();
   const [communities, setCommunities] = useState<CreatorCommunity[]>([]);
   const [cLoading, setCLoading] = useState(true);
 
@@ -523,6 +524,16 @@ function CommunityTab({ t }: { t: (k: string) => string }) {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.yourCommunities")} ({communities.length})
         </h2>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/community/new-lounge")}>
+            <Users2 className="h-3.5 w-3.5" />
+            {t("creator.createLounge")}
+          </Button>
+          <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/community/new-club")}>
+            <Users className="h-3.5 w-3.5" />
+            {t("creator.createClub")}
+          </Button>
+        </div>
       </div>
       {cLoading ? (
         <div className="flex h-20 items-center justify-center">
@@ -579,6 +590,7 @@ interface CreatorSpace {
 }
 
 function SpacesTab({ t }: { t: (k: string) => string }) {
+  const router = useRouter();
   const [spaces, setSpaces] = useState<CreatorSpace[]>([]);
   const [spLoading, setSpLoading] = useState(true);
 
@@ -596,6 +608,10 @@ function SpacesTab({ t }: { t: (k: string) => string }) {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.yourSpaces")} ({spaces.length})
         </h2>
+        <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/spaces/new-app")}>
+          <Gamepad2 className="h-3.5 w-3.5" />
+          {t("creator.createApp")}
+        </Button>
       </div>
       {spLoading ? (
         <div className="flex h-20 items-center justify-center">

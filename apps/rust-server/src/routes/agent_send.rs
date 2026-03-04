@@ -10,6 +10,8 @@ use serde_json::json;
 
 use crate::auth::middleware::AuthAgent;
 use crate::services::message_seq::get_next_seq;
+use crate::services::push::send_push_to_user;
+use crate::services::push_trigger::{is_conversation_muted, should_send_push};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -142,6 +144,73 @@ async fn agent_send(
     }), &state.redis);
 
     tracing::info!("stream_end reason=agent_send conv={} agent={} msgId={} seq={}", conversation_id, agent_id, msg_id, seq);
+
+    // Push notification to all conversation members
+    {
+        let db = &state.db;
+        let config = &state.config;
+
+        // Get all user members of this conversation
+        let members = sqlx::query_as::<_, (String,)>(
+            "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1::uuid",
+        )
+        .bind(conversation_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default();
+
+        let member_ids: Vec<String> = if members.is_empty() {
+            // Fallback: single-user conversation
+            tracing::info!("push: conversation_user_members empty, fallback to user_id={}", user_id);
+            vec![user_id.clone()]
+        } else {
+            members.into_iter().map(|(id,)| id).collect()
+        };
+
+        tracing::info!("push: member_ids={:?} conv={}", member_ids, conversation_id);
+
+        let preview = {
+            let max_chars = 100;
+            let truncated = match content.char_indices().nth(max_chars) {
+                Some((idx, _)) => &content[..idx],
+                None => content,
+            };
+            if truncated.len() < content.len() {
+                format!("{}...", truncated)
+            } else {
+                content.to_string()
+            }
+        };
+
+        for mid in &member_ids {
+            // Skip push if user has the app in foreground
+            if state.ws.is_user_foreground(mid) {
+                tracing::info!("push skip: mid={} is foreground", mid);
+                continue;
+            }
+            let muted = is_conversation_muted(db, mid, conversation_id).await;
+            tracing::info!("push check: mid={} muted={:?}", mid, muted);
+            if let Ok(false) = muted {
+                let should_push = should_send_push(db, mid, "message").await;
+                tracing::info!("push check: mid={} should_send={:?}", mid, should_push);
+                if let Ok(true) = should_push {
+                    let result = send_push_to_user(
+                        db,
+                        config,
+                        mid,
+                        &crate::services::push::PushPayload {
+                            notification_type: "message".into(),
+                            title: agent.name.clone(),
+                            body: preview.clone(),
+                            url: Some(format!("/?c={}", conversation_id)),
+                        },
+                    )
+                    .await;
+                    tracing::info!("push result: mid={} result={:?}", mid, result);
+                }
+            }
+        }
+    }
 
     (
         StatusCode::OK,

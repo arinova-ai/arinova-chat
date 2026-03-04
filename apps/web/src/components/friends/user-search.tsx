@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -8,6 +8,7 @@ import { Search, UserPlus, Loader2, Check } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
+import { useTranslation } from "@/lib/i18n";
 
 interface SearchUser {
   id: string;
@@ -22,51 +23,33 @@ interface UserSearchProps {
 }
 
 export function UserSearch({ onRequestSent }: UserSearchProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [sentUsernames, setSentUsernames] = useState<Set<string>>(new Set());
   const [sendingUsername, setSendingUsername] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const searchUsers = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
+  const searchUsers = useCallback(async () => {
+    const q = query.trim();
+    if (!q) return;
     setLoading(true);
     setError("");
+    setSearched(true);
     try {
       const data = await api<SearchUser[]>(
-        `/api/users/search?q=${encodeURIComponent(q.trim())}`
+        `/api/users/search?q=${encodeURIComponent(q)}&exact=true`
       );
       setResults(data);
     } catch {
       setResults([]);
-      setError("Failed to search users");
+      setError(t("friends.search.error"));
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-    debounceRef.current = setTimeout(() => {
-      searchUsers(query);
-    }, 300);
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [query, searchUsers]);
+  }, [query, t]);
 
   const handleSendRequest = async (username: string) => {
     setSendingUsername(username);
@@ -80,7 +63,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
       onRequestSent?.(username);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to send friend request"
+        err instanceof Error ? err.message : t("friends.search.requestFailed")
       );
     } finally {
       setSendingUsername(null);
@@ -89,15 +72,31 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
 
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search by username..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="pl-9 bg-neutral-800 border-none"
-          autoFocus
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={t("friends.search.placeholder")}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") searchUsers(); }}
+            className="pl-9 bg-neutral-800 border-none"
+            autoFocus
+          />
+        </div>
+        <Button
+          size="sm"
+          className="shrink-0 gap-1.5"
+          disabled={loading || !query.trim()}
+          onClick={searchUsers}
+        >
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Search className="h-3.5 w-3.5" />
+          )}
+          {t("friends.search.button")}
+        </Button>
       </div>
 
       {error && (
@@ -113,9 +112,9 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
           </div>
         )}
 
-        {!loading && query.trim() && results.length === 0 && (
+        {!loading && searched && results.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No users found
+            {t("friends.search.noResults")}
           </p>
         )}
 
@@ -152,7 +151,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
                 {isSent ? (
                   <span className="flex items-center gap-1 text-xs text-green-400">
                     <Check className="h-3.5 w-3.5" />
-                    Sent
+                    {t("friends.search.sent")}
                   </span>
                 ) : (
                   <Button
@@ -167,7 +166,7 @@ export function UserSearch({ onRequestSent }: UserSearchProps) {
                     ) : (
                       <UserPlus className="h-3.5 w-3.5" />
                     )}
-                    Add Friend
+                    {t("friends.search.addFriend")}
                   </Button>
                 )}
               </div>

@@ -68,7 +68,6 @@ const INITIAL_STATE = {
   unreadCounts: {},
   agentHealth: {},
   agentSkills: {},
-  showTimestamps: false,
   mutedConversations: {},
   ttsEnabled: false,
   thinkingAgents: {},
@@ -523,42 +522,4 @@ describe("useChatStore", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // toggleTimestamps
-  // -------------------------------------------------------------------------
-  describe("toggleTimestamps", () => {
-    it("flips showTimestamps from false to true", () => {
-      useChatStore.setState({ showTimestamps: false });
-
-      useChatStore.getState().toggleTimestamps();
-
-      expect(useChatStore.getState().showTimestamps).toBe(true);
-    });
-
-    it("flips showTimestamps from true to false", () => {
-      useChatStore.setState({ showTimestamps: true });
-
-      useChatStore.getState().toggleTimestamps();
-
-      expect(useChatStore.getState().showTimestamps).toBe(false);
-    });
-
-    it("persists the new value to localStorage", () => {
-      const setItem = vi.spyOn(localStorage, "setItem");
-      useChatStore.setState({ showTimestamps: false });
-
-      useChatStore.getState().toggleTimestamps();
-
-      expect(setItem).toHaveBeenCalledWith("arinova_timestamps", "true");
-    });
-
-    it("persists false to localStorage when toggling off", () => {
-      const setItem = vi.spyOn(localStorage, "setItem");
-      useChatStore.setState({ showTimestamps: true });
-
-      useChatStore.getState().toggleTimestamps();
-
-      expect(setItem).toHaveBeenCalledWith("arinova_timestamps", "false");
-    });
-  });
 });

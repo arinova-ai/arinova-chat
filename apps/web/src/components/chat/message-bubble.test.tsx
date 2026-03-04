@@ -17,7 +17,6 @@ vi.mock("@/store/chat-store", () => ({
       cancelQueuedMessage: vi.fn(),
       messagesByConversation: {},
       conversationMembers: {},
-      showTimestamps: false,
       setReplyingTo: vi.fn(),
       toggleReaction: vi.fn(),
       reactionsByMessage: {},
