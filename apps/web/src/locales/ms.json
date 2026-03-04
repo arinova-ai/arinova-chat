@@ -408,6 +408,8 @@
   "stickerShop.messageOptional": "Mesej (pilihan)",
   "stickerShop.messagePlaceholder": "Tambah mesej peribadi...",
   "stickerShop.sendGift": "Hantar Hadiah",
+  "stickerShop.downloaded": "Dimuat turun",
+  "stickerShop.noFriends": "Tiada rakan",
 
   "creator.title": "Konsol Pencipta",
   "creator.subtitle": "Urus ciptaan anda",
@@ -458,6 +460,9 @@
   "creator.yourSpaces": "Your Spaces",
   "creator.noSpaces": "No spaces yet",
   "creator.members": "members",
+  "creator.createLounge": "Cipta Lounge",
+  "creator.createClub": "Cipta Club",
+  "creator.createApp": "Cipta App",
   "creator.createNewAgent": "Cipta Ejen Baharu",
   "creator.editAgent": "Edit Ejen",
   "creator.basicInfo": "Maklumat Asas",

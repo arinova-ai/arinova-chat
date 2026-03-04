@@ -410,6 +410,8 @@
   "stickerShop.messageOptional": "Message (optional)",
   "stickerShop.messagePlaceholder": "Add a personal message...",
   "stickerShop.sendGift": "Send Gift",
+  "stickerShop.downloaded": "Downloaded",
+  "stickerShop.noFriends": "No friends yet",
 
   "creator.title": "Creator Console",
   "creator.subtitle": "Manage your creations",
@@ -460,6 +462,9 @@
   "creator.yourSpaces": "Your Spaces",
   "creator.noSpaces": "No spaces yet",
   "creator.members": "members",
+  "creator.createLounge": "Create Lounge",
+  "creator.createClub": "Create Club",
+  "creator.createApp": "Create App",
   "creator.createNewAgent": "Create New Agent",
   "creator.editAgent": "Edit Agent",
   "creator.basicInfo": "Basic Info",

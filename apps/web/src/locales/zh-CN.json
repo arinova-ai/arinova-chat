@@ -408,6 +408,8 @@
   "stickerShop.messageOptional": "留言（选填）",
   "stickerShop.messagePlaceholder": "附上一段个人消息...",
   "stickerShop.sendGift": "送出礼物",
+  "stickerShop.downloaded": "已下载",
+  "stickerShop.noFriends": "暂无好友",
 
   "creator.title": "创作者控制台",
   "creator.subtitle": "管理你的作品",
@@ -458,6 +460,9 @@
   "creator.yourSpaces": "Your Spaces",
   "creator.noSpaces": "No spaces yet",
   "creator.members": "members",
+  "creator.createLounge": "创建 Lounge",
+  "creator.createClub": "创建 Club",
+  "creator.createApp": "创建 App",
   "creator.createNewAgent": "创建新 Agent",
   "creator.editAgent": "编辑 Agent",
   "creator.basicInfo": "基本信息",

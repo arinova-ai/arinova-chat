@@ -410,6 +410,8 @@
   "stickerShop.messageOptional": "留言（選填）",
   "stickerShop.messagePlaceholder": "附上一段個人訊息...",
   "stickerShop.sendGift": "送出禮物",
+  "stickerShop.downloaded": "已下載",
+  "stickerShop.noFriends": "尚無好友",
 
   "creator.title": "創作者主控台",
   "creator.subtitle": "管理你的作品",
@@ -460,6 +462,9 @@
   "creator.yourSpaces": "你的空間",
   "creator.noSpaces": "尚無空間",
   "creator.members": "成員",
+  "creator.createLounge": "建立 Lounge",
+  "creator.createClub": "建立 Club",
+  "creator.createApp": "建立 App",
   "creator.createNewAgent": "建立新 Agent",
   "creator.editAgent": "編輯 Agent",
   "creator.basicInfo": "基本資訊",

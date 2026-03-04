@@ -408,6 +408,8 @@
   "stickerShop.messageOptional": "メッセージ（任意）",
   "stickerShop.messagePlaceholder": "メッセージを添えて...",
   "stickerShop.sendGift": "ギフトを送る",
+  "stickerShop.downloaded": "ダウンロード済み",
+  "stickerShop.noFriends": "フレンドがいません",
 
   "creator.title": "クリエイターコンソール",
   "creator.subtitle": "作品を管理する",
@@ -458,6 +460,9 @@
   "creator.yourSpaces": "Your Spaces",
   "creator.noSpaces": "No spaces yet",
   "creator.members": "members",
+  "creator.createLounge": "ラウンジを作成",
+  "creator.createClub": "クラブを作成",
+  "creator.createApp": "アプリを作成",
   "creator.createNewAgent": "新しいエージェントを作成",
   "creator.editAgent": "エージェントを編集",
   "creator.basicInfo": "基本情報",

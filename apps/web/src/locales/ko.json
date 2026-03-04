@@ -408,6 +408,8 @@
   "stickerShop.messageOptional": "메시지 (선택 사항)",
   "stickerShop.messagePlaceholder": "개인 메시지를 추가하세요...",
   "stickerShop.sendGift": "선물 보내기",
+  "stickerShop.downloaded": "다운로드됨",
+  "stickerShop.noFriends": "친구가 없습니다",
 
   "creator.title": "크리에이터 콘솔",
   "creator.subtitle": "내 창작물 관리",
@@ -458,6 +460,9 @@
   "creator.yourSpaces": "Your Spaces",
   "creator.noSpaces": "No spaces yet",
   "creator.members": "members",
+  "creator.createLounge": "라운지 만들기",
+  "creator.createClub": "클럽 만들기",
+  "creator.createApp": "앱 만들기",
   "creator.createNewAgent": "새 에이전트 만들기",
   "creator.editAgent": "에이전트 수정",
   "creator.basicInfo": "기본 정보",

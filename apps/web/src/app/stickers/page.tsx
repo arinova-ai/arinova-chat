@@ -9,6 +9,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { PageTitle } from "@/components/ui/page-title";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -23,8 +24,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Gift,
+  Loader2,
   X,
 } from "lucide-react";
+import { assetUrl } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
@@ -97,13 +100,12 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-// Mock friends for gift feature
-const MOCK_FRIENDS = [
-  { id: "f1", name: "Alice", avatar: "A" },
-  { id: "f2", name: "Bob", avatar: "B" },
-  { id: "f3", name: "Charlie", avatar: "C" },
-  { id: "f4", name: "Diana", avatar: "D" },
-];
+interface GiftFriend {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Featured Carousel
@@ -285,6 +287,31 @@ function PackDetailDialog({
   const [detailStickers, setDetailStickers] = useState<string[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [zoomedSticker, setZoomedSticker] = useState<string | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchased, setPurchased] = useState(false);
+  const [purchaseError, setPurchaseError] = useState("");
+
+  const handlePurchase = async () => {
+    if (!pack) return;
+    setPurchasing(true);
+    setPurchaseError("");
+    try {
+      await api(`/api/stickers/${pack.id}/purchase`, { method: "POST" });
+      setPurchased(true);
+    } catch (err) {
+      setPurchaseError(
+        err instanceof Error ? err.message : "Purchase failed"
+      );
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  // Reset purchase state when dialog opens for a different pack
+  useEffect(() => {
+    setPurchased(false);
+    setPurchaseError("");
+  }, [pack?.id]);
 
   useEffect(() => {
     if (!zoomedSticker) return;
@@ -348,10 +375,26 @@ function PackDetailDialog({
               {formatCount(pack.downloads)}
             </span>
           </div>
+          {purchaseError && (
+            <p className="mt-2 text-xs text-destructive">{purchaseError}</p>
+          )}
           <div className="mt-3 flex items-center gap-2">
-            <Button size="sm" className="brand-gradient-btn gap-1">
-              <Download className="h-3.5 w-3.5" />
-              {pack.price === 0 ? t("stickerShop.download") : `${t("stickerShop.buyFor")} ${pack.price} ${t("stickerShop.coins")}`}
+            <Button
+              size="sm"
+              className="brand-gradient-btn gap-1"
+              disabled={purchasing || purchased}
+              onClick={handlePurchase}
+            >
+              {purchasing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              {purchased
+                ? t("stickerShop.downloaded")
+                : pack.price === 0
+                  ? t("stickerShop.download")
+                  : `${t("stickerShop.buyFor")} ${pack.price} ${t("stickerShop.coins")}`}
             </Button>
             <Button
               size="sm"
@@ -426,9 +469,21 @@ function GiftDialog({
   onClose: () => void;
   t: (k: string) => string;
 }) {
+  const [friends, setFriends] = useState<GiftFriend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
+
+  // Fetch real friend list when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    setFriendsLoading(true);
+    api<GiftFriend[]>("/api/friends")
+      .then((data) => setFriends(data))
+      .catch(() => setFriends([]))
+      .finally(() => setFriendsLoading(false));
+  }, [open]);
 
   const handleSend = () => {
     if (!selectedFriend) return;
@@ -474,23 +529,43 @@ function GiftDialog({
             {/* Friend selection */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">{t("stickerShop.chooseFriend")}</label>
-              <div className="space-y-1">
-                {MOCK_FRIENDS.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setSelectedFriend(f.id)}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                      selectedFriend === f.id
-                        ? "bg-brand/15 ring-1 ring-brand/40"
-                        : "hover:bg-secondary"
-                    }`}
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
-                      {f.avatar}
-                    </div>
-                    <span className="text-sm">{f.name}</span>
-                  </button>
-                ))}
+              <div className="max-h-48 space-y-1 overflow-y-auto">
+                {friendsLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : friends.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-muted-foreground">
+                    {t("stickerShop.noFriends")}
+                  </p>
+                ) : (
+                  friends.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setSelectedFriend(f.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                        selectedFriend === f.id
+                          ? "bg-brand/15 ring-1 ring-brand/40"
+                          : "hover:bg-secondary"
+                      }`}
+                    >
+                      <Avatar className="h-8 w-8">
+                        {f.image ? (
+                          <AvatarImage src={assetUrl(f.image)} alt={f.name ?? f.username ?? ""} />
+                        ) : null}
+                        <AvatarFallback className="text-xs">
+                          {(f.name ?? f.username ?? "?").charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm truncate block">{f.name ?? f.username}</span>
+                        {f.username && (
+                          <span className="text-[11px] text-muted-foreground truncate block">@{f.username}</span>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 
