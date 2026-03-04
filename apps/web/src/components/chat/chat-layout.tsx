@@ -21,6 +21,7 @@ export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const searchActive = useChatStore((s) => s.searchActive);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const jumpToMessage = useChatStore((s) => s.jumpToMessage);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const setCurrentUserId = useChatStore((s) => s.setCurrentUserId);
   const prevConvRef = useRef<string | null>(null);
@@ -59,14 +60,19 @@ export function ChatLayout() {
     };
   }, []);
 
-  // Handle ?c= query param from push notification deep links
+  // Handle ?c= and ?m= query params from push notification deep links
   useEffect(() => {
     const convId = searchParams.get("c");
+    const msgId = searchParams.get("m");
     if (convId) {
-      setActiveConversation(convId);
+      if (msgId) {
+        jumpToMessage(convId, msgId);
+      } else {
+        setActiveConversation(convId);
+      }
       router.replace("/", { scroll: false });
     }
-  }, [searchParams, setActiveConversation, router]);
+  }, [searchParams, setActiveConversation, jumpToMessage, router]);
 
   // Push notification setup: refresh subscription + wire click handler
   useEffect(() => {
@@ -74,14 +80,19 @@ export function ChatLayout() {
     const cleanup = setupNotificationClickHandler((url) => {
       const params = new URLSearchParams(url.split("?")[1] || "");
       const convId = params.get("c");
+      const msgId = params.get("m");
       if (convId) {
-        setActiveConversation(convId);
+        if (msgId) {
+          jumpToMessage(convId, msgId);
+        } else {
+          setActiveConversation(convId);
+        }
       } else {
         router.push(url);
       }
     });
     return cleanup;
-  }, [router, setActiveConversation]);
+  }, [router, setActiveConversation, jumpToMessage]);
 
   // Listen for global new-chat event (e.g. from sidebar header button)
   useEffect(() => {

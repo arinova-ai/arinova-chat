@@ -1038,7 +1038,8 @@ pub async fn trigger_agent_response(
                                 notification_type: "message".into(),
                                 title: sender_name.to_string(),
                                 body: preview,
-                                url: Some(format!("/?c={}", conversation_id)),
+                                url: Some(format!("/?c={}&m={}", conversation_id, msg_id)),
+                                message_id: Some(msg_id.to_string()),
                             },
                         )
                         .await;
@@ -1223,7 +1224,8 @@ pub async fn trigger_agent_response(
                                 notification_type: "message".into(),
                                 title: sender_name.to_string(),
                                 body: preview,
-                                url: Some(format!("/?c={}", conversation_id)),
+                                url: Some(format!("/?c={}&m={}", conversation_id, user_msg_id)),
+                                message_id: Some(user_msg_id.to_string()),
                             },
                         )
                         .await;
@@ -1740,7 +1742,8 @@ async fn do_trigger_agent_response(
                                                 notification_type: "message".into(),
                                                 title: agent_name.clone(),
                                                 body: preview,
-                                                url: Some(format!("/?c={}", conversation_id)),
+                                                url: Some(format!("/?c={}&m={}", conversation_id, agent_msg_id_clone)),
+                                                message_id: Some(agent_msg_id_clone.clone()),
                                             },
                                         )
                                         .await;
