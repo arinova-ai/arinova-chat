@@ -27,6 +27,8 @@ import {
   Bot,
   Palette,
   LayoutDashboard,
+  Gamepad2,
+  Users2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,8 @@ interface DashboardStats {
     stickerPacks: number;
     agents: number;
     themes: number;
+    communities: number;
+    spaces: number;
   };
   recentEarnings: {
     id: string;
@@ -81,13 +85,15 @@ interface CreatorStickerPack {
 // Tabs
 // ---------------------------------------------------------------------------
 
-type Tab = "overview" | "stickers" | "agents" | "themes";
+type Tab = "overview" | "stickers" | "agents" | "themes" | "community" | "spaces";
 
 const TAB_DEFS: { key: Tab; i18nKey: string; icon: typeof LayoutDashboard }[] = [
   { key: "overview", i18nKey: "creator.tab.overview", icon: LayoutDashboard },
   { key: "stickers", i18nKey: "creator.tab.stickers", icon: Sticker },
   { key: "agents", i18nKey: "creator.tab.agents", icon: Bot },
   { key: "themes", i18nKey: "creator.tab.themes", icon: Palette },
+  { key: "community", i18nKey: "creator.tab.community", icon: Users },
+  { key: "spaces", i18nKey: "creator.tab.spaces", icon: Gamepad2 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -171,7 +177,7 @@ function OverviewTab({ stats, t }: { stats: DashboardStats | null; t: (k: string
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.yourCreations")}
         </h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Sticker className="mx-auto h-6 w-6 text-brand-text" />
             <p className="mt-2 text-2xl font-bold">{stats?.creations.stickerPacks ?? 0}</p>
@@ -186,6 +192,16 @@ function OverviewTab({ stats, t }: { stats: DashboardStats | null; t: (k: string
             <Palette className="mx-auto h-6 w-6 text-brand-text" />
             <p className="mt-2 text-2xl font-bold">{stats?.creations.themes ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.tab.themes")}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4 text-center">
+            <Users className="mx-auto h-6 w-6 text-brand-text" />
+            <p className="mt-2 text-2xl font-bold">{stats?.creations.communities ?? 0}</p>
+            <p className="text-xs text-muted-foreground">{t("creator.tab.community")}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4 text-center">
+            <Gamepad2 className="mx-auto h-6 w-6 text-brand-text" />
+            <p className="mt-2 text-2xl font-bold">{stats?.creations.spaces ?? 0}</p>
+            <p className="text-xs text-muted-foreground">{t("creator.tab.spaces")}</p>
           </div>
         </div>
       </div>
@@ -477,6 +493,152 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Community Tab
+// ---------------------------------------------------------------------------
+
+interface CreatorCommunity {
+  id: string;
+  name: string;
+  memberCount: number;
+  monthlyRevenue: number;
+  status: string;
+}
+
+function CommunityTab({ t }: { t: (k: string) => string }) {
+  const [communities, setCommunities] = useState<CreatorCommunity[]>([]);
+  const [cLoading, setCLoading] = useState(true);
+
+  useEffect(() => {
+    setCLoading(true);
+    api<{ communities: CreatorCommunity[] }>("/api/creator/community")
+      .then((data) => setCommunities(data.communities))
+      .catch(() => {})
+      .finally(() => setCLoading(false));
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          {t("creator.yourCommunities")} ({communities.length})
+        </h2>
+      </div>
+      {cLoading ? (
+        <div className="flex h-20 items-center justify-center">
+          <ArinovaSpinner size="sm" />
+        </div>
+      ) : communities.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Users className="h-8 w-8 mb-2 opacity-40" />
+          <p className="text-sm">{t("creator.noCommunities")}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {communities.map((c) => (
+            <div
+              key={c.id}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
+                <Users className="h-5 w-5 text-brand-text" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold truncate">{c.name}</h3>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(c.status)}`}>
+                    {t(`creator.status.${c.status}`)}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span>{c.memberCount} {t("creator.members")}</span>
+                  <span className="flex items-center gap-0.5">
+                    <Coins className="h-3 w-3 text-yellow-500" />
+                    {c.monthlyRevenue}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Spaces Tab
+// ---------------------------------------------------------------------------
+
+interface CreatorSpace {
+  id: string;
+  name: string;
+  sessionCount: number;
+  totalRevenue: number;
+  status: string;
+}
+
+function SpacesTab({ t }: { t: (k: string) => string }) {
+  const [spaces, setSpaces] = useState<CreatorSpace[]>([]);
+  const [spLoading, setSpLoading] = useState(true);
+
+  useEffect(() => {
+    setSpLoading(true);
+    api<{ spaces: CreatorSpace[] }>("/api/creator/spaces")
+      .then((data) => setSpaces(data.spaces))
+      .catch(() => {})
+      .finally(() => setSpLoading(false));
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          {t("creator.yourSpaces")} ({spaces.length})
+        </h2>
+      </div>
+      {spLoading ? (
+        <div className="flex h-20 items-center justify-center">
+          <ArinovaSpinner size="sm" />
+        </div>
+      ) : spaces.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Gamepad2 className="h-8 w-8 mb-2 opacity-40" />
+          <p className="text-sm">{t("creator.noSpaces")}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {spaces.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
+                <Gamepad2 className="h-5 w-5 text-brand-text" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold truncate">{s.name}</h3>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(s.status)}`}>
+                    {t(`creator.status.${s.status}`)}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span>{s.sessionCount} sessions</span>
+                  <span className="flex items-center gap-0.5">
+                    <Coins className="h-3 w-3 text-yellow-500" />
+                    {s.totalRevenue}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -598,6 +760,8 @@ function CreatorConsoleContent() {
               <AgentsTab agents={agents} loading={loading} onArchive={handleArchive} t={t} />
             )}
             {tab === "themes" && <ThemesTab t={t} />}
+            {tab === "community" && <CommunityTab t={t} />}
+            {tab === "spaces" && <SpacesTab t={t} />}
           </div>
         </div>
 

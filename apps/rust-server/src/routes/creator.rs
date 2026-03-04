@@ -22,6 +22,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/creator/users", get(users))
         .route("/api/creator/downloads", get(downloads))
         .route("/api/creator/payout", axum::routing::post(payout))
+        .route("/api/creator/community", get(creator_community))
+        .route("/api/creator/spaces", get(creator_spaces))
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +281,22 @@ async fn dashboard(
         })
         .collect();
 
+    let community_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM communities WHERE creator_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let spaces_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM playgrounds WHERE owner_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
     (
         StatusCode::OK,
         Json(json!({
@@ -291,6 +309,8 @@ async fn dashboard(
                 "stickerPacks": sticker_agg.sticker_count,
                 "agents": agent_agg.agent_count,
                 "themes": 0,
+                "communities": community_count,
+                "spaces": spaces_count,
             },
             "recentEarnings": earnings_json,
         })),
@@ -816,6 +836,121 @@ async fn payout(
         StatusCode::OK,
         Json(json!({ "success": true, "newBalance": new_balance })),
     )
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/creator/community — Communities created by the user
+// ---------------------------------------------------------------------------
+
+#[derive(sqlx::FromRow)]
+struct CreatorCommunityRow {
+    id: Uuid,
+    name: String,
+    member_count: i64,
+    monthly_revenue: i64,
+    status: String,
+}
+
+async fn creator_community(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, CreatorCommunityRow>(
+        r#"SELECT c.id, c.name,
+                  (SELECT COUNT(*) FROM community_members cm WHERE cm.community_id = c.id) AS member_count,
+                  COALESCE((SELECT SUM(ct.amount) FROM coin_transactions ct
+                            WHERE ct.user_id = $1 AND ct.type = 'earning'
+                            AND ct.description LIKE 'Community%'
+                            AND ct.created_at >= NOW() - INTERVAL '30 days'), 0)::int8 AS monthly_revenue,
+                  c.status::text AS status
+           FROM communities c
+           WHERE c.creator_id = $1
+           ORDER BY c.created_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let communities: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    json!({
+                        "id": r.id,
+                        "name": r.name,
+                        "memberCount": r.member_count,
+                        "monthlyRevenue": r.monthly_revenue,
+                        "status": r.status,
+                    })
+                })
+                .collect();
+            (StatusCode::OK, Json(json!({ "communities": communities })))
+        }
+        Err(e) => {
+            tracing::error!("Creator community fetch failed: {}", e);
+            (StatusCode::OK, Json(json!({ "communities": [] })))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/creator/spaces — Spaces (playgrounds) created by the user
+// ---------------------------------------------------------------------------
+
+#[derive(sqlx::FromRow)]
+struct CreatorSpaceRow {
+    id: Uuid,
+    name: String,
+    session_count: i64,
+    total_revenue: i64,
+    status: String,
+}
+
+async fn creator_spaces(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, CreatorSpaceRow>(
+        r#"SELECT p.id, p.name,
+                  (SELECT COUNT(*) FROM playground_sessions ps WHERE ps.playground_id = p.id) AS session_count,
+                  COALESCE((SELECT SUM(ct.amount) FROM coin_transactions ct
+                            WHERE ct.user_id = $1 AND ct.type = 'earning'
+                            AND ct.description NOT LIKE 'Sticker sale:%'
+                            AND ct.description NOT LIKE 'Agent Hub earning%'
+                            AND ct.description NOT LIKE 'Theme sale:%'
+                            AND ct.description NOT LIKE 'Community%'
+                            AND ct.created_at >= NOW() - INTERVAL '30 days'), 0)::int8 AS total_revenue,
+                  CASE WHEN p.is_public THEN 'active' ELSE 'draft' END AS status
+           FROM playgrounds p
+           WHERE p.owner_id = $1
+           ORDER BY p.created_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let spaces: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    json!({
+                        "id": r.id,
+                        "name": r.name,
+                        "sessionCount": r.session_count,
+                        "totalRevenue": r.total_revenue,
+                        "status": r.status,
+                    })
+                })
+                .collect();
+            (StatusCode::OK, Json(json!({ "spaces": spaces })))
+        }
+        Err(e) => {
+            tracing::error!("Creator spaces fetch failed: {}", e);
+            (StatusCode::OK, Json(json!({ "spaces": [] })))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
