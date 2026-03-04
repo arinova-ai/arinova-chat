@@ -41,7 +41,7 @@ export function ChatArea() {
   const [threadListOpen, setThreadListOpen] = useState(false);
   const [notebookOpen, setNotebookOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const dragCounterRef = useRef(0);
   useRenderDiag("ChatArea", () => ({
     activeConversationId,
@@ -79,7 +79,7 @@ export function ChatArea() {
     dragCounterRef.current = 0;
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      setDroppedFile(files[0]);
+      setDroppedFiles(Array.from(files));
     }
   }, []);
 
@@ -152,7 +152,7 @@ export function ChatArea() {
         <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
       </ErrorBoundary>
       <ErrorBoundary scope="ChatInput">
-        <ChatInput droppedFile={droppedFile} onDropHandled={() => setDroppedFile(null)} />
+        <ChatInput droppedFiles={droppedFiles} onDropHandled={() => setDroppedFiles(null)} />
       </ErrorBoundary>
 
       {showCallOverlay && <ActiveCall />}

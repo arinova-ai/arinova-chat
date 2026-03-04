@@ -71,7 +71,7 @@ async fn upload_file(
     // --- Phase 1: Read all multipart fields ---
     let mut caption = String::new();
     let mut duration_seconds: Option<i32> = None;
-    let mut file_data: Option<(String, String, bytes::Bytes)> = None; // (file_name, content_type, data)
+    let mut files_data: Vec<(String, String, bytes::Bytes)> = Vec::new(); // Vec<(file_name, content_type, data)>
 
     while let Ok(Some(field)) = multipart.next_field().await {
         let field_name = field.name().unwrap_or("").to_string();
@@ -109,7 +109,7 @@ async fn upload_file(
             continue;
         }
 
-        // Treat any other field as the file
+        // Treat any other field as a file
         let content_type = field.content_type().unwrap_or("").to_string();
 
         if BLOCKED_TYPES.contains(&content_type.as_str()) {
@@ -152,82 +152,92 @@ async fn upload_file(
                 .into_response();
         }
 
-        file_data = Some((file_name, content_type, data));
-    }
-
-    // --- Phase 2: Process the file ---
-    let (file_name, content_type, data) = match file_data {
-        Some(f) => f,
-        None => {
+        if files_data.len() >= 9 {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(json!({"error": "No file uploaded"})),
+                Json(json!({"error": "Maximum 9 files per message"})),
             )
                 .into_response();
         }
-    };
+        files_data.push((file_name, content_type, data));
+    }
 
-    let attachment_id = Uuid::new_v4();
-    let ext = file_name.rsplit('.').next().unwrap_or("bin");
-    let stored_name = format!(
-        "{}_{}.{}",
-        attachment_id,
-        chrono::Utc::now().timestamp(),
-        ext
-    );
-    let r2_key = format!("attachments/{}/{}", conversation_id, stored_name);
-
-    // Try R2 upload first, fallback to local storage
-    let storage_path = if let Some(s3) = &state.s3 {
-        match crate::services::r2::upload_to_r2(
-            s3,
-            &state.config.r2_bucket,
-            &r2_key,
-            data.to_vec(),
-            &content_type,
-            &state.config.r2_public_url,
+    // --- Phase 2: Process the files ---
+    if files_data.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "No file uploaded"})),
         )
-        .await
-        {
-            Ok(url) => url,
-            Err(_) => {
-                let dir = std::path::Path::new(&state.config.upload_dir)
-                    .join("attachments")
-                    .join(conversation_id.to_string());
-                let _ = tokio::fs::create_dir_all(&dir).await;
-                let local_path = dir.join(&stored_name);
-                if let Err(e) = tokio::fs::write(&local_path, &data).await {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({"error": format!("Failed to store file: {}", e)})),
-                    )
-                        .into_response();
+            .into_response();
+    }
+
+    // Upload each file and collect attachment info
+    let mut uploaded_files: Vec<(Uuid, String, String, i32, String)> = Vec::new(); // (att_id, file_name, content_type, file_size, storage_path)
+
+    for (file_name, content_type, data) in &files_data {
+        let attachment_id = Uuid::new_v4();
+        let ext = file_name.rsplit('.').next().unwrap_or("bin");
+        let stored_name = format!(
+            "{}_{}.{}",
+            attachment_id,
+            chrono::Utc::now().timestamp(),
+            ext
+        );
+        let r2_key = format!("attachments/{}/{}", conversation_id, stored_name);
+
+        // Try R2 upload first, fallback to local storage
+        let storage_path = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(
+                s3,
+                &state.config.r2_bucket,
+                &r2_key,
+                data.to_vec(),
+                content_type,
+                &state.config.r2_public_url,
+            )
+            .await
+            {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir)
+                        .join("attachments")
+                        .join(conversation_id.to_string());
+                    let _ = tokio::fs::create_dir_all(&dir).await;
+                    let local_path = dir.join(&stored_name);
+                    if let Err(e) = tokio::fs::write(&local_path, &data).await {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"error": format!("Failed to store file: {}", e)})),
+                        )
+                            .into_response();
+                    }
+                    format!("/uploads/attachments/{}/{}", conversation_id, stored_name)
                 }
-                format!("/uploads/attachments/{}/{}", conversation_id, stored_name)
             }
-        }
-    } else {
-        let dir = std::path::Path::new(&state.config.upload_dir)
-            .join("attachments")
-            .join(conversation_id.to_string());
-        let _ = tokio::fs::create_dir_all(&dir).await;
-        let local_path = dir.join(&stored_name);
-        if let Err(e) = tokio::fs::write(&local_path, &data).await {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": format!("Failed to store file: {}", e)})),
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir)
+                .join("attachments")
+                .join(conversation_id.to_string());
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            let local_path = dir.join(&stored_name);
+            if let Err(e) = tokio::fs::write(&local_path, &data).await {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to store file: {}", e)})),
+                )
+                    .into_response();
+            }
+            format!(
+                "/uploads/attachments/{}/{}",
+                conversation_id, stored_name
             )
-                .into_response();
-        }
-        format!(
-            "/uploads/attachments/{}/{}",
-            conversation_id, stored_name
-        )
-    };
+        };
 
-    let file_size = data.len() as i32;
+        let file_size = data.len() as i32;
+        uploaded_files.push((attachment_id, file_name.clone(), content_type.clone(), file_size, storage_path));
+    }
 
-    // --- Phase 3: Create message + attachment ---
+    // --- Phase 3: Create ONE message + multiple attachments ---
     let conv_id_str = conversation_id.to_string();
     let seq = match get_next_seq(&state.db, &conv_id_str).await {
         Ok(s) => s,
@@ -265,31 +275,46 @@ async fn upload_file(
         }
     };
 
-    let att_result = sqlx::query_as::<_, crate::db::models::Attachment>(
-        r#"INSERT INTO attachments (id, message_id, file_name, file_type, file_size, storage_path, duration_seconds)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           RETURNING *"#,
-    )
-    .bind(attachment_id)
-    .bind(message_id)
-    .bind(&file_name)
-    .bind(&content_type)
-    .bind(file_size)
-    .bind(&storage_path)
-    .bind(duration_seconds)
-    .fetch_one(&state.db)
-    .await;
+    // Create attachment records for each uploaded file
+    let mut attachments_json = Vec::new();
+    for (attachment_id, file_name, content_type, file_size, storage_path) in &uploaded_files {
+        let att_result = sqlx::query_as::<_, crate::db::models::Attachment>(
+            r#"INSERT INTO attachments (id, message_id, file_name, file_type, file_size, storage_path, duration_seconds)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING *"#,
+        )
+        .bind(attachment_id)
+        .bind(message_id)
+        .bind(file_name)
+        .bind(content_type)
+        .bind(file_size)
+        .bind(storage_path)
+        .bind(duration_seconds)
+        .fetch_one(&state.db)
+        .await;
 
-    let attachment = match att_result {
-        Ok(a) => a,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": format!("Failed to create attachment: {}", e)})),
-            )
-                .into_response();
-        }
-    };
+        let attachment = match att_result {
+            Ok(a) => a,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to create attachment: {}", e)})),
+                )
+                    .into_response();
+            }
+        };
+
+        attachments_json.push(json!({
+            "id": attachment.id,
+            "messageId": attachment.message_id,
+            "fileName": attachment.file_name,
+            "fileType": attachment.file_type,
+            "fileSize": attachment.file_size,
+            "url": attachment.storage_path,
+            "duration": attachment.duration_seconds,
+            "createdAt": attachment.created_at.and_utc().to_rfc3339(),
+        }));
+    }
 
     // Update conversation timestamp
     let _ = sqlx::query(
@@ -300,11 +325,15 @@ async fn upload_file(
     .await;
 
     // --- Phase 4: Trigger agent response ---
-    // Build message content for the agent: caption + attachment URL
+    // Build message content for the agent: caption + all attachment references
+    let attachment_refs: Vec<String> = uploaded_files
+        .iter()
+        .map(|(_, fname, _, _, spath)| format!("[Attachment: {}]({})", fname, spath))
+        .collect();
     let agent_content = if caption.is_empty() {
-        format!("[Attachment: {}]({})", file_name, storage_path)
+        attachment_refs.join("\n")
     } else {
-        format!("{}\n\n[Attachment: {}]({})", caption, file_name, storage_path)
+        format!("{}\n\n{}", caption, attachment_refs.join("\n"))
     };
 
     let user_id = user.id.clone();
@@ -331,7 +360,7 @@ async fn upload_file(
         .await;
     });
 
-    // --- Phase 5: Return message with embedded attachments ---
+    // --- Phase 5: Return message with all attachments ---
     (
         StatusCode::CREATED,
         Json(json!({
@@ -346,16 +375,7 @@ async fn upload_file(
                 "senderAgentId": message.sender_agent_id,
                 "createdAt": message.created_at.and_utc().to_rfc3339(),
                 "updatedAt": message.updated_at.and_utc().to_rfc3339(),
-                "attachments": [{
-                    "id": attachment.id,
-                    "messageId": attachment.message_id,
-                    "fileName": attachment.file_name,
-                    "fileType": attachment.file_type,
-                    "fileSize": attachment.file_size,
-                    "url": attachment.storage_path,
-                    "duration": attachment.duration_seconds,
-                    "createdAt": attachment.created_at.and_utc().to_rfc3339(),
-                }]
+                "attachments": attachments_json
             }
         })),
     )

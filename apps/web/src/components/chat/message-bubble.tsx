@@ -225,38 +225,116 @@ function SenderLabel({ info }: { info: SenderDisplayInfo | null }) {
   );
 }
 
+/** Grid layout for multiple image attachments. */
+function ImageGrid({ images }: { images: Attachment[] }) {
+  const count = images.length;
+  const galleryImages = images
+    .filter((a) => !a.url.startsWith("data:"))
+    .map((a) => ({ src: assetUrl(a.url), alt: a.fileName }));
+
+  const renderImage = (att: Attachment, index: number, className: string) => {
+    const isUploading = att.url.startsWith("data:");
+    const galleryIndex = isUploading
+      ? 0
+      : galleryImages.findIndex((g) => g.src === assetUrl(att.url));
+    return (
+      <div key={att.id} className={cn("relative overflow-hidden", className)}>
+        {isUploading ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={att.url}
+              alt={att.fileName}
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            </div>
+          </>
+        ) : (
+          <ImageLightbox
+            src={assetUrl(att.url)}
+            alt={att.fileName}
+            className="h-full w-full object-cover cursor-zoom-in"
+            images={galleryImages.length > 1 ? galleryImages : undefined}
+            initialIndex={galleryIndex >= 0 ? galleryIndex : 0}
+          />
+        )}
+      </div>
+    );
+  };
+
+  if (count === 1) {
+    return (
+      <div className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+        {renderImage(images[0], 0, "aspect-auto")}
+      </div>
+    );
+  }
+
+  if (count === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-0.5 max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+        {images.map((att, i) => renderImage(att, i, "aspect-square"))}
+      </div>
+    );
+  }
+
+  if (count === 3) {
+    return (
+      <div className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden space-y-0.5">
+        {renderImage(images[0], 0, "aspect-video")}
+        <div className="grid grid-cols-2 gap-0.5">
+          {images.slice(1).map((att, i) => renderImage(att, i + 1, "aspect-square"))}
+        </div>
+      </div>
+    );
+  }
+
+  if (count === 4) {
+    return (
+      <div className="grid grid-cols-2 gap-0.5 max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+        {images.map((att, i) => renderImage(att, i, "aspect-square"))}
+      </div>
+    );
+  }
+
+  // 5-9 images: 3-column grid, last cell shows +N overlay if needed
+  const maxVisible = 9;
+  const visible = images.slice(0, maxVisible);
+  const remaining = count - maxVisible;
+
+  return (
+    <div className="grid grid-cols-3 gap-0.5 max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+      {visible.map((att, i) => {
+        const isLast = i === visible.length - 1 && remaining > 0;
+        return (
+          <div key={att.id} className="relative aspect-square overflow-hidden">
+            {renderImage(att, i, "aspect-square")}
+            {isLast && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <span className="text-lg font-bold text-white">+{remaining}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Renders image, audio, or file attachments inside the bubble. */
 function AttachmentRenderer({ attachments }: { attachments: Attachment[] }) {
   if (attachments.length === 0) return null;
+
+  const imageAtts = attachments.filter((a) => a.fileType.startsWith("image/"));
+  const otherAtts = attachments.filter((a) => !a.fileType.startsWith("image/"));
+
   return (
     <div className="mb-1 space-y-1">
-      {attachments.map((att) =>
-        att.fileType.startsWith("image/") ? (() => {
-          const isUploading = att.url.startsWith("data:");
-          return (
-            <div key={att.id} className="relative inline-block">
-              {isUploading ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={att.url}
-                  alt={att.fileName}
-                  className="max-w-full max-h-64 rounded-lg object-contain"
-                />
-              ) : (
-                <ImageLightbox
-                  src={assetUrl(att.url)}
-                  alt={att.fileName}
-                  className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
-                />
-              )}
-              {isUploading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-lg">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                </div>
-              )}
-            </div>
-          );
-        })() : att.fileType.startsWith("audio/") ? (
+      {imageAtts.length > 0 && <ImageGrid images={imageAtts} />}
+      {otherAtts.map((att) =>
+        att.fileType.startsWith("audio/") ? (
           att.id.startsWith("temp-att-") ? (
             <div key={att.id} className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 text-xs">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
