@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { Message } from "@arinova/shared/types";
 import { Pin, ChevronDown, ChevronUp, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -81,14 +82,44 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
     [conversationId, pins, setPinnedIds]
   );
 
-  const scrollToMessage = useCallback((messageId: string) => {
-    const el = document.querySelector(`[data-message-id="${messageId}"]`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("ring-2", "ring-yellow-400/50");
-      setTimeout(() => el.classList.remove("ring-2", "ring-yellow-400/50"), 2000);
+  const scrollToMessage = useCallback(async (messageId: string) => {
+    const state = useChatStore.getState();
+    const currentMsgs = state.messagesByConversation[conversationId] ?? [];
+    const found = currentMsgs.some((m) => m.id === messageId);
+
+    if (!found) {
+      // Message not in loaded range — fetch messages around it
+      try {
+        const data = await api<{
+          messages: Message[];
+          hasMoreUp: boolean;
+          hasMoreDown: boolean;
+        }>(
+          `/api/conversations/${conversationId}/messages?around=${messageId}&limit=50`
+        );
+        useChatStore.setState({
+          highlightMessageId: messageId,
+          jumpPagination: { hasMoreUp: data.hasMoreUp, hasMoreDown: data.hasMoreDown },
+          messagesByConversation: {
+            ...useChatStore.getState().messagesByConversation,
+            [conversationId]: data.messages,
+          },
+        });
+      } catch {
+        // Failed to load — set highlight anyway in case message is actually rendered
+        useChatStore.setState({ highlightMessageId: messageId });
+      }
+    } else {
+      useChatStore.setState({ highlightMessageId: messageId });
     }
-  }, []);
+
+    // Clear highlight after delay
+    setTimeout(() => {
+      if (useChatStore.getState().highlightMessageId === messageId) {
+        useChatStore.setState({ highlightMessageId: null });
+      }
+    }, 3000);
+  }, [conversationId]);
 
   if (pins.length === 0) return null;
 

@@ -281,14 +281,29 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   }, []);
 
   // Scroll-to-bottom handler — also closes conversation search to prevent conflict
-  const handleScrollToBottom = useCallback(() => {
+  // Uses instant scroll (not smooth) since user may be far back in history.
+  // If viewing historical messages (hasMoreDown), reloads the latest page first.
+  const handleScrollToBottom = useCallback(async () => {
     const state = useChatStore.getState();
     if (state.convSearchOpen) {
       state.closeConvSearch();
     }
-    virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" });
+
+    if (hasMoreDown && activeConversationId) {
+      // Viewing historical messages — reset pagination and reload latest page
+      setHasMoreDown(false);
+      setHasMoreUp(true);
+      setFirstItemIndex(START_INDEX);
+      useChatStore.setState({ jumpPagination: null, highlightMessageId: null });
+      await state.loadMessages(activeConversationId);
+      requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end" });
+      });
+    } else {
+      virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end" });
+    }
     setNewMessageCount(0);
-  }, []);
+  }, [hasMoreDown, activeConversationId]);
 
   // Initial scroll position (computed once on mount)
   const initialIndex = useMemo(() => {
