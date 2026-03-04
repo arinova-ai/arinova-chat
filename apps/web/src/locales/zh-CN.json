@@ -83,6 +83,9 @@
   "chat.actions.stopGenerating": "停止生成",
   "chat.actions.cancelQueued": "取消排队中的消息",
   "chat.actions.select": "选择",
+  "chat.actions.pin": "置顶",
+  "chat.actions.unpin": "取消置顶",
+  "chat.actions.report": "举报",
 
   "chat.selection.count": "已选择 {count} 条",
   "chat.selection.copied": "已复制到剪贴板",

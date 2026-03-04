@@ -83,6 +83,9 @@
   "chat.actions.stopGenerating": "Detener generacion",
   "chat.actions.cancelQueued": "Cancelar mensaje en cola",
   "chat.actions.select": "Seleccionar",
+  "chat.actions.pin": "Fijar",
+  "chat.actions.unpin": "Desfijar",
+  "chat.actions.report": "Reportar",
 
   "chat.selection.count": "{count} seleccionados",
   "chat.selection.copied": "Copiado al portapapeles",

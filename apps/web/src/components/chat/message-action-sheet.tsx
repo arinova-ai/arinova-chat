@@ -131,13 +131,13 @@ export function MessageActionSheet({
               ) : (
                 <Pin className="h-4 w-4 text-yellow-400" />
               )}
-              <span className="text-yellow-400">{isPinned ? "Unpin" : "Pin"}</span>
+              <span className="text-yellow-400">{isPinned ? t("chat.actions.unpin") : t("chat.actions.pin")}</span>
             </button>
           )}
           {onReport && (
             <button className={ACTION_BUTTON} onClick={() => handle(onReport)}>
               <Flag className="h-4 w-4 text-orange-400" />
-              <span className="text-orange-400">Report</span>
+              <span className="text-orange-400">{t("chat.actions.report")}</span>
             </button>
           )}
           {isError && (

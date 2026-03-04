@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Message } from "@arinova/shared/types";
 import {
@@ -18,6 +18,8 @@ import { useTranslation } from "@/lib/i18n";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🤔", "👀"];
 const INTERACTION_GUARD_MS = 300;
+const MENU_W = 200;
+const VIEWPORT_PAD = 8;
 
 interface MessageContextMenuProps {
   message: Message | null;
@@ -38,41 +40,11 @@ interface MessageContextMenuProps {
 }
 
 interface MenuPosition {
-  top: number;
+  emojiTop: number;
+  menuTop: number;
   left: number;
-  menuAbove: boolean;
+  menuMaxH: number;
   msgRect: DOMRect;
-}
-
-function computePosition(messageId: string): MenuPosition | null {
-  const el = document.querySelector(`[data-message-id="${messageId}"]`);
-  if (!el) return null;
-
-  const rect = el.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-
-  // Menu dimensions estimate (w: 200, h: ~320 including emoji row)
-  const menuW = 200;
-  const menuH = 320;
-  const emojiH = 52;
-  const totalH = menuH + emojiH + 8; // menu + emoji + gap
-
-  // Determine if menu goes above or below the message
-  const spaceBelow = vh - rect.bottom;
-  const spaceAbove = rect.top;
-  const menuAbove = spaceBelow < totalH && spaceAbove > spaceBelow;
-
-  const top = menuAbove
-    ? Math.max(8, rect.top - totalH - 4)
-    : Math.min(vh - totalH - 8, rect.bottom + 4);
-
-  // Horizontal: align to message side
-  let left = rect.left;
-  if (left + menuW > vw - 12) left = vw - menuW - 12;
-  if (left < 12) left = 12;
-
-  return { top, left, menuAbove, msgRect: rect };
 }
 
 export function MessageContextMenu({
@@ -97,6 +69,9 @@ export function MessageContextMenu({
   const [visible, setVisible] = useState(false);
   const openedAtRef = useRef(0);
   const prevOpenRef = useRef(false);
+  const emojiRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const savedOverflowRef = useRef("");
 
   // Track open timestamp for guard
   if (open && !prevOpenRef.current) {
@@ -104,26 +79,64 @@ export function MessageContextMenu({
   }
   prevOpenRef.current = open;
 
-  // Compute position + scroll lock on open
-  useEffect(() => {
+  // Compute position after DOM renders (measures actual element sizes)
+  useLayoutEffect(() => {
     if (!open || !message) {
-      setVisible(false);
       setPosition(null);
-      document.body.style.overflow = "";
       return;
     }
 
-    const pos = computePosition(message.id);
-    setPosition(pos);
+    const el = document.querySelector(`[data-message-id="${message.id}"]`);
+    if (!el) return;
 
-    // Trigger entrance animation
-    requestAnimationFrame(() => setVisible(true));
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
 
-    // Scroll lock
+    const emojiH = emojiRef.current?.offsetHeight ?? 52;
+    const menuH = menuRef.current?.scrollHeight ?? 320;
+    const gap = 8;
+    const totalH = emojiH + gap + menuH;
+
+    const spaceBelow = vh - rect.bottom;
+    const spaceAbove = rect.top;
+    const placeAbove = spaceBelow < totalH + VIEWPORT_PAD && spaceAbove > spaceBelow;
+
+    let emojiTop: number;
+    if (placeAbove) {
+      emojiTop = Math.max(VIEWPORT_PAD, rect.top - totalH - 4);
+    } else {
+      emojiTop = Math.min(vh - totalH - VIEWPORT_PAD, rect.bottom + 4);
+    }
+    const menuTop = emojiTop + emojiH + gap;
+
+    // Constrain menu height if viewport is very small
+    const availableForMenu = vh - menuTop - VIEWPORT_PAD;
+    const menuMaxH = Math.min(menuH, availableForMenu);
+
+    let left = rect.left;
+    if (left + MENU_W > vw - 12) left = vw - MENU_W - 12;
+    if (left < 12) left = 12;
+
+    setPosition({ emojiTop, menuTop, left, menuMaxH, msgRect: rect });
+  });
+
+  // Entrance animation + scroll lock
+  useEffect(() => {
+    if (!open || !message) {
+      setVisible(false);
+      document.body.style.overflow = savedOverflowRef.current;
+      return;
+    }
+
+    // Save current overflow before locking
+    savedOverflowRef.current = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    requestAnimationFrame(() => setVisible(true));
+
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = savedOverflowRef.current;
     };
   }, [open, message]);
 
@@ -139,7 +152,6 @@ export function MessageContextMenu({
 
   const close = useCallback(() => {
     setVisible(false);
-    // Wait for exit animation
     setTimeout(() => onOpenChange(false), 150);
   }, [onOpenChange]);
 
@@ -170,24 +182,13 @@ export function MessageContextMenu({
       }
     : undefined;
 
-  const menuStyle: React.CSSProperties | undefined = position
-    ? {
-        position: "fixed",
-        top: position.menuAbove ? undefined : position.top + 52 + 8,
-        bottom: position.menuAbove
-          ? window.innerHeight - position.top - 52 - 8
-          : undefined,
-        left: position.left,
-      }
-    : undefined;
+  const emojiStyle: React.CSSProperties = position
+    ? { position: "fixed", top: position.emojiTop, left: position.left }
+    : { position: "fixed", top: -9999, left: -9999, visibility: "hidden" as const };
 
-  const emojiStyle: React.CSSProperties | undefined = position
-    ? {
-        position: "fixed",
-        top: position.top,
-        left: position.left,
-      }
-    : undefined;
+  const menuStyle: React.CSSProperties = position
+    ? { position: "fixed", top: position.menuTop, left: position.left, maxHeight: position.menuMaxH }
+    : { position: "fixed", top: -9999, left: -9999, visibility: "hidden" as const };
 
   return createPortal(
     <div
@@ -201,86 +202,84 @@ export function MessageContextMenu({
       {glowStyle && <div style={glowStyle} />}
 
       {/* Quick emoji row */}
-      {emojiStyle && (
-        <div
-          className={`flex items-center gap-1 rounded-full border border-border/50 bg-card/95 px-2 py-1.5 shadow-xl transition-all duration-150 ${visible ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
-          style={emojiStyle}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {QUICK_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => handle(() => onReact(emoji))}
-              className="rounded-full p-1.5 text-xl active:scale-110 active:bg-accent transition-transform"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      )}
+      <div
+        ref={emojiRef}
+        className={`flex items-center gap-1 rounded-full border border-border/50 bg-card/95 px-2 py-1.5 shadow-xl transition-all duration-150 ${visible && position ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
+        style={emojiStyle}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {QUICK_EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            onClick={() => handle(() => onReact(emoji))}
+            className="rounded-full p-1.5 text-xl active:scale-110 active:bg-accent transition-transform"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
 
       {/* Context menu */}
-      {menuStyle && (
-        <div
-          className={`w-[200px] rounded-2xl border border-border/50 bg-card/95 shadow-xl backdrop-blur-md overflow-hidden transition-all duration-150 ${visible ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
-          style={menuStyle}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="py-1">
+      <div
+        ref={menuRef}
+        className={`w-[200px] rounded-2xl border border-border/50 bg-card/95 shadow-xl backdrop-blur-md overflow-hidden overflow-y-auto transition-all duration-150 ${visible && position ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
+        style={menuStyle}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="py-1">
+          <MenuButton
+            icon={<Copy className="h-[18px] w-[18px]" />}
+            label={t("common.copy")}
+            onClick={() => handle(onCopy)}
+          />
+          {onSelect && (
             <MenuButton
-              icon={<Copy className="h-[18px] w-[18px]" />}
-              label={t("common.copy")}
-              onClick={() => handle(onCopy)}
+              icon={<CheckSquare className="h-[18px] w-[18px]" />}
+              label={t("chat.actions.select")}
+              onClick={() => handle(onSelect)}
             />
-            {onSelect && (
-              <MenuButton
-                icon={<CheckSquare className="h-[18px] w-[18px]" />}
-                label={t("chat.actions.select")}
-                onClick={() => handle(onSelect)}
-              />
-            )}
+          )}
+          <MenuButton
+            icon={<Reply className="h-[18px] w-[18px]" />}
+            label={t("chat.actions.reply")}
+            onClick={() => handle(onReply)}
+          />
+          {!isInThread && onStartThread && (
             <MenuButton
-              icon={<Reply className="h-[18px] w-[18px]" />}
-              label={t("chat.actions.reply")}
-              onClick={() => handle(onReply)}
+              icon={<MessageSquare className="h-[18px] w-[18px]" />}
+              label={t("chat.actions.startThread")}
+              onClick={() => handle(onStartThread)}
             />
-            {!isInThread && onStartThread && (
-              <MenuButton
-                icon={<MessageSquare className="h-[18px] w-[18px]" />}
-                label={t("chat.actions.startThread")}
-                onClick={() => handle(onStartThread)}
-              />
-            )}
-            {onPin && (
-              <MenuButton
-                icon={isPinned ? <PinOff className="h-[18px] w-[18px]" /> : <Pin className="h-[18px] w-[18px]" />}
-                label={isPinned ? "Unpin" : "Pin"}
-                onClick={() => handle(onPin)}
-              />
-            )}
-            {onReport && (
-              <MenuButton
-                icon={<Flag className="h-[18px] w-[18px]" />}
-                label="Report"
-                onClick={() => handle(onReport)}
-              />
-            )}
-            {isError && (
-              <MenuButton
-                icon={<RotateCcw className="h-[18px] w-[18px]" />}
-                label={t("common.retry")}
-                onClick={() => handle(onRetry)}
-              />
-            )}
+          )}
+          {onPin && (
             <MenuButton
-              icon={<Trash2 className="h-[18px] w-[18px]" />}
-              label={t("common.delete")}
-              onClick={() => handle(onDelete)}
-              destructive
+              icon={isPinned ? <PinOff className="h-[18px] w-[18px]" /> : <Pin className="h-[18px] w-[18px]" />}
+              label={isPinned ? t("chat.actions.unpin") : t("chat.actions.pin")}
+              onClick={() => handle(onPin)}
             />
-          </div>
+          )}
+          {onReport && (
+            <MenuButton
+              icon={<Flag className="h-[18px] w-[18px]" />}
+              label={t("chat.actions.report")}
+              onClick={() => handle(onReport)}
+            />
+          )}
+          {isError && (
+            <MenuButton
+              icon={<RotateCcw className="h-[18px] w-[18px]" />}
+              label={t("common.retry")}
+              onClick={() => handle(onRetry)}
+            />
+          )}
+          <MenuButton
+            icon={<Trash2 className="h-[18px] w-[18px]" />}
+            label={t("common.delete")}
+            onClick={() => handle(onDelete)}
+            destructive
+          />
         </div>
-      )}
+      </div>
     </div>,
     document.body,
   );

@@ -83,6 +83,9 @@
   "chat.actions.stopGenerating": "生成を停止",
   "chat.actions.cancelQueued": "キュー中のメッセージをキャンセル",
   "chat.actions.select": "選択",
+  "chat.actions.pin": "ピン留め",
+  "chat.actions.unpin": "ピン留め解除",
+  "chat.actions.report": "報告",
 
   "chat.selection.count": "{count}件選択中",
   "chat.selection.copied": "クリップボードにコピーしました",

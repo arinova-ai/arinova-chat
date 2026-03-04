@@ -83,6 +83,9 @@
   "chat.actions.stopGenerating": "Hentikan penjanaan",
   "chat.actions.cancelQueued": "Batalkan mesej beratur",
   "chat.actions.select": "Pilih",
+  "chat.actions.pin": "Semat",
+  "chat.actions.unpin": "Nyahsemat",
+  "chat.actions.report": "Laporkan",
 
   "chat.selection.count": "{count} dipilih",
   "chat.selection.copied": "Disalin ke papan keratan",

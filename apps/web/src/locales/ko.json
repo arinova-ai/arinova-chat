@@ -83,6 +83,9 @@
   "chat.actions.stopGenerating": "생성 중지",
   "chat.actions.cancelQueued": "대기 중인 메시지 취소",
   "chat.actions.select": "선택",
+  "chat.actions.pin": "고정",
+  "chat.actions.unpin": "고정 해제",
+  "chat.actions.report": "신고",
 
   "chat.selection.count": "{count}개 선택됨",
   "chat.selection.copied": "클립보드에 복사됨",

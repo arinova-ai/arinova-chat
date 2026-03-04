@@ -83,6 +83,9 @@
   "chat.actions.stopGenerating": "Arrêter la génération",
   "chat.actions.cancelQueued": "Annuler le message en file d'attente",
   "chat.actions.select": "Sélectionner",
+  "chat.actions.pin": "Épingler",
+  "chat.actions.unpin": "Désépingler",
+  "chat.actions.report": "Signaler",
 
   "chat.selection.count": "{count} sélectionnés",
   "chat.selection.copied": "Copié dans le presse-papiers",

@@ -85,6 +85,9 @@
   "chat.actions.stopGenerating": "Stop generating",
   "chat.actions.cancelQueued": "Cancel queued message",
   "chat.actions.select": "Select",
+  "chat.actions.pin": "Pin",
+  "chat.actions.unpin": "Unpin",
+  "chat.actions.report": "Report",
 
   "chat.selection.count": "{count} selected",
   "chat.selection.copied": "Copied to clipboard",

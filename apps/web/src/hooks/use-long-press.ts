@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface UseLongPressOptions {
   /** Duration in ms before firing (default: 500) */
@@ -48,6 +48,9 @@ export function useLongPress(
     // Cancel long-press if user moves finger (scrolling)
     clear();
   }, [clear]);
+
+  // Clear pending timer on unmount to avoid firing callback after teardown
+  useEffect(() => clear, [clear]);
 
   return { onTouchStart, onTouchEnd, onTouchMove };
 }
