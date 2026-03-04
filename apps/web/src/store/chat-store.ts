@@ -4,6 +4,15 @@ import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
+import {
+  getCachedMessages,
+  setCachedMessages,
+  deleteCachedMessages,
+  debouncedSetCachedMessages,
+  pruneStaleCache,
+  getCachedScrollPosition,
+  setCachedScrollPosition,
+} from "@/lib/idb-message-cache";
 
 interface ConversationWithAgent extends Conversation {
   agentName: string;
@@ -133,7 +142,21 @@ interface ChatState {
   notebookOpen: boolean;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
+  // Conversation search state (in-conversation search bar)
+  convSearchOpen: boolean;
+  convSearchQuery: string;
+  convSearchResults: { messageId: string; content: string }[];
+  convSearchIndex: number; // current active result index
+  convSearchLoading: boolean;
+
+  // Unread divider: first unread message ID per conversation
+  unreadDividerMessageId: string | null;
+
+  // Scroll positions persisted to IDB for PWA restore
+  scrollPositions: Record<string, number>;
+
   // Actions
+  setScrollPosition: (conversationId: string, position: number) => void;
   setCurrentUserId: (id: string | null) => void;
   setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
@@ -143,9 +166,13 @@ interface ChatState {
   searchMore: () => Promise<void>;
   clearSearch: () => void;
   jumpToMessage: (conversationId: string, messageId: string) => Promise<void>;
+  openConvSearch: () => void;
+  closeConvSearch: () => void;
+  searchConversation: (query: string) => Promise<void>;
+  setConvSearchIndex: (index: number) => Promise<void>;
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
-  loadMessages: (conversationId: string) => Promise<void>;
+  loadMessages: (conversationId: string, unreadCountForDivider?: number) => Promise<void>;
   sendMessage: (content: string, mentions?: string[]) => void;
   cancelStream: (messageId?: string) => void;
   cancelAgentStream: (conversationId: string, messageId: string) => void;
@@ -274,7 +301,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
   notesByConversation: {},
   notebookOpen: false,
   agentNotesEnabledByConversation: {},
+  convSearchOpen: false,
+  convSearchQuery: "",
+  convSearchResults: [],
+  convSearchIndex: -1,
+  convSearchLoading: false,
+  unreadDividerMessageId: null,
+  scrollPositions: {},
 
+  setScrollPosition: (conversationId, position) => {
+    set({ scrollPositions: { ...get().scrollPositions, [conversationId]: position } });
+    setCachedScrollPosition(conversationId, position).catch(() => {});
+  },
   setCurrentUserId: (id) => {
     diagCount("action:setCurrentUserId");
     if (get().currentUserId === id) return;
@@ -316,19 +354,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (currentState.activeConversationId === id && !currentState.searchActive) {
       return;
     }
+    // Save unread count before resetting so we can place a divider after loading
+    const savedUnread = get().unreadCounts[id] ?? 0;
+    const cached = get().messagesByConversation[id] ?? [];
     set({
       activeConversationId: id,
       sidebarOpen: false,
       searchActive: false,
       activeThreadId: null,
       jumpPagination: null,
+      convSearchOpen: false,
+      convSearchQuery: "",
+      convSearchResults: [],
+      convSearchIndex: -1,
+      convSearchLoading: false,
+      unreadDividerMessageId: null,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
-      messagesByConversation: {
-        ...get().messagesByConversation,
-        [id]: [],
-      },
+      // Keep cached messages to prevent flash; loadMessages will replace them
+      ...(cached.length === 0 && {
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [id]: [],
+        },
+      }),
     });
-    get().loadMessages(id);
+    get().loadMessages(id, savedUnread);
 
     // Load conversation members for @mention support
     const conv = get().conversations.find((c) => c.id === id);
@@ -411,6 +461,108 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  openConvSearch: () => {
+    set({ convSearchOpen: true, convSearchQuery: "", convSearchResults: [], convSearchIndex: -1 });
+  },
+
+  closeConvSearch: () => {
+    set({
+      convSearchOpen: false,
+      convSearchQuery: "",
+      convSearchResults: [],
+      convSearchIndex: -1,
+      convSearchLoading: false,
+      highlightMessageId: null,
+    });
+  },
+
+  searchConversation: async (query) => {
+    const conversationId = get().activeConversationId;
+    if (!query.trim() || !conversationId) return;
+    set({ convSearchQuery: query, convSearchLoading: true, convSearchResults: [], convSearchIndex: -1 });
+    try {
+      const data = await api<{ results: { messageId: string; content: string }[]; total: number }>(
+        `/api/messages/search?q=${encodeURIComponent(query)}&conversation_id=${conversationId}&limit=50`
+      );
+      const results = data.results.map((r) => ({ messageId: r.messageId, content: r.content }));
+      set({
+        convSearchResults: results,
+        convSearchIndex: results.length > 0 ? 0 : -1,
+        highlightMessageId: results.length > 0 ? results[0].messageId : null,
+      });
+
+      // If first result is not in loaded messages, load around it
+      if (results.length > 0) {
+        const currentMsgs = get().messagesByConversation[conversationId] ?? [];
+        if (!currentMsgs.some((m) => m.id === results[0].messageId)) {
+          try {
+            const aroundData = await api<{
+              messages: Message[];
+              hasMoreUp: boolean;
+              hasMoreDown: boolean;
+            }>(
+              `/api/conversations/${conversationId}/messages?around=${results[0].messageId}&limit=50`
+            );
+            set({
+              jumpPagination: { hasMoreUp: aroundData.hasMoreUp, hasMoreDown: aroundData.hasMoreDown },
+              messagesByConversation: {
+                ...get().messagesByConversation,
+                [conversationId]: aroundData.messages,
+              },
+            });
+          } catch {
+            // ignore — highlight will still work if message loads later
+          }
+        }
+      }
+    } catch {
+      set({ convSearchResults: [], convSearchIndex: -1 });
+    } finally {
+      set({ convSearchLoading: false });
+    }
+  },
+
+  setConvSearchIndex: async (index) => {
+    const { convSearchResults, activeConversationId } = get();
+    if (index < 0 || index >= convSearchResults.length || !activeConversationId) return;
+    const result = convSearchResults[index];
+    const currentMsgs = get().messagesByConversation[activeConversationId] ?? [];
+    const found = currentMsgs.some((m) => m.id === result.messageId);
+
+    if (found) {
+      set({ convSearchIndex: index, highlightMessageId: result.messageId });
+    } else {
+      // Message not in loaded range — fetch messages around it
+      try {
+        const data = await api<{
+          messages: Message[];
+          hasMoreUp: boolean;
+          hasMoreDown: boolean;
+        }>(
+          `/api/conversations/${activeConversationId}/messages?around=${result.messageId}&limit=50`
+        );
+        set({
+          convSearchIndex: index,
+          highlightMessageId: result.messageId,
+          jumpPagination: { hasMoreUp: data.hasMoreUp, hasMoreDown: data.hasMoreDown },
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [activeConversationId]: data.messages,
+          },
+        });
+      } catch {
+        set({ convSearchIndex: index, highlightMessageId: result.messageId });
+      }
+    }
+
+    // Clear highlight after a delay
+    setTimeout(() => {
+      if (get().highlightMessageId === result.messageId) {
+        set({ highlightMessageId: null });
+      }
+    }, 3000);
+  },
+
   jumpToMessage: async (conversationId, messageId) => {
     // Fetch around-cursor messages FIRST, before switching conversation,
     // so MessageList mounts with correct messages already in store.
@@ -456,21 +608,52 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ conversations });
   },
 
-  loadMessages: async (conversationId) => {
+  loadMessages: async (conversationId, unreadCountForDivider) => {
     const requestId = get().loadingRequestId + 1;
     const prevMessages = get().messagesByConversation[conversationId] ?? [];
     set({ loadingMessages: true, loadingRequestId: requestId });
+
+    // ── Cache-first: show IDB-cached messages immediately ──
+    if (prevMessages.length === 0) {
+      const cached = await getCachedMessages(conversationId);
+      if (cached && cached.length > 0 && get().loadingRequestId === requestId) {
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: cached,
+          },
+        });
+        // Restore scroll position
+        const scrollPos = await getCachedScrollPosition(conversationId);
+        if (scrollPos !== null) {
+          set({ scrollPositions: { ...get().scrollPositions, [conversationId]: scrollPos } });
+        }
+      }
+    }
+
+    // ── Fetch fresh data from API ──
     try {
-      // Always load fresh messages (no cache guard)
       const data = await api<{ messages: Message[]; hasMore: boolean }>(
         `/api/conversations/${conversationId}/messages`
       );
+      // Compute unread divider position before updating messages
+      let dividerMsgId: string | null = null;
+      if (unreadCountForDivider && unreadCountForDivider > 0 && data.messages.length > 0) {
+        const idx = data.messages.length - unreadCountForDivider;
+        if (idx > 0 && idx < data.messages.length) {
+          dividerMsgId = data.messages[idx].id;
+        }
+      }
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
           [conversationId]: data.messages,
         },
+        ...(dividerMsgId !== null && { unreadDividerMessageId: dividerMsgId }),
       });
+
+      // Persist fresh messages to IDB cache
+      setCachedMessages(conversationId, data.messages).catch(() => {});
 
       // Send mark_read with max seq from loaded messages
       if (get().activeConversationId === conversationId) {
@@ -846,6 +1029,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messagesByConversation: newMessages,
       thinkingAgents: newThinking,
     });
+    deleteCachedMessages(id).catch(() => {});
   },
 
   updateConversation: async (id, data) => {
@@ -951,6 +1135,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: [],
       },
     });
+    deleteCachedMessages(conversationId).catch(() => {});
   },
 
   getConversationStatus: () => {
@@ -1503,6 +1688,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         wsManager.send({ type: "mark_read", conversationId, seq: msg.seq });
         wsManager.updateLastSeq(conversationId, msg.seq);
       }
+
+      // Persist updated messages to IDB cache (debounced)
+      const updatedMsgs = get().messagesByConversation[conversationId];
+      if (updatedMsgs) debouncedSetCachedMessages(conversationId, updatedMsgs);
       return;
     }
 
@@ -1652,6 +1841,58 @@ export const useChatStore = create<ChatState>((set, get) => ({
             },
           });
         }
+      }
+      return;
+    }
+
+    if (event.type === "stream_resume") {
+      const { conversationId, messageId, seq, content } = event;
+
+      // Remove any stale thinkingAgent for this message
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const newThinking = thinking.filter((t) => t.messageId !== messageId);
+
+      const current = get().messagesByConversation[conversationId] ?? [];
+      const existingIdx = current.findIndex((m) => m.id === messageId);
+
+      if (existingIdx !== -1) {
+        // Message already in store — update content and mark as streaming
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: current.map((m) =>
+              m.id === messageId
+                ? { ...m, content, status: "streaming" as const }
+                : m
+            ),
+          },
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: newThinking,
+          },
+        });
+      } else {
+        // Message not in store — insert it
+        const resumeMsg: Message = {
+          id: messageId,
+          conversationId,
+          seq,
+          role: "agent",
+          content,
+          status: "streaming",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: [...current, resumeMsg],
+          },
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: newThinking,
+          },
+        });
       }
       return;
     }
@@ -1997,6 +2238,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
         }
       }
+
+      // Persist completed messages to IDB cache
+      const endMsgs = get().messagesByConversation[conversationId];
+      if (endMsgs) setCachedMessages(conversationId, endMsgs).catch(() => {});
       return;
     }
 
@@ -2337,6 +2582,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const unsub = wsManager.subscribe((event) => {
       get().handleWSEvent(event);
     });
+    // Prune expired IDB cache entries on startup
+    pruneStaleCache().catch(() => {});
     return () => {
       unsub();
       wsManager.disconnect();

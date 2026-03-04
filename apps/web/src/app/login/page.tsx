@@ -97,7 +97,7 @@ function LoginForm() {
           <div className="text-center">
             <h1 className="text-3xl font-bold">Welcome Back</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Sign in to your account.
+              Sign in to your account
             </p>
           </div>
 
@@ -120,6 +120,7 @@ function LoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                   className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-[oklch(0.6_0.18_250)] focus:outline-none focus:ring-1 focus:ring-[oklch(0.6_0.18_250)]"
                 />
               </div>
@@ -137,6 +138,7 @@ function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                   className="h-11 w-full rounded-lg border border-border bg-background pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-[oklch(0.6_0.18_250)] focus:outline-none focus:ring-1 focus:ring-[oklch(0.6_0.18_250)]"
                 />
                 <button
@@ -199,7 +201,8 @@ function LoginForm() {
           </p>
 
           <p className="text-center text-xs text-muted-foreground/60">
-            By signing in you agree to our Terms of Service
+            By signing in you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-muted-foreground">Terms of Service</Link>
           </p>
         </div>
       </div>

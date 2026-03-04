@@ -93,6 +93,14 @@ pub fn filter_agents_for_dispatch(
     }
 }
 
+/// Safely truncate a string at a character boundary.
+fn safe_truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
 /// Get conversation member user IDs with caching.
 /// Returns a filtered list excluding users who have blocked (or are blocked by) sender_user_id.
 async fn get_conv_member_ids(
@@ -763,7 +771,8 @@ async fn handle_sync(
         "missedMessages": missed_messages
     }));
 
-    // Re-attach to active streams
+    // Re-attach to active streams — send stream_resume so frontend can
+    // restore the in-progress message without duplicating.
     for conv_id in &conv_ids {
         if !ws_state.has_active_stream(conv_id) {
             continue;
@@ -779,24 +788,33 @@ async fn handle_sync(
         .await;
 
         if let Ok(Some((msg_id, seq))) = streaming_msg {
-            ws_state.send_to_user(user_id, &json!({
-                "type": "stream_start",
-                "conversationId": conv_id,
-                "messageId": msg_id,
-                "seq": seq
-            }));
-
+            let mut content = String::new();
             if let Ok(mut conn) = redis.get().await {
                 if let Ok(Some(cached)) = conn.get::<_, Option<String>>(&format!("stream:{}", msg_id)).await {
-                    ws_state.send_to_user(user_id, &json!({
-                        "type": "stream_chunk",
-                        "conversationId": conv_id,
-                        "messageId": msg_id,
-                        "seq": seq,
-                        "chunk": cached
-                    }));
+                    content = cached;
                 }
             }
+
+            // Also try to get the agent info from the message
+            let agent_info = sqlx::query_as::<_, (Option<String>,)>(
+                r#"SELECT sender_agent_id::text FROM messages WHERE id = $1::uuid"#,
+            )
+            .bind(&msg_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten();
+
+            let agent_id = agent_info.and_then(|a| a.0);
+
+            ws_state.send_to_user(user_id, &json!({
+                "type": "stream_resume",
+                "conversationId": conv_id,
+                "messageId": msg_id,
+                "seq": seq,
+                "content": content,
+                "agentId": agent_id
+            }));
         }
     }
 }
@@ -996,6 +1014,35 @@ pub async fn trigger_agent_response(
                 }
             });
             ws_state.broadcast_to_members(&member_ids, &msg_event, redis);
+
+            // Push notification for human message to other members
+            for mid in &member_ids {
+                if mid == user_id { continue; }
+                if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
+                    if let Ok(true) = should_send_push(db, mid, "message").await {
+                        let preview = {
+                            let truncated = safe_truncate(&content, 100);
+                            if truncated.len() < content.len() {
+                                format!("{}...", truncated)
+                            } else {
+                                content.to_string()
+                            }
+                        };
+                        let _ = send_push_to_user(
+                            db,
+                            config,
+                            mid,
+                            &crate::services::push::PushPayload {
+                                notification_type: "message".into(),
+                                title: sender_name.to_string(),
+                                body: preview,
+                                url: Some(format!("/chat/{}", conversation_id)),
+                            },
+                        )
+                        .await;
+                    }
+                }
+            }
         }
         return;
     }
@@ -1150,6 +1197,35 @@ pub async fn trigger_agent_response(
                 }
             });
             ws_state.broadcast_to_members(&member_ids, &user_msg_event, redis);
+
+            // Push notification for human message to other group members
+            for mid in &member_ids {
+                if mid == user_id { continue; }
+                if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
+                    if let Ok(true) = should_send_push(db, mid, "message").await {
+                        let preview = {
+                            let truncated = safe_truncate(&content, 100);
+                            if truncated.len() < content.len() {
+                                format!("{}...", truncated)
+                            } else {
+                                content.to_string()
+                            }
+                        };
+                        let _ = send_push_to_user(
+                            db,
+                            config,
+                            mid,
+                            &crate::services::push::PushPayload {
+                                notification_type: "message".into(),
+                                title: sender_name.to_string(),
+                                body: preview,
+                                url: Some(format!("/chat/{}", conversation_id)),
+                            },
+                        )
+                        .await;
+                    }
+                }
+            }
         }
     }
 
@@ -1638,19 +1714,22 @@ async fn do_trigger_agent_response(
                                 update_thread_summary(&db, tid, None, Some(&agent_id)).await;
                             }
 
-                            // Push notification
-                            if !ws_state.is_user_foreground(&user_id) {
-                                if let Ok(false) = is_conversation_muted(&db, &user_id, &conversation_id).await {
-                                    if let Ok(true) = should_send_push(&db, &user_id, "message").await {
-                                        let preview = if full_content.len() > 100 {
-                                            format!("{}...", &full_content[..100])
-                                        } else {
-                                            full_content.clone()
+                            // Push notification for agent message — send to all conversation members
+                            for mid in &member_ids {
+                                if let Ok(false) = is_conversation_muted(&db, mid, &conversation_id).await {
+                                    if let Ok(true) = should_send_push(&db, mid, "message").await {
+                                        let preview = {
+                                            let truncated = safe_truncate(&full_content, 100);
+                                            if truncated.len() < full_content.len() {
+                                                format!("{}...", truncated)
+                                            } else {
+                                                full_content.clone()
+                                            }
                                         };
                                         let _ = send_push_to_user(
                                             &db,
                                             &config,
-                                            &user_id,
+                                            mid,
                                             &crate::services::push::PushPayload {
                                                 notification_type: "message".into(),
                                                 title: agent_name.clone(),

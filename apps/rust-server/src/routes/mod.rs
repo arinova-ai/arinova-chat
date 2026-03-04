@@ -33,6 +33,7 @@ pub mod pins;
 pub mod notes;
 pub mod agent_notes;
 pub mod link_preview;
+pub mod spaces;
 
 use axum::Router;
 use crate::AppState;

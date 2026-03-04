@@ -25,6 +25,7 @@ interface SpacesState {
   // List
   spaces: Space[];
   loading: boolean;
+  error: boolean;
   page: number;
   totalPages: number;
   search: string;
@@ -73,6 +74,7 @@ interface SpacesState {
 export const useSpacesStore = create<SpacesState>((set, get) => ({
   spaces: [],
   loading: false,
+  error: false,
   page: 1,
   totalPages: 1,
   search: "",
@@ -88,7 +90,7 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
   pipBtnPos: null,
 
   fetchSpaces: async () => {
-    set({ loading: true });
+    set({ loading: true, error: false });
     try {
       const { search, category, page } = get();
       const params = new URLSearchParams();
@@ -105,7 +107,7 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
         page: data.page,
       });
     } catch {
-      // handled by api()
+      set({ error: true });
     } finally {
       set({ loading: false });
     }

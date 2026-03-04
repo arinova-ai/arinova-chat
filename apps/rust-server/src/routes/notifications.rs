@@ -107,8 +107,8 @@ async fn update_preferences(
                playground_invite_enabled = COALESCE($5, notification_preferences.playground_invite_enabled),
                playground_turn_enabled = COALESCE($6, notification_preferences.playground_turn_enabled),
                playground_result_enabled = COALESCE($7, notification_preferences.playground_result_enabled),
-               quiet_hours_start = COALESCE($8, notification_preferences.quiet_hours_start),
-               quiet_hours_end = COALESCE($9, notification_preferences.quiet_hours_end)
+               quiet_hours_start = $8,
+               quiet_hours_end = $9
            RETURNING *"#,
     )
     .bind(pref_id)

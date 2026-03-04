@@ -1,4 +1,4 @@
-const CACHE_NAME = "arinova-v2";
+const CACHE_NAME = "arinova-v3";
 const PRECACHE_URLS = ["/", "/login", "/register"];
 
 self.addEventListener("install", (event) => {

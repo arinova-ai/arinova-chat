@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { ArrowLeft, CalendarDays, Settings, X, ShieldBan, VolumeX, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Settings, X, ShieldBan, VolumeX, Loader2, UserPlus, UserMinus, Clock } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { useTranslation } from "@/lib/i18n";
@@ -40,6 +40,8 @@ function UserProfileContent() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [friendStatus, setFriendStatus] = useState<"none" | "friend" | "pending_outgoing" | "pending_incoming">("none");
+  const [friendshipId, setFriendshipId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const blockedUserIds = useChatStore((s) => s.blockedUserIds);
@@ -80,6 +82,36 @@ function UserProfileContent() {
       .catch(() => {});
   }, [userId, isOwnProfile, blockedUserIds]);
 
+  // Check friend status
+  useEffect(() => {
+    if (isOwnProfile) return;
+    let cancelled = false;
+    Promise.all([
+      api<Array<{ id: string }>>("/api/friends"),
+      api<{ incoming: Array<{ id: string; userId: string }>; outgoing: Array<{ id: string; userId: string }> }>("/api/friends/requests"),
+    ])
+      .then(([friends, requests]) => {
+        if (cancelled) return;
+        if (friends.some((f) => f.id === userId)) {
+          setFriendStatus("friend");
+        } else {
+          const incoming = requests.incoming.find((r) => r.userId === userId);
+          const outgoing = requests.outgoing.find((r) => r.userId === userId);
+          if (incoming) {
+            setFriendStatus("pending_incoming");
+            setFriendshipId(incoming.id);
+          } else if (outgoing) {
+            setFriendStatus("pending_outgoing");
+            setFriendshipId(outgoing.id);
+          } else {
+            setFriendStatus("none");
+          }
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId, isOwnProfile]);
+
   const handleToggleBlock = async () => {
     setActionLoading("block");
     try {
@@ -103,6 +135,28 @@ function UserProfileContent() {
       } else {
         await api(`/api/users/${userId}/mute`, { method: "POST" });
         setIsMuted(true);
+      }
+    } catch {}
+    setActionLoading(null);
+  };
+
+  const handleFriendAction = async () => {
+    setActionLoading("friend");
+    try {
+      if (friendStatus === "friend") {
+        await api(`/api/friends/${userId}`, { method: "DELETE" });
+        setFriendStatus("none");
+        setFriendshipId(null);
+      } else if (friendStatus === "pending_incoming" && friendshipId) {
+        await api(`/api/friends/accept/${friendshipId}`, { method: "POST" });
+        setFriendStatus("friend");
+        setFriendshipId(null);
+      } else if (friendStatus === "none" && user?.username) {
+        await api("/api/friends/request", {
+          method: "POST",
+          body: JSON.stringify({ username: user.username }),
+        });
+        setFriendStatus("pending_outgoing");
       }
     } catch {}
     setActionLoading(null);
@@ -239,9 +293,33 @@ function UserProfileContent() {
                     </div>
                   )}
 
-                  {/* Block / Mute actions (not shown on own profile) */}
+                  {/* Friend / Block / Mute actions (not shown on own profile) */}
                   {!isOwnProfile && (
                     <div className="mt-4 flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`gap-1.5 ${friendStatus === "friend" ? "text-green-500 border-green-500/40" : friendStatus === "pending_outgoing" ? "text-muted-foreground" : ""}`}
+                        disabled={actionLoading === "friend" || friendStatus === "pending_outgoing"}
+                        onClick={handleFriendAction}
+                      >
+                        {actionLoading === "friend" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : friendStatus === "friend" ? (
+                          <UserMinus className="h-3.5 w-3.5" />
+                        ) : friendStatus === "pending_outgoing" ? (
+                          <Clock className="h-3.5 w-3.5" />
+                        ) : (
+                          <UserPlus className="h-3.5 w-3.5" />
+                        )}
+                        {friendStatus === "friend"
+                          ? t("userProfile.removeFriend")
+                          : friendStatus === "pending_outgoing"
+                            ? t("userProfile.pendingRequest")
+                            : friendStatus === "pending_incoming"
+                              ? t("userProfile.acceptRequest")
+                              : t("userProfile.addFriend")}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"

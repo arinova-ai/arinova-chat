@@ -6,7 +6,7 @@ import { authClient } from "@/lib/auth-client";
 import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Check, X, AtSign } from "lucide-react";
+import { Loader2, Check, X, AtSign, AlertTriangle } from "lucide-react";
 
 const USERNAME_REGEX = /^[a-z][a-z0-9_]*$/;
 const NO_CONSECUTIVE_UNDERSCORES = /_{2,}/;
@@ -138,8 +138,12 @@ export default function SetupUsernamePage() {
           </div>
           <h1 className="text-2xl font-bold">Choose Your Username</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            This will be your unique identifier. It cannot be changed later.
+            This will be your unique identifier.
           </p>
+          <div className="mt-2 flex items-center gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span>It cannot be changed later.</span>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -102,6 +102,79 @@ async fn main() {
         WHERE m.thread_id IS NOT NULL
         GROUP BY m.thread_id
         ON CONFLICT (thread_id) DO NOTHING;
+
+        CREATE TABLE IF NOT EXISTS office_slot_bindings (
+            user_id TEXT NOT NULL,
+            theme_id TEXT NOT NULL,
+            slot_index INT NOT NULL,
+            agent_id UUID NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, theme_id, slot_index)
+        );
+
+        DO $$ BEGIN
+            CREATE TYPE playground_category AS ENUM ('board_game', 'card_game', 'rpg', 'strategy', 'puzzle', 'trivia', 'social', 'other');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+
+        DO $$ BEGIN
+            CREATE TYPE session_status AS ENUM ('waiting', 'active', 'paused', 'finished', 'cancelled');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+
+        CREATE TABLE IF NOT EXISTS playgrounds (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            category playground_category NOT NULL DEFAULT 'other',
+            tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+            definition JSONB NOT NULL DEFAULT '{}'::jsonb,
+            is_public BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_playgrounds_owner ON playgrounds(owner_id);
+
+        CREATE TABLE IF NOT EXISTS playground_sessions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            playground_id UUID NOT NULL REFERENCES playgrounds(id) ON DELETE CASCADE,
+            status session_status NOT NULL DEFAULT 'waiting',
+            state JSONB NOT NULL DEFAULT '{}'::jsonb,
+            current_phase TEXT,
+            prize_pool INT NOT NULL DEFAULT 0,
+            started_at TIMESTAMP,
+            finished_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_playground_sessions_pg ON playground_sessions(playground_id);
+
+        CREATE TABLE IF NOT EXISTS playground_participants (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            session_id UUID NOT NULL REFERENCES playground_sessions(id) ON DELETE CASCADE,
+            user_id TEXT,
+            agent_id UUID,
+            role TEXT,
+            "controlMode" TEXT NOT NULL DEFAULT 'human',
+            is_connected BOOLEAN NOT NULL DEFAULT true,
+            joined_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_playground_participants_session ON playground_participants(session_id);
+
+        CREATE TABLE IF NOT EXISTS notification_preferences (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id TEXT NOT NULL UNIQUE,
+            global_enabled BOOLEAN NOT NULL DEFAULT true,
+            message_enabled BOOLEAN NOT NULL DEFAULT true,
+            playground_invite_enabled BOOLEAN NOT NULL DEFAULT true,
+            playground_turn_enabled BOOLEAN NOT NULL DEFAULT true,
+            playground_result_enabled BOOLEAN NOT NULL DEFAULT true,
+            quiet_hours_start TEXT,
+            quiet_hours_end TEXT
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
@@ -220,6 +293,8 @@ async fn main() {
         .merge(routes::reports::router())
         .merge(routes::notes::router())
         .merge(routes::agent_notes::router())
+        .merge(routes::link_preview::router())
+        .merge(routes::spaces::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)

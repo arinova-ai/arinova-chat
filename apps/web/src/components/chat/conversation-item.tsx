@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
 import type { Message } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,6 +14,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,6 +33,15 @@ import type { ConversationType } from "@arinova/shared/types";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
+
+// Detect hover-capable device (desktop) vs touch-only (mobile)
+const hoverQuery = typeof window !== "undefined" ? window.matchMedia("(hover: hover)") : null;
+function subscribeHover(cb: () => void) {
+  hoverQuery?.addEventListener("change", cb);
+  return () => hoverQuery?.removeEventListener("change", cb);
+}
+function getHoverSnapshot() { return hoverQuery?.matches ?? false; }
+function getHoverServerSnapshot() { return false; }
 
 const SWIPE_THRESHOLD = 70;
 const SWIPE_ACTION_WIDTH = 140;
@@ -98,6 +114,7 @@ export function ConversationItem({
   onDelete,
 }: ConversationItemProps) {
   const { t } = useTranslation();
+  const isDesktop = useSyncExternalStore(subscribeHover, getHoverSnapshot, getHoverServerSnapshot);
   const preview = lastMessage
     ? truncate(lastMessage.content.replace(/\n/g, " "), 50)
     : t("chat.noMessages");
@@ -112,12 +129,14 @@ export function ConversationItem({
   const [swipeOffset, setSwipeOffset] = useState(0);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const swipingRef = useRef(false);
+  const startOffsetRef = useRef(0);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    startOffsetRef.current = swipeOffset;
     swipingRef.current = false;
-  }, []);
+  }, [swipeOffset]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
@@ -136,8 +155,18 @@ export function ConversationItem({
     }
 
     if (swipingRef.current) {
-      // Right swipe: clamp to SWIPE_ACTION_WIDTH, Left swipe: clamp to -SWIPE_DELETE_WIDTH
-      const clamped = Math.max(-SWIPE_DELETE_WIDTH, Math.min(SWIPE_ACTION_WIDTH, dx));
+      const raw = startOffsetRef.current + dx;
+      let clamped: number;
+      if (startOffsetRef.current > 0) {
+        // Right side (Pin/Mute) was open — only allow closing toward 0, don't open Delete
+        clamped = Math.max(0, Math.min(SWIPE_ACTION_WIDTH, raw));
+      } else if (startOffsetRef.current < 0) {
+        // Left side (Delete) was open — only allow closing toward 0, don't open Pin/Mute
+        clamped = Math.max(-SWIPE_DELETE_WIDTH, Math.min(0, raw));
+      } else {
+        // Nothing open — allow either direction
+        clamped = Math.max(-SWIPE_DELETE_WIDTH, Math.min(SWIPE_ACTION_WIDTH, raw));
+      }
       setSwipeOffset(clamped);
     }
   }, []);
@@ -196,12 +225,11 @@ export function ConversationItem({
 
   const isPinned = pinnedAt !== null;
 
-  return (
-    <>
+  const cardContent = (
       <div className="relative overflow-hidden rounded-lg">
-        {/* Left actions (right swipe): Pin + Mute */}
+        {/* Left actions (right swipe): Pin + Mute — mobile only */}
         <div
-          className="absolute inset-y-0 left-0 flex items-stretch"
+          className="absolute inset-y-0 left-0 flex items-stretch md:hidden"
           style={{ width: SWIPE_ACTION_WIDTH }}
         >
           <button
@@ -230,9 +258,9 @@ export function ConversationItem({
           )}
         </div>
 
-        {/* Right action (left swipe): Delete */}
+        {/* Right action (left swipe): Delete — mobile only */}
         <div
-          className="absolute inset-y-0 right-0 flex items-stretch"
+          className="absolute inset-y-0 right-0 flex items-stretch md:hidden"
           style={{ width: SWIPE_DELETE_WIDTH }}
         >
           <button
@@ -335,15 +363,15 @@ export function ConversationItem({
           </div>
         </button>
 
-        {/* Three-dot menu button */}
+        {/* Three-dot menu button — mobile only */}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon-xs"
               className={cn(
-                "shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100",
-                menuOpen && "opacity-100"
+                "shrink-0 text-muted-foreground transition-opacity md:hidden",
+                menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
               )}
               onClick={(e) => e.stopPropagation()}
             >
@@ -379,6 +407,19 @@ export function ConversationItem({
                 </>
               )}
             </DropdownMenuItem>
+            {onMuteToggle && (
+              <>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMuteToggle();
+                  }}
+                >
+                  {isMuted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                  {isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
@@ -394,6 +435,57 @@ export function ConversationItem({
         </DropdownMenu>
       </div>
       </div>
+  );
+
+  return (
+    <>
+      {isDesktop ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            {cardContent}
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem
+              onClick={() => {
+                setRenaming(true);
+                setRenameValue(title ?? agentName);
+              }}
+            >
+              <Pencil className="h-4 w-4" />
+              {t("conversation.rename")}
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onPin(!isPinned)}>
+              {isPinned ? (
+                <>
+                  <PinOff className="h-4 w-4" />
+                  {t("conversation.unpin")}
+                </>
+              ) : (
+                <>
+                  <Pin className="h-4 w-4" />
+                  {t("conversation.pin")}
+                </>
+              )}
+            </ContextMenuItem>
+            {onMuteToggle && (
+              <ContextMenuItem onClick={() => onMuteToggle()}>
+                {isMuted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                {isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
+              </ContextMenuItem>
+            )}
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              variant="destructive"
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              {t("common.delete")}
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        cardContent
+      )}
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

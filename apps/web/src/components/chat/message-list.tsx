@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { Message } from "@arinova/shared/types";
 import { MessageBubble } from "./message-bubble";
-import { useAutoScroll } from "@/hooks/use-auto-scroll";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
 import { ArrowDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
-import { diagCount, diagEvent, useRenderDiag } from "@/lib/chat-diagnostics";
+import { useTranslation } from "@/lib/i18n";
+import { diagCount, useRenderDiag } from "@/lib/chat-diagnostics";
 
 interface MessageListProps {
   messages: Message[];
@@ -20,7 +21,6 @@ interface MessageListProps {
 function MessageSkeleton() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-4">
-      {/* Alternating left/right placeholder bubbles */}
       <div className="flex justify-start">
         <div className="h-10 w-48 animate-pulse rounded-2xl bg-muted" />
       </div>
@@ -40,7 +40,10 @@ function MessageSkeleton() {
   );
 }
 
+const START_INDEX = 100_000;
+
 export function MessageList({ messages: rawMessages, agentName, isGroupConversation }: MessageListProps) {
+  const { t } = useTranslation();
   const loadingMessages = useChatStore((s) => s.loadingMessages);
 
   // Filter out thread messages (they display in the thread panel only) + deduplicate
@@ -48,36 +51,30 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     .filter((m) => !m.threadId)
     .filter((m) => m.status === "streaming" || m.content?.trim() || m.attachments?.length)
     .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
+
   const lastMessage = messages[messages.length - 1];
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const highlightMessageId = useChatStore((s) => s.highlightMessageId);
   const searchQuery = useChatStore((s) => s.searchQuery);
-  const thinkingCount = useChatStore((s) => activeConversationId ? (s.thinkingAgents[activeConversationId]?.length ?? 0) : 0);
+  const convSearchQuery = useChatStore((s) => s.convSearchQuery);
   const jumpPagination = useChatStore((s) => s.jumpPagination);
+  const unreadDividerMessageId = useChatStore((s) => s.unreadDividerMessageId);
+
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const [loadingUp, setLoadingUp] = useState(false);
   const [loadingDown, setLoadingDown] = useState(false);
   const [hasMoreUp, setHasMoreUp] = useState(jumpPagination?.hasMoreUp ?? true);
   const [hasMoreDown, setHasMoreDown] = useState(jumpPagination?.hasMoreDown ?? false);
-  const loadingUpRef = useRef(false);
-  const loadingDownRef = useRef(false);
-  const messagesRef = useRef(messages);
-  const highlightRef = useRef<HTMLDivElement>(null);
-  const prependHeightRef = useRef<number | null>(null);
-  const isRestoringScrollRef = useRef(false);
 
+  const loadingRef = useRef(false);
+  const messagesRef = useRef(messages);
+  const atBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(messages.length);
   const isPrependingRef = useRef(false);
-  const { ref: scrollRef, showScrollButton, newMessageCount, scrollToBottom } = useAutoScroll<HTMLDivElement>(
-    [lastMessage?.content, lastMessage?.status, messages.length, thinkingCount],
-    {
-      conversationId: activeConversationId,
-      skipScroll: !!highlightMessageId,
-      messageCount: messages.length,
-      isPrependingRef,
-    },
-  );
-  const topSentinelRef = useRef<HTMLDivElement>(null);
-  const bottomSentinelRef = useRef<HTMLDivElement>(null);
-  const loadingRef = useRef(false); // serialization: only one load at a time
+
   useRenderDiag("MessageList", () => ({
     activeConversationId,
     count: messages.length,
@@ -99,54 +96,41 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     }
   }, [jumpPagination]);
 
-  // Scroll to highlighted message (and matching text within it) when it appears
+  // Scroll to highlighted message when it appears
   useEffect(() => {
-    if (!highlightMessageId || !highlightRef.current) return;
+    if (!highlightMessageId) return;
+    const idx = messages.findIndex((m) => m.id === highlightMessageId);
+    if (idx === -1) return;
 
-    requestAnimationFrame(() => {
-      const el = highlightRef.current;
-      const container = scrollRef.current;
-      if (!el || !container) return;
+    setTimeout(() => {
+      virtuosoRef.current?.scrollToIndex({
+        index: idx,
+        align: "center",
+        behavior: "smooth",
+      });
+    }, 100);
+  }, [highlightMessageId, messages]);
 
-      const query = useChatStore.getState().searchQuery?.toLowerCase();
+  // Track new messages for badge count
+  useEffect(() => {
+    const prevCount = prevMessageCountRef.current;
+    const currentCount = messages.length;
+    prevMessageCountRef.current = currentCount;
 
-      // Try to find the matching text node inside the message
-      if (query) {
-        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-        let node: Text | null;
-        while ((node = walker.nextNode() as Text | null)) {
-          const idx = node.textContent?.toLowerCase().indexOf(query) ?? -1;
-          if (idx >= 0) {
-            // Found — get bounding rect of the matched text and center it
-            const range = document.createRange();
-            range.setStart(node, idx);
-            range.setEnd(node, idx + query.length);
-            const rect = range.getBoundingClientRect();
-            const containerRect = container.getBoundingClientRect();
-            const offset = rect.top - containerRect.top + container.scrollTop;
-            container.scrollTo({
-              top: offset - containerRect.height / 2,
-              behavior: "smooth",
-            });
-            return;
-          }
-        }
-      }
+    if (currentCount > prevCount && !atBottomRef.current && !isPrependingRef.current) {
+      setNewMessageCount((prev) => prev + (currentCount - prevCount));
+    }
+  }, [messages.length]);
 
-      // Fallback: center the whole message
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }, [highlightMessageId, messages, scrollRef]);
-
+  // Load older messages (triggered by startReached)
   const loadOlder = useCallback(async () => {
     diagCount("msglist:loadOlder:attempt");
     const currentMessages = messagesRef.current;
-    if (loadingRef.current || loadingUpRef.current || !hasMoreUp || !activeConversationId || currentMessages.length === 0)
+    if (loadingRef.current || !hasMoreUp || !activeConversationId || currentMessages.length === 0)
       return;
     diagCount("msglist:loadOlder:run");
 
     loadingRef.current = true;
-    loadingUpRef.current = true;
     setLoadingUp(true);
     try {
       const firstMsg = currentMessages[0];
@@ -155,11 +139,8 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       );
 
       if (data.messages.length > 0) {
-        const el = scrollRef.current;
-        prependHeightRef.current = el?.scrollHeight ?? 0;
-        // Set synchronously BEFORE store update so the auto-scroll effect
-        // sees it when triggered by the new message count
         isPrependingRef.current = true;
+        setFirstItemIndex((prev) => prev - data.messages.length);
 
         const store = useChatStore.getState();
         const current = store.messagesByConversation[activeConversationId] ?? [];
@@ -169,6 +150,10 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
             [activeConversationId]: [...data.messages, ...current],
           },
         });
+
+        requestAnimationFrame(() => {
+          isPrependingRef.current = false;
+        });
       }
 
       setHasMoreUp(data.hasMore);
@@ -176,20 +161,19 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       // ignore
     } finally {
       loadingRef.current = false;
-      loadingUpRef.current = false;
       setLoadingUp(false);
     }
-  }, [hasMoreUp, activeConversationId, scrollRef]);
+  }, [hasMoreUp, activeConversationId]);
 
+  // Load newer messages (triggered by endReached)
   const loadNewer = useCallback(async () => {
     diagCount("msglist:loadNewer:attempt");
     const currentMessages = messagesRef.current;
-    if (loadingRef.current || loadingDownRef.current || !hasMoreDown || !activeConversationId || currentMessages.length === 0)
+    if (loadingRef.current || !hasMoreDown || !activeConversationId || currentMessages.length === 0)
       return;
     diagCount("msglist:loadNewer:run");
 
     loadingRef.current = true;
-    loadingDownRef.current = true;
     setLoadingDown(true);
     try {
       const lastMsg = currentMessages[currentMessages.length - 1];
@@ -213,117 +197,158 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
       // ignore
     } finally {
       loadingRef.current = false;
-      loadingDownRef.current = false;
       setLoadingDown(false);
     }
   }, [hasMoreDown, activeConversationId]);
 
-  // Restore scroll position after older messages are prepended (before paint)
-  useLayoutEffect(() => {
-    const prevHeight = prependHeightRef.current;
-    if (prevHeight === null) return;
-    prependHeightRef.current = null;
-    const el = scrollRef.current;
-    if (el) {
-      isRestoringScrollRef.current = true;
-      el.scrollTop += el.scrollHeight - prevHeight;
-      requestAnimationFrame(() => {
-        isRestoringScrollRef.current = false;
-        isPrependingRef.current = false;
-      });
+  // Auto-scroll: follow output only when already at bottom
+  const followOutput = useCallback(
+    (isAtBottom: boolean): false | "smooth" => (isAtBottom ? "smooth" : false),
+    [],
+  );
+
+  // Track bottom state for scroll-to-bottom button & new message badge
+  const handleAtBottomChange = useCallback((bottom: boolean) => {
+    atBottomRef.current = bottom;
+    setShowScrollButton(!bottom);
+    if (bottom) {
+      setNewMessageCount(0);
+      // Clear unread divider once user has seen all messages
+      if (useChatStore.getState().unreadDividerMessageId) {
+        useChatStore.setState({ unreadDividerMessageId: null });
+      }
     }
-  });
+  }, []);
 
-  // IntersectionObserver sentinels for loading triggers (replaces scroll-event checks)
+  // Scroll-to-bottom handler — also closes conversation search to prevent conflict
+  const handleScrollToBottom = useCallback(() => {
+    const state = useChatStore.getState();
+    if (state.convSearchOpen) {
+      state.closeConvSearch();
+    }
+    virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" });
+    setNewMessageCount(0);
+  }, []);
+
+  // Initial scroll position (computed once on mount)
+  const initialIndex = useMemo(() => {
+    if (highlightMessageId) {
+      const idx = messages.findIndex((m) => m.id === highlightMessageId);
+      if (idx !== -1) return idx;
+    }
+    return Math.max(0, messages.length - 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When messages first arrive (from IDB cache), scroll to bottom.
+  // initialTopMostItemIndex only takes effect at mount time, so if messages
+  // were empty when Virtuoso mounted the initial scroll position is wrong.
+  const prevLengthRef = useRef(0);
   useEffect(() => {
-    const container = scrollRef.current;
-    const topEl = topSentinelRef.current;
-    const bottomEl = bottomSentinelRef.current;
-    if (!container || !topEl || !bottomEl) return;
+    if (prevLengthRef.current === 0 && messages.length > 0) {
+      virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end" });
+    }
+    prevLengthRef.current = messages.length;
+  }, [messages.length]);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        diagCount("msglist:observer:callback");
-        if (isRestoringScrollRef.current) return;
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          if (entry.target === topEl) {
-            diagEvent("msglist:observer:top");
-            loadOlder();
-          }
-          if (entry.target === bottomEl) {
-            diagEvent("msglist:observer:bottom");
-            loadNewer();
-          }
-        }
-      },
-      { root: container, rootMargin: "200px 0px" }
-    );
-    observer.observe(topEl);
-    observer.observe(bottomEl);
-    return () => observer.disconnect();
-  }, [loadOlder, loadNewer, scrollRef]);
-
-  return (
-    <div className="relative flex-1 overflow-hidden">
-      <div
-        ref={scrollRef}
-        className="h-full overflow-y-auto overflow-x-hidden py-4"
-        style={{ overflowAnchor: "none" }}
-      >
-        {messages.length === 0 && loadingMessages ? (
-          <MessageSkeleton />
+  // Virtuoso Header / Footer components
+  const virtuosoComponents = useMemo(
+    () => ({
+      Header: () =>
+        loadingUp ? (
+          <div className="mx-auto flex w-full max-w-3xl justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
         ) : (
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-          {/* Top sentinel for IntersectionObserver-based older message loading */}
-          <div ref={topSentinelRef} className="h-px shrink-0" aria-hidden />
-          {loadingUp && (
-            <div className="flex justify-center py-2">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          )}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              ref={message.id === highlightMessageId ? highlightRef : undefined}
-              className={cn(
-                "transition-colors duration-1000",
-                message.id === highlightMessageId && "search-highlight"
-              )}
-            >
-              {message.role === "system" ? (
-                <div className="flex justify-center py-1.5">
-                  <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
-                    {message.content}
-                  </span>
-                </div>
-              ) : (
-                <MessageBubble
-                  message={message}
-                  agentName={message.role === "agent" ? agentName : undefined}
-                  highlightQuery={message.id === highlightMessageId ? searchQuery : undefined}
-                  isGroupConversation={isGroupConversation}
-                />
-              )}
-            </div>
-          ))}
+          <div className="pt-2" />
+        ),
+      Footer: () => (
+        <div className="mx-auto w-full max-w-3xl pb-4">
           {loadingDown && (
             <div className="flex justify-center py-2">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           )}
-          {activeConversationId && (
-            <TypingIndicator conversationId={activeConversationId} />
-          )}
-          {/* Bottom sentinel for IntersectionObserver-based newer message loading */}
-          <div ref={bottomSentinelRef} className="h-px shrink-0" aria-hidden />
+          {activeConversationId && <TypingIndicator conversationId={activeConversationId} />}
         </div>
+      ),
+    }),
+    [loadingUp, loadingDown, activeConversationId],
+  );
+
+  // Item renderer
+  // Use conversation search query for highlighting when available, fallback to global search
+  const activeHighlightQuery = convSearchQuery || searchQuery;
+
+  const itemContent = useCallback(
+    (_index: number, message: Message) => (
+      <div
+        className={cn(
+          "mx-auto w-full max-w-3xl px-4 py-2",
+          "transition-colors duration-1000",
+          message.id === highlightMessageId && "search-highlight",
+        )}
+      >
+        {/* Unread divider */}
+        {message.id === unreadDividerMessageId && (
+          <div className="flex items-center gap-3 px-2 pb-2">
+            <div className="h-px flex-1 bg-blue-500/60" />
+            <span className="shrink-0 text-[11px] font-medium text-blue-500">
+              {t("chat.unreadDivider")}
+            </span>
+            <div className="h-px flex-1 bg-blue-500/60" />
+          </div>
+        )}
+        {message.role === "system" ? (
+          <div className="flex justify-center py-1.5">
+            <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
+              {message.content}
+            </span>
+          </div>
+        ) : (
+          <MessageBubble
+            message={message}
+            agentName={message.role === "agent" ? agentName : undefined}
+            highlightQuery={message.id === highlightMessageId ? activeHighlightQuery : undefined}
+            isGroupConversation={isGroupConversation}
+          />
         )}
       </div>
+    ),
+    [highlightMessageId, activeHighlightQuery, agentName, isGroupConversation, unreadDividerMessageId, t],
+  );
+
+  if (messages.length === 0 && loadingMessages) {
+    return (
+      <div className="relative flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto py-4">
+          <MessageSkeleton />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex-1 overflow-hidden">
+      <Virtuoso
+        ref={virtuosoRef}
+        data={messages}
+        firstItemIndex={firstItemIndex}
+        initialTopMostItemIndex={initialIndex}
+        followOutput={followOutput}
+        startReached={loadOlder}
+        endReached={hasMoreDown ? loadNewer : undefined}
+        atBottomStateChange={handleAtBottomChange}
+        atBottomThreshold={100}
+        increaseViewportBy={{ top: 200, bottom: 200 }}
+        components={virtuosoComponents}
+        className="h-full"
+        itemContent={itemContent}
+      />
 
       {showScrollButton && (
         <button
-          onClick={scrollToBottom}
+          onClick={handleScrollToBottom}
           className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 shadow-lg transition-opacity hover:bg-accent"
           aria-label="Scroll to latest"
         >

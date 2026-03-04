@@ -112,7 +112,7 @@ export default function RegisterPage() {
           <div className="text-center">
             <h1 className="text-3xl font-bold">Create Account</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Join thousands of users.
+              Join thousands of users
             </p>
           </div>
 
@@ -131,6 +131,7 @@ export default function RegisterPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Nickname/Display Name"
                 required
+                autoComplete="name"
                 className={inputClass}
               />
             </div>
@@ -143,6 +144,7 @@ export default function RegisterPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Email Address"
                 required
+                autoComplete="email"
                 className={inputClass}
               />
             </div>
@@ -156,6 +158,7 @@ export default function RegisterPage() {
                 placeholder="Password"
                 required
                 minLength={8}
+                autoComplete="new-password"
                 className={inputClass + " pr-10"}
               />
               <button
@@ -166,6 +169,7 @@ export default function RegisterPage() {
                 {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </button>
             </div>
+            <p className="text-xs text-muted-foreground/70">At least 8 characters with uppercase and lowercase</p>
 
             <div className="relative">
               <CheckCircle className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -176,6 +180,7 @@ export default function RegisterPage() {
                 placeholder="Confirm Password"
                 required
                 minLength={8}
+                autoComplete="new-password"
                 className={inputClass + " pr-10"}
               />
               <button
@@ -232,7 +237,8 @@ export default function RegisterPage() {
           </p>
 
           <p className="text-center text-xs text-muted-foreground/60">
-            By creating an account, you agree to our Terms of Service.
+            By creating an account, you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-muted-foreground">Terms of Service</Link>
           </p>
         </div>
       </div>

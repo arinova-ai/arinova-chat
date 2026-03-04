@@ -155,8 +155,8 @@ function CommunityBrowseContent() {
 
           {/* Search + type filter (browse tab only) */}
           {tab === "browse" && (
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
@@ -166,7 +166,7 @@ function CommunityBrowseContent() {
                   className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {TYPE_FILTERS.map((f) => (
                   <button
                     key={f}

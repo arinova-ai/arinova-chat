@@ -27,10 +27,10 @@ interface Transaction {
 }
 
 const TOPUP_PLANS = [
-  { id: "starter", labelKey: "wallet.plan.starter", price: "$5", coins: 500, bonus: null },
-  { id: "standard", labelKey: "wallet.plan.standard", price: "$10", coins: 1100, bonus: "10% bonus" },
-  { id: "advanced", labelKey: "wallet.plan.advanced", price: "$25", coins: 3000, bonus: "20% bonus" },
-  { id: "pro", labelKey: "wallet.plan.pro", price: "$50", coins: 6500, bonus: "30% bonus" },
+  { id: "starter", labelKey: "wallet.plan.starter", price: "$5", coins: 500, bonus: null, popular: false },
+  { id: "standard", labelKey: "wallet.plan.standard", price: "$10", coins: 1100, bonus: "10% bonus", popular: false },
+  { id: "advanced", labelKey: "wallet.plan.advanced", price: "$25", coins: 3000, bonus: "20% bonus", popular: true },
+  { id: "pro", labelKey: "wallet.plan.pro", price: "$50", coins: 6500, bonus: "30% bonus", popular: false },
 ];
 
 function WalletContent() {
@@ -129,8 +129,17 @@ function WalletContent() {
                   {TOPUP_PLANS.map((plan) => (
                     <div
                       key={plan.id}
-                      className="relative rounded-xl border border-border bg-card p-5 transition-colors hover:border-brand-border"
+                      className={`relative rounded-xl border p-5 transition-colors hover:border-brand-border ${
+                        plan.popular
+                          ? "border-brand/40 bg-brand/5 ring-1 ring-brand/20"
+                          : "border-border bg-card"
+                      }`}
                     >
+                      {plan.popular && (
+                        <span className="absolute -top-2.5 left-4 rounded-full bg-brand px-2.5 py-0.5 text-[10px] font-semibold text-white">
+                          Most Popular
+                        </span>
+                      )}
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-semibold">{t(plan.labelKey)}</h3>
@@ -143,17 +152,21 @@ function WalletContent() {
                             <Coins className="h-4 w-4 text-yellow-500" />
                             {plan.coins.toLocaleString()}
                           </p>
-                          {plan.bonus && (
+                          {plan.bonus ? (
                             <span className="inline-flex items-center gap-0.5 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] text-green-400">
                               <Sparkles className="h-3 w-3" />
                               {plan.bonus}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                              No bonus
                             </span>
                           )}
                         </div>
                       </div>
                       <Button
-                        className="mt-3 w-full"
-                        variant="secondary"
+                        className={`mt-3 w-full ${plan.popular ? "brand-gradient-btn" : ""}`}
+                        variant={plan.popular ? "default" : "secondary"}
                         size="sm"
                         disabled={topupLoading !== null}
                         onClick={() => handleTopup(plan.id, plan.coins)}

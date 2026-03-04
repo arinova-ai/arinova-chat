@@ -179,7 +179,7 @@ function ThemesGrid() {
         {/* Search + filters */}
         <div className="shrink-0 border-b border-border px-6 py-3 space-y-3">
           {/* Search bar */}
-          <div className="relative max-w-md">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
@@ -191,7 +191,7 @@ function ThemesGrid() {
             />
           </div>
 
-          {/* Filter chips */}
+          {/* Price filter chips */}
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Price filter">
             {(["all", "free", "premium"] as const).map((value) => (
               <button
@@ -207,26 +207,27 @@ function ThemesGrid() {
                 {t(`theme.filter.${value}`)}
               </button>
             ))}
-
-            {allTags.length > 0 && (
-              <span className="mx-1 h-4 w-px bg-border" />
-            )}
-
-            {allTags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
-                aria-pressed={selectedTags.has(tag)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  selectedTags.has(tag)
-                    ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                #{tag}
-              </button>
-            ))}
           </div>
+
+          {/* Tag filter chips */}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Tag filter">
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  aria-pressed={selectedTags.has(tag)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    selectedTags.has(tag)
+                      ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Theme cards grid */}

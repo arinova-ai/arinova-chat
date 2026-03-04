@@ -167,18 +167,20 @@ interface MessageAvatarProps {
   isOwn: boolean;
   clickable: boolean;
   onClick: () => void;
+  agentAvatarUrl?: string | null;
 }
 
 /** Avatar with optional click-to-open-profile. Renders agent or user icon. */
-function MessageAvatar({ message, isOwn, clickable, onClick }: MessageAvatarProps) {
+function MessageAvatar({ message, isOwn, clickable, onClick, agentAvatarUrl }: MessageAvatarProps) {
   const isAgent = message.role !== "user";
   const { data: session } = authClient.useSession();
   const ownImage = isOwn ? session?.user?.image : undefined;
+  const agentSrc = agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR;
 
   const avatarContent = (
     <Avatar className="h-8 w-8 shrink-0">
       {isAgent && (
-        <AvatarImage src={AGENT_DEFAULT_AVATAR} alt="Agent" className="object-cover" />
+        <AvatarImage src={agentSrc} alt={message.senderAgentName ?? "Agent"} className="object-cover" />
       )}
       {!isAgent && !isOwn && message.senderUserImage && (
         <AvatarImage src={assetUrl(message.senderUserImage)} alt={message.senderUserName ?? "User"} className="object-cover" />
@@ -510,6 +512,15 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
     if (message.senderAgentId) return message.senderAgentId;
     return conversation?.agentId ?? null;
   }, [message.senderAgentId, conversation]);
+  const groupMembersData = useChatStore((s) => s.groupMembersData);
+  const resolvedAgentAvatarUrl = useMemo(() => {
+    if (message.senderAgentId) {
+      const gm = groupMembersData[message.conversationId];
+      const agent = gm?.agents.find((a) => a.agentId === message.senderAgentId);
+      if (agent?.agentAvatarUrl) return agent.agentAvatarUrl;
+    }
+    return conversation?.agentAvatarUrl ?? null;
+  }, [message.senderAgentId, message.conversationId, groupMembersData, conversation]);
   const showAgentProfile = useMemo(
     () => !isUser && message.role === "agent" && !!resolvedAgentId,
     [isUser, message.role, resolvedAgentId]
@@ -575,6 +586,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         message={message}
         isOwn={isUser}
         clickable={showProfileClick}
+        agentAvatarUrl={resolvedAgentAvatarUrl}
         onClick={() => {
           if (showOwnProfile && currentUserId) {
             router.push(`/profile/${currentUserId}`);
@@ -588,7 +600,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0" {...longPressHandlers}>
+        <div className="relative min-w-0 select-none md:select-auto" {...longPressHandlers}>
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(

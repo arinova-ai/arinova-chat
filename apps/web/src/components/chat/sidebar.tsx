@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, MessageCircle, SquarePen } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { ConversationList } from "./conversation-list";
@@ -30,17 +30,19 @@ export function Sidebar() {
           subtitle={t("chat.subtitle")}
           icon={MessageCircle}
         />
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new Event("arinova:new-chat"))}
-          className="mt-1 rounded-lg p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
-          aria-label={t("chat.newChat")}
-        >
-          <SquarePen className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-0.5 mt-1">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("arinova:new-chat"))}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+            aria-label={t("chat.newChat")}
+          >
+            <SquarePen className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
-      {/* Search */}
+      {/* Search — always visible */}
       <div className="shrink-0 px-3 pb-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

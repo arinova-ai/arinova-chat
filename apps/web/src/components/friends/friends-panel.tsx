@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { MessageSquare, UserMinus, Loader2 } from "lucide-react";
+import { MessageSquare, UserMinus, Loader2, Users } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { api } from "@/lib/api";
@@ -97,9 +97,10 @@ export function FriendsPanel({ onStartConversation }: FriendsPanelProps) {
       )}
 
       {friends.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          No friends yet. Send a friend request to get started!
-        </p>
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <Users className="h-10 w-10 opacity-40 mb-2" />
+          <p className="text-sm">No friends yet. Send a friend request to get started!</p>
+        </div>
       ) : (
         <div className="space-y-1">
           {friends.map((friend) => {

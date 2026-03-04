@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { Message } from "@arinova/shared/types";
 import {
   Sheet,
@@ -11,6 +12,8 @@ import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🤔", "👀"];
+/** Guard duration (ms) to ignore accidental touch after long-press opens sheet */
+const INTERACTION_GUARD_MS = 300;
 
 interface MessageActionSheetProps {
   message: Message | null;
@@ -47,11 +50,25 @@ export function MessageActionSheet({
   isInThread,
 }: MessageActionSheetProps) {
   const { t } = useTranslation();
+  // Interaction guard: block accidental taps right after the sheet opens (from long-press release)
+  const [guarded, setGuarded] = useState(false);
+  const guardTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    if (open) {
+      setGuarded(true);
+      guardTimer.current = setTimeout(() => setGuarded(false), INTERACTION_GUARD_MS);
+    } else {
+      setGuarded(false);
+    }
+    return () => clearTimeout(guardTimer.current);
+  }, [open]);
+
   if (!message) return null;
 
   const isError = message.status === "error";
 
   const handle = (action: () => void) => {
+    if (guarded) return; // ignore accidental touch
     action();
     onOpenChange(false);
   };
@@ -61,7 +78,11 @@ export function MessageActionSheet({
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3"
+        className="rounded-t-2xl border-border bg-secondary px-2 pt-3"
+        style={{
+          paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
+          pointerEvents: guarded ? "none" : undefined,
+        }}
       >
         <VisuallyHidden.Root>
           <SheetTitle>{t("chat.messageActions")}</SheetTitle>

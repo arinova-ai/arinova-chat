@@ -10,7 +10,8 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { MarkdownContent } from "./markdown-content";
+import dynamic from "next/dynamic";
+const NotebookEditor = dynamic(() => import("./notebook-editor").then((m) => m.NotebookEditor), { ssr: false });
 import {
   BookOpen,
   Plus,
@@ -392,7 +393,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 <span suppressHydrationWarning>{formatTime(selectedNote.updatedAt)}</span>
               </div>
               {selectedNote.content ? (
-                <MarkdownContent content={selectedNote.content} />
+                <NotebookEditor
+                  content={selectedNote.content}
+                  editable={false}
+                />
               ) : (
                 <p className="text-sm text-muted-foreground italic">
                   {t("chat.notebook.noContent")}
@@ -444,12 +448,12 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 autoFocus
               />
-              <textarea
+              <NotebookEditor
+                content={contentInput}
+                onChange={setContentInput}
+                editable
                 placeholder={t("chat.notebook.contentPlaceholder")}
-                value={contentInput}
-                onChange={(e) => setContentInput(e.target.value)}
-                rows={8}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                className="flex-1 min-h-0 rounded-md border border-border bg-background"
               />
               <div className="flex gap-2 justify-end">
                 <Button
@@ -516,12 +520,12 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 autoFocus
               />
-              <textarea
+              <NotebookEditor
+                content={contentInput}
+                onChange={setContentInput}
+                editable
                 placeholder={t("chat.notebook.contentPlaceholder")}
-                value={contentInput}
-                onChange={(e) => setContentInput(e.target.value)}
-                rows={8}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                className="flex-1 min-h-0 rounded-md border border-border bg-background"
               />
               <div className="flex gap-2 justify-end">
                 <Button

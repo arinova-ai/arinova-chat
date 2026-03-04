@@ -71,7 +71,8 @@ class WebSocketManager {
             data.type === "stream_start" ||
             data.type === "stream_chunk" ||
             data.type === "stream_end" ||
-            data.type === "stream_error"
+            data.type === "stream_error" ||
+            data.type === "stream_resume"
           ) {
             if (data.seq > 0) {
               this.updateLastSeq(data.conversationId, data.seq);
