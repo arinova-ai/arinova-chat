@@ -21,6 +21,17 @@ const INTERACTION_GUARD_MS = 300;
 const MENU_W = 200;
 const VIEWPORT_PAD = 8;
 
+/** Parse CSS env(safe-area-inset-top) for iOS notch/status bar. */
+function parseSafeAreaTop(): number {
+  if (typeof document === "undefined") return 0;
+  const div = document.createElement("div");
+  div.style.cssText = "position:fixed;top:0;height:env(safe-area-inset-top,0px);pointer-events:none;visibility:hidden";
+  document.body.appendChild(div);
+  const h = div.offsetHeight;
+  document.body.removeChild(div);
+  return h;
+}
+
 interface MessageContextMenuProps {
   message: Message | null;
   open: boolean;
@@ -90,29 +101,38 @@ export function MessageContextMenu({
     if (!el) return;
 
     const rect = el.getBoundingClientRect();
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
+    // Use visualViewport for accurate dimensions on iOS (accounts for browser chrome)
+    const vp = window.visualViewport;
+    const vpTop = vp?.offsetTop ?? 0;
+    const vh = vp?.height ?? window.innerHeight;
+    const vw = vp?.width ?? window.innerWidth;
+
+    // iOS safe area: prevent content from going under the notch/status bar
+    const safeTop = vpTop || parseSafeAreaTop();
+    const padTop = Math.max(VIEWPORT_PAD, safeTop + 8);
 
     const emojiH = emojiRef.current?.offsetHeight ?? 52;
     const menuH = menuRef.current?.scrollHeight ?? 320;
     const gap = 8;
     const totalH = emojiH + gap + menuH;
 
-    const spaceBelow = vh - rect.bottom;
-    const spaceAbove = rect.top;
+    const spaceBelow = (vpTop + vh) - rect.bottom;
+    const spaceAbove = rect.top - vpTop;
     const placeAbove = spaceBelow < totalH + VIEWPORT_PAD && spaceAbove > spaceBelow;
 
     let emojiTop: number;
     if (placeAbove) {
-      emojiTop = Math.max(VIEWPORT_PAD, rect.top - totalH - 4);
+      emojiTop = Math.max(padTop, rect.top - totalH - 4);
     } else {
-      emojiTop = Math.min(vh - totalH - VIEWPORT_PAD, rect.bottom + 4);
+      emojiTop = Math.min(vpTop + vh - totalH - VIEWPORT_PAD, rect.bottom + 4);
     }
+    // Clamp: never go above safe area
+    emojiTop = Math.max(padTop, emojiTop);
     const menuTop = emojiTop + emojiH + gap;
 
     // Constrain menu height if viewport is very small
-    const availableForMenu = vh - menuTop - VIEWPORT_PAD;
-    const menuMaxH = Math.min(menuH, availableForMenu);
+    const availableForMenu = vpTop + vh - menuTop - VIEWPORT_PAD;
+    const menuMaxH = Math.min(menuH, Math.max(availableForMenu, 120));
 
     let left = rect.left;
     if (left + MENU_W > vw - 12) left = vw - MENU_W - 12;
@@ -166,6 +186,8 @@ export function MessageContextMenu({
   };
 
   // Glow effect on the original message element
+  // Rendered after backdrop in DOM order + z-[102] to sit above backdrop-blur
+  // (iOS Safari's backdrop-filter creates a new stacking context)
   const glowStyle = position?.msgRect
     ? {
         position: "fixed" as const,
@@ -173,7 +195,6 @@ export function MessageContextMenu({
         left: position.msgRect.left,
         width: position.msgRect.width,
         height: position.msgRect.height,
-        zIndex: 101,
         borderRadius: "1rem",
         boxShadow: isOwn
           ? "0 0 20px 4px rgba(59, 130, 246, 0.4)"
@@ -198,8 +219,8 @@ export function MessageContextMenu({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
-      {/* Message glow highlight */}
-      {glowStyle && <div style={glowStyle} />}
+      {/* Message glow highlight — z-[102] above backdrop-blur stacking context */}
+      {glowStyle && <div className="z-[102]" style={glowStyle} />}
 
       {/* Quick emoji row */}
       <div
