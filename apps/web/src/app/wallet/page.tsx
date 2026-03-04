@@ -143,10 +143,14 @@ function WalletContent() {
                             <Coins className="h-4 w-4 text-yellow-500" />
                             {plan.coins.toLocaleString()}
                           </p>
-                          {plan.bonus && (
+                          {plan.bonus ? (
                             <span className="inline-flex items-center gap-0.5 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] text-green-400">
                               <Sparkles className="h-3 w-3" />
                               {plan.bonus}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                              No bonus
                             </span>
                           )}
                         </div>
