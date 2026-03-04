@@ -179,7 +179,7 @@ const markdownComponents = {
   table(props: ComponentProps<"table">) {
     return (
       <div className="my-2 overflow-x-auto rounded-md border border-border">
-        <table {...props} className="w-full border-collapse text-sm" />
+        <table {...props} className="min-w-full border-collapse text-sm" />
       </div>
     );
   },
