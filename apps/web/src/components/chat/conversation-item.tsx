@@ -129,12 +129,14 @@ export function ConversationItem({
   const [swipeOffset, setSwipeOffset] = useState(0);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const swipingRef = useRef(false);
+  const startOffsetRef = useRef(0);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    startOffsetRef.current = swipeOffset;
     swipingRef.current = false;
-  }, []);
+  }, [swipeOffset]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
@@ -153,8 +155,18 @@ export function ConversationItem({
     }
 
     if (swipingRef.current) {
-      // Right swipe: clamp to SWIPE_ACTION_WIDTH, Left swipe: clamp to -SWIPE_DELETE_WIDTH
-      const clamped = Math.max(-SWIPE_DELETE_WIDTH, Math.min(SWIPE_ACTION_WIDTH, dx));
+      const raw = startOffsetRef.current + dx;
+      let clamped: number;
+      if (startOffsetRef.current > 0) {
+        // Right side (Pin/Mute) was open — only allow closing toward 0, don't open Delete
+        clamped = Math.max(0, Math.min(SWIPE_ACTION_WIDTH, raw));
+      } else if (startOffsetRef.current < 0) {
+        // Left side (Delete) was open — only allow closing toward 0, don't open Pin/Mute
+        clamped = Math.max(-SWIPE_DELETE_WIDTH, Math.min(0, raw));
+      } else {
+        // Nothing open — allow either direction
+        clamped = Math.max(-SWIPE_DELETE_WIDTH, Math.min(SWIPE_ACTION_WIDTH, raw));
+      }
       setSwipeOffset(clamped);
     }
   }, []);
