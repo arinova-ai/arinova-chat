@@ -119,7 +119,7 @@ export function MessageContextMenu({
     if (left < 12) left = 12;
 
     setPosition({ emojiTop, menuTop, left, menuMaxH, msgRect: rect });
-  });
+  }, [open, message?.id]);
 
   // Entrance animation + scroll lock
   useEffect(() => {
