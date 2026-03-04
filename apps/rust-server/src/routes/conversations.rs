@@ -503,6 +503,60 @@ async fn list_conversations(
         }
     }
 
+    // Batch-fetch attachments for lastMessage previews (voice messages, files)
+    let last_msg_ids: Vec<Uuid> = rows
+        .iter()
+        .filter_map(|r| r.last_msg_id)
+        .collect();
+
+    let mut last_msg_attachments: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+
+    if !last_msg_ids.is_empty() {
+        let placeholders: Vec<String> = last_msg_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", i + 1))
+            .collect();
+        let att_query = format!(
+            r#"SELECT a.id, a.message_id, a.file_name, a.file_type, a.file_size, a.storage_path, a.duration_seconds
+               FROM attachments a
+               WHERE a.message_id IN ({})"#,
+            placeholders.join(", ")
+        );
+
+        let mut q = sqlx::query_as::<_, (Uuid, Uuid, String, String, i32, String, Option<i32>)>(&att_query);
+        for mid in &last_msg_ids {
+            q = q.bind(mid);
+        }
+
+        if let Ok(att_rows) = q.fetch_all(&state.db).await {
+            for (id, message_id, file_name, file_type, file_size, storage_path, duration) in att_rows {
+                let url = if storage_path.starts_with("http://") || storage_path.starts_with("https://") {
+                    storage_path.clone()
+                } else if storage_path.starts_with("/uploads/") {
+                    storage_path.clone()
+                } else if state.config.is_r2_configured() {
+                    format!("{}/{}", state.config.r2_public_url, storage_path)
+                } else {
+                    format!("/uploads/{}", storage_path)
+                };
+                last_msg_attachments
+                    .entry(message_id)
+                    .or_default()
+                    .push(json!({
+                        "id": id,
+                        "messageId": message_id,
+                        "fileName": file_name,
+                        "fileType": file_type,
+                        "fileSize": file_size,
+                        "url": url,
+                        "duration": duration,
+                    }));
+            }
+        }
+    }
+
     // Build result JSON matching the TypeScript shape
     let result: Vec<serde_json::Value> = rows
         .iter()
@@ -548,6 +602,7 @@ async fn list_conversations(
             };
 
             let last_message = if let Some(msg_id) = row.last_msg_id {
+                let atts = last_msg_attachments.get(&msg_id).cloned().unwrap_or_default();
                 json!({
                     "id": msg_id,
                     "conversationId": row.id,
@@ -555,6 +610,7 @@ async fn list_conversations(
                     "role": row.last_msg_role,
                     "content": row.last_msg_content,
                     "status": row.last_msg_status,
+                    "attachments": atts,
                     "createdAt": row.last_msg_created_at.map(|t| t.and_utc().to_rfc3339()),
                     "updatedAt": row.last_msg_updated_at.map(|t| t.and_utc().to_rfc3339()),
                 })
