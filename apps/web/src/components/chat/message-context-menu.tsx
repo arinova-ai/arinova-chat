@@ -83,6 +83,7 @@ export function MessageContextMenu({
   const emojiRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const savedOverflowRef = useRef("");
+  const elevatedElsRef = useRef<{ el: HTMLElement; prev: string }[]>([]);
 
   // Track open timestamp for guard
   if (open && !prevOpenRef.current) {
@@ -140,6 +141,48 @@ export function MessageContextMenu({
 
     setPosition({ emojiTop, menuTop, left, menuMaxH, msgRect: rect });
   }, [open, message?.id]);
+
+  // Elevate the original message element above the backdrop so it's visible
+  // (Telegram-style: message floats above the dimmed overlay)
+  useEffect(() => {
+    if (!open || !message) return;
+
+    const el = document.querySelector(`[data-message-id="${message.id}"]`) as HTMLElement | null;
+    if (!el) return;
+
+    const toElevate: { el: HTMLElement; prev: string }[] = [];
+
+    // Elevate the message element itself
+    toElevate.push({ el, prev: el.style.zIndex });
+    el.style.zIndex = "200";
+    el.style.position = "relative";
+
+    // Elevate scroll container (Virtuoso creates nested divs with overflow)
+    // Walk up to find the scrollable ancestor so the message can escape its stacking context
+    let parent = el.parentElement;
+    while (parent && parent !== document.body) {
+      const style = getComputedStyle(parent);
+      if (style.overflow === "auto" || style.overflow === "scroll" ||
+          style.overflowY === "auto" || style.overflowY === "scroll") {
+        toElevate.push({ el: parent, prev: parent.style.zIndex });
+        parent.style.zIndex = "200";
+        break;
+      }
+      parent = parent.parentElement;
+    }
+
+    elevatedElsRef.current = toElevate;
+
+    return () => {
+      for (const { el: e, prev } of elevatedElsRef.current) {
+        e.style.zIndex = prev;
+        if (e.style.position === "relative" && !prev) {
+          e.style.position = "";
+        }
+      }
+      elevatedElsRef.current = [];
+    };
+  }, [open, message]);
 
   // Entrance animation + scroll lock
   useEffect(() => {
