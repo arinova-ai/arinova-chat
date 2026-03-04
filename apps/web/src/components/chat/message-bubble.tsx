@@ -618,43 +618,23 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
-  // --- Text selection mode (Select action — LINE-style) ---
-  const [textSelectable, setTextSelectable] = useState(false);
-  const bubbleRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  // --- Select mode: popup textarea for partial text copy ---
+  const [selectOpen, setSelectOpen] = useState(false);
+  const selectTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSelect = useCallback(() => {
-    setTextSelectable(true);
+    setSelectOpen(true);
   }, []);
 
-  // Auto-select message text when entering selection mode (LINE style)
+  // Auto-select all text when textarea dialog opens
   useEffect(() => {
-    if (!textSelectable || !contentRef.current) return;
-    const selection = window.getSelection();
-    if (selection) {
-      const range = document.createRange();
-      range.selectNodeContents(contentRef.current);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-  }, [textSelectable]);
-
-  // Exit text selection when tapping outside the bubble
-  useEffect(() => {
-    if (!textSelectable) return;
-    const handler = (e: PointerEvent) => {
-      if (bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
-        setTextSelectable(false);
-        window.getSelection()?.removeAllRanges();
-      }
-    };
-    // Small delay to avoid capturing the sheet-close tap
-    const timer = setTimeout(() => document.addEventListener("pointerdown", handler), 100);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("pointerdown", handler);
-    };
-  }, [textSelectable]);
+    if (!selectOpen) return;
+    // Wait for dialog to mount, then select all text
+    const timer = setTimeout(() => {
+      selectTextareaRef.current?.select();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [selectOpen]);
 
   const handleCopy = useCallback(() => {
     const text = message.content;
@@ -739,7 +719,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div ref={bubbleRef} className={cn("relative min-w-0", textSelectable ? "select-text" : "select-none md:select-auto")} {...(selectionMode || textSelectable ? {} : longPressHandlers)}>
+        <div className="relative min-w-0 select-none md:select-auto" {...(selectionMode ? {} : longPressHandlers)}>
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(
@@ -796,14 +776,12 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
             <AttachmentRenderer attachments={message.attachments ?? []} />
 
-            <div ref={contentRef}>
-              <MessageContent
-                message={message}
-                highlightQuery={highlightQuery}
-                mentionNames={mentionNames}
-                isStreaming={isStreaming}
-              />
-            </div>
+            <MessageContent
+              message={message}
+              highlightQuery={highlightQuery}
+              mentionNames={mentionNames}
+              isStreaming={isStreaming}
+            />
             {!isStreaming && message.content && (
               <LinkPreviewCards content={message.content} />
             )}
@@ -913,6 +891,28 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           onSelect={handleSelect}
         />
       )}
+
+      {/* Select text dialog — popup textarea for partial copy */}
+      <Dialog open={selectOpen} onOpenChange={setSelectOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("chat.actions.select")}</DialogTitle>
+            <DialogDescription className="sr-only">Select text to copy</DialogDescription>
+          </DialogHeader>
+          <textarea
+            ref={selectTextareaRef}
+            readOnly
+            value={message.content}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm select-text"
+            rows={Math.min(Math.max(message.content.split("\n").length, 3), 12)}
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSelectOpen(false)}>
+              {t("common.close")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
         <DialogContent>
