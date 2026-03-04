@@ -240,6 +240,17 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // When messages first arrive (from IDB cache), scroll to bottom.
+  // initialTopMostItemIndex only takes effect at mount time, so if messages
+  // were empty when Virtuoso mounted the initial scroll position is wrong.
+  const prevLengthRef = useRef(0);
+  useEffect(() => {
+    if (prevLengthRef.current === 0 && messages.length > 0) {
+      virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end" });
+    }
+    prevLengthRef.current = messages.length;
+  }, [messages.length]);
+
   // Virtuoso Header / Footer components
   const virtuosoComponents = useMemo(
     () => ({
