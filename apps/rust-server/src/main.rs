@@ -102,6 +102,16 @@ async fn main() {
         WHERE m.thread_id IS NOT NULL
         GROUP BY m.thread_id
         ON CONFLICT (thread_id) DO NOTHING;
+
+        CREATE TABLE IF NOT EXISTS office_slot_bindings (
+            user_id TEXT NOT NULL,
+            theme_id TEXT NOT NULL,
+            slot_index INT NOT NULL,
+            agent_id UUID NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, theme_id, slot_index)
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
@@ -221,6 +231,7 @@ async fn main() {
         .merge(routes::notes::router())
         .merge(routes::agent_notes::router())
         .merge(routes::link_preview::router())
+        .merge(routes::spaces::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)
