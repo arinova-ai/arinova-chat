@@ -163,6 +163,18 @@ async fn main() {
             joined_at TIMESTAMP NOT NULL DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_playground_participants_session ON playground_participants(session_id);
+
+        CREATE TABLE IF NOT EXISTS notification_preferences (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id TEXT NOT NULL UNIQUE,
+            global_enabled BOOLEAN NOT NULL DEFAULT true,
+            message_enabled BOOLEAN NOT NULL DEFAULT true,
+            playground_invite_enabled BOOLEAN NOT NULL DEFAULT true,
+            playground_turn_enabled BOOLEAN NOT NULL DEFAULT true,
+            playground_result_enabled BOOLEAN NOT NULL DEFAULT true,
+            quiet_hours_start TEXT,
+            quiet_hours_end TEXT
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
