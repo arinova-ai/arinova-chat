@@ -4,6 +4,15 @@ import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
+import {
+  getCachedMessages,
+  setCachedMessages,
+  deleteCachedMessages,
+  debouncedSetCachedMessages,
+  pruneStaleCache,
+  getCachedScrollPosition,
+  setCachedScrollPosition,
+} from "@/lib/idb-message-cache";
 
 interface ConversationWithAgent extends Conversation {
   agentName: string;
@@ -143,7 +152,11 @@ interface ChatState {
   // Unread divider: first unread message ID per conversation
   unreadDividerMessageId: string | null;
 
+  // Scroll positions persisted to IDB for PWA restore
+  scrollPositions: Record<string, number>;
+
   // Actions
+  setScrollPosition: (conversationId: string, position: number) => void;
   setCurrentUserId: (id: string | null) => void;
   setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
@@ -294,7 +307,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   convSearchIndex: -1,
   convSearchLoading: false,
   unreadDividerMessageId: null,
+  scrollPositions: {},
 
+  setScrollPosition: (conversationId, position) => {
+    set({ scrollPositions: { ...get().scrollPositions, [conversationId]: position } });
+    setCachedScrollPosition(conversationId, position).catch(() => {});
+  },
   setCurrentUserId: (id) => {
     diagCount("action:setCurrentUserId");
     if (get().currentUserId === id) return;
@@ -594,6 +612,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const requestId = get().loadingRequestId + 1;
     const prevMessages = get().messagesByConversation[conversationId] ?? [];
     set({ loadingMessages: true, loadingRequestId: requestId });
+
+    // ── Cache-first: show IDB-cached messages immediately ──
+    if (prevMessages.length === 0) {
+      const cached = await getCachedMessages(conversationId);
+      if (cached && cached.length > 0 && get().loadingRequestId === requestId) {
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: cached,
+          },
+        });
+        // Restore scroll position
+        const scrollPos = await getCachedScrollPosition(conversationId);
+        if (scrollPos !== null) {
+          set({ scrollPositions: { ...get().scrollPositions, [conversationId]: scrollPos } });
+        }
+      }
+    }
+
+    // ── Fetch fresh data from API ──
     try {
       const data = await api<{ messages: Message[]; hasMore: boolean }>(
         `/api/conversations/${conversationId}/messages`
@@ -613,6 +651,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
         ...(dividerMsgId !== null && { unreadDividerMessageId: dividerMsgId }),
       });
+
+      // Persist fresh messages to IDB cache
+      setCachedMessages(conversationId, data.messages).catch(() => {});
 
       // Send mark_read with max seq from loaded messages
       if (get().activeConversationId === conversationId) {
@@ -988,6 +1029,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messagesByConversation: newMessages,
       thinkingAgents: newThinking,
     });
+    deleteCachedMessages(id).catch(() => {});
   },
 
   updateConversation: async (id, data) => {
@@ -1093,6 +1135,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: [],
       },
     });
+    deleteCachedMessages(conversationId).catch(() => {});
   },
 
   getConversationStatus: () => {
@@ -1645,6 +1688,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         wsManager.send({ type: "mark_read", conversationId, seq: msg.seq });
         wsManager.updateLastSeq(conversationId, msg.seq);
       }
+
+      // Persist updated messages to IDB cache (debounced)
+      const updatedMsgs = get().messagesByConversation[conversationId];
+      if (updatedMsgs) debouncedSetCachedMessages(conversationId, updatedMsgs);
       return;
     }
 
@@ -2139,6 +2186,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
         }
       }
+
+      // Persist completed messages to IDB cache
+      const endMsgs = get().messagesByConversation[conversationId];
+      if (endMsgs) setCachedMessages(conversationId, endMsgs).catch(() => {});
       return;
     }
 
@@ -2479,6 +2530,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const unsub = wsManager.subscribe((event) => {
       get().handleWSEvent(event);
     });
+    // Prune expired IDB cache entries on startup
+    pruneStaleCache().catch(() => {});
     return () => {
       unsub();
       wsManager.disconnect();
