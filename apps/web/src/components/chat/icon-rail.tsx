@@ -67,24 +67,34 @@ export function IconRail() {
 
   const activeId = getActiveId();
 
-  const mainItems: NavEntry[] = [
+  // ── Primary ──
+  const primaryItems: NavEntry[] = [
     { id: "chat", label: t("nav.chat"), href: "/" },
     { id: "office", label: t("nav.office"), href: "/office" },
     { id: "spaces", label: t("nav.spaces"), href: "/spaces" },
   ];
 
+  // ── Social ──
   const friendsItem: NavEntry = {
     id: "friends",
     label: t("nav.friends"),
     href: "/friends",
   };
 
-  const secondaryItems: NavEntry[] = [
-    { id: "stickers", label: t("nav.stickers"), href: "/stickers" },
-    { id: "creator", label: t("nav.creator"), href: "/creator" },
+  const socialItems: NavEntry[] = [
     { id: "community", label: t("nav.community"), href: "/community" },
-    { id: "theme", label: t("nav.theme"), href: "/office/themes" },
+  ];
+
+  // ── Market ──
+  const marketItems: NavEntry[] = [
+    { id: "stickers", label: t("nav.stickers"), href: "/stickers" },
     { id: "market", label: t("nav.market"), href: "/agent-hub" },
+    { id: "theme", label: t("nav.theme"), href: "/office/themes" },
+  ];
+
+  // ── Create ──
+  const createItems: NavEntry[] = [
+    { id: "creator", label: t("nav.creator"), href: "/creator" },
     { id: "wallet", label: t("nav.wallet"), href: "/wallet" },
   ];
 
@@ -129,9 +139,13 @@ export function IconRail() {
 
       {/* Main nav */}
       <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
-        {mainItems.map((item) => renderButton(item))}
+        {/* Primary: Chat, Office, Spaces */}
+        {primaryItems.map((item) => renderButton(item))}
 
-        {/* Friends with badge */}
+        {/* ── divider ── */}
+        <div className="my-1 h-px w-8 bg-border" />
+
+        {/* Social: Friends, Community */}
         <div className="relative">
           {renderButton(friendsItem)}
           {pendingRequestCount > 0 && (
@@ -140,8 +154,19 @@ export function IconRail() {
             </span>
           )}
         </div>
+        {socialItems.map((item) => renderButton(item))}
 
-        {secondaryItems.map((item) => renderButton(item))}
+        {/* ── divider ── */}
+        <div className="my-1 h-px w-8 bg-border" />
+
+        {/* Market: Sticker Shop, Agent Hub, Theme */}
+        {marketItems.map((item) => renderButton(item))}
+
+        {/* ── divider ── */}
+        <div className="my-1 h-px w-8 bg-border" />
+
+        {/* Create: Creator Console, Wallet */}
+        {createItems.map((item) => renderButton(item))}
       </nav>
 
       {/* Settings pinned to bottom */}
