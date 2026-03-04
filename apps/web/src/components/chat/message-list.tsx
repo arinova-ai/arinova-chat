@@ -226,7 +226,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     if (state.convSearchOpen) {
       state.closeConvSearch();
     }
-    virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" });
+    virtuosoRef.current?.scrollToIndex({ index: "LAST", align: "end", behavior: "smooth" });
     setNewMessageCount(0);
   }, []);
 
