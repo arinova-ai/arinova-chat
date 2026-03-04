@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface UseLongPressOptions {
   /** Duration in ms before firing (default: 500) */
@@ -26,7 +26,7 @@ export function useLongPress(
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         firedRef.current = true;
-        navigator.vibrate?.(50);
+        navigator.vibrate?.(10);
         callback();
       }, threshold);
     },
@@ -39,6 +39,7 @@ export function useLongPress(
       // Prevent tap / click if long-press already fired
       if (firedRef.current) {
         e.preventDefault();
+        e.stopPropagation();
       }
     },
     [clear],
@@ -48,6 +49,9 @@ export function useLongPress(
     // Cancel long-press if user moves finger (scrolling)
     clear();
   }, [clear]);
+
+  // Clear pending timer on unmount to avoid firing callback after teardown
+  useEffect(() => clear, [clear]);
 
   return { onTouchStart, onTouchEnd, onTouchMove };
 }

@@ -73,6 +73,9 @@
   "chat.dragDrop": "Drop file to upload",
   "chat.typePlaceholder": "Type a message...",
   "chat.mentionPlaceholder": "@mention an agent...",
+  "chat.maxImages": "Maximum 9 images",
+  "chat.imagesSelected": "{count} images selected",
+  "chat.imageCount": "{n}/{max}",
 
   "chat.actions.copy": "Copy message",
   "chat.actions.reply": "Reply",
@@ -81,6 +84,13 @@
   "chat.actions.retry": "Retry message",
   "chat.actions.stopGenerating": "Stop generating",
   "chat.actions.cancelQueued": "Cancel queued message",
+  "chat.actions.select": "Select",
+  "chat.actions.pin": "Pin",
+  "chat.actions.unpin": "Unpin",
+  "chat.actions.report": "Report",
+
+  "chat.selection.count": "{count} selected",
+  "chat.selection.copied": "Copied to clipboard",
 
   "chat.status.error": "Error",
   "chat.status.stopped": "Stopped",

@@ -71,6 +71,9 @@
   "chat.dragDrop": "Lepaskan fail untuk muat naik",
   "chat.typePlaceholder": "Taip mesej...",
   "chat.mentionPlaceholder": "@sebut ejen...",
+  "chat.maxImages": "Maksimum 9 imej",
+  "chat.imagesSelected": "{count} imej dipilih",
+  "chat.imageCount": "{n}/{max}",
 
   "chat.actions.copy": "Salin mesej",
   "chat.actions.reply": "Balas",
@@ -79,6 +82,13 @@
   "chat.actions.retry": "Cuba semula mesej",
   "chat.actions.stopGenerating": "Hentikan penjanaan",
   "chat.actions.cancelQueued": "Batalkan mesej beratur",
+  "chat.actions.select": "Pilih",
+  "chat.actions.pin": "Semat",
+  "chat.actions.unpin": "Nyahsemat",
+  "chat.actions.report": "Laporkan",
+
+  "chat.selection.count": "{count} dipilih",
+  "chat.selection.copied": "Disalin ke papan keratan",
 
   "chat.status.error": "Ralat",
   "chat.status.stopped": "Dihentikan",

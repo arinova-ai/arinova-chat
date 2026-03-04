@@ -71,6 +71,9 @@
   "chat.dragDrop": "파일을 놓아서 업로드",
   "chat.typePlaceholder": "메시지를 입력하세요...",
   "chat.mentionPlaceholder": "@에이전트를 멘션하세요...",
+  "chat.maxImages": "최대 9장의 이미지",
+  "chat.imagesSelected": "{count}장의 이미지 선택됨",
+  "chat.imageCount": "{n}/{max}",
 
   "chat.actions.copy": "메시지 복사",
   "chat.actions.reply": "답장",
@@ -79,6 +82,13 @@
   "chat.actions.retry": "메시지 재시도",
   "chat.actions.stopGenerating": "생성 중지",
   "chat.actions.cancelQueued": "대기 중인 메시지 취소",
+  "chat.actions.select": "선택",
+  "chat.actions.pin": "고정",
+  "chat.actions.unpin": "고정 해제",
+  "chat.actions.report": "신고",
+
+  "chat.selection.count": "{count}개 선택됨",
+  "chat.selection.copied": "클립보드에 복사됨",
 
   "chat.status.error": "오류",
   "chat.status.stopped": "중지됨",

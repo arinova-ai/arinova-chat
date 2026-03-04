@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Message, Attachment } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { Button } from "@/components/ui/button";
 import { useChatStore, type ReactionInfo } from "@/store/chat-store";
+import { useToastStore } from "@/store/toast-store";
 import { ImageLightbox } from "./image-lightbox";
 import { AudioPlayer } from "./audio-player";
 
@@ -41,7 +42,7 @@ import {
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
-import { MessageActionSheet } from "./message-action-sheet";
+import { MessageContextMenu } from "./message-context-menu";
 import { LinkPreviewCards } from "./link-preview-card";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
@@ -225,38 +226,116 @@ function SenderLabel({ info }: { info: SenderDisplayInfo | null }) {
   );
 }
 
+/** Grid layout for multiple image attachments. */
+function ImageGrid({ images }: { images: Attachment[] }) {
+  const count = images.length;
+  const galleryImages = images
+    .filter((a) => !a.url.startsWith("data:"))
+    .map((a) => ({ src: assetUrl(a.url), alt: a.fileName }));
+
+  const renderImage = (att: Attachment, index: number, className: string) => {
+    const isUploading = att.url.startsWith("data:");
+    const galleryIndex = isUploading
+      ? 0
+      : galleryImages.findIndex((g) => g.src === assetUrl(att.url));
+    return (
+      <div key={att.id} className={cn("relative overflow-hidden", className)}>
+        {isUploading ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={att.url}
+              alt={att.fileName}
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            </div>
+          </>
+        ) : (
+          <ImageLightbox
+            src={assetUrl(att.url)}
+            alt={att.fileName}
+            className="h-full w-full object-cover cursor-zoom-in"
+            images={galleryImages.length > 1 ? galleryImages : undefined}
+            initialIndex={galleryIndex >= 0 ? galleryIndex : 0}
+          />
+        )}
+      </div>
+    );
+  };
+
+  if (count === 1) {
+    return (
+      <div className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+        {renderImage(images[0], 0, "aspect-auto")}
+      </div>
+    );
+  }
+
+  if (count === 2) {
+    return (
+      <div className="grid grid-cols-2 gap-0.5 max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+        {images.map((att, i) => renderImage(att, i, "aspect-square"))}
+      </div>
+    );
+  }
+
+  if (count === 3) {
+    return (
+      <div className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden space-y-0.5">
+        {renderImage(images[0], 0, "aspect-video")}
+        <div className="grid grid-cols-2 gap-0.5">
+          {images.slice(1).map((att, i) => renderImage(att, i + 1, "aspect-square"))}
+        </div>
+      </div>
+    );
+  }
+
+  if (count === 4) {
+    return (
+      <div className="grid grid-cols-2 gap-0.5 max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+        {images.map((att, i) => renderImage(att, i, "aspect-square"))}
+      </div>
+    );
+  }
+
+  // 5-9 images: 3-column grid, last cell shows +N overlay if needed
+  const maxVisible = 9;
+  const visible = images.slice(0, maxVisible);
+  const remaining = count - maxVisible;
+
+  return (
+    <div className="grid grid-cols-3 gap-0.5 max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
+      {visible.map((att, i) => {
+        const isLast = i === visible.length - 1 && remaining > 0;
+        return (
+          <div key={att.id} className="relative aspect-square overflow-hidden">
+            {renderImage(att, i, "aspect-square")}
+            {isLast && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <span className="text-lg font-bold text-white">+{remaining}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Renders image, audio, or file attachments inside the bubble. */
 function AttachmentRenderer({ attachments }: { attachments: Attachment[] }) {
   if (attachments.length === 0) return null;
+
+  const imageAtts = attachments.filter((a) => a.fileType.startsWith("image/"));
+  const otherAtts = attachments.filter((a) => !a.fileType.startsWith("image/"));
+
   return (
     <div className="mb-1 space-y-1">
-      {attachments.map((att) =>
-        att.fileType.startsWith("image/") ? (() => {
-          const isUploading = att.url.startsWith("data:");
-          return (
-            <div key={att.id} className="relative inline-block">
-              {isUploading ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={att.url}
-                  alt={att.fileName}
-                  className="max-w-full max-h-64 rounded-lg object-contain"
-                />
-              ) : (
-                <ImageLightbox
-                  src={assetUrl(att.url)}
-                  alt={att.fileName}
-                  className="max-w-full max-h-64 rounded-lg object-contain cursor-zoom-in"
-                />
-              )}
-              {isUploading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-lg">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                </div>
-              )}
-            </div>
-          );
-        })() : att.fileType.startsWith("audio/") ? (
+      {imageAtts.length > 0 && <ImageGrid images={imageAtts} />}
+      {otherAtts.map((att) =>
+        att.fileType.startsWith("audio/") ? (
           att.id.startsWith("temp-att-") ? (
             <div key={att.id} className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2 text-xs">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -452,9 +531,11 @@ interface MessageBubbleProps {
   highlightQuery?: string;
   isGroupConversation?: boolean;
   isInThread?: boolean;
+  selectionMode?: boolean;
+  onEnterSelectionMode?: () => void;
 }
 
-export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
+export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread, selectionMode, onEnterSelectionMode }: MessageBubbleProps) {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
@@ -531,21 +612,59 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   );
   const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile;
   const longPressHandlers = useLongPress(() => {
-    if (!isStreaming) setActionSheetOpen(true);
+    if (!isStreaming && !selectionMode) setActionSheetOpen(true);
   });
 
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(message.content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API not available
+  // --- Select mode: popup textarea for partial text copy ---
+  const [selectOpen, setSelectOpen] = useState(false);
+  const selectTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSelect = useCallback(() => {
+    setSelectOpen(true);
+  }, []);
+
+  // Auto-select all text when textarea dialog opens
+  useEffect(() => {
+    if (!selectOpen) return;
+    // Wait for dialog to mount, then select all text
+    const timer = setTimeout(() => {
+      selectTextareaRef.current?.select();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [selectOpen]);
+
+  const handleCopy = useCallback(() => {
+    const text = message.content;
+    // Primary: Clipboard API (permission granted synchronously in user gesture)
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {
+        // Fallback: execCommand for very old browsers
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.cssText = "position:fixed;left:-9999px;opacity:0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand("copy"); } catch { /* ignore */ }
+        document.body.removeChild(ta);
+      });
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;left:-9999px;opacity:0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand("copy"); } catch { /* ignore */ }
+      document.body.removeChild(ta);
     }
-  }, [message.content]);
+    setCopied(true);
+    useToastStore.getState().addToast(t("chat.selection.copied"), "success");
+    setTimeout(() => setCopied(false), 2000);
+  }, [message.content, t]);
 
   const handleDelete = useCallback(() => {
     deleteMessage(message.conversationId, message.id);
@@ -600,7 +719,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0 select-none md:select-auto" {...longPressHandlers}>
+        <div className="relative min-w-0 select-none md:select-auto" {...(selectionMode ? {} : longPressHandlers)}>
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(
@@ -720,7 +839,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           )}
 
           {/* Hover action buttons */}
-          {!isStreaming && (
+          {!isStreaming && !selectionMode && (
             <MessageActions
               message={message}
               isOwn={isUser}
@@ -754,21 +873,48 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         )}
       </div>
 
-      <MessageActionSheet
-        message={message}
-        open={actionSheetOpen}
-        onOpenChange={setActionSheetOpen}
-        onCopy={handleCopy}
-        onDelete={handleDelete}
-        onRetry={handleRetry}
-        onReply={handleReply}
-        onReact={(emoji) => toggleReaction(message.id, emoji)}
-        onPin={handlePin}
-        isPinned={isPinned}
-        onStartThread={() => openThread(message.id)}
-        onReport={() => setReportOpen(true)}
-        isInThread={isInThread}
-      />
+      {/* Mobile: Telegram-style context menu; hidden on md+ */}
+      {!selectionMode && (
+        <MessageContextMenu
+          message={message}
+          open={actionSheetOpen}
+          onOpenChange={setActionSheetOpen}
+          isOwnMessage={isUser}
+          onCopy={handleCopy}
+          onDelete={handleDelete}
+          onRetry={handleRetry}
+          onReply={handleReply}
+          onReact={(emoji) => toggleReaction(message.id, emoji)}
+          onPin={handlePin}
+          isPinned={isPinned}
+          onStartThread={() => openThread(message.id)}
+          onReport={() => setReportOpen(true)}
+          isInThread={isInThread}
+          onSelect={handleSelect}
+        />
+      )}
+
+      {/* Select text dialog — popup textarea for partial copy */}
+      <Dialog open={selectOpen} onOpenChange={setSelectOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("chat.actions.select")}</DialogTitle>
+            <DialogDescription className="sr-only">Select text to copy</DialogDescription>
+          </DialogHeader>
+          <textarea
+            ref={selectTextareaRef}
+            readOnly
+            value={message.content}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm select-text"
+            rows={Math.min(Math.max(message.content.split("\n").length, 3), 12)}
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSelectOpen(false)}>
+              {t("common.close")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
         <DialogContent>

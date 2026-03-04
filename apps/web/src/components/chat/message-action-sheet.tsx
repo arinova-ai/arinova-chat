@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import type { Message } from "@arinova/shared/types";
 import {
   Sheet,
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag, CheckSquare } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
@@ -29,10 +29,11 @@ interface MessageActionSheetProps {
   onStartThread?: () => void;
   onReport?: () => void;
   isInThread?: boolean;
+  onSelect?: () => void;
 }
 
 const ACTION_BUTTON =
-  "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-foreground active:bg-accent";
+  "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-foreground active:bg-accent cursor-pointer";
 
 export function MessageActionSheet({
   message,
@@ -48,28 +49,25 @@ export function MessageActionSheet({
   onStartThread,
   onReport,
   isInThread,
+  onSelect,
 }: MessageActionSheetProps) {
   const { t } = useTranslation();
-  // Interaction guard: block accidental taps right after the sheet opens (from long-press release)
-  const [guarded, setGuarded] = useState(false);
-  const guardTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => {
-    if (open) {
-      setGuarded(true);
-      guardTimer.current = setTimeout(() => setGuarded(false), INTERACTION_GUARD_MS);
-    } else {
-      setGuarded(false);
-    }
-    return () => clearTimeout(guardTimer.current);
-  }, [open]);
+  // Interaction guard: block accidental taps right after the sheet opens (from long-press release).
+  // Uses a timestamp ref set synchronously during render — immune to useEffect timing issues.
+  const openedAtRef = useRef(0);
+  const prevOpenRef = useRef(false);
+  if (open && !prevOpenRef.current) {
+    openedAtRef.current = Date.now();
+  }
+  prevOpenRef.current = open;
 
   if (!message) return null;
 
   const isError = message.status === "error";
 
   const handle = (action: () => void) => {
-    if (guarded) return; // ignore accidental touch
-    action();
+    if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) return; // ignore accidental touch
+    action(); // Run synchronously to preserve user gesture for clipboard API
     onOpenChange(false);
   };
 
@@ -81,7 +79,6 @@ export function MessageActionSheet({
         className="rounded-t-2xl border-border bg-secondary px-2 pt-3"
         style={{
           paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
-          pointerEvents: guarded ? "none" : undefined,
         }}
       >
         <VisuallyHidden.Root>
@@ -111,6 +108,12 @@ export function MessageActionSheet({
             <Copy className="h-4 w-4 text-muted-foreground" />
             {t("common.copy")}
           </button>
+          {onSelect && (
+            <button className={ACTION_BUTTON} onClick={() => handle(onSelect)}>
+              <CheckSquare className="h-4 w-4 text-blue-400" />
+              <span className="text-blue-400">{t("chat.actions.select")}</span>
+            </button>
+          )}
           <button className={ACTION_BUTTON} onClick={() => handle(onReply)}>
             <Reply className="h-4 w-4 text-blue-400" />
             <span className="text-blue-400">{t("chat.actions.reply")}</span>
@@ -128,13 +131,13 @@ export function MessageActionSheet({
               ) : (
                 <Pin className="h-4 w-4 text-yellow-400" />
               )}
-              <span className="text-yellow-400">{isPinned ? "Unpin" : "Pin"}</span>
+              <span className="text-yellow-400">{isPinned ? t("chat.actions.unpin") : t("chat.actions.pin")}</span>
             </button>
           )}
           {onReport && (
             <button className={ACTION_BUTTON} onClick={() => handle(onReport)}>
               <Flag className="h-4 w-4 text-orange-400" />
-              <span className="text-orange-400">Report</span>
+              <span className="text-orange-400">{t("chat.actions.report")}</span>
             </button>
           )}
           {isError && (

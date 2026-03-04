@@ -67,16 +67,82 @@ function isAcceptedFile(file: File): boolean {
 }
 
 interface ChatInputProps {
-  droppedFile?: File | null;
+  droppedFiles?: File[] | null;
   onDropHandled?: () => void;
+}
+
+// ---------- File Preview Grid (memoised object URLs) ----------
+
+function FilePreviewGrid({
+  files,
+  onRemove,
+  onClearAll,
+  label,
+}: {
+  files: File[];
+  onRemove: (idx: number) => void;
+  onClearAll: () => void;
+  label: string;
+}) {
+  const previewUrls = useMemo(
+    () => files.map((f) => (f.type.startsWith("image/") ? URL.createObjectURL(f) : null)),
+    [files],
+  );
+
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => url && URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
+
+  return (
+    <div className="mb-2 space-y-1">
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onClearAll}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        {files.map((file, idx) => (
+          <div key={`${file.name}-${idx}`} className="relative group/thumb">
+            {previewUrls[idx] ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={previewUrls[idx]}
+                alt={file.name}
+                className="h-16 w-full rounded-md object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-full items-center justify-center rounded-md bg-secondary">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => onRemove(idx)}
+              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover/thumb:opacity-100"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ---------- Component ----------
 
-export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
+export function ChatInput({ droppedFiles, onDropHandled }: ChatInputProps = {}) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
@@ -139,16 +205,24 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     }
   }, [agentId, loadAgentSkills]);
 
-  // Handle file dropped from ChatArea drag-and-drop
+  // Handle files dropped from ChatArea drag-and-drop
   useEffect(() => {
-    if (!droppedFile) return;
-    if (isAcceptedFile(droppedFile)) {
-      setSelectedFile(droppedFile);
-    } else {
+    if (!droppedFiles || droppedFiles.length === 0) return;
+    const accepted = droppedFiles.filter(isAcceptedFile);
+    if (accepted.length === 0) {
       useToastStore.getState().addToast("Unsupported file type");
+    } else {
+      setPendingFiles((prev) => {
+        const combined = [...prev, ...accepted];
+        if (combined.length > 9) {
+          useToastStore.getState().addToast(t("chat.maxImages"));
+          return combined.slice(0, 9);
+        }
+        return combined;
+      });
     }
     onDropHandled?.();
-  }, [droppedFile, onDropHandled]);
+  }, [droppedFiles, onDropHandled, t]);
 
   // Restore draft when switching conversations
   useEffect(() => {
@@ -301,6 +375,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
 
   const clearInput = useCallback(() => {
     setValue("");
+    setPendingFiles([]);
     setMentionQuery(null);
     setMentionStart(-1);
     if (activeConversationId) clearInputDraft(activeConversationId);
@@ -475,20 +550,34 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   // ---------- Upload & Send ----------
 
   const handleUpload = useCallback(async () => {
-    if (!selectedFile || !activeConversationId) return;
+    if (pendingFiles.length === 0 || !activeConversationId) return;
 
     const trimmed = value.trim();
-    const prevFile = selectedFile;
+    const prevFiles = [...pendingFiles];
 
-    // Create data URL for instant image preview in optimistic message
-    let previewUrl: string | undefined;
-    if (prevFile.type.startsWith("image/")) {
-      previewUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(prevFile);
-      });
-    }
+    // Create data URLs for instant image preview in optimistic message
+    const previewAttachments = await Promise.all(
+      prevFiles.map(async (f) => {
+        if (f.type.startsWith("image/")) {
+          const dataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(f);
+          });
+          return {
+            id: crypto.randomUUID(),
+            fileName: f.name,
+            fileType: f.type,
+            fileSize: f.size,
+            url: dataUrl,
+          };
+        }
+        return null;
+      })
+    );
+    const validPreviews = previewAttachments.filter(Boolean) as Array<{
+      id: string; fileName: string; fileType: string; fileSize: number; url: string;
+    }>;
 
     // Optimistic message so it shows immediately
     const tempId = crypto.randomUUID();
@@ -502,19 +591,13 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
       senderUserId: useChatStore.getState().currentUserId ?? undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
-      ...(previewUrl
+      ...(validPreviews.length > 0
         ? {
-            attachments: [
-              {
-                id: crypto.randomUUID(),
-                messageId: tempId,
-                fileName: prevFile.name,
-                fileType: prevFile.type,
-                fileSize: prevFile.size,
-                url: previewUrl,
-                createdAt: new Date(),
-              },
-            ],
+            attachments: validPreviews.map((p) => ({
+              ...p,
+              messageId: tempId,
+              createdAt: new Date(),
+            })),
           }
         : {}),
     };
@@ -528,13 +611,19 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
     });
 
     const prevValue = value;
-    setSelectedFile(null);
+    setPendingFiles([]);
     clearInput();
     setUploading(true);
     try {
       const formData = new FormData();
-      const fileToUpload = await compressImage(prevFile);
-      formData.append("file", fileToUpload);
+
+      // Compress all image files in parallel
+      const filesToUpload = await Promise.all(
+        prevFiles.map((f) => compressImage(f))
+      );
+      for (const file of filesToUpload) {
+        formData.append("file", file);
+      }
 
       // Include text as caption so backend combines them into one message
       if (trimmed) {
@@ -611,12 +700,12 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
           [activeConversationId]: msgs.filter((m) => m.id !== tempId),
         },
       });
-      setSelectedFile(prevFile);
+      setPendingFiles(prevFiles);
       setValue(prevValue);
     } finally {
       setUploading(false);
     }
-  }, [selectedFile, activeConversationId, value, clearInput]);
+  }, [pendingFiles, activeConversationId, value, clearInput]);
 
   const handleVoiceUpload = useCallback(
     async (blob: Blob, durationSeconds?: number) => {
@@ -782,7 +871,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   }, [activeConversationId, sendMessage, selectedSticker]);
 
   const handleSend = useCallback(() => {
-    if (selectedFile) {
+    if (pendingFiles.length > 0) {
       handleUpload();
       return;
     }
@@ -811,7 +900,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
 
     sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
     clearInput();
-  }, [value, sendMessage, selectedFile, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
+  }, [value, sendMessage, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
 
   // ---------- Keyboard handling ----------
 
@@ -927,15 +1016,21 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const accepted = Array.from(files).filter(isAcceptedFile);
+    if (accepted.length === 0) return;
+    setPendingFiles((prev) => {
+      const combined = [...prev, ...accepted];
+      if (combined.length > 9) {
+        useToastStore.getState().addToast(t("chat.maxImages"));
+        return combined.slice(0, 9);
+      }
+      return combined;
+    });
     // Reset input so same file can be selected again
     e.target.value = "";
   };
-
-  const isImage = selectedFile?.type.startsWith("image/");
 
   // ---------- Render ----------
 
@@ -1081,27 +1176,14 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
           </div>
         )}
 
-        {/* File preview */}
-        {selectedFile && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-secondary px-3 py-2">
-            {isImage ? (
-              <ImageIcon className="h-4 w-4 text-blue-400" />
-            ) : (
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            )}
-            <span className="flex-1 truncate text-sm">{selectedFile.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {(selectedFile.size / 1024).toFixed(0)} KB
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setSelectedFile(null)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
+        {/* File preview grid */}
+        {pendingFiles.length > 0 && (
+          <FilePreviewGrid
+            files={pendingFiles}
+            onRemove={(idx) => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+            onClearAll={() => setPendingFiles([])}
+            label={t("chat.imageCount").replace("{n}", String(pendingFiles.length)).replace("{max}", "9")}
+          />
         )}
 
         {isRecording ? (
@@ -1127,6 +1209,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
               ref={fileInputRef}
               type="file"
               className="hidden"
+              multiple
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/json,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav"
               onChange={handleFileSelect}
             />
@@ -1231,7 +1314,7 @@ export function ChatInput({ droppedFile, onDropHandled }: ChatInputProps = {}) {
               className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
 
-            {value.trim() || selectedFile ? (
+            {value.trim() || pendingFiles.length > 0 ? (
               <Button
                 size="icon"
                 onClick={handleSend}
