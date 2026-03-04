@@ -297,6 +297,7 @@
   "settings.profile.nameUpdateFailed": "名称更新失败",
   "settings.profile.avatarTooLarge": "头像文件大小不能超过 5MB",
   "settings.profile.unexpectedError": "发生了意外错误",
+  "settings.profile.clickUploadBanner": "点击上传背景图",
   "settings.profile.changePassword": "修改密码",
   "settings.profile.currentPassword": "当前密码",
   "settings.profile.newPassword": "新密码",

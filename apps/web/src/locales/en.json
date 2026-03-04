@@ -299,6 +299,7 @@
   "settings.profile.nameUpdateFailed": "Failed to update name",
   "settings.profile.avatarTooLarge": "Avatar must be under 5MB",
   "settings.profile.unexpectedError": "An unexpected error occurred",
+  "settings.profile.clickUploadBanner": "Click to upload banner",
   "settings.profile.changePassword": "Change Password",
   "settings.profile.currentPassword": "Current Password",
   "settings.profile.newPassword": "New Password",

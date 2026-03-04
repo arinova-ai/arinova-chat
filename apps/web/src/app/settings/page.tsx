@@ -664,6 +664,13 @@ function ProfilePanel() {
             ) : (
               <div className="h-full w-full bg-gradient-to-r from-brand/30 via-brand/15 to-accent/30" />
             )}
+            {/* Always-visible upload hint when no banner */}
+            {!coverImage && !coverUploading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-muted-foreground/70 pointer-events-none">
+                <Camera className="h-6 w-6" />
+                <span className="text-xs font-medium">{t("settings.profile.clickUploadBanner")}</span>
+              </div>
+            )}
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
               {coverUploading ? (
                 <Loader2 className="h-6 w-6 text-white animate-spin" />

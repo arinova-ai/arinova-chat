@@ -297,6 +297,7 @@
   "settings.profile.nameUpdateFailed": "Échec de la mise à jour du nom",
   "settings.profile.avatarTooLarge": "L'avatar doit faire moins de 5 Mo",
   "settings.profile.unexpectedError": "Une erreur inattendue s'est produite",
+  "settings.profile.clickUploadBanner": "Cliquez pour telecharger la banniere",
   "settings.profile.changePassword": "Changer le mot de passe",
   "settings.profile.currentPassword": "Mot de passe actuel",
   "settings.profile.newPassword": "Nouveau mot de passe",

@@ -297,6 +297,7 @@
   "settings.profile.nameUpdateFailed": "Gagal mengemas kini nama",
   "settings.profile.avatarTooLarge": "Avatar mestilah kurang daripada 5MB",
   "settings.profile.unexpectedError": "Ralat tidak dijangka berlaku",
+  "settings.profile.clickUploadBanner": "Klik untuk muat naik sepanduk",
   "settings.profile.changePassword": "Tukar Kata Laluan",
   "settings.profile.currentPassword": "Kata Laluan Semasa",
   "settings.profile.newPassword": "Kata Laluan Baharu",

@@ -297,6 +297,7 @@
   "settings.profile.nameUpdateFailed": "Error al actualizar el nombre",
   "settings.profile.avatarTooLarge": "El avatar debe ser menor a 5MB",
   "settings.profile.unexpectedError": "Ocurrio un error inesperado",
+  "settings.profile.clickUploadBanner": "Haz clic para subir banner",
   "settings.profile.changePassword": "Cambiar Contrasena",
   "settings.profile.currentPassword": "Contrasena Actual",
   "settings.profile.newPassword": "Nueva Contrasena",

@@ -297,6 +297,7 @@
   "settings.profile.nameUpdateFailed": "이름 업데이트에 실패했습니다",
   "settings.profile.avatarTooLarge": "아바타는 5MB 이하여야 합니다",
   "settings.profile.unexpectedError": "예기치 않은 오류가 발생했습니다",
+  "settings.profile.clickUploadBanner": "클릭하여 배너 업로드",
   "settings.profile.changePassword": "비밀번호 변경",
   "settings.profile.currentPassword": "현재 비밀번호",
   "settings.profile.newPassword": "새 비밀번호",

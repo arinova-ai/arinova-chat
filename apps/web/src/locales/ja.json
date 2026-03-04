@@ -297,6 +297,7 @@
   "settings.profile.nameUpdateFailed": "名前の更新に失敗しました",
   "settings.profile.avatarTooLarge": "アバターは5MB以下にしてください",
   "settings.profile.unexpectedError": "予期しないエラーが発生しました",
+  "settings.profile.clickUploadBanner": "クリックしてバナーをアップロード",
   "settings.profile.changePassword": "パスワード変更",
   "settings.profile.currentPassword": "現在のパスワード",
   "settings.profile.newPassword": "新しいパスワード",
