@@ -26,7 +26,7 @@ export function useLongPress(
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         firedRef.current = true;
-        navigator.vibrate?.(50);
+        navigator.vibrate?.(10);
         callback();
       }, threshold);
     },

@@ -43,6 +43,7 @@ import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageActionSheet } from "./message-action-sheet";
+import { MessageContextMenu } from "./message-context-menu";
 import { LinkPreviewCards } from "./link-preview-card";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
@@ -873,11 +874,13 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         )}
       </div>
 
+      {/* Mobile: Telegram-style context menu; hidden on md+ */}
       {!selectionMode && (
-        <MessageActionSheet
+        <MessageContextMenu
           message={message}
           open={actionSheetOpen}
           onOpenChange={setActionSheetOpen}
+          isOwnMessage={isUser}
           onCopy={handleCopy}
           onDelete={handleDelete}
           onRetry={handleRetry}
