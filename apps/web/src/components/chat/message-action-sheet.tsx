@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import type { Message } from "@arinova/shared/types";
 import {
   Sheet,
@@ -52,25 +52,21 @@ export function MessageActionSheet({
   onSelect,
 }: MessageActionSheetProps) {
   const { t } = useTranslation();
-  // Interaction guard: block accidental taps right after the sheet opens (from long-press release)
-  const [guarded, setGuarded] = useState(false);
-  const guardTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => {
-    if (open) {
-      setGuarded(true);
-      guardTimer.current = setTimeout(() => setGuarded(false), INTERACTION_GUARD_MS);
-    } else {
-      setGuarded(false);
-    }
-    return () => clearTimeout(guardTimer.current);
-  }, [open]);
+  // Interaction guard: block accidental taps right after the sheet opens (from long-press release).
+  // Uses a timestamp ref set synchronously during render — immune to useEffect timing issues.
+  const openedAtRef = useRef(0);
+  const prevOpenRef = useRef(false);
+  if (open && !prevOpenRef.current) {
+    openedAtRef.current = Date.now();
+  }
+  prevOpenRef.current = open;
 
   if (!message) return null;
 
   const isError = message.status === "error";
 
   const handle = (action: () => void) => {
-    if (guarded) return; // ignore accidental touch
+    if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) return; // ignore accidental touch
     action(); // Run synchronously to preserve user gesture for clipboard API
     onOpenChange(false);
   };
