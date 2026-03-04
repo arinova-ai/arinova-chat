@@ -618,13 +618,26 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
-  // --- Text selection mode (Select action) ---
+  // --- Text selection mode (Select action — LINE-style) ---
   const [textSelectable, setTextSelectable] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = useCallback(() => {
     setTextSelectable(true);
   }, []);
+
+  // Auto-select message text when entering selection mode (LINE style)
+  useEffect(() => {
+    if (!textSelectable || !contentRef.current) return;
+    const selection = window.getSelection();
+    if (selection) {
+      const range = document.createRange();
+      range.selectNodeContents(contentRef.current);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }, [textSelectable]);
 
   // Exit text selection when tapping outside the bubble
   useEffect(() => {
@@ -783,12 +796,14 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
             <AttachmentRenderer attachments={message.attachments ?? []} />
 
-            <MessageContent
-              message={message}
-              highlightQuery={highlightQuery}
-              mentionNames={mentionNames}
-              isStreaming={isStreaming}
-            />
+            <div ref={contentRef}>
+              <MessageContent
+                message={message}
+                highlightQuery={highlightQuery}
+                mentionNames={mentionNames}
+                isStreaming={isStreaming}
+              />
+            </div>
             {!isStreaming && message.content && (
               <LinkPreviewCards content={message.content} />
             )}
