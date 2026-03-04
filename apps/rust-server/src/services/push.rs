@@ -30,7 +30,7 @@ pub async fn send_push_to_user(
     }
 
     let subs = sqlx::query_as::<_, (String, String, String, String)>(
-        r#"SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1"#,
+        r#"SELECT id::text, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1"#,
     )
     .bind(user_id)
     .fetch_all(pool)
