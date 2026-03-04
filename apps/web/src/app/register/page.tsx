@@ -131,6 +131,7 @@ export default function RegisterPage() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Nickname/Display Name"
                 required
+                autoComplete="name"
                 className={inputClass}
               />
             </div>
@@ -143,6 +144,7 @@ export default function RegisterPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Email Address"
                 required
+                autoComplete="email"
                 className={inputClass}
               />
             </div>
@@ -156,6 +158,7 @@ export default function RegisterPage() {
                 placeholder="Password"
                 required
                 minLength={8}
+                autoComplete="new-password"
                 className={inputClass + " pr-10"}
               />
               <button
@@ -177,6 +180,7 @@ export default function RegisterPage() {
                 placeholder="Confirm Password"
                 required
                 minLength={8}
+                autoComplete="new-password"
                 className={inputClass + " pr-10"}
               />
               <button
