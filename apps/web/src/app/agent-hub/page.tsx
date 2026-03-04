@@ -8,7 +8,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { Search, Star, Store, MessageSquare, Coins } from "lucide-react";
+import { Search, Star, Store, MessageSquare, Coins, Plus } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { PageTitle } from "@/components/ui/page-title";
 
@@ -154,41 +154,43 @@ function AgentHubContent() {
             </div>
           </div>
 
-          {/* Category pills + Sort */}
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex flex-1 flex-wrap gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.value}
-                  onClick={() => {
-                    setCategory(cat.value);
-                    setOffset(0);
-                  }}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    category === cat.value
-                      ? "bg-brand text-white"
-                      : "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
+          {/* Category pills + Sort — hidden when empty */}
+          {(loading || listings.length > 0) && (
+            <div className="mt-3 flex items-center gap-3">
+              <div className="flex flex-1 flex-wrap gap-2">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.value}
+                    onClick={() => {
+                      setCategory(cat.value);
+                      setOffset(0);
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      category === cat.value
+                        ? "bg-brand text-white"
+                        : "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+              <select
+                value={sort}
+                onChange={(e) => {
+                  setSort(e.target.value);
+                  setOffset(0);
+                }}
+                className="hidden h-8 rounded-lg border-none bg-secondary px-2 text-xs text-foreground sm:block focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {SORTS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={sort}
-              onChange={(e) => {
-                setSort(e.target.value);
-                setOffset(0);
-              }}
-              className="hidden h-8 rounded-lg border-none bg-secondary px-2 text-xs text-foreground sm:block focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {SORTS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          )}
         </div>
 
         {/* Content */}
@@ -198,9 +200,17 @@ function AgentHubContent() {
               <ArinovaSpinner size="sm" />
             </div>
           ) : listings.length === 0 ? (
-            <div className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
               <MessageSquare className="h-10 w-10 opacity-40" />
               <p className="text-sm">{t("agentHub.noAgents")}</p>
+              <Button
+                className="brand-gradient-btn gap-1.5 mt-1"
+                size="sm"
+                onClick={() => router.push("/agent-hub/create")}
+              >
+                <Plus className="h-4 w-4" />
+                {t("agentHub.createAgent")}
+              </Button>
             </div>
           ) : (
             <>
