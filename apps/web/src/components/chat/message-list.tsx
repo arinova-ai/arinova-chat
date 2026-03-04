@@ -5,8 +5,9 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { Message } from "@arinova/shared/types";
 import { MessageBubble } from "./message-bubble";
 import { useChatStore } from "@/store/chat-store";
+import { useToastStore } from "@/store/toast-store";
 import { api } from "@/lib/api";
-import { ArrowDown, Loader2 } from "lucide-react";
+import { ArrowDown, Check, Copy, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
 import { useTranslation } from "@/lib/i18n";
@@ -68,6 +69,50 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const [loadingDown, setLoadingDown] = useState(false);
   const [hasMoreUp, setHasMoreUp] = useState(jumpPagination?.hasMoreUp ?? true);
   const [hasMoreDown, setHasMoreDown] = useState(jumpPagination?.hasMoreDown ?? false);
+
+  // Selection mode (view-level local state)
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const enterSelectionMode = useCallback((initialMessageId: string) => {
+    setSelectedIds(new Set([initialMessageId]));
+    setSelectionMode(true);
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  }, []);
+
+  const toggleSelect = useCallback((messageId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+
+  const handleCopySelected = useCallback(async () => {
+    const selectedMessages = messages
+      .filter(m => selectedIds.has(m.id))
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    const text = selectedMessages.map(m => m.content).join("\n\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      useToastStore.getState().addToast(t("chat.selection.copied"), "success");
+      exitSelectionMode();
+    } catch {
+      // clipboard not available
+    }
+  }, [messages, selectedIds, exitSelectionMode, t]);
+
+  // Exit selection mode when conversation changes
+  useEffect(() => {
+    exitSelectionMode();
+  }, [activeConversationId, exitSelectionMode]);
 
   const loadingRef = useRef(false);
   const messagesRef = useRef(messages);
@@ -306,16 +351,34 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
             </span>
           </div>
         ) : (
-          <MessageBubble
-            message={message}
-            agentName={message.role === "agent" ? agentName : undefined}
-            highlightQuery={message.id === highlightMessageId ? activeHighlightQuery : undefined}
-            isGroupConversation={isGroupConversation}
-          />
+          <div className={cn("flex items-center gap-2", selectionMode && "cursor-pointer")}
+            onClick={selectionMode ? () => toggleSelect(message.id) : undefined}
+          >
+            {selectionMode && (
+              <div className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors",
+                selectedIds.has(message.id)
+                  ? "border-blue-500 bg-blue-500 text-white"
+                  : "border-muted-foreground/40"
+              )}>
+                {selectedIds.has(message.id) && <Check className="h-3 w-3" />}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <MessageBubble
+                message={message}
+                agentName={message.role === "agent" ? agentName : undefined}
+                highlightQuery={message.id === highlightMessageId ? activeHighlightQuery : undefined}
+                isGroupConversation={isGroupConversation}
+                selectionMode={selectionMode}
+                onEnterSelectionMode={() => enterSelectionMode(message.id)}
+              />
+            </div>
+          </div>
         )}
       </div>
     ),
-    [highlightMessageId, activeHighlightQuery, agentName, isGroupConversation, unreadDividerMessageId, t],
+    [highlightMessageId, activeHighlightQuery, agentName, isGroupConversation, unreadDividerMessageId, t, selectionMode, selectedIds, toggleSelect, enterSelectionMode],
   );
 
   if (messages.length === 0 && loadingMessages) {
@@ -329,7 +392,27 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   }
 
   return (
-    <div className="relative flex-1 overflow-hidden">
+    <div className={cn("relative flex-1 overflow-hidden", selectionMode && "select-none")}>
+      {selectionMode && (
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-3 border-b border-border bg-card px-4 py-3 shadow-sm"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}
+        >
+          <button onClick={exitSelectionMode} className="p-1 text-muted-foreground hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+          <span className="flex-1 text-sm font-medium">
+            {t("chat.selection.count").replace("{count}", String(selectedIds.size))}
+          </span>
+          <button
+            onClick={handleCopySelected}
+            disabled={selectedIds.size === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          >
+            <Copy className="h-4 w-4" />
+            {t("common.copy")}
+          </button>
+        </div>
+      )}
       <Virtuoso
         ref={virtuosoRef}
         data={messages}

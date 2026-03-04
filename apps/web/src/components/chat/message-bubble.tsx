@@ -452,9 +452,11 @@ interface MessageBubbleProps {
   highlightQuery?: string;
   isGroupConversation?: boolean;
   isInThread?: boolean;
+  selectionMode?: boolean;
+  onEnterSelectionMode?: () => void;
 }
 
-export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread }: MessageBubbleProps) {
+export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread, selectionMode, onEnterSelectionMode }: MessageBubbleProps) {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
@@ -531,7 +533,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   );
   const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile;
   const longPressHandlers = useLongPress(() => {
-    if (!isStreaming) setActionSheetOpen(true);
+    if (!isStreaming && !selectionMode) setActionSheetOpen(true);
   });
 
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
@@ -600,7 +602,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0 select-none md:select-auto" {...longPressHandlers}>
+        <div className="relative min-w-0 select-none md:select-auto" {...(selectionMode ? {} : longPressHandlers)}>
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(
@@ -720,7 +722,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           )}
 
           {/* Hover action buttons */}
-          {!isStreaming && (
+          {!isStreaming && !selectionMode && (
             <MessageActions
               message={message}
               isOwn={isUser}
@@ -754,21 +756,24 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         )}
       </div>
 
-      <MessageActionSheet
-        message={message}
-        open={actionSheetOpen}
-        onOpenChange={setActionSheetOpen}
-        onCopy={handleCopy}
-        onDelete={handleDelete}
-        onRetry={handleRetry}
-        onReply={handleReply}
-        onReact={(emoji) => toggleReaction(message.id, emoji)}
-        onPin={handlePin}
-        isPinned={isPinned}
-        onStartThread={() => openThread(message.id)}
-        onReport={() => setReportOpen(true)}
-        isInThread={isInThread}
-      />
+      {!selectionMode && (
+        <MessageActionSheet
+          message={message}
+          open={actionSheetOpen}
+          onOpenChange={setActionSheetOpen}
+          onCopy={handleCopy}
+          onDelete={handleDelete}
+          onRetry={handleRetry}
+          onReply={handleReply}
+          onReact={(emoji) => toggleReaction(message.id, emoji)}
+          onPin={handlePin}
+          isPinned={isPinned}
+          onStartThread={() => openThread(message.id)}
+          onReport={() => setReportOpen(true)}
+          isInThread={isInThread}
+          onSelect={onEnterSelectionMode}
+        />
+      )}
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
         <DialogContent>

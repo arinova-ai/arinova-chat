@@ -71,6 +71,9 @@
   "chat.dragDrop": "拖放文件以上传",
   "chat.typePlaceholder": "输入消息...",
   "chat.mentionPlaceholder": "@提及一个 Agent...",
+  "chat.maxImages": "最多 9 张图片",
+  "chat.imagesSelected": "已选择 {count} 张图片",
+  "chat.imageCount": "{n}/{max}",
 
   "chat.actions.copy": "复制消息",
   "chat.actions.reply": "回复",
@@ -79,6 +82,10 @@
   "chat.actions.retry": "重试消息",
   "chat.actions.stopGenerating": "停止生成",
   "chat.actions.cancelQueued": "取消排队中的消息",
+  "chat.actions.select": "选择",
+
+  "chat.selection.count": "已选择 {count} 条",
+  "chat.selection.copied": "已复制到剪贴板",
 
   "chat.status.error": "错误",
   "chat.status.stopped": "已停止",

@@ -7,7 +7,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag, CheckSquare } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
@@ -29,6 +29,7 @@ interface MessageActionSheetProps {
   onStartThread?: () => void;
   onReport?: () => void;
   isInThread?: boolean;
+  onSelect?: () => void;
 }
 
 const ACTION_BUTTON =
@@ -48,6 +49,7 @@ export function MessageActionSheet({
   onStartThread,
   onReport,
   isInThread,
+  onSelect,
 }: MessageActionSheetProps) {
   const { t } = useTranslation();
   // Interaction guard: block accidental taps right after the sheet opens (from long-press release)
@@ -111,6 +113,12 @@ export function MessageActionSheet({
             <Copy className="h-4 w-4 text-muted-foreground" />
             {t("common.copy")}
           </button>
+          {onSelect && (
+            <button className={ACTION_BUTTON} onClick={() => handle(onSelect)}>
+              <CheckSquare className="h-4 w-4 text-blue-400" />
+              <span className="text-blue-400">{t("chat.actions.select")}</span>
+            </button>
+          )}
           <button className={ACTION_BUTTON} onClick={() => handle(onReply)}>
             <Reply className="h-4 w-4 text-blue-400" />
             <span className="text-blue-400">{t("chat.actions.reply")}</span>

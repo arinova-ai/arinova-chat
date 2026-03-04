@@ -71,6 +71,9 @@
   "chat.dragDrop": "ファイルをドロップしてアップロード",
   "chat.typePlaceholder": "メッセージを入力...",
   "chat.mentionPlaceholder": "@でエージェントをメンション...",
+  "chat.maxImages": "最大9枚の画像",
+  "chat.imagesSelected": "{count}枚の画像を選択中",
+  "chat.imageCount": "{n}/{max}",
 
   "chat.actions.copy": "メッセージをコピー",
   "chat.actions.reply": "返信",
@@ -79,6 +82,10 @@
   "chat.actions.retry": "メッセージを再送信",
   "chat.actions.stopGenerating": "生成を停止",
   "chat.actions.cancelQueued": "キュー中のメッセージをキャンセル",
+  "chat.actions.select": "選択",
+
+  "chat.selection.count": "{count}件選択中",
+  "chat.selection.copied": "クリップボードにコピーしました",
 
   "chat.status.error": "エラー",
   "chat.status.stopped": "停止済み",

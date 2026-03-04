@@ -73,6 +73,9 @@
   "chat.dragDrop": "拖放檔案以上傳",
   "chat.typePlaceholder": "輸入訊息...",
   "chat.mentionPlaceholder": "@提及一個 Agent...",
+  "chat.maxImages": "最多 9 張圖片",
+  "chat.imagesSelected": "已選擇 {count} 張圖片",
+  "chat.imageCount": "{n}/{max}",
 
   "chat.actions.copy": "複製訊息",
   "chat.actions.reply": "回覆",
@@ -81,6 +84,10 @@
   "chat.actions.retry": "重試訊息",
   "chat.actions.stopGenerating": "停止生成",
   "chat.actions.cancelQueued": "取消排隊中的訊息",
+  "chat.actions.select": "選取",
+
+  "chat.selection.count": "{count} 則已選取",
+  "chat.selection.copied": "已複製到剪貼簿",
 
   "chat.status.error": "錯誤",
   "chat.status.stopped": "已停止",
