@@ -75,5 +75,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(notes::router())
         .merge(agent_notes::router())
         .merge(link_preview::router())
+        .merge(spaces::router())
         .with_state(state)
 }
