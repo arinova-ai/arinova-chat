@@ -112,7 +112,7 @@ export default function RegisterPage() {
           <div className="text-center">
             <h1 className="text-3xl font-bold">Create Account</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Join thousands of users.
+              Join thousands of users
             </p>
           </div>
 
