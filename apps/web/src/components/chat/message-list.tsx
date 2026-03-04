@@ -109,11 +109,19 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
 
     try {
       await navigator.clipboard.writeText(text);
-      useToastStore.getState().addToast(t("chat.selection.copied"), "success");
-      exitSelectionMode();
     } catch {
-      // clipboard not available
+      // Fallback: create a temporary textarea and use execCommand
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
     }
+    useToastStore.getState().addToast(t("chat.selection.copied"), "success");
+    exitSelectionMode();
   }, [messages, selectedIds, exitSelectionMode, t]);
 
   // Exit selection mode when conversation changes

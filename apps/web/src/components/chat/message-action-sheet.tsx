@@ -71,8 +71,10 @@ export function MessageActionSheet({
 
   const handle = (action: () => void) => {
     if (guarded) return; // ignore accidental touch
-    action();
     onOpenChange(false);
+    // Run action after sheet starts closing — ensures clipboard calls
+    // happen outside the dialog overlay context (avoids focus-loss issues on mobile Safari)
+    requestAnimationFrame(() => action());
   };
 
   return (

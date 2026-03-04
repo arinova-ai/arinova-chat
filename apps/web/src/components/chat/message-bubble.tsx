@@ -617,14 +617,27 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(message.content);
+  const handleCopy = useCallback(() => {
+    const text = message.content;
+    // Try modern Clipboard API first, then legacy fallback
+    const doCopy = async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // Fallback: create a temporary textarea and use execCommand
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API not available
-    }
+    };
+    doCopy();
   }, [message.content]);
 
   const handleDelete = useCallback(() => {
