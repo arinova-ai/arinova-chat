@@ -506,6 +506,9 @@
   "agentHub.sort.rating": "评分",
   "agentHub.sort.price": "价格",
 
+  "apps.title": "你的应用",
+  "apps.subtitle": "管理已安装的应用",
+
   "friends.title": "好友",
   "friends.subtitle": "交流与社交",
   "friends.tabFriends": "好友",

@@ -506,6 +506,9 @@
   "agentHub.sort.rating": "Note",
   "agentHub.sort.price": "Prix",
 
+  "apps.title": "Vos applications",
+  "apps.subtitle": "Gérer les applications installées",
+
   "friends.title": "Amis",
   "friends.subtitle": "Échangez et socialisez",
   "friends.tabFriends": "Amis",

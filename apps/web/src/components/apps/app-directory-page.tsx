@@ -16,6 +16,7 @@ import {
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
+import { useTranslation } from "@/lib/i18n";
 
 interface App {
   id: string;
@@ -47,6 +48,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 export function AppDirectoryPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [apps, setApps] = useState<App[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,7 @@ export function AppDirectoryPage() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
-            <PageTitle icon={Package} title="Your Apps" subtitle="Manage installed apps" />
+            <PageTitle icon={Package} title={t("apps.title")} subtitle={t("apps.subtitle")} />
             <div className="flex-1" />
             <div className="relative hidden sm:block">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

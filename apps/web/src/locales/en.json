@@ -508,6 +508,9 @@
   "agentHub.sort.rating": "Rating",
   "agentHub.sort.price": "Price",
 
+  "apps.title": "Your Apps",
+  "apps.subtitle": "Manage installed apps",
+
   "friends.title": "Friends",
   "friends.subtitle": "Connect and socialize",
   "friends.tabFriends": "Friends",

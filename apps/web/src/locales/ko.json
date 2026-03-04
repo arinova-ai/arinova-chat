@@ -506,6 +506,9 @@
   "agentHub.sort.rating": "평점순",
   "agentHub.sort.price": "가격순",
 
+  "apps.title": "내 앱",
+  "apps.subtitle": "설치된 앱 관리",
+
   "friends.title": "친구",
   "friends.subtitle": "소통하고 교류하세요",
   "friends.tabFriends": "친구",

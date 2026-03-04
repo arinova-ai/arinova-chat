@@ -8,6 +8,7 @@ import { OfficeView } from "@/components/office/office-view";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { PageTitle } from "@/components/ui/page-title";
+import { useTranslation } from "@/lib/i18n";
 import { ThemeProvider, useTheme } from "@/components/office/theme-context";
 import type { ThemeQuality } from "@/components/office/theme-types";
 
@@ -20,6 +21,7 @@ function readQuality(): ThemeQuality {
 }
 
 function OfficeContent() {
+  const { t } = useTranslation();
   const { state } = useOfficePlugin();
   const { manifest } = useTheme();
   const [quality, setQuality] = useState<ThemeQuality>(readQuality);
@@ -45,8 +47,8 @@ function OfficeContent() {
         <div className="shrink-0 border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
             <PageTitle
-              title="Office"
-              subtitle="Virtual Workspace"
+              title={t("office.title")}
+              subtitle={t("office.subtitle")}
               icon={Building2}
               className="flex-1 min-w-0"
             />

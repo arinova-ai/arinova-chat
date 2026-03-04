@@ -506,6 +506,9 @@
   "agentHub.sort.rating": "評価順",
   "agentHub.sort.price": "価格順",
 
+  "apps.title": "あなたのアプリ",
+  "apps.subtitle": "インストール済みアプリを管理",
+
   "friends.title": "フレンド",
   "friends.subtitle": "つながって交流しよう",
   "friends.tabFriends": "フレンド",

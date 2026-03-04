@@ -508,6 +508,9 @@
   "agentHub.sort.rating": "評分",
   "agentHub.sort.price": "價格",
 
+  "apps.title": "你的應用",
+  "apps.subtitle": "管理已安裝的應用",
+
   "friends.title": "好友",
   "friends.subtitle": "交流與社交",
   "friends.tabFriends": "好友",
