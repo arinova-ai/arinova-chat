@@ -183,6 +183,11 @@ async fn agent_send(
         };
 
         for mid in &member_ids {
+            // Skip push if user has the app in foreground
+            if state.ws.is_user_foreground(mid) {
+                tracing::info!("push skip: mid={} is foreground", mid);
+                continue;
+            }
             let muted = is_conversation_muted(db, mid, conversation_id).await;
             tracing::info!("push check: mid={} muted={:?}", mid, muted);
             if let Ok(false) = muted {
