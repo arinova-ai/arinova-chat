@@ -112,6 +112,7 @@
   "chat.search.noResults": "メッセージが見つかりません",
   "chat.search.inConversation": "会話内を検索",
   "chat.search.nOfTotal": "{n} / {total}",
+  "chat.unreadDivider": "未読メッセージ",
 
   "chat.messageActions": "メッセージ操作",
 

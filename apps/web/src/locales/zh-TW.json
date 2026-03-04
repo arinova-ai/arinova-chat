@@ -114,6 +114,7 @@
   "chat.search.noResults": "找不到訊息",
   "chat.search.inConversation": "在對話中搜尋",
   "chat.search.nOfTotal": "{n} / {total}",
+  "chat.unreadDivider": "以下是未讀訊息",
 
   "chat.messageActions": "訊息操作",
 

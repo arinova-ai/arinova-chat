@@ -112,6 +112,7 @@
   "chat.search.noResults": "未找到消息",
   "chat.search.inConversation": "在对话中搜索",
   "chat.search.nOfTotal": "{n} / {total}",
+  "chat.unreadDivider": "以下是未读消息",
 
   "chat.messageActions": "消息操作",
 

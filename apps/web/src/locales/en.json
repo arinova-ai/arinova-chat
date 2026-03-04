@@ -114,6 +114,7 @@
   "chat.search.noResults": "No messages found",
   "chat.search.inConversation": "Search in conversation",
   "chat.search.nOfTotal": "{n} of {total}",
+  "chat.unreadDivider": "Unread messages",
 
   "chat.messageActions": "Message actions",
 

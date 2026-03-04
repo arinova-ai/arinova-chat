@@ -112,6 +112,7 @@
   "chat.search.noResults": "Tiada mesej ditemui",
   "chat.search.inConversation": "Cari dalam perbualan",
   "chat.search.nOfTotal": "{n} daripada {total}",
+  "chat.unreadDivider": "Mesej belum dibaca",
 
   "chat.messageActions": "Tindakan mesej",
 

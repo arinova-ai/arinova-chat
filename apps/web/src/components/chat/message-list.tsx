@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { ArrowDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
+import { useTranslation } from "@/lib/i18n";
 import { diagCount, useRenderDiag } from "@/lib/chat-diagnostics";
 
 interface MessageListProps {
@@ -42,6 +43,7 @@ function MessageSkeleton() {
 const START_INDEX = 100_000;
 
 export function MessageList({ messages: rawMessages, agentName, isGroupConversation }: MessageListProps) {
+  const { t } = useTranslation();
   const loadingMessages = useChatStore((s) => s.loadingMessages);
 
   // Filter out thread messages (they display in the thread panel only) + deduplicate
@@ -56,6 +58,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const searchQuery = useChatStore((s) => s.searchQuery);
   const convSearchQuery = useChatStore((s) => s.convSearchQuery);
   const jumpPagination = useChatStore((s) => s.jumpPagination);
+  const unreadDividerMessageId = useChatStore((s) => s.unreadDividerMessageId);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
@@ -208,7 +211,13 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const handleAtBottomChange = useCallback((bottom: boolean) => {
     atBottomRef.current = bottom;
     setShowScrollButton(!bottom);
-    if (bottom) setNewMessageCount(0);
+    if (bottom) {
+      setNewMessageCount(0);
+      // Clear unread divider once user has seen all messages
+      if (useChatStore.getState().unreadDividerMessageId) {
+        useChatStore.setState({ unreadDividerMessageId: null });
+      }
+    }
   }, []);
 
   // Scroll-to-bottom handler
@@ -265,6 +274,16 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           message.id === highlightMessageId && "search-highlight",
         )}
       >
+        {/* Unread divider */}
+        {message.id === unreadDividerMessageId && (
+          <div className="flex items-center gap-3 px-2 pb-2">
+            <div className="h-px flex-1 bg-blue-500/60" />
+            <span className="shrink-0 text-[11px] font-medium text-blue-500">
+              {t("chat.unreadDivider")}
+            </span>
+            <div className="h-px flex-1 bg-blue-500/60" />
+          </div>
+        )}
         {message.role === "system" ? (
           <div className="flex justify-center py-1.5">
             <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
@@ -281,7 +300,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         )}
       </div>
     ),
-    [highlightMessageId, activeHighlightQuery, agentName, isGroupConversation],
+    [highlightMessageId, activeHighlightQuery, agentName, isGroupConversation, unreadDividerMessageId, t],
   );
 
   if (messages.length === 0 && loadingMessages) {

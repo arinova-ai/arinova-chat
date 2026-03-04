@@ -140,6 +140,9 @@ interface ChatState {
   convSearchIndex: number; // current active result index
   convSearchLoading: boolean;
 
+  // Unread divider: first unread message ID per conversation
+  unreadDividerMessageId: string | null;
+
   // Actions
   setCurrentUserId: (id: string | null) => void;
   setReplyingTo: (message: Message | null) => void;
@@ -156,7 +159,7 @@ interface ChatState {
   setConvSearchIndex: (index: number) => Promise<void>;
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
-  loadMessages: (conversationId: string) => Promise<void>;
+  loadMessages: (conversationId: string, unreadCountForDivider?: number) => Promise<void>;
   sendMessage: (content: string, mentions?: string[]) => void;
   cancelStream: (messageId?: string) => void;
   cancelAgentStream: (conversationId: string, messageId: string) => void;
@@ -290,6 +293,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   convSearchResults: [],
   convSearchIndex: -1,
   convSearchLoading: false,
+  unreadDividerMessageId: null,
 
   setCurrentUserId: (id) => {
     diagCount("action:setCurrentUserId");
@@ -332,6 +336,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (currentState.activeConversationId === id && !currentState.searchActive) {
       return;
     }
+    // Save unread count before resetting so we can place a divider after loading
+    const savedUnread = get().unreadCounts[id] ?? 0;
+    const cached = get().messagesByConversation[id] ?? [];
     set({
       activeConversationId: id,
       sidebarOpen: false,
@@ -343,13 +350,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       convSearchResults: [],
       convSearchIndex: -1,
       convSearchLoading: false,
+      unreadDividerMessageId: null,
       unreadCounts: { ...get().unreadCounts, [id]: 0 },
-      messagesByConversation: {
-        ...get().messagesByConversation,
-        [id]: [],
-      },
+      // Keep cached messages to prevent flash; loadMessages will replace them
+      ...(cached.length === 0 && {
+        messagesByConversation: {
+          ...get().messagesByConversation,
+          [id]: [],
+        },
+      }),
     });
-    get().loadMessages(id);
+    get().loadMessages(id, savedUnread);
 
     // Load conversation members for @mention support
     const conv = get().conversations.find((c) => c.id === id);
@@ -579,20 +590,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ conversations });
   },
 
-  loadMessages: async (conversationId) => {
+  loadMessages: async (conversationId, unreadCountForDivider) => {
     const requestId = get().loadingRequestId + 1;
     const prevMessages = get().messagesByConversation[conversationId] ?? [];
     set({ loadingMessages: true, loadingRequestId: requestId });
     try {
-      // Always load fresh messages (no cache guard)
       const data = await api<{ messages: Message[]; hasMore: boolean }>(
         `/api/conversations/${conversationId}/messages`
       );
+      // Compute unread divider position before updating messages
+      let dividerMsgId: string | null = null;
+      if (unreadCountForDivider && unreadCountForDivider > 0 && data.messages.length > 0) {
+        const idx = data.messages.length - unreadCountForDivider;
+        if (idx > 0 && idx < data.messages.length) {
+          dividerMsgId = data.messages[idx].id;
+        }
+      }
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
           [conversationId]: data.messages,
         },
+        ...(dividerMsgId !== null && { unreadDividerMessageId: dividerMsgId }),
       });
 
       // Send mark_read with max seq from loaded messages
