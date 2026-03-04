@@ -130,6 +130,7 @@
   "chat.header.memberCount": "멤버 {count}명",
   "chat.header.group": "그룹",
   "chat.voiceMessage": "음성 메시지",
+  "chat.photoMessage": "사진",
   "chat.header.muteConversation": "음소거",
   "chat.header.unmuteConversation": "음소거 해제",
   "chat.header.moreOptions": "더 많은 옵션",

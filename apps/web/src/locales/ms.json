@@ -130,6 +130,7 @@
   "chat.header.memberCount": "{count} ahli",
   "chat.header.group": "Kumpulan",
   "chat.voiceMessage": "Mesej suara",
+  "chat.photoMessage": "Foto",
   "chat.header.muteConversation": "Bisukan",
   "chat.header.unmuteConversation": "Nyahbisukan",
   "chat.header.moreOptions": "Lagi pilihan",

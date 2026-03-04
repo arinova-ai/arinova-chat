@@ -117,6 +117,9 @@ export function ConversationItem({
   const isDesktop = useSyncExternalStore(subscribeHover, getHoverSnapshot, getHoverServerSnapshot);
   const preview = (() => {
     if (!lastMessage) return t("chat.noMessages");
+    if (lastMessage.role === "system") {
+      return `ℹ️ ${lastMessage.content.replace(/\n/g, " ")}`;
+    }
     const audioAtt = lastMessage.attachments?.find((a) =>
       a.fileType.startsWith("audio/")
     );
@@ -126,6 +129,18 @@ export function ConversationItem({
       const s = dur % 60;
       const ts = `${m}:${String(s).padStart(2, "0")}`;
       return `🎙 ${t("chat.voiceMessage")} (${ts})`;
+    }
+    const imageAtt = lastMessage.attachments?.find((a) =>
+      a.fileType.startsWith("image/")
+    );
+    if (imageAtt) {
+      return `📷 ${t("chat.photoMessage")}`;
+    }
+    const fileAtt = lastMessage.attachments?.find((a) =>
+      !a.fileType.startsWith("audio/") && !a.fileType.startsWith("image/")
+    );
+    if (fileAtt) {
+      return `📎 ${fileAtt.fileName}`;
     }
     return truncate(lastMessage.content.replace(/\n/g, " "), 50);
   })();

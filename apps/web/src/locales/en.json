@@ -132,6 +132,7 @@
   "chat.header.memberCount": "{count} members",
   "chat.header.group": "Group",
   "chat.voiceMessage": "Voice message",
+  "chat.photoMessage": "Photo",
   "chat.header.muteConversation": "Mute",
   "chat.header.unmuteConversation": "Unmute",
   "chat.header.moreOptions": "More options",
