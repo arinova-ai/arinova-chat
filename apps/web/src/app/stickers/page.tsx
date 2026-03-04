@@ -300,7 +300,7 @@ function PackDetailDialog({
       setPurchased(true);
     } catch (err) {
       setPurchaseError(
-        err instanceof Error ? err.message : "Purchase failed"
+        err instanceof Error ? err.message : t("stickerShop.purchaseFailed")
       );
     } finally {
       setPurchasing(false);
@@ -471,6 +471,7 @@ function GiftDialog({
 }) {
   const [friends, setFriends] = useState<GiftFriend[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(false);
+  const [friendsError, setFriendsError] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
@@ -478,11 +479,14 @@ function GiftDialog({
   // Fetch real friend list when dialog opens
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     setFriendsLoading(true);
+    setFriendsError(false);
     api<GiftFriend[]>("/api/friends")
-      .then((data) => setFriends(data))
-      .catch(() => setFriends([]))
-      .finally(() => setFriendsLoading(false));
+      .then((data) => { if (!cancelled) setFriends(data); })
+      .catch(() => { if (!cancelled) { setFriends([]); setFriendsError(true); } })
+      .finally(() => { if (!cancelled) setFriendsLoading(false); });
+    return () => { cancelled = true; };
   }, [open]);
 
   const handleSend = () => {
@@ -534,6 +538,10 @@ function GiftDialog({
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
+                ) : friendsError ? (
+                  <p className="py-4 text-center text-xs text-destructive">
+                    {t("stickerShop.friendsError")}
+                  </p>
                 ) : friends.length === 0 ? (
                   <p className="py-4 text-center text-xs text-muted-foreground">
                     {t("stickerShop.noFriends")}
