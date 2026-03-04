@@ -489,15 +489,23 @@ function GiftDialog({
     return () => { cancelled = true; };
   }, [open]);
 
-  const handleSend = () => {
-    if (!selectedFriend) return;
-    setSent(true);
-    setTimeout(() => {
-      setSent(false);
-      setSelectedFriend(null);
-      setMessage("");
-      onClose();
-    }, 1500);
+  const handleSend = async () => {
+    if (!selectedFriend || !pack) return;
+    try {
+      await api(`/api/stickers/${pack.id}/gift`, {
+        method: "POST",
+        body: JSON.stringify({ friendId: selectedFriend, message: message || undefined }),
+      });
+      setSent(true);
+      setTimeout(() => {
+        setSent(false);
+        setSelectedFriend(null);
+        setMessage("");
+        onClose();
+      }, 1500);
+    } catch {
+      // Silently fail — the dialog stays open so user can retry
+    }
   };
 
   const handleClose = () => {

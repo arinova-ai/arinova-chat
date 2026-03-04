@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::services::message_seq::get_next_seq;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -19,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/stickers", get(list_packs))
         .route("/api/stickers/{id}", get(get_pack))
         .route("/api/stickers/{id}/purchase", post(purchase_pack))
+        .route("/api/stickers/{id}/gift", post(gift_pack))
         // User
         .route("/api/user/stickers", get(user_packs))
         // Creator
@@ -848,4 +850,198 @@ async fn delete_sticker(
             )
         }
     }
+}
+
+// ===== Gift =====
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GiftBody {
+    friend_id: String,
+    message: Option<String>,
+}
+
+async fn gift_pack(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(pack_id): Path<Uuid>,
+    Json(body): Json<GiftBody>,
+) -> (StatusCode, Json<Value>) {
+    // 1. Verify pack exists and is active
+    let pack = sqlx::query_as::<_, PackRow>(
+        "SELECT * FROM sticker_packs WHERE id = $1 AND status = 'active'",
+    )
+    .bind(pack_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let pack = match pack {
+        Ok(Some(p)) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Pack not found"}))),
+        Err(e) => {
+            tracing::error!("gift_pack fetch: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Internal error"})));
+        }
+    };
+
+    // 2. Verify friendship
+    let friendship = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM friendships
+           WHERE status = 'accepted'
+             AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))"#,
+    )
+    .bind(&user.id)
+    .bind(&body.friend_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if friendship == 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Not friends"})));
+    }
+
+    // 3. Grant sticker pack to friend (skip if already owned)
+    let _ = sqlx::query(
+        "INSERT INTO user_stickers (user_id, pack_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(&body.friend_id)
+    .bind(pack_id)
+    .execute(&state.db)
+    .await;
+
+    // 4. Find or create direct conversation with friend
+    let existing_conv = sqlx::query_scalar::<_, Uuid>(
+        r#"SELECT c.id FROM conversations c
+           JOIN conversation_user_members cum1 ON cum1.conversation_id = c.id AND cum1.user_id = $1
+           JOIN conversation_user_members cum2 ON cum2.conversation_id = c.id AND cum2.user_id = $2
+           WHERE c.type = 'direct' AND c.agent_id IS NULL
+           LIMIT 1"#,
+    )
+    .bind(&user.id)
+    .bind(&body.friend_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let conv_id = if let Some(cid) = existing_conv {
+        cid
+    } else {
+        let new_id = Uuid::new_v4();
+        let _ = sqlx::query(
+            r#"INSERT INTO conversations (id, type, user_id, mention_only)
+               VALUES ($1, 'direct', $2, FALSE)"#,
+        )
+        .bind(new_id)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await;
+        let _ = sqlx::query(
+            r#"INSERT INTO conversation_user_members (conversation_id, user_id, role)
+               VALUES ($1, $2, 'member'), ($1, $3, 'member')"#,
+        )
+        .bind(new_id)
+        .bind(&user.id)
+        .bind(&body.friend_id)
+        .execute(&state.db)
+        .await;
+        new_id
+    };
+
+    // 5. Insert gift system message with structured JSON content
+    let sender_name = sqlx::query_scalar::<_, String>(
+        r#"SELECT name FROM "user" WHERE id = $1"#,
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| "Someone".into());
+
+    let cover_url = pack.cover_image.as_deref().unwrap_or("");
+    let gift_content = format!(
+        "🎁 {} sent you a sticker pack: {}|sticker_gift:{}:{}:{}",
+        sender_name, pack.name, pack_id, pack.name, cover_url
+    );
+
+    let conv_id_str = conv_id.to_string();
+    let seq = match get_next_seq(&state.db, &conv_id_str).await {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Seq error"}))),
+    };
+
+    let msg_id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    let _ = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, role, content, status, seq, sender_user_id, created_at, updated_at)
+           VALUES ($1, $2, 'system', $3, 'completed', $4, $5, $6, $6)"#,
+    )
+    .bind(msg_id)
+    .bind(conv_id)
+    .bind(&gift_content)
+    .bind(seq)
+    .bind(&user.id)
+    .bind(now.naive_utc())
+    .execute(&state.db)
+    .await;
+
+    // Update conversation timestamp
+    let _ = sqlx::query("UPDATE conversations SET updated_at = NOW() WHERE id = $1")
+        .bind(conv_id)
+        .execute(&state.db)
+        .await;
+
+    // 6. Broadcast via WS
+    let member_ids: Vec<String> = sqlx::query_as::<_, (String,)>(
+        "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+    )
+    .bind(conv_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|(uid,)| uid)
+    .collect();
+
+    let msg_event = json!({
+        "type": "new_message",
+        "conversationId": conv_id_str,
+        "message": {
+            "id": msg_id.to_string(),
+            "conversationId": conv_id_str,
+            "seq": seq,
+            "role": "system",
+            "content": &gift_content,
+            "status": "completed",
+            "senderUserId": &user.id,
+            "createdAt": now.to_rfc3339(),
+            "updatedAt": now.to_rfc3339(),
+        }
+    });
+    state.ws.broadcast_to_members(&member_ids, &msg_event, &state.redis);
+
+    // 7. If the friend provided a personal message, send it as a user message
+    if let Some(ref personal_msg) = body.message {
+        if !personal_msg.trim().is_empty() {
+            let msg_seq = match get_next_seq(&state.db, &conv_id_str).await {
+                Ok(s) => s,
+                Err(_) => return (StatusCode::OK, Json(json!({"gifted": true}))),
+            };
+            let user_msg_id = Uuid::new_v4();
+            let _ = sqlx::query(
+                r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, created_at, updated_at)
+                   VALUES ($1, $2, $3, 'user', $4, 'completed', $5, NOW(), NOW())"#,
+            )
+            .bind(user_msg_id)
+            .bind(conv_id)
+            .bind(msg_seq)
+            .bind(personal_msg.trim())
+            .bind(&user.id)
+            .execute(&state.db)
+            .await;
+        }
+    }
+
+    (StatusCode::OK, Json(json!({"gifted": true, "conversationId": conv_id})))
 }

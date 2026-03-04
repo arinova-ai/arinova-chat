@@ -131,6 +131,7 @@
   "chat.header.group": "群组",
   "chat.voiceMessage": "语音消息",
   "chat.photoMessage": "照片",
+  "chat.stickerGift.claim": "查看贴图包",
   "chat.header.muteConversation": "静音",
   "chat.header.unmuteConversation": "取消静音",
   "chat.header.moreOptions": "更多选项",

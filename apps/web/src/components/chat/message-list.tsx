@@ -7,7 +7,8 @@ import { MessageBubble } from "./message-bubble";
 import { useChatStore } from "@/store/chat-store";
 import { useToastStore } from "@/store/toast-store";
 import { api } from "@/lib/api";
-import { ArrowDown, Check, Copy, Loader2, X } from "lucide-react";
+import { ArrowDown, Check, Copy, Gift, Loader2, X } from "lucide-react";
+import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
 import { useTranslation } from "@/lib/i18n";
@@ -375,11 +376,15 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           </div>
         )}
         {message.role === "system" ? (
-          <div className="flex justify-center py-1.5">
-            <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
-              {message.content}
-            </span>
-          </div>
+          message.content.includes("|sticker_gift:") ? (
+            <StickerGiftMessage content={message.content} />
+          ) : (
+            <div className="flex justify-center py-1.5">
+              <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
+                {message.content}
+              </span>
+            </div>
+          )
         ) : (
           <div className={cn("flex items-center gap-2", selectionMode && "cursor-pointer")}
             onClick={selectionMode ? () => toggleSelect(message.id) : undefined}
@@ -473,6 +478,41 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           <ArrowDown className="h-4 w-4" />
         </button>
       )}
+    </div>
+  );
+}
+
+function StickerGiftMessage({ content }: { content: string }) {
+  const { t } = useTranslation();
+  // Format: "display text|sticker_gift:{packId}:{packName}:{coverUrl}"
+  const [displayText, meta] = content.split("|sticker_gift:");
+  const parts = meta?.split(":") ?? [];
+  const packId = parts[0] ?? "";
+  const packName = parts[1] ?? "";
+  const coverUrl = parts.slice(2).join(":"); // coverUrl may contain colons
+
+  return (
+    <div className="flex justify-center py-2">
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm max-w-xs">
+        {coverUrl && (
+          <img
+            src={assetUrl(coverUrl)}
+            alt={packName}
+            className="h-12 w-12 rounded-lg object-cover shrink-0"
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground">{displayText}</p>
+          <p className="text-sm font-medium truncate">{packName}</p>
+          <a
+            href={`/stickers?pack=${packId}`}
+            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-400 hover:text-blue-300"
+          >
+            <Gift className="h-3 w-3" />
+            {t("chat.stickerGift.claim")}
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

@@ -131,6 +131,7 @@
   "chat.header.group": "グループ",
   "chat.voiceMessage": "音声メッセージ",
   "chat.photoMessage": "写真",
+  "chat.stickerGift.claim": "スタンプパックを見る",
   "chat.header.muteConversation": "ミュート",
   "chat.header.unmuteConversation": "ミュート解除",
   "chat.header.moreOptions": "その他のオプション",

@@ -133,6 +133,7 @@
   "chat.header.group": "Group",
   "chat.voiceMessage": "Voice message",
   "chat.photoMessage": "Photo",
+  "chat.stickerGift.claim": "View sticker pack",
   "chat.header.muteConversation": "Mute",
   "chat.header.unmuteConversation": "Unmute",
   "chat.header.moreOptions": "More options",
