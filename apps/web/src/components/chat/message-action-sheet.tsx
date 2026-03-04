@@ -33,7 +33,7 @@ interface MessageActionSheetProps {
 }
 
 const ACTION_BUTTON =
-  "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-foreground active:bg-accent";
+  "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm text-foreground active:bg-accent cursor-pointer";
 
 export function MessageActionSheet({
   message,
@@ -71,10 +71,8 @@ export function MessageActionSheet({
 
   const handle = (action: () => void) => {
     if (guarded) return; // ignore accidental touch
+    action(); // Run synchronously to preserve user gesture for clipboard API
     onOpenChange(false);
-    // Run action after sheet starts closing — ensures clipboard calls
-    // happen outside the dialog overlay context (avoids focus-loss issues on mobile Safari)
-    requestAnimationFrame(() => action());
   };
 
   return (
@@ -85,7 +83,6 @@ export function MessageActionSheet({
         className="rounded-t-2xl border-border bg-secondary px-2 pt-3"
         style={{
           paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))",
-          pointerEvents: guarded ? "none" : undefined,
         }}
       >
         <VisuallyHidden.Root>

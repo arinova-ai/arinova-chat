@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { Button } from "@/components/ui/button";
 import { useChatStore, type ReactionInfo } from "@/store/chat-store";
+import { useToastStore } from "@/store/toast-store";
 import { ImageLightbox } from "./image-lightbox";
 import { AudioPlayer } from "./audio-player";
 
@@ -619,26 +620,28 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
   const handleCopy = useCallback(() => {
     const text = message.content;
-    // Try modern Clipboard API first, then legacy fallback
-    const doCopy = async () => {
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        // Fallback: create a temporary textarea and use execCommand
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    };
-    doCopy();
-  }, [message.content]);
+    // Synchronous copy — must stay in user gesture call stack for iOS Safari
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch { /* ignore */ }
+    document.body.removeChild(ta);
+    // Also try async clipboard API (non-blocking, works on modern browsers)
+    if (!ok) {
+      navigator.clipboard?.writeText(text).catch(() => {});
+    }
+    setCopied(true);
+    useToastStore.getState().addToast(t("chat.selection.copied"), "success");
+    setTimeout(() => setCopied(false), 2000);
+  }, [message.content, t]);
 
   const handleDelete = useCallback(() => {
     deleteMessage(message.conversationId, message.id);
