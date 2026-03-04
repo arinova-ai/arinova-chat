@@ -96,13 +96,20 @@ export function NotificationBanner() {
       <p className="flex-1 text-sm">
         Enable notifications to stay updated on messages and app activity.
       </p>
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <Button variant="ghost" size="sm" onClick={handleLater}>
           Later
         </Button>
         <Button size="sm" onClick={handleEnable} disabled={subscribing}>
           {subscribing ? "Enabling…" : "Enable"}
         </Button>
+        <button
+          onClick={handleLater}
+          className="ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
     </div>
   );
