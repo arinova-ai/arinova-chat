@@ -213,7 +213,7 @@ function PackCard({ pack, onClick, onGift, t }: { pack: StickerPack; onClick: ()
         <button
           onClick={(e) => { e.stopPropagation(); onGift(); }}
           className="ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-brand-text"
-          title={t("stickerShop.gift")}
+          title="Gift this pack"
         >
           <Gift className="h-3.5 w-3.5" />
         </button>
@@ -357,6 +357,7 @@ function PackDetailDialog({
               size="sm"
               variant="outline"
               className="gap-1"
+              title="Gift this pack"
               onClick={() => onGift(pack)}
             >
               <Gift className="h-3.5 w-3.5" />
