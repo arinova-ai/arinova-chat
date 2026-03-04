@@ -24,6 +24,8 @@ pub async fn send_push_to_user(
     payload: &PushPayload,
 ) -> Result<(), anyhow::Error> {
     if !config.is_push_enabled() {
+        tracing::warn!("push disabled: vapid_public_key empty={} vapid_private_key empty={}",
+            config.vapid_public_key.is_empty(), config.vapid_private_key.is_empty());
         return Ok(());
     }
 
@@ -35,7 +37,7 @@ pub async fn send_push_to_user(
     .await?;
 
     if subs.is_empty() {
-        tracing::debug!(user_id, "no push subscriptions found");
+        tracing::warn!(user_id, "no push subscriptions found");
         return Ok(());
     }
 
@@ -124,7 +126,7 @@ async fn send_web_push(
         .await?;
 
     let status = resp.status().as_u16();
-    tracing::debug!(endpoint, status, "web push sent");
+    tracing::info!(endpoint, status, "web push sent");
 
     Ok(status)
 }

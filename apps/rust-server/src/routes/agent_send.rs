@@ -161,10 +161,13 @@ async fn agent_send(
 
         let member_ids: Vec<String> = if members.is_empty() {
             // Fallback: single-user conversation
+            tracing::info!("push: conversation_user_members empty, fallback to user_id={}", user_id);
             vec![user_id.clone()]
         } else {
             members.into_iter().map(|(id,)| id).collect()
         };
+
+        tracing::info!("push: member_ids={:?} conv={}", member_ids, conversation_id);
 
         let preview = {
             let max_chars = 100;
@@ -180,9 +183,13 @@ async fn agent_send(
         };
 
         for mid in &member_ids {
-            if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
-                if let Ok(true) = should_send_push(db, mid, "message").await {
-                    let _ = send_push_to_user(
+            let muted = is_conversation_muted(db, mid, conversation_id).await;
+            tracing::info!("push check: mid={} muted={:?}", mid, muted);
+            if let Ok(false) = muted {
+                let should_push = should_send_push(db, mid, "message").await;
+                tracing::info!("push check: mid={} should_send={:?}", mid, should_push);
+                if let Ok(true) = should_push {
+                    let result = send_push_to_user(
                         db,
                         config,
                         mid,
@@ -194,6 +201,7 @@ async fn agent_send(
                         },
                     )
                     .await;
+                    tracing::info!("push result: mid={} result={:?}", mid, result);
                 }
             }
         }
