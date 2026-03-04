@@ -506,6 +506,7 @@ interface CreatorCommunity {
 }
 
 function CommunityTab({ t }: { t: (k: string) => string }) {
+  const router = useRouter();
   const [communities, setCommunities] = useState<CreatorCommunity[]>([]);
   const [cLoading, setCLoading] = useState(true);
 
@@ -523,6 +524,16 @@ function CommunityTab({ t }: { t: (k: string) => string }) {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.yourCommunities")} ({communities.length})
         </h2>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/community/new-lounge")}>
+            <Users2 className="h-3.5 w-3.5" />
+            {t("creator.createLounge")}
+          </Button>
+          <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/community/new-club")}>
+            <Users className="h-3.5 w-3.5" />
+            {t("creator.createClub")}
+          </Button>
+        </div>
       </div>
       {cLoading ? (
         <div className="flex h-20 items-center justify-center">
@@ -579,6 +590,7 @@ interface CreatorSpace {
 }
 
 function SpacesTab({ t }: { t: (k: string) => string }) {
+  const router = useRouter();
   const [spaces, setSpaces] = useState<CreatorSpace[]>([]);
   const [spLoading, setSpLoading] = useState(true);
 
@@ -596,6 +608,10 @@ function SpacesTab({ t }: { t: (k: string) => string }) {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.yourSpaces")} ({spaces.length})
         </h2>
+        <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/spaces/new-app")}>
+          <Gamepad2 className="h-3.5 w-3.5" />
+          {t("creator.createApp")}
+        </Button>
       </div>
       {spLoading ? (
         <div className="flex h-20 items-center justify-center">
