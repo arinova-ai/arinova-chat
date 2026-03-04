@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -18,7 +18,28 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import { MOCK_PACKS, type CreatorStickerPack, type PackStatus, type StickerItem } from "./mock-data";
+import { api } from "@/lib/api";
+
+type PackStatus = "active" | "under_review" | "draft";
+
+interface StickerItem {
+  id: string;
+  filename: string;
+  emoji: string;
+  preview: string;
+}
+
+interface CreatorStickerPack {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  status: PackStatus;
+  downloads: number;
+  coverImage: string;
+  stickers: StickerItem[];
+  createdAt: string;
+}
 
 // ---------------------------------------------------------------------------
 // Status badge
@@ -289,10 +310,19 @@ function PackEditor({
 function StickerManagementContent() {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
-  const [packs, setPacks] = useState<CreatorStickerPack[]>(MOCK_PACKS);
+  const [packs, setPacks] = useState<CreatorStickerPack[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPack, setEditingPack] = useState<CreatorStickerPack | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    api<{ packs: CreatorStickerPack[] }>("/api/creator/stickers")
+      .then((data) => setPacks(data.packs))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = filter === "all" ? packs : packs.filter((p) => p.status === filter);
 
@@ -310,20 +340,32 @@ function StickerManagementContent() {
     setEditingPack(null);
   };
 
-  const handleDelete = (id: string) => {
-    setPacks((prev) => prev.filter((p) => p.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await api(`/api/creator/stickers/${id}`, { method: "DELETE" });
+      setPacks((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      // auto-handled
+    }
   };
 
-  const handleSubmitReview = (id: string) => {
+  const handleSubmitReview = async (id: string) => {
     setSubmitting(id);
-    setTimeout(() => {
+    try {
+      await api(`/api/creator/stickers/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "under_review" }),
+      });
       setPacks((prev) =>
         prev.map((p) =>
           p.id === id ? { ...p, status: "under_review" as PackStatus } : p
         )
       );
+    } catch {
+      // auto-handled
+    } finally {
       setSubmitting(null);
-    }, 500);
+    }
   };
 
   return (

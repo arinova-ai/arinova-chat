@@ -23,9 +23,6 @@ import {
   Banknote,
   X,
   Download,
-  TrendingUp,
-  ShoppingCart,
-  CheckCircle,
   Sticker,
   Bot,
   Palette,
@@ -38,15 +35,20 @@ import {
 
 interface DashboardStats {
   totalRevenue: number;
-  totalMessages: number;
-  totalConversations: number;
-  activeListings: number;
-  avgRating: number | null;
+  totalDownloads: number;
+  totalUsers: number;
+  avgRating: number;
   totalReviews: number;
+  creations: {
+    stickerPacks: number;
+    agents: number;
+    themes: number;
+  };
   recentEarnings: {
     id: string;
     amount: number;
     description: string | null;
+    source: string;
     createdAt: string;
   }[];
 }
@@ -66,25 +68,6 @@ interface AgentListing {
   reviewCount: number;
 }
 
-// ---------------------------------------------------------------------------
-// Mock data for Overview / Stickers / Themes tabs
-// ---------------------------------------------------------------------------
-
-const MOCK_CREATOR_STATS = {
-  revenue: 128.50, revenueChange: 8.2,
-  downloads: 4523, downloadsNew: 154,
-  users: 4542, usersChange: 22,
-  rating: 4.6, ratingCount: 89,
-};
-
-const MOCK_CREATIONS = { stickerPacks: 3, agents: 2, themes: 1 };
-
-const MOCK_ACTIVITY = [
-  { text: "Cute Animals Pack sold \u00d75", time: "2h ago", icon: "cart" as const },
-  { text: "New review on Arinova Pack \u2605\u2605\u2605\u2605\u2606", time: "5h ago", icon: "star" as const },
-  { text: 'Theme "Ocean Blue" approved', time: "1d ago", icon: "check" as const },
-];
-
 interface CreatorStickerPack {
   id: string;
   name: string;
@@ -93,10 +76,6 @@ interface CreatorStickerPack {
   status: string;
   stickerCount: number;
 }
-
-const MOCK_THEME_LISTINGS = [
-  { name: "Ocean Blue", sales: 450, revenue: 67.50, status: "active" },
-];
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -127,18 +106,13 @@ function statusBadge(status: string) {
   return map[status] ?? "bg-gray-500/15 text-gray-400";
 }
 
-const ACTIVITY_ICONS = {
-  cart: ShoppingCart,
-  star: Star,
-  check: CheckCircle,
-};
-
 // ---------------------------------------------------------------------------
 // Overview Tab
 // ---------------------------------------------------------------------------
 
-function OverviewTab({ t }: { t: (k: string) => string }) {
+function OverviewTab({ stats, t }: { stats: DashboardStats | null; t: (k: string) => string }) {
   const router = useRouter();
+
   return (
     <div className="space-y-8">
       {/* Stats */}
@@ -152,11 +126,7 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
             <Coins className="h-4 w-4 text-green-400" />
             <span className="text-xs">{t("creator.totalRevenue")}</span>
           </div>
-          <p className="mt-1 text-2xl font-bold">${MOCK_CREATOR_STATS.revenue.toFixed(2)}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-green-400">
-            <TrendingUp className="h-3 w-3" />
-            +{MOCK_CREATOR_STATS.revenueChange}%
-          </p>
+          <p className="mt-1 text-2xl font-bold">{(stats?.totalRevenue ?? 0).toLocaleString()}</p>
         </button>
         <button
           type="button"
@@ -167,10 +137,7 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
             <Download className="h-4 w-4 text-blue-400" />
             <span className="text-xs">{t("creator.totalDownloads")}</span>
           </div>
-          <p className="mt-1 text-2xl font-bold">{MOCK_CREATOR_STATS.downloads.toLocaleString()}</p>
-          <p className="mt-0.5 text-[11px] text-blue-400">
-            +{MOCK_CREATOR_STATS.downloadsNew} {t("creator.new")}
-          </p>
+          <p className="mt-1 text-2xl font-bold">{(stats?.totalDownloads ?? 0).toLocaleString()}</p>
         </button>
         <button
           type="button"
@@ -181,11 +148,7 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
             <Users className="h-4 w-4 text-green-400" />
             <span className="text-xs">{t("creator.totalUsers")}</span>
           </div>
-          <p className="mt-1 text-2xl font-bold">{MOCK_CREATOR_STATS.users.toLocaleString()}</p>
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-green-400">
-            <TrendingUp className="h-3 w-3" />
-            +{MOCK_CREATOR_STATS.usersChange}%
-          </p>
+          <p className="mt-1 text-2xl font-bold">{(stats?.totalUsers ?? 0).toLocaleString()}</p>
         </button>
         <button
           type="button"
@@ -196,9 +159,9 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
             <Star className="h-4 w-4 text-yellow-500" />
             <span className="text-xs">{t("creator.avgRating")}</span>
           </div>
-          <p className="mt-1 text-2xl font-bold">{MOCK_CREATOR_STATS.rating}</p>
+          <p className="mt-1 text-2xl font-bold">{stats?.avgRating ?? 0}</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {MOCK_CREATOR_STATS.ratingCount} {t("creator.ratings")}
+            {stats?.totalReviews ?? 0} {t("creator.ratings")}
           </p>
         </button>
       </div>
@@ -211,17 +174,17 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Sticker className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{MOCK_CREATIONS.stickerPacks}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations.stickerPacks ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.stickerPacks")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Bot className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{MOCK_CREATIONS.agents}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations.agents ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.tab.agents")}</p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 text-center">
             <Palette className="mx-auto h-6 w-6 text-brand-text" />
-            <p className="mt-2 text-2xl font-bold">{MOCK_CREATIONS.themes}</p>
+            <p className="mt-2 text-2xl font-bold">{stats?.creations.themes ?? 0}</p>
             <p className="text-xs text-muted-foreground">{t("creator.tab.themes")}</p>
           </div>
         </div>
@@ -232,25 +195,27 @@ function OverviewTab({ t }: { t: (k: string) => string }) {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.recentActivity")}
         </h2>
-        <div className="space-y-2">
-          {MOCK_ACTIVITY.map((act, i) => {
-            const Icon = ACTIVITY_ICONS[act.icon];
-            const iconColor =
-              act.icon === "cart" ? "text-green-400" :
-              act.icon === "star" ? "text-yellow-500" :
-              "text-blue-400";
-            return (
+        {(stats?.recentEarnings.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("creator.noActivity")}</p>
+        ) : (
+          <div className="space-y-2">
+            {stats!.recentEarnings.map((e) => (
               <div
-                key={i}
+                key={e.id}
                 className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3"
               >
-                <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
-                <p className="flex-1 min-w-0 text-sm truncate">{act.text}</p>
-                <span className="shrink-0 text-xs text-muted-foreground">{act.time}</span>
+                <Coins className="h-4 w-4 shrink-0 text-green-400" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{e.description ?? e.source}</p>
+                  <p className="text-[10px] text-muted-foreground">{e.source}</p>
+                </div>
+                <span className="shrink-0 text-sm font-semibold text-green-400">
+                  +{e.amount}
+                </span>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -451,45 +416,62 @@ function AgentsTab({
 // Themes Tab
 // ---------------------------------------------------------------------------
 
+interface ThemeListing {
+  id: string;
+  name: string;
+  version: string;
+}
+
 function ThemesTab({ t }: { t: (k: string) => string }) {
+  const [themes, setThemes] = useState<ThemeListing[]>([]);
+  const [tLoading, setTLoading] = useState(true);
+
+  useEffect(() => {
+    setTLoading(true);
+    api<{ themes: ThemeListing[] }>("/api/themes")
+      .then((data) => setThemes(data.themes))
+      .catch(() => {})
+      .finally(() => setTLoading(false));
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          {t("creator.yourThemes")} ({MOCK_THEME_LISTINGS.length})
+          {t("creator.yourThemes")} ({themes.length})
         </h2>
         <Button size="sm" variant="secondary" className="gap-1" disabled>
           <Plus className="h-3.5 w-3.5" />
           {t("creator.newTheme")}
         </Button>
       </div>
-      <div className="space-y-2">
-        {MOCK_THEME_LISTINGS.map((theme) => (
-          <div
-            key={theme.name}
-            className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
-              <Palette className="h-5 w-5 text-brand-text" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+      {tLoading ? (
+        <div className="flex h-20 items-center justify-center">
+          <ArinovaSpinner size="sm" />
+        </div>
+      ) : themes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Palette className="h-8 w-8 mb-2 opacity-40" />
+          <p className="text-sm">{t("creator.noThemes")}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {themes.map((theme) => (
+            <div
+              key={theme.id}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
+                <Palette className="h-5 w-5 text-brand-text" />
+              </div>
+              <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold truncate">{theme.name}</h3>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(theme.status)}`}>
-                  {t(`creator.status.${theme.status}`)}
-                </span>
-              </div>
-              <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span>{theme.sales.toLocaleString()} {t("creator.sales")}</span>
-                <span className="flex items-center gap-0.5">
-                  <Coins className="h-3 w-3 text-yellow-500" />
-                  ${theme.revenue.toFixed(2)}
-                </span>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">v{theme.version}</p>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -502,6 +484,7 @@ function CreatorConsoleContent() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("overview");
   const [agents, setAgents] = useState<AgentListing[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
   const [payoutOpen, setPayoutOpen] = useState(false);
@@ -511,12 +494,14 @@ function CreatorConsoleContent() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [agentData, balData] = await Promise.all([
+      const [agentData, balData, dashData] = await Promise.all([
         api<{ listings: AgentListing[] }>("/api/creator/agents"),
         api<{ balance: number }>("/api/wallet/balance"),
+        api<DashboardStats>("/api/creator/dashboard"),
       ]);
       setAgents(agentData.listings);
       setBalance(balData.balance);
+      setDashboardStats(dashData);
     } catch {
       // auto-handled
     } finally {
@@ -607,7 +592,7 @@ function CreatorConsoleContent() {
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 pb-24 md:pb-6">
           <div className="mx-auto max-w-4xl">
-            {tab === "overview" && <OverviewTab t={t} />}
+            {tab === "overview" && <OverviewTab stats={dashboardStats} t={t} />}
             {tab === "stickers" && <StickersTab t={t} />}
             {tab === "agents" && (
               <AgentsTab agents={agents} loading={loading} onArchive={handleArchive} t={t} />

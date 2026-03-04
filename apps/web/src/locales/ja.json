@@ -408,6 +408,8 @@
   "creator.yourCreations": "あなたの作品",
   "creator.stickerPacks": "スタンプパック",
   "creator.recentActivity": "最近のアクティビティ",
+  "creator.noActivity": "まだアクティビティがありません",
+  "creator.noThemes": "まだテーマがアップロードされていません",
   "creator.yourStickerPacks": "あなたのスタンプパック",
   "creator.newStickerPack": "新しいスタンプパック",
   "creator.yourAgents": "あなたのエージェント",

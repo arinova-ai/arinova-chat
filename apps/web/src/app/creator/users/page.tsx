@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Users, UserPlus, TrendingUp } from "lucide-react";
+import { ArrowLeft, Users, UserPlus, Loader2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -10,10 +10,21 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
-import {
-  TOTAL_USERS, TOTAL_CHANGE, NEW_USERS_30D, RETURNING_30D,
-  DAILY_DATA, aggregateWeekly, aggregateMonthly, type DailyUsers,
-} from "./mock-data";
+import { api } from "@/lib/api";
+
+interface DailyUsers {
+  date: string;
+  label?: string;
+  newUsers: number;
+  returning: number;
+}
+
+interface UsersData {
+  totalUsers: number;
+  newUsers: number;
+  returning: number;
+  dailyData: DailyUsers[];
+}
 
 type Period = "year" | "month" | "week" | "day";
 const PERIOD_TABS: { key: Period; label: string }[] = [
@@ -23,12 +34,45 @@ const PERIOD_TABS: { key: Period; label: string }[] = [
   { key: "day", label: "Day" },
 ];
 
-function getChartData(period: Period): DailyUsers[] {
+function addLabel(data: DailyUsers[]): DailyUsers[] {
+  return data.map((d) => {
+    const dt = new Date(d.date + "T00:00:00");
+    return { ...d, label: dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }) };
+  });
+}
+
+function aggregateWeekly(data: DailyUsers[]): DailyUsers[] {
+  const weeks: DailyUsers[] = [];
+  for (let i = 0; i < data.length; i += 7) {
+    const chunk = data.slice(i, i + 7);
+    if (chunk.length === 0) continue;
+    weeks.push({
+      date: chunk[0].date,
+      label: `${chunk[0].label ?? chunk[0].date} – ${chunk[chunk.length - 1].label ?? chunk[chunk.length - 1].date}`,
+      newUsers: chunk.reduce((s, d) => s + d.newUsers, 0),
+      returning: chunk.reduce((s, d) => s + d.returning, 0),
+    });
+  }
+  return weeks;
+}
+
+function aggregateMonthly(data: DailyUsers[]): DailyUsers[] {
+  if (data.length === 0) return [];
+  return [{
+    date: data[0].date,
+    label: "Monthly Total",
+    newUsers: data.reduce((s, d) => s + d.newUsers, 0),
+    returning: data.reduce((s, d) => s + d.returning, 0),
+  }];
+}
+
+function getChartData(data: DailyUsers[], period: Period): DailyUsers[] {
+  const labeled = addLabel(data);
   switch (period) {
-    case "year": return aggregateMonthly(DAILY_DATA);
-    case "month": return aggregateWeekly(DAILY_DATA);
-    case "week": return DAILY_DATA.slice(-7);
-    default: return DAILY_DATA;
+    case "year": return aggregateMonthly(labeled);
+    case "month": return aggregateWeekly(labeled);
+    case "week": return labeled.slice(-7);
+    default: return labeled;
   }
 }
 
@@ -59,7 +103,33 @@ function ChartTooltip({ active, payload, label }: {
 function UsersContent() {
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("month");
-  const chartData = getChartData(period);
+  const [data, setData] = useState<UsersData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api<UsersData>("/api/creator/users?days=30")
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const chartData = useMemo(() => getChartData(data?.dailyData ?? [], period), [data, period]);
+
+  if (loading) {
+    return (
+      <div className="app-dvh flex bg-background">
+        <div className="hidden h-full md:block"><IconRail /></div>
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  const totalUsers = data?.totalUsers ?? 0;
+  const newUsers = data?.newUsers ?? 0;
+  const returning = data?.returning ?? 0;
 
   return (
     <div className="app-dvh flex bg-background">
@@ -72,7 +142,7 @@ function UsersContent() {
             </Button>
             <div className="flex-1">
               <h1 className="text-lg font-bold">Users Dashboard</h1>
-              <p className="text-xs text-muted-foreground">Feb 1 – Mar 2, 2026</p>
+              <p className="text-xs text-muted-foreground">Last 30 days</p>
             </div>
           </div>
         </div>
@@ -82,10 +152,7 @@ function UsersContent() {
             {/* Mobile hero */}
             <div className="md:hidden rounded-xl border border-border bg-card p-4 text-center">
               <p className="text-xs text-muted-foreground">Total Users</p>
-              <p className="mt-1 text-3xl font-bold">{TOTAL_USERS.toLocaleString()}</p>
-              <p className="mt-0.5 inline-flex items-center gap-1 text-sm text-green-400">
-                <TrendingUp className="h-3.5 w-3.5" />+{TOTAL_CHANGE}%
-              </p>
+              <p className="mt-1 text-3xl font-bold">{totalUsers.toLocaleString()}</p>
             </div>
 
             {/* Summary cards */}
@@ -95,24 +162,21 @@ function UsersContent() {
                   <Users className="h-4 w-4 text-green-400" />
                   <span className="text-xs text-muted-foreground">Total Users</span>
                 </div>
-                <p className="mt-1 text-xl font-bold">{TOTAL_USERS.toLocaleString()}</p>
-                <p className="mt-0.5 flex items-center gap-1 text-[11px] text-green-400">
-                  <TrendingUp className="h-3 w-3" />+{TOTAL_CHANGE}%
-                </p>
+                <p className="mt-1 text-xl font-bold">{totalUsers.toLocaleString()}</p>
               </div>
               <div className="rounded-xl border-2 border-blue-500/40 bg-card p-4">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-4 w-4 text-blue-400" />
                   <span className="text-xs text-muted-foreground">New Users (30d)</span>
                 </div>
-                <p className="mt-1 text-xl font-bold">{NEW_USERS_30D.toLocaleString()}</p>
+                <p className="mt-1 text-xl font-bold">{newUsers.toLocaleString()}</p>
               </div>
               <div className="rounded-xl border-2 border-purple-500/40 bg-card p-4">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-purple-400" />
                   <span className="text-xs text-muted-foreground">Returning (30d)</span>
                 </div>
-                <p className="mt-1 text-xl font-bold">{RETURNING_30D.toLocaleString()}</p>
+                <p className="mt-1 text-xl font-bold">{returning.toLocaleString()}</p>
               </div>
             </div>
 
@@ -127,17 +191,23 @@ function UsersContent() {
                 ))}
               </div>
               <div className="h-64 sm:h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.4 0.04 250 / 0.15)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "oklch(0.6 0.02 260)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0.02 260)" }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "oklch(0.4 0.04 250 / 0.08)" }} />
-                    <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="newUsers" name="New Users" stackId="users" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="returning" name="Returning" stackId="users" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {chartData.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    No user data yet
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.4 0.04 250 / 0.15)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "oklch(0.6 0.02 260)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0.02 260)" }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: "oklch(0.4 0.04 250 / 0.08)" }} />
+                      <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="newUsers" name="New Users" stackId="users" fill="#3b82f6" />
+                      <Bar dataKey="returning" name="Returning" stackId="users" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
           </div>
