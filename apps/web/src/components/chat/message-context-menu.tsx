@@ -93,10 +93,12 @@ export function MessageContextMenu({
   const emojiRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const savedOverflowRef = useRef("");
+  const ignoreNextClickRef = useRef(false);
 
-  // Track open timestamp for guard
+  // Track open timestamp for guard + mark first click to ignore
   if (open && !prevOpenRef.current) {
     openedAtRef.current = Date.now();
+    ignoreNextClickRef.current = true;
   }
   prevOpenRef.current = open;
 
@@ -242,6 +244,7 @@ export function MessageContextMenu({
   return createPortal(
     <div
       className={`fixed inset-0 z-[100] transition-opacity duration-150 ${visible ? "opacity-100" : "opacity-0"}`}
+      style={{ touchAction: "manipulation" }}
       onTouchEnd={(e) => {
         // Block synthetic click from touchend during guard period
         if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) {
@@ -250,6 +253,11 @@ export function MessageContextMenu({
         }
       }}
       onClick={() => {
+        // Ignore the very first click (iOS 300ms delayed synthetic click from long-press release)
+        if (ignoreNextClickRef.current) {
+          ignoreNextClickRef.current = false;
+          return;
+        }
         if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) return;
         close();
       }}
