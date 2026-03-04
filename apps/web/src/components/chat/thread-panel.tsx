@@ -105,7 +105,7 @@ export function ThreadPanel() {
         className="w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col"
       >
         {/* Thread Header */}
-        <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0">
+        <SheetHeader className="px-4 pb-3 border-b shrink-0" style={{ paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))" }}>
           <div className="flex items-center justify-between">
             <SheetTitle className="text-sm flex items-center gap-1.5">
               <MessageSquare className="h-4 w-4" />
