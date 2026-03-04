@@ -166,6 +166,7 @@ export default function RegisterPage() {
                 {showPassword ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               </button>
             </div>
+            <p className="text-xs text-muted-foreground/70">At least 8 characters with uppercase and lowercase</p>
 
             <div className="relative">
               <CheckCircle className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
