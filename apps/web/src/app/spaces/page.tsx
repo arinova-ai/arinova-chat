@@ -7,7 +7,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { PageTitle } from "@/components/ui/page-title";
 import { Button } from "@/components/ui/button";
-import { Search, Gamepad2, Play, Loader2 } from "lucide-react";
+import { Search, Gamepad2, Play, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useSpacesStore } from "@/store/spaces-store";
 import type { Space } from "@arinova/shared/types";
@@ -65,6 +65,7 @@ function SpacesContent() {
   const [category, setCategory] = useState("all");
   const spaces = useSpacesStore((s) => s.spaces);
   const loading = useSpacesStore((s) => s.loading);
+  const error = useSpacesStore((s) => s.error);
   const fetchSpaces = useSpacesStore((s) => s.fetchSpaces);
 
   useEffect(() => {
@@ -135,6 +136,20 @@ function SpacesContent() {
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <AlertTriangle className="h-10 w-10 opacity-40 mb-2" />
+                <p className="text-sm font-medium">Failed to load. Try again</p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-3 gap-1.5"
+                  onClick={() => fetchSpaces()}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Retry
+                </Button>
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
