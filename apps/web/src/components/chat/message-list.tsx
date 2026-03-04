@@ -220,8 +220,12 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     }
   }, []);
 
-  // Scroll-to-bottom handler
+  // Scroll-to-bottom handler — also closes conversation search to prevent conflict
   const handleScrollToBottom = useCallback(() => {
+    const state = useChatStore.getState();
+    if (state.convSearchOpen) {
+      state.closeConvSearch();
+    }
     virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" });
     setNewMessageCount(0);
   }, []);
