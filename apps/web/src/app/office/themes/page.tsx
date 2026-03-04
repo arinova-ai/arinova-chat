@@ -179,7 +179,7 @@ function ThemesGrid() {
         {/* Search + filters */}
         <div className="shrink-0 border-b border-border px-6 py-3 space-y-3">
           {/* Search bar */}
-          <div className="relative max-w-md">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
