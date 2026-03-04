@@ -20,6 +20,7 @@ const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "🤔", "👀"];
 const INTERACTION_GUARD_MS = 300;
 const MENU_W = 200;
 const VIEWPORT_PAD = 8;
+const GAP = 8;
 
 /** Parse CSS env(safe-area-inset-top) for iOS notch/status bar. */
 function parseSafeAreaTop(): number {
@@ -50,12 +51,21 @@ interface MessageContextMenuProps {
   onSelect?: () => void;
 }
 
-interface MenuPosition {
+interface Layout {
+  /** Cloned message position */
+  cloneTop: number;
+  cloneLeft: number;
+  cloneWidth: number;
+  cloneHeight: number;
+  /** Emoji row position */
   emojiTop: number;
+  emojiLeft: number;
+  /** Menu position */
   menuTop: number;
-  left: number;
+  menuLeft: number;
   menuMaxH: number;
-  msgRect: DOMRect;
+  /** Clone HTML */
+  cloneHtml: string;
 }
 
 export function MessageContextMenu({
@@ -76,14 +86,13 @@ export function MessageContextMenu({
   onSelect,
 }: MessageContextMenuProps) {
   const { t } = useTranslation();
-  const [position, setPosition] = useState<MenuPosition | null>(null);
+  const [layout, setLayout] = useState<Layout | null>(null);
   const [visible, setVisible] = useState(false);
   const openedAtRef = useRef(0);
   const prevOpenRef = useRef(false);
   const emojiRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const savedOverflowRef = useRef("");
-  const elevatedElsRef = useRef<{ el: HTMLElement; prev: string }[]>([]);
 
   // Track open timestamp for guard
   if (open && !prevOpenRef.current) {
@@ -91,98 +100,66 @@ export function MessageContextMenu({
   }
   prevOpenRef.current = open;
 
-  // Compute position after DOM renders (measures actual element sizes)
+  // Compute layout: clone message HTML, center it, position emoji + menu around it
   useLayoutEffect(() => {
     if (!open || !message) {
-      setPosition(null);
+      setLayout(null);
       return;
     }
-
-    const el = document.querySelector(`[data-message-id="${message.id}"]`);
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    // Use visualViewport for accurate dimensions on iOS (accounts for browser chrome)
-    const vp = window.visualViewport;
-    const vpTop = vp?.offsetTop ?? 0;
-    const vh = vp?.height ?? window.innerHeight;
-    const vw = vp?.width ?? window.innerWidth;
-
-    // iOS safe area: prevent content from going under the notch/status bar
-    const safeTop = vpTop || parseSafeAreaTop();
-    const padTop = Math.max(VIEWPORT_PAD, safeTop + 8);
-
-    const emojiH = emojiRef.current?.offsetHeight ?? 52;
-    const menuH = menuRef.current?.scrollHeight ?? 320;
-    const gap = 8;
-    const totalH = emojiH + gap + menuH;
-
-    const spaceBelow = (vpTop + vh) - rect.bottom;
-    const spaceAbove = rect.top - vpTop;
-    const placeAbove = spaceBelow < totalH + VIEWPORT_PAD && spaceAbove > spaceBelow;
-
-    let emojiTop: number;
-    if (placeAbove) {
-      emojiTop = Math.max(padTop, rect.top - totalH - 4);
-    } else {
-      emojiTop = Math.min(vpTop + vh - totalH - VIEWPORT_PAD, rect.bottom + 4);
-    }
-    // Clamp: never go above safe area
-    emojiTop = Math.max(padTop, emojiTop);
-    const menuTop = emojiTop + emojiH + gap;
-
-    // Constrain menu height if viewport is very small
-    const availableForMenu = vpTop + vh - menuTop - VIEWPORT_PAD;
-    const menuMaxH = Math.min(menuH, Math.max(availableForMenu, 120));
-
-    let left = rect.left;
-    if (left + MENU_W > vw - 12) left = vw - MENU_W - 12;
-    if (left < 12) left = 12;
-
-    setPosition({ emojiTop, menuTop, left, menuMaxH, msgRect: rect });
-  }, [open, message?.id]);
-
-  // Elevate the original message element above the backdrop so it's visible
-  // (Telegram-style: message floats above the dimmed overlay)
-  useEffect(() => {
-    if (!open || !message) return;
 
     const el = document.querySelector(`[data-message-id="${message.id}"]`) as HTMLElement | null;
     if (!el) return;
 
-    const toElevate: { el: HTMLElement; prev: string }[] = [];
+    const rect = el.getBoundingClientRect();
+    const vp = window.visualViewport;
+    const vpTop = vp?.offsetTop ?? 0;
+    const vh = vp?.height ?? window.innerHeight;
+    const vw = vp?.width ?? window.innerWidth;
+    const safeTop = vpTop || parseSafeAreaTop();
+    const padTop = Math.max(VIEWPORT_PAD, safeTop + 8);
 
-    // Elevate the message element itself
-    toElevate.push({ el, prev: el.style.zIndex });
-    el.style.zIndex = "200";
-    el.style.position = "relative";
+    const cloneHtml = el.outerHTML;
+    const cloneW = rect.width;
+    const cloneH = rect.height;
 
-    // Elevate scroll container (Virtuoso creates nested divs with overflow)
-    // Walk up to find the scrollable ancestor so the message can escape its stacking context
-    let parent = el.parentElement;
-    while (parent && parent !== document.body) {
-      const style = getComputedStyle(parent);
-      if (style.overflow === "auto" || style.overflow === "scroll" ||
-          style.overflowY === "auto" || style.overflowY === "scroll") {
-        toElevate.push({ el: parent, prev: parent.style.zIndex });
-        parent.style.zIndex = "200";
-        break;
-      }
-      parent = parent.parentElement;
+    const emojiH = emojiRef.current?.offsetHeight ?? 52;
+    const menuH = menuRef.current?.scrollHeight ?? 320;
+
+    // Center clone vertically in viewport
+    const totalNeeded = emojiH + GAP + cloneH + GAP + menuH;
+    let cloneTop: number;
+
+    if (totalNeeded + padTop + VIEWPORT_PAD <= vh) {
+      // Everything fits: center the whole group
+      const groupTop = vpTop + Math.max(padTop, (vh - totalNeeded) / 2);
+      cloneTop = groupTop + emojiH + GAP;
+    } else {
+      // Tight: put clone in center, let menu scroll
+      cloneTop = vpTop + Math.max(padTop + emojiH + GAP, (vh - cloneH) / 2);
     }
 
-    elevatedElsRef.current = toElevate;
+    const cloneLeft = rect.left;
 
-    return () => {
-      for (const { el: e, prev } of elevatedElsRef.current) {
-        e.style.zIndex = prev;
-        if (e.style.position === "relative" && !prev) {
-          e.style.position = "";
-        }
-      }
-      elevatedElsRef.current = [];
-    };
-  }, [open, message]);
+    // Emoji above clone
+    const emojiTop = cloneTop - GAP - emojiH;
+
+    // Menu below clone
+    const menuTop = cloneTop + cloneH + GAP;
+    const availableForMenu = vpTop + vh - menuTop - VIEWPORT_PAD;
+    const menuMaxH = Math.min(menuH, Math.max(availableForMenu, 120));
+
+    // Horizontal positioning for emoji + menu (same logic as before)
+    let menuLeft = rect.left;
+    if (menuLeft + MENU_W > vw - 12) menuLeft = vw - MENU_W - 12;
+    if (menuLeft < 12) menuLeft = 12;
+
+    setLayout({
+      cloneTop, cloneLeft, cloneWidth: cloneW, cloneHeight: cloneH,
+      emojiTop, emojiLeft: menuLeft,
+      menuTop, menuLeft, menuMaxH,
+      cloneHtml,
+    });
+  }, [open, message?.id]);
 
   // Entrance animation + scroll lock
   useEffect(() => {
@@ -192,7 +169,6 @@ export function MessageContextMenu({
       return;
     }
 
-    // Save current overflow before locking
     savedOverflowRef.current = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -228,31 +204,39 @@ export function MessageContextMenu({
     close();
   };
 
-  // Glow effect on the original message element
-  // Rendered after backdrop in DOM order + z-[102] to sit above backdrop-blur
-  // (iOS Safari's backdrop-filter creates a new stacking context)
-  const glowStyle = position?.msgRect
+  const showContent = visible && layout;
+
+  const cloneStyle: React.CSSProperties = layout
     ? {
-        position: "fixed" as const,
-        top: position.msgRect.top,
-        left: position.msgRect.left,
-        width: position.msgRect.width,
-        height: position.msgRect.height,
-        borderRadius: "1rem",
+        position: "fixed",
+        top: layout.cloneTop,
+        left: layout.cloneLeft,
+        width: layout.cloneWidth,
+      }
+    : { position: "fixed", top: -9999, left: -9999, visibility: "hidden" };
+
+  const glowStyle: React.CSSProperties | undefined = layout
+    ? {
+        position: "fixed",
+        top: layout.cloneTop - 4,
+        left: layout.cloneLeft - 4,
+        width: layout.cloneWidth + 8,
+        height: layout.cloneHeight + 8,
+        borderRadius: "1.25rem",
         boxShadow: isOwn
-          ? "0 0 20px 4px rgba(59, 130, 246, 0.4)"
-          : "0 0 20px 4px rgba(148, 163, 184, 0.3)",
-        pointerEvents: "none" as const,
+          ? "0 0 24px 6px rgba(59, 130, 246, 0.4)"
+          : "0 0 24px 6px rgba(148, 163, 184, 0.3)",
+        pointerEvents: "none",
       }
     : undefined;
 
-  const emojiStyle: React.CSSProperties = position
-    ? { position: "fixed", top: position.emojiTop, left: position.left }
-    : { position: "fixed", top: -9999, left: -9999, visibility: "hidden" as const };
+  const emojiStyle: React.CSSProperties = layout
+    ? { position: "fixed", top: layout.emojiTop, left: layout.emojiLeft }
+    : { position: "fixed", top: -9999, left: -9999, visibility: "hidden" };
 
-  const menuStyle: React.CSSProperties = position
-    ? { position: "fixed", top: position.menuTop, left: position.left, maxHeight: position.menuMaxH }
-    : { position: "fixed", top: -9999, left: -9999, visibility: "hidden" as const };
+  const menuStyle: React.CSSProperties = layout
+    ? { position: "fixed", top: layout.menuTop, left: layout.menuLeft, maxHeight: layout.menuMaxH }
+    : { position: "fixed", top: -9999, left: -9999, visibility: "hidden" };
 
   return createPortal(
     <div
@@ -262,13 +246,26 @@ export function MessageContextMenu({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
-      {/* Message glow highlight — z-[102] above backdrop-blur stacking context */}
-      {glowStyle && <div className="z-[102]" style={glowStyle} />}
+      {/* Glow around cloned message */}
+      {glowStyle && (
+        <div
+          className={`z-[102] transition-opacity duration-150 ${showContent ? "opacity-100" : "opacity-0"}`}
+          style={glowStyle}
+        />
+      )}
+
+      {/* Cloned message — centered in viewport, above backdrop */}
+      <div
+        className={`z-[102] pointer-events-none transition-all duration-150 ${showContent ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
+        style={cloneStyle}
+        dangerouslySetInnerHTML={layout ? { __html: layout.cloneHtml } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      />
 
       {/* Quick emoji row */}
       <div
         ref={emojiRef}
-        className={`flex items-center gap-1 rounded-full border border-border/50 bg-card/95 px-2 py-1.5 shadow-xl transition-all duration-150 ${visible && position ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
+        className={`z-[103] flex items-center gap-1 rounded-full border border-border/50 bg-card/95 px-2 py-1.5 shadow-xl transition-all duration-150 ${showContent ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
         style={emojiStyle}
         onClick={(e) => e.stopPropagation()}
       >
@@ -286,7 +283,7 @@ export function MessageContextMenu({
       {/* Context menu */}
       <div
         ref={menuRef}
-        className={`w-[200px] rounded-2xl border border-border/50 bg-card/95 shadow-xl backdrop-blur-md overflow-hidden overflow-y-auto transition-all duration-150 ${visible && position ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
+        className={`z-[103] w-[200px] rounded-2xl border border-border/50 bg-card/95 shadow-xl backdrop-blur-md overflow-hidden overflow-y-auto transition-all duration-150 ${showContent ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
         style={menuStyle}
         onClick={(e) => e.stopPropagation()}
       >
