@@ -197,7 +197,7 @@ async fn agent_send(
                             notification_type: "message".into(),
                             title: agent.name.clone(),
                             body: preview.clone(),
-                            url: Some(format!("/chat/{}", conversation_id)),
+                            url: Some(format!("/?c={}", conversation_id)),
                         },
                     )
                     .await;

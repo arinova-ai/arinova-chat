@@ -1036,7 +1036,7 @@ pub async fn trigger_agent_response(
                                 notification_type: "message".into(),
                                 title: sender_name.to_string(),
                                 body: preview,
-                                url: Some(format!("/chat/{}", conversation_id)),
+                                url: Some(format!("/?c={}", conversation_id)),
                             },
                         )
                         .await;
@@ -1219,7 +1219,7 @@ pub async fn trigger_agent_response(
                                 notification_type: "message".into(),
                                 title: sender_name.to_string(),
                                 body: preview,
-                                url: Some(format!("/chat/{}", conversation_id)),
+                                url: Some(format!("/?c={}", conversation_id)),
                             },
                         )
                         .await;
@@ -1734,7 +1734,7 @@ async fn do_trigger_agent_response(
                                                 notification_type: "message".into(),
                                                 title: agent_name.clone(),
                                                 body: preview,
-                                                url: Some(format!("/chat/{}", conversation_id)),
+                                                url: Some(format!("/?c={}", conversation_id)),
                                             },
                                         )
                                         .await;

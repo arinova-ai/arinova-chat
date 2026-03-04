@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { IconRail } from "./icon-rail";
 import { MobileBottomNav } from "./mobile-bottom-nav";
@@ -25,6 +25,7 @@ export function ChatLayout() {
   const setCurrentUserId = useChatStore((s) => s.setCurrentUserId);
   const prevConvRef = useRef<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
   useRenderDiag("ChatLayout", () => ({
     activeConversationId,
     searchActive,
@@ -58,12 +59,29 @@ export function ChatLayout() {
     };
   }, []);
 
+  // Handle ?c= query param from push notification deep links
+  useEffect(() => {
+    const convId = searchParams.get("c");
+    if (convId) {
+      setActiveConversation(convId);
+      router.replace("/", { scroll: false });
+    }
+  }, [searchParams, setActiveConversation, router]);
+
   // Push notification setup: refresh subscription + wire click handler
   useEffect(() => {
     refreshPushSubscription();
-    const cleanup = setupNotificationClickHandler((url) => router.push(url));
+    const cleanup = setupNotificationClickHandler((url) => {
+      const params = new URLSearchParams(url.split("?")[1] || "");
+      const convId = params.get("c");
+      if (convId) {
+        setActiveConversation(convId);
+      } else {
+        router.push(url);
+      }
+    });
     return cleanup;
-  }, [router]);
+  }, [router, setActiveConversation]);
 
   // Listen for global new-chat event (e.g. from sidebar header button)
   useEffect(() => {
