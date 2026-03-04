@@ -242,6 +242,7 @@ function OverviewTab({ stats, t }: { stats: DashboardStats | null; t: (k: string
 // ---------------------------------------------------------------------------
 
 function StickersTab({ t }: { t: (k: string) => string }) {
+  const router = useRouter();
   const [stickerPacks, setStickerPacks] = useState<CreatorStickerPack[]>([]);
   const [sLoading, setSLoading] = useState(true);
 
@@ -259,7 +260,7 @@ function StickersTab({ t }: { t: (k: string) => string }) {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.yourStickerPacks")} ({stickerPacks.length})
         </h2>
-        <Button size="sm" variant="secondary" className="gap-1">
+        <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/stickers")}>
           <Plus className="h-3.5 w-3.5" />
           {t("creator.newStickerPack")}
         </Button>
