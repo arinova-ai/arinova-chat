@@ -342,6 +342,8 @@
   "settings.privacy.subtitle": "Urus pengguna yang disekat dan tetapan privasi.",
   "settings.privacy.blockedUsers": "Pengguna Disekat",
   "settings.privacy.noBlocked": "Tiada pengguna disekat",
+  "settings.privacy.mutedUsers": "Pengguna yang disenyapkan",
+  "settings.privacy.noMuted": "Tiada pengguna yang disenyapkan",
 
   "userProfile.title": "Profil Pengguna",
   "userProfile.joined": "Menyertai",

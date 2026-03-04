@@ -342,6 +342,8 @@
   "settings.privacy.subtitle": "Gérez les utilisateurs bloqués et les paramètres de confidentialité.",
   "settings.privacy.blockedUsers": "Utilisateurs bloqués",
   "settings.privacy.noBlocked": "Aucun utilisateur bloqué",
+  "settings.privacy.mutedUsers": "Utilisateurs muets",
+  "settings.privacy.noMuted": "Aucun utilisateur muet",
 
   "userProfile.title": "Profil utilisateur",
   "userProfile.joined": "Inscrit le",

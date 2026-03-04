@@ -342,6 +342,8 @@
   "settings.privacy.subtitle": "ブロックしたユーザーとプライバシー設定を管理します。",
   "settings.privacy.blockedUsers": "ブロックしたユーザー",
   "settings.privacy.noBlocked": "ブロックしたユーザーはいません",
+  "settings.privacy.mutedUsers": "ミュート中のユーザー",
+  "settings.privacy.noMuted": "ミュート中のユーザーはいません",
 
   "userProfile.title": "ユーザー情報",
   "userProfile.joined": "参加日",

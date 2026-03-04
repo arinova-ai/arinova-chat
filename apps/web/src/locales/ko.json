@@ -342,6 +342,8 @@
   "settings.privacy.subtitle": "차단된 사용자 및 개인정보 설정을 관리하세요.",
   "settings.privacy.blockedUsers": "차단된 사용자",
   "settings.privacy.noBlocked": "차단된 사용자가 없습니다",
+  "settings.privacy.mutedUsers": "음소거된 사용자",
+  "settings.privacy.noMuted": "음소거된 사용자가 없습니다",
 
   "userProfile.title": "사용자 프로필",
   "userProfile.joined": "가입일",

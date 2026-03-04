@@ -344,6 +344,8 @@
   "settings.privacy.subtitle": "管理封鎖的使用者與隱私設定。",
   "settings.privacy.blockedUsers": "已封鎖的使用者",
   "settings.privacy.noBlocked": "沒有已封鎖的使用者",
+  "settings.privacy.mutedUsers": "已靜音的使用者",
+  "settings.privacy.noMuted": "沒有已靜音的使用者",
 
   "userProfile.title": "使用者資訊",
   "userProfile.joined": "加入於",

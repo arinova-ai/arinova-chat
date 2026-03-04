@@ -342,6 +342,8 @@
   "settings.privacy.subtitle": "Administra usuarios bloqueados y configuracion de privacidad.",
   "settings.privacy.blockedUsers": "Usuarios Bloqueados",
   "settings.privacy.noBlocked": "No hay usuarios bloqueados",
+  "settings.privacy.mutedUsers": "Usuarios silenciados",
+  "settings.privacy.noMuted": "No hay usuarios silenciados",
 
   "userProfile.title": "Perfil de Usuario",
   "userProfile.joined": "Se unio",
