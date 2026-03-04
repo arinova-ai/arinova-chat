@@ -49,10 +49,11 @@ struct ConvCheck {
 fn resolve_url(config: &crate::config::Config, storage_path: &str) -> String {
     if storage_path.starts_with("http://") || storage_path.starts_with("https://") {
         storage_path.to_string()
+    } else if storage_path.starts_with("/uploads/") {
+        // Local fallback path — always serve directly, even when R2 is configured
+        storage_path.to_string()
     } else if config.is_r2_configured() {
         format!("{}/{}", config.r2_public_url, storage_path)
-    } else if storage_path.starts_with("/uploads/") {
-        storage_path.to_string()
     } else {
         format!("/uploads/{}", storage_path)
     }
@@ -70,7 +71,7 @@ async fn fetch_attachments(
         .as_deref()
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(30)
-        .min(60);
+        .clamp(1, 60);
 
     // Verify conversation access
     let conv = sqlx::query_as::<_, ConvCheck>(

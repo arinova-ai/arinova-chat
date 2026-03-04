@@ -72,6 +72,7 @@ export function MediaFilesPanel({ open, onOpenChange, conversationId, initialTab
   const [media, setMedia] = useState<TabState>(INITIAL_TAB);
   const [files, setFiles] = useState<TabState>(INITIAL_TAB);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef(false);
 
   // Reset when conversation changes or panel opens
   useEffect(() => {
@@ -84,6 +85,8 @@ export function MediaFilesPanel({ open, onOpenChange, conversationId, initialTab
 
   const fetchItems = useCallback(
     async (type: MediaFilesTab, cursor?: string | null) => {
+      if (loadingRef.current) return;
+      loadingRef.current = true;
       const setState = type === "media" ? setMedia : setFiles;
       setState((prev) => ({ ...prev, loading: true }));
 
@@ -104,6 +107,8 @@ export function MediaFilesPanel({ open, onOpenChange, conversationId, initialTab
         }));
       } catch {
         setState((prev) => ({ ...prev, loading: false, loaded: true }));
+      } finally {
+        loadingRef.current = false;
       }
     },
     [conversationId]
