@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Message, Attachment } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
@@ -618,25 +618,55 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
+  // --- Text selection mode (Select action) ---
+  const [textSelectable, setTextSelectable] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+
+  const handleSelect = useCallback(() => {
+    setTextSelectable(true);
+  }, []);
+
+  // Exit text selection when tapping outside the bubble
+  useEffect(() => {
+    if (!textSelectable) return;
+    const handler = (e: PointerEvent) => {
+      if (bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
+        setTextSelectable(false);
+        window.getSelection()?.removeAllRanges();
+      }
+    };
+    // Small delay to avoid capturing the sheet-close tap
+    const timer = setTimeout(() => document.addEventListener("pointerdown", handler), 100);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("pointerdown", handler);
+    };
+  }, [textSelectable]);
+
   const handleCopy = useCallback(() => {
     const text = message.content;
-    // Synchronous copy — must stay in user gesture call stack for iOS Safari
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    let ok = false;
-    try {
-      ok = document.execCommand("copy");
-    } catch { /* ignore */ }
-    document.body.removeChild(ta);
-    // Also try async clipboard API (non-blocking, works on modern browsers)
-    if (!ok) {
-      navigator.clipboard?.writeText(text).catch(() => {});
+    // Primary: Clipboard API (permission granted synchronously in user gesture)
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {
+        // Fallback: execCommand for very old browsers
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.cssText = "position:fixed;left:-9999px;opacity:0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand("copy"); } catch { /* ignore */ }
+        document.body.removeChild(ta);
+      });
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;left:-9999px;opacity:0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand("copy"); } catch { /* ignore */ }
+      document.body.removeChild(ta);
     }
     setCopied(true);
     useToastStore.getState().addToast(t("chat.selection.copied"), "success");
@@ -696,7 +726,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0 select-none md:select-auto" {...(selectionMode ? {} : longPressHandlers)}>
+        <div ref={bubbleRef} className={cn("relative min-w-0", textSelectable ? "select-text" : "select-none md:select-auto")} {...(selectionMode || textSelectable ? {} : longPressHandlers)}>
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(
@@ -865,7 +895,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           onStartThread={() => openThread(message.id)}
           onReport={() => setReportOpen(true)}
           isInThread={isInThread}
-          onSelect={onEnterSelectionMode}
+          onSelect={handleSelect}
         />
       )}
 
