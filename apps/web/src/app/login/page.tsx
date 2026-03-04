@@ -199,7 +199,8 @@ function LoginForm() {
           </p>
 
           <p className="text-center text-xs text-muted-foreground/60">
-            By signing in you agree to our Terms of Service
+            By signing in you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-muted-foreground">Terms of Service</Link>
           </p>
         </div>
       </div>
