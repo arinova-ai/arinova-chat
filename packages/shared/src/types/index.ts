@@ -462,6 +462,14 @@ export type WSServerEvent =
       threadId?: string;
     }
   | {
+      type: "stream_resume";
+      conversationId: string;
+      messageId: string;
+      seq: number;
+      content: string;
+      agentId?: string;
+    }
+  | {
       type: "sync_response";
       conversations: SyncConversationSummary[];
       missedMessages: SyncMissedMessage[];

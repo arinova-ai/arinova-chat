@@ -1845,6 +1845,58 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    if (event.type === "stream_resume") {
+      const { conversationId, messageId, seq, content } = event;
+
+      // Remove any stale thinkingAgent for this message
+      const thinking = get().thinkingAgents[conversationId] ?? [];
+      const newThinking = thinking.filter((t) => t.messageId !== messageId);
+
+      const current = get().messagesByConversation[conversationId] ?? [];
+      const existingIdx = current.findIndex((m) => m.id === messageId);
+
+      if (existingIdx !== -1) {
+        // Message already in store — update content and mark as streaming
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: current.map((m) =>
+              m.id === messageId
+                ? { ...m, content, status: "streaming" as const }
+                : m
+            ),
+          },
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: newThinking,
+          },
+        });
+      } else {
+        // Message not in store — insert it
+        const resumeMsg: Message = {
+          id: messageId,
+          conversationId,
+          seq,
+          role: "agent",
+          content,
+          status: "streaming",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: [...current, resumeMsg],
+          },
+          thinkingAgents: {
+            ...get().thinkingAgents,
+            [conversationId]: newThinking,
+          },
+        });
+      }
+      return;
+    }
+
     if (event.type === "stream_chunk") {
       const { conversationId, messageId, chunk } = event;
       const threadId = event.threadId;

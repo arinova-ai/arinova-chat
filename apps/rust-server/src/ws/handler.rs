@@ -771,7 +771,8 @@ async fn handle_sync(
         "missedMessages": missed_messages
     }));
 
-    // Re-attach to active streams
+    // Re-attach to active streams — send stream_resume so frontend can
+    // restore the in-progress message without duplicating.
     for conv_id in &conv_ids {
         if !ws_state.has_active_stream(conv_id) {
             continue;
@@ -787,24 +788,33 @@ async fn handle_sync(
         .await;
 
         if let Ok(Some((msg_id, seq))) = streaming_msg {
-            ws_state.send_to_user(user_id, &json!({
-                "type": "stream_start",
-                "conversationId": conv_id,
-                "messageId": msg_id,
-                "seq": seq
-            }));
-
+            let mut content = String::new();
             if let Ok(mut conn) = redis.get().await {
                 if let Ok(Some(cached)) = conn.get::<_, Option<String>>(&format!("stream:{}", msg_id)).await {
-                    ws_state.send_to_user(user_id, &json!({
-                        "type": "stream_chunk",
-                        "conversationId": conv_id,
-                        "messageId": msg_id,
-                        "seq": seq,
-                        "chunk": cached
-                    }));
+                    content = cached;
                 }
             }
+
+            // Also try to get the agent info from the message
+            let agent_info = sqlx::query_as::<_, (Option<String>,)>(
+                r#"SELECT sender_agent_id::text FROM messages WHERE id = $1::uuid"#,
+            )
+            .bind(&msg_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten();
+
+            let agent_id = agent_info.and_then(|a| a.0);
+
+            ws_state.send_to_user(user_id, &json!({
+                "type": "stream_resume",
+                "conversationId": conv_id,
+                "messageId": msg_id,
+                "seq": seq,
+                "content": content,
+                "agentId": agent_id
+            }));
         }
     }
 }
