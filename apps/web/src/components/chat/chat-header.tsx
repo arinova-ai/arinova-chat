@@ -306,6 +306,28 @@ export function ChatHeader({
                 <MessageSquare className="h-4 w-4" />
               </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  title={t("chat.header.moreOptions")}
+                >
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onPhotosClick}>
+                  <Image className="h-4 w-4" />
+                  {t("chat.header.photos")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onFilesClick}>
+                  <FileText className="h-4 w-4" />
+                  {t("chat.header.files")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
       </div>
