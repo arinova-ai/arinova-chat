@@ -242,6 +242,13 @@ export function MessageContextMenu({
   return createPortal(
     <div
       className={`fixed inset-0 z-[100] transition-opacity duration-150 ${visible ? "opacity-100" : "opacity-0"}`}
+      onTouchEnd={(e) => {
+        // Block synthetic click from touchend during guard period
+        if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
       onClick={() => {
         if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) return;
         close();

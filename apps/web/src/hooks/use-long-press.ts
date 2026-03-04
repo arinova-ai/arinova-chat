@@ -39,6 +39,7 @@ export function useLongPress(
       // Prevent tap / click if long-press already fired
       if (firedRef.current) {
         e.preventDefault();
+        e.stopPropagation();
       }
     },
     [clear],
