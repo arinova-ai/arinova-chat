@@ -2,6 +2,8 @@ import type {
   ArinovaConfig,
   LoginOptions,
   LoginResult,
+  ConnectOptions,
+  ConnectResult,
   ArinovaUser,
   AgentInfo,
   AgentChatOptions,
@@ -40,6 +42,54 @@ export const Arinova = {
     if (config.clientId && config.clientSecret) {
       _oauthClientInfo = { clientId: config.clientId, clientSecret: config.clientSecret };
     }
+  },
+
+  /**
+   * Connect to Arinova — works seamlessly in both iframe and standalone contexts.
+   *
+   * - **Inside an iframe** (embedded in Arinova Chat): receives auth via postMessage from the parent window.
+   * - **Outside an iframe** (standalone): falls back to the OAuth login() flow.
+   *
+   * @param options.timeout - How long to wait for postMessage in iframe mode (default: 5000ms)
+   * @returns Promise resolving with user, accessToken, and agents
+   */
+  async connect(options?: ConnectOptions): Promise<ConnectResult> {
+    const timeout = options?.timeout ?? 5000;
+
+    const inIframe = typeof window !== "undefined" && window.self !== window.top;
+
+    if (!inIframe) {
+      // Not in iframe — fall back to OAuth login flow
+      this.login();
+      // login() redirects, so this promise never resolves in practice
+      return new Promise(() => {});
+    }
+
+    // In iframe — listen for postMessage auth from parent
+    return new Promise<ConnectResult>((resolve, reject) => {
+      let settled = false;
+
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          window.removeEventListener("message", handler);
+          reject(new Error("Arinova connect timeout: no auth message received from parent window within " + timeout + "ms"));
+        }
+      }, timeout);
+
+      function handler(event: MessageEvent) {
+        if (event.data?.type !== "arinova:auth") return;
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        window.removeEventListener("message", handler);
+
+        const { user, accessToken, agents } = event.data.payload as ConnectResult;
+        resolve({ user, accessToken, agents: agents ?? [] });
+      }
+
+      window.addEventListener("message", handler);
+    });
   },
 
   /**
