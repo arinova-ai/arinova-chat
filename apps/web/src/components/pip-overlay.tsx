@@ -213,6 +213,11 @@ export function PipOverlay() {
     );
   }, [session]);
 
+  // Re-send auth when session becomes available (onLoad may fire before session is ready)
+  useEffect(() => {
+    sendAuthToIframe();
+  }, [sendAuthToIframe]);
+
   if (!pipMode || !iframeUrl) return null;
 
   if (pipMode === "fullscreen") {
