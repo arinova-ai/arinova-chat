@@ -278,7 +278,7 @@ CREATE TABLE communities (
     creator_id TEXT NOT NULL REFERENCES "user"(id),
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    type TEXT NOT NULL DEFAULT 'lounge' CHECK (type IN ('lounge', 'club')),
+    type TEXT NOT NULL DEFAULT 'club' CHECK (type IN ('official', 'club')),
     -- Pricing (credits)
     join_fee INTEGER NOT NULL DEFAULT 0,
     monthly_fee INTEGER NOT NULL DEFAULT 0,
@@ -292,6 +292,11 @@ CREATE TABLE communities (
     category TEXT,
     tags TEXT[],
     tts_voice TEXT DEFAULT 'alloy',
+    -- Official fields
+    verified BOOLEAN DEFAULT FALSE,
+    verified_at TIMESTAMPTZ,
+    default_agent_listing_id UUID REFERENCES agent_listings(id),
+    cs_mode VARCHAR(20) DEFAULT 'ai_only' CHECK (cs_mode IN ('ai_only', 'human_only', 'hybrid')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -300,7 +305,7 @@ CREATE TABLE community_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES "user"(id),
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('creator', 'moderator', 'member')),
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('creator', 'moderator', 'member', 'cs_agent')),
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- Subscription
     subscription_status TEXT DEFAULT 'active' CHECK (subscription_status IN ('active', 'expired', 'cancelled')),
@@ -331,6 +336,38 @@ CREATE INDEX idx_community_messages_community ON community_messages(community_id
 CREATE INDEX idx_community_members_community ON community_members(community_id);
 CREATE INDEX idx_community_members_user ON community_members(user_id);
 CREATE INDEX idx_community_agents_community ON community_agents(community_id);
+
+-- Official 1-on-1 conversation tracking
+CREATE TABLE official_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES "user"(id),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    status VARCHAR(20) DEFAULT 'ai_active'
+      CHECK (status IN ('ai_active', 'human_active', 'waiting_human', 'resolved', 'closed')),
+    assigned_cs_id UUID REFERENCES "user"(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (community_id, user_id)
+);
+CREATE INDEX idx_official_conv_community ON official_conversations(community_id);
+CREATE INDEX idx_official_conv_user ON official_conversations(user_id);
+CREATE INDEX idx_official_conv_cs ON official_conversations(assigned_cs_id) WHERE assigned_cs_id IS NOT NULL;
+
+-- Verification requests
+CREATE TABLE official_verification_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    requester_id UUID NOT NULL REFERENCES "user"(id),
+    business_name VARCHAR(255),
+    business_registration TEXT,
+    documents_url TEXT,
+    status VARCHAR(20) DEFAULT 'pending'
+      CHECK (status IN ('pending', 'approved', 'rejected')),
+    reviewer_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    reviewed_at TIMESTAMPTZ
+);
 
 -- ===== Agent Marketplace Tables =====
 

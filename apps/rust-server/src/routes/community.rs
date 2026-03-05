@@ -77,6 +77,9 @@ struct CommunityRow {
     cover_image_url: Option<String>,
     category: Option<String>,
     tags: Option<Vec<String>>,
+    verified: Option<bool>,
+    cs_mode: Option<String>,
+    default_agent_listing_id: Option<Uuid>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -96,6 +99,8 @@ struct CommunityBrowseRow {
     avatar_url: Option<String>,
     category: Option<String>,
     tags: Option<Vec<String>>,
+    verified: Option<bool>,
+    cs_mode: Option<String>,
     created_at: DateTime<Utc>,
     creator_name: String,
 }
@@ -173,6 +178,9 @@ fn community_json(r: &CommunityRow) -> Value {
         "coverImageUrl": r.cover_image_url,
         "category": r.category,
         "tags": r.tags,
+        "verified": r.verified.unwrap_or(false),
+        "csMode": r.cs_mode,
+        "defaultAgentListingId": r.default_agent_listing_id,
         "createdAt": r.created_at.to_rfc3339(),
         "updatedAt": r.updated_at.to_rfc3339(),
     })
@@ -204,6 +212,7 @@ async fn browse(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.type,
                   c.join_fee, c.monthly_fee, c.agent_call_fee,
                   c.member_count, c.avatar_url, c.category, c.tags,
+                  c.verified, c.cs_mode,
                   c.created_at, u.name AS creator_name
            FROM communities c
            JOIN "user" u ON c.creator_id = u.id
@@ -257,6 +266,8 @@ async fn browse(
                         "avatarUrl": r.avatar_url,
                         "category": r.category,
                         "tags": r.tags,
+                        "verified": r.verified.unwrap_or(false),
+                        "csMode": r.cs_mode,
                         "createdAt": r.created_at.to_rfc3339(),
                         "creatorName": r.creator_name,
                     })
@@ -296,6 +307,10 @@ struct CreateBody {
     category: Option<String>,
     #[serde(rename = "avatarUrl")]
     avatar_url: Option<String>,
+    #[serde(rename = "csMode")]
+    cs_mode: Option<String>,
+    #[serde(rename = "defaultAgentListingId")]
+    default_agent_listing_id: Option<String>,
 }
 
 async fn create(
@@ -311,13 +326,26 @@ async fn create(
         );
     }
 
-    let community_type = body.community_type.as_deref().unwrap_or("lounge");
-    if community_type != "lounge" && community_type != "club" {
+    let community_type = body.community_type.as_deref().unwrap_or("club");
+    if community_type != "official" && community_type != "club" {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Type must be 'lounge' or 'club'" })),
+            Json(json!({ "error": "Type must be 'official' or 'club'" })),
         );
     }
+
+    let cs_mode = body.cs_mode.as_deref().unwrap_or("ai_only");
+    if !["ai_only", "human_only", "hybrid"].contains(&cs_mode) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "cs_mode must be 'ai_only', 'human_only', or 'hybrid'" })),
+        );
+    }
+
+    let default_agent_listing_id = body
+        .default_agent_listing_id
+        .as_deref()
+        .and_then(|s| Uuid::parse_str(s).ok());
 
     let mut tx = match state.db.begin().await {
         Ok(tx) => tx,
@@ -333,8 +361,9 @@ async fn create(
     // Insert community
     let community_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO communities (creator_id, name, description, type, join_fee, monthly_fee,
-                                     agent_call_fee, category, avatar_url, member_count)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1)
+                                     agent_call_fee, category, avatar_url, member_count,
+                                     cs_mode, default_agent_listing_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $11)
            RETURNING id"#,
     )
     .bind(&user.id)
@@ -346,6 +375,8 @@ async fn create(
     .bind(body.agent_call_fee.unwrap_or(0).max(0))
     .bind(body.category.as_deref())
     .bind(body.avatar_url.as_deref())
+    .bind(cs_mode)
+    .bind(default_agent_listing_id)
     .fetch_one(&mut *tx)
     .await
     {
@@ -401,7 +432,8 @@ async fn get_community(
     let row = sqlx::query_as::<_, CommunityRow>(
         r#"SELECT id, creator_id, name, description, type, join_fee, monthly_fee,
                   agent_call_fee, status, member_count, avatar_url, cover_image_url,
-                  category, tags, created_at, updated_at
+                  category, tags, verified, cs_mode, default_agent_listing_id,
+                  created_at, updated_at
            FROM communities WHERE id = $1"#,
     )
     .bind(id)
@@ -443,6 +475,10 @@ struct UpdateBody {
     avatar_url: Option<String>,
     #[serde(rename = "coverImageUrl")]
     cover_image_url: Option<String>,
+    #[serde(rename = "csMode")]
+    cs_mode: Option<String>,
+    #[serde(rename = "defaultAgentListingId")]
+    default_agent_listing_id: Option<String>,
 }
 
 async fn update_community(
@@ -517,6 +553,11 @@ async fn update_community(
         }
     }
 
+    let default_agent_id = body
+        .default_agent_listing_id
+        .as_deref()
+        .and_then(|s| Uuid::parse_str(s).ok());
+
     let result = sqlx::query(
         r#"UPDATE communities SET
              name = COALESCE($2, name),
@@ -527,6 +568,8 @@ async fn update_community(
              category = COALESCE($7, category),
              avatar_url = COALESCE($8, avatar_url),
              cover_image_url = COALESCE($9, cover_image_url),
+             cs_mode = COALESCE($10, cs_mode),
+             default_agent_listing_id = COALESCE($11, default_agent_listing_id),
              updated_at = NOW()
            WHERE id = $1"#,
     )
@@ -539,6 +582,8 @@ async fn update_community(
     .bind(body.category.as_deref())
     .bind(body.avatar_url.as_deref())
     .bind(body.cover_image_url.as_deref())
+    .bind(body.cs_mode.as_deref())
+    .bind(default_agent_id)
     .execute(&state.db)
     .await;
 
@@ -1881,7 +1926,8 @@ async fn my_communities(
     let rows = sqlx::query_as::<_, CommunityRow>(
         r#"SELECT id, creator_id, name, description, type, join_fee, monthly_fee,
                   agent_call_fee, status, member_count, avatar_url, cover_image_url,
-                  category, tags, created_at, updated_at
+                  category, tags, verified, cs_mode, default_agent_listing_id,
+                  created_at, updated_at
            FROM communities
            WHERE creator_id = $1
            ORDER BY created_at DESC"#,
@@ -1916,7 +1962,8 @@ async fn joined_communities(
     let rows = sqlx::query_as::<_, CommunityRow>(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.type, c.join_fee, c.monthly_fee,
                   c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
-                  c.category, c.tags, c.created_at, c.updated_at
+                  c.category, c.tags, c.verified, c.cs_mode, c.default_agent_listing_id,
+                  c.created_at, c.updated_at
            FROM communities c
            JOIN community_members cm ON c.id = cm.community_id
            WHERE cm.user_id = $1 AND c.status = 'active'

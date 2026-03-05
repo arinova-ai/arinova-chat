@@ -36,6 +36,7 @@ pub mod link_preview;
 pub mod spaces;
 pub mod media;
 pub mod shortcuts;
+pub mod official;
 
 use axum::Router;
 use crate::AppState;
@@ -80,5 +81,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(spaces::router())
         .merge(media::router())
         .merge(shortcuts::router())
+        .merge(official::router())
         .with_state(state)
 }

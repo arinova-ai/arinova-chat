@@ -22,6 +22,7 @@ interface ConversationWithAgent extends Conversation {
   peerUserId?: string | null;
   lastMessage: Message | null;
   isVerified?: boolean;
+  officialCommunityId?: string | null;
 }
 
 interface GroupMember {

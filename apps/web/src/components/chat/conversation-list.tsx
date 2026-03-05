@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "agents" | "friends" | "groups";
-const TABS: Tab[] = ["all", "agents", "friends", "groups"];
+type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "clubs";
+const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "clubs"];
 
 export function ConversationList() {
   const { t } = useTranslation();
@@ -29,10 +29,16 @@ export function ConversationList() {
   const sorted = useMemo(() => {
     let filtered = conversations;
     if (tab === "agents") {
-      filtered = conversations.filter((c) => c.type === "direct" && c.agentId);
+      filtered = conversations.filter((c) => c.type === "direct" && c.agentId && !c.officialCommunityId);
     } else if (tab === "friends") {
-      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId);
+      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId && !c.officialCommunityId);
     } else if (tab === "groups") {
+      filtered = conversations.filter((c) => c.type === "group");
+    } else if (tab === "officials") {
+      filtered = conversations.filter((c) => !!c.officialCommunityId);
+    } else if (tab === "clubs") {
+      // Club conversations are group chats from club communities
+      // For now, clubs show in the groups tab too — this is a placeholder
       filtered = conversations.filter((c) => c.type === "group");
     }
 

@@ -95,6 +95,8 @@ struct ConversationListRow {
     last_msg_updated_at: Option<NaiveDateTime>,
     // Agent owner verified
     agent_owner_is_verified: Option<bool>,
+    // Official community link
+    official_community_id: Option<Uuid>,
 }
 
 /// Row for group agent member names batch fetch.
@@ -317,10 +319,12 @@ async fn list_conversations(
                 lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
-                agent_owner.is_verified AS agent_owner_is_verified
+                agent_owner.is_verified AS agent_owner_is_verified,
+                oc.community_id AS official_community_id
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
+            LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN LATERAL (
                 SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
                 FROM messages m
@@ -366,10 +370,12 @@ async fn list_conversations(
                 lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
-                agent_owner.is_verified AS agent_owner_is_verified
+                agent_owner.is_verified AS agent_owner_is_verified,
+                oc.community_id AS official_community_id
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
+            LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN LATERAL (
                 SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
                 FROM messages m
@@ -665,6 +671,7 @@ async fn list_conversations(
                 "agentDescription": agent_description,
                 "agentAvatarUrl": avatar_url,
                 "isVerified": is_verified,
+                "officialCommunityId": row.official_community_id,
                 "lastMessage": last_message,
             })
         })
