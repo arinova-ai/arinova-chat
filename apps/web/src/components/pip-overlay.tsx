@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { X, Minimize2, Gamepad2 } from "lucide-react";
 import { useSpacesStore } from "@/store/spaces-store";
+import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 
 // ---------------------------------------------------------------------------
@@ -186,6 +187,7 @@ export function PipOverlay() {
   const closePip = useSpacesStore((s) => s.closePip);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { data: session } = authClient.useSession();
+  const agents = useChatStore((s) => s.agents);
 
   const authSentRef = useRef(false);
 
@@ -208,13 +210,13 @@ export function PipOverlay() {
             image: session.user.image ?? null,
           },
           accessToken: sessionToken,
-          agents: [],
+          agents: agents.map((a) => ({ id: a.id, name: a.name, description: a.description, avatarUrl: a.avatarUrl })),
         },
       },
       "*",
     );
     return true;
-  }, [session]);
+  }, [session, agents]);
 
   // Retry sending auth every 200ms until successful (covers both late session load and late iframe JS init)
   useEffect(() => {
