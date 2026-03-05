@@ -1599,7 +1599,11 @@ async fn do_trigger_agent_response(
         .await;
 
         if let Ok(Some((role, ref_content, agent_name_opt))) = reply_msg {
-            let preview = if ref_content.len() > 500 { &ref_content[..500] } else { &ref_content };
+            let preview = if ref_content.len() > 500 {
+                let mut end = 500;
+                while !ref_content.is_char_boundary(end) { end -= 1; }
+                &ref_content[..end]
+            } else { &ref_content };
             task_payload["replyTo"] = json!({
                 "role": role,
                 "content": preview,

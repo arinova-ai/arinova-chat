@@ -265,7 +265,11 @@ pub(crate) async fn with_attachments(
 
             let reply_to = m.reply_to_id.and_then(|rid| {
                 reply_data.get(&rid).map(|(role, content, agent_name)| {
-                    let preview = if content.len() > 200 { &content[..200] } else { content.as_str() };
+                    let preview = if content.len() > 200 {
+                        let mut end = 200;
+                        while !content.is_char_boundary(end) { end -= 1; }
+                        &content[..end]
+                    } else { content.as_str() };
                     json!({
                         "role": role,
                         "content": preview,
