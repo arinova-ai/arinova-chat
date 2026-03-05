@@ -188,6 +188,7 @@ export function PipOverlay() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { data: session } = authClient.useSession();
   const agents = useChatStore((s) => s.agents);
+  const loadAgents = useChatStore((s) => s.loadAgents);
 
   const authSentRef = useRef(false);
 
@@ -241,6 +242,16 @@ export function PipOverlay() {
       clearTimeout(timeout);
     };
   }, [pipMode, iframeUrl, sendAuthToIframe]);
+
+  // Load agents if not yet loaded, then re-send auth with agents
+  useEffect(() => {
+    if (!pipMode || !iframeUrl) return;
+    if (agents.length === 0) {
+      loadAgents();
+      return;
+    }
+    if (authSentRef.current) sendAuthToIframe();
+  }, [agents, pipMode, iframeUrl, sendAuthToIframe, loadAgents]);
 
   if (!pipMode || !iframeUrl) return null;
 
