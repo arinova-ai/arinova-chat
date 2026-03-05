@@ -129,6 +129,9 @@ export function ImageLightbox({ src, alt, className, images, initialIndex }: Ima
               paddingLeft: "env(safe-area-inset-left, 0px)",
               paddingRight: "env(safe-area-inset-right, 0px)",
               touchAction: "none",
+              WebkitTouchCallout: "none",
+              userSelect: "none",
+              WebkitUserSelect: "none",
             }}
             onContextMenu={(e) => e.preventDefault()}
             onClick={() => { if (scale <= 1) setOpen(false); else setScale(1); }}

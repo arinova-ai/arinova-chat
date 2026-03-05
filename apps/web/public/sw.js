@@ -56,8 +56,16 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   const rawUrl = event.notification.data?.url || "/";
-  // Ensure absolute URL for openWindow (relative paths fail in standalone PWA)
-  const absoluteUrl = rawUrl.startsWith("http") ? rawUrl : new URL(rawUrl, self.location.origin).href;
+  // Resolve to absolute URL using SW scope (handles non-root PWA deployments)
+  const scope = self.registration.scope;
+  let absoluteUrl;
+  try {
+    const resolved = new URL(rawUrl, scope);
+    // Only allow same-origin URLs; fallback to scope root for external
+    absoluteUrl = resolved.origin === new URL(scope).origin ? resolved.href : scope;
+  } catch {
+    absoluteUrl = scope;
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
