@@ -272,7 +272,7 @@ pub async fn attach_link_previews(db: &PgPool, message_id: &str, content: &str) 
             .flatten();
 
             if let Some((pid,)) = preview_id {
-                let _ = sqlx::query(
+                let insert_result = sqlx::query(
                     "INSERT INTO message_link_previews (message_id, preview_id, sort_order) VALUES ($1::uuid, $2, $3) ON CONFLICT DO NOTHING"
                 )
                 .bind(message_id)
@@ -280,15 +280,18 @@ pub async fn attach_link_previews(db: &PgPool, message_id: &str, content: &str) 
                 .bind(idx as i32)
                 .execute(db)
                 .await;
+
+                if insert_result.is_ok() {
+                    results.push(serde_json::json!({
+                        "url": meta.url,
+                        "title": meta.title,
+                        "description": meta.description,
+                        "imageUrl": meta.image_url,
+                        "faviconUrl": meta.favicon_url,
+                        "domain": meta.domain,
+                    }));
+                }
             }
-            results.push(serde_json::json!({
-                "url": meta.url,
-                "title": meta.title,
-                "description": meta.description,
-                "imageUrl": meta.image_url,
-                "faviconUrl": meta.favicon_url,
-                "domain": meta.domain,
-            }));
         }
     }
     results

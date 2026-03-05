@@ -747,7 +747,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
           {stickerUrl ? (
             /* Sticker: no bubble frame, transparent background */
-            <div className="h-32 w-32 bg-muted rounded-lg">
+            <div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={stickerUrl}
