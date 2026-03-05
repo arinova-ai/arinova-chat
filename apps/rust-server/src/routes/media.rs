@@ -80,7 +80,7 @@ async fn fetch_attachments(
         r#"SELECT id FROM conversations WHERE id = $1 AND (
             user_id = $2
             OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
-            OR EXISTS (SELECT 1 FROM official_conversations oc WHERE oc.conversation_id = $1 AND oc.user_id = $2)
+            OR EXISTS (SELECT 1 FROM official_conversations oc WHERE oc.conversation_id = $1 AND (oc.user_id = $2 OR oc.assigned_cs_id = $2))
         )"#,
     )
     .bind(conv_id)

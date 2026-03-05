@@ -29,13 +29,14 @@ export function ConversationList() {
   const sorted = useMemo(() => {
     let filtered = conversations;
     if (tab === "agents") {
-      filtered = conversations.filter((c) => c.type === "direct" && c.agentId);
+      filtered = conversations.filter((c) => c.type === "direct" && c.agentId && !c.officialCommunityId);
     } else if (tab === "friends") {
-      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId);
+      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId && !c.officialCommunityId);
     } else if (tab === "groups") {
       filtered = conversations.filter((c) => c.type === "group");
     } else if (tab === "officials") {
-      filtered = conversations.filter((c) => c.type === "official");
+      // Fallback: include old official conversations that are still type='direct' but have officialCommunityId
+      filtered = conversations.filter((c) => c.type === "official" || !!c.officialCommunityId);
     } else if (tab === "clubs") {
       filtered = conversations.filter((c) => c.type === "club");
     }
