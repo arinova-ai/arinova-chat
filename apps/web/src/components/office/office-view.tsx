@@ -24,7 +24,7 @@ const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 
 function OfficeViewInner() {
   const stream = useOfficeStream();
-  const { manifest, themeId } = useTheme();
+  const { manifest, loading, themeId } = useTheme();
   const themeEntry = THEME_REGISTRY.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
   const displayAgents = stream.agents.slice(0, maxAgents);
@@ -114,6 +114,15 @@ function OfficeViewInner() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Don't render map until theme manifest is loaded — prevents old pixi layout flash
+  if (loading || !manifest) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-text/30 border-t-brand-text" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
