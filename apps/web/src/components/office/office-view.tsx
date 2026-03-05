@@ -6,6 +6,7 @@ import StatusBar from "./status-bar";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
 import { OfficeChatPanel } from "./office-chat-panel";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { useTheme } from "./theme-context";
 import { THEME_REGISTRY } from "./theme-registry";
@@ -115,35 +116,36 @@ function OfficeViewInner() {
     return () => observer.disconnect();
   }, []);
 
-  // Don't render map until theme manifest is loaded — prevents old pixi layout flash
-  if (loading || !manifest) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-text/30 border-t-brand-text" />
-      </div>
-    );
-  }
+  const themeReady = !loading && !!manifest;
 
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
       {/* Status summary */}
-      <div className="shrink-0 pb-3">
-        <StatusBar agents={displayAgents} />
-      </div>
+      {themeReady && (
+        <div className="shrink-0 pb-3">
+          <StatusBar agents={displayAgents} />
+        </div>
+      )}
 
-      {/* Office map area — always takes full remaining space */}
+      {/* Office map area — always takes full remaining space; ref must always mount for ResizeObserver */}
       <div ref={mapContainerRef} className="flex-1 min-h-0">
-        {mapSize.width > 0 && mapSize.height > 0 && (
-          <OfficeMap
-            agents={displayAgents}
-            selectedAgentId={selectedAgentId}
-            onSelectAgent={selectAgent}
-            onCharacterClick={handleCharacterClick}
-            width={mapSize.width}
-            height={mapSize.height}
-            manifest={manifest}
-            themeId={themeId}
-          />
+        {!themeReady ? (
+          <div className="flex h-full items-center justify-center">
+            <ArinovaSpinner />
+          </div>
+        ) : (
+          mapSize.width > 0 && mapSize.height > 0 && (
+            <OfficeMap
+              agents={displayAgents}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={selectAgent}
+              onCharacterClick={handleCharacterClick}
+              width={mapSize.width}
+              height={mapSize.height}
+              manifest={manifest}
+              themeId={themeId}
+            />
+          )
         )}
       </div>
 
