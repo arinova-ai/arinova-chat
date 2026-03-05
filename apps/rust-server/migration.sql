@@ -828,6 +828,9 @@ CREATE TABLE IF NOT EXISTS message_link_previews (
 );
 CREATE INDEX IF NOT EXISTS idx_message_link_previews_msg ON message_link_previews(message_id);
 
+-- Messages metadata (needed for sticker agent_prompt injection etc.)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB;
+
 -- Agent Compatible stickers
 ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS agent_compatible BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'none';
