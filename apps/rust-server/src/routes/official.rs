@@ -89,7 +89,7 @@ async fn start_chat(
            WHERE community_id = $1 AND user_id = $2"#,
     )
     .bind(community_id)
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
 
@@ -99,16 +99,6 @@ async fn start_chat(
             Json(json!({ "conversationId": conv_id, "existing": true })),
         );
     }
-
-    let user_uuid = match Uuid::parse_str(&user.id) {
-        Ok(u) => u,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "Invalid user ID" })),
-            );
-        }
-    };
 
     // Create conversation
     let mut tx = match state.db.begin().await {
@@ -164,7 +154,7 @@ async fn start_chat(
            VALUES ($1, $2, $3, $4)"#,
     )
     .bind(community_id)
-    .bind(user_uuid)
+    .bind(&user.id)
     .bind(conv_id)
     .bind(initial_status)
     .execute(&mut *tx)
@@ -204,15 +194,13 @@ async fn transfer_human(
     user: AuthUser,
     Path(community_id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
-    let user_uuid = Uuid::parse_str(&user.id).unwrap_or_default();
-
     let result = sqlx::query(
         r#"UPDATE official_conversations
            SET status = 'waiting_human', updated_at = NOW()
            WHERE community_id = $1 AND user_id = $2 AND status = 'ai_active'"#,
     )
     .bind(community_id)
-    .bind(user_uuid)
+    .bind(&user.id)
     .execute(&state.db)
     .await;
 
@@ -280,8 +268,6 @@ async fn accept_transfer(
         }
     };
 
-    let cs_uuid = Uuid::parse_str(&user.id).unwrap_or_default();
-
     let result = sqlx::query(
         r#"UPDATE official_conversations
            SET status = 'human_active', assigned_cs_id = $3, updated_at = NOW()
@@ -289,7 +275,7 @@ async fn accept_transfer(
     )
     .bind(community_id)
     .bind(conv_id)
-    .bind(cs_uuid)
+    .bind(&user.id)
     .execute(&state.db)
     .await;
 
@@ -337,19 +323,16 @@ async fn resolve(
         }
     };
 
-    let cs_uuid = Uuid::parse_str(&user.id).unwrap_or_default();
-
     // Allow CS agent, creator, moderator, or the user themselves to resolve
     let result = sqlx::query(
         r#"UPDATE official_conversations
            SET status = 'resolved', updated_at = NOW()
            WHERE community_id = $1 AND conversation_id = $2
              AND (user_id = $3 OR assigned_cs_id = $3
-                  OR EXISTS (SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $4 AND role IN ('creator', 'moderator', 'cs_agent')))"#,
+                  OR EXISTS (SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $3 AND role IN ('creator', 'moderator', 'cs_agent')))"#,
     )
     .bind(community_id)
     .bind(conv_id)
-    .bind(cs_uuid)
     .bind(&user.id)
     .execute(&state.db)
     .await;
@@ -425,9 +408,9 @@ async fn cs_status(
 struct CsQueueRow {
     id: Uuid,
     conversation_id: Uuid,
-    user_id: Uuid,
+    user_id: String,
     status: String,
-    assigned_cs_id: Option<Uuid>,
+    assigned_cs_id: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     user_name: String,
@@ -464,7 +447,7 @@ async fn cs_queue(
                   oc.assigned_cs_id, oc.created_at, oc.updated_at,
                   u.name AS user_name, u.image AS user_image
            FROM official_conversations oc
-           JOIN "user" u ON oc.user_id::text = u.id
+           JOIN "user" u ON oc.user_id = u.id
            WHERE oc.community_id = $1
            ORDER BY
              CASE oc.status
@@ -612,8 +595,6 @@ async fn submit_verification(
         }
     }
 
-    let user_uuid = Uuid::parse_str(&user.id).unwrap_or_default();
-
     let result = sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO official_verification_requests
              (community_id, requester_id, business_name, business_registration, documents_url)
@@ -621,7 +602,7 @@ async fn submit_verification(
            RETURNING id"#,
     )
     .bind(community_id)
-    .bind(user_uuid)
+    .bind(&user.id)
     .bind(body.business_name.as_deref())
     .bind(body.business_registration.as_deref())
     .bind(body.documents_url.as_deref())
@@ -651,7 +632,7 @@ async fn submit_verification(
 struct VerificationRow {
     id: Uuid,
     community_id: Uuid,
-    requester_id: Uuid,
+    requester_id: String,
     business_name: Option<String>,
     business_registration: Option<String>,
     documents_url: Option<String>,

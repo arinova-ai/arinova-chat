@@ -341,11 +341,11 @@ CREATE INDEX idx_community_agents_community ON community_agents(community_id);
 CREATE TABLE official_conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES "user"(id),
+    user_id TEXT NOT NULL REFERENCES "user"(id),
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     status VARCHAR(20) DEFAULT 'ai_active'
       CHECK (status IN ('ai_active', 'human_active', 'waiting_human', 'resolved', 'closed')),
-    assigned_cs_id UUID REFERENCES "user"(id),
+    assigned_cs_id TEXT REFERENCES "user"(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (community_id, user_id)
@@ -358,7 +358,7 @@ CREATE INDEX idx_official_conv_cs ON official_conversations(assigned_cs_id) WHER
 CREATE TABLE official_verification_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
-    requester_id UUID NOT NULL REFERENCES "user"(id),
+    requester_id TEXT NOT NULL REFERENCES "user"(id),
     business_name VARCHAR(255),
     business_registration TEXT,
     documents_url TEXT,
