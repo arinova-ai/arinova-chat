@@ -21,7 +21,7 @@ CREATE TYPE coin_transaction_type AS ENUM ('topup', 'purchase', 'refund', 'payou
 CREATE TYPE purchase_status AS ENUM ('completed', 'refunded');
 
 -- Playground enums
-CREATE TYPE playground_category AS ENUM ('game', 'strategy', 'social', 'puzzle', 'roleplay', 'other');
+CREATE TYPE playground_category AS ENUM ('board_game', 'card_game', 'rpg', 'strategy', 'puzzle', 'trivia', 'social', 'other');
 CREATE TYPE playground_control_mode AS ENUM ('agent', 'human', 'copilot');
 CREATE TYPE playground_currency AS ENUM ('free', 'play', 'arinova');
 CREATE TYPE playground_message_type AS ENUM ('chat', 'action', 'system', 'phase_transition');

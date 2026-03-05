@@ -193,7 +193,7 @@ export function PipOverlay() {
           <iframe
             src={iframeUrl}
             className="h-full w-full border-none"
-            allow="microphone; camera"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           />
         </div>
         <FullscreenMinimizeButton onMinimize={togglePipMode} />

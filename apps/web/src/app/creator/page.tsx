@@ -605,7 +605,8 @@ function CreateSpaceDialog({
   const [tags, setTags] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const canSave = name.trim().length > 0;
+  const urlValid = !iframeUrl.trim() || iframeUrl.trim().startsWith("https://");
+  const canSave = name.trim().length > 0 && urlValid;
 
   const handleCreate = async () => {
     if (!canSave) return;
@@ -684,8 +685,13 @@ function CreateSpaceDialog({
               value={iframeUrl}
               onChange={(e) => setIframeUrl(e.target.value)}
               placeholder="https://example.com/app"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className={`w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring ${
+                iframeUrl.trim() && !urlValid ? "border-red-500" : "border-border"
+              }`}
             />
+            {iframeUrl.trim() && !urlValid && (
+              <p className="text-xs text-red-500">URL must start with https://</p>
+            )}
           </div>
 
           <div className="space-y-1.5">

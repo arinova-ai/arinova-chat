@@ -215,6 +215,26 @@ async fn create_space(
     user: AuthUser,
     Json(body): Json<CreateSpaceBody>,
 ) -> Response {
+    // Validate iframeUrl must be https:// if present
+    if let Some(ref def) = body.definition {
+        if let Some(url) = def.get("iframeUrl").and_then(|v| v.as_str()) {
+            if !url.starts_with("https://") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "iframeUrl must use https://"})),
+                )
+                    .into_response();
+            }
+            if url::Url::parse(url).is_err() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "iframeUrl is not a valid URL"})),
+                )
+                    .into_response();
+            }
+        }
+    }
+
     let result = sqlx::query_as::<_, SpaceRow>(
         r#"INSERT INTO playgrounds (owner_id, name, description, category, tags, definition, is_public)
            VALUES ($1, $2, $3, COALESCE($4, 'other')::playground_category, COALESCE($5, '[]'::jsonb), COALESCE($6, '{}'::jsonb), COALESCE($7, true))

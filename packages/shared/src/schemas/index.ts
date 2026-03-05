@@ -247,7 +247,7 @@ export const economyAwardSchema = z.object({
 export const createSpaceSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().min(1).max(1000),
-  category: z.enum(["game", "strategy", "social", "puzzle", "roleplay", "other"]),
+  category: z.enum(["board_game", "card_game", "rpg", "strategy", "puzzle", "trivia", "social", "other"]),
   tags: z.array(z.string().max(50)).max(10).optional(),
   definition: z.record(z.unknown()).optional(),
   isPublic: z.boolean().optional(),
