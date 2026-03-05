@@ -70,6 +70,7 @@
   "chat.tab.groups": "群组",
   "chat.tab.officials": "官方",
   "chat.tab.clubs": "社群",
+  "chat.tab.lounges": "交流厅",
   "chat.emptyState.title": "尚未选择对话",
   "chat.emptyState.description": "从侧边栏选择一个对话来开始聊天",
   "chat.dragDrop": "拖放文件以上传",
@@ -596,6 +597,8 @@
   "community.perMonth": "/月",
   "community.joinFee": "加入",
   "community.by": "由",
+  "community.type.lounge": "交流厅",
+  "community.lounge.voiceAgent": "语音代理",
 
   "official.dashboard.title": "客服管理",
   "official.dashboard.queue": "排队列表",

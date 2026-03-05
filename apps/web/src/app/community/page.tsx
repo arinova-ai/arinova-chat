@@ -9,7 +9,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
-import { Loader2, Search, Plus, Users, Coins, BadgeCheck, Headset } from "lucide-react";
+import { Loader2, Search, Plus, Users, Coins, BadgeCheck, Headset, Mic } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ interface CommunityItem {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "official" | "club";
+  type: "official" | "club" | "lounge";
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -37,7 +37,7 @@ interface BrowseResponse {
   total: number;
 }
 
-const TABS = ["official", "club"] as const;
+const TABS = ["official", "club", "lounge"] as const;
 type Tab = (typeof TABS)[number];
 
 function CommunityBrowseContent() {
@@ -247,6 +247,8 @@ function CommunityCard({
                 "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
                 c.type === "official"
                   ? "bg-blue-500/15 text-blue-400"
+                  : c.type === "lounge"
+                  ? "bg-amber-500/15 text-amber-400"
                   : "bg-purple-500/15 text-purple-400"
               )}
             >
@@ -280,6 +282,12 @@ function CommunityCard({
               : c.joinFee > 0
               ? `${c.joinFee} ${t("community.joinFee")}`
               : t("common.free")}
+          </span>
+        )}
+        {c.type === "lounge" && (
+          <span className="flex items-center gap-1">
+            <Mic className="h-3 w-3 text-amber-400" />
+            {t("community.lounge.voiceAgent")}
           </span>
         )}
         {c.creatorName && (

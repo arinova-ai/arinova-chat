@@ -596,9 +596,12 @@
   "community.perMonth": "/mo",
   "community.joinFee": "join",
   "community.by": "by",
+  "community.type.lounge": "Lounge",
+  "community.lounge.voiceAgent": "Voice Agent",
 
   "chat.tab.officials": "Officials",
   "chat.tab.clubs": "Clubs",
+  "chat.tab.lounges": "Lounges",
 
   "official.dashboard.title": "CS Dashboard",
   "official.dashboard.queue": "Queue",

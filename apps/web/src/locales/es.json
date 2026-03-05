@@ -70,6 +70,7 @@
   "chat.tab.groups": "Grupos",
   "chat.tab.officials": "Oficiales",
   "chat.tab.clubs": "Clubes",
+  "chat.tab.lounges": "Lounges",
   "chat.emptyState.title": "No hay conversacion seleccionada",
   "chat.emptyState.description": "Elige una conversacion de la barra lateral para comenzar a chatear",
   "chat.dragDrop": "Suelta el archivo para subirlo",
@@ -596,6 +597,8 @@
   "community.cs.status.resolved": "Resuelto",
   "community.cs.status.none": "Sin estado",
   "community.by": "por",
+  "community.type.lounge": "Lounge",
+  "community.lounge.voiceAgent": "Agente de Voz",
 
   "official.dashboard.title": "Panel de CS",
   "official.dashboard.queue": "Cola",

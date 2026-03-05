@@ -70,6 +70,7 @@
   "chat.tab.groups": "Kumpulan",
   "chat.tab.officials": "Rasmi",
   "chat.tab.clubs": "Kelab",
+  "chat.tab.lounges": "Lounge",
   "chat.emptyState.title": "Tiada perbualan dipilih",
   "chat.emptyState.description": "Pilih perbualan dari bar sisi untuk mula bersembang",
   "chat.dragDrop": "Lepaskan fail untuk muat naik",
@@ -596,6 +597,8 @@
   "community.cs.status.resolved": "Selesai",
   "community.cs.status.none": "Tiada status",
   "community.by": "oleh",
+  "community.type.lounge": "Lounge",
+  "community.lounge.voiceAgent": "Ejen Suara",
 
   "official.dashboard.title": "Papan Pemuka CS",
   "official.dashboard.queue": "Barisan",

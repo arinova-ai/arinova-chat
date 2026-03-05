@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "clubs";
-const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "clubs"];
+type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "clubs" | "lounges";
+const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "clubs", "lounges"];
 
 export function ConversationList() {
   const { t } = useTranslation();
@@ -39,6 +39,8 @@ export function ConversationList() {
       filtered = conversations.filter((c) => c.type === "official" || !!c.officialCommunityId);
     } else if (tab === "clubs") {
       filtered = conversations.filter((c) => c.type === "club");
+    } else if (tab === "lounges") {
+      filtered = conversations.filter((c) => c.type === "lounge");
     }
 
     return [...filtered].sort((a, b) => {

@@ -70,6 +70,7 @@
   "chat.tab.groups": "그룹",
   "chat.tab.officials": "공식",
   "chat.tab.clubs": "클럽",
+  "chat.tab.lounges": "라운지",
   "chat.emptyState.title": "선택된 대화가 없습니다",
   "chat.emptyState.description": "사이드바에서 대화를 선택하여 채팅을 시작하세요",
   "chat.dragDrop": "파일을 놓아서 업로드",
@@ -596,6 +597,8 @@
   "community.cs.status.resolved": "해결됨",
   "community.cs.status.none": "상태 없음",
   "community.by": "제작",
+  "community.type.lounge": "라운지",
+  "community.lounge.voiceAgent": "보이스 에이전트",
 
   "official.dashboard.title": "CS 대시보드",
   "official.dashboard.queue": "대기열",

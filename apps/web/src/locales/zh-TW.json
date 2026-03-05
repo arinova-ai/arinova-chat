@@ -70,6 +70,7 @@
   "chat.tab.groups": "群組",
   "chat.tab.officials": "官方",
   "chat.tab.clubs": "社群",
+  "chat.tab.lounges": "交流廳",
   "chat.newChat": "新對話",
   "chat.thinking": "思考中...",
   "chat.emptyState.title": "尚未選擇對話",
@@ -598,6 +599,8 @@
   "community.perMonth": "/月",
   "community.joinFee": "加入",
   "community.by": "由",
+  "community.type.lounge": "交流廳",
+  "community.lounge.voiceAgent": "語音代理",
 
   "official.dashboard.title": "客服管理",
   "official.dashboard.queue": "排隊列表",

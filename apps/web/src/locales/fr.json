@@ -70,6 +70,7 @@
   "chat.tab.groups": "Groupes",
   "chat.tab.officials": "Officiels",
   "chat.tab.clubs": "Clubs",
+  "chat.tab.lounges": "Lounges",
   "chat.emptyState.title": "Aucune conversation sélectionnée",
   "chat.emptyState.description": "Choisissez une conversation dans la barre latérale pour commencer à discuter",
   "chat.dragDrop": "Déposez le fichier pour l'envoyer",
@@ -596,6 +597,8 @@
   "community.cs.status.resolved": "Résolu",
   "community.cs.status.none": "Aucun statut",
   "community.by": "par",
+  "community.type.lounge": "Lounge",
+  "community.lounge.voiceAgent": "Agent Vocal",
 
   "official.dashboard.title": "Tableau de bord SC",
   "official.dashboard.queue": "File d'attente",

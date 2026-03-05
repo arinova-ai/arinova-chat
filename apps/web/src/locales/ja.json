@@ -70,6 +70,7 @@
   "chat.tab.groups": "グループ",
   "chat.tab.officials": "公式",
   "chat.tab.clubs": "クラブ",
+  "chat.tab.lounges": "ラウンジ",
   "chat.emptyState.title": "会話が選択されていません",
   "chat.emptyState.description": "サイドバーから会話を選んでチャットを始めましょう",
   "chat.dragDrop": "ファイルをドロップしてアップロード",
@@ -596,6 +597,8 @@
   "community.perMonth": "/月",
   "community.joinFee": "参加費",
   "community.by": "by",
+  "community.type.lounge": "ラウンジ",
+  "community.lounge.voiceAgent": "ボイスエージェント",
 
   "official.dashboard.title": "CSダッシュボード",
   "official.dashboard.queue": "キュー",

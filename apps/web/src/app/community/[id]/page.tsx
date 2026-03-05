@@ -25,6 +25,7 @@ import {
   MessageSquare,
   ShieldCheck,
   LayoutDashboard,
+  Mic,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/utils";
@@ -39,7 +40,7 @@ interface Community {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "official" | "club";
+  type: "official" | "club" | "lounge";
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -535,10 +536,12 @@ function CommunityDetailContent() {
                     "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
                     community.type === "official"
                       ? "bg-blue-500/15 text-blue-400"
+                      : community.type === "lounge"
+                      ? "bg-amber-500/15 text-amber-400"
                       : "bg-purple-500/15 text-purple-400"
                   )}
                 >
-                  {community.type === "official" ? "Official" : "Club"}
+                  {community.type === "official" ? "Official" : community.type === "lounge" ? "Lounge" : "Club"}
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground flex items-center gap-2">
@@ -771,6 +774,24 @@ function CommunityDetailContent() {
                     >
                       <MessageSquare className="h-4 w-4" />
                       Start Chat
+                    </Button>
+                  </>
+                ) : community.type === "lounge" ? (
+                  <>
+                    <p className="text-sm font-medium">Chat with {community.name}&apos;s Voice Agent</p>
+                    <p className="text-xs text-muted-foreground">Free tier available</p>
+                    <Button
+                      className="brand-gradient-btn gap-2"
+                      onClick={async () => {
+                        try {
+                          const res = await api<{ conversationId: string }>(`/api/lounge/${community.id}/start-chat`, { method: "POST" });
+                          useChatStore.getState().setActiveConversation(res.conversationId);
+                          router.push(`/?c=${res.conversationId}`);
+                        } catch { /* handled by api */ }
+                      }}
+                    >
+                      <Mic className="h-4 w-4" />
+                      Start Voice Chat
                     </Button>
                   </>
                 ) : (
