@@ -255,29 +255,30 @@ export function PipOverlay() {
 
   if (!pipMode || !iframeUrl) return null;
 
-  if (pipMode === "fullscreen") {
-    return (
-      <>
-        <div className="fixed inset-0 z-50 bg-background">
-          <iframe
-            ref={iframeRef}
-            src={iframeUrl}
-            className="h-full w-full border-none"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            onLoad={sendAuthToIframe}
-          />
-        </div>
-        <FullscreenMinimizeButton onMinimize={togglePipMode} />
-      </>
-    );
-  }
-
-  // PIP mode — collapsed circular bubble
   return (
-    <PipBubble
-      gameName={gameName}
-      onExpand={togglePipMode}
-      onClose={closePip}
-    />
+    <>
+      {/* Always keep iframe mounted to preserve game state across PIP toggle */}
+      <div
+        className={`fixed inset-0 z-50 bg-background ${pipMode === "fullscreen" ? "" : "pointer-events-none invisible"}`}
+      >
+        <iframe
+          ref={iframeRef}
+          src={iframeUrl}
+          className="h-full w-full border-none"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          onLoad={sendAuthToIframe}
+        />
+      </div>
+
+      {pipMode === "fullscreen" ? (
+        <FullscreenMinimizeButton onMinimize={togglePipMode} />
+      ) : (
+        <PipBubble
+          gameName={gameName}
+          onExpand={togglePipMode}
+          onClose={closePip}
+        />
+      )}
+    </>
   );
 }
