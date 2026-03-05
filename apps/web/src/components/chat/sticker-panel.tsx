@@ -86,6 +86,11 @@ export function StickerPanel({ open, onClose }: StickerPanelProps) {
   const [favorites, setFavorites] = useState<FavoriteSticker[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [aiFilterOn, setAiFilterOn] = useState(false);
+  const [previewSticker, setPreviewSticker] = useState<{
+    sticker: { id: string; filename: string; emoji: string; agentPrompt?: string | null };
+    packId: string;
+    packDir: string;
+  } | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     stickerId: string;
     x: number;
@@ -210,27 +215,32 @@ export function StickerPanel({ open, onClose }: StickerPanelProps) {
     [packMap]
   );
 
-  // Send sticker immediately on click
+  // Show preview on click instead of sending immediately
   const handleStickerClick = useCallback(
     (sticker: { id: string; filename: string; emoji: string; agentPrompt?: string | null }, packId: string, packDir: string) => {
       if (!activeConversationId) return;
-      sendMessage(`![sticker](/stickers/${packDir}/${sticker.filename})`);
-
-      // Add to recents
-      addRecent({
-        packDir,
-        filename: sticker.filename,
-        stickerId: sticker.id,
-        packId,
-        emoji: sticker.emoji,
-        agentPrompt: sticker.agentPrompt,
-      });
-      setRecents(getRecents());
-
-      onClose();
+      setPreviewSticker({ sticker, packId, packDir });
     },
-    [activeConversationId, sendMessage, onClose]
+    [activeConversationId]
   );
+
+  // Actually send sticker from preview
+  const handleSendPreview = useCallback(() => {
+    if (!previewSticker || !activeConversationId) return;
+    const { sticker, packId, packDir } = previewSticker;
+    sendMessage(`![sticker](/stickers/${packDir}/${sticker.filename})`);
+    addRecent({
+      packDir,
+      filename: sticker.filename,
+      stickerId: sticker.id,
+      packId,
+      emoji: sticker.emoji,
+      agentPrompt: sticker.agentPrompt,
+    });
+    setRecents(getRecents());
+    setPreviewSticker(null);
+    onClose();
+  }, [previewSticker, activeConversationId, sendMessage, onClose]);
 
   // Long press / right-click for favorites
   const handleContextAction = useCallback(
@@ -398,7 +408,7 @@ export function StickerPanel({ open, onClose }: StickerPanelProps) {
       className="shrink-0 border-t border-border bg-background transition-all duration-300 ease-in-out"
       style={{ height: open ? "45vh" : "0", overflow: "hidden" }}
     >
-      <div className="flex h-full flex-col">
+      <div className="relative flex h-full flex-col">
         {/* Header with AI filter toggle */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -487,6 +497,39 @@ export function StickerPanel({ open, onClose }: StickerPanelProps) {
             </div>
           )}
         </div>
+
+        {/* Sticker preview overlay */}
+        {previewSticker && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm p-4">
+            <button
+              type="button"
+              onClick={() => setPreviewSticker(null)}
+              className="absolute top-2 right-2 rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/stickers/${previewSticker.packDir}/${previewSticker.sticker.filename}`}
+              alt={previewSticker.sticker.emoji || previewSticker.sticker.id}
+              className="h-40 w-40 object-contain"
+            />
+            <p className="mt-2 text-sm text-muted-foreground">{previewSticker.sticker.emoji}</p>
+            {previewSticker.sticker.agentPrompt && (
+              <div className="mt-2 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2 max-w-xs">
+                <p className="text-[10px] text-blue-400 font-medium mb-0.5">AI will see:</p>
+                <p className="text-xs text-blue-300">{previewSticker.sticker.agentPrompt}</p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleSendPreview}
+              className="mt-4 rounded-full bg-brand px-6 py-2 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
+            >
+              Send
+            </button>
+          </div>
+        )}
 
         {/* Agent hint for AI stickers in agent conversations */}
         {isAgentConversation && aiFilterOn && (
