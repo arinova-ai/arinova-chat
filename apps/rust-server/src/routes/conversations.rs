@@ -530,7 +530,8 @@ async fn list_conversations(
             q = q.bind(mid);
         }
 
-        if let Ok(att_rows) = q.fetch_all(&state.db).await {
+        match q.fetch_all(&state.db).await {
+        Ok(att_rows) => {
             for (id, message_id, file_name, file_type, file_size, storage_path, duration) in att_rows {
                 let url = if storage_path.starts_with("http://") || storage_path.starts_with("https://") {
                     storage_path.clone()
@@ -554,6 +555,10 @@ async fn list_conversations(
                         "duration": duration,
                     }));
             }
+        }
+        Err(e) => {
+            tracing::error!("Fetch last message attachments failed: {}", e);
+        }
         }
     }
 

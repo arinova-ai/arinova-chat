@@ -7,6 +7,7 @@ import { MessageBubble } from "./message-bubble";
 import { useChatStore } from "@/store/chat-store";
 import { useToastStore } from "@/store/toast-store";
 import { api } from "@/lib/api";
+import Link from "next/link";
 import { ArrowDown, Check, Copy, Gift, Loader2, X } from "lucide-react";
 import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
@@ -376,7 +377,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           </div>
         )}
         {message.role === "system" ? (
-          message.content.includes("|sticker_gift:") ? (
+          message.content.includes("|sticker_gift_json:") || message.content.includes("|sticker_gift:") ? (
             <StickerGiftMessage content={message.content} />
           ) : (
             <div className="flex justify-center py-1.5">
@@ -484,12 +485,34 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
 
 function StickerGiftMessage({ content }: { content: string }) {
   const { t } = useTranslation();
-  // Format: "display text|sticker_gift:{packId}:{packName}:{coverUrl}"
-  const [displayText, meta] = content.split("|sticker_gift:");
-  const parts = meta?.split(":") ?? [];
-  const packId = parts[0] ?? "";
-  const packName = parts[1] ?? "";
-  const coverUrl = parts.slice(2).join(":"); // coverUrl may contain colons
+
+  let displayText = "";
+  let packId = "";
+  let packName = "";
+  let coverUrl = "";
+
+  // New JSON format: "display text|sticker_gift_json:{...}"
+  const jsonIdx = content.indexOf("|sticker_gift_json:");
+  if (jsonIdx !== -1) {
+    displayText = content.slice(0, jsonIdx);
+    try {
+      const parsed = JSON.parse(content.slice(jsonIdx + "|sticker_gift_json:".length));
+      packId = parsed.packId ?? "";
+      packName = parsed.packName ?? "";
+      coverUrl = parsed.coverUrl ?? "";
+    } catch {
+      // Fallback: show raw display text
+      displayText = content.slice(0, jsonIdx);
+    }
+  } else {
+    // Legacy format: "display text|sticker_gift:{packId}:{packName}:{coverUrl}"
+    const [dt, meta] = content.split("|sticker_gift:");
+    displayText = dt ?? "";
+    const parts = meta?.split(":") ?? [];
+    packId = parts[0] ?? "";
+    packName = parts[1] ?? "";
+    coverUrl = parts.slice(2).join(":"); // coverUrl may contain colons
+  }
 
   return (
     <div className="flex justify-center py-2">
@@ -504,13 +527,13 @@ function StickerGiftMessage({ content }: { content: string }) {
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">{displayText}</p>
           <p className="text-sm font-medium truncate">{packName}</p>
-          <a
+          <Link
             href={`/stickers?pack=${packId}`}
             className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-400 hover:text-blue-300"
           >
             <Gift className="h-3 w-3" />
             {t("chat.stickerGift.claim")}
-          </a>
+          </Link>
         </div>
       </div>
     </div>

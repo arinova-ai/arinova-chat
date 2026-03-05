@@ -118,7 +118,7 @@ export function ConversationItem({
   const preview = (() => {
     if (!lastMessage) return t("chat.noMessages");
     if (lastMessage.role === "system") {
-      return `ℹ️ ${lastMessage.content.replace(/\n/g, " ")}`;
+      return `ℹ️ ${truncate(lastMessage.content.replace(/\n/g, " "), 50)}`;
     }
     const audioAtt = lastMessage.attachments?.find((a) =>
       a.fileType.startsWith("audio/")
