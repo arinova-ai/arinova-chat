@@ -747,7 +747,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
           {stickerUrl ? (
             /* Sticker: no bubble frame, transparent background */
-            <div>
+            <div className="h-32 w-32 bg-muted rounded-lg">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={stickerUrl}
@@ -789,8 +789,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
               mentionNames={mentionNames}
               isStreaming={isStreaming}
             />
-            {!isStreaming && message.content && (
-              <LinkPreviewCards content={message.content} />
+            {!isStreaming && message.linkPreviews && message.linkPreviews.length > 0 && (
+              <LinkPreviewCards linkPreviews={message.linkPreviews} />
             )}
           </div>
           )}

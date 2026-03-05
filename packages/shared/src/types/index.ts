@@ -528,6 +528,7 @@ export type WSServerEvent =
   | { type: "note:created"; conversationId: string; note: Note }
   | { type: "note:updated"; conversationId: string; note: Note }
   | { type: "note:deleted"; conversationId: string; noteId: string }
+  | { type: "link_previews_ready"; conversationId: string; messageId: string; linkPreviews: LinkPreview[] }
   | { type: "pong" };
 
 // ===== Agent Skill =====

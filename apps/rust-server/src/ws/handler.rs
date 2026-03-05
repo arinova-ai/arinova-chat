@@ -103,7 +103,7 @@ fn safe_truncate(s: &str, max_chars: usize) -> &str {
 
 /// Get conversation member user IDs with caching.
 /// Returns a filtered list excluding users who have blocked (or are blocked by) sender_user_id.
-async fn get_conv_member_ids(
+pub async fn get_conv_member_ids(
     ws_state: &WsState,
     db: &PgPool,
     conversation_id: &str,
@@ -957,8 +957,21 @@ pub async fn trigger_agent_response(
                 let db2 = db.clone();
                 let mid = msg_id.to_string();
                 let text = content.to_string();
+                let ws2 = ws_state.clone();
+                let redis2 = redis.clone();
+                let cid = conversation_id.to_string();
+                let uid = user_id.to_string();
                 tokio::spawn(async move {
-                    crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+                    let previews = crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+                    if !previews.is_empty() {
+                        let members = get_conv_member_ids(&ws2, &db2, &cid, &uid).await;
+                        ws2.broadcast_to_members(&members, &serde_json::json!({
+                            "type": "link_previews_ready",
+                            "conversationId": &cid,
+                            "messageId": &mid,
+                            "linkPreviews": previews,
+                        }), &redis2);
+                    }
                 });
             }
 
@@ -1179,8 +1192,21 @@ pub async fn trigger_agent_response(
             let db2 = db.clone();
             let mid = user_msg_id.to_string();
             let text = content.to_string();
+            let ws2 = ws_state.clone();
+            let redis2 = redis.clone();
+            let cid = conversation_id.to_string();
+            let uid = user_id.to_string();
             tokio::spawn(async move {
-                crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+                let previews = crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+                if !previews.is_empty() {
+                    let members = get_conv_member_ids(&ws2, &db2, &cid, &uid).await;
+                    ws2.broadcast_to_members(&members, &serde_json::json!({
+                        "type": "link_previews_ready",
+                        "conversationId": &cid,
+                        "messageId": &mid,
+                        "linkPreviews": previews,
+                    }), &redis2);
+                }
             });
         }
 
@@ -1787,8 +1813,20 @@ async fn do_trigger_agent_response(
                                     let db3 = db.clone();
                                     let mid = agent_msg_id_clone.clone();
                                     let text = full_content.clone();
+                                    let ws3 = ws_state.clone();
+                                    let redis3 = redis.clone();
+                                    let cid3 = conversation_id.clone();
+                                    let mids3 = member_ids.clone();
                                     tokio::spawn(async move {
-                                        crate::services::link_preview::attach_link_previews(&db3, &mid, &text).await;
+                                        let previews = crate::services::link_preview::attach_link_previews(&db3, &mid, &text).await;
+                                        if !previews.is_empty() {
+                                            ws3.broadcast_to_members(&mids3, &serde_json::json!({
+                                                "type": "link_previews_ready",
+                                                "conversationId": &cid3,
+                                                "messageId": &mid,
+                                                "linkPreviews": previews,
+                                            }), &redis3);
+                                        }
                                     });
                                 }
                             }

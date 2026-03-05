@@ -110,10 +110,23 @@ async fn agent_send(
     // Spawn link preview extraction in background
     {
         let db2 = state.db.clone();
+        let ws2 = state.ws.clone();
+        let redis2 = state.redis.clone();
         let mid = msg_id.clone();
         let text = content.to_string();
+        let cid = conversation_id.to_string();
+        let uid = user_id.clone();
         tokio::spawn(async move {
-            crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+            let previews = crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+            if !previews.is_empty() {
+                let members = crate::ws::handler::get_conv_member_ids(&ws2, &db2, &cid, &uid).await;
+                ws2.broadcast_to_members(&members, &serde_json::json!({
+                    "type": "link_previews_ready",
+                    "conversationId": &cid,
+                    "messageId": &mid,
+                    "linkPreviews": previews,
+                }), &redis2);
+            }
         });
     }
 
