@@ -383,12 +383,15 @@ async fn cs_status(
     Path(community_id): Path<Uuid>,
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> (StatusCode, Json<Value>) {
-    let conversation_id = match params.get("conversationId") {
-        Some(id) => id.clone(),
+    let conversation_id = match params
+        .get("conversationId")
+        .and_then(|s| Uuid::parse_str(s).ok())
+    {
+        Some(id) => id,
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "conversationId required" })),
+                Json(json!({ "error": "conversationId required (valid UUID)" })),
             );
         }
     };
@@ -397,7 +400,7 @@ async fn cs_status(
         "SELECT status FROM official_conversations WHERE community_id = $1 AND conversation_id = $2",
     )
     .bind(community_id)
-    .bind(&conversation_id)
+    .bind(conversation_id)
     .fetch_optional(&state.db)
     .await;
 

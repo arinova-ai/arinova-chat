@@ -1,5 +1,8 @@
 -- Community Official + Club redesign migration
 
+-- Archive existing lounges FIRST (before changing type constraint)
+UPDATE communities SET type = 'club', status = 'archived' WHERE type = 'lounge';
+
 -- Update type constraint to include 'official'
 ALTER TABLE communities DROP CONSTRAINT IF EXISTS communities_type_check;
 ALTER TABLE communities ADD CONSTRAINT communities_type_check
@@ -49,5 +52,4 @@ CREATE TABLE IF NOT EXISTS official_verification_requests (
   reviewed_at TIMESTAMPTZ
 );
 
--- Archive existing lounges
-UPDATE communities SET type = 'club', status = 'archived' WHERE type = 'lounge';
+-- (lounges already archived at top of migration)
