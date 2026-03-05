@@ -297,6 +297,8 @@ async fn main() {
         .merge(routes::spaces::router())
         .merge(routes::shortcuts::router())
         .merge(routes::official::router())
+        .merge(routes::lounge::router())
+        .merge(routes::media::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .with_state(state)
