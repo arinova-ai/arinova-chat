@@ -363,7 +363,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
     }
 
     // Cleanup — only if this is still the registered connection (not superseded by a reconnect)
-    if let Some(agent_id) = authenticated_agent_id {
+    {
         let is_current = state.ws.agent_connections
             .get(&agent_id)
             .map(|entry| entry.0 == conn_id)
