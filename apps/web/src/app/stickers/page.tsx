@@ -402,7 +402,15 @@ function PackDetailDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v && !zoomedSticker) onClose(); }}>
-      <DialogContent className="max-w-lg border-border bg-card p-0 gap-0">
+      <DialogContent showCloseButton={false} className="max-w-lg border-border bg-card p-0 gap-0 max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-2rem)] overflow-y-auto">
+        {/* Sticky close button */}
+        <button
+          type="button"
+          onClick={() => { if (!zoomedSticker) onClose(); }}
+          className="sticky top-0 right-0 z-10 ml-auto mr-3 mt-3 mb-[-2rem] flex h-7 w-7 items-center justify-center rounded-full bg-card/80 backdrop-blur-sm opacity-70 hover:opacity-100 transition-opacity"
+        >
+          <X className="h-4 w-4" />
+        </button>
         {/* Banner */}
         <div className="relative bg-gradient-to-r from-brand/20 to-blue-600/10 p-5">
           <DialogHeader>
