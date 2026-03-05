@@ -377,8 +377,8 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           </div>
         )}
         {message.role === "system" ? (
-          message.content.includes("|sticker_gift_json:") || message.content.includes("|sticker_gift:") ? (
-            <StickerGiftMessage content={message.content} />
+          (message.metadata as Record<string, unknown>)?.type === "sticker_gift" ? (
+            <StickerGiftMessage message={message} />
           ) : (
             <div className="flex justify-center py-1.5">
               <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
@@ -483,36 +483,14 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   );
 }
 
-function StickerGiftMessage({ content }: { content: string }) {
+function StickerGiftMessage({ message }: { message: Message }) {
   const { t } = useTranslation();
 
-  let displayText = "";
-  let packId = "";
-  let packName = "";
-  let coverUrl = "";
-
-  // New JSON format: "display text|sticker_gift_json:{...}"
-  const jsonIdx = content.indexOf("|sticker_gift_json:");
-  if (jsonIdx !== -1) {
-    displayText = content.slice(0, jsonIdx);
-    try {
-      const parsed = JSON.parse(content.slice(jsonIdx + "|sticker_gift_json:".length));
-      packId = parsed.packId ?? "";
-      packName = parsed.packName ?? "";
-      coverUrl = parsed.coverUrl ?? "";
-    } catch {
-      // Fallback: show raw display text
-      displayText = content.slice(0, jsonIdx);
-    }
-  } else {
-    // Legacy format: "display text|sticker_gift:{packId}:{packName}:{coverUrl}"
-    const [dt, meta] = content.split("|sticker_gift:");
-    displayText = dt ?? "";
-    const parts = meta?.split(":") ?? [];
-    packId = parts[0] ?? "";
-    packName = parts[1] ?? "";
-    coverUrl = parts.slice(2).join(":"); // coverUrl may contain colons
-  }
+  const metadata = message.metadata as Record<string, unknown> | undefined;
+  const displayText = message.content ?? "";
+  const packId = (metadata?.packId as string) ?? "";
+  const packName = (metadata?.packName as string) ?? "";
+  const coverUrl = (metadata?.coverUrl as string) ?? "";
 
   return (
     <div className="flex justify-center py-2">

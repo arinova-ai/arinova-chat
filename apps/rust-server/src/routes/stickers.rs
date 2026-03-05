@@ -995,18 +995,19 @@ async fn gift_pack(
     .unwrap_or_else(|| "Someone".into());
 
     let cover_url = pack.cover_image.as_deref().unwrap_or("");
-    let display_text = format!("\u{1f381} {} sent you a sticker pack: {}", sender_name, pack.name);
-    let gift_json = json!({
+    let gift_content = format!(
+        "\u{1f381} {} sent you a sticker pack: {}",
+        sender_name, pack.name
+    );
+    let gift_metadata = json!({
         "type": "sticker_gift",
         "packId": pack_id.to_string(),
         "packName": pack.name,
         "coverUrl": cover_url,
-        "displayText": display_text,
     });
-    let gift_content = format!("{}|sticker_gift_json:{}", display_text, gift_json);
 
     let conv_id_str = conv_id.to_string();
-    let seq = match get_next_seq(&state.db, &conv_id_str).await {
+    let seq = match get_next_seq(&mut *tx, &conv_id_str).await {
         Ok(s) => s,
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Seq error"}))),
     };
@@ -1014,12 +1015,13 @@ async fn gift_pack(
     let msg_id = Uuid::new_v4();
     let now = chrono::Utc::now();
     if let Err(e) = sqlx::query(
-        r#"INSERT INTO messages (id, conversation_id, role, content, status, seq, sender_user_id, created_at, updated_at)
-           VALUES ($1, $2, 'system', $3, 'completed', $4, $5, $6, $6)"#,
+        r#"INSERT INTO messages (id, conversation_id, role, content, metadata, status, seq, sender_user_id, created_at, updated_at)
+           VALUES ($1, $2, 'system', $3, $4, 'completed', $5, $6, $7, $7)"#,
     )
     .bind(msg_id)
     .bind(conv_id)
     .bind(&gift_content)
+    .bind(&gift_metadata)
     .bind(seq)
     .bind(&user.id)
     .bind(now.naive_utc())
@@ -1043,7 +1045,7 @@ async fn gift_pack(
     // 7. If the friend provided a personal message, send it as a user message
     let personal_msg_data = if let Some(ref personal_msg) = body.message {
         if !personal_msg.trim().is_empty() {
-            let msg_seq = match get_next_seq(&state.db, &conv_id_str).await {
+            let msg_seq = match get_next_seq(&mut *tx, &conv_id_str).await {
                 Ok(s) => s,
                 Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Seq error"}))),
             };
@@ -1100,6 +1102,7 @@ async fn gift_pack(
             "seq": seq,
             "role": "system",
             "content": &gift_content,
+            "metadata": &gift_metadata,
             "status": "completed",
             "senderUserId": &user.id,
             "createdAt": now.to_rfc3339(),
