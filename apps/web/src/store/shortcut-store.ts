@@ -38,7 +38,8 @@ export const useShortcutStore = create<ShortcutState>((set, get) => ({
   },
 
   addShortcut: async (shortcut) => {
-    const next = [...get().shortcuts, shortcut];
+    const prev = [...get().shortcuts];
+    const next = [...prev, shortcut];
     set({ shortcuts: next });
     try {
       await api("/api/user/shortcuts", {
@@ -46,13 +47,13 @@ export const useShortcutStore = create<ShortcutState>((set, get) => ({
         body: JSON.stringify({ shortcuts: next }),
       });
     } catch {
-      // revert on failure
-      set({ shortcuts: get().shortcuts.filter((_, i) => i !== next.length - 1) });
+      // Revert to snapshot taken before optimistic update
+      set({ shortcuts: prev });
     }
   },
 
   removeShortcut: async (index) => {
-    const prev = get().shortcuts;
+    const prev = [...get().shortcuts];
     const next = prev.filter((_, i) => i !== index);
     set({ shortcuts: next });
     try {
@@ -61,6 +62,7 @@ export const useShortcutStore = create<ShortcutState>((set, get) => ({
         body: JSON.stringify({ shortcuts: next }),
       });
     } catch {
+      // Revert to snapshot taken before optimistic update
       set({ shortcuts: prev });
     }
   },
