@@ -187,8 +187,10 @@ export function PipOverlay() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { data: session } = authClient.useSession();
 
+  const authSentRef = useRef(false);
+
   const sendAuthToIframe = useCallback(() => {
-    if (!iframeRef.current?.contentWindow || !session?.user) return;
+    if (!iframeRef.current?.contentWindow || !session?.user) return false;
 
     // Read session token from cookies
     const cookies = document.cookie.split("; ");
@@ -211,12 +213,32 @@ export function PipOverlay() {
       },
       "*",
     );
+    return true;
   }, [session]);
 
-  // Re-send auth when session becomes available (onLoad may fire before session is ready)
+  // Retry sending auth every 200ms until successful (covers both late session load and late iframe JS init)
   useEffect(() => {
-    sendAuthToIframe();
-  }, [sendAuthToIframe]);
+    if (!pipMode || !iframeUrl) {
+      authSentRef.current = false;
+      return;
+    }
+    if (authSentRef.current) return;
+
+    const interval = setInterval(() => {
+      if (sendAuthToIframe()) {
+        authSentRef.current = true;
+        clearInterval(interval);
+      }
+    }, 200);
+
+    // Stop retrying after 15s
+    const timeout = setTimeout(() => clearInterval(interval), 15000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [pipMode, iframeUrl, sendAuthToIframe]);
 
   if (!pipMode || !iframeUrl) return null;
 
