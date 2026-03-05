@@ -1307,6 +1307,7 @@ fn clone_message_row(m: &MessageRow) -> MessageRow {
         sender_user_id: m.sender_user_id.clone(),
         reply_to_id: m.reply_to_id,
         thread_id: m.thread_id,
+        metadata: m.metadata.clone(),
         created_at: m.created_at,
         updated_at: m.updated_at,
     }
