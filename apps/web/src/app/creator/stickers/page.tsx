@@ -207,6 +207,9 @@ function StickerUploader({
         <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border py-8 text-muted-foreground">
           <ImageIcon className="h-8 w-8 mb-2 opacity-40" />
           <p className="text-sm">Drop images here or click Upload</p>
+          <p className="mt-1.5 text-[11px] text-muted-foreground/60">
+            Recommended: 256×256 px · PNG with transparent background
+          </p>
         </div>
       )}
     </div>
@@ -252,8 +255,7 @@ function PackEditor({
   // Validation for agent compatible packs
   const priceNum = parseInt(price) || 0;
   const agentPromptsValid = !agentCompatible || uploadedStickers.every((s) => (s.agentPrompt ?? "").trim().length > 0);
-  const agentPriceValid = !agentCompatible || priceNum > 0;
-  const canSave = name.trim() && uploadedStickers.length > 0 && agentPromptsValid && agentPriceValid;
+  const canSave = name.trim() && uploadedStickers.length > 0 && agentPromptsValid;
 
   const handleAddFiles = useCallback((files: FileList) => {
     const newStickers: UploadedSticker[] = [];
@@ -370,7 +372,7 @@ function PackEditor({
               <div className="flex items-start gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-3 py-2">
                 <Info className="h-3.5 w-3.5 text-yellow-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-yellow-400">
-                  Agent Compatible packs require a price and review before publishing
+                  Agent Compatible packs require review before publishing
                 </p>
               </div>
             )}
@@ -379,21 +381,14 @@ function PackEditor({
           {/* Price */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
-              Price (coins{agentCompatible ? ", required" : ", 0 = free"})
-              {agentCompatible && !agentPriceValid && (
-                <span className="ml-2 text-xs text-red-400">Must be greater than 0</span>
-              )}
+              Price (coins, 0 = free)
             </label>
             <input
               type="number"
-              min={agentCompatible ? 1 : 0}
+              min={0}
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              className={`w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring ${
-                agentCompatible && !agentPriceValid
-                  ? "border-red-500/50"
-                  : "border-border"
-              }`}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 

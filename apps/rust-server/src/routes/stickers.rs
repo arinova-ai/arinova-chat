@@ -595,13 +595,6 @@ async fn create_pack(
     let price = body.price.unwrap_or(0).max(0);
     let agent_compatible = body.agent_compatible.unwrap_or(false);
 
-    if agent_compatible && price <= 0 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Agent compatible packs must have price > 0" })),
-        );
-    }
-
     let id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO sticker_packs (creator_id, name, name_zh, description, character_name, category, price, cover_image, agent_compatible)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
