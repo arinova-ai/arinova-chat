@@ -239,7 +239,7 @@ function ImageGrid({ images }: { images: Attachment[] }) {
       ? 0
       : galleryImages.findIndex((g) => g.src === assetUrl(att.url));
     return (
-      <div key={att.id} className={cn("relative overflow-hidden", className)}>
+      <div key={att.id} className={cn("relative overflow-hidden bg-muted", className)}>
         {isUploading ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -266,9 +266,17 @@ function ImageGrid({ images }: { images: Attachment[] }) {
   };
 
   if (count === 1) {
+    const img = images[0];
+    const hasSize = img.width && img.height;
     return (
-      <div className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden">
-        {renderImage(images[0], 0, "aspect-auto")}
+      <div
+        className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden"
+        style={{
+          aspectRatio: hasSize ? `${img.width}/${img.height}` : "4/3",
+          maxHeight: 400,
+        }}
+      >
+        {renderImage(img, 0, "aspect-auto")}
       </div>
     );
   }

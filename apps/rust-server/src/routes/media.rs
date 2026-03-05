@@ -35,6 +35,8 @@ struct MediaRow {
     file_size: i32,
     storage_path: String,
     duration_seconds: Option<i32>,
+    width: Option<i32>,
+    height: Option<i32>,
     created_at: NaiveDateTime,
     sender_user_id: Option<String>,
     sender_agent_id: Option<Uuid>,
@@ -108,7 +110,7 @@ async fn fetch_attachments(
 
         let sql = format!(
             r#"SELECT a.id, a.message_id, a.file_name, a.file_type, a.file_size,
-                      a.storage_path, a.duration_seconds, a.created_at,
+                      a.storage_path, a.duration_seconds, a.width, a.height, a.created_at,
                       m.sender_user_id, m.sender_agent_id, m.created_at AS message_created_at
                FROM attachments a
                JOIN messages m ON m.id = a.message_id
@@ -126,7 +128,7 @@ async fn fetch_attachments(
     } else {
         let sql = format!(
             r#"SELECT a.id, a.message_id, a.file_name, a.file_type, a.file_size,
-                      a.storage_path, a.duration_seconds, a.created_at,
+                      a.storage_path, a.duration_seconds, a.width, a.height, a.created_at,
                       m.sender_user_id, m.sender_agent_id, m.created_at AS message_created_at
                FROM attachments a
                JOIN messages m ON m.id = a.message_id
@@ -212,6 +214,8 @@ async fn fetch_attachments(
                 "fileSize": r.file_size,
                 "url": url,
                 "duration": r.duration_seconds,
+                "width": r.width,
+                "height": r.height,
                 "createdAt": r.created_at.and_utc().to_rfc3339(),
                 "senderUserId": r.sender_user_id,
                 "senderUserName": sender_name,

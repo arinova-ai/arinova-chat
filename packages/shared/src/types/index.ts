@@ -118,6 +118,8 @@ export interface Attachment {
   fileSize: number;
   url: string;
   duration?: number;
+  width?: number | null;
+  height?: number | null;
   createdAt: Date;
 }
 
