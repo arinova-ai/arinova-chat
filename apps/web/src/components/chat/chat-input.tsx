@@ -57,8 +57,14 @@ const ACCEPTED_TYPES = new Set([
   "audio/webm", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav",
 ]);
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 function isAcceptedFile(file: File): boolean {
   return ACCEPTED_TYPES.has(file.type);
+}
+
+function isFileTooLarge(file: File): boolean {
+  return file.size > MAX_FILE_SIZE;
 }
 
 interface ChatInputProps {
@@ -203,11 +209,16 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   useEffect(() => {
     if (!droppedFiles || droppedFiles.length === 0) return;
     const accepted = droppedFiles.filter(isAcceptedFile);
-    if (accepted.length === 0) {
-      useToastStore.getState().addToast("Unsupported file type");
+    const tooLarge = accepted.filter(isFileTooLarge);
+    if (tooLarge.length > 0) {
+      useToastStore.getState().addToast(t("chat.fileTooLarge"));
+    }
+    const validFiles = accepted.filter((f) => !isFileTooLarge(f));
+    if (validFiles.length === 0) {
+      if (accepted.length === 0) useToastStore.getState().addToast("Unsupported file type");
     } else {
       setPendingFiles((prev) => {
-        const combined = [...prev, ...accepted];
+        const combined = [...prev, ...validFiles];
         if (combined.length > 9) {
           useToastStore.getState().addToast(t("chat.maxImages"));
           return combined.slice(0, 9);
@@ -999,8 +1010,14 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     if (!files || files.length === 0) return;
     const accepted = Array.from(files).filter(isAcceptedFile);
     if (accepted.length === 0) return;
+    const tooLarge = accepted.filter(isFileTooLarge);
+    if (tooLarge.length > 0) {
+      useToastStore.getState().addToast(t("chat.fileTooLarge"));
+    }
+    const validFiles = accepted.filter((f) => !isFileTooLarge(f));
+    if (validFiles.length === 0) { e.target.value = ""; return; }
     setPendingFiles((prev) => {
-      const combined = [...prev, ...accepted];
+      const combined = [...prev, ...validFiles];
       if (combined.length > 9) {
         useToastStore.getState().addToast(t("chat.maxImages"));
         return combined.slice(0, 9);
