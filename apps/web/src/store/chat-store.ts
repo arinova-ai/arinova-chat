@@ -1663,8 +1663,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
-      // In-app notification for messages from other conversations (mobile)
+      // In-app notification for messages from other conversations (mobile only)
+      const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
       if (
+        isMobile &&
         conversationId !== activeConversationId &&
         !get().mutedConversations[conversationId] &&
         msg.senderUserId !== get().currentUserId &&
@@ -2002,13 +2004,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);
 
-      console.log("[stream_end]", {
-        conversationId,
-        messageId,
-        reason: event.reason ?? "unknown",
-        agentName: stillThinking?.agentName ?? "unknown",
-        timestamp: new Date().toISOString(),
-      });
       if (stillThinking) {
         if (finalContent) {
           const agentMsg: Message = {

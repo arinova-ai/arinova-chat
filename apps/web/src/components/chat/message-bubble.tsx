@@ -729,7 +729,7 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
         <div
           className="relative min-w-0 select-none md:select-auto"
           style={{ WebkitTouchCallout: "none" }}
-          onContextMenu={(e) => { if (!selectionMode) e.preventDefault(); }}
+          onContextMenu={(e) => { if (!selectionMode && matchMedia("(pointer: coarse)").matches) e.preventDefault(); }}
           {...(selectionMode ? {} : longPressHandlers)}
         >
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
