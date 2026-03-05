@@ -213,9 +213,9 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           },
         });
 
-        requestAnimationFrame(() => {
+        setTimeout(() => {
           isPrependingRef.current = false;
-        });
+        }, 100);
       }
 
       setHasMoreUp(data.hasMore);
@@ -265,7 +265,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
 
   // Auto-scroll: follow output only when already at bottom
   const followOutput = useCallback(
-    (isAtBottom: boolean): false | "smooth" => (isAtBottom ? "smooth" : false),
+    (isAtBottom: boolean): false | "auto" => (isAtBottom ? "auto" : false),
     [],
   );
 
@@ -458,8 +458,8 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         startReached={loadOlder}
         endReached={hasMoreDown ? loadNewer : undefined}
         atBottomStateChange={handleAtBottomChange}
-        atBottomThreshold={100}
-        increaseViewportBy={{ top: 200, bottom: 200 }}
+        atBottomThreshold={50}
+        increaseViewportBy={{ top: 100, bottom: 100 }}
         components={virtuosoComponents}
         className="h-full"
         itemContent={itemContent}

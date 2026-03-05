@@ -1,72 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { api } from "@/lib/api";
 import type { LinkPreview } from "@arinova/shared/types";
 
-const URL_RE = /https?:\/\/[^\s<>)\]}"'`,]+/g;
-
-/** Extract up to 3 URLs from text content. */
-function extractUrls(content: string): string[] {
-  const matches = content.match(URL_RE);
-  if (!matches) return [];
-  const seen = new Set<string>();
-  const urls: string[] = [];
-  for (const raw of matches) {
-    const url = raw.replace(/[.,:;!?)]+$/, "");
-    if (!seen.has(url)) {
-      seen.add(url);
-      urls.push(url);
-      if (urls.length >= 3) break;
-    }
-  }
-  return urls;
-}
-
-// Module-level cache so we don't re-fetch the same URL across re-renders
-const previewCache = new Map<string, LinkPreview | null>();
-
 interface LinkPreviewCardsProps {
-  content: string;
+  linkPreviews: LinkPreview[];
 }
 
-export function LinkPreviewCards({ content }: LinkPreviewCardsProps) {
-  const [previews, setPreviews] = useState<LinkPreview[]>([]);
-  const urls = extractUrls(content);
-
-  const fetchPreviews = useCallback(async () => {
-    if (urls.length === 0) return;
-
-    const results: LinkPreview[] = [];
-    for (const url of urls) {
-      if (previewCache.has(url)) {
-        const cached = previewCache.get(url);
-        if (cached) results.push(cached);
-        continue;
-      }
-      try {
-        const data = await api<LinkPreview>(
-          `/api/link-preview?url=${encodeURIComponent(url)}`
-        );
-        previewCache.set(url, data);
-        results.push(data);
-      } catch {
-        previewCache.set(url, null);
-      }
-    }
-    setPreviews(results);
-  }, [urls.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    fetchPreviews();
-  }, [fetchPreviews]);
-
-  if (previews.length === 0) return null;
+export function LinkPreviewCards({ linkPreviews }: LinkPreviewCardsProps) {
+  if (linkPreviews.length === 0) return null;
 
   return (
     <div className="mt-2 flex flex-col gap-2">
-      {previews.map((preview) => (
+      {linkPreviews.map((preview) => (
         <LinkPreviewCard key={preview.url} preview={preview} />
       ))}
     </div>

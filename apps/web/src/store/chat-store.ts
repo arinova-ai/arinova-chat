@@ -2355,6 +2355,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    if (event.type === "link_previews_ready") {
+      const { conversationId, messageId, linkPreviews } = event;
+      const msgs = get().messagesByConversation[conversationId];
+      if (msgs) {
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: msgs.map((m) =>
+              m.id === messageId ? { ...m, linkPreviews } : m
+            ),
+          },
+        });
+      }
+      // Also update thread messages
+      for (const [tid, threadMsgs] of Object.entries(get().threadMessages)) {
+        const idx = threadMsgs.findIndex((m) => m.id === messageId);
+        if (idx !== -1) {
+          set({
+            threadMessages: {
+              ...get().threadMessages,
+              [tid]: threadMsgs.map((m) =>
+                m.id === messageId ? { ...m, linkPreviews } : m
+              ),
+            },
+          });
+          break;
+        }
+      }
+      return;
+    }
+
     if (event.type === "note:created") {
       const { conversationId, note } = event;
       const current = get().notesByConversation[conversationId] ?? [];

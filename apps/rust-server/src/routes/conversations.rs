@@ -522,20 +522,20 @@ async fn list_conversations(
             .map(|(i, _)| format!("${}", i + 1))
             .collect();
         let att_query = format!(
-            r#"SELECT a.id, a.message_id, a.file_name, a.file_type, a.file_size, a.storage_path, a.duration_seconds
+            r#"SELECT a.id, a.message_id, a.file_name, a.file_type, a.file_size, a.storage_path, a.duration_seconds, a.width, a.height
                FROM attachments a
                WHERE a.message_id IN ({})"#,
             placeholders.join(", ")
         );
 
-        let mut q = sqlx::query_as::<_, (Uuid, Uuid, String, String, i32, String, Option<i32>)>(&att_query);
+        let mut q = sqlx::query_as::<_, (Uuid, Uuid, String, String, i32, String, Option<i32>, Option<i32>, Option<i32>)>(&att_query);
         for mid in &last_msg_ids {
             q = q.bind(mid);
         }
 
         match q.fetch_all(&state.db).await {
         Ok(att_rows) => {
-            for (id, message_id, file_name, file_type, file_size, storage_path, duration) in att_rows {
+            for (id, message_id, file_name, file_type, file_size, storage_path, duration, width, height) in att_rows {
                 let url = if storage_path.starts_with("http://") || storage_path.starts_with("https://") {
                     storage_path.clone()
                 } else if storage_path.starts_with("/uploads/") {
@@ -556,6 +556,8 @@ async fn list_conversations(
                         "fileSize": file_size,
                         "url": url,
                         "duration": duration,
+                        "width": width,
+                        "height": height,
                     }));
             }
         }

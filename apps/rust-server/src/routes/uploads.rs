@@ -172,7 +172,7 @@ async fn upload_file(
     }
 
     // Upload each file and collect attachment info
-    let mut uploaded_files: Vec<(Uuid, String, String, i32, String)> = Vec::new(); // (att_id, file_name, content_type, file_size, storage_path)
+    let mut uploaded_files: Vec<(Uuid, String, String, i32, String, Option<i32>, Option<i32>)> = Vec::new(); // (att_id, file_name, content_type, file_size, storage_path, width, height)
 
     for (file_name, content_type, data) in &files_data {
         let attachment_id = Uuid::new_v4();
@@ -234,7 +234,20 @@ async fn upload_file(
         };
 
         let file_size = data.len() as i32;
-        uploaded_files.push((attachment_id, file_name.clone(), content_type.clone(), file_size, storage_path));
+
+        // Extract image dimensions for image/* MIME types
+        let (width, height) = if content_type.starts_with("image/") {
+            image::ImageReader::new(std::io::Cursor::new(data))
+                .with_guessed_format()
+                .ok()
+                .and_then(|reader| reader.into_dimensions().ok())
+                .map(|(w, h)| (i32::try_from(w).ok(), i32::try_from(h).ok()))
+                .unwrap_or((None, None))
+        } else {
+            (None, None)
+        };
+
+        uploaded_files.push((attachment_id, file_name.clone(), content_type.clone(), file_size, storage_path, width, height));
     }
 
     // --- Phase 3: Create ONE message + multiple attachments ---
@@ -277,10 +290,10 @@ async fn upload_file(
 
     // Create attachment records for each uploaded file
     let mut attachments_json = Vec::new();
-    for (attachment_id, file_name, content_type, file_size, storage_path) in &uploaded_files {
+    for (attachment_id, file_name, content_type, file_size, storage_path, width, height) in &uploaded_files {
         let att_result = sqlx::query_as::<_, crate::db::models::Attachment>(
-            r#"INSERT INTO attachments (id, message_id, file_name, file_type, file_size, storage_path, duration_seconds)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+            r#"INSERT INTO attachments (id, message_id, file_name, file_type, file_size, storage_path, duration_seconds, width, height)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                RETURNING *"#,
         )
         .bind(attachment_id)
@@ -290,6 +303,8 @@ async fn upload_file(
         .bind(file_size)
         .bind(storage_path)
         .bind(duration_seconds)
+        .bind(width)
+        .bind(height)
         .fetch_one(&state.db)
         .await;
 
@@ -312,6 +327,8 @@ async fn upload_file(
             "fileSize": attachment.file_size,
             "url": attachment.storage_path,
             "duration": attachment.duration_seconds,
+            "width": attachment.width,
+            "height": attachment.height,
             "createdAt": attachment.created_at.and_utc().to_rfc3339(),
         }));
     }
@@ -378,7 +395,7 @@ async fn upload_file(
     // Build message content for the agent: caption + all attachment references
     let attachment_refs: Vec<String> = uploaded_files
         .iter()
-        .map(|(_, fname, _, _, spath)| format!("[Attachment: {}]({})", fname, spath))
+        .map(|(_, fname, _, _, spath, _, _)| format!("[Attachment: {}]({})", fname, spath))
         .collect();
     let agent_content = if caption.is_empty() {
         attachment_refs.join("\n")
@@ -457,6 +474,8 @@ async fn get_attachment(
             "fileType": a.file_type,
             "fileSize": a.file_size,
             "storagePath": a.storage_path,
+            "width": a.width,
+            "height": a.height,
             "createdAt": a.created_at.and_utc().to_rfc3339(),
         }))
         .into_response(),

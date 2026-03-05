@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { X, Minimize2, Gamepad2 } from "lucide-react";
 import { useSpacesStore } from "@/store/spaces-store";
+import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 
 // ---------------------------------------------------------------------------
@@ -186,9 +187,13 @@ export function PipOverlay() {
   const closePip = useSpacesStore((s) => s.closePip);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { data: session } = authClient.useSession();
+  const agents = useChatStore((s) => s.agents);
+  const loadAgents = useChatStore((s) => s.loadAgents);
+
+  const authSentRef = useRef(false);
 
   const sendAuthToIframe = useCallback(() => {
-    if (!iframeRef.current?.contentWindow || !session?.user) return;
+    if (!iframeRef.current?.contentWindow || !session?.user) return false;
 
     // Read session token from cookies
     const cookies = document.cookie.split("; ");
@@ -206,38 +211,74 @@ export function PipOverlay() {
             image: session.user.image ?? null,
           },
           accessToken: sessionToken,
-          agents: [],
+          agents: agents.map((a) => ({ id: a.id, name: a.name, description: a.description, avatarUrl: a.avatarUrl })),
         },
       },
       "*",
     );
-  }, [session]);
+    return true;
+  }, [session, agents]);
+
+  // Retry sending auth every 200ms until successful (covers both late session load and late iframe JS init)
+  useEffect(() => {
+    if (!pipMode || !iframeUrl) {
+      authSentRef.current = false;
+      return;
+    }
+    if (authSentRef.current) return;
+
+    const interval = setInterval(() => {
+      if (sendAuthToIframe()) {
+        authSentRef.current = true;
+        clearInterval(interval);
+      }
+    }, 200);
+
+    // Stop retrying after 15s
+    const timeout = setTimeout(() => clearInterval(interval), 15000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [pipMode, iframeUrl, sendAuthToIframe]);
+
+  // Load agents if not yet loaded, then re-send auth with agents
+  useEffect(() => {
+    if (!pipMode || !iframeUrl) return;
+    if (agents.length === 0) {
+      loadAgents();
+      return;
+    }
+    if (authSentRef.current) sendAuthToIframe();
+  }, [agents, pipMode, iframeUrl, sendAuthToIframe, loadAgents]);
 
   if (!pipMode || !iframeUrl) return null;
 
-  if (pipMode === "fullscreen") {
-    return (
-      <>
-        <div className="fixed inset-0 z-50 bg-background">
-          <iframe
-            ref={iframeRef}
-            src={iframeUrl}
-            className="h-full w-full border-none"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            onLoad={sendAuthToIframe}
-          />
-        </div>
-        <FullscreenMinimizeButton onMinimize={togglePipMode} />
-      </>
-    );
-  }
-
-  // PIP mode — collapsed circular bubble
   return (
-    <PipBubble
-      gameName={gameName}
-      onExpand={togglePipMode}
-      onClose={closePip}
-    />
+    <>
+      {/* Always keep iframe mounted to preserve game state across PIP toggle */}
+      <div
+        className={`fixed inset-0 z-50 bg-background ${pipMode === "fullscreen" ? "" : "pointer-events-none invisible"}`}
+      >
+        <iframe
+          ref={iframeRef}
+          src={iframeUrl}
+          className="h-full w-full border-none"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          onLoad={sendAuthToIframe}
+        />
+      </div>
+
+      {pipMode === "fullscreen" ? (
+        <FullscreenMinimizeButton onMinimize={togglePipMode} />
+      ) : (
+        <PipBubble
+          gameName={gameName}
+          onExpand={togglePipMode}
+          onClose={closePip}
+        />
+      )}
+    </>
   );
 }

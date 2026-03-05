@@ -253,13 +253,14 @@ pub async fn get_or_fetch(db: &PgPool, target_url: &str) -> Option<OgMeta> {
 /// Extract URLs from message content, fetch/cache their OG metadata,
 /// and insert into message_link_previews. Designed to be spawned as a
 /// background task so it doesn't block message delivery.
-pub async fn attach_link_previews(db: &PgPool, message_id: &str, content: &str) {
+pub async fn attach_link_previews(db: &PgPool, message_id: &str, content: &str) -> Vec<serde_json::Value> {
     let urls = extract_urls(content, 3);
     if urls.is_empty() {
-        return;
+        return vec![];
     }
+    let mut results = Vec::new();
     for (idx, url) in urls.iter().enumerate() {
-        if get_or_fetch(db, url).await.is_some() {
+        if let Some(meta) = get_or_fetch(db, url).await {
             // Get the cached preview ID
             let preview_id: Option<(Uuid,)> = sqlx::query_as(
                 "SELECT id FROM link_previews WHERE url = $1"
@@ -271,7 +272,7 @@ pub async fn attach_link_previews(db: &PgPool, message_id: &str, content: &str) 
             .flatten();
 
             if let Some((pid,)) = preview_id {
-                let _ = sqlx::query(
+                let insert_result = sqlx::query(
                     "INSERT INTO message_link_previews (message_id, preview_id, sort_order) VALUES ($1::uuid, $2, $3) ON CONFLICT DO NOTHING"
                 )
                 .bind(message_id)
@@ -279,7 +280,19 @@ pub async fn attach_link_previews(db: &PgPool, message_id: &str, content: &str) 
                 .bind(idx as i32)
                 .execute(db)
                 .await;
+
+                if insert_result.is_ok() {
+                    results.push(serde_json::json!({
+                        "url": meta.url,
+                        "title": meta.title,
+                        "description": meta.description,
+                        "imageUrl": meta.image_url,
+                        "faviconUrl": meta.favicon_url,
+                        "domain": meta.domain,
+                    }));
+                }
             }
         }
     }
+    results
 }

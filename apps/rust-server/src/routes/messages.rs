@@ -60,6 +60,8 @@ pub(crate) struct AttachmentRow {
     file_size: i32,
     storage_path: String,
     duration_seconds: Option<i32>,
+    width: Option<i32>,
+    height: Option<i32>,
     created_at: NaiveDateTime,
 }
 
@@ -106,7 +108,7 @@ pub(crate) async fn with_attachments(
     let message_ids: Vec<Uuid> = items.iter().map(|m| m.id).collect();
 
     let attachments = sqlx::query_as::<_, AttachmentRow>(
-        "SELECT id, message_id, file_name, file_type, file_size, storage_path, duration_seconds, created_at
+        "SELECT id, message_id, file_name, file_type, file_size, storage_path, duration_seconds, width, height, created_at
          FROM attachments
          WHERE message_id = ANY($1)",
     )
@@ -252,6 +254,8 @@ pub(crate) async fn with_attachments(
                         "fileSize": a.file_size,
                         "url": url,
                         "duration": a.duration_seconds,
+                        "width": a.width,
+                        "height": a.height,
                         "createdAt": a.created_at.and_utc().to_rfc3339(),
                     })
                 })
