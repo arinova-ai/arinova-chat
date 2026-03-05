@@ -828,4 +828,19 @@ CREATE TABLE IF NOT EXISTS message_link_previews (
 );
 CREATE INDEX IF NOT EXISTS idx_message_link_previews_msg ON message_link_previews(message_id);
 
+-- Agent Compatible stickers
+ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS agent_compatible BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'none';
+ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS review_note TEXT;
+ALTER TABLE stickers ADD COLUMN IF NOT EXISTS agent_prompt VARCHAR(200);
+
+CREATE TABLE IF NOT EXISTS user_favorite_stickers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  sticker_id UUID NOT NULL REFERENCES stickers(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, sticker_id)
+);
+
 COMMIT;

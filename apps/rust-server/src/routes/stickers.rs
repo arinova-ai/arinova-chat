@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::auth::middleware::AuthUser;
+use crate::auth::middleware::{AuthAdmin, AuthUser};
 use crate::services::message_seq::get_next_seq;
 use crate::AppState;
 
@@ -23,6 +23,16 @@ pub fn router() -> Router<AppState> {
         .route("/api/stickers/{id}/gift", post(gift_pack))
         // User
         .route("/api/user/stickers", get(user_packs))
+        .route("/api/user/stickers/favorites", get(list_favorites))
+        .route("/api/user/stickers/favorites", post(add_favorite))
+        .route(
+            "/api/user/stickers/favorites/reorder",
+            patch(reorder_favorites),
+        )
+        .route(
+            "/api/user/stickers/favorites/{sticker_id}",
+            delete(remove_favorite),
+        )
         // Creator
         .route("/api/creator/stickers", get(creator_list_packs))
         .route("/api/creator/stickers", post(create_pack))
@@ -33,6 +43,12 @@ pub fn router() -> Router<AppState> {
             "/api/creator/stickers/{pack_id}/stickers/{sticker_id}",
             delete(delete_sticker),
         )
+        .route(
+            "/api/creator/stickers/{id}/submit-review",
+            post(submit_review),
+        )
+        // Admin
+        .route("/api/admin/stickers/{id}/review", post(admin_review))
 }
 
 // ===== Row structs =====
@@ -50,6 +66,9 @@ struct PackRow {
     status: String,
     downloads: i32,
     cover_image: Option<String>,
+    agent_compatible: bool,
+    review_status: String,
+    review_note: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -67,6 +86,9 @@ struct PackWithCount {
     status: String,
     downloads: i32,
     cover_image: Option<String>,
+    agent_compatible: bool,
+    review_status: String,
+    review_note: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     sticker_count: Option<i64>,
@@ -81,6 +103,7 @@ struct StickerRow {
     emoji: Option<String>,
     description_en: Option<String>,
     description_zh: Option<String>,
+    agent_prompt: Option<String>,
     sort_order: i32,
     created_at: DateTime<Utc>,
 }
@@ -99,6 +122,8 @@ fn pack_to_json(p: &PackWithCount) -> Value {
         "status": p.status,
         "downloads": p.downloads,
         "coverImage": p.cover_image,
+        "agentCompatible": p.agent_compatible,
+        "reviewStatus": p.review_status,
         "stickerCount": p.sticker_count.unwrap_or(0),
         "createdAt": p.created_at.to_rfc3339(),
         "updatedAt": p.updated_at.to_rfc3339(),
@@ -113,6 +138,7 @@ fn sticker_to_json(s: &StickerRow) -> Value {
         "emoji": s.emoji,
         "descriptionEn": s.description_en,
         "descriptionZh": s.description_zh,
+        "agentPrompt": s.agent_prompt,
         "sortOrder": s.sort_order,
         "createdAt": s.created_at.to_rfc3339(),
     })
@@ -127,6 +153,7 @@ async fn list_packs(State(state): State<AppState>) -> (StatusCode, Json<Value>) 
            LEFT JOIN stickers s ON s.pack_id = sp.id
            LEFT JOIN "user" u ON u.id = sp.creator_id
            WHERE sp.status = 'active'
+             AND (sp.agent_compatible = FALSE OR sp.review_status = 'approved')
            GROUP BY sp.id, u.name
            ORDER BY sp.downloads DESC, sp.created_at DESC"#,
     )
@@ -232,6 +259,14 @@ async fn purchase_pack(
             );
         }
     };
+
+    // Block self-purchase
+    if pack.creator_id == user.id {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Cannot purchase your own pack" })),
+        );
+    }
 
     // Check if already purchased
     let already = sqlx::query_scalar::<_, i64>(
@@ -539,6 +574,8 @@ struct CreatePackBody {
     price: Option<i32>,
     #[serde(rename = "coverImage")]
     cover_image: Option<String>,
+    #[serde(rename = "agentCompatible")]
+    agent_compatible: Option<bool>,
 }
 
 async fn create_pack(
@@ -555,10 +592,18 @@ async fn create_pack(
 
     let category = body.category.unwrap_or_else(|| "cute".to_string());
     let price = body.price.unwrap_or(0).max(0);
+    let agent_compatible = body.agent_compatible.unwrap_or(false);
+
+    if agent_compatible && price <= 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Agent compatible packs must have price > 0" })),
+        );
+    }
 
     let id = match sqlx::query_scalar::<_, Uuid>(
-        r#"INSERT INTO sticker_packs (creator_id, name, name_zh, description, character_name, category, price, cover_image)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        r#"INSERT INTO sticker_packs (creator_id, name, name_zh, description, character_name, category, price, cover_image, agent_compatible)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING id"#,
     )
     .bind(&user.id)
@@ -569,6 +614,7 @@ async fn create_pack(
     .bind(&category)
     .bind(price)
     .bind(&body.cover_image)
+    .bind(agent_compatible)
     .fetch_one(&state.db)
     .await
     {
@@ -600,6 +646,8 @@ struct UpdatePackBody {
     status: Option<String>,
     #[serde(rename = "coverImage")]
     cover_image: Option<String>,
+    #[serde(rename = "agentCompatible")]
+    agent_compatible: Option<bool>,
 }
 
 async fn update_pack(
@@ -650,6 +698,7 @@ async fn update_pack(
              price = COALESCE($7, price),
              status = COALESCE($8, status),
              cover_image = COALESCE($9, cover_image),
+             agent_compatible = COALESCE($10, agent_compatible),
              updated_at = NOW()
            WHERE id = $1"#,
     )
@@ -662,6 +711,7 @@ async fn update_pack(
     .bind(body.price)
     .bind(&body.status)
     .bind(&body.cover_image)
+    .bind(body.agent_compatible)
     .execute(&state.db)
     .await
     {
@@ -720,6 +770,8 @@ struct AddStickerBody {
     description_zh: Option<String>,
     #[serde(rename = "sortOrder")]
     sort_order: Option<i32>,
+    #[serde(rename = "agentPrompt")]
+    agent_prompt: Option<String>,
 }
 
 async fn add_sticker(
@@ -759,11 +811,20 @@ async fn add_sticker(
         }
     }
 
+    if let Some(ref prompt) = body.agent_prompt {
+        if prompt.len() > 200 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "agent_prompt must be 200 characters or less" })),
+            );
+        }
+    }
+
     let sort_order = body.sort_order.unwrap_or(0);
 
     let id = match sqlx::query_scalar::<_, Uuid>(
-        r#"INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order)
-           VALUES ($1, $2, $3, $4, $5, $6)
+        r#"INSERT INTO stickers (pack_id, filename, emoji, description_en, description_zh, sort_order, agent_prompt)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id"#,
     )
     .bind(pack_id)
@@ -772,6 +833,7 @@ async fn add_sticker(
     .bind(&body.description_en)
     .bind(&body.description_zh)
     .bind(sort_order)
+    .bind(&body.agent_prompt)
     .fetch_one(&state.db)
     .await
     {
@@ -1132,4 +1194,283 @@ async fn gift_pack(
     }
 
     (StatusCode::OK, Json(json!({"gifted": true, "conversationId": conv_id})))
+}
+
+// ===== POST /api/creator/stickers/:id/submit-review — submit for review =====
+
+async fn submit_review(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(pack_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    // Verify ownership and agent_compatible
+    let pack = sqlx::query_as::<_, PackRow>(
+        "SELECT * FROM sticker_packs WHERE id = $1",
+    )
+    .bind(pack_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let pack = match pack {
+        Ok(Some(p)) => p,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Pack not found" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("submit_review fetch: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Internal error" })),
+            );
+        }
+    };
+
+    if pack.creator_id != user.id {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Not your pack" })),
+        );
+    }
+
+    if !pack.agent_compatible {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Pack is not agent compatible" })),
+        );
+    }
+
+    // Check all stickers have agent_prompt
+    let missing = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM stickers WHERE pack_id = $1 AND (agent_prompt IS NULL OR agent_prompt = '')",
+    )
+    .bind(pack_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if missing > 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "All stickers must have an agent_prompt before submitting for review" })),
+        );
+    }
+
+    // Check there is at least one sticker
+    let sticker_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM stickers WHERE pack_id = $1",
+    )
+    .bind(pack_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if sticker_count == 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Pack must have at least one sticker" })),
+        );
+    }
+
+    if let Err(e) = sqlx::query(
+        "UPDATE sticker_packs SET review_status = 'pending_review', review_note = NULL, updated_at = NOW() WHERE id = $1",
+    )
+    .bind(pack_id)
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!("submit_review update: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Failed to submit for review" })),
+        );
+    }
+
+    (StatusCode::OK, Json(json!({ "submitted": true })))
+}
+
+// ===== POST /api/admin/stickers/:id/review — admin approve/reject =====
+
+#[derive(Deserialize)]
+struct AdminReviewBody {
+    action: String, // "approve" or "reject"
+    note: Option<String>,
+}
+
+async fn admin_review(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Path(pack_id): Path<Uuid>,
+    Json(body): Json<AdminReviewBody>,
+) -> (StatusCode, Json<Value>) {
+    let new_status = match body.action.as_str() {
+        "approve" => "approved",
+        "reject" => "rejected",
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "action must be 'approve' or 'reject'" })),
+            );
+        }
+    };
+
+    let result = sqlx::query(
+        "UPDATE sticker_packs SET review_status = $2, review_note = $3, updated_at = NOW() WHERE id = $1 AND review_status = 'pending_review'",
+    )
+    .bind(pack_id)
+    .bind(new_status)
+    .bind(&body.note)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => {
+            (StatusCode::OK, Json(json!({ "reviewed": true, "status": new_status })))
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Pack not found or not pending review" })),
+        ),
+        Err(e) => {
+            tracing::error!("admin_review update: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Review failed" })),
+            )
+        }
+    }
+}
+
+// ===== Favorites =====
+
+// GET /api/user/stickers/favorites
+async fn list_favorites(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, StickerRow>(
+        r#"SELECT s.* FROM user_favorite_stickers uf
+           JOIN stickers s ON s.id = uf.sticker_id
+           WHERE uf.user_id = $1
+           ORDER BY uf.sort_order ASC, uf.created_at ASC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let stickers: Vec<Value> = rows.iter().map(sticker_to_json).collect();
+    (StatusCode::OK, Json(json!({ "favorites": stickers })))
+}
+
+// POST /api/user/stickers/favorites
+#[derive(Deserialize)]
+struct AddFavoriteBody {
+    #[serde(rename = "stickerId")]
+    sticker_id: Uuid,
+}
+
+async fn add_favorite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<AddFavoriteBody>,
+) -> (StatusCode, Json<Value>) {
+    // Get next sort_order
+    let max_order = sqlx::query_scalar::<_, Option<i32>>(
+        "SELECT MAX(sort_order) FROM user_favorite_stickers WHERE user_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(None)
+    .unwrap_or(0);
+
+    let result = sqlx::query(
+        r#"INSERT INTO user_favorite_stickers (user_id, sticker_id, sort_order)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, sticker_id) DO NOTHING"#,
+    )
+    .bind(&user.id)
+    .bind(body.sticker_id)
+    .bind(max_order + 1)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::OK, Json(json!({ "added": true }))),
+        Err(e) => {
+            tracing::error!("add_favorite: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to add favorite" })),
+            )
+        }
+    }
+}
+
+// DELETE /api/user/stickers/favorites/:stickerId
+async fn remove_favorite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(sticker_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let result = sqlx::query(
+        "DELETE FROM user_favorite_stickers WHERE user_id = $1 AND sticker_id = $2",
+    )
+    .bind(&user.id)
+    .bind(sticker_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::OK, Json(json!({ "removed": true }))),
+        Err(e) => {
+            tracing::error!("remove_favorite: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to remove favorite" })),
+            )
+        }
+    }
+}
+
+// PATCH /api/user/stickers/favorites/reorder
+#[derive(Deserialize)]
+struct ReorderFavoritesBody {
+    stickers: Vec<ReorderItem>,
+}
+
+#[derive(Deserialize)]
+struct ReorderItem {
+    id: Uuid,
+    #[serde(rename = "sortOrder")]
+    sort_order: i32,
+}
+
+async fn reorder_favorites(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<ReorderFavoritesBody>,
+) -> (StatusCode, Json<Value>) {
+    for item in &body.stickers {
+        if let Err(e) = sqlx::query(
+            "UPDATE user_favorite_stickers SET sort_order = $3 WHERE user_id = $1 AND sticker_id = $2",
+        )
+        .bind(&user.id)
+        .bind(item.id)
+        .bind(item.sort_order)
+        .execute(&state.db)
+        .await
+        {
+            tracing::error!("reorder_favorites: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to reorder" })),
+            );
+        }
+    }
+
+    (StatusCode::OK, Json(json!({ "reordered": true })))
 }
