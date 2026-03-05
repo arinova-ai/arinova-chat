@@ -539,7 +539,7 @@ export function StickerPanel({ open, onClose }: StickerPanelProps) {
         )}
 
         {/* Tab bar at bottom */}
-        <div className="flex items-center gap-0.5 border-t border-border px-2 py-1.5 overflow-x-auto">
+        <div className="flex items-center gap-0.5 border-t border-border px-2 py-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] overflow-x-auto">
           {/* Recents tab */}
           <button
             type="button"
