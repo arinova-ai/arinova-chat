@@ -495,13 +495,11 @@ function StickerGiftMessage({ message }: { message: Message }) {
   return (
     <div className="flex justify-center py-2">
       <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm max-w-xs">
-        {coverUrl && (
-          <img
-            src={assetUrl(coverUrl)}
-            alt={packName}
-            className="h-12 w-12 rounded-lg object-cover shrink-0"
-          />
-        )}
+        <img
+          src={coverUrl || "/stickers/arinova-pack-01/01-hello.png"}
+          alt={packName}
+          className="h-12 w-12 rounded-lg object-cover shrink-0"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">{displayText}</p>
           <p className="text-sm font-medium truncate">{packName}</p>
