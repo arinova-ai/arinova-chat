@@ -278,6 +278,24 @@
   height: 0;
 }
 
+/* Hidden scrollbar utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Wiggle animation for edit mode */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-1.5deg); }
+  50% { transform: rotate(1.5deg); }
+}
+.animate-wiggle {
+  animation: wiggle 0.3s ease-in-out infinite;
+}
+
 /* Markdown content styles */
 
 .markdown-content {

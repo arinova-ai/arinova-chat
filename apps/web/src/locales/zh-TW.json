@@ -12,6 +12,8 @@
   "nav.agentHub": "Agent Hub",
   "nav.themeStore": "主題商店",
   "nav.stickers": "貼圖商店",
+  "nav.addShortcut": "新增",
+  "nav.allShortcutsAdded": "所有捷徑已新增",
   "nav.creator": "創作者主控台",
 
   "common.save": "儲存變更",

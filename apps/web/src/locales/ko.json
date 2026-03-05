@@ -12,6 +12,8 @@
   "nav.agentHub": "Agent Hub",
   "nav.themeStore": "테마 스토어",
   "nav.stickers": "스티커 상점",
+  "nav.addShortcut": "추가",
+  "nav.allShortcutsAdded": "모든 바로가기가 추가됨",
   "nav.creator": "크리에이터 콘솔",
 
   "common.save": "변경 사항 저장",

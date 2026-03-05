@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, Users, UserPlus, Wallet,
-  Palette, Store, Settings, Smile, PenTool, type LucideIcon,
+  Palette, Store, Settings, Smile, PenTool, Plus, X, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
+import { useShortcutStore } from "@/store/shortcut-store";
+import { AddShortcutSheet } from "./add-shortcut-sheet";
 
 /** Lucide icon per nav id — active/inactive styling via parent text color */
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -17,6 +19,18 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   office: Building2,
   friends: UserPlus,
   settings: Settings,
+};
+
+/** Icon lookup for shortcut icon names */
+const SHORTCUT_ICONS: Record<string, LucideIcon> = {
+  globe: Globe,
+  smile: Smile,
+  "pen-tool": PenTool,
+  store: Store,
+  users: Users,
+  wallet: Wallet,
+  palette: Palette,
+  "building-2": Building2,
 };
 
 export function MobileBottomNav() {
@@ -62,18 +76,59 @@ export function MobileBottomNav() {
     { id: "office-theme", icon: Palette, label: t("nav.themeStore"), href: "/office/themes" },
   ];
 
+  const shortcuts = useShortcutStore((s) => s.shortcuts);
+  const editing = useShortcutStore((s) => s.editing);
+  const removeShortcut = useShortcutStore((s) => s.removeShortcut);
+  const setEditing = useShortcutStore((s) => s.setEditing);
+  const fetchShortcuts = useShortcutStore((s) => s.fetchShortcuts);
+  const loaded = useShortcutStore((s) => s.loaded);
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Long-press detection
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTouchStart = useCallback(() => {
+    longPressTimer.current = setTimeout(() => {
+      setEditing(true);
+    }, 500);
+  }, [setEditing]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) fetchShortcuts();
+  }, [loaded, fetchShortcuts]);
+
+  // Exit edit mode when sheet closes
+  useEffect(() => {
+    if (!fanOpen) setEditing(false);
+  }, [fanOpen, setEditing]);
+
   return (
     <>
+      {/* Add shortcut sheet */}
+      {addOpen && (
+        <AddShortcutSheet
+          open={addOpen}
+          onOpenChange={setAddOpen}
+        />
+      )}
+
       {/* Bottom sheet menu */}
       <Sheet open={fanOpen} onOpenChange={setFanOpen}>
         <SheetContent
           side="bottom"
           showCloseButton
-          className="rounded-t-2xl border-t border-border bg-card px-0 pt-2 pb-0 md:hidden"
+          className="rounded-t-2xl border-t border-border bg-card px-4 pt-2 pb-0 md:hidden"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
           <SheetTitle className="sr-only">{t("common.menu")}</SheetTitle>
-          <nav className="flex flex-col">
+          <div className="grid grid-cols-4 gap-2 py-3">
             {sheetItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -84,14 +139,68 @@ export function MobileBottomNav() {
                     setFanOpen(false);
                     router.push(item.href);
                   }}
-                  className="flex h-14 items-center gap-4 px-6 text-left transition-colors hover:bg-muted/50 active:bg-muted/70"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl p-2 transition-colors hover:bg-muted/50 active:bg-muted/70"
+                  style={{ width: 76, height: 76 }}
                 >
-                  <Icon className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-[15px] font-medium text-foreground">{item.label}</span>
+                  <Icon className="h-6 w-6 text-muted-foreground" />
+                  <span className="text-[11px] font-medium text-foreground truncate max-w-full">{item.label}</span>
                 </button>
               );
             })}
-          </nav>
+
+            {/* Custom shortcuts */}
+            {shortcuts.map((sc, i) => {
+              const Icon = SHORTCUT_ICONS[sc.icon] ?? Globe;
+              return (
+                <div
+                  key={`sc-${i}`}
+                  className="relative"
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                >
+                  {editing && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeShortcut(i); }}
+                      className="absolute -top-1 -right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editing) return;
+                      setFanOpen(false);
+                      if (sc.url) router.push(sc.url);
+                    }}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1.5 rounded-xl p-2 transition-colors hover:bg-muted/50 active:bg-muted/70",
+                      editing && "animate-wiggle"
+                    )}
+                    style={{ width: 76, height: 76 }}
+                  >
+                    <Icon className="h-6 w-6 text-muted-foreground" />
+                    <span className="text-[11px] font-medium text-foreground truncate max-w-full">{sc.label}</span>
+                  </button>
+                </div>
+              );
+            })}
+
+            {/* Add button */}
+            {!editing && (
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-muted-foreground/30 p-2 transition-colors hover:bg-muted/50"
+                style={{ width: 76, height: 76 }}
+              >
+                <Plus className="h-6 w-6 text-muted-foreground/50" />
+                <span className="text-[11px] text-muted-foreground/50">{t("nav.addShortcut")}</span>
+              </button>
+            )}
+          </div>
         </SheetContent>
       </Sheet>
 

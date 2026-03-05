@@ -12,6 +12,8 @@
   "nav.agentHub": "Agent Hub",
   "nav.themeStore": "Boutique de thèmes",
   "nav.stickers": "Boutique de stickers",
+  "nav.addShortcut": "Ajouter",
+  "nav.allShortcutsAdded": "Tous les raccourcis ajoutés",
   "nav.creator": "Console créateur",
 
   "common.save": "Enregistrer les modifications",

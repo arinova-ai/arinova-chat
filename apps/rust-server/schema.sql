@@ -38,6 +38,7 @@ CREATE TABLE "user" (
     image TEXT,
     bio TEXT,
     username VARCHAR(32) UNIQUE,
+    quick_shortcuts JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

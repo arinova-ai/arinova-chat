@@ -12,6 +12,8 @@
   "nav.agentHub": "Agent Hub",
   "nav.themeStore": "テーマストア",
   "nav.stickers": "スタンプショップ",
+  "nav.addShortcut": "追加",
+  "nav.allShortcutsAdded": "すべてのショートカットが追加済み",
   "nav.creator": "クリエイターコンソール",
 
   "common.save": "変更を保存",

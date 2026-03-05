@@ -12,6 +12,8 @@
   "nav.agentHub": "Agent Hub",
   "nav.themeStore": "Theme Store",
   "nav.stickers": "Sticker Shop",
+  "nav.addShortcut": "Add",
+  "nav.allShortcutsAdded": "All shortcuts added",
   "nav.creator": "Creator Console",
 
   "common.save": "Save Changes",
