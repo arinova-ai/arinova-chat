@@ -812,7 +812,7 @@ async fn add_sticker(
     }
 
     if let Some(ref prompt) = body.agent_prompt {
-        if prompt.len() > 200 {
+        if prompt.chars().count() > 200 {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({ "error": "agent_prompt must be 200 characters or less" })),
@@ -1454,6 +1454,17 @@ async fn reorder_favorites(
     user: AuthUser,
     Json(body): Json<ReorderFavoritesBody>,
 ) -> (StatusCode, Json<Value>) {
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("reorder_favorites begin tx: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to reorder" })),
+            );
+        }
+    };
+
     for item in &body.stickers {
         if let Err(e) = sqlx::query(
             "UPDATE user_favorite_stickers SET sort_order = $3 WHERE user_id = $1 AND sticker_id = $2",
@@ -1461,7 +1472,7 @@ async fn reorder_favorites(
         .bind(&user.id)
         .bind(item.id)
         .bind(item.sort_order)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await
         {
             tracing::error!("reorder_favorites: {}", e);
@@ -1470,6 +1481,14 @@ async fn reorder_favorites(
                 Json(json!({ "error": "Failed to reorder" })),
             );
         }
+    }
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!("reorder_favorites commit: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Failed to reorder" })),
+        );
     }
 
     (StatusCode::OK, Json(json!({ "reordered": true })))

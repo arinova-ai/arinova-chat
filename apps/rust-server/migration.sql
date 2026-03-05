@@ -842,5 +842,6 @@ CREATE TABLE IF NOT EXISTS user_favorite_stickers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(user_id, sticker_id)
 );
+CREATE INDEX IF NOT EXISTS idx_user_favorite_stickers_user ON user_favorite_stickers(user_id);
 
 COMMIT;
