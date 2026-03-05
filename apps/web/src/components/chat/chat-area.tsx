@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { useVoiceCallStore } from "@/store/voice-call-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
+import { StickerPanel } from "./sticker-panel";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
@@ -45,12 +46,18 @@ export function ChatArea() {
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
   useRenderDiag("ChatArea", () => ({
     activeConversationId,
     searchActive,
     conversationCount: conversations.length,
   }));
+
+  // Close sticker panel when switching conversations
+  useEffect(() => {
+    setStickerOpen(false);
+  }, [activeConversationId]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -157,8 +164,14 @@ export function ChatArea() {
         <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
       </ErrorBoundary>
       <ErrorBoundary scope="ChatInput">
-        <ChatInput droppedFiles={droppedFiles} onDropHandled={() => setDroppedFiles(null)} />
+        <ChatInput
+          droppedFiles={droppedFiles}
+          onDropHandled={() => setDroppedFiles(null)}
+          stickerOpen={stickerOpen}
+          onStickerToggle={() => setStickerOpen((prev) => !prev)}
+        />
       </ErrorBoundary>
+      <StickerPanel open={stickerOpen} onClose={() => setStickerOpen(false)} />
 
       {showCallOverlay && <ActiveCall />}
 

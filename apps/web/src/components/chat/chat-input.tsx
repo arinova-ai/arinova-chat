@@ -4,11 +4,6 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic, Reply } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { VoiceRecorder } from "./voice-recorder";
 import { useChatStore } from "@/store/chat-store";
 import { useRouter } from "next/navigation";
@@ -69,6 +64,8 @@ function isAcceptedFile(file: File): boolean {
 interface ChatInputProps {
   droppedFiles?: File[] | null;
   onDropHandled?: () => void;
+  stickerOpen?: boolean;
+  onStickerToggle?: () => void;
 }
 
 // ---------- File Preview Grid (memoised object URLs) ----------
@@ -139,16 +136,13 @@ function FilePreviewGrid({
 
 // ---------- Component ----------
 
-export function ChatInput({ droppedFiles, onDropHandled }: ChatInputProps = {}) {
+export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerToggle }: ChatInputProps = {}) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [stickerOpen, setStickerOpen] = useState(false);
-  const [stickerPacks, setStickerPacks] = useState<Array<{ packId: string; dir: string; name: string; stickers: Array<{ id: string; filename: string; emoji: string }> }>>([]);
-  const [activePackIndex, setActivePackIndex] = useState(0);
-  const [selectedSticker, setSelectedSticker] = useState<{ id: string; filename: string; emoji: string; packId: string; dir: string } | null>(null);
+  const [stickerPacksLoaded, setStickerPacksLoaded] = useState(false);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -834,41 +828,18 @@ export function ChatInput({ droppedFiles, onDropHandled }: ChatInputProps = {}) 
     [activeConversationId]
   );
 
-  // Sticker packs — fetch user's owned packs from API
+  // Check if user has sticker packs (for showing the sticker button)
   useEffect(() => {
     let cancelled = false;
-    api<{ packs: Array<{ id: string; name: string; coverImage?: string | null; stickers?: Array<{ id: string; filename: string; emoji: string | null }> }> }>("/api/user/stickers", { silent: true })
+    api<{ packs: Array<{ id: string }> }>("/api/user/stickers", { silent: true })
       .then((data) => {
         if (cancelled) return;
-        const mapped = data.packs.map((p) => {
-          // Derive directory from coverImage: "/stickers/pixel-cat-01/01-hello.png" -> "pixel-cat-01"
-          const cover = p.coverImage ?? "";
-          const parts = cover.split("/");
-          const dir = parts.length >= 3 ? parts[parts.length - 2] : p.id;
-          return {
-            packId: p.id,
-            dir,
-            name: p.name,
-            stickers: (p.stickers ?? []).map((s) => ({
-              id: s.id,
-              filename: s.filename,
-              emoji: s.emoji ?? "",
-            })),
-          };
-        });
-        setStickerPacks(mapped);
+        setStickerPacksLoaded(data.packs.length > 0);
       })
       .catch(() => {});
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleStickerSend = useCallback(() => {
-    if (!activeConversationId || !selectedSticker) return;
-    sendMessage(`![sticker](/stickers/${selectedSticker.dir}/${selectedSticker.filename})`);
-    setStickerOpen(false);
-    setSelectedSticker(null);
-  }, [activeConversationId, sendMessage, selectedSticker]);
 
   const handleSend = useCallback(() => {
     if (pendingFiles.length > 0) {
@@ -1214,94 +1185,17 @@ export function ChatInput({ droppedFiles, onDropHandled }: ChatInputProps = {}) 
               onChange={handleFileSelect}
             />
 
-            {/* Sticker picker */}
-            {stickerPacks.length > 0 && (
-              <Popover open={stickerOpen} onOpenChange={(open) => { setStickerOpen(open); if (!open) setSelectedSticker(null); }}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-11 w-11 shrink-0 rounded-xl"
-                    title={t("chat.stickers")}
-                  >
-                    <Smile className="h-5 w-5" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  className="w-[calc(100vw-2rem)] sm:w-[400px] border-border bg-background p-2"
-                  align="start"
-                  sideOffset={8}
-                  side="top"
-                >
-                  {/* Preview area */}
-                  <div className="flex items-center gap-3 rounded-lg bg-secondary/60 px-3 py-2 mb-2 min-h-[100px]">
-                    {selectedSticker ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/stickers/${selectedSticker.dir}/${selectedSticker.filename}`}
-                          alt={selectedSticker.id}
-                          className="h-24 w-24 object-contain shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{selectedSticker.emoji} {selectedSticker.id}</p>
-                        </div>
-                        <Button size="sm" className="shrink-0 gap-1.5" onClick={handleStickerSend}>
-                          <SendHorizontal className="h-3.5 w-3.5" />
-                          {t("common.send")}
-                        </Button>
-                      </>
-                    ) : (
-                      <p className="text-sm text-muted-foreground w-full text-center">{t("chat.selectSticker")}</p>
-                    )}
-                  </div>
-
-                  {/* Sticker grid */}
-                  <div className="grid grid-cols-5 gap-1 max-h-[280px] overflow-y-auto">
-                    {(stickerPacks[activePackIndex]?.stickers ?? []).map((s) => {
-                      const pack = stickerPacks[activePackIndex];
-                      const isSelected = selectedSticker?.id === s.id && selectedSticker?.packId === pack.packId;
-                      return (
-                        <button
-                          key={`${pack.packId}-${s.id}`}
-                          type="button"
-                          onClick={() => setSelectedSticker({ ...s, packId: pack.packId, dir: pack.dir })}
-                          className={`rounded-lg p-1 transition-colors ${isSelected ? "bg-accent ring-2 ring-brand" : "hover:bg-accent"}`}
-                          title={s.emoji}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={`/stickers/${pack.dir}/${s.filename}`}
-                            alt={s.id}
-                            className="h-14 w-14 object-contain"
-                            loading="lazy"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Pack tabs */}
-                  <div className="flex items-center gap-1 border-t border-border mt-2 pt-2">
-                    {stickerPacks.map((pack, idx) => (
-                      <button
-                        key={pack.packId}
-                        type="button"
-                        onClick={() => { setActivePackIndex(idx); setSelectedSticker(null); }}
-                        className={`rounded-md p-1 transition-colors ${
-                          activePackIndex === idx
-                            ? "bg-accent ring-2 ring-brand"
-                            : "hover:bg-accent/50"
-                        }`}
-                        title={pack.name}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={`/stickers/${pack.dir}/${pack.stickers[0]?.filename}`} alt={pack.name} className="h-8 w-8 object-contain" />
-                      </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+            {/* Sticker picker toggle */}
+            {stickerPacksLoaded && onStickerToggle && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onStickerToggle}
+                className={`h-11 w-11 shrink-0 rounded-xl ${stickerOpen ? "bg-accent ring-2 ring-brand" : ""}`}
+                title={t("chat.stickers")}
+              >
+                <Smile className="h-5 w-5" />
+              </Button>
             )}
 
             <textarea

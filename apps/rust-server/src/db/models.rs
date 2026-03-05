@@ -203,6 +203,7 @@ pub struct Message {
     pub sender_user_id: Option<String>,
     pub reply_to_id: Option<Uuid>,
     pub thread_id: Option<Uuid>,
+    pub metadata: Option<serde_json::Value>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

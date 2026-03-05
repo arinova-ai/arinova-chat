@@ -94,6 +94,7 @@ export interface Message {
   threadSummary?: ThreadSummary;
   attachments?: Attachment[];
   linkPreviews?: LinkPreview[];
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

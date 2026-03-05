@@ -12,6 +12,7 @@ import {
   Shield,
   Loader2,
   AlertTriangle,
+  Sticker,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/admin/review", label: "Review", icon: Shield },
+  { href: "/admin/sticker-review", label: "Sticker Review", icon: Sticker },
   { href: "/admin/reports", label: "Reports", icon: AlertTriangle },
 ];
 

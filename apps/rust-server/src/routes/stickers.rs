@@ -48,6 +48,7 @@ pub fn router() -> Router<AppState> {
             post(submit_review),
         )
         // Admin
+        .route("/api/admin/stickers/pending", get(admin_list_pending))
         .route("/api/admin/stickers/{id}/review", post(admin_review))
 }
 
@@ -1289,6 +1290,52 @@ async fn submit_review(
     }
 
     (StatusCode::OK, Json(json!({ "submitted": true })))
+}
+
+// ===== GET /api/admin/stickers/pending — list pending review packs with stickers =====
+
+async fn admin_list_pending(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> (StatusCode, Json<Value>) {
+    let rows = match sqlx::query_as::<_, PackWithCount>(
+        r#"SELECT sp.*, COUNT(s.id) AS sticker_count, u.name AS creator_name
+           FROM sticker_packs sp
+           LEFT JOIN stickers s ON s.pack_id = sp.id
+           LEFT JOIN "user" u ON u.id = sp.creator_id
+           WHERE sp.review_status = 'pending_review'
+           GROUP BY sp.id, u.name
+           ORDER BY sp.updated_at ASC"#,
+    )
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!("Admin list pending packs failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Failed to fetch pending packs" })),
+            );
+        }
+    };
+
+    let mut packs: Vec<Value> = Vec::new();
+    for row in &rows {
+        let mut p = pack_to_json(row);
+        // Include stickers with agent_prompt for review
+        let stickers = sqlx::query_as::<_, StickerRow>(
+            "SELECT * FROM stickers WHERE pack_id = $1 ORDER BY sort_order ASC",
+        )
+        .bind(row.id)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default();
+        p["stickers"] = json!(stickers.iter().map(sticker_to_json).collect::<Vec<_>>());
+        packs.push(p);
+    }
+
+    (StatusCode::OK, Json(json!({ "packs": packs })))
 }
 
 // ===== POST /api/admin/stickers/:id/review — admin approve/reject =====

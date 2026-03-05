@@ -155,7 +155,8 @@ CREATE TABLE messages (
     sender_agent_id UUID,
     sender_user_id TEXT,
     reply_to_id UUID,
-    thread_id UUID
+    thread_id UUID,
+    metadata JSONB
 );
 
 CREATE TABLE thread_summaries (
