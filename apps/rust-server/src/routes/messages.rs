@@ -46,6 +46,7 @@ pub(crate) struct MessageRow {
     pub(crate) sender_user_id: Option<String>,
     pub(crate) reply_to_id: Option<Uuid>,
     pub(crate) thread_id: Option<Uuid>,
+    pub(crate) metadata: Option<serde_json::Value>,
     pub(crate) created_at: NaiveDateTime,
     pub(crate) updated_at: NaiveDateTime,
 }
@@ -309,6 +310,7 @@ pub(crate) async fn with_attachments(
                     "updatedAt": m.updated_at.and_utc().to_rfc3339(),
                     "attachments": att_json,
                     "linkPreviews": link_previews.get(&m.id).cloned().unwrap_or_default(),
+                    "metadata": m.metadata,
                 })
             }
         })
@@ -1305,6 +1307,7 @@ fn clone_message_row(m: &MessageRow) -> MessageRow {
         sender_user_id: m.sender_user_id.clone(),
         reply_to_id: m.reply_to_id,
         thread_id: m.thread_id,
+        metadata: m.metadata.clone(),
         created_at: m.created_at,
         updated_at: m.updated_at,
     }

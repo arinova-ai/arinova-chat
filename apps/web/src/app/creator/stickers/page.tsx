@@ -13,6 +13,8 @@ import {
   Loader2,
   Sticker,
   Image as ImageIcon,
+  Bot,
+  Info,
 } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -21,12 +23,14 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 
 type PackStatus = "active" | "under_review" | "draft";
+type ReviewStatus = "none" | "pending_review" | "approved" | "rejected";
 
 interface StickerItem {
   id: string;
   filename: string;
   emoji: string;
   preview: string;
+  agentPrompt?: string;
 }
 
 interface CreatorStickerPack {
@@ -39,6 +43,9 @@ interface CreatorStickerPack {
   coverImage: string;
   stickers: StickerItem[];
   createdAt: string;
+  agentCompatible?: boolean;
+  reviewStatus?: ReviewStatus;
+  reviewNote?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,6 +57,16 @@ function statusBadge(status: PackStatus) {
     active: { cls: "bg-green-500/15 text-green-400", label: "Active" },
     under_review: { cls: "bg-blue-500/15 text-blue-400", label: "Under Review" },
     draft: { cls: "bg-yellow-500/15 text-yellow-400", label: "Draft" },
+  };
+  return map[status];
+}
+
+function reviewStatusBadge(status: ReviewStatus): { cls: string; label: string } | null {
+  const map: Record<ReviewStatus, { cls: string; label: string } | null> = {
+    none: null,
+    pending_review: { cls: "bg-yellow-500/15 text-yellow-400", label: "Pending Review" },
+    approved: { cls: "bg-green-500/15 text-green-400", label: "Approved" },
+    rejected: { cls: "bg-red-500/15 text-red-400", label: "Rejected" },
   };
   return map[status];
 }
@@ -75,16 +92,21 @@ interface UploadedSticker {
   file: File;
   preview: string;
   emoji: string;
+  agentPrompt?: string;
 }
 
 function StickerUploader({
   stickers,
   onAdd,
   onRemove,
+  agentCompatible,
+  onPromptChange,
 }: {
   stickers: UploadedSticker[];
   onAdd: (files: FileList) => void;
   onRemove: (id: string) => void;
+  agentCompatible?: boolean;
+  onPromptChange?: (id: string, prompt: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -116,32 +138,78 @@ function StickerUploader({
         />
       </div>
       {stickers.length > 0 ? (
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
-          {stickers.map((s) => (
-            <div
-              key={s.id}
-              className="group relative aspect-square rounded-lg border border-border bg-secondary overflow-hidden"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={s.preview}
-                alt={s.emoji}
-                className="h-full w-full object-cover"
-              />
-              <button
-                type="button"
-                onClick={() => onRemove(s.id)}
-                className="absolute top-0.5 right-0.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
+        agentCompatible ? (
+          <div className="space-y-3">
+            {stickers.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-start gap-3 rounded-lg border border-border bg-secondary/50 p-3"
               >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-        </div>
+                <div className="group relative h-16 w-16 shrink-0 rounded-lg border border-border bg-secondary overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={s.preview}
+                    alt={s.emoji}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onRemove(s.id)}
+                    className="absolute top-0.5 right-0.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Agent Prompt
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={200}
+                    value={s.agentPrompt ?? ""}
+                    onChange={(e) => onPromptChange?.(s.id, e.target.value)}
+                    placeholder="Describe what this sticker means (e.g., 'User is greeting you cheerfully')"
+                    className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <p className="text-[10px] text-muted-foreground text-right">
+                    {(s.agentPrompt ?? "").length}/200
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+            {stickers.map((s) => (
+              <div
+                key={s.id}
+                className="group relative aspect-square rounded-lg border border-border bg-secondary overflow-hidden"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={s.preview}
+                  alt={s.emoji}
+                  className="h-full w-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemove(s.id)}
+                  className="absolute top-0.5 right-0.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border py-8 text-muted-foreground">
           <ImageIcon className="h-8 w-8 mb-2 opacity-40" />
           <p className="text-sm">Drop images here or click Upload</p>
+          <p className="mt-1.5 text-[11px] text-muted-foreground/60">
+            Recommended: 256×256 px · PNG with transparent background
+          </p>
         </div>
       )}
     </div>
@@ -165,6 +233,7 @@ function PackEditor({
   const [name, setName] = useState(pack?.name ?? "");
   const [description, setDescription] = useState(pack?.description ?? "");
   const [price, setPrice] = useState(pack?.price?.toString() ?? "0");
+  const [agentCompatible, setAgentCompatible] = useState(pack?.agentCompatible ?? false);
   const [saving, setSaving] = useState(false);
   const [uploadedStickers, setUploadedStickers] = useState<UploadedSticker[]>(
     () =>
@@ -173,8 +242,20 @@ function PackEditor({
         file: null as unknown as File,
         preview: s.preview,
         emoji: s.emoji,
+        agentPrompt: s.agentPrompt ?? "",
       })) ?? []
   );
+
+  const handlePromptChange = useCallback((id: string, prompt: string) => {
+    setUploadedStickers((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, agentPrompt: prompt } : s))
+    );
+  }, []);
+
+  // Validation for agent compatible packs
+  const priceNum = parseInt(price) || 0;
+  const agentPromptsValid = !agentCompatible || uploadedStickers.every((s) => (s.agentPrompt ?? "").trim().length > 0);
+  const canSave = name.trim() && uploadedStickers.length > 0 && agentPromptsValid;
 
   const handleAddFiles = useCallback((files: FileList) => {
     const newStickers: UploadedSticker[] = [];
@@ -195,7 +276,7 @@ function PackEditor({
   }, []);
 
   const handleSave = () => {
-    if (!name.trim()) return;
+    if (!canSave) return;
     setSaving(true);
     // Simulate API call
     setTimeout(() => {
@@ -203,7 +284,7 @@ function PackEditor({
         id: pack?.id ?? `pack-${Date.now()}`,
         name: name.trim(),
         description: description.trim(),
-        price: parseInt(price) || 0,
+        price: priceNum,
         status: pack?.status ?? "draft",
         downloads: pack?.downloads ?? 0,
         coverImage: uploadedStickers[0]?.preview ?? "",
@@ -212,8 +293,12 @@ function PackEditor({
           filename: s.file?.name ?? `sticker_${i + 1}.webp`,
           emoji: s.emoji,
           preview: s.preview,
+          agentPrompt: agentCompatible ? (s.agentPrompt ?? "") : undefined,
         })),
         createdAt: pack?.createdAt ?? new Date().toISOString().slice(0, 10),
+        agentCompatible,
+        reviewStatus: agentCompatible ? (pack?.reviewStatus ?? "none") : "none",
+        reviewNote: pack?.reviewNote,
       };
       onSave(newPack);
       setSaving(false);
@@ -260,9 +345,44 @@ function PackEditor({
             />
           </div>
 
+          {/* Agent Compatible toggle */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-brand-text" />
+                <label className="text-sm font-medium">Agent Compatible</label>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={agentCompatible}
+                onClick={() => setAgentCompatible(!agentCompatible)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                  agentCompatible ? "bg-brand" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                    agentCompatible ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            {agentCompatible && (
+              <div className="flex items-start gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-3 py-2">
+                <Info className="h-3.5 w-3.5 text-yellow-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-yellow-400">
+                  Agent Compatible packs require review before publishing
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Price */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Price (coins, 0 = free)</label>
+            <label className="text-sm font-medium">
+              Price (coins, 0 = free)
+            </label>
             <input
               type="number"
               min={0}
@@ -277,7 +397,14 @@ function PackEditor({
             stickers={uploadedStickers}
             onAdd={handleAddFiles}
             onRemove={handleRemoveSticker}
+            agentCompatible={agentCompatible}
+            onPromptChange={handlePromptChange}
           />
+          {agentCompatible && uploadedStickers.length > 0 && !agentPromptsValid && (
+            <p className="text-xs text-red-400">
+              All stickers must have an Agent Prompt when Agent Compatible is enabled
+            </p>
+          )}
         </div>
 
         <div className="flex gap-3 pt-2">
@@ -286,7 +413,7 @@ function PackEditor({
           </Button>
           <Button
             className="brand-gradient-btn flex-1"
-            disabled={saving || !name.trim() || uploadedStickers.length === 0}
+            disabled={saving || !canSave}
             onClick={handleSave}
           >
             {saving ? (
@@ -350,17 +477,32 @@ function StickerManagementContent() {
   };
 
   const handleSubmitReview = async (id: string) => {
+    const pack = packs.find((p) => p.id === id);
     setSubmitting(id);
     try {
-      await api(`/api/creator/stickers/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "under_review" }),
-      });
-      setPacks((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, status: "under_review" as PackStatus } : p
-        )
-      );
+      if (pack?.agentCompatible) {
+        // Agent Compatible packs use the dedicated submit-review endpoint
+        await api(`/api/creator/stickers/${id}/submit-review`, {
+          method: "POST",
+        });
+        setPacks((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, status: "under_review" as PackStatus, reviewStatus: "pending_review" as ReviewStatus }
+              : p
+          )
+        );
+      } else {
+        await api(`/api/creator/stickers/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "under_review" }),
+        });
+        setPacks((prev) =>
+          prev.map((p) =>
+            p.id === id ? { ...p, status: "under_review" as PackStatus } : p
+          )
+        );
+      }
     } catch {
       // auto-handled
     } finally {
@@ -464,7 +606,7 @@ function StickerManagementContent() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-sm font-semibold truncate">
                             {pack.name}
                           </h3>
@@ -473,10 +615,34 @@ function StickerManagementContent() {
                           >
                             {badge.label}
                           </span>
+                          {pack.agentCompatible && (
+                            <span className="shrink-0 rounded-full bg-brand/15 text-brand-text px-2 py-0.5 text-[10px] font-medium flex items-center gap-1">
+                              <Bot className="h-3 w-3" />
+                              AI
+                            </span>
+                          )}
+                          {pack.agentCompatible && pack.reviewStatus && pack.reviewStatus !== "none" && (() => {
+                            const rb = reviewStatusBadge(pack.reviewStatus);
+                            return rb ? (
+                              <span
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${rb.cls}`}
+                              >
+                                {rb.label}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                         <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
                           {pack.description}
                         </p>
+                        {pack.reviewStatus === "rejected" && pack.reviewNote && (
+                          <div className="mt-1 flex items-start gap-1.5 rounded-md bg-red-500/10 border border-red-500/20 px-2 py-1.5">
+                            <Info className="h-3 w-3 text-red-400 mt-0.5 shrink-0" />
+                            <p className="text-[11px] text-red-400">
+                              <span className="font-medium">Rejected:</span> {pack.reviewNote}
+                            </p>
+                          </div>
+                        )}
                         <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                           <span>{pack.stickers.length} stickers</span>
                           <span>
@@ -495,7 +661,7 @@ function StickerManagementContent() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {pack.status === "draft" && (
+                        {(pack.status === "draft" || (pack.agentCompatible && pack.reviewStatus === "rejected")) && (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -508,7 +674,9 @@ function StickerManagementContent() {
                             ) : (
                               <>
                                 <Send className="h-3.5 w-3.5" />
-                                <span className="hidden sm:inline">Submit</span>
+                                <span className="hidden sm:inline">
+                                  {pack.reviewStatus === "rejected" ? "Resubmit" : "Submit"}
+                                </span>
                               </>
                             )}
                           </Button>

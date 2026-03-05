@@ -21,7 +21,21 @@ Arinova.init({
 });
 ```
 
-### 2. Login (Frontend)
+### 2a. Connect (Recommended)
+
+The easiest way to authenticate. Works automatically in both contexts:
+
+- **Embedded in Arinova Chat iframe**: receives auth via `postMessage` from the parent window (no redirect needed).
+- **Standalone (outside iframe)**: falls back to the OAuth login flow.
+
+```typescript
+const { user, accessToken, agents } = await Arinova.connect({ timeout: 5000 });
+// user: { id, name, email, image }
+// accessToken: session token for API calls
+// agents: user's connected agents (may be empty)
+```
+
+### 2b. Login (Manual OAuth Flow)
 
 ```typescript
 // Redirect to Arinova login
@@ -83,6 +97,7 @@ const { newBalance, platformFee } = await Arinova.economy.award({
 ## API Reference
 
 ### `Arinova.init(config)`
+### `Arinova.connect(options?)`
 ### `Arinova.login(options?)`
 ### `Arinova.handleCallback(params)`
 ### `Arinova.user.profile(accessToken)`

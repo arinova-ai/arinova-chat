@@ -18,11 +18,13 @@ import {
 } from "lucide-react";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  game: "bg-red-500/15 text-red-400",
-  puzzle: "bg-purple-500/15 text-purple-400",
+  board_game: "bg-red-500/15 text-red-400",
+  card_game: "bg-amber-500/15 text-amber-400",
+  rpg: "bg-orange-500/15 text-orange-400",
   strategy: "bg-teal-500/15 text-teal-400",
+  puzzle: "bg-purple-500/15 text-purple-400",
+  trivia: "bg-pink-500/15 text-pink-400",
   social: "bg-blue-500/15 text-blue-400",
-  roleplay: "bg-orange-500/15 text-orange-400",
   other: "bg-gray-500/15 text-gray-400",
 };
 

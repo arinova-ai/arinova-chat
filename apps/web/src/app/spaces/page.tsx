@@ -12,14 +12,16 @@ import { useTranslation } from "@/lib/i18n";
 import { useSpacesStore } from "@/store/spaces-store";
 import type { Space } from "@arinova/shared/types";
 
-const CATEGORY_KEYS = ["all", "game", "puzzle", "strategy", "social", "roleplay", "other"] as const;
+const CATEGORY_KEYS = ["all", "board_game", "card_game", "rpg", "strategy", "puzzle", "trivia", "social", "other"] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
-  game: "bg-red-500/15 text-red-400",
-  puzzle: "bg-purple-500/15 text-purple-400",
+  board_game: "bg-red-500/15 text-red-400",
+  card_game: "bg-amber-500/15 text-amber-400",
+  rpg: "bg-orange-500/15 text-orange-400",
   strategy: "bg-teal-500/15 text-teal-400",
+  puzzle: "bg-purple-500/15 text-purple-400",
+  trivia: "bg-pink-500/15 text-pink-400",
   social: "bg-blue-500/15 text-blue-400",
-  roleplay: "bg-orange-500/15 text-orange-400",
   other: "bg-gray-500/15 text-gray-400",
 };
 

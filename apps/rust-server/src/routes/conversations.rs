@@ -90,6 +90,7 @@ struct ConversationListRow {
     last_msg_role: Option<String>,
     last_msg_content: Option<String>,
     last_msg_status: Option<String>,
+    last_msg_metadata: Option<serde_json::Value>,
     last_msg_created_at: Option<NaiveDateTime>,
     last_msg_updated_at: Option<NaiveDateTime>,
     // Agent owner verified
@@ -313,6 +314,7 @@ async fn list_conversations(
                 lm.role::text AS last_msg_role,
                 lm.content AS last_msg_content,
                 lm.status::text AS last_msg_status,
+                lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
                 agent_owner.is_verified AS agent_owner_is_verified
@@ -320,7 +322,7 @@ async fn list_conversations(
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN LATERAL (
-                SELECT m.id, m.seq, m.role, m.content, m.status, m.created_at, m.updated_at
+                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
                 FROM messages m
                 WHERE m.conversation_id = c.id
                 ORDER BY m.created_at DESC
@@ -361,6 +363,7 @@ async fn list_conversations(
                 lm.role::text AS last_msg_role,
                 lm.content AS last_msg_content,
                 lm.status::text AS last_msg_status,
+                lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
                 agent_owner.is_verified AS agent_owner_is_verified
@@ -368,7 +371,7 @@ async fn list_conversations(
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN LATERAL (
-                SELECT m.id, m.seq, m.role, m.content, m.status, m.created_at, m.updated_at
+                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
                 FROM messages m
                 WHERE m.conversation_id = c.id
                 ORDER BY m.created_at DESC
@@ -503,6 +506,65 @@ async fn list_conversations(
         }
     }
 
+    // Batch-fetch attachments for lastMessage previews (voice messages, files)
+    let last_msg_ids: Vec<Uuid> = rows
+        .iter()
+        .filter_map(|r| r.last_msg_id)
+        .collect();
+
+    let mut last_msg_attachments: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+
+    if !last_msg_ids.is_empty() {
+        let placeholders: Vec<String> = last_msg_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", i + 1))
+            .collect();
+        let att_query = format!(
+            r#"SELECT a.id, a.message_id, a.file_name, a.file_type, a.file_size, a.storage_path, a.duration_seconds
+               FROM attachments a
+               WHERE a.message_id IN ({})"#,
+            placeholders.join(", ")
+        );
+
+        let mut q = sqlx::query_as::<_, (Uuid, Uuid, String, String, i32, String, Option<i32>)>(&att_query);
+        for mid in &last_msg_ids {
+            q = q.bind(mid);
+        }
+
+        match q.fetch_all(&state.db).await {
+        Ok(att_rows) => {
+            for (id, message_id, file_name, file_type, file_size, storage_path, duration) in att_rows {
+                let url = if storage_path.starts_with("http://") || storage_path.starts_with("https://") {
+                    storage_path.clone()
+                } else if storage_path.starts_with("/uploads/") {
+                    storage_path.clone()
+                } else if state.config.is_r2_configured() {
+                    format!("{}/{}", state.config.r2_public_url, storage_path)
+                } else {
+                    format!("/uploads/{}", storage_path)
+                };
+                last_msg_attachments
+                    .entry(message_id)
+                    .or_default()
+                    .push(json!({
+                        "id": id,
+                        "messageId": message_id,
+                        "fileName": file_name,
+                        "fileType": file_type,
+                        "fileSize": file_size,
+                        "url": url,
+                        "duration": duration,
+                    }));
+            }
+        }
+        Err(e) => {
+            tracing::error!("Fetch last message attachments failed: {}", e);
+        }
+        }
+    }
+
     // Build result JSON matching the TypeScript shape
     let result: Vec<serde_json::Value> = rows
         .iter()
@@ -548,6 +610,7 @@ async fn list_conversations(
             };
 
             let last_message = if let Some(msg_id) = row.last_msg_id {
+                let atts = last_msg_attachments.get(&msg_id).cloned().unwrap_or_default();
                 json!({
                     "id": msg_id,
                     "conversationId": row.id,
@@ -555,6 +618,8 @@ async fn list_conversations(
                     "role": row.last_msg_role,
                     "content": row.last_msg_content,
                     "status": row.last_msg_status,
+                    "metadata": row.last_msg_metadata,
+                    "attachments": atts,
                     "createdAt": row.last_msg_created_at.map(|t| t.and_utc().to_rfc3339()),
                     "updatedAt": row.last_msg_updated_at.map(|t| t.and_utc().to_rfc3339()),
                 })

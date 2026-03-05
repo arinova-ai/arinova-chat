@@ -164,7 +164,7 @@ export async function handleArinovaChatInbound(params: {
     Body: body,
     BodyForAgent: bodyForAgent,
     RawBody: rawBody,
-    CommandBody: rawBody,
+    CommandBody: rawBody.replace(/^!\[/, "["),
     From: `openclaw-arinova-ai:${peerId}`,
     To: `openclaw-arinova-ai:${account.agentId}`,
     SessionKey: route.sessionKey,

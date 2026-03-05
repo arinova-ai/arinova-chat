@@ -14,6 +14,16 @@ export interface LoginResult {
   accessToken: string;
 }
 
+export interface ConnectOptions {
+  timeout?: number; // milliseconds, defaults to 5000
+}
+
+export interface ConnectResult {
+  user: ArinovaUser;
+  accessToken: string;
+  agents: AgentInfo[];
+}
+
 export interface ArinovaUser {
   id: string;
   name: string;

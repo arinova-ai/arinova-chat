@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { X, Minimize2, Gamepad2 } from "lucide-react";
 import { useSpacesStore } from "@/store/spaces-store";
+import { authClient } from "@/lib/auth-client";
 
 // ---------------------------------------------------------------------------
 // Shared draggable hook
@@ -183,6 +184,34 @@ export function PipOverlay() {
   const gameName = useSpacesStore((s) => s.pipGameName);
   const togglePipMode = useSpacesStore((s) => s.togglePipMode);
   const closePip = useSpacesStore((s) => s.closePip);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const { data: session } = authClient.useSession();
+
+  const sendAuthToIframe = useCallback(() => {
+    if (!iframeRef.current?.contentWindow || !session?.user) return;
+
+    // Read session token from cookies
+    const cookies = document.cookie.split("; ");
+    const sessionCookie = cookies.find((c) => c.startsWith("better-auth.session_token="));
+    const sessionToken = sessionCookie?.split("=").slice(1).join("=") ?? "";
+
+    iframeRef.current.contentWindow.postMessage(
+      {
+        type: "arinova:auth",
+        payload: {
+          user: {
+            id: session.user.id,
+            name: session.user.name,
+            email: session.user.email,
+            image: session.user.image ?? null,
+          },
+          accessToken: sessionToken,
+          agents: [],
+        },
+      },
+      "*",
+    );
+  }, [session]);
 
   if (!pipMode || !iframeUrl) return null;
 
@@ -191,9 +220,11 @@ export function PipOverlay() {
       <>
         <div className="fixed inset-0 z-50 bg-background">
           <iframe
+            ref={iframeRef}
             src={iframeUrl}
             className="h-full w-full border-none"
-            allow="microphone; camera"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            onLoad={sendAuthToIframe}
           />
         </div>
         <FullscreenMinimizeButton onMinimize={togglePipMode} />

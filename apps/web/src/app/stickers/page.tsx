@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { useToastStore } from "@/store/toast-store";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -24,8 +25,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Gift,
+  Share2,
   Loader2,
   X,
+  Bot,
+  Sparkles,
 } from "lucide-react";
 import { assetUrl } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
@@ -45,6 +49,8 @@ interface StickerPack {
   stickers: number;
   coverUrl: string;
   stickerFiles?: ApiSticker[];
+  agentCompatible: boolean;
+  reviewStatus: string;
 }
 
 interface ApiPack {
@@ -58,6 +64,8 @@ interface ApiPack {
   coverImage: string | null;
   stickerCount: number;
   stickers?: ApiSticker[];
+  agentCompatible?: boolean;
+  reviewStatus?: string;
 }
 
 interface ApiSticker {
@@ -65,6 +73,7 @@ interface ApiSticker {
   filename: string;
   emoji: string | null;
   sortOrder: number;
+  agentPrompt?: string | null;
 }
 
 function packDirFromCover(coverImage: string | null): string {
@@ -86,8 +95,12 @@ function apiPackToStickerPack(p: ApiPack): StickerPack {
     stickers: p.stickerCount,
     coverUrl: p.coverImage ?? "/stickers/arinova-pack-01/01-hello.png",
     stickerFiles: p.stickers,
+    agentCompatible: p.agentCompatible ?? false,
+    reviewStatus: p.reviewStatus ?? "none",
   };
 }
+
+type StickerFilter = "all" | "free" | "agent-compatible";
 
 const CATEGORY_KEYS = ["all", "cute", "funny", "anime", "meme", "seasonal"] as const;
 
@@ -198,10 +211,22 @@ function PriceBadge({ price, t }: { price: number; t: (k: string) => string }) {
 // Pack Card
 // ---------------------------------------------------------------------------
 
-function PackCard({ pack, onClick, onGift, t }: { pack: StickerPack; onClick: () => void; onGift: () => void; t: (k: string) => string }) {
+function AiBadge() {
+  return (
+    <span className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-md bg-gradient-to-r from-blue-500 to-purple-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+      <Sparkles className="h-2.5 w-2.5" />
+      AI
+    </span>
+  );
+}
+
+function PackCard({ pack, onClick, onGift, onShare, t }: { pack: StickerPack; onClick: () => void; onGift: () => void; onShare: () => void; t: (k: string) => string }) {
+  const isFree = !pack.agentCompatible && pack.price === 0;
+
   return (
     <div className="flex flex-col rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-brand-border">
-      <button onClick={onClick} className="flex aspect-square w-full items-center justify-center rounded-lg bg-secondary/50 p-3">
+      <button onClick={onClick} className="relative flex aspect-square w-full items-center justify-center rounded-lg bg-secondary/50 p-3">
+        {pack.agentCompatible && <AiBadge />}
         <img
           src={pack.coverUrl}
           alt={pack.name}
@@ -212,13 +237,23 @@ function PackCard({ pack, onClick, onGift, t }: { pack: StickerPack; onClick: ()
       <p className="text-[11px] text-muted-foreground truncate">{pack.author}</p>
       <div className="mt-2 flex items-center gap-2">
         <PriceBadge price={pack.price} t={t} />
-        <button
-          onClick={(e) => { e.stopPropagation(); onGift(); }}
-          className="ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-brand-text"
-          title="Gift this pack"
-        >
-          <Gift className="h-3.5 w-3.5" />
-        </button>
+        {isFree ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onShare(); }}
+            className="ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-brand-text"
+            title={t("stickerShop.share")}
+          >
+            <Share2 className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onGift(); }}
+            className="ml-auto rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-brand-text"
+            title={t("stickerShop.gift")}
+          >
+            <Gift className="h-3.5 w-3.5" />
+          </button>
+        )}
         <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
           <Download className="h-3 w-3" />
           {formatCount(pack.downloads)}
@@ -276,17 +311,21 @@ function PackDetailDialog({
   open,
   onClose,
   onGift,
+  onShare,
   t,
 }: {
   pack: StickerPack | null;
   open: boolean;
   onClose: () => void;
   onGift: (pack: StickerPack) => void;
+  onShare: (pack: StickerPack) => void;
   t: (k: string) => string;
 }) {
   const [detailStickers, setDetailStickers] = useState<string[]>([]);
+  const [detailStickerData, setDetailStickerData] = useState<ApiSticker[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [zoomedSticker, setZoomedSticker] = useState<string | null>(null);
+  const [expandedPromptIdx, setExpandedPromptIdx] = useState<number | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [purchased, setPurchased] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
@@ -334,9 +373,11 @@ function PackDetailDialog({
 
   useEffect(() => {
     if (!pack || !open) return;
+    setExpandedPromptIdx(null);
     // If pack has inline sticker files from API, build URLs
     if (pack.stickerFiles && pack.stickerFiles.length > 0) {
       setDetailStickers(pack.stickerFiles.map((s) => `/stickers/${pack.dir}/${s.filename}`));
+      setDetailStickerData(pack.stickerFiles);
       return;
     }
     // Otherwise fetch from API
@@ -344,10 +385,12 @@ function PackDetailDialog({
     api<{ stickers: ApiSticker[] }>(`/api/stickers/${pack.id}`)
       .then((data) => {
         setDetailStickers(data.stickers.map((s) => `/stickers/${pack.dir}/${s.filename}`));
+        setDetailStickerData(data.stickers);
       })
       .catch(() => {
         // Fallback to legacy file naming
         setDetailStickers(getStickerFiles(pack.id, pack.stickers));
+        setDetailStickerData([]);
       })
       .finally(() => setDetailLoading(false));
   }, [pack, open]);
@@ -363,7 +406,15 @@ function PackDetailDialog({
         {/* Banner */}
         <div className="relative bg-gradient-to-r from-brand/20 to-blue-600/10 p-5">
           <DialogHeader>
-            <DialogTitle className="text-lg">{pack.name}</DialogTitle>
+            <DialogTitle className="text-lg flex items-center gap-2">
+              {pack.name}
+              {pack.agentCompatible && (
+                <span className="inline-flex items-center gap-0.5 rounded-md bg-gradient-to-r from-blue-500 to-purple-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  <Sparkles className="h-2.5 w-2.5" />
+                  AI
+                </span>
+              )}
+            </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               {pack.author} &middot; {pack.stickers} {t("stickerShop.stickersCount")}
             </DialogDescription>
@@ -396,31 +447,110 @@ function PackDetailDialog({
                   ? t("stickerShop.download")
                   : `${t("stickerShop.buyFor")} ${pack.price} ${t("stickerShop.coins")}`}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1"
-              title="Gift this pack"
-              onClick={() => onGift(pack)}
-            >
-              <Gift className="h-3.5 w-3.5" />
-              {t("stickerShop.gift")}
-            </Button>
+            {!pack.agentCompatible && pack.price === 0 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                title={t("stickerShop.share")}
+                onClick={() => onShare(pack)}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                {t("stickerShop.share")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                title={t("stickerShop.gift")}
+                onClick={() => onGift(pack)}
+              >
+                <Gift className="h-3.5 w-3.5" />
+                {t("stickerShop.gift")}
+              </Button>
+            )}
           </div>
         </div>
 
+        {/* Agent Compatible — "Try it" demo + explanation */}
+        {pack.agentCompatible && (
+          <div className="border-b border-border px-4 py-3 space-y-3">
+            {/* Explanation text */}
+            <div className="flex items-start gap-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 p-3">
+              <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-blue-400" />
+              <p className="text-xs text-muted-foreground">
+                {t("stickerShop.agentCompatibleDesc")}
+              </p>
+            </div>
+
+            {/* "Try it" demo — static chat simulation */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                {t("stickerShop.tryItDemo")}
+              </p>
+              <div className="rounded-lg bg-secondary/30 p-3 space-y-2">
+                {/* User sends sticker (right-aligned) */}
+                <div className="flex justify-end">
+                  <div className="rounded-xl bg-brand/15 p-1.5">
+                    <img
+                      src={previewStickers[0] ?? pack.coverUrl}
+                      alt="demo sticker"
+                      className="h-14 w-14 object-contain"
+                    />
+                  </div>
+                </div>
+                {/* Agent responds (left-aligned) */}
+                <div className="flex items-start gap-2">
+                  <div className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500">
+                    <Bot className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <div className="rounded-xl bg-secondary px-3 py-2 text-xs text-foreground max-w-[80%]">
+                    {t("stickerShop.tryItResponse")}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Sticker grid */}
         <div className="grid grid-cols-4 gap-2 p-4 sm:grid-cols-5 max-h-[50vh] overflow-y-auto">
-          {previewStickers.map((url, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setZoomedSticker(url)}
-              className="flex aspect-square items-center justify-center rounded-lg bg-secondary/50 p-2 cursor-zoom-in hover:bg-secondary/80 transition-colors"
-            >
-              <img src={url} alt={`sticker-${i + 1}`} className="h-full w-full object-contain" />
-            </button>
-          ))}
+          {previewStickers.map((url, i) => {
+            const stickerData = detailStickerData[i];
+            const agentPrompt = stickerData?.agentPrompt;
+            const isExpanded = expandedPromptIdx === i;
+            const truncatedPrompt = agentPrompt && agentPrompt.length > 50
+              ? agentPrompt.slice(0, 50) + "..."
+              : agentPrompt;
+
+            return (
+              <div key={i} className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pack.agentCompatible && agentPrompt) {
+                      setExpandedPromptIdx(isExpanded ? null : i);
+                    } else {
+                      setZoomedSticker(url);
+                    }
+                  }}
+                  className="flex aspect-square items-center justify-center rounded-lg bg-secondary/50 p-2 cursor-zoom-in hover:bg-secondary/80 transition-colors"
+                >
+                  <img src={url} alt={`sticker-${i + 1}`} className="h-full w-full object-contain" />
+                </button>
+                {pack.agentCompatible && agentPrompt && (
+                  <p
+                    className="mt-1 text-[10px] text-muted-foreground leading-tight cursor-pointer hover:text-foreground transition-colors"
+                    onClick={() => setExpandedPromptIdx(isExpanded ? null : i)}
+                    title={agentPrompt}
+                  >
+                    {isExpanded ? agentPrompt : truncatedPrompt}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
 
       </DialogContent>
@@ -469,6 +599,7 @@ function GiftDialog({
   onClose: () => void;
   t: (k: string) => string;
 }) {
+  const addToast = useToastStore((s) => s.addToast);
   const [friends, setFriends] = useState<GiftFriend[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(false);
   const [friendsError, setFriendsError] = useState(false);
@@ -489,15 +620,27 @@ function GiftDialog({
     return () => { cancelled = true; };
   }, [open]);
 
-  const handleSend = () => {
-    if (!selectedFriend) return;
-    setSent(true);
-    setTimeout(() => {
-      setSent(false);
-      setSelectedFriend(null);
-      setMessage("");
-      onClose();
-    }, 1500);
+  const handleSend = async () => {
+    if (!selectedFriend || !pack) return;
+    try {
+      await api(`/api/stickers/${pack.id}/gift`, {
+        method: "POST",
+        body: JSON.stringify({ friendId: selectedFriend, message: message || undefined }),
+      });
+      setSent(true);
+      setTimeout(() => {
+        setSent(false);
+        setSelectedFriend(null);
+        setMessage("");
+        onClose();
+      }, 1500);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        addToast(t("stickerShop.recipientAlreadyOwns"), "error");
+      } else {
+        addToast(t("stickerShop.giftFailed"), "error");
+      }
+    }
   };
 
   const handleClose = () => {
@@ -613,10 +756,23 @@ function StickerShopContent() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const [stickerFilter, setStickerFilter] = useState<StickerFilter>("all");
   const [selectedPack, setSelectedPack] = useState<StickerPack | null>(null);
   const [giftPack, setGiftPack] = useState<StickerPack | null>(null);
   const [packs, setPacks] = useState<StickerPack[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleShare = useCallback((pack: StickerPack) => {
+    const url = `${window.location.origin}/stickers?pack=${pack.id}`;
+    if (navigator.share) {
+      navigator.share({ title: pack.name, text: `Check out "${pack.name}" stickers on Arinova!`, url }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        // Simple feedback — could enhance with a toast
+        alert(t("stickerShop.linkCopied"));
+      }).catch(() => {});
+    }
+  }, [t]);
 
   const fetchPacks = useCallback(async () => {
     setLoading(true);
@@ -638,6 +794,12 @@ function StickerShopContent() {
 
   const filtered = useMemo(() => {
     let list = packs;
+    // Apply sticker type filter
+    if (stickerFilter === "free") {
+      list = list.filter((p) => !p.agentCompatible);
+    } else if (stickerFilter === "agent-compatible") {
+      list = list.filter((p) => p.agentCompatible);
+    }
     if (category !== "all") {
       list = list.filter((p) => p.category === category);
     }
@@ -650,7 +812,7 @@ function StickerShopContent() {
       );
     }
     return list;
-  }, [packs, category, search]);
+  }, [packs, category, stickerFilter, search]);
 
   return (
     <div className="app-dvh flex bg-background">
@@ -674,6 +836,28 @@ function StickerShopContent() {
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
+          </div>
+
+          {/* Filter tabs: All | Free | Agent Compatible */}
+          <div className="mt-3 flex border-b border-border">
+            {([
+              { key: "all" as StickerFilter, label: t("stickerShop.filterAll") },
+              { key: "free" as StickerFilter, label: t("stickerShop.filterFree") },
+              { key: "agent-compatible" as StickerFilter, label: t("stickerShop.filterAgentCompatible"), icon: true },
+            ]).map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setStickerFilter(tab.key)}
+                className={`flex items-center gap-1 px-4 py-2 text-xs font-medium transition-colors border-b-2 -mb-px ${
+                  stickerFilter === tab.key
+                    ? "border-brand text-brand-text"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+                }`}
+              >
+                {tab.icon && <Sparkles className="h-3 w-3" />}
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {/* Category pills */}
@@ -718,6 +902,7 @@ function StickerShopContent() {
                     pack={pack}
                     onClick={() => setSelectedPack(pack)}
                     onGift={() => setGiftPack(pack)}
+                    onShare={() => handleShare(pack)}
                     t={t}
                   />
                 ))}
@@ -734,6 +919,7 @@ function StickerShopContent() {
         open={selectedPack !== null}
         onClose={() => setSelectedPack(null)}
         onGift={(p) => { setSelectedPack(null); setGiftPack(p); }}
+        onShare={(p) => { setSelectedPack(null); handleShare(p); }}
         t={t}
       />
 

@@ -6,6 +6,7 @@ import StatusBar from "./status-bar";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
 import { OfficeChatPanel } from "./office-chat-panel";
+import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { useTheme } from "./theme-context";
 import { THEME_REGISTRY } from "./theme-registry";
@@ -24,7 +25,7 @@ const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 
 function OfficeViewInner() {
   const stream = useOfficeStream();
-  const { manifest, themeId } = useTheme();
+  const { manifest, loading, themeId } = useTheme();
   const themeEntry = THEME_REGISTRY.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
   const displayAgents = stream.agents.slice(0, maxAgents);
@@ -115,26 +116,36 @@ function OfficeViewInner() {
     return () => observer.disconnect();
   }, []);
 
+  const themeReady = !loading && !!manifest;
+
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
       {/* Status summary */}
-      <div className="shrink-0 pb-3">
-        <StatusBar agents={displayAgents} />
-      </div>
+      {themeReady && (
+        <div className="shrink-0 pb-3">
+          <StatusBar agents={displayAgents} />
+        </div>
+      )}
 
-      {/* Office map area — always takes full remaining space */}
+      {/* Office map area — always takes full remaining space; ref must always mount for ResizeObserver */}
       <div ref={mapContainerRef} className="flex-1 min-h-0">
-        {mapSize.width > 0 && mapSize.height > 0 && (
-          <OfficeMap
-            agents={displayAgents}
-            selectedAgentId={selectedAgentId}
-            onSelectAgent={selectAgent}
-            onCharacterClick={handleCharacterClick}
-            width={mapSize.width}
-            height={mapSize.height}
-            manifest={manifest}
-            themeId={themeId}
-          />
+        {!themeReady ? (
+          <div className="flex h-full items-center justify-center">
+            <ArinovaSpinner />
+          </div>
+        ) : (
+          mapSize.width > 0 && mapSize.height > 0 && (
+            <OfficeMap
+              agents={displayAgents}
+              selectedAgentId={selectedAgentId}
+              onSelectAgent={selectAgent}
+              onCharacterClick={handleCharacterClick}
+              width={mapSize.width}
+              height={mapSize.height}
+              manifest={manifest}
+              themeId={themeId}
+            />
+          )
         )}
       </div>
 

@@ -39,7 +39,7 @@ self.addEventListener("push", (event) => {
     payload = { title: "Arinova Chat", body: event.data.text() };
   }
 
-  const { title = "Arinova Chat", body = "", url, type, data } = payload;
+  const { title = "Arinova Chat", body = "", url, type, message_id, data } = payload;
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -47,7 +47,7 @@ self.addEventListener("push", (event) => {
       icon: "/icon-192.png",
       badge: "/icon-192.png",
       tag: type || "default",
-      data: { url, type, ...data },
+      data: { url, type, message_id, ...data },
     })
   );
 });

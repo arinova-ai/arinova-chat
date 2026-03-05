@@ -13,6 +13,8 @@ pub struct PushPayload {
     pub body: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
 }
 
 /// Send push notification to all subscriptions for a user.

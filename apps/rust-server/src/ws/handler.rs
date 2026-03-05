@@ -1038,7 +1038,8 @@ pub async fn trigger_agent_response(
                                 notification_type: "message".into(),
                                 title: sender_name.to_string(),
                                 body: preview,
-                                url: Some(format!("/?c={}", conversation_id)),
+                                url: Some(format!("/?c={}&m={}", conversation_id, msg_id)),
+                                message_id: Some(msg_id.to_string()),
                             },
                         )
                         .await;
@@ -1122,9 +1123,44 @@ pub async fn trigger_agent_response(
             .unwrap_or_else(uuid::Uuid::new_v4);
         saved_user_msg_id = Some(user_msg_id.to_string());
         let now = chrono::Utc::now();
+
+        // Detect sticker messages and build metadata for DB storage
+        let sticker_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+        let msg_metadata: Option<serde_json::Value> = if let Some(caps) = sticker_re.captures(content.trim()) {
+            let sticker_url = caps.get(1).unwrap().as_str();
+            let filename = caps.get(3).unwrap().as_str();
+
+            let sticker_row = sqlx::query_as::<_, (Option<String>,)>(
+                r#"SELECT s.agent_prompt FROM stickers s WHERE s.filename = $1 LIMIT 1"#,
+            )
+            .bind(filename)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten();
+
+            match sticker_row {
+                Some((Some(ref prompt),)) if !prompt.is_empty() => {
+                    Some(json!({
+                        "type": "sticker",
+                        "stickerUrl": sticker_url,
+                        "agentPrompt": prompt
+                    }))
+                }
+                _ => {
+                    Some(json!({
+                        "type": "sticker",
+                        "stickerUrl": sticker_url
+                    }))
+                }
+            }
+        } else {
+            None
+        };
+
         let _ = sqlx::query(
-            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, thread_id, created_at, updated_at)
-               VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, $7::uuid, $8, $8)"#,
+            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, thread_id, metadata, created_at, updated_at)
+               VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, $7::uuid, $8, $9, $9)"#,
         )
         .bind(user_msg_id)
         .bind(conversation_id)
@@ -1133,6 +1169,7 @@ pub async fn trigger_agent_response(
         .bind(user_id)
         .bind(reply_to_id.as_deref())
         .bind(thread_id.as_deref())
+        .bind(&msg_metadata)
         .bind(now.naive_utc())
         .execute(db)
         .await;
@@ -1223,7 +1260,8 @@ pub async fn trigger_agent_response(
                                 notification_type: "message".into(),
                                 title: sender_name.to_string(),
                                 body: preview,
-                                url: Some(format!("/?c={}", conversation_id)),
+                                url: Some(format!("/?c={}&m={}", conversation_id, user_msg_id)),
+                                message_id: Some(user_msg_id.to_string()),
                             },
                         )
                         .await;
@@ -1425,12 +1463,58 @@ async fn do_trigger_agent_response(
         "threadId": thread_id
     }), redis);
 
+    // Detect sticker messages and look up agent_prompt
+    let sticker_regex = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+    let sticker_metadata: Option<serde_json::Value> = if let Some(caps) = sticker_regex.captures(content.trim()) {
+        let sticker_url = caps.get(1).unwrap().as_str();
+        let filename = caps.get(3).unwrap().as_str();
+
+        // Look up the sticker's agent_prompt by filename
+        let sticker_row = sqlx::query_as::<_, (Option<String>,)>(
+            r#"SELECT s.agent_prompt FROM stickers s WHERE s.filename = $1 LIMIT 1"#,
+        )
+        .bind(filename)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten();
+
+        match sticker_row {
+            Some((Some(ref prompt),)) if !prompt.is_empty() => {
+                Some(json!({
+                    "type": "sticker",
+                    "stickerUrl": sticker_url,
+                    "agentPrompt": prompt
+                }))
+            }
+            _ => {
+                Some(json!({
+                    "type": "sticker",
+                    "stickerUrl": sticker_url
+                }))
+            }
+        }
+    } else {
+        None
+    };
+
+    // For sticker messages with agent_prompt, override the content sent to agent
+    let effective_content = if let Some(ref meta) = sticker_metadata {
+        if let Some(prompt) = meta.get("agentPrompt").and_then(|v| v.as_str()) {
+            format!("[User sent a sticker: {}]", prompt)
+        } else {
+            content.to_string()
+        }
+    } else {
+        content.to_string()
+    };
+
     // Prepend system prompt if configured
     let task_content = match &system_prompt {
         Some(prompt) if !prompt.is_empty() => {
-            format!("[System Prompt]\n{}\n\n[User Message]\n{}", prompt, content)
+            format!("[System Prompt]\n{}\n\n[User Message]\n{}", prompt, effective_content)
         }
-        _ => content.to_string(),
+        _ => effective_content,
     };
 
     // Fetch sender username for task payload
@@ -1454,6 +1538,11 @@ async fn do_trigger_agent_response(
         "senderUserId": user_id,
         "senderUsername": sender_username
     });
+
+    // Add sticker metadata to task payload if present
+    if let Some(ref meta) = sticker_metadata {
+        task_payload["stickerMetadata"] = meta.clone();
+    }
 
     // Add group members context
     if conv_type == "group" {
@@ -1740,7 +1829,8 @@ async fn do_trigger_agent_response(
                                                 notification_type: "message".into(),
                                                 title: agent_name.clone(),
                                                 body: preview,
-                                                url: Some(format!("/?c={}", conversation_id)),
+                                                url: Some(format!("/?c={}&m={}", conversation_id, agent_msg_id_clone)),
+                                                message_id: Some(agent_msg_id_clone.clone()),
                                             },
                                         )
                                         .await;

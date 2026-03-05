@@ -7,7 +7,9 @@ import { MessageBubble } from "./message-bubble";
 import { useChatStore } from "@/store/chat-store";
 import { useToastStore } from "@/store/toast-store";
 import { api } from "@/lib/api";
-import { ArrowDown, Check, Copy, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowDown, Check, Copy, Gift, Loader2, X } from "lucide-react";
+import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
 import { useTranslation } from "@/lib/i18n";
@@ -375,11 +377,15 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           </div>
         )}
         {message.role === "system" ? (
-          <div className="flex justify-center py-1.5">
-            <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
-              {message.content}
-            </span>
-          </div>
+          (message.metadata as Record<string, unknown>)?.type === "sticker_gift" ? (
+            <StickerGiftMessage message={message} />
+          ) : (
+            <div className="flex justify-center py-1.5">
+              <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
+                {message.content}
+              </span>
+            </div>
+          )
         ) : (
           <div className={cn("flex items-center gap-2", selectionMode && "cursor-pointer")}
             onClick={selectionMode ? () => toggleSelect(message.id) : undefined}
@@ -473,6 +479,39 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           <ArrowDown className="h-4 w-4" />
         </button>
       )}
+    </div>
+  );
+}
+
+function StickerGiftMessage({ message }: { message: Message }) {
+  const { t } = useTranslation();
+
+  const metadata = message.metadata as Record<string, unknown> | undefined;
+  const displayText = message.content ?? "";
+  const packId = (metadata?.packId as string) ?? "";
+  const packName = (metadata?.packName as string) ?? "";
+  const coverUrl = (metadata?.coverUrl as string) ?? "";
+
+  return (
+    <div className="flex justify-center py-2">
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm max-w-xs">
+        <img
+          src={coverUrl || "/stickers/arinova-pack-01/01-hello.png"}
+          alt={packName}
+          className="h-12 w-12 rounded-lg object-cover shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground">{displayText}</p>
+          <p className="text-sm font-medium truncate">{packName}</p>
+          <Link
+            href={`/stickers?pack=${packId}`}
+            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-400 hover:text-blue-300"
+          >
+            <Gift className="h-3 w-3" />
+            {t("chat.stickerGift.claim")}
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

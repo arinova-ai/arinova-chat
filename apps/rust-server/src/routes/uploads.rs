@@ -324,6 +324,56 @@ async fn upload_file(
     .execute(&state.db)
     .await;
 
+    // --- Phase 3b: Broadcast new message with attachments via WS ---
+    {
+        let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>, bool)>(
+            r#"SELECT name, username, image, is_verified FROM "user" WHERE id = $1"#,
+        )
+        .bind(&user.id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        let sender_name = sender_info.as_ref().and_then(|(n, _, _, _)| n.as_deref()).unwrap_or("");
+        let sender_username = sender_info.as_ref().and_then(|(_, u, _, _)| u.as_deref()).unwrap_or("");
+        let sender_image = sender_info.as_ref().and_then(|(_, _, img, _)| img.as_deref());
+        let sender_is_verified = sender_info.as_ref().map(|(_, _, _, v)| *v).unwrap_or(false);
+
+        let member_ids: Vec<String> = sqlx::query_as::<_, (String,)>(
+            "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+        )
+        .bind(conversation_id)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(uid,)| uid)
+        .collect();
+
+        let msg_event = json!({
+            "type": "new_message",
+            "conversationId": conv_id_str,
+            "message": {
+                "id": message_id.to_string(),
+                "conversationId": conv_id_str,
+                "seq": seq,
+                "role": "user",
+                "content": &caption,
+                "status": "completed",
+                "senderUserId": &user.id,
+                "senderUserName": sender_name,
+                "senderUsername": sender_username,
+                "senderUserImage": sender_image,
+                "senderIsVerified": sender_is_verified,
+                "attachments": &attachments_json,
+                "createdAt": message.created_at.and_utc().to_rfc3339(),
+                "updatedAt": message.updated_at.and_utc().to_rfc3339(),
+            }
+        });
+        state.ws.broadcast_to_members(&member_ids, &msg_event, &state.redis);
+    }
+
     // --- Phase 4: Trigger agent response ---
     // Build message content for the agent: caption + all attachment references
     let attachment_refs: Vec<String> = uploaded_files

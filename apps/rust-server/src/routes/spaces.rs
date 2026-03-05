@@ -59,6 +59,7 @@ struct SpaceRow {
     description: String,
     category: String,
     tags: serde_json::Value,
+    definition: serde_json::Value,
     is_public: bool,
     created_at: chrono::NaiveDateTime,
     updated_at: chrono::NaiveDateTime,
@@ -104,7 +105,7 @@ async fn list_spaces(
     );
 
     let rows = sqlx::query_as::<_, SpaceRow>(
-        r#"SELECT id, owner_id, name, description, category::text, tags, is_public, created_at, updated_at
+        r#"SELECT id, owner_id, name, description, category::text, tags, definition, is_public, created_at, updated_at
            FROM playgrounds
            WHERE is_public = true
              AND ($1::text IS NULL OR name ILIKE $1)
@@ -152,7 +153,7 @@ async fn get_space(
     Path(id): Path<Uuid>,
 ) -> Response {
     let space = sqlx::query_as::<_, SpaceRow>(
-        r#"SELECT id, owner_id, name, description, category::text, tags, is_public, created_at, updated_at
+        r#"SELECT id, owner_id, name, description, category::text, tags, definition, is_public, created_at, updated_at
            FROM playgrounds WHERE id = $1"#,
     )
     .bind(id)
@@ -199,6 +200,7 @@ async fn get_space(
         "description": space.description,
         "category": space.category,
         "tags": space.tags,
+        "definition": space.definition,
         "isPublic": space.is_public,
         "createdAt": space.created_at,
         "updatedAt": space.updated_at,
@@ -213,10 +215,30 @@ async fn create_space(
     user: AuthUser,
     Json(body): Json<CreateSpaceBody>,
 ) -> Response {
+    // Validate iframeUrl must be https:// if present
+    if let Some(ref def) = body.definition {
+        if let Some(url) = def.get("iframeUrl").and_then(|v| v.as_str()) {
+            if !url.starts_with("https://") {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "iframeUrl must use https://"})),
+                )
+                    .into_response();
+            }
+            if url::Url::parse(url).is_err() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "iframeUrl is not a valid URL"})),
+                )
+                    .into_response();
+            }
+        }
+    }
+
     let result = sqlx::query_as::<_, SpaceRow>(
         r#"INSERT INTO playgrounds (owner_id, name, description, category, tags, definition, is_public)
            VALUES ($1, $2, $3, COALESCE($4, 'other')::playground_category, COALESCE($5, '[]'::jsonb), COALESCE($6, '{}'::jsonb), COALESCE($7, true))
-           RETURNING id, owner_id, name, description, category::text, tags, is_public, created_at, updated_at"#,
+           RETURNING id, owner_id, name, description, category::text, tags, definition, is_public, created_at, updated_at"#,
     )
     .bind(&user.id)
     .bind(&body.name)

@@ -94,6 +94,7 @@ export interface Message {
   threadSummary?: ThreadSummary;
   attachments?: Attachment[];
   linkPreviews?: LinkPreview[];
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -165,7 +166,7 @@ export interface ChannelMessage {
 }
 
 // ===== Spaces =====
-export type SpaceCategory = "game" | "strategy" | "social" | "puzzle" | "roleplay" | "other";
+export type SpaceCategory = "board_game" | "card_game" | "rpg" | "strategy" | "puzzle" | "trivia" | "social" | "other";
 export type SpaceSessionStatus = "waiting" | "active" | "paused" | "finished";
 export type SpaceControlMode = "agent" | "human" | "copilot";
 

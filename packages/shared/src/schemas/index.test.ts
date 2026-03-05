@@ -869,7 +869,7 @@ const validPlaygroundDefinition = {
   metadata: {
     name: "狼人殺",
     description: "經典狼人殺遊戲",
-    category: "game" as const,
+    category: "board_game" as const,
     minPlayers: 5,
     maxPlayers: 12,
     tags: ["狼人殺", "多人"],
@@ -1093,7 +1093,7 @@ describe("playgroundDefinitionSchema", () => {
   });
 
   it("accepts all valid categories", () => {
-    for (const cat of ["game", "strategy", "social", "puzzle", "roleplay", "other"]) {
+    for (const cat of ["board_game", "card_game", "rpg", "strategy", "puzzle", "trivia", "social", "other"]) {
       const result = playgroundDefinitionSchema.safeParse({
         ...validPlaygroundDefinition,
         metadata: { ...validPlaygroundDefinition.metadata, category: cat },
