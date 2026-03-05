@@ -879,7 +879,7 @@ function StickerShopContent() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 pb-24 md:p-6 md:pb-6">
+        <div className="flex-1 overflow-y-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6">
           <div className="mx-auto max-w-5xl space-y-6">
             {/* Featured carousel */}
             {featuredPacks.length > 0 && <FeaturedCarousel packs={featuredPacks} t={t} />}
