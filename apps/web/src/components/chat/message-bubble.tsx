@@ -204,7 +204,7 @@ function MessageAvatar({ message, isOwn, clickable, onClick, agentAvatarUrl }: M
     return (
       <button
         type="button"
-        className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="h-8 w-8 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         onClick={onClick}
       >
         {avatarContent}
