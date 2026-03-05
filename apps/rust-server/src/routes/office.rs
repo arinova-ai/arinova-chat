@@ -8,7 +8,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::convert::Infallible;

@@ -49,8 +49,6 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
     });
 
     // Wait for authentication within timeout
-    let mut authenticated_agent_id: Option<String> = None;
-
     let auth_result = timeout(AUTH_TIMEOUT, async {
         while let Some(Ok(Message::Text(text))) = ws_receiver.next().await {
             let event: Value = match serde_json::from_str(&text) {
@@ -151,8 +149,6 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
             return;
         }
     };
-
-    authenticated_agent_id = Some(agent_id.clone());
 
     // Process authenticated messages
     let ws_state = state.ws.clone();

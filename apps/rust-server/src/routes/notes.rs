@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, patch, post},
+    routing::{get, patch},
     Router,
 };
 use chrono::{DateTime, Utc};

@@ -108,10 +108,10 @@ async fn user_agents(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct AgentChatBody {
     agent_id: String,
     prompt: String,
-    #[allow(dead_code)]
     system_prompt: Option<String>,
 }
 

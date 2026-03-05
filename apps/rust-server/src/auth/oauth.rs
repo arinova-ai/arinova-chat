@@ -14,6 +14,7 @@ struct GoogleTokenResponse {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct GoogleUserInfo {
     sub: String,
     email: String,

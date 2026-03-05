@@ -2,7 +2,7 @@ use axum::{
     extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
     Router,
 };
 use serde::Deserialize;
@@ -12,7 +12,6 @@ use uuid::Uuid;
 use crate::auth::middleware::AuthUser;
 use crate::db::models::Agent;
 use crate::utils::pairing_code::generate_secret_token;
-use crate::ws::state::WsState;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -188,8 +187,8 @@ async fn update_agent(
     Json(body): Json<UpdateAgentBody>,
 ) -> Response {
     // Build dynamic update query
-    let mut sets = vec!["updated_at = NOW()".to_string()];
-    let mut param_idx = 3u32; // $1 = id, $2 = owner_id
+    let _sets = vec!["updated_at = NOW()".to_string()];
+    let _param_idx = 3u32; // $1 = id, $2 = owner_id
 
     // We'll use a simpler approach - update all provided fields
     let result = sqlx::query_as::<_, Agent>(

@@ -2,7 +2,7 @@ use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
     response::Json,
-    routing::{delete, get, post},
+    routing::{delete, post},
     Router,
 };
 use chrono::NaiveDateTime;

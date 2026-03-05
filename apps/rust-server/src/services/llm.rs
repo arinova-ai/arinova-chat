@@ -5,7 +5,7 @@
 //! - `call_llm_stream()` — SSE streaming chat completion
 
 use bytes::Bytes;
-use futures::stream::{Stream, StreamExt};
+use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;

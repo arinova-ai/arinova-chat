@@ -1,5 +1,3 @@
-use sqlx::PgPool;
-
 /// Get the next sequence number for a conversation.
 /// Uses MAX(seq) + 1 to ensure monotonically increasing per-conversation.
 /// Accepts any sqlx executor (pool or transaction).
