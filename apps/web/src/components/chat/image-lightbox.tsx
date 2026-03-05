@@ -130,6 +130,7 @@ export function ImageLightbox({ src, alt, className, images, initialIndex }: Ima
               paddingRight: "env(safe-area-inset-right, 0px)",
               touchAction: "none",
             }}
+            onContextMenu={(e) => e.preventDefault()}
             onClick={() => { if (scale <= 1) setOpen(false); else setScale(1); }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
@@ -173,8 +174,13 @@ export function ImageLightbox({ src, alt, className, images, initialIndex }: Ima
               style={{
                 transform: `scale(${scale})`,
                 transition: pinchStartDistRef.current !== null ? "none" : "transform 0.2s ease-out",
+                WebkitTouchCallout: "none",
+                userSelect: "none",
+                WebkitUserSelect: "none",
               }}
+              onContextMenu={(e) => e.preventDefault()}
               onClick={handleImageClick}
+              draggable={false}
             />
 
             {/* Page indicator */}

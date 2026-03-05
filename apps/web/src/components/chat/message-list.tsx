@@ -459,7 +459,9 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         endReached={hasMoreDown ? loadNewer : undefined}
         atBottomStateChange={handleAtBottomChange}
         atBottomThreshold={50}
-        increaseViewportBy={{ top: 100, bottom: 100 }}
+        defaultItemHeight={80}
+        increaseViewportBy={{ top: 200, bottom: 200 }}
+        computeItemKey={(_index, msg) => msg.id}
         components={virtuosoComponents}
         className="h-full"
         itemContent={itemContent}

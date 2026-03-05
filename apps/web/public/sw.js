@@ -55,20 +55,26 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || "/";
+  const rawUrl = event.notification.data?.url || "/";
+  // Ensure absolute URL for openWindow (relative paths fail in standalone PWA)
+  const absoluteUrl = rawUrl.startsWith("http") ? rawUrl : new URL(rawUrl, self.location.origin).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
       // Focus existing window if available
       for (const client of clients) {
         if (client.url.includes(self.location.origin)) {
-          client.focus();
-          client.postMessage({ type: "NOTIFICATION_CLICK", url });
+          try {
+            await client.focus();
+          } catch {
+            // focus() can fail if window is not focusable
+          }
+          client.postMessage({ type: "NOTIFICATION_CLICK", url: rawUrl });
           return;
         }
       }
-      // Otherwise open new window
-      return self.clients.openWindow(url);
+      // No existing window — open new one with absolute URL
+      return self.clients.openWindow(absoluteUrl);
     })
   );
 });
