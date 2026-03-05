@@ -977,6 +977,20 @@ async fn gift_pack(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Not friends"})));
     }
 
+    // 2b. Check if recipient already owns this pack
+    let recipient_owns = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM user_stickers WHERE user_id = $1 AND pack_id = $2",
+    )
+    .bind(&body.friend_id)
+    .bind(pack_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if recipient_owns > 0 {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Recipient already owns this pack"})));
+    }
+
     // 3. Begin transaction for the entire gift operation
     let mut tx = match state.db.begin().await {
         Ok(tx) => tx,
