@@ -29,17 +29,15 @@ export function ConversationList() {
   const sorted = useMemo(() => {
     let filtered = conversations;
     if (tab === "agents") {
-      filtered = conversations.filter((c) => c.type === "direct" && c.agentId && !c.officialCommunityId);
+      filtered = conversations.filter((c) => c.type === "direct" && c.agentId);
     } else if (tab === "friends") {
-      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId && !c.officialCommunityId);
+      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId);
     } else if (tab === "groups") {
       filtered = conversations.filter((c) => c.type === "group");
     } else if (tab === "officials") {
-      filtered = conversations.filter((c) => !!c.officialCommunityId);
+      filtered = conversations.filter((c) => c.type === "official");
     } else if (tab === "clubs") {
-      // Club conversations are group chats from club communities
-      // For now, clubs show in the groups tab too — this is a placeholder
-      filtered = conversations.filter((c) => c.type === "group");
+      filtered = conversations.filter((c) => c.type === "club");
     }
 
     return [...filtered].sort((a, b) => {

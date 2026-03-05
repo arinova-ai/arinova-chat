@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ===== Enum Types =====
 
-CREATE TYPE conversation_type AS ENUM ('direct', 'group');
+CREATE TYPE conversation_type AS ENUM ('direct', 'group', 'official', 'club', 'lounge');
 CREATE TYPE message_role AS ENUM ('user', 'agent', 'assistant', 'system');
 CREATE TYPE message_status AS ENUM ('pending', 'streaming', 'completed', 'cancelled', 'error');
 CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member', 'creator', 'moderator');

@@ -123,7 +123,7 @@ async fn start_chat(
 
     let conv_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO conversations (title, type, user_id, agent_id, mention_only)
-           VALUES ($1, 'direct', $2, $3, FALSE)
+           VALUES ($1, 'official', $2, $3, FALSE)
            RETURNING id"#,
     )
     .bind(&community_name)
