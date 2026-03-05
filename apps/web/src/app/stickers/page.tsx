@@ -374,6 +374,8 @@ function PackDetailDialog({
   useEffect(() => {
     if (!pack || !open) return;
     setExpandedPromptIdx(null);
+    setDetailStickers([]);
+    setDetailStickerData([]);
     // If pack has inline sticker files from API, build URLs
     if (pack.stickerFiles && pack.stickerFiles.length > 0) {
       setDetailStickers(pack.stickerFiles.map((s) => `/stickers/${pack.dir}/${s.filename}`));

@@ -726,7 +726,12 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
       />
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
-        <div className="relative min-w-0 select-none md:select-auto" {...(selectionMode ? {} : longPressHandlers)}>
+        <div
+          className="relative min-w-0 select-none md:select-auto"
+          style={{ WebkitTouchCallout: "none" }}
+          onContextMenu={(e) => { if (!selectionMode) e.preventDefault(); }}
+          {...(selectionMode ? {} : longPressHandlers)}
+        >
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
             <div className={cn(

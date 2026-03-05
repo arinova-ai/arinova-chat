@@ -635,7 +635,11 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Upload failed");
+        const msg = res.status === 413
+          ? t("chat.fileTooLarge")
+          : (body.error ?? t("chat.uploadFailed"));
+        useToastStore.getState().addToast(msg);
+        throw new Error(msg);
       }
 
       // Promote the optimistic message with real data from the server
@@ -764,7 +768,11 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? "Upload failed");
+          const msg = res.status === 413
+            ? t("chat.fileTooLarge")
+            : (body.error ?? t("chat.uploadFailed"));
+          useToastStore.getState().addToast(msg);
+          throw new Error(msg);
         }
 
         // Promote temp → real using REST response

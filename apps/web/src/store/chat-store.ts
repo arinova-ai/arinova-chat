@@ -4,6 +4,7 @@ import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
+import { useNotificationStore } from "@/store/notification-store";
 import {
   getCachedMessages,
   setCachedMessages,
@@ -1659,6 +1660,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
                     (unreadCounts[conversationId] ?? 0) + 1,
                 }
               : unreadCounts,
+        });
+      }
+
+      // In-app notification for messages from other conversations (mobile)
+      if (
+        conversationId !== activeConversationId &&
+        !get().mutedConversations[conversationId] &&
+        msg.senderUserId !== get().currentUserId &&
+        msg.role !== "system"
+      ) {
+        const senderName = msg.senderUserName || msg.senderUsername || "New message";
+        const preview = msg.content
+          ? msg.content.length > 80 ? msg.content.slice(0, 80) + "..." : msg.content
+          : "Sent an attachment";
+        useNotificationStore.getState().show({
+          conversationId,
+          senderName,
+          senderImage: (msg as Record<string, unknown>).senderUserImage as string | undefined,
+          preview,
         });
       }
 

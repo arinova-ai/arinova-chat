@@ -72,6 +72,8 @@
   "chat.typePlaceholder": "Escribe un mensaje...",
   "chat.mentionPlaceholder": "@menciona un agente...",
   "chat.maxImages": "Máximo 9 imágenes",
+  "chat.fileTooLarge": "El archivo es demasiado grande para subir",
+  "chat.uploadFailed": "Error al subir, inténtalo de nuevo",
   "chat.imagesSelected": "{count} imágenes seleccionadas",
   "chat.imageCount": "{n}/{max}",
 

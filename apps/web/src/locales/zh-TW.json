@@ -74,6 +74,8 @@
   "chat.typePlaceholder": "輸入訊息...",
   "chat.mentionPlaceholder": "@提及一個 Agent...",
   "chat.maxImages": "最多 9 張圖片",
+  "chat.fileTooLarge": "檔案太大，無法上傳",
+  "chat.uploadFailed": "上傳失敗，請重試",
   "chat.imagesSelected": "已選擇 {count} 張圖片",
   "chat.imageCount": "{n}/{max}",
 
