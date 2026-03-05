@@ -410,6 +410,8 @@
   "stickerShop.giftTitle": "このスタンプパックを贈る",
   "stickerShop.giftDesc": "「{name}」をフレンドに送る",
   "stickerShop.giftSent": "ギフトを送りました！",
+  "stickerShop.recipientAlreadyOwns": "相手はすでにこのスタンプパックを持っています",
+  "stickerShop.giftFailed": "ギフトの送信に失敗しました。もう一度お試しください",
   "stickerShop.chooseFriend": "フレンドを選択",
   "stickerShop.messageOptional": "メッセージ（任意）",
   "stickerShop.messagePlaceholder": "メッセージを添えて...",

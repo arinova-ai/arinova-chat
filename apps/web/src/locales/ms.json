@@ -410,6 +410,8 @@
   "stickerShop.giftTitle": "Hadiahkan pek pelekat ini",
   "stickerShop.giftDesc": "Hantar \"{name}\" kepada rakan",
   "stickerShop.giftSent": "Hadiah dihantar!",
+  "stickerShop.recipientAlreadyOwns": "Rakan ini sudah memiliki pek pelekat ini",
+  "stickerShop.giftFailed": "Gagal menghantar hadiah. Sila cuba lagi",
   "stickerShop.chooseFriend": "Pilih rakan",
   "stickerShop.messageOptional": "Mesej (pilihan)",
   "stickerShop.messagePlaceholder": "Tambah mesej peribadi...",

@@ -410,6 +410,8 @@
   "stickerShop.giftTitle": "Offrir ce pack de stickers",
   "stickerShop.giftDesc": "Envoyer « {name} » à un ami",
   "stickerShop.giftSent": "Cadeau envoyé !",
+  "stickerShop.recipientAlreadyOwns": "Cet ami possède déjà ce pack de stickers",
+  "stickerShop.giftFailed": "Échec de l'envoi du cadeau. Veuillez réessayer",
   "stickerShop.chooseFriend": "Choisir un ami",
   "stickerShop.messageOptional": "Message (facultatif)",
   "stickerShop.messagePlaceholder": "Ajouter un message personnel...",

@@ -412,6 +412,8 @@
   "stickerShop.giftTitle": "贈送此貼圖包",
   "stickerShop.giftDesc": "將「{name}」傳送給好友",
   "stickerShop.giftSent": "禮物已送出！",
+  "stickerShop.recipientAlreadyOwns": "對方已經擁有這個貼圖包",
+  "stickerShop.giftFailed": "送禮失敗，請重試",
   "stickerShop.chooseFriend": "選擇好友",
   "stickerShop.messageOptional": "留言（選填）",
   "stickerShop.messagePlaceholder": "附上一段個人訊息...",

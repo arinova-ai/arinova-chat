@@ -410,6 +410,8 @@
   "stickerShop.giftTitle": "赠送此贴纸包",
   "stickerShop.giftDesc": "将「{name}」发送给好友",
   "stickerShop.giftSent": "礼物已送出！",
+  "stickerShop.recipientAlreadyOwns": "对方已经拥有这个贴纸包",
+  "stickerShop.giftFailed": "送礼失败，请重试",
   "stickerShop.chooseFriend": "选择好友",
   "stickerShop.messageOptional": "留言（选填）",
   "stickerShop.messagePlaceholder": "附上一段个人消息...",

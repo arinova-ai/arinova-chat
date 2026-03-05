@@ -410,6 +410,8 @@
   "stickerShop.giftTitle": "Regalar este paquete de stickers",
   "stickerShop.giftDesc": "Enviar \"{name}\" a un amigo",
   "stickerShop.giftSent": "¡Regalo enviado!",
+  "stickerShop.recipientAlreadyOwns": "Este amigo ya tiene este paquete de stickers",
+  "stickerShop.giftFailed": "Error al enviar el regalo. Inténtalo de nuevo",
   "stickerShop.chooseFriend": "Elige un amigo",
   "stickerShop.messageOptional": "Mensaje (opcional)",
   "stickerShop.messagePlaceholder": "Agrega un mensaje personal...",

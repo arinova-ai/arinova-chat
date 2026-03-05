@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { useToastStore } from "@/store/toast-store";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -598,6 +599,7 @@ function GiftDialog({
   onClose: () => void;
   t: (k: string) => string;
 }) {
+  const addToast = useToastStore((s) => s.addToast);
   const [friends, setFriends] = useState<GiftFriend[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(false);
   const [friendsError, setFriendsError] = useState(false);
@@ -632,8 +634,12 @@ function GiftDialog({
         setMessage("");
         onClose();
       }, 1500);
-    } catch {
-      // Silently fail — the dialog stays open so user can retry
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        addToast(t("stickerShop.recipientAlreadyOwns"), "error");
+      } else {
+        addToast(t("stickerShop.giftFailed"), "error");
+      }
     }
   };
 

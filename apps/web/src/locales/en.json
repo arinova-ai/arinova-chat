@@ -412,6 +412,8 @@
   "stickerShop.giftTitle": "Gift this sticker pack",
   "stickerShop.giftDesc": "Send \"{name}\" to a friend",
   "stickerShop.giftSent": "Gift sent!",
+  "stickerShop.recipientAlreadyOwns": "This friend already owns this sticker pack",
+  "stickerShop.giftFailed": "Failed to send gift. Please try again",
   "stickerShop.chooseFriend": "Choose a friend",
   "stickerShop.messageOptional": "Message (optional)",
   "stickerShop.messagePlaceholder": "Add a personal message...",

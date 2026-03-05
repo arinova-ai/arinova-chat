@@ -410,6 +410,8 @@
   "stickerShop.giftTitle": "이 스티커 팩 선물하기",
   "stickerShop.giftDesc": "\"{name}\"을(를) 친구에게 보내기",
   "stickerShop.giftSent": "선물을 보냈습니다!",
+  "stickerShop.recipientAlreadyOwns": "이 친구는 이미 이 스티커 팩을 가지고 있습니다",
+  "stickerShop.giftFailed": "선물 보내기에 실패했습니다. 다시 시도해 주세요",
   "stickerShop.chooseFriend": "친구 선택",
   "stickerShop.messageOptional": "메시지 (선택 사항)",
   "stickerShop.messagePlaceholder": "개인 메시지를 추가하세요...",
