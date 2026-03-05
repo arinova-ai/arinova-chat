@@ -241,7 +241,7 @@ async fn upload_file(
                 .with_guessed_format()
                 .ok()
                 .and_then(|reader| reader.into_dimensions().ok())
-                .map(|(w, h)| (Some(w as i32), Some(h as i32)))
+                .map(|(w, h)| (i32::try_from(w).ok(), i32::try_from(h).ok()))
                 .unwrap_or((None, None))
         } else {
             (None, None)
@@ -474,6 +474,8 @@ async fn get_attachment(
             "fileType": a.file_type,
             "fileSize": a.file_size,
             "storagePath": a.storage_path,
+            "width": a.width,
+            "height": a.height,
             "createdAt": a.created_at.and_utc().to_rfc3339(),
         }))
         .into_response(),
