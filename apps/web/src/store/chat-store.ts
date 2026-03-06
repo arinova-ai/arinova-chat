@@ -588,7 +588,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (get().highlightMessageId === messageId) {
         set({ highlightMessageId: null });
       }
-    }, 8000);
+    }, 3000);
   },
 
   loadAgents: async () => {
