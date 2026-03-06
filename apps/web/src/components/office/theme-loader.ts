@@ -1,6 +1,34 @@
 import type { ThemeManifest } from "./theme-types";
 
+// ── Theme assets base URL (resolved from backend /api/themes/config) ──
+
+let _themeAssetsBaseUrl: string | null = null;
+
+async function getThemeAssetsBaseUrl(): Promise<string> {
+  if (_themeAssetsBaseUrl !== null) return _themeAssetsBaseUrl;
+  try {
+    const res = await fetch("/api/themes/config");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.themeAssetsBaseUrl) {
+        _themeAssetsBaseUrl = data.themeAssetsBaseUrl as string;
+        return _themeAssetsBaseUrl!;
+      }
+    }
+  } catch { /* fall through */ }
+  _themeAssetsBaseUrl = "/themes";
+  return _themeAssetsBaseUrl;
+}
+
+/** Get the base URL for a specific theme's assets. */
+export async function getThemeBaseUrl(themeId: string): Promise<string> {
+  const base = await getThemeAssetsBaseUrl();
+  return `${base}/${themeId}`;
+}
+
 function themeUrl(themeId: string): string {
+  // Sync fallback for initial load — will be overridden once config is fetched
+  if (_themeAssetsBaseUrl) return `${_themeAssetsBaseUrl}/${themeId}/theme.json`;
   return `/themes/${themeId}/theme.json`;
 }
 
@@ -117,7 +145,8 @@ export function validateManifest(data: unknown): ThemeManifest {
  * No in-memory cache — avoids stale version issues on theme updates.
  */
 export async function loadTheme(themeId: string): Promise<ThemeManifest> {
-  const url = themeUrl(themeId);
+  const base = await getThemeBaseUrl(themeId);
+  const url = `${base}/theme.json`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to load theme "${themeId}": ${res.status} ${res.statusText}`);

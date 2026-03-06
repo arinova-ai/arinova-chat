@@ -11,6 +11,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use crate::auth::middleware::AuthUser;
+use crate::services::r2::upload_to_r2;
 use crate::AppState;
 
 /// Maximum total bundle size: 200 MB
@@ -30,7 +31,19 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/themes/upload", post(upload_theme))
         .route("/api/themes", get(list_themes))
+        .route("/api/themes/config", get(theme_config))
         .route("/api/themes/{themeId}", delete(delete_theme))
+}
+
+/// GET /api/themes/config — Returns the base URL for theme assets.
+/// Frontend uses this to know whether to load from R2 or local.
+async fn theme_config(State(state): State<AppState>) -> Json<Value> {
+    let base_url = if state.s3.is_some() && !state.config.r2_public_url.is_empty() {
+        format!("{}/themes", state.config.r2_public_url)
+    } else {
+        "/themes".to_string()
+    };
+    Json(json!({ "themeAssetsBaseUrl": base_url }))
 }
 
 // ---------------------------------------------------------------------------
@@ -80,29 +93,36 @@ fn validate_manifest(raw: &[u8]) -> Result<ManifestMeta, String> {
     }
 
     // Renderer-specific checks
-    let is_v3 = meta.renderer.as_deref() == Some("threejs")
+    let renderer = meta.renderer.as_deref().unwrap_or("pixi");
+    let is_v3 = renderer == "threejs"
         || meta.room.as_ref().and_then(|r| r.get("model")).is_some();
 
-    if !is_v3 {
-        // v2: needs zones, layers, characters
-        let zones_empty = meta.zones.as_ref().map_or(true, |z| z.is_empty());
-        let layers_empty = meta.layers.as_ref().map_or(true, |l| l.is_empty());
-        let chars_missing = meta.characters.is_none();
-        if zones_empty || layers_empty || chars_missing {
-            return Err(
-                "v2 (pixi) themes require non-empty zones, layers, and a characters config".into(),
-            );
+    match renderer {
+        "sprite" | "avg" => {
+            // sprite and avg themes have their own structure — skip v2 zone/layer validation
         }
-    } else {
-        // v3: needs room.model
-        let has_room_model = meta
-            .room
-            .as_ref()
-            .and_then(|r| r.get("model"))
-            .and_then(|m| m.as_str())
-            .map_or(false, |s| !s.is_empty());
-        if !has_room_model {
-            return Err("v3 (threejs) themes require room.model path".into());
+        _ if is_v3 => {
+            // v3: needs room.model
+            let has_room_model = meta
+                .room
+                .as_ref()
+                .and_then(|r| r.get("model"))
+                .and_then(|m| m.as_str())
+                .map_or(false, |s| !s.is_empty());
+            if !has_room_model {
+                return Err("v3 (threejs) themes require room.model path".into());
+            }
+        }
+        _ => {
+            // v2 (pixi): needs zones, layers, characters
+            let zones_empty = meta.zones.as_ref().map_or(true, |z| z.is_empty());
+            let layers_empty = meta.layers.as_ref().map_or(true, |l| l.is_empty());
+            let chars_missing = meta.characters.is_none();
+            if zones_empty || layers_empty || chars_missing {
+                return Err(
+                    "v2 (pixi) themes require non-empty zones, layers, and a characters config".into(),
+                );
+            }
         }
     }
 
@@ -219,70 +239,138 @@ async fn upload_theme(
 
     let theme_id = meta.id.clone();
 
-    // Phase 3: Prepare output directory
-    let themes_dir = themes_base_dir(&state);
-    let theme_dir = themes_dir.join(&theme_id);
+    // Phase 3: Upload to R2 if configured, otherwise fall back to local filesystem
+    if let Some(s3) = &state.s3 {
+        // ── R2 path ──────────────────────────────────────────────
+        let bucket = &state.config.r2_bucket;
+        let public_url = &state.config.r2_public_url;
 
-    // If theme already exists, remove old version first
-    if theme_dir.exists() {
-        if let Err(e) = tokio::fs::remove_dir_all(&theme_dir).await {
-            tracing::error!("Failed to remove existing theme dir: {}", e);
+        // Upload theme.json
+        let manifest_key = format!("themes/{}/theme.json", theme_id);
+        if let Err(e) = upload_to_r2(
+            s3,
+            bucket,
+            &manifest_key,
+            manifest_raw.clone(),
+            "application/json",
+            public_url,
+        )
+        .await
+        {
+            tracing::error!("R2 upload theme.json failed: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to replace existing theme"})),
+                Json(json!({"error": "Failed to upload theme.json to storage"})),
             )
                 .into_response();
         }
-    }
 
-    if let Err(e) = tokio::fs::create_dir_all(&theme_dir).await {
-        tracing::error!("Failed to create theme dir: {}", e);
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to create theme directory"})),
-        )
-            .into_response();
-    }
+        // Extract and upload bundle files
+        if let Some(zip_data) = bundle_bytes {
+            let tid = theme_id.clone();
+            let extract_result = tokio::task::spawn_blocking(move || {
+                extract_zip_to_memory(&zip_data, &tid)
+            })
+            .await;
 
-    // Write theme.json
-    if let Err(e) = tokio::fs::write(theme_dir.join("theme.json"), &manifest_raw).await {
-        tracing::error!("Failed to write theme.json: {}", e);
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Failed to write theme.json"})),
-        )
-            .into_response();
-    }
-
-    // Phase 4: Extract bundle zip (if provided)
-    if let Some(zip_data) = bundle_bytes {
-        let out_dir = theme_dir.clone();
-        let extract_result = tokio::task::spawn_blocking(move || {
-            extract_zip(&zip_data, &out_dir)
-        })
-        .await;
-
-        match extract_result {
-            Ok(Ok(count)) => {
-                tracing::info!("Theme '{}': extracted {} asset files", theme_id, count);
+            match extract_result {
+                Ok(Ok(files)) => {
+                    let count = files.len();
+                    for (key, data, content_type) in files {
+                        if let Err(e) =
+                            upload_to_r2(s3, bucket, &key, data, &content_type, public_url).await
+                        {
+                            tracing::error!("R2 upload '{}' failed: {}", key, e);
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(json!({"error": format!("Failed to upload asset: {}", key)})),
+                            )
+                                .into_response();
+                        }
+                    }
+                    tracing::info!(
+                        "Theme '{}': uploaded {} assets to R2",
+                        theme_id,
+                        count
+                    );
+                }
+                Ok(Err(e)) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": format!("Bundle extraction failed: {}", e)})),
+                    )
+                        .into_response();
+                }
+                Err(e) => {
+                    tracing::error!("spawn_blocking panicked: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Internal error during extraction"})),
+                    )
+                        .into_response();
+                }
             }
-            Ok(Err(e)) => {
-                // Cleanup on failure
-                let _ = tokio::fs::remove_dir_all(&theme_dir).await;
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({"error": format!("Bundle extraction failed: {}", e)})),
-                )
-                    .into_response();
-            }
-            Err(e) => {
-                let _ = tokio::fs::remove_dir_all(&theme_dir).await;
-                tracing::error!("spawn_blocking panicked: {}", e);
+        }
+    } else {
+        // ── Local filesystem fallback (dev mode) ─────────────────
+        let themes_dir = themes_base_dir(&state);
+        let theme_dir = themes_dir.join(&theme_id);
+
+        if theme_dir.exists() {
+            if let Err(e) = tokio::fs::remove_dir_all(&theme_dir).await {
+                tracing::error!("Failed to remove existing theme dir: {}", e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "Internal error during extraction"})),
+                    Json(json!({"error": "Failed to replace existing theme"})),
                 )
                     .into_response();
+            }
+        }
+
+        if let Err(e) = tokio::fs::create_dir_all(&theme_dir).await {
+            tracing::error!("Failed to create theme dir: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to create theme directory"})),
+            )
+                .into_response();
+        }
+
+        if let Err(e) = tokio::fs::write(theme_dir.join("theme.json"), &manifest_raw).await {
+            tracing::error!("Failed to write theme.json: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to write theme.json"})),
+            )
+                .into_response();
+        }
+
+        if let Some(zip_data) = bundle_bytes {
+            let out_dir = theme_dir.clone();
+            let extract_result =
+                tokio::task::spawn_blocking(move || extract_zip(&zip_data, &out_dir)).await;
+
+            match extract_result {
+                Ok(Ok(count)) => {
+                    tracing::info!("Theme '{}': extracted {} asset files (local)", theme_id, count);
+                }
+                Ok(Err(e)) => {
+                    let _ = tokio::fs::remove_dir_all(&theme_dir).await;
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": format!("Bundle extraction failed: {}", e)})),
+                    )
+                        .into_response();
+                }
+                Err(e) => {
+                    let _ = tokio::fs::remove_dir_all(&theme_dir).await;
+                    tracing::error!("spawn_blocking panicked: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Internal error during extraction"})),
+                    )
+                        .into_response();
+                }
             }
         }
     }
@@ -298,7 +386,66 @@ async fn upload_theme(
         .into_response()
 }
 
-/// Synchronous zip extraction (runs inside spawn_blocking).
+/// Synchronous zip extraction to memory (for R2 upload). Returns Vec<(r2_key, data, content_type)>.
+fn extract_zip_to_memory(
+    data: &[u8],
+    theme_id: &str,
+) -> Result<Vec<(String, Vec<u8>, String)>, String> {
+    let cursor = std::io::Cursor::new(data);
+    let mut archive =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("Invalid zip: {}", e))?;
+
+    let mut files = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| format!("Zip entry error: {}", e))?;
+        let name = entry.name().to_string();
+
+        if !is_safe_zip_entry(&name) {
+            return Err(format!(
+                "Disallowed file in bundle: '{}' (unsupported extension or path traversal)",
+                name
+            ));
+        }
+
+        if entry.is_dir() {
+            continue;
+        }
+
+        let mut buf = Vec::new();
+        entry
+            .read_to_end(&mut buf)
+            .map_err(|e| format!("Failed to read zip entry '{}': {}", name, e))?;
+
+        let r2_key = format!("themes/{}/{}", theme_id, name);
+        let content_type = mime_from_extension(&name);
+        files.push((r2_key, buf, content_type));
+    }
+
+    Ok(files)
+}
+
+/// Guess MIME type from file extension.
+fn mime_from_extension(name: &str) -> String {
+    let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "glb" => "model/gltf-binary",
+        "gltf" => "model/gltf+json",
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "wav" => "audio/wav",
+        "json" => "application/json",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+/// Synchronous zip extraction to local disk (runs inside spawn_blocking).
 fn extract_zip(data: &[u8], out_dir: &std::path::Path) -> Result<usize, String> {
     let cursor = std::io::Cursor::new(data);
     let mut archive =
@@ -357,33 +504,76 @@ async fn list_themes(
     State(state): State<AppState>,
     _user: AuthUser,
 ) -> Response {
-    let themes_dir = themes_base_dir(&state);
-
     let mut themes: Vec<Value> = Vec::new();
 
-    let mut entries = match tokio::fs::read_dir(&themes_dir).await {
-        Ok(e) => e,
-        Err(_) => {
-            // No themes directory yet
-            return (StatusCode::OK, Json(json!({ "themes": [] }))).into_response();
-        }
-    };
+    if let Some(s3) = &state.s3 {
+        // ── R2 path: list objects with prefix "themes/" and find theme.json files ──
+        let bucket = &state.config.r2_bucket;
+        match s3
+            .list_objects_v2()
+            .bucket(bucket)
+            .prefix("themes/")
+            .delimiter("/")
+            .send()
+            .await
+        {
+            Ok(output) => {
+                // Common prefixes = theme directories (e.g. "themes/avg-classroom/")
+                let prefixes: Vec<String> = output
+                    .common_prefixes()
+                    .iter()
+                    .filter_map(|cp| cp.prefix().map(|s| s.to_string()))
+                    .collect();
 
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
+                for prefix in prefixes {
+                    let manifest_key = format!("{}theme.json", prefix);
+                    if let Ok(obj) = s3.get_object().bucket(bucket).key(&manifest_key).send().await
+                    {
+                        if let Ok(body) = obj.body.collect().await {
+                            let bytes = body.into_bytes();
+                            if let Ok(val) = serde_json::from_slice::<Value>(&bytes) {
+                                themes.push(json!({
+                                    "id": val.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "name": val.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "version": val.get("version").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "description": val.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "renderer": val.get("renderer").and_then(|v| v.as_str()).unwrap_or("pixi"),
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("R2 list_objects failed: {}", e);
+            }
         }
-        let manifest_path = path.join("theme.json");
-        if let Ok(data) = tokio::fs::read(&manifest_path).await {
-            if let Ok(val) = serde_json::from_slice::<Value>(&data) {
-                themes.push(json!({
-                    "id": val.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                    "name": val.get("name").and_then(|v| v.as_str()).unwrap_or(""),
-                    "version": val.get("version").and_then(|v| v.as_str()).unwrap_or(""),
-                    "description": val.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                    "renderer": val.get("renderer").and_then(|v| v.as_str()).unwrap_or("pixi"),
-                }));
+    } else {
+        // ── Local filesystem fallback ──
+        let themes_dir = themes_base_dir(&state);
+        let mut entries = match tokio::fs::read_dir(&themes_dir).await {
+            Ok(e) => e,
+            Err(_) => {
+                return (StatusCode::OK, Json(json!({ "themes": [] }))).into_response();
+            }
+        };
+
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let manifest_path = path.join("theme.json");
+            if let Ok(data) = tokio::fs::read(&manifest_path).await {
+                if let Ok(val) = serde_json::from_slice::<Value>(&data) {
+                    themes.push(json!({
+                        "id": val.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                        "name": val.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+                        "version": val.get("version").and_then(|v| v.as_str()).unwrap_or(""),
+                        "description": val.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                        "renderer": val.get("renderer").and_then(|v| v.as_str()).unwrap_or("pixi"),
+                    }));
+                }
             }
         }
     }
@@ -410,26 +600,72 @@ async fn delete_theme(
             .into_response();
     }
 
-    let theme_dir = themes_base_dir(&state).join(&theme_id);
-    if !theme_dir.exists() {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Theme not found"})),
-        )
-            .into_response();
-    }
+    if let Some(s3) = &state.s3 {
+        // ── R2 path: delete all objects with prefix themes/{themeId}/ ──
+        let bucket = &state.config.r2_bucket;
+        let prefix = format!("themes/{}/", theme_id);
 
-    match tokio::fs::remove_dir_all(&theme_dir).await {
-        Ok(_) => (StatusCode::OK, Json(json!({"deleted": theme_id}))).into_response(),
-        Err(e) => {
+        match s3
+            .list_objects_v2()
+            .bucket(bucket)
+            .prefix(&prefix)
+            .send()
+            .await
+        {
+            Ok(output) => {
+                let keys: Vec<String> = output
+                    .contents()
+                    .iter()
+                    .filter_map(|obj| obj.key().map(|k| k.to_string()))
+                    .collect();
+
+                if keys.is_empty() {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(json!({"error": "Theme not found"})),
+                    )
+                        .into_response();
+                }
+
+                for key in &keys {
+                    if let Err(e) = s3.delete_object().bucket(bucket).key(key).send().await {
+                        tracing::error!("R2 delete '{}' failed: {}", key, e);
+                    }
+                }
+
+                tracing::info!("Theme '{}': deleted {} objects from R2", theme_id, keys.len());
+            }
+            Err(e) => {
+                tracing::error!("R2 list for delete failed: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Failed to list theme files"})),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        // ── Local filesystem fallback ──
+        let theme_dir = themes_base_dir(&state).join(&theme_id);
+        if !theme_dir.exists() {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Theme not found"})),
+            )
+                .into_response();
+        }
+
+        if let Err(e) = tokio::fs::remove_dir_all(&theme_dir).await {
             tracing::error!("Failed to delete theme '{}': {}", theme_id, e);
-            (
+            return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to delete theme"})),
             )
-                .into_response()
+                .into_response();
         }
     }
+
+    (StatusCode::OK, Json(json!({"deleted": theme_id}))).into_response()
 }
 
 // ---------------------------------------------------------------------------

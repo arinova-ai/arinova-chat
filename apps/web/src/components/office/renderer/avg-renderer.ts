@@ -1,6 +1,7 @@
 import type { OfficeRenderer } from "./types";
 import type { ThemeManifest, AvgCharacterDef } from "../theme-types";
 import type { Agent, AgentStatus } from "../types";
+import { getThemeBaseUrl } from "../theme-loader";
 
 // ── Pose mapping ────────────────────────────────────────────────
 
@@ -183,7 +184,7 @@ export class AvgRenderer implements OfficeRenderer {
     this.containerW = width;
     this.containerH = height;
     this.charDefs = manifest?.avgCharacters ?? [];
-    this.themeBase = themeId ? `/themes/${themeId}` : "";
+    this.themeBase = themeId ? await getThemeBaseUrl(themeId) : "";
 
     // Root container
     const root = document.createElement("div");
