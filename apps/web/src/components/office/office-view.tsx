@@ -67,7 +67,8 @@ function OfficeViewInner() {
   }, [bindings.length, displayAgents, themeId, fetchBindings]);
 
   // Derive character agent from the clicked slot's binding.
-  // Falls back to the first display agent when no binding exists.
+  // For multi-slot themes (avg) unbound slots show null; single-slot themes fall back to first agent.
+  const isMultiSlot = manifest?.renderer === "avg";
   const activeBinding = bindings.find((b) => b.slotIndex === clickedSlotIndex);
   const characterAgent: Agent | null = activeBinding
     ? stream.agents.find((a) => a.id === activeBinding.agentId)
@@ -80,7 +81,7 @@ function OfficeViewInner() {
           status: "idle" as const,
           recentActivity: [],
         } : null)
-    : displayAgents[0] ?? null;
+    : (isMultiSlot ? null : displayAgents[0] ?? null);
 
   const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
 

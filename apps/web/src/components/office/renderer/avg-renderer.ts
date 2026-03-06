@@ -422,7 +422,7 @@ export class AvgRenderer implements OfficeRenderer {
 
         if (this.currentPoses.get(def.slotIndex) !== pose) {
           this.currentPoses.set(def.slotIndex, pose);
-          const sprites = def.sprites[pose];
+          const sprites = def.sprites[pose] ?? def.sprites["sleeping"];
           if (sprites) {
             charEl.frameA.src = `${this.themeBase}/${sprites[0]}`;
             charEl.frameB.src = `${this.themeBase}/${sprites[1]}`;
