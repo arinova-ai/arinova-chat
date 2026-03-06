@@ -128,14 +128,16 @@ function PipBubble({
         <Gamepad2 className="h-6 w-6" />
       </div>
 
-      {/* Small X badge — top-right corner */}
+      {/* Close badge — enlarged hit area around small visible circle */}
       <button
         onPointerDown={(e) => e.stopPropagation()}
         onClick={onClose}
-        className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white shadow-md"
+        className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center"
         title="Close"
       >
-        <X className="h-3 w-3" />
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white shadow-md">
+          <X className="h-3 w-3" />
+        </span>
       </button>
     </div>
   );
