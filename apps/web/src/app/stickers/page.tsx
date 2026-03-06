@@ -399,7 +399,7 @@ function PackDetailDialog({
 
   if (!pack) return null;
 
-  const previewStickers = detailStickers.length > 0 ? detailStickers : getStickerFiles(pack.id, pack.stickers);
+  const previewStickers = detailStickers;
 
   return (
     <>
@@ -525,6 +525,11 @@ function PackDetailDialog({
         )}
 
         {/* Sticker grid */}
+        {detailLoading || previewStickers.length === 0 ? (
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
         <div className="grid grid-cols-4 gap-2 p-4 sm:grid-cols-5 max-h-[50vh] overflow-y-auto">
           {previewStickers.map((url, i) => {
             const stickerData = detailStickerData[i];
@@ -562,6 +567,7 @@ function PackDetailDialog({
             );
           })}
         </div>
+        )}
 
       </DialogContent>
     </Dialog>
