@@ -404,7 +404,7 @@ function PackDetailDialog({
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v && !zoomedSticker) onClose(); }}>
-      <DialogContent showCloseButton={false} className="max-w-lg border-border bg-card p-0 gap-0 max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-2rem)] overflow-y-auto">
+      <DialogContent key={pack.id} showCloseButton={false} className="max-w-lg border-border bg-card p-0 gap-0 max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-2rem)] overflow-y-auto">
         {/* Sticky close button */}
         <button
           type="button"
