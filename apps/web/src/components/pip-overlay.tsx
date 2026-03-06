@@ -14,6 +14,7 @@ function useDraggable(
   size: number,
   initialPos?: { x: number; y: number } | null,
   onPosChange?: (pos: { x: number; y: number }) => void,
+  onTap?: () => void,
 ) {
   const ref = useRef<HTMLDivElement>(null);
   const dragState = useRef({
@@ -27,6 +28,8 @@ function useDraggable(
   const didDrag = useRef(false);
   const onPosChangeRef = useRef(onPosChange);
   onPosChangeRef.current = onPosChange;
+  const onTapRef = useRef(onTap);
+  onTapRef.current = onTap;
 
   useEffect(() => {
     setPos(
@@ -80,10 +83,12 @@ function useDraggable(
     dragState.current.dragging = false;
     if (didDrag.current) {
       onPosChangeRef.current?.({ x: dragState.current.origX + (e.clientX - dragState.current.startX), y: dragState.current.origY + (e.clientY - dragState.current.startY) });
+    } else {
+      onTapRef.current?.();
     }
   }, []);
 
-  return { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp };
+  return { ref, pos, onPointerDown, onPointerMove, onPointerUp };
 }
 
 // ---------------------------------------------------------------------------
@@ -101,8 +106,8 @@ function PipBubble({
 }) {
   const pipBtnPos = useSpacesStore((s) => s.pipBtnPos);
   const setPipBtnPos = useSpacesStore((s) => s.setPipBtnPos);
-  const { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp } =
-    useDraggable(56, pipBtnPos, setPipBtnPos);
+  const { ref, pos, onPointerDown, onPointerMove, onPointerUp } =
+    useDraggable(56, pipBtnPos, setPipBtnPos, onExpand);
 
   if (pos.x < 0) return null;
 
@@ -116,22 +121,17 @@ function PipBubble({
       onPointerUp={onPointerUp}
     >
       {/* Main circle — tap to expand */}
-      <button
-        onClick={() => {
-          if (!didDrag.current) onExpand();
-        }}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-lg transition active:scale-95"
+      <div
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-lg transition active:scale-95 cursor-pointer"
         title={gameName ?? "Game"}
       >
         <Gamepad2 className="h-6 w-6" />
-      </button>
+      </div>
 
       {/* Small X badge — top-right corner */}
       <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onClose}
         className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-white shadow-md"
         title="Close"
       >
@@ -148,8 +148,8 @@ function PipBubble({
 function FullscreenMinimizeButton({ onMinimize }: { onMinimize: () => void }) {
   const pipBtnPos = useSpacesStore((s) => s.pipBtnPos);
   const setPipBtnPos = useSpacesStore((s) => s.setPipBtnPos);
-  const { ref, pos, didDrag, onPointerDown, onPointerMove, onPointerUp } =
-    useDraggable(48, pipBtnPos, setPipBtnPos);
+  const { ref, pos, onPointerDown, onPointerMove, onPointerUp } =
+    useDraggable(48, pipBtnPos, setPipBtnPos, onMinimize);
 
   if (pos.x < 0) return null;
 
@@ -162,15 +162,12 @@ function FullscreenMinimizeButton({ onMinimize }: { onMinimize: () => void }) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      <button
-        onClick={() => {
-          if (!didDrag.current) onMinimize();
-        }}
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/90 active:scale-95"
+      <div
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/70 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/90 active:scale-95 cursor-pointer"
         title="Minimize"
       >
         <Minimize2 className="h-5 w-5" />
-      </button>
+      </div>
     </div>
   );
 }
