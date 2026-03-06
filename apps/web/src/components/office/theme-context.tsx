@@ -64,6 +64,7 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ownedThemes, setOwnedThemes] = useState<Set<string>>(new Set());
+  const [ownedLoaded, setOwnedLoaded] = useState(false);
 
   // Fetch owned themes on mount
   const refreshOwned = useCallback(async () => {
@@ -71,6 +72,7 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
       const data = await api<{ owned: string[] }>("/api/themes/owned", { silent: true });
       setOwnedThemes(new Set(data.owned));
     } catch { /* not logged in yet */ }
+    setOwnedLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -80,12 +82,13 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
   // Validate saved themeId once owned themes are loaded — if it's a paid theme
   // the user doesn't own, fall back to default
   useEffect(() => {
+    if (!ownedLoaded) return; // wait for fetch to complete before validating
     if (!isKnownTheme(themeId)) return;
     if (!isFreeTheme(themeId) && !ownedThemes.has(themeId)) {
       setThemeId(DEFAULT_THEME_ID);
       saveThemeId(DEFAULT_THEME_ID);
     }
-  }, [ownedThemes, themeId]);
+  }, [ownedLoaded, ownedThemes, themeId]);
 
   useEffect(() => {
     let cancelled = false;
