@@ -61,6 +61,9 @@ export function ImageLightbox({ src, alt, className, images, initialIndex }: Ima
   }, [open, initialIndex]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Stop propagation so parent message-bubble long-press doesn't fire
+    // (React portals bubble events through the React tree, not the DOM tree)
+    e.stopPropagation();
     if (e.touches.length === 2) {
       // Pinch start
       pinchStartDistRef.current = getTouchDistance(e.touches);
