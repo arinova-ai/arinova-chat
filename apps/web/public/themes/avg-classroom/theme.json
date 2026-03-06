@@ -1,0 +1,127 @@
+{
+  "id": "avg-classroom",
+  "name": "AVG Classroom",
+  "version": "1.0.0",
+  "author": { "name": "Alice", "id": "alice" },
+  "description": "Anime classroom with 6 agent slots in visual-novel style.",
+  "tags": ["anime", "classroom", "avg"],
+  "preview": "preview.png",
+  "license": "standard",
+
+  "canvas": {
+    "width": 1920,
+    "height": 1072,
+    "background": { "image": "bg.jpeg" }
+  },
+  "viewport": {
+    "minZoom": 0.5,
+    "maxZoom": 3,
+    "defaultZoom": 1,
+    "panBounds": true,
+    "mobile": { "defaultZoom": 1.8, "pinchToZoom": true }
+  },
+  "layers": [],
+  "zones": [],
+  "furniture": [],
+  "characters": {
+    "atlas": "",
+    "frameWidth": 0,
+    "frameHeight": 0,
+    "anchor": { "x": 0.5, "y": 1 },
+    "hitArea": { "type": "rect", "x": 0, "y": 0, "width": 0, "height": 0 },
+    "nameTag": { "offsetY": 0, "font": "12px sans-serif", "color": "#fff", "bgColor": "rgba(0,0,0,0.6)", "padding": { "x": 4, "y": 2 }, "borderRadius": 4, "maxWidth": 100 },
+    "statusBadge": { "offsetX": 0, "offsetY": 0, "radius": 6, "colors": { "working": "#22c55e", "idle": "#eab308", "blocked": "#ef4444", "collaborating": "#3b82f6" } },
+    "states": {},
+    "directions": []
+  },
+  "effects": [],
+
+  "renderer": "avg",
+
+  "avgCharacters": [
+    {
+      "id": "char4",
+      "name": "Slot 1",
+      "slotIndex": 0,
+      "hotspot": { "left": 2, "top": 25, "width": 14, "height": 65 },
+      "sprites": {
+        "idle": ["char4-step1.png", "char4-step1b.png"],
+        "sleeping": ["char4-step2.png", "char4-step2b.png"],
+        "blocked": ["char4-step3.png", "char4-step3b.png"],
+        "working": ["char4-step4.png", "char4-step4b.png"],
+        "collaborating": ["char4-step4.png", "char4-step4b.png"]
+      },
+      "defaultSprite": "sleeping"
+    },
+    {
+      "id": "char1",
+      "name": "Slot 2",
+      "slotIndex": 1,
+      "hotspot": { "left": 17, "top": 25, "width": 14, "height": 65 },
+      "sprites": {
+        "idle": ["char1-step1.png", "char1-step1b.png"],
+        "sleeping": ["char1-step2.png", "char1-step2b.png"],
+        "blocked": ["char1-step3.png", "char1-step3b.png"],
+        "working": ["char1-step4.png", "char1-step4b.png"],
+        "collaborating": ["char1-step4.png", "char1-step4b.png"]
+      },
+      "defaultSprite": "sleeping"
+    },
+    {
+      "id": "char3",
+      "name": "Slot 3",
+      "slotIndex": 2,
+      "hotspot": { "left": 32, "top": 20, "width": 14, "height": 65 },
+      "sprites": {
+        "idle": ["char3-step1.png", "char3-step1b.png"],
+        "sleeping": ["char3-step2.png", "char3-step2b.png"],
+        "blocked": ["char3-step3.png", "char3-step3b.png"],
+        "working": ["char3-step4.png", "char3-step4b.png"],
+        "collaborating": ["char3-step4.png", "char3-step4b.png"]
+      },
+      "defaultSprite": "sleeping"
+    },
+    {
+      "id": "char2",
+      "name": "Slot 4",
+      "slotIndex": 3,
+      "hotspot": { "left": 47, "top": 20, "width": 14, "height": 65 },
+      "sprites": {
+        "idle": ["char2-step1.png", "char2-step1b.png"],
+        "sleeping": ["char2-step2.png", "char2-step2b.png"],
+        "blocked": ["char2-step3.png", "char2-step3b.png"],
+        "working": ["char2-step4.png", "char2-step4b.png"],
+        "collaborating": ["char2-step4.png", "char2-step4b.png"]
+      },
+      "defaultSprite": "sleeping"
+    },
+    {
+      "id": "char5",
+      "name": "Slot 5",
+      "slotIndex": 4,
+      "hotspot": { "left": 62, "top": 25, "width": 14, "height": 65 },
+      "sprites": {
+        "idle": ["char5-step1.png", "char5-step1b.png"],
+        "sleeping": ["char5-step2.png", "char5-step2b.png"],
+        "blocked": ["char5-step3.png", "char5-step3b.png"],
+        "working": ["char5-step4.png", "char5-step4b.png"],
+        "collaborating": ["char5-step4.png", "char5-step4b.png"]
+      },
+      "defaultSprite": "sleeping"
+    },
+    {
+      "id": "char6",
+      "name": "Slot 6",
+      "slotIndex": 5,
+      "hotspot": { "left": 78, "top": 20, "width": 14, "height": 65 },
+      "sprites": {
+        "idle": ["char6-step1.png", "char6-step1b.png"],
+        "sleeping": ["char6-step2.png", "char6-step2b.png"],
+        "blocked": ["char6-step3.png", "char6-step3b.png"],
+        "working": ["char6-step4.png", "char6-step4b.png"],
+        "collaborating": ["char6-step4.png", "char6-step4b.png"]
+      },
+      "defaultSprite": "sleeping"
+    }
+  ]
+}
