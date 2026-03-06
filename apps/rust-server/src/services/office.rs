@@ -311,7 +311,7 @@ impl OfficeState {
     }
 
     fn handle_activity(&self, event: &InternalEvent) {
-        let agent = self.ensure_agent(&event.agent_id, event.timestamp);
+        let _agent = self.ensure_agent(&event.agent_id, event.timestamp);
         if let Some(mut entry) = self.inner.agents.get_mut(&event.agent_id) {
             let a = entry.value_mut();
             if a.status == AgentStatus::Blocked || a.status == AgentStatus::Idle {

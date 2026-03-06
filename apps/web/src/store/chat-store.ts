@@ -4,6 +4,7 @@ import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
+import { useNotificationStore } from "@/store/notification-store";
 import {
   getCachedMessages,
   setCachedMessages,
@@ -21,6 +22,7 @@ interface ConversationWithAgent extends Conversation {
   peerUserId?: string | null;
   lastMessage: Message | null;
   isVerified?: boolean;
+  officialCommunityId?: string | null;
 }
 
 interface GroupMember {
@@ -554,7 +556,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (get().highlightMessageId === result.messageId) {
         set({ highlightMessageId: null });
       }
-    }, 3000);
+    }, 1000);
   },
 
   jumpToMessage: async (conversationId, messageId) => {
@@ -586,7 +588,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (get().highlightMessageId === messageId) {
         set({ highlightMessageId: null });
       }
-    }, 8000);
+    }, 1000);
   },
 
   loadAgents: async () => {
@@ -1662,6 +1664,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
+      // In-app notification for messages from other conversations (mobile only)
+      const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+      if (
+        isMobile &&
+        conversationId !== activeConversationId &&
+        !get().mutedConversations[conversationId] &&
+        msg.senderUserId !== get().currentUserId &&
+        msg.role !== "system"
+      ) {
+        const senderName = msg.senderUserName || msg.senderUsername || "New message";
+        const preview = msg.content
+          ? msg.content.length > 80 ? msg.content.slice(0, 80) + "..." : msg.content
+          : "Sent an attachment";
+        useNotificationStore.getState().show({
+          conversationId,
+          senderName,
+          senderImage: (msg as Record<string, unknown>).senderUserImage as string | undefined,
+          preview,
+        });
+      }
+
       // When a system message arrives, refresh conversation members (for @mention)
       if (msg.role === "system") {
         const conv = get().conversations.find((c) => c.id === conversationId);
@@ -1982,13 +2005,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);
 
-      console.log("[stream_end]", {
-        conversationId,
-        messageId,
-        reason: event.reason ?? "unknown",
-        agentName: stillThinking?.agentName ?? "unknown",
-        timestamp: new Date().toISOString(),
-      });
       if (stillThinking) {
         if (finalContent) {
           const agentMsg: Message = {

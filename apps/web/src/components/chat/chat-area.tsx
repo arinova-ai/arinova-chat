@@ -156,6 +156,7 @@ export function ChatArea() {
         onNotebookClick={() => setNotebookOpen(true)}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
+        officialCommunityId={conversation.officialCommunityId}
       />
       <ErrorBoundary scope="PinnedMessagesBar">
         {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}

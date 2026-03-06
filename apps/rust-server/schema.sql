@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ===== Enum Types =====
 
-CREATE TYPE conversation_type AS ENUM ('direct', 'group');
+CREATE TYPE conversation_type AS ENUM ('direct', 'group', 'official', 'club', 'lounge');
 CREATE TYPE message_role AS ENUM ('user', 'agent', 'assistant', 'system');
 CREATE TYPE message_status AS ENUM ('pending', 'streaming', 'completed', 'cancelled', 'error');
 CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member', 'creator', 'moderator');
@@ -38,6 +38,7 @@ CREATE TABLE "user" (
     image TEXT,
     bio TEXT,
     username VARCHAR(32) UNIQUE,
+    quick_shortcuts JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -277,7 +278,7 @@ CREATE TABLE communities (
     creator_id TEXT NOT NULL REFERENCES "user"(id),
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    type TEXT NOT NULL DEFAULT 'lounge' CHECK (type IN ('lounge', 'club')),
+    type TEXT NOT NULL DEFAULT 'club' CHECK (type IN ('official', 'club', 'lounge')),
     -- Pricing (credits)
     join_fee INTEGER NOT NULL DEFAULT 0,
     monthly_fee INTEGER NOT NULL DEFAULT 0,
@@ -291,6 +292,18 @@ CREATE TABLE communities (
     category TEXT,
     tags TEXT[],
     tts_voice TEXT DEFAULT 'alloy',
+    -- Official fields
+    verified BOOLEAN DEFAULT FALSE,
+    verified_at TIMESTAMPTZ,
+    default_agent_listing_id UUID REFERENCES agent_listings(id),
+    cs_mode VARCHAR(20) DEFAULT 'ai_only' CHECK (cs_mode IN ('ai_only', 'human_only', 'hybrid')),
+    -- Lounge voice agent fields
+    voice_model_id TEXT,
+    voice_model_status TEXT DEFAULT 'none'
+      CHECK (voice_model_status IN ('none', 'processing', 'ready', 'failed')),
+    voice_samples_url TEXT,
+    free_minutes_per_day INTEGER NOT NULL DEFAULT 5,
+    subscription_price_cents INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -299,7 +312,7 @@ CREATE TABLE community_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES "user"(id),
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('creator', 'moderator', 'member')),
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('creator', 'moderator', 'member', 'cs_agent')),
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- Subscription
     subscription_status TEXT DEFAULT 'active' CHECK (subscription_status IN ('active', 'expired', 'cancelled')),
@@ -330,6 +343,63 @@ CREATE INDEX idx_community_messages_community ON community_messages(community_id
 CREATE INDEX idx_community_members_community ON community_members(community_id);
 CREATE INDEX idx_community_members_user ON community_members(user_id);
 CREATE INDEX idx_community_agents_community ON community_agents(community_id);
+
+-- Official 1-on-1 conversation tracking
+CREATE TABLE official_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES "user"(id),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    status VARCHAR(20) DEFAULT 'ai_active'
+      CHECK (status IN ('ai_active', 'human_active', 'waiting_human', 'resolved', 'closed')),
+    assigned_cs_id TEXT REFERENCES "user"(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (community_id, user_id)
+);
+CREATE INDEX idx_official_conv_community ON official_conversations(community_id);
+CREATE INDEX idx_official_conv_user ON official_conversations(user_id);
+CREATE INDEX idx_official_conv_cs ON official_conversations(assigned_cs_id) WHERE assigned_cs_id IS NOT NULL;
+
+-- Verification requests
+CREATE TABLE official_verification_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    requester_id TEXT NOT NULL REFERENCES "user"(id),
+    business_name VARCHAR(255),
+    business_registration TEXT,
+    documents_url TEXT,
+    status VARCHAR(20) DEFAULT 'pending'
+      CHECK (status IN ('pending', 'approved', 'rejected')),
+    reviewer_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    reviewed_at TIMESTAMPTZ
+);
+
+-- ===== Lounge Tables =====
+
+CREATE TABLE lounge_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES "user"(id),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
+  UNIQUE(community_id, user_id)
+);
+
+CREATE TABLE lounge_voice_usage (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES "user"(id),
+  usage_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  seconds_used INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(community_id, user_id, usage_date)
+);
+
+CREATE INDEX idx_lounge_subs_community ON lounge_subscriptions(community_id);
+CREATE INDEX idx_lounge_subs_user ON lounge_subscriptions(user_id);
+CREATE INDEX idx_lounge_usage_lookup ON lounge_voice_usage(community_id, user_id, usage_date);
 
 -- ===== Agent Marketplace Tables =====
 

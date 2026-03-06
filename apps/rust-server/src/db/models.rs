@@ -46,6 +46,9 @@ pub enum AgentListenMode {
 pub enum ConversationType {
     Direct,
     Group,
+    Official,
+    Club,
+    Lounge,
 }
 
 impl std::fmt::Display for ConversationType {
@@ -53,6 +56,9 @@ impl std::fmt::Display for ConversationType {
         match self {
             Self::Direct => write!(f, "direct"),
             Self::Group => write!(f, "group"),
+            Self::Official => write!(f, "official"),
+            Self::Club => write!(f, "club"),
+            Self::Lounge => write!(f, "lounge"),
         }
     }
 }

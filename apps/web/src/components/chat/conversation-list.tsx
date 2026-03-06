@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "agents" | "friends" | "groups";
-const TABS: Tab[] = ["all", "agents", "friends", "groups"];
+type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "clubs" | "lounges";
+const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "clubs", "lounges"];
 
-export function ConversationList() {
+export function ConversationList({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -29,11 +29,18 @@ export function ConversationList() {
   const sorted = useMemo(() => {
     let filtered = conversations;
     if (tab === "agents") {
-      filtered = conversations.filter((c) => c.type === "direct" && c.agentId);
+      filtered = conversations.filter((c) => c.type === "direct" && c.agentId && !c.officialCommunityId);
     } else if (tab === "friends") {
-      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId);
+      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId && !c.officialCommunityId);
     } else if (tab === "groups") {
       filtered = conversations.filter((c) => c.type === "group");
+    } else if (tab === "officials") {
+      // Fallback: include old official conversations that are still type='direct' but have officialCommunityId
+      filtered = conversations.filter((c) => c.type === "official" || !!c.officialCommunityId);
+    } else if (tab === "clubs") {
+      filtered = conversations.filter((c) => c.type === "club");
+    } else if (tab === "lounges") {
+      filtered = conversations.filter((c) => c.type === "lounge");
     }
 
     return [...filtered].sort((a, b) => {
@@ -48,39 +55,45 @@ export function ConversationList() {
 
   return (
     <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
-      {/* Tab bar */}
-      <div className="shrink-0 flex gap-1 px-3 pb-2">
-        {TABS.map((tb) => (
-          <button
-            key={tb}
-            type="button"
-            onClick={() => setTab(tb)}
-            className={cn(
-              "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
-              tab === tb
-                ? "bg-blue-600 text-white"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {t(`chat.tab.${tb}`)}
-          </button>
-        ))}
-      </div>
+      {/* Tab bar — hidden when collapsed */}
+      {!collapsed && (
+        <div className="shrink-0 flex gap-1 px-3 pb-2 overflow-x-auto scrollbar-none">
+          {TABS.map((tb) => (
+            <button
+              key={tb}
+              type="button"
+              onClick={() => setTab(tb)}
+              className={cn(
+                "shrink-0 rounded-lg px-3 py-1 text-xs font-medium transition-colors",
+                tab === tb
+                  ? "bg-blue-600 text-white"
+                  : "bg-secondary text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t(`chat.tab.${tb}`)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Conversation list */}
-      <div className="flex-1 min-w-0 overflow-y-auto px-2 py-1">
+      <div className={cn("flex-1 min-w-0 overflow-y-auto py-1", collapsed ? "px-1" : "px-2")}>
         {sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
             <MessageCirclePlus className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              {t("chat.noConversations")}
-            </p>
-            <Button
-              size="sm"
-              onClick={() => window.dispatchEvent(new Event("arinova:new-chat"))}
-            >
-              {t("chat.newChat")}
-            </Button>
+            {!collapsed && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {t("chat.noConversations")}
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => window.dispatchEvent(new Event("arinova:new-chat"))}
+                >
+                  {t("chat.newChat")}
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -107,6 +120,7 @@ export function ConversationList() {
                 isMuted={!!mutedConversations[conv.id]}
                 onMuteToggle={() => toggleMuteConversation(conv.id)}
                 onDelete={() => deleteConversation(conv.id)}
+                collapsed={collapsed}
               />
             ))}
           </div>

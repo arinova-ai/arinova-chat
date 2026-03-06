@@ -55,6 +55,7 @@ pub fn router() -> Router<AppState> {
 // ===== Row structs =====
 
 #[derive(sqlx::FromRow)]
+#[allow(dead_code)]
 struct PackRow {
     id: Uuid,
     creator_id: String,
@@ -75,6 +76,7 @@ struct PackRow {
 }
 
 #[derive(sqlx::FromRow)]
+#[allow(dead_code)]
 struct PackWithCount {
     id: Uuid,
     creator_id: String,

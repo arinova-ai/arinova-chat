@@ -64,6 +64,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const unreadDividerMessageId = useChatStore((s) => s.unreadDividerMessageId);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const heightCache = useRef<Map<string, number>>(new Map());
   const [firstItemIndex, setFirstItemIndex] = useState(START_INDEX);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
@@ -130,6 +131,11 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   useEffect(() => {
     exitSelectionMode();
   }, [activeConversationId, exitSelectionMode]);
+
+  // Clear height cache when switching conversations
+  useEffect(() => {
+    heightCache.current.clear();
+  }, [activeConversationId]);
 
   const loadingRef = useRef(false);
   const messagesRef = useRef(messages);
@@ -353,6 +359,22 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
     [loadingUp, loadingDown, activeConversationId],
   );
 
+  // Height caching: record measured height per message id, return cached value for zero-height elements
+  const handleItemSize = useCallback((el: HTMLElement) => {
+    const vIdx = parseInt(el.dataset.itemIndex ?? "0", 10);
+    const arrIdx = vIdx - firstItemIndex;
+    const msgId = messages[arrIdx]?.id;
+    const h = el.getBoundingClientRect().height;
+    if (msgId) {
+      if (h > 0) {
+        heightCache.current.set(msgId, h);
+        return h;
+      }
+      return heightCache.current.get(msgId) ?? 80;
+    }
+    return h || 80;
+  }, [messages, firstItemIndex]);
+
   // Item renderer
   // Use conversation search query for highlighting when available, fallback to global search
   const activeHighlightQuery = convSearchQuery || searchQuery;
@@ -407,7 +429,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
                 highlightQuery={message.id === highlightMessageId ? activeHighlightQuery : undefined}
                 isGroupConversation={isGroupConversation}
                 selectionMode={selectionMode}
-                onEnterSelectionMode={() => enterSelectionMode(message.id)}
+                onEnterSelectionMode={enterSelectionMode}
               />
             </div>
           </div>
@@ -459,7 +481,10 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         endReached={hasMoreDown ? loadNewer : undefined}
         atBottomStateChange={handleAtBottomChange}
         atBottomThreshold={50}
-        increaseViewportBy={{ top: 100, bottom: 100 }}
+        defaultItemHeight={80}
+        itemSize={handleItemSize}
+        increaseViewportBy={{ top: 200, bottom: 200 }}
+        computeItemKey={(_index, msg) => msg.id}
         components={virtuosoComponents}
         className="h-full"
         itemContent={itemContent}

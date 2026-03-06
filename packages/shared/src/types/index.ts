@@ -31,7 +31,7 @@ export interface Agent {
 }
 
 // ===== Conversation =====
-export type ConversationType = "direct" | "group";
+export type ConversationType = "direct" | "group" | "official" | "club" | "lounge";
 
 export interface Conversation {
   id: string;

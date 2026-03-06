@@ -118,7 +118,7 @@ export function PinnedMessagesBar({ conversationId }: PinnedMessagesBarProps) {
       if (useChatStore.getState().highlightMessageId === messageId) {
         useChatStore.setState({ highlightMessageId: null });
       }
-    }, 3000);
+    }, 1000);
   }, [conversationId]);
 
   if (pins.length === 0) return null;

@@ -344,7 +344,7 @@ async fn enrich_streaming(
                 return None;
             }
             let conv_id_str = m.get("conversationId")?.as_str()?;
-            let conv_id = Uuid::parse_str(conv_id_str).ok()?;
+            let _conv_id = Uuid::parse_str(conv_id_str).ok()?;
             if !ws_state.has_active_stream(conv_id_str) {
                 return None;
             }
@@ -803,7 +803,7 @@ async fn get_messages(
     }
 
     // --- Default: before mode (load older messages from bottom) ---
-    let (query_str, bind_cursor) = if let Some(ref before_id) = query.before {
+    let (_query_str, bind_cursor) = if let Some(ref before_id) = query.before {
         let before_uuid = match Uuid::parse_str(before_id) {
             Ok(u) => u,
             Err(_) => {
@@ -1234,14 +1234,6 @@ async fn get_thread_messages(
 }
 
 // ── 5. DELETE /api/conversations/{conversationId}/messages/:messageId ───
-
-#[derive(Deserialize)]
-struct DeleteMessagePath {
-    #[serde(rename = "conversationId")]
-    conversation_id: Uuid,
-    #[serde(rename = "messageId")]
-    message_id: Uuid,
-}
 
 async fn delete_message(
     State(state): State<AppState>,

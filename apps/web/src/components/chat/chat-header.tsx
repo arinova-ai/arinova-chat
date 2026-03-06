@@ -25,6 +25,8 @@ import {
   MessageSquare,
   BookOpen,
   Search,
+  Headset,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
@@ -32,6 +34,7 @@ import { cn } from "@/lib/utils";
 import type { ConversationType } from "@arinova/shared/types";
 import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
+import { api } from "@/lib/api";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -52,6 +55,7 @@ interface ChatHeaderProps {
   onNotebookClick?: () => void;
   onPhotosClick?: () => void;
   onFilesClick?: () => void;
+  officialCommunityId?: string | null;
 }
 
 export function ChatHeader({
@@ -72,6 +76,7 @@ export function ChatHeader({
   onNotebookClick,
   onPhotosClick,
   onFilesClick,
+  officialCommunityId,
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -86,6 +91,26 @@ export function ChatHeader({
   const convSearchIndex = useChatStore((s) => s.convSearchIndex);
   const convSearchLoading = useChatStore((s) => s.convSearchLoading);
   const setConvSearchIndex = useChatStore((s) => s.setConvSearchIndex);
+
+  // Official CS status
+  const [csStatus, setCsStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!officialCommunityId || !conversationId) return;
+    api<{ status: string }>(`/api/communities/${officialCommunityId}/cs-status?conversationId=${conversationId}`, { silent: true })
+      .then((d) => setCsStatus(d.status))
+      .catch(() => {});
+  }, [officialCommunityId, conversationId]);
+
+  const handleTransferHuman = useCallback(async () => {
+    if (!officialCommunityId || !conversationId) return;
+    try {
+      await api(`/api/communities/${officialCommunityId}/transfer-human`, {
+        method: "POST",
+        body: JSON.stringify({ conversationId }),
+      });
+      setCsStatus("waiting_human");
+    } catch {}
+  }, [officialCommunityId, conversationId]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [localSearchQuery, setLocalSearchQuery] = useState("");
@@ -161,7 +186,19 @@ export function ChatHeader({
         </div>
         <div className="min-w-0 text-left">
           <h2 className="text-sm font-semibold truncate">{displayName}</h2>
-          {type === "group" ? (
+          {officialCommunityId && csStatus ? (
+            <p className="flex items-center gap-1 text-xs truncate">
+              <Headset className="h-3 w-3" />
+              <span className={cn(
+                csStatus === "ai_active" && "text-blue-400",
+                csStatus === "human_active" && "text-green-400",
+                csStatus === "waiting_human" && "text-yellow-400",
+                csStatus === "resolved" && "text-muted-foreground",
+              )}>
+                {t(`community.cs.status.${csStatus}`)}
+              </span>
+            </p>
+          ) : type === "group" ? (
             <p className="text-xs text-muted-foreground truncate">
               {memberCount ? `${memberCount} ${t("chat.header.members")}` : t("chat.header.group")}
             </p>
@@ -264,6 +301,18 @@ export function ChatHeader({
           </>
         ) : (
           <>
+            {officialCommunityId && csStatus === "ai_active" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 text-xs text-yellow-500 hover:text-yellow-400"
+                onClick={handleTransferHuman}
+                title={t("community.cs.transferHuman")}
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t("community.cs.transferHuman")}</span>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

@@ -232,7 +232,7 @@ async fn agent_get_messages(
     }
 
     // --- Default: before mode ---
-    let result = if let Some(ref before_id) = query.before {
+    let _result = if let Some(ref before_id) = query.before {
         let before_uuid = match Uuid::parse_str(before_id) {
             Ok(u) => u,
             Err(_) => {

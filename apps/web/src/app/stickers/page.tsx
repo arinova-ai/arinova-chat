@@ -374,6 +374,8 @@ function PackDetailDialog({
   useEffect(() => {
     if (!pack || !open) return;
     setExpandedPromptIdx(null);
+    setDetailStickers([]);
+    setDetailStickerData([]);
     // If pack has inline sticker files from API, build URLs
     if (pack.stickerFiles && pack.stickerFiles.length > 0) {
       setDetailStickers(pack.stickerFiles.map((s) => `/stickers/${pack.dir}/${s.filename}`));
@@ -397,12 +399,12 @@ function PackDetailDialog({
 
   if (!pack) return null;
 
-  const previewStickers = detailStickers.length > 0 ? detailStickers : getStickerFiles(pack.id, pack.stickers);
+  const previewStickers = detailStickers;
 
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v && !zoomedSticker) onClose(); }}>
-      <DialogContent showCloseButton={false} className="max-w-lg border-border bg-card p-0 gap-0 max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-2rem)] overflow-y-auto">
+      <DialogContent key={pack.id} showCloseButton={false} className="max-w-lg border-border bg-card p-0 gap-0 max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-2rem)] overflow-y-auto">
         {/* Sticky close button */}
         <button
           type="button"
@@ -523,6 +525,11 @@ function PackDetailDialog({
         )}
 
         {/* Sticker grid */}
+        {detailLoading || previewStickers.length === 0 ? (
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
         <div className="grid grid-cols-4 gap-2 p-4 sm:grid-cols-5 max-h-[50vh] overflow-y-auto">
           {previewStickers.map((url, i) => {
             const stickerData = detailStickerData[i];
@@ -560,6 +567,7 @@ function PackDetailDialog({
             );
           })}
         </div>
+        )}
 
       </DialogContent>
     </Dialog>

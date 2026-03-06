@@ -3,6 +3,7 @@
 import { I18nProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import { PipOverlay } from "@/components/pip-overlay";
+import { InAppNotification } from "@/components/chat/in-app-notification";
 import type { ReactNode } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -11,6 +12,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <I18nProvider>
         {children}
         <PipOverlay />
+        <InAppNotification />
       </I18nProvider>
     </ThemeProvider>
   );

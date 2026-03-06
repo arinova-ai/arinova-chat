@@ -5,11 +5,13 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, UserPlus,
   Palette, Users, Store, Wallet, Settings, Smile,
-  LayoutDashboard, type LucideIcon,
+  LayoutDashboard, Plus, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
+import { useShortcutStore } from "@/store/shortcut-store";
+import { AddShortcutPopover } from "./add-shortcut-sheet";
 
 /** Lucide icon per nav id — active/inactive styling via parent text color */
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -24,6 +26,17 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   market: Store,
   wallet: Wallet,
   settings: Settings,
+};
+
+const SHORTCUT_ICONS: Record<string, LucideIcon> = {
+  globe: Globe,
+  smile: Smile,
+  "pen-tool": LayoutDashboard,
+  store: Store,
+  users: Users,
+  wallet: Wallet,
+  palette: Palette,
+  "building-2": Building2,
 };
 
 interface NavEntry {
@@ -104,6 +117,16 @@ export function IconRail() {
     href: "/settings",
   };
 
+  const shortcuts = useShortcutStore((s) => s.shortcuts);
+  const removeShortcut = useShortcutStore((s) => s.removeShortcut);
+  const fetchShortcuts = useShortcutStore((s) => s.fetchShortcuts);
+  const loaded = useShortcutStore((s) => s.loaded);
+  const [addPopoverOpen, setAddPopoverOpen] = useState(false);
+
+  useEffect(() => {
+    if (!loaded) fetchShortcuts();
+  }, [loaded, fetchShortcuts]);
+
   const renderButton = (item: NavEntry, extra?: React.ReactNode) => {
     const isActive = activeId === item.id;
     const Icon = NAV_ICONS[item.id];
@@ -138,7 +161,7 @@ export function IconRail() {
       </div>
 
       {/* Main nav */}
-      <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto">
+      <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto scrollbar-none">
         {/* Primary: Chat, Office, Spaces */}
         {primaryItems.map((item) => renderButton(item))}
 
@@ -167,6 +190,49 @@ export function IconRail() {
 
         {/* Create: Creator Console, Wallet */}
         {createItems.map((item) => renderButton(item))}
+
+        {/* ── Custom shortcuts ── */}
+        {shortcuts.length > 0 && (
+          <>
+            <div className="my-1 h-px w-8 bg-border" />
+            {shortcuts.map((sc, i) => {
+              const Icon = SHORTCUT_ICONS[sc.icon] ?? Globe;
+              return (
+                <button
+                  key={`sc-${i}`}
+                  type="button"
+                  onClick={() => {
+                    if (sc.url) router.push(sc.url);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    removeShortcut(i);
+                  }}
+                  className={cn(
+                    "flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors",
+                    "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                  )}
+                  title={sc.label}
+                >
+                  <Icon className="h-6 w-6" />
+                  <span className="truncate max-w-[52px]">{sc.label}</span>
+                </button>
+              );
+            })}
+          </>
+        )}
+
+        {/* Add shortcut button */}
+        <AddShortcutPopover open={addPopoverOpen} onOpenChange={setAddPopoverOpen}>
+          <button
+            type="button"
+            onClick={() => setAddPopoverOpen(true)}
+            className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] text-muted-foreground/50 border-2 border-dashed border-muted-foreground/20 hover:bg-accent/30 transition-colors mt-1"
+            title={t("nav.addShortcut")}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </AddShortcutPopover>
       </nav>
 
       {/* Settings pinned to bottom */}

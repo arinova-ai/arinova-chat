@@ -29,6 +29,7 @@ import {
   LayoutDashboard,
   Gamepad2,
   Users2,
+  Upload,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -439,11 +440,155 @@ interface ThemeListing {
   version: string;
 }
 
+function CreateThemeDialog({
+  onClose,
+  onCreated,
+  t,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+  t: (k: string) => string;
+}) {
+  const [themeId, setThemeId] = useState("");
+  const [themeName, setThemeName] = useState("");
+  const [version, setVersion] = useState("1.0.0");
+  const [bundleFile, setBundleFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const idValid = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(themeId);
+  const versionValid = /^\d+\.\d+\.\d+$/.test(version);
+  const canSave =
+    themeId.trim().length > 0 &&
+    idValid &&
+    themeName.trim().length > 0 &&
+    versionValid &&
+    bundleFile !== null;
+
+  const handleCreate = async () => {
+    if (!canSave || !bundleFile) return;
+    setSaving(true);
+    setError("");
+    try {
+      const manifest = JSON.stringify({
+        id: themeId.trim(),
+        name: themeName.trim(),
+        version: version.trim(),
+      });
+
+      const formData = new FormData();
+      formData.append("manifest", new Blob([manifest], { type: "application/json" }), "theme.json");
+      formData.append("bundle", bundleFile);
+
+      await api("/api/themes/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      onCreated();
+    } catch {
+      setError(t("creator.themeDialog.upload") + " failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">{t("creator.themeDialog.title")}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t("creator.themeDialog.themeId")}</label>
+            <input
+              type="text"
+              value={themeId}
+              onChange={(e) => setThemeId(e.target.value.toLowerCase())}
+              placeholder={t("creator.themeDialog.themeIdPlaceholder")}
+              className={`w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring ${
+                themeId && !idValid ? "border-red-500" : "border-border"
+              }`}
+            />
+            {themeId && !idValid && (
+              <p className="text-xs text-red-500">{t("creator.themeDialog.themeIdError")}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t("creator.themeDialog.themeName")}</label>
+            <input
+              type="text"
+              value={themeName}
+              onChange={(e) => setThemeName(e.target.value)}
+              placeholder={t("creator.themeDialog.themeNamePlaceholder")}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t("creator.themeDialog.version")}</label>
+            <input
+              type="text"
+              value={version}
+              onChange={(e) => setVersion(e.target.value)}
+              placeholder="1.0.0"
+              className={`w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring ${
+                version && !versionValid ? "border-red-500" : "border-border"
+              }`}
+            />
+            {version && !versionValid && (
+              <p className="text-xs text-red-500">{t("creator.themeDialog.versionError")}</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t("creator.themeDialog.bundleZip")}</label>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border bg-background px-3 py-3 text-sm text-muted-foreground hover:bg-accent/30 transition-colors">
+              <Upload className="h-4 w-4 shrink-0" />
+              <span className="truncate">{bundleFile ? bundleFile.name : t("creator.themeDialog.chooseFile")}</span>
+              <input
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={(e) => setBundleFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-500">{error}</p>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>
+            {t("creator.dialog.cancel")}
+          </Button>
+          <Button
+            className="brand-gradient-btn flex-1"
+            disabled={saving || !canSave}
+            onClick={handleCreate}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t("creator.themeDialog.upload")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ThemesTab({ t }: { t: (k: string) => string }) {
   const [themes, setThemes] = useState<ThemeListing[]>([]);
   const [tLoading, setTLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
 
-  useEffect(() => {
+  const fetchThemes = useCallback(() => {
     setTLoading(true);
     api<{ themes: ThemeListing[] }>("/api/themes")
       .then((data) => setThemes(data.themes))
@@ -451,13 +596,17 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
       .finally(() => setTLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetchThemes();
+  }, [fetchThemes]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           {t("creator.yourThemes")} ({themes.length})
         </h2>
-        <Button size="sm" variant="secondary" className="gap-1" disabled>
+        <Button size="sm" variant="secondary" className="gap-1" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           {t("creator.newTheme")}
         </Button>
@@ -489,6 +638,17 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
           ))}
         </div>
       )}
+
+      {createOpen && (
+        <CreateThemeDialog
+          t={t}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => {
+            setCreateOpen(false);
+            fetchThemes();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -505,18 +665,122 @@ interface CreatorCommunity {
   status: string;
 }
 
+function CreateCommunityDialog({
+  communityType,
+  onClose,
+  onCreated,
+  t,
+}: {
+  communityType: "club" | "lounge";
+  onClose: () => void;
+  onCreated: () => void;
+  t: (k: string) => string;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const canSave = name.trim().length > 0;
+  const isLounge = communityType === "lounge";
+  const title = isLounge ? t("creator.communityDialog.createLounge") : t("creator.communityDialog.createClub");
+
+  const handleCreate = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      if (isLounge) {
+        await api("/api/lounge", {
+          method: "POST",
+          body: JSON.stringify({
+            name: name.trim(),
+            description: description.trim() || undefined,
+          }),
+        });
+      } else {
+        await api("/api/communities", {
+          method: "POST",
+          body: JSON.stringify({
+            name: name.trim(),
+            description: description.trim() || undefined,
+            type: "club",
+          }),
+        });
+      }
+      onCreated();
+    } catch {
+      // auto-handled by api()
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t("creator.communityDialog.name")}</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={isLounge ? t("creator.communityDialog.loungePlaceholder") : t("creator.communityDialog.clubPlaceholder")}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">{t("creator.communityDialog.description")}</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t("creator.communityDialog.descPlaceholder")}
+              rows={3}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>
+            {t("creator.dialog.cancel")}
+          </Button>
+          <Button
+            className="brand-gradient-btn flex-1"
+            disabled={saving || !canSave}
+            onClick={handleCreate}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t("creator.communityDialog.create")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CommunityTab({ t }: { t: (k: string) => string }) {
-  const router = useRouter();
   const [communities, setCommunities] = useState<CreatorCommunity[]>([]);
   const [cLoading, setCLoading] = useState(true);
+  const [createType, setCreateType] = useState<"club" | "lounge" | null>(null);
 
-  useEffect(() => {
+  const fetchCommunities = useCallback(() => {
     setCLoading(true);
     api<{ communities: CreatorCommunity[] }>("/api/creator/community")
       .then((data) => setCommunities(data.communities))
       .catch(() => {})
       .finally(() => setCLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchCommunities();
+  }, [fetchCommunities]);
 
   return (
     <div className="space-y-4">
@@ -525,11 +789,11 @@ function CommunityTab({ t }: { t: (k: string) => string }) {
           {t("creator.yourCommunities")} ({communities.length})
         </h2>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/community/new-lounge")}>
+          <Button size="sm" variant="secondary" className="gap-1" onClick={() => setCreateType("lounge")}>
             <Users2 className="h-3.5 w-3.5" />
             {t("creator.createLounge")}
           </Button>
-          <Button size="sm" variant="secondary" className="gap-1" onClick={() => router.push("/creator/community/new-club")}>
+          <Button size="sm" variant="secondary" className="gap-1" onClick={() => setCreateType("club")}>
             <Users className="h-3.5 w-3.5" />
             {t("creator.createClub")}
           </Button>
@@ -572,6 +836,18 @@ function CommunityTab({ t }: { t: (k: string) => string }) {
             </div>
           ))}
         </div>
+      )}
+
+      {createType && (
+        <CreateCommunityDialog
+          communityType={createType}
+          t={t}
+          onClose={() => setCreateType(null)}
+          onCreated={() => {
+            setCreateType(null);
+            fetchCommunities();
+          }}
+        />
       )}
     </div>
   );

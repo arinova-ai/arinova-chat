@@ -1,7 +1,7 @@
 use axum::{
-    extract::{FromRequestParts, State},
+    extract::FromRequestParts,
     http::{request::Parts, StatusCode},
-    response::{IntoResponse, Json},
+    response::Json,
 };
 use serde::Serialize;
 use uuid::Uuid;

@@ -21,7 +21,13 @@ import {
   AlertCircle,
   AtSign,
   X,
+  BadgeCheck,
+  MessageSquare,
+  ShieldCheck,
+  LayoutDashboard,
+  Mic,
 } from "lucide-react";
+import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/utils";
 import { AudioPlayer } from "@/components/chat/audio-player";
 
@@ -34,7 +40,7 @@ interface Community {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "lounge" | "club";
+  type: "official" | "club" | "lounge";
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -43,6 +49,8 @@ interface Community {
   avatarUrl: string | null;
   coverImageUrl: string | null;
   category: string | null;
+  verified: boolean;
+  csMode: string | null;
   createdAt: string;
 }
 
@@ -112,6 +120,11 @@ function CommunityDetailContent() {
 
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Verification
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyForm, setVerifyForm] = useState({ businessName: "", businessRegistration: "", documentsUrl: "" });
+  const [verifySubmitting, setVerifySubmitting] = useState(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -434,6 +447,19 @@ function CommunityDetailContent() {
     }
   }, [selectedAgent, sendAgentMessage, sendTextMessage]);
 
+  const handleSubmitVerification = useCallback(async () => {
+    setVerifySubmitting(true);
+    try {
+      await api(`/api/communities/${id}/verify`, {
+        method: "POST",
+        body: JSON.stringify(verifyForm),
+      });
+      setVerifyOpen(false);
+    } catch { /* handled */ } finally {
+      setVerifySubmitting(false);
+    }
+  }, [id, verifyForm]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -502,15 +528,20 @@ function CommunityDetailContent() {
                 <h2 className="text-sm font-semibold truncate">
                   {community.name}
                 </h2>
+                {community.verified && (
+                  <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" />
+                )}
                 <span
                   className={cn(
                     "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                    community.type === "lounge"
-                      ? "bg-emerald-500/15 text-emerald-400"
+                    community.type === "official"
+                      ? "bg-blue-500/15 text-blue-400"
+                      : community.type === "lounge"
+                      ? "bg-amber-500/15 text-amber-400"
                       : "bg-purple-500/15 text-purple-400"
                   )}
                 >
-                  {community.type === "lounge" ? "Lounge" : "Club"}
+                  {community.type === "official" ? "Official" : community.type === "lounge" ? "Lounge" : "Club"}
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground flex items-center gap-2">
@@ -526,6 +557,26 @@ function CommunityDetailContent() {
                 )}
               </p>
             </div>
+            {currentUserId === community.creatorId && community.type === "official" && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => router.push(`/official/${community.id}/dashboard`)}
+                title="Dashboard"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+              </Button>
+            )}
+            {currentUserId === community.creatorId && !community.verified && community.type === "official" && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setVerifyOpen(true)}
+                title="Apply for verification"
+              >
+                <ShieldCheck className="h-4 w-4 text-blue-400" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
@@ -539,6 +590,47 @@ function CommunityDetailContent() {
               )}
             </Button>
           </div>
+
+          {/* Verification form */}
+          {verifyOpen && (
+            <div className="shrink-0 border-b border-border bg-card/50 px-4 py-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Apply for Verification</h3>
+                <button onClick={() => setVerifyOpen(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder="Business name"
+                value={verifyForm.businessName}
+                onChange={(e) => setVerifyForm((f) => ({ ...f, businessName: e.target.value }))}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                type="text"
+                placeholder="Business registration number"
+                value={verifyForm.businessRegistration}
+                onChange={(e) => setVerifyForm((f) => ({ ...f, businessRegistration: e.target.value }))}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                type="text"
+                placeholder="Documents URL (optional)"
+                value={verifyForm.documentsUrl}
+                onChange={(e) => setVerifyForm((f) => ({ ...f, documentsUrl: e.target.value }))}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+              />
+              <Button
+                size="sm"
+                className="brand-gradient-btn"
+                disabled={!verifyForm.businessName.trim() || verifySubmitting}
+                onClick={handleSubmitVerification}
+              >
+                {verifySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit"}
+              </Button>
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -667,32 +759,71 @@ function CommunityDetailContent() {
           ) : !isMember ? (
             <div className="shrink-0 border-t border-border p-4 pb-24 md:pb-4">
               <div className="flex flex-col items-center gap-2 text-center">
-                <p className="text-sm font-medium">
-                  Join to participate in this community
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {community.joinFee > 0 && (
-                    <span>Join fee: {community.joinFee} coins</span>
-                  )}
-                  {community.joinFee > 0 && community.monthlyFee > 0 && " · "}
-                  {community.monthlyFee > 0 && (
-                    <span>{community.monthlyFee} coins/month</span>
-                  )}
-                  {community.joinFee === 0 && community.monthlyFee === 0 && (
-                    <span>Free to join</span>
-                  )}
-                </p>
-                <Button
-                  className="brand-gradient-btn"
-                  onClick={handleJoin}
-                  disabled={joining}
-                >
-                  {joining ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Join Community"
-                  )}
-                </Button>
+                {community.type === "official" ? (
+                  <>
+                    <p className="text-sm font-medium">Start a conversation with {community.name}</p>
+                    <Button
+                      className="brand-gradient-btn gap-2"
+                      onClick={async () => {
+                        try {
+                          const res = await api<{ conversationId: string }>(`/api/communities/${community.id}/start-chat`, { method: "POST" });
+                          useChatStore.getState().setActiveConversation(res.conversationId);
+                          router.push(`/?c=${res.conversationId}`);
+                        } catch { /* handled by api */ }
+                      }}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Start Chat
+                    </Button>
+                  </>
+                ) : community.type === "lounge" ? (
+                  <>
+                    <p className="text-sm font-medium">Chat with {community.name}&apos;s Voice Agent</p>
+                    <p className="text-xs text-muted-foreground">Free tier available</p>
+                    <Button
+                      className="brand-gradient-btn gap-2"
+                      onClick={async () => {
+                        try {
+                          const res = await api<{ conversationId: string }>(`/api/lounge/${community.id}/start-chat`, { method: "POST" });
+                          useChatStore.getState().setActiveConversation(res.conversationId);
+                          router.push(`/?c=${res.conversationId}`);
+                        } catch { /* handled by api */ }
+                      }}
+                    >
+                      <Mic className="h-4 w-4" />
+                      Start Voice Chat
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium">
+                      Join to participate in this community
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {community.joinFee > 0 && (
+                        <span>Join fee: {community.joinFee} coins</span>
+                      )}
+                      {community.joinFee > 0 && community.monthlyFee > 0 && " · "}
+                      {community.monthlyFee > 0 && (
+                        <span>{community.monthlyFee} coins/month</span>
+                      )}
+                      {community.joinFee === 0 && community.monthlyFee === 0 && (
+                        <span>Free to join</span>
+                      )}
+                    </p>
+                    <Button
+                      className="brand-gradient-btn"
+                      onClick={handleJoin}
+                      disabled={joining}
+                    >
+                      {joining ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Join Community"
+                      )}
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           ) : (

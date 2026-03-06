@@ -5,8 +5,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde::Deserialize;
+use serde_json::json;
 
 use crate::auth::{
     oauth,
@@ -46,6 +46,7 @@ struct SignInBody {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct SocialQuery {
     provider: String,
     #[serde(rename = "callbackURL")]

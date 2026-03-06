@@ -9,7 +9,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
-import { Loader2, Search, Plus, Users, Coins } from "lucide-react";
+import { Loader2, Search, Plus, Users, Coins, BadgeCheck, Headset, Mic } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ interface CommunityItem {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "lounge" | "club";
+  type: "official" | "club" | "lounge";
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -26,6 +26,8 @@ interface CommunityItem {
   avatarUrl: string | null;
   category: string | null;
   tags: string[] | null;
+  verified: boolean;
+  csMode: string | null;
   createdAt: string;
   creatorName?: string;
 }
@@ -35,21 +37,17 @@ interface BrowseResponse {
   total: number;
 }
 
-const TYPE_FILTERS = ["all", "lounge", "club"] as const;
-type TypeFilter = (typeof TYPE_FILTERS)[number];
-
-const TABS = ["browse", "my", "joined"] as const;
+const TABS = ["official", "club", "lounge"] as const;
 type Tab = (typeof TABS)[number];
 
 function CommunityBrowseContent() {
   const router = useRouter();
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>("browse");
+  const [tab, setTab] = useState<Tab>("official");
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [offset, setOffset] = useState(0);
   const limit = 20;
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -58,28 +56,14 @@ function CommunityBrowseContent() {
     async (currentOffset: number) => {
       setLoading(true);
       try {
-        let data: BrowseResponse;
-
-        if (tab === "my") {
-          const res = await api<{ communities: CommunityItem[] }>(
-            "/api/communities/my"
-          );
-          data = { communities: res.communities, total: res.communities.length };
-        } else if (tab === "joined") {
-          const res = await api<{ communities: CommunityItem[] }>(
-            "/api/communities/joined"
-          );
-          data = { communities: res.communities, total: res.communities.length };
-        } else {
-          const params = new URLSearchParams();
-          if (typeFilter !== "all") params.set("type", typeFilter);
-          if (search.trim()) params.set("search", search.trim());
-          params.set("page", String(Math.floor(currentOffset / limit) + 1));
-          params.set("limit", String(limit));
-          data = await api<BrowseResponse>(
-            `/api/communities?${params.toString()}`
-          );
-        }
+        const params = new URLSearchParams();
+        params.set("type", tab);
+        if (search.trim()) params.set("search", search.trim());
+        params.set("page", String(Math.floor(currentOffset / limit) + 1));
+        params.set("limit", String(limit));
+        const data = await api<BrowseResponse>(
+          `/api/communities?${params.toString()}`
+        );
 
         if (currentOffset === 0) {
           setCommunities(data.communities);
@@ -93,10 +77,9 @@ function CommunityBrowseContent() {
         setLoading(false);
       }
     },
-    [tab, typeFilter, search, limit]
+    [tab, search, limit]
   );
 
-  // Debounced fetch on filter changes
   useEffect(() => {
     setOffset(0);
     clearTimeout(debounceRef.current);
@@ -104,9 +87,8 @@ function CommunityBrowseContent() {
       fetchCommunities(0);
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [tab, typeFilter, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Non-debounced fetch for load more
   useEffect(() => {
     if (offset > 0) {
       fetchCommunities(offset);
@@ -134,7 +116,7 @@ function CommunityBrowseContent() {
             </Button>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs: Official | Club */}
           <div className="mt-3 flex gap-1">
             {TABS.map((tb) => (
               <button
@@ -148,43 +130,24 @@ function CommunityBrowseContent() {
                     : "bg-secondary text-muted-foreground hover:text-foreground"
                 )}
               >
-                {tb === "my" ? t("community.tabMyCommunities") : tb === "joined" ? t("community.tabJoined") : t("community.tabBrowse")}
+                {t(`community.type.${tb}`)}
               </button>
             ))}
           </div>
 
-          {/* Search + type filter (browse tab only) */}
-          {tab === "browse" && (
-            <div className="mt-3 flex flex-col gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t("community.searchPlaceholder")}
-                  className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {TYPE_FILTERS.map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setTypeFilter(f)}
-                    className={cn(
-                      "rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors",
-                      typeFilter === f
-                        ? "bg-brand text-white"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
+          {/* Search */}
+          <div className="mt-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("community.searchPlaceholder")}
+                className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
             </div>
-          )}
+          </div>
         </div>
 
         {/* Card grid */}
@@ -197,13 +160,7 @@ function CommunityBrowseContent() {
             <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
               <Users className="h-12 w-12 mb-3 opacity-40" />
               <p className="text-sm font-medium">{t("community.notFound")}</p>
-              <p className="text-xs mt-1">
-                {tab === "browse"
-                  ? t("community.notFoundHint")
-                  : tab === "my"
-                  ? t("community.noCreated")
-                  : t("community.noJoined")}
-              </p>
+              <p className="text-xs mt-1">{t("community.notFoundHint")}</p>
             </div>
           ) : (
             <>
@@ -217,8 +174,7 @@ function CommunityBrowseContent() {
                 ))}
               </div>
 
-              {/* Load more */}
-              {tab === "browse" && communities.length < total && (
+              {communities.length < total && (
                 <div className="mt-6 flex justify-center">
                   <Button
                     variant="secondary"
@@ -252,6 +208,16 @@ function CommunityCard({
   onClick: () => void;
 }) {
   const { t } = useTranslation();
+
+  const csModeLabel =
+    c.csMode === "hybrid"
+      ? t("community.csMode.hybrid")
+      : c.csMode === "human_only"
+      ? t("community.csMode.humanOnly")
+      : c.csMode === "ai_only"
+      ? t("community.csMode.aiOnly")
+      : null;
+
   return (
     <button
       type="button"
@@ -271,17 +237,22 @@ function CommunityCard({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <h3 className="text-sm font-semibold truncate">{c.name}</h3>
+            {c.verified && (
+              <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" />
+            )}
             <span
               className={cn(
                 "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                c.type === "lounge"
-                  ? "bg-emerald-500/15 text-emerald-400"
+                c.type === "official"
+                  ? "bg-blue-500/15 text-blue-400"
+                  : c.type === "lounge"
+                  ? "bg-amber-500/15 text-amber-400"
                   : "bg-purple-500/15 text-purple-400"
               )}
             >
-              {c.type === "lounge" ? t("community.type.lounge") : t("community.type.club")}
+              {t(`community.type.${c.type}`)}
             </span>
           </div>
           {c.description && (
@@ -297,14 +268,28 @@ function CommunityCard({
           <Users className="h-3 w-3" />
           {c.memberCount.toLocaleString()}
         </span>
-        <span className="flex items-center gap-1">
-          <Coins className="h-3 w-3 text-yellow-500" />
-          {c.monthlyFee > 0
-            ? `${c.monthlyFee}${t("community.perMonth")}`
-            : c.joinFee > 0
-            ? `${c.joinFee} ${t("community.joinFee")}`
-            : t("common.free")}
-        </span>
+        {c.type === "official" && csModeLabel && (
+          <span className="flex items-center gap-1">
+            <Headset className="h-3 w-3" />
+            {csModeLabel}
+          </span>
+        )}
+        {c.type === "club" && (
+          <span className="flex items-center gap-1">
+            <Coins className="h-3 w-3 text-yellow-500" />
+            {c.monthlyFee > 0
+              ? `${c.monthlyFee}${t("community.perMonth")}`
+              : c.joinFee > 0
+              ? `${c.joinFee} ${t("community.joinFee")}`
+              : t("common.free")}
+          </span>
+        )}
+        {c.type === "lounge" && (
+          <span className="flex items-center gap-1">
+            <Mic className="h-3 w-3 text-amber-400" />
+            {t("community.lounge.voiceAgent")}
+          </span>
+        )}
         {c.creatorName && (
           <span className="ml-auto truncate">{t("community.by")} {c.creatorName}</span>
         )}

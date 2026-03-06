@@ -68,6 +68,7 @@ interface ConversationItemProps {
   isThinking?: boolean;
   isVerified?: boolean;
   onDelete: () => void;
+  collapsed?: boolean;
 }
 
 function formatTime(date: Date, t: (key: string) => string): string {
@@ -112,6 +113,7 @@ export function ConversationItem({
   onMuteToggle,
   isMuted = false,
   onDelete,
+  collapsed = false,
 }: ConversationItemProps) {
   const { t } = useTranslation();
   const isDesktop = useSyncExternalStore(subscribeHover, getHoverSnapshot, getHoverServerSnapshot);
@@ -250,6 +252,76 @@ export function ConversationItem({
   }, [onDelete]);
 
   const isPinned = pinnedAt !== null;
+
+  // Collapsed view: avatar + name + unread badge
+  if (collapsed) {
+    return (
+      <>
+        <button
+          onClick={onClick}
+          className={cn(
+            "flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2 transition-colors",
+            isActive
+              ? "bg-accent text-accent-foreground"
+              : "hover:bg-accent/50 text-foreground"
+          )}
+        >
+          <div className="relative shrink-0">
+            <Avatar className="h-9 w-9">
+              {type === "direct" && (
+                <AvatarImage
+                  src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
+                  alt={agentName}
+                  className="object-cover"
+                />
+              )}
+              <AvatarFallback className="bg-accent text-foreground/80 text-xs">
+                {type === "group" ? (
+                  <Users className="h-4 w-4" />
+                ) : (
+                  <Bot className="h-4 w-4" />
+                )}
+              </AvatarFallback>
+            </Avatar>
+            {isOnline && (
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card bg-green-500" />
+            )}
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </div>
+          <span className="w-full truncate text-center text-[10px] leading-tight">
+            {title ?? agentName}
+          </span>
+        </button>
+
+        {/* Delete confirmation dialog */}
+        <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t("conversation.deleteTitle")}</DialogTitle>
+              <DialogDescription>
+                {t("conversation.deleteDesc")}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteConfirmOpen(false)}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmDelete}>
+                {t("common.delete")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   const cardContent = (
       <div className="relative overflow-hidden rounded-lg">

@@ -55,20 +55,34 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || "/";
+  const rawUrl = event.notification.data?.url || "/";
+  // Resolve to absolute URL using SW scope (handles non-root PWA deployments)
+  const scope = self.registration.scope;
+  let absoluteUrl;
+  try {
+    const resolved = new URL(rawUrl, scope);
+    // Only allow same-origin URLs; fallback to scope root for external
+    absoluteUrl = resolved.origin === new URL(scope).origin ? resolved.href : scope;
+  } catch {
+    absoluteUrl = scope;
+  }
 
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
       // Focus existing window if available
       for (const client of clients) {
         if (client.url.includes(self.location.origin)) {
-          client.focus();
-          client.postMessage({ type: "NOTIFICATION_CLICK", url });
+          try {
+            await client.focus();
+          } catch {
+            // focus() can fail if window is not focusable
+          }
+          client.postMessage({ type: "NOTIFICATION_CLICK", url: rawUrl });
           return;
         }
       }
-      // Otherwise open new window
-      return self.clients.openWindow(url);
+      // No existing window — open new one with absolute URL
+      return self.clients.openWindow(absoluteUrl);
     })
   );
 });
