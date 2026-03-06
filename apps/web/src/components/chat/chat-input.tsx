@@ -6,7 +6,6 @@ import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic, Reply } 
 import { useTranslation } from "@/lib/i18n";
 import { VoiceRecorder } from "./voice-recorder";
 import { useChatStore } from "@/store/chat-store";
-import { useRouter } from "next/navigation";
 import {
   PLATFORM_COMMANDS,
   filterCommands,
@@ -157,8 +156,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   const fileInputRef = useRef<HTMLInputElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const lastTypingSentRef = useRef(0);
-  const router = useRouter();
-
   const sendMessage = useChatStore((s) => s.sendMessage);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const conversations = useChatStore((s) => s.conversations);
@@ -169,7 +166,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   const insertSystemMessage = useChatStore((s) => s.insertSystemMessage);
   const clearConversation = useChatStore((s) => s.clearConversation);
   const getConversationStatus = useChatStore((s) => s.getConversationStatus);
-  const setSearchQuery = useChatStore((s) => s.setSearchQuery);
   const ttsEnabled = useChatStore((s) => s.ttsEnabled);
   const setTtsEnabled = useChatStore((s) => s.setTtsEnabled);
   const conversationMembers = useChatStore((s) => s.conversationMembers);
@@ -211,7 +207,11 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     const accepted = droppedFiles.filter(isAcceptedFile);
     const tooLarge = accepted.filter(isFileTooLarge);
     if (tooLarge.length > 0) {
-      useToastStore.getState().addToast(t("chat.fileTooLarge"));
+      const names = tooLarge.map((f) => f.name).join(", ");
+      useToastStore.getState().addToast(
+        `${t("chat.fileTooLarge")}${names ? `: ${names}` : ""}`,
+        "error",
+      );
     }
     const validFiles = accepted.filter((f) => !isFileTooLarge(f));
     if (validFiles.length === 0) {
@@ -419,7 +419,8 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
       const args = fullInput.length > prefixLen ? fullInput.slice(prefixLen).trim() : "";
 
       switch (cmd.id) {
-        case "help": {
+        case "help":
+        case "commands": {
           const currentSkills = agentId ? (agentSkills[agentId] ?? []) : [];
           const helpText = buildHelpText(currentSkills);
           insertSystemMessage(helpText);
@@ -428,12 +429,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
         case "new": {
           // Dispatch a custom event that the sidebar/dialog can listen to
           window.dispatchEvent(new CustomEvent("arinova:new-chat"));
-          break;
-        }
-        case "clear": {
-          if (activeConversationId) {
-            clearConversation(activeConversationId);
-          }
           break;
         }
         case "stop": {
@@ -457,32 +452,18 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
           insertSystemMessage(`Text-to-speech ${on ? "enabled" : "disabled"}.`);
           break;
         }
-        case "settings": {
-          router.push("/settings");
-          break;
-        }
-        case "search": {
-          if (args) {
-            setSearchQuery(args);
-          } else {
-            insertSystemMessage("Usage: `/search [query]`");
-          }
-          break;
-        }
         case "whoami": {
-          insertSystemMessage("Use `/settings` to view your profile information.");
+          insertSystemMessage("Check your profile in Settings.");
           break;
         }
-        // "forward" commands: send as message to agent
-        case "model":
-        case "think":
-        case "reasoning":
-        case "verbose":
-        case "compact": {
-          if (!agentId) {
-            insertSystemMessage(`Cannot use \`/${cmd.id}\` — no agent in this conversation.`);
-          } else {
-            sendMessage(`/${cmd.id}${args ? " " + args : ""}`);
+        default: {
+          // All "forward" commands: send as message to agent
+          if (cmd.handler === "forward") {
+            if (!agentId) {
+              insertSystemMessage(`Cannot use \`/${cmd.id}\` — no agent in this conversation.`);
+            } else {
+              sendMessage(`/${cmd.id}${args ? " " + args : ""}`);
+            }
           }
           break;
         }
@@ -497,10 +478,8 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
       clearConversation,
       cancelStream,
       getConversationStatus,
-      setSearchQuery,
       setTtsEnabled,
       sendMessage,
-      router,
     ]
   );
 
@@ -1012,7 +991,11 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     if (accepted.length === 0) return;
     const tooLarge = accepted.filter(isFileTooLarge);
     if (tooLarge.length > 0) {
-      useToastStore.getState().addToast(t("chat.fileTooLarge"));
+      const names = tooLarge.map((f) => f.name).join(", ");
+      useToastStore.getState().addToast(
+        `${t("chat.fileTooLarge")}${names ? `: ${names}` : ""}`,
+        "error",
+      );
     }
     const validFiles = accepted.filter((f) => !isFileTooLarge(f));
     if (validFiles.length === 0) { e.target.value = ""; return; }

@@ -77,7 +77,7 @@
   "chat.typePlaceholder": "Taip mesej...",
   "chat.mentionPlaceholder": "@sebut ejen...",
   "chat.maxImages": "Maksimum 9 imej",
-  "chat.fileTooLarge": "Fail terlalu besar untuk dimuat naik",
+  "chat.fileTooLarge": "Fail melebihi had 10 MB",
   "chat.uploadFailed": "Muat naik gagal, sila cuba lagi",
   "chat.imagesSelected": "{count} imej dipilih",
   "chat.imageCount": "{n}/{max}",

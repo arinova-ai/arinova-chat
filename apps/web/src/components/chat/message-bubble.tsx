@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, memo } from "react";
 import { useRouter } from "next/navigation";
 import type { Message, Attachment } from "@arinova/shared/types";
 import { cn } from "@/lib/utils";
@@ -270,7 +270,7 @@ function ImageGrid({ images }: { images: Attachment[] }) {
     const hasSize = img.width && img.height;
     return (
       <div
-        className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden"
+        className="max-w-[280px] md:max-w-[360px] rounded-lg overflow-hidden bg-muted"
         style={{
           aspectRatio: hasSize ? `${img.width}/${img.height}` : "4/3",
           maxHeight: 400,
@@ -540,10 +540,10 @@ interface MessageBubbleProps {
   isGroupConversation?: boolean;
   isInThread?: boolean;
   selectionMode?: boolean;
-  onEnterSelectionMode?: () => void;
+  onEnterSelectionMode?: (messageId: string) => void;
 }
 
-export function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread, selectionMode, onEnterSelectionMode }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, agentName, highlightQuery, isGroupConversation, isInThread, selectionMode, onEnterSelectionMode }: MessageBubbleProps) {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
@@ -751,8 +751,8 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
           )}
 
           {stickerUrl ? (
-            /* Sticker: no bubble frame, transparent background */
-            <div>
+            /* Sticker: no bubble frame, transparent background, fixed placeholder */
+            <div className="h-32 w-32">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={stickerUrl}
@@ -957,4 +957,4 @@ export function MessageBubble({ message, agentName, highlightQuery, isGroupConve
 
     </div>
   );
-}
+});
