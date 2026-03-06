@@ -59,6 +59,8 @@
   "time.yesterday": "Ayer",
 
   "chat.subtitle": "Conecta con tu equipo al instante",
+  "chat.collapseSidebar": "Contraer barra lateral",
+  "chat.expandSidebar": "Expandir barra lateral",
   "chat.searchPlaceholder": "Buscar conversaciones...",
   "chat.stickers": "Stickers",
   "chat.selectSticker": "Selecciona un sticker",

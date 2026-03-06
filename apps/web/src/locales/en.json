@@ -59,6 +59,8 @@
   "time.yesterday": "Yesterday",
 
   "chat.subtitle": "Connect with your team instantly",
+  "chat.collapseSidebar": "Collapse sidebar",
+  "chat.expandSidebar": "Expand sidebar",
   "chat.searchPlaceholder": "Search conversations...",
   "chat.stickers": "Stickers",
   "chat.selectSticker": "Select a sticker",

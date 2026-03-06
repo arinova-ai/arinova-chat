@@ -17,6 +17,8 @@ import { refreshPushSubscription, setupNotificationClickHandler } from "@/lib/pu
 import { initChatDiagnostics, useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
 
+const SIDEBAR_COLLAPSED_KEY = "arinova:sidebar-collapsed";
+
 export function ChatLayout() {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const searchActive = useChatStore((s) => s.searchActive);
@@ -27,6 +29,19 @@ export function ChatLayout() {
   const prevConvRef = useRef<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Desktop sidebar collapse state (persisted in localStorage)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  });
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      return next;
+    });
+  };
   useRenderDiag("ChatLayout", () => ({
     activeConversationId,
     searchActive,
@@ -139,8 +154,11 @@ export function ChatLayout() {
       </div>
 
       {/* Desktop: Conversation panel */}
-      <div className="hidden h-full w-72 shrink-0 overflow-hidden border-r border-border md:block">
-        <Sidebar />
+      <div
+        className="hidden h-full shrink-0 overflow-hidden border-r border-border md:block transition-[width] duration-300 ease-in-out"
+        style={{ width: sidebarCollapsed ? 72 : 288 }}
+      >
+        <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
       </div>
 
       {/* Mobile: sidebar + bottom nav when no conversation/search, chat when selected */}

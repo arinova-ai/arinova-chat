@@ -59,6 +59,8 @@
   "time.yesterday": "Semalam",
 
   "chat.subtitle": "Berhubung dengan pasukan anda serta-merta",
+  "chat.collapseSidebar": "Kecilkan bar sisi",
+  "chat.expandSidebar": "Kembangkan bar sisi",
   "chat.searchPlaceholder": "Cari perbualan...",
   "chat.stickers": "Pelekat",
   "chat.selectSticker": "Pilih pelekat",

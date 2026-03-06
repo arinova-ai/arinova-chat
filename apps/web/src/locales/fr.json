@@ -59,6 +59,8 @@
   "time.yesterday": "Hier",
 
   "chat.subtitle": "Communiquez instantanément avec votre équipe",
+  "chat.collapseSidebar": "Réduire la barre latérale",
+  "chat.expandSidebar": "Développer la barre latérale",
   "chat.searchPlaceholder": "Rechercher des conversations...",
   "chat.stickers": "Stickers",
   "chat.selectSticker": "Sélectionner un sticker",

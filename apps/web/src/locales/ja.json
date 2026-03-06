@@ -59,6 +59,8 @@
   "time.yesterday": "昨日",
 
   "chat.subtitle": "チームとリアルタイムでつながる",
+  "chat.collapseSidebar": "サイドバーを折りたたむ",
+  "chat.expandSidebar": "サイドバーを展開",
   "chat.searchPlaceholder": "会話を検索...",
   "chat.stickers": "スタンプ",
   "chat.selectSticker": "スタンプを選択",

@@ -59,6 +59,8 @@
   "time.yesterday": "昨天",
 
   "chat.subtitle": "與你的團隊即時溝通",
+  "chat.collapseSidebar": "收合側邊欄",
+  "chat.expandSidebar": "展開側邊欄",
   "chat.searchPlaceholder": "搜尋對話...",
   "chat.stickers": "貼圖",
   "chat.selectSticker": "選擇貼圖",

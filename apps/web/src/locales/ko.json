@@ -59,6 +59,8 @@
   "time.yesterday": "어제",
 
   "chat.subtitle": "팀과 즉시 소통하세요",
+  "chat.collapseSidebar": "사이드바 접기",
+  "chat.expandSidebar": "사이드바 펼치기",
   "chat.searchPlaceholder": "대화 검색...",
   "chat.stickers": "스티커",
   "chat.selectSticker": "스티커 선택",
