@@ -131,6 +131,7 @@ function PipBubble({
       {/* Close badge — enlarged hit area around small visible circle */}
       <button
         onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
         onClick={onClose}
         className="absolute -top-3 -right-3 flex h-8 w-8 items-center justify-center"
         title="Close"
