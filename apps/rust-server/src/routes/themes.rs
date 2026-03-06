@@ -35,6 +35,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/themes/owned", get(owned_themes))
         .route("/api/themes/{themeId}", delete(delete_theme))
         .route("/api/themes/{themeId}/purchase", post(purchase_theme))
+        .route("/api/themes/{themeId}/manifest", get(get_theme_manifest))
 }
 
 /// GET /api/themes/config — Returns the base URL for theme assets.
@@ -46,6 +47,66 @@ async fn theme_config(State(state): State<AppState>) -> Json<Value> {
         "/themes".to_string()
     };
     Json(json!({ "themeAssetsBaseUrl": base_url }))
+}
+
+/// GET /api/themes/:themeId/manifest — Proxy theme.json from R2 (or local).
+/// Avoids CORS issues when the frontend fetches theme.json directly from R2.
+async fn get_theme_manifest(
+    State(state): State<AppState>,
+    Path(theme_id): Path<String>,
+) -> Response {
+    // Validate theme_id format
+    let id_re = regex_lite::Regex::new(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$").unwrap();
+    if !id_re.is_match(&theme_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Invalid theme ID"})),
+        )
+            .into_response();
+    }
+
+    if let Some(s3) = &state.s3 {
+        let bucket = &state.config.r2_bucket;
+        let key = format!("themes/{}/theme.json", theme_id);
+        match s3.get_object().bucket(bucket).key(&key).send().await {
+            Ok(obj) => match obj.body.collect().await {
+                Ok(body) => {
+                    let bytes = body.into_bytes();
+                    (
+                        StatusCode::OK,
+                        [("content-type", "application/json")],
+                        bytes.to_vec(),
+                    )
+                        .into_response()
+                }
+                Err(_) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Failed to read theme manifest"})),
+                )
+                    .into_response(),
+            },
+            Err(_) => (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Theme not found"})),
+            )
+                .into_response(),
+        }
+    } else {
+        let manifest_path = themes_base_dir(&state).join(&theme_id).join("theme.json");
+        match tokio::fs::read(&manifest_path).await {
+            Ok(data) => (
+                StatusCode::OK,
+                [("content-type", "application/json")],
+                data,
+            )
+                .into_response(),
+            Err(_) => (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Theme not found"})),
+            )
+                .into_response(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

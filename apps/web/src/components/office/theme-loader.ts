@@ -142,13 +142,13 @@ export function validateManifest(data: unknown): ThemeManifest {
 
 /**
  * Load and validate a theme manifest by ID.
- * Always fetches fresh from /themes/{id}/theme.json (manifest is small).
+ * Fetches via backend API to avoid CORS issues with R2.
  * No in-memory cache — avoids stale version issues on theme updates.
  */
 export async function loadTheme(themeId: string): Promise<ThemeManifest> {
-  const base = await getThemeBaseUrl(themeId);
-  const url = `${base}/theme.json`;
-  const res = await fetch(url);
+  const res = await fetch(`${BACKEND_URL}/api/themes/${encodeURIComponent(themeId)}/manifest`, {
+    credentials: "include",
+  });
   if (!res.ok) {
     throw new Error(`Failed to load theme "${themeId}": ${res.status} ${res.statusText}`);
   }
