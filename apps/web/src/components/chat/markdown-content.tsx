@@ -168,41 +168,13 @@ const remarkPluginList = [remarkGfm, remarkBreaks, remarkStripTableBreaks];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rehypePluginList: any[] = [rehypeHighlight, [rehypeSanitize, sanitizeSchema]];
 
-const IMAGE_PATH_RE = /^\/.*\.(png|jpe?g|gif|webp|bmp|svg|tiff?)$/i;
-
-function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
-  const [showPath, setShowPath] = useState(false);
-  if (!src || typeof src !== "string") return null;
-  const isLocalPath = typeof alt === "string" && IMAGE_PATH_RE.test(alt);
-  return (
-    <span className="block">
-      <ImageLightbox src={src} alt={isLocalPath ? undefined : alt} />
-      {isLocalPath && (
-        <span className="block mt-1">
-          <button
-            type="button"
-            onClick={() => setShowPath((v) => !v)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showPath ? "Hide path" : "Show path"}
-          </button>
-          {showPath && (
-            <span className="block mt-0.5 rounded bg-muted px-2 py-1 text-xs font-mono select-text break-all">
-              {alt}
-            </span>
-          )}
-        </span>
-      )}
-    </span>
-  );
-}
-
 // Stable components object — prevents React from unmounting/remounting
 // markdown elements on every render (which causes image flicker during streaming).
 const markdownComponents = {
   img(props: ComponentProps<"img">) {
     const src = typeof props.src === "string" ? props.src : undefined;
-    return <MarkdownImage src={src} alt={typeof props.alt === "string" ? props.alt : undefined} />;
+    if (!src) return null;
+    return <ImageLightbox src={src} alt={typeof props.alt === "string" ? props.alt : undefined} />;
   },
   table(props: ComponentProps<"table">) {
     return (
