@@ -32,6 +32,7 @@ function OfficeViewInner() {
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showCharacterModal, setShowCharacterModal] = useState(false);
+  const [clickedSlotIndex, setClickedSlotIndex] = useState(0);
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
@@ -65,16 +66,14 @@ function OfficeViewInner() {
     }).then(() => fetchBindings()).catch(() => {});
   }, [bindings.length, displayAgents, themeId, fetchBindings]);
 
-  // Derive character agent from binding → all stream agents (not just displayAgents,
-  // which may be capped by maxAgents). If the bound agent isn't streaming office
-  // events at all, create a minimal fallback from the binding metadata so the
-  // character modal shows agent info with "Idle" status instead of "not connected".
-  const slot0Binding = bindings.find((b) => b.slotIndex === 0);
-  const characterAgent: Agent | null = slot0Binding
-    ? stream.agents.find((a) => a.id === slot0Binding.agentId)
-      ?? (slot0Binding.agentName ? {
-          id: slot0Binding.agentId,
-          name: slot0Binding.agentName,
+  // Derive character agent from the clicked slot's binding.
+  // Falls back to the first display agent when no binding exists.
+  const activeBinding = bindings.find((b) => b.slotIndex === clickedSlotIndex);
+  const characterAgent: Agent | null = activeBinding
+    ? stream.agents.find((a) => a.id === activeBinding.agentId)
+      ?? (activeBinding.agentName ? {
+          id: activeBinding.agentId,
+          name: activeBinding.agentName,
           role: "",
           emoji: "\u{1F916}",
           color: "#64748b",
@@ -91,6 +90,10 @@ function OfficeViewInner() {
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const handleCharacterClick = useCallback(() => setShowCharacterModal(true), []);
+  const handleSlotClick = useCallback((slotIndex: number) => {
+    setClickedSlotIndex(slotIndex);
+    setShowCharacterModal(true);
+  }, []);
   const closeCharacterModal = useCallback(() => setShowCharacterModal(false), []);
   const handleOpenChat = useCallback((agentId: string) => {
     setShowCharacterModal(false);
@@ -140,6 +143,8 @@ function OfficeViewInner() {
               selectedAgentId={selectedAgentId}
               onSelectAgent={selectAgent}
               onCharacterClick={handleCharacterClick}
+              onSlotClick={handleSlotClick}
+              bindings={bindings}
               width={mapSize.width}
               height={mapSize.height}
               manifest={manifest}
@@ -150,7 +155,7 @@ function OfficeViewInner() {
       </div>
 
       {/* Agent detail modal (v2/PixiJS themes — multi-agent click) */}
-      {manifest?.renderer !== "sprite" && (
+      {manifest?.renderer !== "sprite" && manifest?.renderer !== "avg" && (
         <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
       )}
 
@@ -161,8 +166,8 @@ function OfficeViewInner() {
         agent={characterAgent}
         agents={displayAgents}
         themeId={themeId}
-        slotIndex={0}
-        boundAgentId={slot0Binding?.agentId ?? null}
+        slotIndex={clickedSlotIndex}
+        boundAgentId={activeBinding?.agentId ?? null}
         onBindingChange={fetchBindings}
         onOpenChat={handleOpenChat}
       />
