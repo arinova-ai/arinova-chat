@@ -237,7 +237,7 @@
 }
 
 .search-highlight {
-  animation: search-flash 2s ease-out forwards;
+  animation: search-flash 1s ease-out forwards;
   border-radius: var(--radius);
 }
 
