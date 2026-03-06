@@ -1,4 +1,5 @@
 import type { ThemeManifest } from "./theme-types";
+import { BACKEND_URL } from "@/lib/config";
 
 // ── Theme assets base URL (resolved from backend /api/themes/config) ──
 
@@ -7,7 +8,7 @@ let _themeAssetsBaseUrl: string | null = null;
 async function getThemeAssetsBaseUrl(): Promise<string> {
   if (_themeAssetsBaseUrl !== null) return _themeAssetsBaseUrl;
   try {
-    const res = await fetch("/api/themes/config");
+    const res = await fetch(`${BACKEND_URL}/api/themes/config`, { credentials: "include" });
     if (res.ok) {
       const data = await res.json();
       if (data.themeAssetsBaseUrl) {
