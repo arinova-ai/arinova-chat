@@ -103,6 +103,14 @@ async fn main() {
         GROUP BY m.thread_id
         ON CONFLICT (thread_id) DO NOTHING;
 
+        CREATE TABLE IF NOT EXISTS theme_purchases (
+            user_id TEXT NOT NULL,
+            theme_id TEXT NOT NULL,
+            price INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, theme_id)
+        );
+
         CREATE TABLE IF NOT EXISTS office_slot_bindings (
             user_id TEXT NOT NULL,
             theme_id TEXT NOT NULL,

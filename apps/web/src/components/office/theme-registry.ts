@@ -33,7 +33,7 @@ export const THEME_REGISTRY: ThemeEntry[] = [
     id: "avg-classroom",
     name: "AVG Classroom",
     description: "Anime classroom with 6 agent slots in visual-novel style.",
-    previewUrl: "/themes/avg-classroom/preview.png",
+    previewUrl: "https://uploads.chat.arinova.ai/themes/avg-classroom/preview.png",
     price: 1000,
     maxAgents: 6,
     tags: ["anime", "classroom", "avg"],

@@ -13,24 +13,56 @@ import { THEME_REGISTRY, type ThemeEntry } from "@/components/office/theme-regis
 import { useTranslation } from "@/lib/i18n";
 
 function ThemeCard({ entry }: { entry: ThemeEntry }) {
-  const { themeId, switchTheme } = useTheme();
+  const { themeId, switchTheme, ownedThemes, refreshOwned } = useTheme();
   const { t } = useTranslation();
   const [toast, setToast] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
+  const isOwned = ownedThemes.has(entry.id);
   const isPremium = !isFree;
 
   useEffect(() => {
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
   }, []);
 
-  const handleApply = () => {
-    if (!isFree || isActive) return;
-    switchTheme(entry.id);
+  const showToast = () => {
     setToast(true);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(false), 2000);
+  };
+
+  const handleApply = () => {
+    if (isActive) return;
+    if (!isFree && !isOwned) return;
+    switchTheme(entry.id);
+    showToast();
+  };
+
+  const handlePurchase = async () => {
+    if (purchasing || isFree || isOwned) return;
+    setPurchasing(true);
+    try {
+      const res = await fetch(`/api/themes/${entry.id}/purchase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ price: entry.price }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Purchase failed");
+        return;
+      }
+      await refreshOwned();
+      switchTheme(entry.id);
+      showToast();
+    } catch {
+      alert("Purchase failed. Please try again.");
+    } finally {
+      setPurchasing(false);
+    }
   };
 
   return (
@@ -95,7 +127,7 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
             <Check className="h-4 w-4" />
             {t("theme.applied")}
           </button>
-        ) : isFree ? (
+        ) : isFree || isOwned ? (
           <button
             onClick={handleApply}
             className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80"
@@ -104,10 +136,15 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
           </button>
         ) : (
           <button
-            disabled
-            className="w-full rounded-lg bg-muted py-2 text-sm font-medium text-muted-foreground flex items-center justify-center gap-1.5"
+            onClick={handlePurchase}
+            disabled={purchasing}
+            className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80 disabled:opacity-60 flex items-center justify-center gap-1.5"
           >
-            <Lock className="h-3.5 w-3.5" />
+            {purchasing ? (
+              <span className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
+            ) : (
+              <Lock className="h-3.5 w-3.5" />
+            )}
             {entry.price} {t("theme.credits")}
           </button>
         )}

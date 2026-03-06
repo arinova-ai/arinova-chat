@@ -32,7 +32,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/themes/upload", post(upload_theme))
         .route("/api/themes", get(list_themes))
         .route("/api/themes/config", get(theme_config))
+        .route("/api/themes/owned", get(owned_themes))
         .route("/api/themes/{themeId}", delete(delete_theme))
+        .route("/api/themes/{themeId}/purchase", post(purchase_theme))
 }
 
 /// GET /api/themes/config — Returns the base URL for theme assets.
@@ -666,6 +668,168 @@ async fn delete_theme(
     }
 
     (StatusCode::OK, Json(json!({"deleted": theme_id}))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/themes/:themeId/purchase — Purchase a theme
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct PurchaseBody {
+    price: i32,
+}
+
+async fn purchase_theme(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(theme_id): Path<String>,
+    Json(body): Json<PurchaseBody>,
+) -> (StatusCode, Json<Value>) {
+    let price = body.price;
+    if price <= 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Price must be positive"})),
+        );
+    }
+
+    // Check if already purchased
+    let already = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM theme_purchases WHERE user_id = $1 AND theme_id = $2",
+    )
+    .bind(&user.id)
+    .bind(&theme_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if already > 0 {
+        return (
+            StatusCode::OK,
+            Json(json!({"already_owned": true, "theme_id": theme_id})),
+        );
+    }
+
+    // === Begin transaction ===
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("purchase_theme: begin tx failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Internal error"})),
+            );
+        }
+    };
+
+    // Atomic deduction: only succeeds if balance >= price
+    let new_balance = match sqlx::query_scalar::<_, i32>(
+        r#"UPDATE coin_balances
+           SET balance = balance - $2, updated_at = NOW()
+           WHERE user_id = $1 AND balance >= $2
+           RETURNING balance"#,
+    )
+    .bind(&user.id)
+    .bind(price)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(Some(b)) => b,
+        Ok(None) => {
+            return (
+                StatusCode::PAYMENT_REQUIRED,
+                Json(json!({"error": "Insufficient balance"})),
+            );
+        }
+        Err(e) => {
+            tracing::error!("purchase_theme: deduction failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Payment failed"})),
+            );
+        }
+    };
+
+    // Record purchase in theme_purchases
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO theme_purchases (user_id, theme_id, price)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, theme_id) DO NOTHING"#,
+    )
+    .bind(&user.id)
+    .bind(&theme_id)
+    .bind(price)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("purchase_theme: insert failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Failed to record purchase"})),
+        );
+    }
+
+    // Record transaction
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO coin_transactions (user_id, type, amount, description)
+           VALUES ($1, 'purchase', $2, $3)"#,
+    )
+    .bind(&user.id)
+    .bind(-price)
+    .bind(format!("Theme purchase: {}", theme_id))
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("purchase_theme: record tx failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Failed to record transaction"})),
+        );
+    }
+
+    // === Commit ===
+    if let Err(e) = tx.commit().await {
+        tracing::error!("purchase_theme: commit failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Transaction failed"})),
+        );
+    }
+
+    tracing::info!(
+        "User {} purchased theme '{}' for {} coins (new balance: {})",
+        user.id, theme_id, price, new_balance
+    );
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "theme_id": theme_id,
+            "price": price,
+            "balance": new_balance,
+        })),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/themes/owned — List themes the user has purchased
+// ---------------------------------------------------------------------------
+
+async fn owned_themes(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, (String,)>(
+        "SELECT theme_id FROM theme_purchases WHERE user_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let theme_ids: Vec<String> = rows.into_iter().map(|(id,)| id).collect();
+
+    (StatusCode::OK, Json(json!({"owned": theme_ids})))
 }
 
 // ---------------------------------------------------------------------------

@@ -4,16 +4,17 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import type { ThemeManifest } from "./theme-types";
 import { loadTheme } from "./theme-loader";
 import { isKnownTheme, isFreeTheme } from "./theme-registry";
+import { api } from "@/lib/api";
 
 const DEFAULT_THEME_ID = "cozy-studio";
 const STORAGE_KEY = "arinova-office-theme";
 
-/** Read saved themeId from localStorage, validating it's a known free theme. */
+/** Read saved themeId from localStorage — validates on mount with owned check. */
 function readSavedThemeId(): string {
   if (typeof window === "undefined") return DEFAULT_THEME_ID;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && isKnownTheme(saved) && isFreeTheme(saved)) return saved;
+    if (saved && isKnownTheme(saved)) return saved;
     return DEFAULT_THEME_ID;
   } catch {
     return DEFAULT_THEME_ID;
@@ -33,7 +34,9 @@ interface ThemeContextValue {
   loading: boolean;
   error: string | null;
   themeId: string;
+  ownedThemes: Set<string>;
   switchTheme: (themeId: string) => void;
+  refreshOwned: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
@@ -41,7 +44,9 @@ const ThemeContext = createContext<ThemeContextValue>({
   loading: true,
   error: null,
   themeId: DEFAULT_THEME_ID,
+  ownedThemes: new Set(),
   switchTheme: () => {},
+  refreshOwned: async () => {},
 });
 
 export function useTheme(): ThemeContextValue {
@@ -58,6 +63,29 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
   const [manifest, setManifest] = useState<ThemeManifest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ownedThemes, setOwnedThemes] = useState<Set<string>>(new Set());
+
+  // Fetch owned themes on mount
+  const refreshOwned = useCallback(async () => {
+    try {
+      const data = await api<{ owned: string[] }>("/api/themes/owned", { silent: true });
+      setOwnedThemes(new Set(data.owned));
+    } catch { /* not logged in yet */ }
+  }, []);
+
+  useEffect(() => {
+    refreshOwned();
+  }, [refreshOwned]);
+
+  // Validate saved themeId once owned themes are loaded — if it's a paid theme
+  // the user doesn't own, fall back to default
+  useEffect(() => {
+    if (!isKnownTheme(themeId)) return;
+    if (!isFreeTheme(themeId) && !ownedThemes.has(themeId)) {
+      setThemeId(DEFAULT_THEME_ID);
+      saveThemeId(DEFAULT_THEME_ID);
+    }
+  }, [ownedThemes, themeId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,17 +120,21 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
 
   const switchTheme = useCallback((newId: string) => {
     if (newId === themeId) return;
-    // Only allow switching to known, free themes
-    if (!isKnownTheme(newId) || !isFreeTheme(newId)) {
-      console.warn(`[ThemeProvider] Cannot switch to "${newId}" — not a known free theme`);
+    if (!isKnownTheme(newId)) {
+      console.warn(`[ThemeProvider] Cannot switch to "${newId}" — not a known theme`);
+      return;
+    }
+    // Allow free themes or owned themes
+    if (!isFreeTheme(newId) && !ownedThemes.has(newId)) {
+      console.warn(`[ThemeProvider] Cannot switch to "${newId}" — not owned`);
       return;
     }
     saveThemeId(newId);
     setThemeId(newId);
-  }, [themeId]);
+  }, [themeId, ownedThemes]);
 
   return (
-    <ThemeContext.Provider value={{ manifest, loading, error, themeId, switchTheme }}>
+    <ThemeContext.Provider value={{ manifest, loading, error, themeId, ownedThemes, switchTheme, refreshOwned }}>
       {children}
     </ThemeContext.Provider>
   );

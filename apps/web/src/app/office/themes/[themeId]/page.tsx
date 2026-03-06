@@ -94,15 +94,17 @@ function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
 }
 
 function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: ThemeDetails }) {
-  const { themeId, switchTheme } = useTheme();
+  const { themeId, switchTheme, ownedThemes, refreshOwned } = useTheme();
   const { t } = useTranslation();
   const [toast, setToast] = useState(false);
   const [liked, setLiked] = useState(false);
   const [activeThumb, setActiveThumb] = useState(0);
   const [qualityModes, setQualityModes] = useState("Standard");
+  const [purchasing, setPurchasing] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
+  const isOwned = ownedThemes.has(entry.id);
 
   useEffect(() => {
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -116,12 +118,42 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
       .catch(() => {});
   }, [entry.id]);
 
-  const handleApply = () => {
-    if (!isFree || isActive) return;
-    switchTheme(entry.id);
+  const showToast = () => {
     setToast(true);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(false), 2000);
+  };
+
+  const handleApply = () => {
+    if (isActive) return;
+    if (!isFree && !isOwned) return;
+    switchTheme(entry.id);
+    showToast();
+  };
+
+  const handlePurchase = async () => {
+    if (purchasing || isFree || isOwned) return;
+    setPurchasing(true);
+    try {
+      const res = await fetch(`/api/themes/${entry.id}/purchase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ price: entry.price }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Purchase failed");
+        return;
+      }
+      await refreshOwned();
+      switchTheme(entry.id);
+      showToast();
+    } catch {
+      alert("Purchase failed. Please try again.");
+    } finally {
+      setPurchasing(false);
+    }
   };
 
   return (
@@ -293,7 +325,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                     <Check className="h-5 w-5" />
                     {t("theme.applied")}
                   </button>
-                ) : isFree ? (
+                ) : isFree || isOwned ? (
                   <button
                     onClick={handleApply}
                     className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90"
@@ -302,10 +334,15 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                   </button>
                 ) : (
                   <button
-                    disabled
-                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white opacity-80 flex items-center justify-center gap-2"
+                    onClick={handlePurchase}
+                    disabled={purchasing}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
                   >
-                    <Lock className="h-4 w-4" />
+                    {purchasing ? (
+                      <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                    ) : (
+                      <Lock className="h-4 w-4" />
+                    )}
                     {t("theme.purchaseAndApply")}
                   </button>
                 )}
