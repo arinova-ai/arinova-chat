@@ -52,17 +52,83 @@ pub fn router() -> Router<AppState> {
         .route("/api/themes/{themeId}", get(get_theme_detail).delete(delete_theme))
         .route("/api/themes/{themeId}/purchase", post(purchase_theme))
         .route("/api/themes/{themeId}/manifest", get(get_theme_manifest))
+        .route("/api/themes/assets/{themeId}/{filename}", get(get_theme_asset))
 }
 
 /// GET /api/themes/config — Returns the base URL for theme assets.
 /// Frontend uses this to know whether to load from R2 or local.
 async fn theme_config(State(state): State<AppState>) -> Json<Value> {
-    let base_url = if state.s3.is_some() && !state.config.r2_public_url.is_empty() {
-        format!("{}/themes", state.config.r2_public_url)
-    } else {
-        "/themes".to_string()
-    };
+    // Always use the API proxy for theme assets to avoid CORS issues with R2.
+    // Assets are served via /api/themes/assets/{themeId}/{filename}.
+    let base_url = format!("{}/api/themes/assets", state.config.better_auth_url);
     Json(json!({ "themeAssetsBaseUrl": base_url }))
+}
+
+/// GET /api/themes/:themeId/assets/:filename — Proxy a theme asset from R2 (or local).
+/// Avoids CORS issues when PixiJS web workers fetch cross-origin images.
+async fn get_theme_asset(
+    State(state): State<AppState>,
+    Path((theme_id, filename)): Path<(String, String)>,
+) -> Response {
+    let id_re = regex_lite::Regex::new(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$").unwrap();
+    if !id_re.is_match(&theme_id) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid theme ID"}))).into_response();
+    }
+    // Only allow safe filenames (no path traversal)
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') || filename.contains(':') {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid filename"}))).into_response();
+    }
+
+    let content_type = match filename.rsplit('.').next().unwrap_or("") {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "json" => "application/json",
+        "glb" | "gltf" => "model/gltf-binary",
+        "mp3" => "audio/mpeg",
+        "ogg" => "audio/ogg",
+        "wav" => "audio/wav",
+        _ => "application/octet-stream",
+    };
+
+    if let Some(s3) = &state.s3 {
+        let bucket = &state.config.r2_bucket;
+        let key = format!("themes/{}/{}", theme_id, filename);
+        match s3.get_object().bucket(bucket).key(&key).send().await {
+            Ok(obj) => match obj.body.collect().await {
+                Ok(body) => {
+                    let bytes = body.into_bytes();
+                    (
+                        StatusCode::OK,
+                        [
+                            ("content-type", content_type),
+                            ("cache-control", "public, max-age=86400"),
+                        ],
+                        bytes.to_vec(),
+                    )
+                        .into_response()
+                }
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to read asset"}))).into_response(),
+            },
+            Err(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Asset not found"}))).into_response(),
+        }
+    } else {
+        let asset_path = themes_base_dir(&state).join(&theme_id).join(&filename);
+        match tokio::fs::read(&asset_path).await {
+            Ok(data) => (
+                StatusCode::OK,
+                [
+                    ("content-type", content_type),
+                    ("cache-control", "public, max-age=86400"),
+                ],
+                data,
+            )
+                .into_response(),
+            Err(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Asset not found"}))).into_response(),
+        }
+    }
 }
 
 /// GET /api/themes/:themeId/manifest — Proxy theme.json from R2 (or local).
