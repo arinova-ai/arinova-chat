@@ -71,13 +71,9 @@ function parseBgColor(manifest: ThemeManifest): number {
 function computeScale(containerW: number, containerH: number, canvasW: number, canvasH: number) {
   const scaleX = containerW / canvasW;
   const scaleY = containerH / canvasH;
-  // "fit-width" strategy: always fit the full canvas width so all horizontal
-  // zones (and agents placed in them) are visible. On portrait phones with
-  // wide canvases this means the image sits at the top with space below,
-  // which is much better than clipping agents off-screen.
-  const scale = scaleX;
-  const offsetX = 0;
-  const offsetY = Math.max(0, (containerH - canvasH * scale) / 2);
+  const scale = Math.max(scaleX, scaleY);
+  const offsetX = (containerW - canvasW * scale) / 2;
+  const offsetY = (containerH - canvasH * scale) / 2;
   return { scale, offsetX, offsetY };
 }
 
@@ -90,6 +86,7 @@ function statusToZoneType(status: AgentStatus): ZoneType {
 function assignSeats(
   agents: Agent[],
   zones: ZoneDef[],
+  canvasW?: number,
 ): Map<string, { x: number; y: number; seatId: string }> {
   const assignments = new Map<string, { x: number; y: number; seatId: string }>();
   if (zones.length === 0) return assignments;
@@ -97,10 +94,19 @@ function assignSeats(
   const usableZones = zones.filter((z) => z.seats.length > 0);
   if (usableZones.length === 0) return assignments;
 
+  // Sort zones by distance from canvas center so agents are placed in the
+  // most central (and therefore most visible on mobile) zones first.
+  const cx = (canvasW ?? 1920) / 2;
+  const sorted = [...usableZones].sort((a, b) => {
+    const aCx = a.bounds.x + a.bounds.width / 2;
+    const bCx = b.bounds.x + b.bounds.width / 2;
+    return Math.abs(aCx - cx) - Math.abs(bCx - cx);
+  });
+
   const grouped = new Map<string, Agent[]>();
   for (const agent of agents) {
     const targetType = statusToZoneType(agent.status);
-    const zone = usableZones.find((z) => z.type === targetType) ?? usableZones[0];
+    const zone = sorted.find((z) => z.type === targetType) ?? sorted[0];
     const list = grouped.get(zone.id) ?? [];
     list.push(agent);
     grouped.set(zone.id, list);
@@ -746,7 +752,7 @@ export class PixiRenderer implements OfficeRenderer {
 
   private computePositions() {
     if (!this.useFallback && this.manifest) {
-      const seatMap = assignSeats(this.agents, this.manifest.zones);
+      const seatMap = assignSeats(this.agents, this.manifest.zones, this.manifest.canvas.width);
 
       for (const [agentId, { x, y, seatId }] of seatMap) {
         const prevSeatId = this.prevSeat.get(agentId);
