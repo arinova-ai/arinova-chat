@@ -172,17 +172,19 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
         ) : (
           <div className="flex min-w-0 flex-col gap-0.5">
             {sorted.map((conv) => {
-              const isPinned = conv.pinnedAt !== null;
+              const isPinned = !!conv.pinnedAt;
+              const canDrag = isPinned && !collapsed;
               return (
                 <div
                   key={conv.id}
-                  draggable={isPinned && !collapsed}
-                  onDragStart={isPinned ? (e) => handleDragStart(e, conv.id) : undefined}
-                  onDragEnd={isPinned ? handleDragEnd : undefined}
-                  onDragOver={isPinned ? handleDragOver : undefined}
-                  onDragEnter={isPinned ? () => handleDragEnter(conv.id) : undefined}
-                  onDrop={isPinned ? (e) => handleDrop(e, conv.id) : undefined}
+                  draggable={canDrag || undefined}
+                  onDragStart={canDrag ? (e) => handleDragStart(e, conv.id) : undefined}
+                  onDragEnd={canDrag ? handleDragEnd : undefined}
+                  onDragOver={canDrag ? handleDragOver : undefined}
+                  onDragEnter={canDrag ? () => handleDragEnter(conv.id) : undefined}
+                  onDrop={canDrag ? (e) => handleDrop(e, conv.id) : undefined}
                   className={cn(
+                    canDrag && "cursor-grab active:cursor-grabbing",
                     dragOverId === conv.id && dragId !== conv.id && isPinned && "border-t-2 border-primary"
                   )}
                 >
