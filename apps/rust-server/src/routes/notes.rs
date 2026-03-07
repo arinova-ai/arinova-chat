@@ -26,7 +26,7 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/conversations/{id}/notes/{noteId}",
-            patch(update_note).delete(delete_note),
+            get(get_note).patch(update_note).delete(delete_note),
         )
 }
 
@@ -172,6 +172,44 @@ const NOTE_QUERY_BASE: &str = r#"
 "#;
 
 // ===== Handlers =====
+
+/// GET /api/conversations/:id/notes/:noteId
+async fn get_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
+    let row = sqlx::query_as::<_, NoteRow>(&format!(
+        "{} WHERE n.id = $1 AND n.conversation_id = $2",
+        NOTE_QUERY_BASE
+    ))
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(note)) => Json(note_to_json(&note)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Note not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
 
 #[derive(Deserialize)]
 struct ListNotesQuery {

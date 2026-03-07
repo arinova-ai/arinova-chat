@@ -22,7 +22,7 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/agent/conversations/{convId}/notes/{noteId}",
-            patch(agent_update_note).delete(agent_delete_note),
+            get(agent_get_note).patch(agent_update_note).delete(agent_delete_note),
         )
 }
 
@@ -135,6 +135,44 @@ async fn get_conv_member_ids(db: &sqlx::PgPool, conv_id: Uuid) -> Vec<String> {
 }
 
 // ===== Handlers =====
+
+/// GET /api/agent/conversations/:convId/notes/:noteId
+async fn agent_get_note(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !agent_is_member(&state.db, conv_id, agent.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Agent is not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
+    let row = sqlx::query_as::<_, NoteRow>(&format!(
+        "{} WHERE n.id = $1 AND n.conversation_id = $2",
+        NOTE_QUERY_BASE
+    ))
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(note)) => Json(note_to_json(&note)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Note not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
 
 #[derive(Deserialize)]
 struct ListNotesQuery {
