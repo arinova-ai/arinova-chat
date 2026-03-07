@@ -190,7 +190,7 @@ export interface AudioConfig {
 
 // ── Renderer ───────────────────────────────────────────────────
 
-export type RendererType = "pixi" | "threejs" | "sprite";
+export type RendererType = "pixi" | "threejs" | "sprite" | "avg";
 
 // ── v4: Sprite Renderer ─────────────────────────────────────────
 
@@ -281,6 +281,21 @@ export interface QualityConfig {
   performance?: QualityOverrides;
 }
 
+// ── v5: AVG (Visual Novel) Renderer ─────────────────────────────
+
+export interface AvgCharacterDef {
+  id: string;
+  name: string;
+  slotIndex: number;
+  /** Hotspot position as percentage { left%, top%, width%, height% } */
+  hotspot: { left: number; top: number; width: number; height: number };
+  /** Pose sprites: key = pose name, value = [frameA, frameB] paths */
+  sprites: Record<string, [string, string]>;
+  defaultSprite?: string;
+  /** Dedicated portrait/tachie image filename (transparent PNG) */
+  portrait?: string;
+}
+
 // ── Top-level Manifest ──────────────────────────────────────────
 
 export interface ThemeManifest {
@@ -316,6 +331,9 @@ export interface ThemeManifest {
 
   /** Quality mode overrides — alternative resource paths for high/performance */
   quality?: QualityConfig;
+
+  /** v5: AVG character definitions (visual-novel multi-slot) */
+  avgCharacters?: AvgCharacterDef[];
 
   /** v4: Sprite renderer scenes */
   scenes?: SpriteScenes;

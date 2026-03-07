@@ -264,6 +264,9 @@ fn validate_manifest(raw: &[u8]) -> Result<ManifestMeta, String> {
         "sprite" => {
             // sprite themes have their own structure — skip v2 zone/layer validation
         }
+        "avg" => {
+            // avg (visual novel) themes use avgCharacters, not zones/layers/characters
+        }
         _ if is_v3 => {
             // v3: needs room.model
             let has_room_model = meta
@@ -546,17 +549,31 @@ async fn upload_theme(
     let author_id = meta.author.as_ref().map(|a| a.id.as_str()).unwrap_or("").to_string();
     let author_name = meta.author.as_ref().map(|a| a.name.as_str()).unwrap_or("").to_string();
     let license = meta.license.as_deref().unwrap_or("standard").to_string();
-    let max_agents: i32 = meta
-        .zones
-        .as_ref()
-        .map(|zones| {
-            zones
-                .iter()
-                .filter_map(|z| z.get("capacity").and_then(|c| c.as_i64()))
-                .sum::<i64>() as i32
-        })
-        .unwrap_or(1)
-        .max(1);
+    // For AVG themes, derive max_agents from avgCharacters array length;
+    // otherwise fall back to zones capacity sum (existing logic).
+    let max_agents: i32 = {
+        let zones_capacity = meta
+            .zones
+            .as_ref()
+            .map(|zones| {
+                zones
+                    .iter()
+                    .filter_map(|z| z.get("capacity").and_then(|c| c.as_i64()))
+                    .sum::<i64>() as i32
+            })
+            .unwrap_or(0);
+
+        if zones_capacity > 0 {
+            zones_capacity
+        } else {
+            // Check for avgCharacters in the full manifest JSON
+            let avg_count = serde_json::from_slice::<Value>(&manifest_raw)
+                .ok()
+                .and_then(|v| v.get("avgCharacters")?.as_array().map(|a| a.len() as i32))
+                .unwrap_or(0);
+            if avg_count > 0 { avg_count } else { 1 }
+        }
+    }.max(1);
 
     if let Err(e) = sqlx::query(
         r#"INSERT INTO themes (id, name, version, description, renderer, preview, max_agents, tags, author_id, author_name, license)
