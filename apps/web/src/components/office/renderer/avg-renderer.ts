@@ -27,7 +27,7 @@ function statusToSpriteKey(status: AgentStatus): SpriteKey {
 
 const CANVAS_W = 1920;
 const CANVAS_H = 1072;
-const FRAME_INTERVAL = 500; // ms between frame A/B toggle
+const FRAME_INTERVAL = 2000; // ms between frame A/B toggle
 const MOBILE_BREAKPOINT = 768;
 const MOBILE_SCALE = 1.8;
 const MIN_ZOOM = 0.5;
@@ -169,6 +169,7 @@ export class AvgRenderer implements OfficeRenderer {
   private boundTouchStart: ((e: TouchEvent) => void) | null = null;
   private boundTouchMove: ((e: TouchEvent) => void) | null = null;
   private boundTouchEnd: (() => void) | null = null;
+  private disposed = false;
 
   // ── Init ───────────────────────────────────────────────────
 
@@ -185,6 +186,9 @@ export class AvgRenderer implements OfficeRenderer {
     this.containerH = height;
     this.charDefs = manifest?.avgCharacters ?? [];
     this.themeBase = themeId ? await getThemeBaseUrl(themeId) : "";
+
+    // Guard: if destroy() was called while awaiting themeBase, bail out
+    if (this.disposed) return;
 
     // Root container
     const root = document.createElement("div");
@@ -362,6 +366,7 @@ export class AvgRenderer implements OfficeRenderer {
   // ── OfficeRenderer interface ──────────────────────────────
 
   destroy(): void {
+    this.disposed = true;
     if (this.frameTimer) clearInterval(this.frameTimer);
     if (this.root) {
       if (this.boundTouchStart) this.root.removeEventListener("touchstart", this.boundTouchStart);
