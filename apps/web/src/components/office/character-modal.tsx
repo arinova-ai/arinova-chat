@@ -26,9 +26,7 @@ import { useRouter } from "next/navigation";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { api } from "@/lib/api";
-import { getThemeBaseUrl } from "./theme-loader";
 import type { Agent } from "./types";
-import type { ThemeManifest } from "./theme-types";
 
 const STATUS_BADGE: Record<string, { label: string; dot: string; bg: string; text: string }> = {
   working: { label: "Working", dot: "bg-green-400", bg: "bg-green-500/15", text: "text-green-400" },
@@ -64,129 +62,6 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/** Full-screen AVG visual novel overlay — bg + character tachie + dialog box */
-function AvgOverlay({
-  isOpen, onClose, themeId, manifest, slotIndex, agent, agents, boundAgentId, onBindingChange, onOpenChat,
-}: {
-  isOpen: boolean; onClose: () => void;
-  themeId: string; manifest: ThemeManifest; slotIndex: number;
-  agent: Agent | null; agents: Agent[];
-  boundAgentId?: string | null; onBindingChange?: () => void; onOpenChat?: (agentId: string) => void;
-}) {
-  const [themeBase, setThemeBase] = useState("");
-  useEffect(() => {
-    getThemeBaseUrl(themeId).then(setThemeBase);
-  }, [themeId]);
-
-  if (!isOpen) return null;
-
-  const charDef = manifest.avgCharacters?.find((c) => c.slotIndex === slotIndex);
-  const bgImage = manifest.canvas?.background?.image;
-  const ver = manifest.version ?? "";
-  const portraitSrc = charDef?.portrait ? `${themeBase}/${charDef.portrait}${ver ? `?v=${ver}` : ""}` : null;
-
-  const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
-  const title = (!agent?.name || isUuidName) ? (charDef?.name ?? "Character") : agent.name;
-  const badge = agent ? (STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle) : null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col safe-area-inset" onClick={onClose}>
-      {/* Background scene */}
-      {themeBase && bgImage && (
-        <img
-          src={`${themeBase}/${bgImage}`}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          draggable={false}
-        />
-      )}
-      <div className="absolute inset-0 bg-black/30" />
-
-      {/* Close button — respects safe area */}
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/70"
-        style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
-      >
-        ✕
-      </button>
-
-      {/* Character portrait — always takes remaining space, pushes dialog to bottom */}
-      <div className="relative flex-1 min-h-0 flex items-end justify-center overflow-hidden pointer-events-none">
-        {themeBase && portraitSrc && (
-          <img
-            src={portraitSrc}
-            alt={charDef?.name ?? ""}
-            draggable={false}
-            className="max-w-none max-h-full object-contain object-bottom"
-          />
-        )}
-      </div>
-
-      {/* Dialog box at bottom — respects safe area */}
-      <div
-        className="relative z-10 mx-3 mb-3 shrink-0 rounded-xl border border-white/10 bg-slate-900/85 px-5 py-4 backdrop-blur-md"
-        style={{ marginBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Name label */}
-        <div className="mb-2 flex items-center gap-2">
-          <span className="rounded bg-emerald-600/80 px-2 py-0.5 text-xs font-bold text-white">{title}</span>
-          {badge && (
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.bg} ${badge.text}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
-              {badge.label}
-            </span>
-          )}
-        </div>
-
-        {/* Agent info content */}
-        {agent ? (
-          <div className="space-y-1.5 text-sm text-slate-300">
-            {agent.currentTask && <p>{agent.currentTask.title}</p>}
-            {agent.model && <p className="text-xs text-slate-400">Model: <span className="font-mono">{agent.model}</span></p>}
-            {agent.tokenUsage && (
-              <p className="text-xs text-slate-400">
-                Tokens: {formatTokens(agent.tokenUsage.input)} in / {formatTokens(agent.tokenUsage.output)} out
-              </p>
-            )}
-            {agent.recentActivity.length > 0 && (
-              <p className="text-xs text-slate-400">{agent.recentActivity[0].text}</p>
-            )}
-            {!agent.currentTask && !agent.model && agent.recentActivity.length === 0 && (
-              <p className="text-slate-400">Waiting for activity...</p>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400">No agent connected to this slot.</p>
-        )}
-
-        {/* Action buttons */}
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            disabled={!boundAgentId}
-            onClick={() => { if (boundAgentId && onOpenChat) onOpenChat(boundAgentId); }}
-            className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Chat
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
-            title="Bind to Agent"
-          >
-            <Link2 className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -200,8 +75,6 @@ interface CharacterModalProps {
   onBindingChange?: () => void;
   /** Open inline chat panel instead of navigating away */
   onOpenChat?: (agentId: string) => void;
-  /** Theme manifest for portrait rendering */
-  manifest?: ThemeManifest | null;
 }
 
 const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
@@ -475,7 +348,7 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
   );
 }
 
-export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, slotIndex, boundAgentId, onBindingChange, onOpenChat, manifest }: CharacterModalProps) {
+export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, slotIndex, boundAgentId, onBindingChange, onOpenChat }: CharacterModalProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -486,24 +359,6 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // AVG themes use a full-screen visual novel overlay
-  if (manifest?.renderer === "avg" && manifest.avgCharacters) {
-    return (
-      <AvgOverlay
-        isOpen={isOpen}
-        onClose={onClose}
-        themeId={themeId}
-        manifest={manifest}
-        slotIndex={slotIndex}
-        agent={agent}
-        agents={agents}
-        boundAgentId={boundAgentId}
-        onBindingChange={onBindingChange}
-        onOpenChat={onOpenChat}
-      />
-    );
-  }
-
   const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
   const title = (!agent?.name || isUuidName) ? "Arinova Assistant" : agent.name;
   const content = agent
@@ -513,7 +368,7 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
   if (isMobile) {
     return (
       <Sheet open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl border-slate-700 bg-slate-900">
+        <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto rounded-t-2xl border-slate-700 bg-slate-900">
           <SheetHeader>
             <SheetTitle className="text-slate-100">{title}</SheetTitle>
             <SheetDescription className="sr-only">Character details</SheetDescription>

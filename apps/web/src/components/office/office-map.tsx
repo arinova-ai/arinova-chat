@@ -12,8 +12,6 @@ interface Props {
   selectedAgentId: string | null;
   onSelectAgent: (id: string) => void;
   onCharacterClick?: () => void;
-  onSlotClick?: (slotIndex: number) => void;
-  bindings?: { slotIndex: number; agentId: string }[];
   width: number;
   height: number;
   manifest?: ThemeManifest | null;
@@ -25,8 +23,6 @@ export default function OfficeMap({
   selectedAgentId,
   onSelectAgent,
   onCharacterClick,
-  onSlotClick,
-  bindings,
   width,
   height,
   manifest = null,
@@ -41,10 +37,6 @@ export default function OfficeMap({
   onSelectRef.current = onSelectAgent;
   const onCharacterClickRef = useRef(onCharacterClick);
   onCharacterClickRef.current = onCharacterClick;
-  const onSlotClickRef = useRef(onSlotClick);
-  onSlotClickRef.current = onSlotClick;
-  const bindingsRef = useRef(bindings);
-  bindingsRef.current = bindings;
 
   // Keep latest values accessible via refs for post-init application
   const pendingAgentsRef = useRef(agents);
@@ -74,7 +66,6 @@ export default function OfficeMap({
     const renderer = createRenderer(rendererType);
     renderer.onAgentClick = (id: string) => onSelectRef.current(id);
     renderer.onCharacterClick = () => onCharacterClickRef.current?.();
-    renderer.onSlotClick = (idx: number) => onSlotClickRef.current?.(idx);
 
     const resolveBaseUrl = themeId
       ? getThemeBaseUrl(themeId).then((url) => {
@@ -101,7 +92,6 @@ export default function OfficeMap({
         // Apply latest state
         renderer.updateAgents(pendingAgentsRef.current);
         renderer.selectAgent(pendingSelectionRef.current);
-        if (bindingsRef.current) renderer.updateBindings?.(bindingsRef.current);
       })
       .catch((err) => {
         console.warn("[OfficeMap] Renderer init failed:", err);
@@ -136,13 +126,6 @@ export default function OfficeMap({
       rendererRef.current?.selectAgent(selectedAgentId);
     }
   }, [selectedAgentId]);
-
-  // ── Bindings change ─────────────────────────────────────────
-  useEffect(() => {
-    if (readyRef.current && bindings) {
-      rendererRef.current?.updateBindings?.(bindings);
-    }
-  }, [bindings]);
 
   return <div ref={canvasRef} style={{ width, height }} className="rounded-xl overflow-hidden" />;
 }
