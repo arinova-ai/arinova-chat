@@ -98,41 +98,81 @@ const JS_LANGUAGES = new Set(["javascript", "js"]);
  * This preprocessing ensures tables are always parseable:
  * 1. Normalize \r\n and \r → \n
  * 2. Ensure a blank line before GFM table header + delimiter rows
+ * 3. Remove blank lines inserted mid-table (e.g. when plugin joins
+ *    text blocks with \n\n and the split falls inside a table)
  */
 export function preprocessMarkdown(raw: string): string {
   // 1. Normalize line endings
   let s = raw.replace(/\r\n?/g, "\n");
 
-  // 2. Ensure blank line before table blocks.
-  //    Detect table delimiter row: a line whose pipe-separated cells are all :?-+:?
+  // 2 & 3. Fix table formatting issues.
   //    Skip fenced code blocks (``` or ~~~) to avoid false positives.
   const lines = s.split("\n");
   const result: string[] = [];
   let inFence = false;
+  let inTable = false;
+  let tableColCount = 0;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     // Toggle fence state on ``` or ~~~ lines
     if (/^(`{3,}|~{3,})/.test(line.trimStart())) {
       inFence = !inFence;
     }
-    // Only apply table blank-line fix outside fenced code blocks
+    if (inFence) {
+      inTable = false;
+      result.push(line);
+      continue;
+    }
+
+    // Detect table start: header row followed by delimiter row
     if (
-      !inFence &&
       i >= 1 &&
       line.includes("-") &&
       line.includes("|") &&
       isTableDelimiterRow(line) &&
-      lines[i - 1].includes("|") // previous line is the header row
+      lines[i - 1].includes("|")
     ) {
       // Ensure a blank line before the header row
       const headerIdx = result.length - 1;
       if (headerIdx > 0 && result[headerIdx - 1].trim() !== "") {
         result.splice(headerIdx, 0, "");
       }
+      inTable = true;
+      tableColCount = line.trim().replace(/^\||\|$/g, "").split("|").length;
     }
+
+    // While inside a table, skip blank lines that break the table.
+    // A blank line normally ends a GFM table, but if the next non-blank
+    // line looks like a table row with the same column structure, it was
+    // an accidental split — remove the blank line to keep the table intact.
+    if (inTable && line.trim() === "") {
+      // Look ahead for the next non-blank line
+      let next = i + 1;
+      while (next < lines.length && lines[next].trim() === "") next++;
+      if (next < lines.length && isTableRow(lines[next], tableColCount)) {
+        // Skip this blank line — it's mid-table
+        continue;
+      }
+      // Genuine end of table
+      inTable = false;
+    }
+
+    // End table if we hit a non-table-row line
+    if (inTable && line.trim() !== "" && !line.trim().startsWith("|")) {
+      inTable = false;
+    }
+
     result.push(line);
   }
   return result.join("\n");
+}
+
+/** Returns true if the line looks like a table data row with the expected column count */
+function isTableRow(line: string, expectedCols: number): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("|")) return false;
+  const cols = trimmed.replace(/^\||\|$/g, "").split("|").length;
+  return cols === expectedCols;
 }
 
 /** Returns true if every pipe-separated cell matches the GFM delimiter pattern :?-+:? */
