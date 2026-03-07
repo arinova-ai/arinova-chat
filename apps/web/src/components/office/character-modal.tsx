@@ -111,21 +111,21 @@ function AvgOverlay({
         ✕
       </button>
 
-      {/* Character portrait — bottom-aligned, centered */}
-      {themeBase && portraitSrc && (
-        <div className="relative flex-1 min-h-0 flex items-end justify-center overflow-hidden pointer-events-none">
+      {/* Character portrait — always takes remaining space, pushes dialog to bottom */}
+      <div className="relative flex-1 min-h-0 flex items-end justify-center overflow-hidden pointer-events-none">
+        {themeBase && portraitSrc && (
           <img
             src={portraitSrc}
             alt={charDef?.name ?? ""}
             draggable={false}
-            className="max-w-none h-full object-contain object-bottom"
+            className="max-w-none max-h-full object-contain object-bottom"
           />
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Dialog box at bottom — respects safe area */}
       <div
-        className="relative z-10 mx-3 mb-3 rounded-xl border border-white/10 bg-slate-900/85 px-5 py-4 backdrop-blur-md"
+        className="relative z-10 mx-3 mb-3 shrink-0 rounded-xl border border-white/10 bg-slate-900/85 px-5 py-4 backdrop-blur-md"
         style={{ marginBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}
         onClick={(e) => e.stopPropagation()}
       >
