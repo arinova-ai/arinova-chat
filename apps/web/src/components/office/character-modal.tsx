@@ -64,31 +64,141 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/** Portrait cropped from the full-scene sprite layer */
-function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manifest: ThemeManifest; slotIndex: number }) {
+/** Full-screen AVG visual novel overlay — bg + character tachie + dialog box */
+function AvgOverlay({
+  isOpen, onClose, themeId, manifest, slotIndex, agent, agents, boundAgentId, onBindingChange, onOpenChat,
+}: {
+  isOpen: boolean; onClose: () => void;
+  themeId: string; manifest: ThemeManifest; slotIndex: number;
+  agent: Agent | null; agents: Agent[];
+  boundAgentId?: string | null; onBindingChange?: () => void; onOpenChat?: (agentId: string) => void;
+}) {
   const [themeBase, setThemeBase] = useState("");
-  const [imgRatio, setImgRatio] = useState(0); // naturalW / naturalH
   useEffect(() => {
     getThemeBaseUrl(themeId).then(setThemeBase);
   }, [themeId]);
 
+  if (!isOpen) return null;
+
   const charDef = manifest.avgCharacters?.find((c) => c.slotIndex === slotIndex);
-  if (!charDef || !themeBase) return null;
+  const bgImage = manifest.canvas?.background?.image;
+  const sprites = charDef
+    ? (charDef.sprites.idle ?? charDef.sprites.sleeping ?? Object.values(charDef.sprites)[0])
+    : null;
 
-  const sprites = charDef.sprites.idle ?? charDef.sprites.sleeping ?? Object.values(charDef.sprites)[0];
-  if (!sprites) return null;
+  const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
+  const title = (!agent?.name || isUuidName) ? (charDef?.name ?? "Character") : agent.name;
+  const badge = agent ? (STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle) : null;
 
-  const { left, top, width, height } = charDef.hotspot;
-  const cw = 220;
-  const ch = 320;
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" onClick={onClose}>
+      {/* Background scene */}
+      {themeBase && bgImage && (
+        <img
+          src={`${themeBase}/${bgImage}`}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          draggable={false}
+        />
+      )}
+      <div className="absolute inset-0 bg-black/30" />
 
-  // Compute positions once we know the image aspect ratio
+      {/* Close button */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/70"
+      >
+        ✕
+      </button>
+
+      {/* Character sprite — full height, centered */}
+      {themeBase && sprites && charDef && (
+        <div className="relative flex-1 min-h-0 flex items-end justify-center overflow-hidden pointer-events-none">
+          <CharacterTachie themeBase={themeBase} sprite={sprites[0]} hotspot={charDef.hotspot} />
+        </div>
+      )}
+
+      {/* Dialog box at bottom */}
+      <div
+        className="relative z-10 mx-3 mb-3 rounded-xl border border-white/10 bg-slate-900/85 px-5 py-4 backdrop-blur-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Name label */}
+        <div className="mb-2 flex items-center gap-2">
+          <span className="rounded bg-emerald-600/80 px-2 py-0.5 text-xs font-bold text-white">{title}</span>
+          {badge && (
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.bg} ${badge.text}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
+              {badge.label}
+            </span>
+          )}
+        </div>
+
+        {/* Agent info content */}
+        {agent ? (
+          <div className="space-y-1.5 text-sm text-slate-300">
+            {agent.currentTask && <p>{agent.currentTask.title}</p>}
+            {agent.model && <p className="text-xs text-slate-400">Model: <span className="font-mono">{agent.model}</span></p>}
+            {agent.tokenUsage && (
+              <p className="text-xs text-slate-400">
+                Tokens: {formatTokens(agent.tokenUsage.input)} in / {formatTokens(agent.tokenUsage.output)} out
+              </p>
+            )}
+            {agent.recentActivity.length > 0 && (
+              <p className="text-xs text-slate-400">{agent.recentActivity[0].text}</p>
+            )}
+            {!agent.currentTask && !agent.model && agent.recentActivity.length === 0 && (
+              <p className="text-slate-400">Waiting for activity...</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">No agent connected to this slot.</p>
+        )}
+
+        {/* Action buttons */}
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            disabled={!boundAgentId}
+            onClick={() => { if (boundAgentId && onOpenChat) onOpenChat(boundAgentId); }}
+            className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Chat
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
+            title="Bind to Agent"
+          >
+            <Link2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Renders the character tachie (standing illustration) from the full-scene sprite */
+function CharacterTachie({ themeBase, sprite, hotspot }: { themeBase: string; sprite: string; hotspot: { left: number; top: number; width: number; height: number } }) {
+  const [imgRatio, setImgRatio] = useState(0);
+  const containerRef = useCallback((el: HTMLDivElement | null) => {
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setContainerSize({ w: rect.width, h: rect.height });
+    }
+  }, []);
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
+  const { left, top, width, height } = hotspot;
+  const { w: cw, h: ch } = containerSize;
+
   let imgW = 0, imgH = 0, ox = 0, oy = 0;
-  if (imgRatio > 0) {
-    // Scale so the hotspot region covers the container
-    const sxFull = cw / (width / 100); // image width if hotspot width = container width
-    const syFull = ch / (height / 100) * imgRatio; // image width if hotspot height = container height
-    imgW = Math.min(sxFull, syFull);
+  if (imgRatio > 0 && cw > 0 && ch > 0) {
+    // Scale to fill container height with the character
+    const syFull = ch / (height / 100) * imgRatio;
+    imgW = syFull;
     imgH = imgW / imgRatio;
     const hotW = (width / 100) * imgW;
     const hotH = (height / 100) * imgH;
@@ -97,17 +207,17 @@ function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manife
   }
 
   return (
-    <div className="relative mx-auto mb-4 overflow-hidden rounded-xl bg-slate-800/50" style={{ width: cw, height: ch }}>
+    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
       <img
-        src={`${themeBase}/${sprites[0]}`}
-        alt={charDef.name}
+        src={`${themeBase}/${sprite}`}
+        alt=""
         draggable={false}
         className="absolute max-w-none"
         onLoad={(e) => {
           const img = e.currentTarget;
           if (img.naturalWidth && img.naturalHeight) setImgRatio(img.naturalWidth / img.naturalHeight);
         }}
-        style={imgRatio > 0 ? {
+        style={imgRatio > 0 && cw > 0 ? {
           width: imgW,
           height: imgH,
           left: ox,
@@ -417,13 +527,29 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  // AVG themes use a full-screen visual novel overlay
+  if (manifest?.renderer === "avg" && manifest.avgCharacters) {
+    return (
+      <AvgOverlay
+        isOpen={isOpen}
+        onClose={onClose}
+        themeId={themeId}
+        manifest={manifest}
+        slotIndex={slotIndex}
+        agent={agent}
+        agents={agents}
+        boundAgentId={boundAgentId}
+        onBindingChange={onBindingChange}
+        onOpenChat={onOpenChat}
+      />
+    );
+  }
+
   const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
   const title = (!agent?.name || isUuidName) ? "Arinova Assistant" : agent.name;
   const content = agent
     ? <CharacterDetail agent={agent} agents={agents} themeId={themeId} slotIndex={slotIndex} boundAgentId={boundAgentId} onBindingChange={onBindingChange} onOpenChat={onOpenChat} />
     : <CharacterDetailOffline />;
-
-  const showPortrait = manifest?.renderer === "avg" && manifest.avgCharacters;
 
   if (isMobile) {
     return (
@@ -434,7 +560,6 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
             <SheetDescription className="sr-only">Character details</SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-6">
-            {showPortrait && <AvgPortrait themeId={themeId} manifest={manifest} slotIndex={slotIndex} />}
             {content}
           </div>
         </SheetContent>
@@ -449,7 +574,6 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
           <DialogTitle className="text-slate-100">{title}</DialogTitle>
           <DialogDescription className="sr-only">Character details</DialogDescription>
         </DialogHeader>
-        {showPortrait && <AvgPortrait themeId={themeId} manifest={manifest} slotIndex={slotIndex} />}
         {content}
       </DialogContent>
     </Dialog>
