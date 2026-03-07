@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -8,10 +8,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ImageLightbox } from "./image-lightbox";
-import { Loader2, Image, FileText, Download } from "lucide-react";
+import { Loader2, FileText, Download } from "lucide-react";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 
 export type MediaFilesTab = "media" | "files";
@@ -68,7 +67,7 @@ interface MediaFilesPanelProps {
 
 export function MediaFilesPanel({ open, onOpenChange, conversationId, initialTab = "media" }: MediaFilesPanelProps) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<MediaFilesTab>(initialTab);
+  const tab = initialTab;
   const [media, setMedia] = useState<TabState>(INITIAL_TAB);
   const [files, setFiles] = useState<TabState>(INITIAL_TAB);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -77,7 +76,6 @@ export function MediaFilesPanel({ open, onOpenChange, conversationId, initialTab
   // Reset when conversation changes or panel opens
   useEffect(() => {
     if (open) {
-      setTab(initialTab);
       setMedia(INITIAL_TAB);
       setFiles(INITIAL_TAB);
     }
@@ -150,36 +148,12 @@ export function MediaFilesPanel({ open, onOpenChange, conversationId, initialTab
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-80 sm:max-w-sm p-0 flex flex-col">
         <SheetHeader className="px-4 pt-4 pb-2">
-          <SheetTitle className="text-base">{t("chat.mediaFiles.title")}</SheetTitle>
+          <SheetTitle className="text-base">
+            {tab === "media" ? t("chat.mediaFiles.media") : t("chat.mediaFiles.files")}
+          </SheetTitle>
         </SheetHeader>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-border px-4">
-          <button
-            className={cn(
-              "flex-1 pb-2 text-sm font-medium border-b-2 transition-colors",
-              tab === "media"
-                ? "border-blue-500 text-blue-400"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-            onClick={() => setTab("media")}
-          >
-            <Image className="mr-1.5 inline h-3.5 w-3.5" />
-            {t("chat.mediaFiles.media")}
-          </button>
-          <button
-            className={cn(
-              "flex-1 pb-2 text-sm font-medium border-b-2 transition-colors",
-              tab === "files"
-                ? "border-blue-500 text-blue-400"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-            onClick={() => setTab("files")}
-          >
-            <FileText className="mr-1.5 inline h-3.5 w-3.5" />
-            {t("chat.mediaFiles.files")}
-          </button>
-        </div>
+        <div className="border-b border-border" />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
