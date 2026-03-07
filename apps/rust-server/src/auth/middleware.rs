@@ -84,10 +84,10 @@ where
             hasher.update(api_key.as_bytes());
             let key_hash = hex::encode(hasher.finalize());
 
-            let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>, bool)>(
+            let row = sqlx::query_as::<_, (String, String, String, Option<String>, bool)>(
                 r#"SELECT k.user_id, u.email, u.name, u.username, u.banned
                    FROM creator_api_keys k
-                   JOIN users u ON u.id = k.user_id
+                   JOIN "user" u ON u.id = k.user_id
                    WHERE k.key_hash = $1 AND k.revoked_at IS NULL"#,
             )
             .bind(&key_hash)
@@ -114,7 +114,7 @@ where
             });
 
             return Ok(AuthUser {
-                id: row.0.to_string(),
+                id: row.0,
                 email: row.1,
                 name: row.2,
                 username: row.3,

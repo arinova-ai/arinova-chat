@@ -9,7 +9,6 @@ use chrono::NaiveDateTime;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
 use crate::AppState;
@@ -27,7 +26,7 @@ pub fn router() -> Router<AppState> {
 
 #[derive(sqlx::FromRow)]
 struct ApiKeyRow {
-    id: Uuid,
+    id: String,
     name: String,
     key_prefix: String,
     last_used_at: Option<NaiveDateTime>,
@@ -76,22 +75,12 @@ async fn create_key(
     let key_hash = hash_key(&raw_key);
     let key_prefix = &raw_key[..12]; // "ari_cli_xxxx"
 
-    let user_uuid = match Uuid::parse_str(&user.id) {
-        Ok(u) => u,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Invalid user ID"})),
-            );
-        }
-    };
-
-    let result = sqlx::query_scalar::<_, Uuid>(
+    let result = sqlx::query_scalar::<_, String>(
         r#"INSERT INTO creator_api_keys (user_id, name, key_hash, key_prefix)
            VALUES ($1, $2, $3, $4)
-           RETURNING id"#,
+           RETURNING id::text"#,
     )
-    .bind(user_uuid)
+    .bind(&user.id)
     .bind(name)
     .bind(&key_hash)
     .bind(key_prefix)
@@ -127,18 +116,13 @@ async fn list_keys(
     State(state): State<AppState>,
     user: AuthUser,
 ) -> (StatusCode, Json<Value>) {
-    let user_uuid = match Uuid::parse_str(&user.id) {
-        Ok(u) => u,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid user ID"}))),
-    };
-
     let rows = sqlx::query_as::<_, ApiKeyRow>(
-        r#"SELECT id, name, key_prefix, last_used_at, created_at, revoked_at
+        r#"SELECT id::text, name, key_prefix, last_used_at, created_at, revoked_at
            FROM creator_api_keys
            WHERE user_id = $1
            ORDER BY created_at DESC"#,
     )
-    .bind(user_uuid)
+    .bind(&user.id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
@@ -167,19 +151,14 @@ async fn list_keys(
 async fn revoke_key(
     State(state): State<AppState>,
     user: AuthUser,
-    Path(key_id): Path<Uuid>,
+    Path(key_id): Path<String>,
 ) -> (StatusCode, Json<Value>) {
-    let user_uuid = match Uuid::parse_str(&user.id) {
-        Ok(u) => u,
-        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid user ID"}))),
-    };
-
     let result = sqlx::query(
         r#"UPDATE creator_api_keys SET revoked_at = NOW()
-           WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL"#,
+           WHERE id::text = $1 AND user_id = $2 AND revoked_at IS NULL"#,
     )
-    .bind(key_id)
-    .bind(user_uuid)
+    .bind(&key_id)
+    .bind(&user.id)
     .execute(&state.db)
     .await;
 
