@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, Path, State},
+    extract::{DefaultBodyLimit, Multipart, Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{get, post, delete},
@@ -45,7 +45,10 @@ const ALLOWED_EXTENSIONS: &[&str] = &[
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/themes/upload", post(upload_theme))
+        .route(
+            "/api/themes/upload",
+            post(upload_theme).layer(axum::extract::DefaultBodyLimit::max(MAX_BUNDLE_SIZE)),
+        )
         .route("/api/themes", get(list_themes))
         .route("/api/themes/config", get(theme_config))
         .route("/api/themes/owned", get(owned_themes))
