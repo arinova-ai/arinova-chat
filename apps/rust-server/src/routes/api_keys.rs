@@ -16,8 +16,8 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/creator/api-keys", get(list_keys).post(create_key))
-        .route("/api/creator/api-keys/{id}", delete(revoke_key))
         .route("/api/creator/api-keys/whoami", get(whoami))
+        .route("/api/creator/api-keys/{id}", delete(revoke_key))
 }
 
 // ---------------------------------------------------------------------------
