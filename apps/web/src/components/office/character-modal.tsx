@@ -78,23 +78,30 @@ function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manife
   if (!sprites) return null;
 
   const { left, top, width, height } = charDef.hotspot;
-  // Scale factor: how much to enlarge the image so the hotspot area fills the container
-  const scaleX = 100 / width;
-  const scaleY = 100 / height;
+  // Uniform scale: enlarge the full-scene image so the hotspot region covers the container
+  const cw = 220;
+  const ch = 320;
+  const sx = cw / (width / 100);
+  const sy = ch / (height / 100);
+  const scale = Math.max(sx, sy);
+  // Position so the hotspot region is centered in the container
+  const hotW = (width / 100) * scale;
+  const hotH = (height / 100) * scale;
+  const ox = -(left / 100) * scale + (cw - hotW) / 2;
+  const oy = -(top / 100) * scale + (ch - hotH) / 2;
 
   return (
-    <div className="relative mx-auto mb-4 overflow-hidden rounded-xl bg-slate-800/50" style={{ width: 220, height: 320 }}>
+    <div className="relative mx-auto mb-4 overflow-hidden rounded-xl bg-slate-800/50" style={{ width: cw, height: ch }}>
       <img
         src={`${themeBase}/${sprites[0]}`}
         alt={charDef.name}
         draggable={false}
         className="absolute"
         style={{
-          width: `${scaleX * 100}%`,
-          height: `${scaleY * 100}%`,
-          left: `${-left * scaleX}%`,
-          top: `${-top * scaleY}%`,
-          objectFit: "cover",
+          width: scale,
+          height: "auto",
+          left: ox,
+          top: oy,
         }}
       />
     </div>
