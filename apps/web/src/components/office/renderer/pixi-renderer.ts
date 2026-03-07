@@ -617,17 +617,7 @@ export class PixiRenderer implements OfficeRenderer {
     for (const [seatId, overlay] of this.seatOverlays) {
       const agentId = this.seatAgentMap.get(seatId);
       if (!agentId) {
-        // No agent assigned — show default/idle sprite or hide
-        const texMap = this.seatSpriteTextures.get(seatId);
-        const defaultTextures = texMap?.get("idle") ?? texMap?.values().next().value;
-        if (defaultTextures && defaultTextures.length > 0) {
-          overlay.sprite.texture = defaultTextures[overlay.frameIndex % defaultTextures.length];
-          overlay.currentStatus = "idle";
-          overlay.sprite.visible = true;
-          overlay.sprite.alpha = 0.4; // dimmed when no agent
-        } else {
-          overlay.sprite.visible = false;
-        }
+        overlay.sprite.visible = false;
         continue;
       }
 
