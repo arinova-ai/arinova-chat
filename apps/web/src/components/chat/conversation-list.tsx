@@ -64,7 +64,7 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
               type="button"
               onClick={() => setTab(tb)}
               className={cn(
-                "shrink-0 rounded-lg px-3 py-1 text-xs font-medium transition-colors",
+                "shrink-0 whitespace-nowrap rounded-lg px-3 py-1 text-xs font-medium transition-colors",
                 tab === tb
                   ? "bg-blue-600 text-white"
                   : "bg-secondary text-muted-foreground hover:text-foreground"
