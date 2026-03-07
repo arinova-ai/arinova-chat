@@ -88,7 +88,7 @@ function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manife
     // Scale so the hotspot region covers the container
     const sxFull = cw / (width / 100); // image width if hotspot width = container width
     const syFull = ch / (height / 100) * imgRatio; // image width if hotspot height = container height
-    imgW = Math.max(sxFull, syFull);
+    imgW = Math.min(sxFull, syFull);
     imgH = imgW / imgRatio;
     const hotW = (width / 100) * imgW;
     const hotH = (height / 100) * imgH;
