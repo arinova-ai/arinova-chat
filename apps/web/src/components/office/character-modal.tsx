@@ -102,7 +102,7 @@ function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manife
         src={`${themeBase}/${sprites[0]}`}
         alt={charDef.name}
         draggable={false}
-        className="absolute"
+        className="absolute max-w-none"
         onLoad={(e) => {
           const img = e.currentTarget;
           if (img.naturalWidth && img.naturalHeight) setImgRatio(img.naturalWidth / img.naturalHeight);
