@@ -80,6 +80,7 @@
   "chat.mentionPlaceholder": "@menciona un agente...",
   "chat.maxImages": "Máximo 9 imágenes",
   "chat.fileTooLarge": "El archivo excede el límite de 10 MB",
+  "chat.unsupportedFileType": "Tipo de archivo no compatible",
   "chat.uploadFailed": "Error al subir, inténtalo de nuevo",
   "chat.imagesSelected": "{count} imágenes seleccionadas",
   "chat.imageCount": "{n}/{max}",

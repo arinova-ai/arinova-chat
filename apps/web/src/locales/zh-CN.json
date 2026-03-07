@@ -80,6 +80,7 @@
   "chat.mentionPlaceholder": "@提及一个 Agent...",
   "chat.maxImages": "最多 9 张图片",
   "chat.fileTooLarge": "文件超过 10 MB 限制",
+  "chat.unsupportedFileType": "不支持的文件类型",
   "chat.uploadFailed": "上传失败，请重试",
   "chat.imagesSelected": "已选择 {count} 张图片",
   "chat.imageCount": "{n}/{max}",

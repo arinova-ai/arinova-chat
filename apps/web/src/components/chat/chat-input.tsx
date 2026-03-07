@@ -215,7 +215,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     }
     const validFiles = accepted.filter((f) => !isFileTooLarge(f));
     if (validFiles.length === 0) {
-      if (accepted.length === 0) useToastStore.getState().addToast("Unsupported file type");
+      if (accepted.length === 0) useToastStore.getState().addToast(t("chat.unsupportedFileType"), "error");
     } else {
       setPendingFiles((prev) => {
         const combined = [...prev, ...validFiles];
@@ -988,7 +988,11 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const accepted = Array.from(files).filter(isAcceptedFile);
-    if (accepted.length === 0) return;
+    if (accepted.length === 0) {
+      useToastStore.getState().addToast(t("chat.unsupportedFileType"), "error");
+      e.target.value = "";
+      return;
+    }
     const tooLarge = accepted.filter(isFileTooLarge);
     if (tooLarge.length > 0) {
       const names = tooLarge.map((f) => f.name).join(", ");
