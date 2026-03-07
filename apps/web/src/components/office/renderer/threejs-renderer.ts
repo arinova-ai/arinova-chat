@@ -270,17 +270,21 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
   // ── init ──────────────────────────────────────────────────────
 
+  private assetsBaseUrl = "/themes";
+
   async init(
     container: HTMLDivElement,
     width: number,
     height: number,
     manifest: ThemeManifest | null,
     _themeId?: string,
+    assetsBaseUrl?: string,
   ): Promise<void> {
     this.container = container;
     this.width = width;
     this.height = height;
     this.manifest = manifest;
+    if (assetsBaseUrl) this.assetsBaseUrl = assetsBaseUrl;
     this.quality = readThemeQuality();
     this.hints = resolveRendererHints(this.quality, manifest);
     this.canvasW = manifest?.canvas?.width ?? DEFAULT_CANVAS_W;
@@ -304,7 +308,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     const bgImageDefault = manifest?.canvas?.background?.image;
     if (bgImageDefault && isV3Theme(manifest)) {
       const bgImage = this.resolveQualityPath("background", "image", bgImageDefault);
-      const bgUrl = `/themes/${manifest.id}/${bgImage}`;
+      const bgUrl = `${this.assetsBaseUrl}/${manifest.id}/${bgImage}`;
       new THREE.TextureLoader().load(bgUrl, (tex) => {
         tex.colorSpace = THREE.SRGBColorSpace;
         this.backgroundTexture = tex;
@@ -851,7 +855,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
     const loader = await this.createGLTFLoader();
 
     const roomModel = this.resolveQualityPath("room", "model", this.manifest.room.model);
-    const roomUrl = `/themes/${this.manifest.id}/${roomModel}`;
+    const roomUrl = `${this.assetsBaseUrl}/${this.manifest.id}/${roomModel}`;
     try {
       const gltf = await loader.loadAsync(roomUrl);
       this.roomScene = gltf.scene;
@@ -903,7 +907,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
     // Load main character model (with walk animation)
     const charModel = this.resolveQualityPath("character", "model", this.manifest.character.model);
-    const charUrl = `/themes/${this.manifest.id}/${charModel}`;
+    const charUrl = `${this.assetsBaseUrl}/${this.manifest.id}/${charModel}`;
     try {
       const gltf = await loader.loadAsync(charUrl);
       this.characterModel = gltf.scene;
@@ -953,7 +957,7 @@ export class ThreeJSRenderer implements OfficeRenderer {
 
     // Load separate idle model if specified
     if (this.manifest.character.idleModel) {
-      const idleUrl = `/themes/${this.manifest.id}/${this.manifest.character.idleModel}`;
+      const idleUrl = `${this.assetsBaseUrl}/${this.manifest.id}/${this.manifest.character.idleModel}`;
       try {
         const idleGltf = await loader.loadAsync(idleUrl);
         const animMap = this.manifest.character?.animations ?? {};

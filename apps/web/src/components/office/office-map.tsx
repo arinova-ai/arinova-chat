@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Agent } from "./types";
 import type { ThemeManifest, RendererType } from "./theme-types";
 import { createRenderer } from "./renderer";
+import { getThemeBaseUrl } from "./theme-loader";
 import type { OfficeRenderer } from "./renderer/types";
 
 interface Props {
@@ -66,8 +67,17 @@ export default function OfficeMap({
     renderer.onAgentClick = (id: string) => onSelectRef.current(id);
     renderer.onCharacterClick = () => onCharacterClickRef.current?.();
 
-    renderer
-      .init(container, width, height, manifest, themeId)
+    const resolveBaseUrl = themeId
+      ? getThemeBaseUrl(themeId).then((url) => {
+          // getThemeBaseUrl returns "baseUrl/themeId", strip the themeId suffix
+          // because the renderer constructs "base/themeId/file" itself
+          const idx = url.lastIndexOf(`/${themeId}`);
+          return idx >= 0 ? url.substring(0, idx) : url;
+        })
+      : Promise.resolve("/themes");
+
+    resolveBaseUrl
+      .then((assetsBase) => renderer.init(container, width, height, manifest, themeId, assetsBase))
       .then(() => {
         if (destroyed) {
           renderer.destroy();

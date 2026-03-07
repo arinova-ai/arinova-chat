@@ -9,6 +9,7 @@ export interface OfficeRenderer {
     height: number,
     manifest: ThemeManifest | null,
     themeId?: string,
+    assetsBaseUrl?: string,
   ): Promise<void>;
 
   /** Tear down the renderer and free all resources. */

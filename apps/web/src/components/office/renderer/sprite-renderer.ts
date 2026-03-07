@@ -370,16 +370,20 @@ export class SpriteRenderer implements OfficeRenderer {
   private pinchMidX = 0;
   private pinchMidY = 0;
 
+  private assetsBaseUrl = "/themes";
+
   async init(
     container: HTMLDivElement,
     _width: number,
     _height: number,
     manifest: ThemeManifest | null,
     themeId?: string,
+    assetsBaseUrl?: string,
   ): Promise<void> {
     this.container = container;
     this.manifest = manifest;
     this.themeId = themeId ?? manifest?.id ?? "";
+    if (assetsBaseUrl) this.assetsBaseUrl = assetsBaseUrl;
 
     // Inject CSS
     this.styleEl = document.createElement("style");
@@ -415,7 +419,7 @@ export class SpriteRenderer implements OfficeRenderer {
       layer.style.opacity = key === this.currentScene ? "1" : "0";
 
       const img = document.createElement("img");
-      img.src = `/themes/${this.themeId}/${scene.background}`;
+      img.src = `${this.assetsBaseUrl}/${this.themeId}/${scene.background}`;
       img.alt = `${this.themeId} ${key}`;
       img.draggable = false;
       layer.appendChild(img);

@@ -408,15 +408,19 @@ export class PixiRenderer implements OfficeRenderer {
 
   // ── init ──────────────────────────────────────────────────────
 
+  private assetsBaseUrl = "/themes";
+
   async init(
     container: HTMLDivElement,
     width: number,
     height: number,
     manifest: ThemeManifest | null,
     themeId?: string,
+    assetsBaseUrl?: string,
   ): Promise<void> {
     this.manifest = manifest;
     this.themeId = themeId;
+    if (assetsBaseUrl) this.assetsBaseUrl = assetsBaseUrl;
     this.width = width;
     this.height = height;
     this.statusColors = parseStatusColors(manifest);
@@ -478,7 +482,7 @@ export class PixiRenderer implements OfficeRenderer {
     const hasBgImage = !!manifest.canvas?.background?.image;
     if (bgLayer && hasBgImage && this.themeId) {
       try {
-        const bgUrl = `/themes/${this.themeId}/${manifest.canvas.background.image}`;
+        const bgUrl = `${this.assetsBaseUrl}/${this.themeId}/${manifest.canvas.background.image}`;
         const texture = await Assets.load(bgUrl);
         this.loadedAssetUrls.push(bgUrl);
         const bgSprite = new PixiSprite(texture);
@@ -496,7 +500,7 @@ export class PixiRenderer implements OfficeRenderer {
     const hasAtlas = !!manifest.characters?.atlas;
     if (hasAtlas && this.themeId) {
       try {
-        const atlasUrl = `/themes/${this.themeId}/${manifest.characters.atlas}`;
+        const atlasUrl = `${this.assetsBaseUrl}/${this.themeId}/${manifest.characters.atlas}`;
         const sheetTexture = await Assets.load(atlasUrl);
         this.loadedAssetUrls.push(atlasUrl);
         this.frameSets = extractFrames(
