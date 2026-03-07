@@ -7,6 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { PageTitle } from "@/components/ui/page-title";
 import { useTranslation } from "@/lib/i18n";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
@@ -30,6 +31,10 @@ import {
   Gamepad2,
   Users2,
   Upload,
+  KeyRound,
+  Copy,
+  Check,
+  Trash2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -86,7 +91,7 @@ interface CreatorStickerPack {
 // Tabs
 // ---------------------------------------------------------------------------
 
-type Tab = "overview" | "stickers" | "agents" | "themes" | "community" | "spaces";
+type Tab = "overview" | "stickers" | "agents" | "themes" | "community" | "spaces" | "apikeys";
 
 const TAB_DEFS: { key: Tab; i18nKey: string; icon: typeof LayoutDashboard }[] = [
   { key: "overview", i18nKey: "creator.tab.overview", icon: LayoutDashboard },
@@ -95,6 +100,7 @@ const TAB_DEFS: { key: Tab; i18nKey: string; icon: typeof LayoutDashboard }[] = 
   { key: "themes", i18nKey: "creator.tab.themes", icon: Palette },
   { key: "community", i18nKey: "creator.tab.community", icon: Users },
   { key: "spaces", i18nKey: "creator.tab.spaces", icon: Gamepad2 },
+  { key: "apikeys", i18nKey: "creator.tab.apikeys", icon: KeyRound },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1080,6 +1086,180 @@ function SpacesTab({ t }: { t: (k: string) => string }) {
 }
 
 // ---------------------------------------------------------------------------
+// API Keys Tab
+// ---------------------------------------------------------------------------
+
+interface ApiKeyItem {
+  id: string;
+  name: string;
+  prefix: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+function ApiKeysTab({ t }: { t: (k: string) => string }) {
+  const [keys, setKeys] = useState<ApiKeyItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const fetchKeys = useCallback(() => {
+    setLoading(true);
+    api<{ keys: ApiKeyItem[] }>("/api/creator/api-keys")
+      .then((data) => setKeys(data.keys))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchKeys();
+  }, [fetchKeys]);
+
+  const handleCreate = async () => {
+    const name = newKeyName.trim();
+    if (!name) return;
+    setCreating(true);
+    try {
+      const data = await api<{ id: string; name: string; key: string; prefix: string }>(
+        "/api/creator/api-keys",
+        { method: "POST", body: JSON.stringify({ name }) },
+      );
+      setRevealedKey(data.key);
+      setNewKeyName("");
+      fetchKeys();
+    } catch {
+      // handled by api()
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRevoke = async (id: string) => {
+    try {
+      await api(`/api/creator/api-keys/${id}`, { method: "DELETE" });
+      fetchKeys();
+    } catch {
+      // handled by api()
+    }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const activeKeys = keys.filter((k) => !k.revokedAt);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          {t("creator.apikeys.title")} ({activeKeys.length})
+        </h2>
+      </div>
+
+      {/* Create new key */}
+      <div className="flex gap-2">
+        <Input
+          value={newKeyName}
+          onChange={(e) => setNewKeyName(e.target.value)}
+          placeholder={t("creator.apikeys.namePlaceholder")}
+          className="bg-secondary border-border text-sm"
+          onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+        />
+        <Button
+          size="sm"
+          variant="secondary"
+          className="gap-1 shrink-0"
+          disabled={creating || !newKeyName.trim()}
+          onClick={handleCreate}
+        >
+          {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+          {t("creator.apikeys.create")}
+        </Button>
+      </div>
+
+      {/* Revealed key (shown once after creation) */}
+      {revealedKey && (
+        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4 space-y-2">
+          <p className="text-xs font-medium text-green-400">{t("creator.apikeys.createdNote")}</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded-lg bg-black/30 px-3 py-2 text-xs font-mono break-all select-all">
+              {revealedKey}
+            </code>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 shrink-0"
+              onClick={() => handleCopy(revealedKey)}
+            >
+              {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <Button size="sm" variant="ghost" className="text-xs" onClick={() => setRevealedKey(null)}>
+            {t("creator.apikeys.dismiss")}
+          </Button>
+        </div>
+      )}
+
+      {/* Key list */}
+      {loading ? (
+        <div className="flex h-20 items-center justify-center">
+          <ArinovaSpinner size="sm" />
+        </div>
+      ) : activeKeys.length === 0 && !revealedKey ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <KeyRound className="h-8 w-8 mb-2 opacity-40" />
+          <p className="text-sm">{t("creator.apikeys.empty")}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {activeKeys.map((k) => (
+            <div
+              key={k.id}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
+                <KeyRound className="h-5 w-5 text-brand-text" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold truncate">{k.name}</h3>
+                <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <code className="font-mono">{k.prefix}...</code>
+                  <span>
+                    {t("creator.apikeys.created")}{" "}
+                    {new Date(k.createdAt).toLocaleDateString()}
+                  </span>
+                  {k.lastUsedAt && (
+                    <span>
+                      {t("creator.apikeys.lastUsed")}{" "}
+                      {new Date(k.lastUsedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-400"
+                onClick={() => handleRevoke(k.id)}
+                title={t("creator.apikeys.revoke")}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -1203,6 +1383,7 @@ function CreatorConsoleContent() {
             {tab === "themes" && <ThemesTab t={t} />}
             {tab === "community" && <CommunityTab t={t} />}
             {tab === "spaces" && <SpacesTab t={t} />}
+            {tab === "apikeys" && <ApiKeysTab t={t} />}
           </div>
         </div>
 
