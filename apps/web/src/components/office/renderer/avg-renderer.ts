@@ -231,7 +231,7 @@ export class AvgRenderer implements OfficeRenderer {
     // Character layer (two overlapping imgs for A/B frame toggle)
     const layer = document.createElement("div");
     layer.className = "avg-char-layer";
-    layer.style.opacity = "0.4"; // default: sleeping (no agent)
+    layer.style.opacity = "1";
 
     const frameA = document.createElement("img");
     const frameB = document.createElement("img");
@@ -443,8 +443,8 @@ export class AvgRenderer implements OfficeRenderer {
           nameLabel.textContent = agent.name;
         }
       } else {
-        // No agent or offline — sleeping pose with reduced opacity
-        charEl.layer.style.opacity = "0.4";
+        // No agent or offline — sleeping pose, full opacity
+        charEl.layer.style.opacity = "1";
         const sleepPose: SpriteKey = "sleeping";
         if (this.currentPoses.get(def.slotIndex) !== sleepPose) {
           this.currentPoses.set(def.slotIndex, sleepPose);

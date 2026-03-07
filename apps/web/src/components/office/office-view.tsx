@@ -55,15 +55,23 @@ function OfficeViewInner() {
     fetchBindings();
   }, [fetchBindings]);
 
-  // Auto-bind first display agent to slot 0 when no bindings exist
+  // Auto-bind all display agents to slots when no bindings exist
   useEffect(() => {
     if (bindings.length > 0 || displayAgents.length === 0 || autoBindAttempted.current) return;
     autoBindAttempted.current = true;
-    api("/api/office/bindings", {
-      method: "PUT",
-      body: JSON.stringify({ themeId, slotIndex: 0, agentId: displayAgents[0].id }),
-      silent: true,
-    }).then(() => fetchBindings()).catch(() => {});
+    const bindAll = async () => {
+      for (let i = 0; i < displayAgents.length; i++) {
+        try {
+          await api("/api/office/bindings", {
+            method: "PUT",
+            body: JSON.stringify({ themeId, slotIndex: i, agentId: displayAgents[i].id }),
+            silent: true,
+          });
+        } catch { /* skip failed slots */ }
+      }
+      fetchBindings();
+    };
+    bindAll();
   }, [bindings.length, displayAgents, themeId, fetchBindings]);
 
   // Derive character agent from the clicked slot's binding.
