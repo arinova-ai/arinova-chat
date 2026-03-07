@@ -26,7 +26,9 @@ import { useRouter } from "next/navigation";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { api } from "@/lib/api";
+import { getThemeBaseUrl } from "./theme-loader";
 import type { Agent } from "./types";
+import type { ThemeManifest } from "./theme-types";
 
 const STATUS_BADGE: Record<string, { label: string; dot: string; bg: string; text: string }> = {
   working: { label: "Working", dot: "bg-green-400", bg: "bg-green-500/15", text: "text-green-400" },
@@ -62,6 +64,43 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+/** Portrait cropped from the full-scene sprite layer */
+function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manifest: ThemeManifest; slotIndex: number }) {
+  const [themeBase, setThemeBase] = useState("");
+  useEffect(() => {
+    getThemeBaseUrl(themeId).then(setThemeBase);
+  }, [themeId]);
+
+  const charDef = manifest.avgCharacters?.find((c) => c.slotIndex === slotIndex);
+  if (!charDef || !themeBase) return null;
+
+  const sprites = charDef.sprites.idle ?? charDef.sprites.sleeping ?? Object.values(charDef.sprites)[0];
+  if (!sprites) return null;
+
+  const { left, top, width, height } = charDef.hotspot;
+  // Scale factor: how much to enlarge the image so the hotspot area fills the container
+  const scaleX = 100 / width;
+  const scaleY = 100 / height;
+
+  return (
+    <div className="relative mx-auto mb-4 overflow-hidden rounded-xl bg-slate-800/50" style={{ width: 220, height: 320 }}>
+      <img
+        src={`${themeBase}/${sprites[0]}`}
+        alt={charDef.name}
+        draggable={false}
+        className="absolute"
+        style={{
+          width: `${scaleX * 100}%`,
+          height: `${scaleY * 100}%`,
+          left: `${-left * scaleX}%`,
+          top: `${-top * scaleY}%`,
+          objectFit: "cover",
+        }}
+      />
+    </div>
+  );
+}
+
 interface CharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -75,6 +114,8 @@ interface CharacterModalProps {
   onBindingChange?: () => void;
   /** Open inline chat panel instead of navigating away */
   onOpenChat?: (agentId: string) => void;
+  /** Theme manifest for portrait rendering */
+  manifest?: ThemeManifest | null;
 }
 
 const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
@@ -348,7 +389,7 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
   );
 }
 
-export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, slotIndex, boundAgentId, onBindingChange, onOpenChat }: CharacterModalProps) {
+export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, slotIndex, boundAgentId, onBindingChange, onOpenChat, manifest }: CharacterModalProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -365,15 +406,18 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
     ? <CharacterDetail agent={agent} agents={agents} themeId={themeId} slotIndex={slotIndex} boundAgentId={boundAgentId} onBindingChange={onBindingChange} onOpenChat={onOpenChat} />
     : <CharacterDetailOffline />;
 
+  const showPortrait = manifest?.renderer === "avg" && manifest.avgCharacters;
+
   if (isMobile) {
     return (
       <Sheet open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <SheetContent side="bottom" className="max-h-[70vh] overflow-y-auto rounded-t-2xl border-slate-700 bg-slate-900">
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl border-slate-700 bg-slate-900">
           <SheetHeader>
             <SheetTitle className="text-slate-100">{title}</SheetTitle>
             <SheetDescription className="sr-only">Character details</SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-6">
+            {showPortrait && <AvgPortrait themeId={themeId} manifest={manifest} slotIndex={slotIndex} />}
             {content}
           </div>
         </SheetContent>
@@ -388,6 +432,7 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
           <DialogTitle className="text-slate-100">{title}</DialogTitle>
           <DialogDescription className="sr-only">Character details</DialogDescription>
         </DialogHeader>
+        {showPortrait && <AvgPortrait themeId={themeId} manifest={manifest} slotIndex={slotIndex} />}
         {content}
       </DialogContent>
     </Dialog>

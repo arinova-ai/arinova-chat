@@ -187,6 +187,7 @@ function OfficeViewInner() {
         slotIndex={clickedSlotIndex}
         boundAgentId={activeBinding?.agentId ?? null}
         onBindingChange={fetchBindings}
+        manifest={manifest}
         onOpenChat={handleOpenChat}
       />
 
