@@ -292,6 +292,8 @@ export interface AvgCharacterDef {
   /** Pose sprites: key = pose name, value = [frameA, frameB] paths */
   sprites: Record<string, [string, string]>;
   defaultSprite?: string;
+  /** Dedicated portrait/tachie image filename (transparent PNG) */
+  portrait?: string;
 }
 
 // ── Top-level Manifest ──────────────────────────────────────────

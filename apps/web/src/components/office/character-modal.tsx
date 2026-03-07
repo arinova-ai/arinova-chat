@@ -82,16 +82,14 @@ function AvgOverlay({
 
   const charDef = manifest.avgCharacters?.find((c) => c.slotIndex === slotIndex);
   const bgImage = manifest.canvas?.background?.image;
-  const sprites = charDef
-    ? (charDef.sprites.idle ?? charDef.sprites.sleeping ?? Object.values(charDef.sprites)[0])
-    : null;
+  const portraitSrc = charDef?.portrait ? `${themeBase}/${charDef.portrait}` : null;
 
   const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
   const title = (!agent?.name || isUuidName) ? (charDef?.name ?? "Character") : agent.name;
   const badge = agent ? (STATUS_BADGE[agent.status] ?? STATUS_BADGE.idle) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex flex-col safe-area-inset" onClick={onClose}>
       {/* Background scene */}
       {themeBase && bgImage && (
         <img
@@ -103,25 +101,32 @@ function AvgOverlay({
       )}
       <div className="absolute inset-0 bg-black/30" />
 
-      {/* Close button */}
+      {/* Close button — respects safe area */}
       <button
         type="button"
         onClick={onClose}
         className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/70"
+        style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
       >
         ✕
       </button>
 
-      {/* Character sprite — full height, centered */}
-      {themeBase && sprites && charDef && (
+      {/* Character portrait — bottom-aligned, centered */}
+      {themeBase && portraitSrc && (
         <div className="relative flex-1 min-h-0 flex items-end justify-center overflow-hidden pointer-events-none">
-          <CharacterTachie themeBase={themeBase} sprite={sprites[0]} hotspot={charDef.hotspot} />
+          <img
+            src={portraitSrc}
+            alt={charDef?.name ?? ""}
+            draggable={false}
+            className="max-w-none h-full object-contain object-bottom"
+          />
         </div>
       )}
 
-      {/* Dialog box at bottom */}
+      {/* Dialog box at bottom — respects safe area */}
       <div
         className="relative z-10 mx-3 mb-3 rounded-xl border border-white/10 bg-slate-900/85 px-5 py-4 backdrop-blur-md"
+        style={{ marginBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Name label */}
@@ -180,53 +185,6 @@ function AvgOverlay({
   );
 }
 
-/** Renders the character tachie (standing illustration) from the full-scene sprite */
-function CharacterTachie({ themeBase, sprite, hotspot }: { themeBase: string; sprite: string; hotspot: { left: number; top: number; width: number; height: number } }) {
-  const [imgRatio, setImgRatio] = useState(0);
-  const containerRef = useCallback((el: HTMLDivElement | null) => {
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      setContainerSize({ w: rect.width, h: rect.height });
-    }
-  }, []);
-  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
-
-  const { left, top, width, height } = hotspot;
-  const { w: cw, h: ch } = containerSize;
-
-  let imgW = 0, imgH = 0, ox = 0, oy = 0;
-  if (imgRatio > 0 && cw > 0 && ch > 0) {
-    // Scale to fill container height with the character
-    const syFull = ch / (height / 100) * imgRatio;
-    imgW = syFull;
-    imgH = imgW / imgRatio;
-    const hotW = (width / 100) * imgW;
-    const hotH = (height / 100) * imgH;
-    ox = -(left / 100) * imgW + (cw - hotW) / 2;
-    oy = -(top / 100) * imgH + (ch - hotH) / 2;
-  }
-
-  return (
-    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
-      <img
-        src={`${themeBase}/${sprite}`}
-        alt=""
-        draggable={false}
-        className="absolute max-w-none"
-        onLoad={(e) => {
-          const img = e.currentTarget;
-          if (img.naturalWidth && img.naturalHeight) setImgRatio(img.naturalWidth / img.naturalHeight);
-        }}
-        style={imgRatio > 0 && cw > 0 ? {
-          width: imgW,
-          height: imgH,
-          left: ox,
-          top: oy,
-        } : { opacity: 0 }}
-      />
-    </div>
-  );
-}
 
 interface CharacterModalProps {
   isOpen: boolean;
