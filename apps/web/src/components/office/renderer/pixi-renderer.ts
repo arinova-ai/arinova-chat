@@ -71,7 +71,9 @@ function parseBgColor(manifest: ThemeManifest): number {
 function computeScale(containerW: number, containerH: number, canvasW: number, canvasH: number) {
   const scaleX = containerW / canvasW;
   const scaleY = containerH / canvasH;
-  const scale = Math.max(scaleX, scaleY);
+  // Use "contain" (Math.min) so all zones and agents are always visible,
+  // even on portrait mobile screens with wide landscape canvases.
+  const scale = Math.min(scaleX, scaleY);
   const offsetX = (containerW - canvasW * scale) / 2;
   const offsetY = (containerH - canvasH * scale) / 2;
   return { scale, offsetX, offsetY };
