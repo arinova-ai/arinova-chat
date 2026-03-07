@@ -60,20 +60,6 @@ const THEME_DETAILS: Record<string, ThemeDetails> = {
       { name: "Sarah K.", initial: "S", color: "from-pink-500 to-pink-700", date: "1 week ago", stars: 4, text: "Beautiful design, well worth it. Would love more furniture options in future updates." },
     ],
   },
-  "avg-classroom": {
-    author: { name: "Arinova Official", initial: "A" },
-    rating: 4.9,
-    reviewCount: 8,
-    userCount: 31,
-    renderer: "AVG Visual Novel",
-    animationCount: 12,
-    roomSize: "Large (6 agents)",
-    version: "v1.0",
-    reviews: [
-      { name: "Alex T.", initial: "A", color: "from-blue-500 to-blue-700", date: "1 day ago", stars: 5, text: "The anime classroom aesthetic is gorgeous! Love seeing all my agents as students with different poses based on their status." },
-      { name: "Yuki M.", initial: "Y", color: "from-purple-500 to-purple-700", date: "3 days ago", stars: 5, text: "Finally a theme that supports 6 agents! The frame animations are subtle but really bring the characters to life." },
-    ],
-  },
 };
 
 const THUMB_LABELS = ["Room", "Character", "Night", "Details"];

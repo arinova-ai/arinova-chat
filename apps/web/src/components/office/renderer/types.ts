@@ -28,10 +28,4 @@ export interface OfficeRenderer {
 
   /** Callback invoked when the user clicks the v3 character model. */
   onCharacterClick?: () => void;
-
-  /** Callback invoked when the user clicks a slot (v5 AVG multi-slot). */
-  onSlotClick?: (slotIndex: number) => void;
-
-  /** Update slot→agent bindings so the renderer can show correct poses. */
-  updateBindings?(bindings: { slotIndex: number; agentId: string }[]): void;
 }

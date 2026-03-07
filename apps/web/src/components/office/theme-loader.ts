@@ -77,7 +77,7 @@ export function validateManifest(data: unknown): ThemeManifest {
   const room = d.room as Record<string, unknown> | undefined;
   const isV3 = !!room?.model;
   const isSprite = d.renderer === "sprite";
-  const isAvg = d.renderer === "avg";
+
 
   // v4 (sprite) themes must have scenes with at least a working scene
   if (isSprite) {
@@ -94,7 +94,7 @@ export function validateManifest(data: unknown): ThemeManifest {
     }
   }
 
-  if (!isV3 && !isSprite && !isAvg) {
+  if (!isV3 && !isSprite) {
     // Zones: must be non-empty, each zone must have ≥1 seat
     if (!Array.isArray(d.zones)) throw new Error("Manifest missing 'zones' array");
     const zones = d.zones as unknown[];

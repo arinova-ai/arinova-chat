@@ -1,4 +1,3 @@
-import { AvgRenderer } from "./avg-renderer";
 import { PixiRenderer } from "./pixi-renderer";
 import { SpriteRenderer } from "./sprite-renderer";
 import { ThreeJSRenderer } from "./threejs-renderer";
@@ -9,8 +8,6 @@ export type { OfficeRenderer, RendererType };
 
 export function createRenderer(type: RendererType): OfficeRenderer {
   switch (type) {
-    case "avg":
-      return new AvgRenderer();
     case "threejs":
       return new ThreeJSRenderer();
     case "sprite":
