@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useChatStore, type GroupAgentMember, type GroupUserMember, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { assetUrl } from "@/lib/config";
-import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -48,7 +47,6 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronUp,
-  Settings,
 } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import {
@@ -98,7 +96,7 @@ export function GroupMembersPanel({
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
-  const [tab, setTab] = useState<PanelTab>("members");
+  const tab: PanelTab = initialTab ?? "members";
   const [showAgents, setShowAgents] = useState(true);
 
   // Settings state
@@ -128,7 +126,6 @@ export function GroupMembersPanel({
     if (open) {
       loadMembers();
       setEditTitle(conversation?.title ?? "");
-      if (initialTab) setTab(initialTab);
     }
   }, [open, loadMembers, conversation?.title, initialTab]);
 
@@ -187,36 +184,12 @@ export function GroupMembersPanel({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-80 sm:max-w-sm p-0 flex flex-col">
         <SheetHeader className="px-4 pt-4 pb-2">
-          <SheetTitle className="text-base">{t("group.title")}</SheetTitle>
+          <SheetTitle className="text-base">
+            {tab === "settings" ? t("group.settings") : t("group.members")}
+          </SheetTitle>
         </SheetHeader>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-border px-4">
-          <button
-            className={cn(
-              "flex-1 pb-2 text-sm font-medium border-b-2 transition-colors",
-              tab === "members"
-                ? "border-blue-500 text-blue-400"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            )}
-            onClick={() => setTab("members")}
-          >
-            {t("group.members")}
-          </button>
-          {isAdmin && (
-            <button
-              className={cn(
-                "flex-1 pb-2 text-sm font-medium border-b-2 transition-colors",
-                tab === "settings"
-                  ? "border-blue-500 text-blue-400"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setTab("settings")}
-            >
-              {t("group.settings")}
-            </button>
-          )}
-        </div>
+        <div className="border-b border-border" />
 
         {error && (
           <div className="mx-4 mt-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
