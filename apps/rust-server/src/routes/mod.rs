@@ -38,6 +38,7 @@ pub mod media;
 pub mod shortcuts;
 pub mod official;
 pub mod lounge;
+pub mod api_keys;
 
 use axum::Router;
 use crate::AppState;
@@ -84,5 +85,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(shortcuts::router())
         .merge(official::router())
         .merge(lounge::router())
+        .merge(api_keys::router())
         .with_state(state)
 }

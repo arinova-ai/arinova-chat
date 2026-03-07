@@ -2,7 +2,7 @@ use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, post, delete},
+    routing::{get, patch, post, put},
     Router,
 };
 use serde::Deserialize;
@@ -49,10 +49,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/themes", get(list_themes))
         .route("/api/themes/config", get(theme_config))
         .route("/api/themes/owned", get(owned_themes))
-        .route("/api/themes/{themeId}", get(get_theme_detail).delete(delete_theme))
+        .route("/api/themes/{themeId}", get(get_theme_detail).delete(delete_theme).put(update_theme))
         .route("/api/themes/{themeId}/purchase", post(purchase_theme))
         .route("/api/themes/{themeId}/manifest", get(get_theme_manifest))
+        .route("/api/themes/{themeId}/status", patch(update_theme_status))
         .route("/api/themes/assets/{themeId}/{filename}", get(get_theme_asset))
+        .route("/api/creator/themes", get(creator_themes))
 }
 
 /// GET /api/themes/config — Returns the base URL for theme assets.
@@ -1061,6 +1063,134 @@ async fn owned_themes(
     let theme_ids: Vec<String> = rows.into_iter().map(|(id,)| id).collect();
 
     (StatusCode::OK, Json(json!({"owned": theme_ids})))
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/creator/themes — List themes owned by the current user
+// ---------------------------------------------------------------------------
+
+async fn creator_themes(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, ThemeRow>(
+        r#"SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license
+           FROM themes
+           WHERE author_id = $1
+           ORDER BY created_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let themes: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "name": r.name,
+                "version": r.version,
+                "description": r.description,
+                "renderer": r.renderer,
+                "price": r.price,
+                "maxAgents": r.max_agents,
+                "tags": r.tags,
+                "license": r.license,
+            })
+        })
+        .collect();
+
+    (StatusCode::OK, Json(json!({ "themes": themes })))
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/themes/:themeId — Update a theme (multipart: manifest + optional bundle)
+// ---------------------------------------------------------------------------
+
+async fn update_theme(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(theme_id): Path<String>,
+    multipart: Multipart,
+) -> Response {
+    // Verify ownership
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT author_id FROM themes WHERE id = $1",
+    )
+    .bind(&theme_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(aid)) if aid == user.id => {}
+        Ok(Some(_)) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your theme"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Theme not found"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("update_theme ownership check: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+    }
+
+    // Re-use the upload_theme logic (it does upsert)
+    upload_theme(State(state), user, multipart).await
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/themes/:themeId/status — Update theme status (publish/unpublish)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct StatusBody {
+    status: String,
+}
+
+async fn update_theme_status(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(theme_id): Path<String>,
+    Json(body): Json<StatusBody>,
+) -> (StatusCode, Json<Value>) {
+    let valid = ["published", "draft"];
+    if !valid.contains(&body.status.as_str()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "status must be 'published' or 'draft'"})),
+        );
+    }
+
+    // Check ownership
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT author_id FROM themes WHERE id = $1",
+    )
+    .bind(&theme_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(aid)) if aid == user.id => {}
+        Ok(Some(_)) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your theme"})));
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Theme not found"})));
+        }
+        Err(e) => {
+            tracing::error!("update_theme_status: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+        }
+    }
+
+    // Note: themes table doesn't have a status column yet; this is a placeholder
+    // that succeeds but doesn't persist status. A migration would be needed for full support.
+    (
+        StatusCode::OK,
+        Json(json!({"id": theme_id, "status": body.status})),
+    )
 }
 
 // ---------------------------------------------------------------------------

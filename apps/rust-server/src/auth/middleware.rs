@@ -4,6 +4,7 @@ use axum::{
     response::Json,
 };
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::auth::session::validate_session;
@@ -70,6 +71,56 @@ where
                 Json(serde_json::json!({"error": "Unauthorized"})),
             )
         };
+
+        // Check for CLI API key in Authorization header (ari_cli_ prefix)
+        let auth_header = parts
+            .headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        if let Some(api_key) = auth_header.strip_prefix("Bearer ").filter(|t| t.starts_with("ari_cli_")) {
+            let mut hasher = Sha256::new();
+            hasher.update(api_key.as_bytes());
+            let key_hash = hex::encode(hasher.finalize());
+
+            let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>, bool)>(
+                r#"SELECT k.user_id, u.email, u.name, u.username, u.banned
+                   FROM creator_api_keys k
+                   JOIN users u ON u.id = k.user_id
+                   WHERE k.key_hash = $1 AND k.revoked_at IS NULL"#,
+            )
+            .bind(&key_hash)
+            .fetch_optional(&app_state.db)
+            .await
+            .map_err(|_| reject())?
+            .ok_or_else(reject)?;
+
+            if row.4 {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({"error": "Your account has been banned", "code": "ACCOUNT_BANNED"})),
+                ));
+            }
+
+            // Update last_used_at (fire-and-forget)
+            let db = app_state.db.clone();
+            let hash = key_hash.clone();
+            tokio::spawn(async move {
+                let _ = sqlx::query("UPDATE creator_api_keys SET last_used_at = NOW() WHERE key_hash = $1")
+                    .bind(&hash)
+                    .execute(&db)
+                    .await;
+            });
+
+            return Ok(AuthUser {
+                id: row.0.to_string(),
+                email: row.1,
+                name: row.2,
+                username: row.3,
+                is_verified: true,
+            });
+        }
 
         // Extract session token from cookie header
         let cookie_header = parts

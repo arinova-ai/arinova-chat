@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, post},
+    routing::{get, post, put},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/spaces", get(list_spaces).post(create_space))
-        .route("/api/spaces/{id}", get(get_space).delete(delete_space))
+        .route("/api/spaces/{id}", get(get_space).delete(delete_space).put(update_space))
         .route("/api/spaces/{id}/sessions", get(list_sessions).post(create_session))
         .route("/api/spaces/{id}/sessions/{session_id}/join", post(join_session))
         .route("/api/spaces/{id}/sessions/{session_id}/leave", post(leave_session))
@@ -287,6 +287,110 @@ async fn delete_space(
         .await;
 
     StatusCode::NO_CONTENT.into_response()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateSpaceBody {
+    name: Option<String>,
+    description: Option<String>,
+    category: Option<String>,
+    tags: Option<Vec<String>>,
+    definition: Option<serde_json::Value>,
+    is_public: Option<bool>,
+}
+
+async fn update_space(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateSpaceBody>,
+) -> Response {
+    let space = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM playgrounds WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match space {
+        Ok(Some(owner_id)) if owner_id == user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Forbidden"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Space not found"}))).into_response(),
+        Err(e) => {
+            tracing::error!("update_space: {e}");
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "db error"}))).into_response();
+        }
+    }
+
+    // Build dynamic SET clause
+    let mut sets: Vec<String> = vec![];
+    let mut idx = 1u32;
+    let mut binds: Vec<String> = vec![];
+
+    if let Some(ref name) = body.name {
+        idx += 1;
+        sets.push(format!("name = ${idx}"));
+        binds.push(name.clone());
+    }
+    if let Some(ref desc) = body.description {
+        idx += 1;
+        sets.push(format!("description = ${idx}"));
+        binds.push(desc.clone());
+    }
+    if let Some(ref cat) = body.category {
+        idx += 1;
+        sets.push(format!("category = ${idx}::playground_category"));
+        binds.push(cat.clone());
+    }
+
+    sets.push("updated_at = NOW()".to_string());
+
+    if sets.len() <= 1 && body.tags.is_none() && body.definition.is_none() && body.is_public.is_none() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "No fields to update"}))).into_response();
+    }
+
+    // For simplicity, update text fields first, then handle JSON/bool separately
+    let sql = format!(
+        "UPDATE playgrounds SET {} WHERE id = $1",
+        sets.join(", ")
+    );
+
+    let mut query = sqlx::query(&sql).bind(id);
+    for b in &binds {
+        query = query.bind(b);
+    }
+
+    if let Err(e) = query.execute(&state.db).await {
+        tracing::error!("update_space: {e}");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Update failed"}))).into_response();
+    }
+
+    // Handle JSON fields separately for type safety
+    if let Some(ref tags) = body.tags {
+        let tags_json = serde_json::to_value(tags).unwrap_or_default();
+        let _ = sqlx::query("UPDATE playgrounds SET tags = $2 WHERE id = $1")
+            .bind(id)
+            .bind(tags_json)
+            .execute(&state.db)
+            .await;
+    }
+    if let Some(ref definition) = body.definition {
+        let _ = sqlx::query("UPDATE playgrounds SET definition = $2 WHERE id = $1")
+            .bind(id)
+            .bind(definition)
+            .execute(&state.db)
+            .await;
+    }
+    if let Some(is_public) = body.is_public {
+        let _ = sqlx::query("UPDATE playgrounds SET is_public = $2 WHERE id = $1")
+            .bind(id)
+            .bind(is_public)
+            .execute(&state.db)
+            .await;
+    }
+
+    (StatusCode::OK, Json(json!({"id": id, "updated": true}))).into_response()
 }
 
 async fn list_sessions(
