@@ -1,0 +1,10 @@
+{
+  "name": "avg-classroom-v2",
+  "version": "1.0.0",
+  "renderer": "iframe",
+  "description": "Anime-style classroom office with 6 agent seats — SDK v2",
+  "entry": "theme.js",
+  "maxAgents": 6,
+  "author": { "name": "Arinova Official", "id": "arinova-official" },
+  "tags": ["anime", "classroom", "office"]
+}
