@@ -82,7 +82,8 @@ function AvgOverlay({
 
   const charDef = manifest.avgCharacters?.find((c) => c.slotIndex === slotIndex);
   const bgImage = manifest.canvas?.background?.image;
-  const portraitSrc = charDef?.portrait ? `${themeBase}/${charDef.portrait}` : null;
+  const ver = manifest.version ?? "";
+  const portraitSrc = charDef?.portrait ? `${themeBase}/${charDef.portrait}${ver ? `?v=${ver}` : ""}` : null;
 
   const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
   const title = (!agent?.name || isUuidName) ? (charDef?.name ?? "Character") : agent.name;
