@@ -719,7 +719,6 @@ fn extract_zip(data: &[u8], out_dir: &std::path::Path) -> Result<usize, String> 
 
 async fn list_themes(
     State(state): State<AppState>,
-    _user: AuthUser,
 ) -> Response {
     let base_url = if state.s3.is_some() && !state.config.r2_public_url.is_empty() {
         format!("{}/themes", state.config.r2_public_url)
