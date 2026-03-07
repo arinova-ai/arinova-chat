@@ -55,6 +55,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/themes/{themeId}/status", patch(update_theme_status))
         .route("/api/themes/assets/{themeId}/{filename}", get(get_theme_asset))
         .route("/api/creator/themes", get(creator_themes))
+        // SDK v2 theme runtime
+        .route("/runtime/{themeId}", get(theme_runtime))
+        .route("/sdk/bridge.js", get(sdk_bridge))
 }
 
 /// GET /api/themes/config — Returns the base URL for theme assets.
@@ -1191,6 +1194,73 @@ async fn update_theme_status(
         StatusCode::OK,
         Json(json!({"id": theme_id, "status": body.status})),
     )
+}
+
+// ---------------------------------------------------------------------------
+// SDK v2 — Theme Runtime
+// ---------------------------------------------------------------------------
+
+/// GET /runtime/{themeId} — Returns an HTML page that loads the SDK bridge
+/// and the theme's entry script inside an iframe sandbox.
+async fn theme_runtime(
+    State(state): State<AppState>,
+    Path(theme_id): Path<String>,
+) -> Response {
+    let id_re = regex_lite::Regex::new(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$").unwrap();
+    if !id_re.is_match(&theme_id) {
+        return (StatusCode::BAD_REQUEST, "Invalid theme ID").into_response();
+    }
+
+    // Build asset base URL — use the same proxy base used by theme_config
+    let assets_base = format!("{}/api/themes/assets", state.config.better_auth_url);
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+html,body{{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000}}
+#container{{width:100%;height:100%}}
+</style>
+</head>
+<body>
+<div id="container"></div>
+<script>window.__ARINOVA_THEME_ID__="{theme_id}";window.__ARINOVA_ASSETS_BASE__="{assets_base}/{theme_id}";</script>
+<script src="/sdk/bridge.js"></script>
+<script type="module" src="{assets_base}/{theme_id}/theme.js"></script>
+</body>
+</html>"#,
+        theme_id = theme_id,
+        assets_base = assets_base,
+    );
+
+    (
+        StatusCode::OK,
+        [
+            ("content-type", "text/html; charset=utf-8"),
+            ("cache-control", "no-cache"),
+        ],
+        html,
+    )
+        .into_response()
+}
+
+/// The SDK bridge script, embedded as a const.
+/// Served at GET /sdk/bridge.js
+const BRIDGE_JS: &str = include_str!("../static/bridge.js");
+
+async fn sdk_bridge() -> Response {
+    (
+        StatusCode::OK,
+        [
+            ("content-type", "application/javascript; charset=utf-8"),
+            ("cache-control", "public, max-age=3600"),
+        ],
+        BRIDGE_JS,
+    )
+        .into_response()
 }
 
 // ---------------------------------------------------------------------------
