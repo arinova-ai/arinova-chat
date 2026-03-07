@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS creator_api_keys (
     user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     key_hash VARCHAR(255) NOT NULL,
-    key_prefix VARCHAR(10) NOT NULL,
+    key_prefix VARCHAR(20) NOT NULL,
     last_used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     revoked_at TIMESTAMPTZ

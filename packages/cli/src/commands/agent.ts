@@ -11,7 +11,7 @@ export function registerAgent(program: Command): void {
     .action(async () => {
       try {
         const data = await get("/api/creator/agents");
-        const agents = (data as Record<string, unknown>).agents ?? data;
+        const agents = (data as Record<string, unknown>).listings ?? (data as Record<string, unknown>).agents ?? data;
         if (Array.isArray(agents)) {
           table(agents as Record<string, unknown>[], [
             { key: "id", label: "ID" },
