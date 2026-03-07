@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 import { useNotificationStore } from "@/store/notification-store";
+import { playReceiveSound } from "@/lib/sounds";
 import {
   getCachedMessages,
   setCachedMessages,
@@ -1662,6 +1663,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 }
               : unreadCounts,
         });
+      }
+
+      // Play receive sound for messages from others
+      if (
+        msg.senderUserId !== get().currentUserId &&
+        msg.role !== "system" &&
+        !alreadyExists
+      ) {
+        playReceiveSound();
       }
 
       // In-app notification for messages from other conversations (mobile only)

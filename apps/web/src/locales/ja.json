@@ -364,6 +364,8 @@
   "settings.notifications.quietHoursDesc": "設定した時間帯の通知を一時停止",
   "settings.notifications.from": "開始",
   "settings.notifications.to": "終了",
+  "settings.notifications.chatSounds": "チャット音",
+  "settings.notifications.chatSoundsDesc": "メッセージの送受信時にサウンドを再生",
 
   "settings.privacy.title": "プライバシー",
   "settings.privacy.subtitle": "ブロックしたユーザーとプライバシー設定を管理します。",

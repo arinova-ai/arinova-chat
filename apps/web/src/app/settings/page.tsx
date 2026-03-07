@@ -26,6 +26,7 @@ import {
   ZoomIn,
   ZoomOut,
   Settings,
+  Volume2,
   VolumeX,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
@@ -39,6 +40,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
 import { useTranslation, type Locale } from "@/lib/i18n";
+import { isSoundEnabled, setSoundEnabled } from "@/lib/sounds";
 
 // ───── Types ─────
 
@@ -1173,7 +1175,38 @@ function NotificationPanel() {
             </div>
           </div>
         )}
+
+        <Separator />
+
+        <SoundToggle />
       </div>
+    </div>
+  );
+}
+
+function SoundToggle() {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState(() => isSoundEnabled());
+
+  const handleToggle = (checked: boolean) => {
+    setEnabled(checked);
+    setSoundEnabled(checked);
+  };
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        {enabled ? (
+          <Volume2 className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <VolumeX className="h-4 w-4 text-muted-foreground" />
+        )}
+        <div>
+          <p className="text-sm font-medium">{t("settings.notifications.chatSounds")}</p>
+          <p className="text-xs text-muted-foreground">{t("settings.notifications.chatSoundsDesc")}</p>
+        </div>
+      </div>
+      <Switch checked={enabled} onCheckedChange={handleToggle} />
     </div>
   );
 }

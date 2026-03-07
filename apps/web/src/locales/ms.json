@@ -364,6 +364,8 @@
   "settings.notifications.quietHoursDesc": "Jedakan pemberitahuan pada waktu yang ditetapkan",
   "settings.notifications.from": "Dari",
   "settings.notifications.to": "Hingga",
+  "settings.notifications.chatSounds": "Bunyi sembang",
+  "settings.notifications.chatSoundsDesc": "Mainkan bunyi semasa menghantar dan menerima mesej",
 
   "settings.privacy.title": "Privasi",
   "settings.privacy.subtitle": "Urus pengguna yang disekat dan tetapan privasi.",

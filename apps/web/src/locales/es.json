@@ -364,6 +364,8 @@
   "settings.notifications.quietHoursDesc": "Pausar notificaciones durante las horas establecidas",
   "settings.notifications.from": "Desde",
   "settings.notifications.to": "Hasta",
+  "settings.notifications.chatSounds": "Sonidos de chat",
+  "settings.notifications.chatSoundsDesc": "Reproducir sonidos al enviar y recibir mensajes",
 
   "settings.privacy.title": "Privacidad",
   "settings.privacy.subtitle": "Administra usuarios bloqueados y configuracion de privacidad.",

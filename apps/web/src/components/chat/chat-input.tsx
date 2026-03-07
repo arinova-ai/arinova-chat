@@ -22,6 +22,7 @@ import type { Message } from "@arinova/shared/types";
 import { useToastStore } from "@/store/toast-store";
 import { MentionPopup, type MentionItem } from "./mention-popup";
 import { wsManager } from "@/lib/ws";
+import { playSendSound } from "@/lib/sounds";
 
 // ---------- Popup item types ----------
 
@@ -597,6 +598,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     const prevValue = value;
     setPendingFiles([]);
     clearInput();
+    playSendSound();
     setUploading(true);
     try {
       const formData = new FormData();
@@ -868,6 +870,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     }
 
     sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
+    playSendSound();
     clearInput();
   }, [value, sendMessage, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
 

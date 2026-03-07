@@ -366,6 +366,8 @@
   "settings.notifications.quietHoursDesc": "在設定的時間內暫停通知",
   "settings.notifications.from": "從",
   "settings.notifications.to": "到",
+  "settings.notifications.chatSounds": "聊天音效",
+  "settings.notifications.chatSoundsDesc": "傳送和接收訊息時播放音效",
 
   "settings.privacy.title": "隱私",
   "settings.privacy.subtitle": "管理封鎖的使用者與隱私設定。",
