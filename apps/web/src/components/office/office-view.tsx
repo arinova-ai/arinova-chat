@@ -9,7 +9,6 @@ import { OfficeChatPanel } from "./office-chat-panel";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import { useTheme } from "./theme-context";
-import { THEME_REGISTRY } from "./theme-registry";
 import { api } from "@/lib/api";
 import type { Agent } from "./types";
 
@@ -25,8 +24,8 @@ const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 
 function OfficeViewInner() {
   const stream = useOfficeStream();
-  const { manifest, loading, themeId } = useTheme();
-  const themeEntry = THEME_REGISTRY.find((t) => t.id === themeId);
+  const { manifest, loading, themeId, themes } = useTheme();
+  const themeEntry = themes.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
   const displayAgents = stream.agents.slice(0, maxAgents);
 

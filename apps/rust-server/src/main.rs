@@ -103,6 +103,23 @@ async fn main() {
         GROUP BY m.thread_id
         ON CONFLICT (thread_id) DO NOTHING;
 
+        CREATE TABLE IF NOT EXISTS themes (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            version TEXT NOT NULL DEFAULT '1.0.0',
+            description TEXT NOT NULL DEFAULT '',
+            renderer TEXT NOT NULL DEFAULT 'pixi',
+            preview TEXT NOT NULL DEFAULT 'preview.png',
+            price INT NOT NULL DEFAULT 0,
+            max_agents INT NOT NULL DEFAULT 1,
+            tags TEXT[] NOT NULL DEFAULT '{}',
+            author_id TEXT NOT NULL DEFAULT '',
+            author_name TEXT NOT NULL DEFAULT '',
+            license TEXT NOT NULL DEFAULT 'standard',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
         CREATE TABLE IF NOT EXISTS theme_purchases (
             user_id TEXT NOT NULL,
             theme_id TEXT NOT NULL,

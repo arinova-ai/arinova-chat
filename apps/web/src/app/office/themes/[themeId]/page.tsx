@@ -21,7 +21,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { ThemeProvider, useTheme } from "@/components/office/theme-context";
 import { loadTheme } from "@/components/office/theme-loader";
-import { THEME_REGISTRY, type ThemeEntry } from "@/components/office/theme-registry";
+import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
 // ── Mock data for detail page ───────────────────────────────────
@@ -455,23 +455,40 @@ function NotFoundContent() {
   );
 }
 
+function ThemeDetailInner({ themeId }: { themeId: string }) {
+  const { themes } = useTheme();
+  const entry = themes.find((e) => e.id === themeId);
+  const details: ThemeDetails | undefined = entry
+    ? THEME_DETAILS[entry.id] ?? {
+        author: { name: entry.author?.name ?? "Unknown", initial: (entry.author?.name ?? "?")[0] },
+        rating: 0,
+        reviewCount: 0,
+        userCount: 0,
+        renderer: entry.renderer ?? "PixiJS 2D",
+        animationCount: 0,
+        roomSize: `${entry.maxAgents} ${entry.maxAgents === 1 ? "agent" : "agents"}`,
+        version: entry.version ?? "v1.0",
+        reviews: [],
+      }
+    : undefined;
+
+  // themes not loaded yet — wait before showing not-found
+  if (themes.length === 0) return null;
+  if (!entry || !details) return <NotFoundContent />;
+  return <ThemeDetailContent entry={entry} details={details} />;
+}
+
 export default function ThemeDetailPage({
   params,
 }: {
   params: Promise<{ themeId: string }>;
 }) {
   const { themeId } = use(params);
-  const entry = THEME_REGISTRY.find((e) => e.id === themeId);
-  const details = entry ? THEME_DETAILS[entry.id] : undefined;
 
   return (
     <AuthGuard>
       <ThemeProvider>
-        {entry && details ? (
-          <ThemeDetailContent entry={entry} details={details} />
-        ) : (
-          <NotFoundContent />
-        )}
+        <ThemeDetailInner themeId={themeId} />
       </ThemeProvider>
     </AuthGuard>
   );

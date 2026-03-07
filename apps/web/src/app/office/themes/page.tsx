@@ -9,7 +9,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { ThemeProvider, useTheme } from "@/components/office/theme-context";
-import { THEME_REGISTRY, type ThemeEntry } from "@/components/office/theme-registry";
+import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
 function ThemeCard({ entry }: { entry: ThemeEntry }) {
@@ -162,21 +162,22 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
 
 function ThemesGrid() {
   const { t } = useTranslation();
+  const { themes } = useTheme();
   const [search, setSearch] = useState("");
   const [priceFilter, setPriceFilter] = useState<"all" | "free" | "premium">("all");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    for (const entry of THEME_REGISTRY) {
+    for (const entry of themes) {
       for (const tag of entry.tags) tags.add(tag);
     }
     return Array.from(tags).sort();
-  }, []);
+  }, [themes]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return THEME_REGISTRY.filter((entry) => {
+    return themes.filter((entry) => {
       if (priceFilter === "free" && entry.price !== "free") return false;
       if (priceFilter === "premium" && entry.price === "free") return false;
       if (selectedTags.size > 0 && !entry.tags.some((tag) => selectedTags.has(tag))) return false;
@@ -186,7 +187,7 @@ function ThemesGrid() {
       }
       return true;
     });
-  }, [search, priceFilter, selectedTags]);
+  }, [themes, search, priceFilter, selectedTags]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) => {

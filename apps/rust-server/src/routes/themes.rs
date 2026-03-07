@@ -14,6 +14,22 @@ use crate::auth::middleware::AuthUser;
 use crate::services::r2::upload_to_r2;
 use crate::AppState;
 
+#[derive(sqlx::FromRow)]
+struct ThemeRow {
+    id: String,
+    name: String,
+    version: String,
+    description: String,
+    renderer: String,
+    preview: String,
+    price: i32,
+    max_agents: i32,
+    tags: Vec<String>,
+    author_id: String,
+    author_name: String,
+    license: String,
+}
+
 /// Maximum total bundle size: 200 MB
 const MAX_BUNDLE_SIZE: usize = 200 * 1024 * 1024;
 /// Maximum theme.json size: 256 KB
@@ -33,7 +49,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/themes", get(list_themes))
         .route("/api/themes/config", get(theme_config))
         .route("/api/themes/owned", get(owned_themes))
-        .route("/api/themes/{themeId}", delete(delete_theme))
+        .route("/api/themes/{themeId}", get(get_theme_detail).delete(delete_theme))
         .route("/api/themes/{themeId}/purchase", post(purchase_theme))
         .route("/api/themes/{themeId}/manifest", get(get_theme_manifest))
 }
@@ -120,7 +136,17 @@ struct ManifestMeta {
     name: String,
     version: String,
     #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
     renderer: Option<String>,
+    #[serde(default)]
+    preview: Option<String>,
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    #[serde(default)]
+    author: Option<ManifestAuthor>,
+    #[serde(default)]
+    license: Option<String>,
     #[serde(default)]
     room: Option<Value>,
     #[serde(default)]
@@ -129,6 +155,14 @@ struct ManifestMeta {
     layers: Option<Vec<Value>>,
     #[serde(default)]
     characters: Option<Value>,
+}
+
+#[derive(Deserialize, Default)]
+struct ManifestAuthor {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    id: String,
 }
 
 fn validate_manifest(raw: &[u8]) -> Result<ManifestMeta, String> {
@@ -161,8 +195,8 @@ fn validate_manifest(raw: &[u8]) -> Result<ManifestMeta, String> {
         || meta.room.as_ref().and_then(|r| r.get("model")).is_some();
 
     match renderer {
-        "sprite" | "avg" => {
-            // sprite and avg themes have their own structure — skip v2 zone/layer validation
+        "sprite" => {
+            // sprite themes have their own structure — skip v2 zone/layer validation
         }
         _ if is_v3 => {
             // v3: needs room.model
@@ -438,6 +472,60 @@ async fn upload_theme(
         }
     }
 
+    // Phase 4: Upsert theme metadata into DB
+    let renderer = meta.renderer.as_deref().unwrap_or("pixi").to_string();
+    let description = meta.description.as_deref().unwrap_or("").to_string();
+    let preview = meta.preview.as_deref().unwrap_or("preview.png").to_string();
+    let tags: Vec<String> = meta.tags.unwrap_or_default();
+    let author_id = meta.author.as_ref().map(|a| a.id.as_str()).unwrap_or("").to_string();
+    let author_name = meta.author.as_ref().map(|a| a.name.as_str()).unwrap_or("").to_string();
+    let license = meta.license.as_deref().unwrap_or("standard").to_string();
+    let max_agents: i32 = meta
+        .zones
+        .as_ref()
+        .map(|zones| {
+            zones
+                .iter()
+                .filter_map(|z| z.get("capacity").and_then(|c| c.as_i64()))
+                .sum::<i64>() as i32
+        })
+        .unwrap_or(1)
+        .max(1);
+
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO themes (id, name, version, description, renderer, preview, max_agents, tags, author_id, author_name, license)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (id) DO UPDATE SET
+             name = EXCLUDED.name,
+             version = EXCLUDED.version,
+             description = EXCLUDED.description,
+             renderer = EXCLUDED.renderer,
+             preview = EXCLUDED.preview,
+             max_agents = EXCLUDED.max_agents,
+             tags = EXCLUDED.tags,
+             author_id = EXCLUDED.author_id,
+             author_name = EXCLUDED.author_name,
+             license = EXCLUDED.license,
+             updated_at = NOW()"#,
+    )
+    .bind(&theme_id)
+    .bind(&meta.name)
+    .bind(&meta.version)
+    .bind(&description)
+    .bind(&renderer)
+    .bind(&preview)
+    .bind(max_agents)
+    .bind(&tags)
+    .bind(&author_id)
+    .bind(&author_name)
+    .bind(&license)
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!("Failed to upsert theme metadata: {}", e);
+        // Non-fatal: assets are already uploaded, just log the error
+    }
+
     (
         StatusCode::CREATED,
         Json(json!({
@@ -567,81 +655,98 @@ async fn list_themes(
     State(state): State<AppState>,
     _user: AuthUser,
 ) -> Response {
-    let mut themes: Vec<Value> = Vec::new();
-
-    if let Some(s3) = &state.s3 {
-        // ── R2 path: list objects with prefix "themes/" and find theme.json files ──
-        let bucket = &state.config.r2_bucket;
-        match s3
-            .list_objects_v2()
-            .bucket(bucket)
-            .prefix("themes/")
-            .delimiter("/")
-            .send()
-            .await
-        {
-            Ok(output) => {
-                // Common prefixes = theme directories (e.g. "themes/avg-classroom/")
-                let prefixes: Vec<String> = output
-                    .common_prefixes()
-                    .iter()
-                    .filter_map(|cp| cp.prefix().map(|s| s.to_string()))
-                    .collect();
-
-                for prefix in prefixes {
-                    let manifest_key = format!("{}theme.json", prefix);
-                    if let Ok(obj) = s3.get_object().bucket(bucket).key(&manifest_key).send().await
-                    {
-                        if let Ok(body) = obj.body.collect().await {
-                            let bytes = body.into_bytes();
-                            if let Ok(val) = serde_json::from_slice::<Value>(&bytes) {
-                                themes.push(json!({
-                                    "id": val.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "name": val.get("name").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "version": val.get("version").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "description": val.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "renderer": val.get("renderer").and_then(|v| v.as_str()).unwrap_or("pixi"),
-                                }));
-                            }
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::error!("R2 list_objects failed: {}", e);
-            }
-        }
+    let base_url = if state.s3.is_some() && !state.config.r2_public_url.is_empty() {
+        format!("{}/themes", state.config.r2_public_url)
     } else {
-        // ── Local filesystem fallback ──
-        let themes_dir = themes_base_dir(&state);
-        let mut entries = match tokio::fs::read_dir(&themes_dir).await {
-            Ok(e) => e,
-            Err(_) => {
-                return (StatusCode::OK, Json(json!({ "themes": [] }))).into_response();
-            }
-        };
+        "/themes".to_string()
+    };
 
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-            let manifest_path = path.join("theme.json");
-            if let Ok(data) = tokio::fs::read(&manifest_path).await {
-                if let Ok(val) = serde_json::from_slice::<Value>(&data) {
-                    themes.push(json!({
-                        "id": val.get("id").and_then(|v| v.as_str()).unwrap_or(""),
-                        "name": val.get("name").and_then(|v| v.as_str()).unwrap_or(""),
-                        "version": val.get("version").and_then(|v| v.as_str()).unwrap_or(""),
-                        "description": val.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                        "renderer": val.get("renderer").and_then(|v| v.as_str()).unwrap_or("pixi"),
-                    }));
-                }
-            }
-        }
-    }
+    let rows = sqlx::query_as::<_, ThemeRow>(
+        "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license FROM themes ORDER BY created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let themes: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            let preview_url = format!("{}/{}/{}", base_url, r.id, r.preview);
+            json!({
+                "id": r.id,
+                "name": r.name,
+                "version": r.version,
+                "description": r.description,
+                "renderer": r.renderer,
+                "previewUrl": preview_url,
+                "price": if r.price == 0 { json!("free") } else { json!(r.price) },
+                "maxAgents": r.max_agents,
+                "tags": r.tags,
+                "author": { "name": r.author_name, "id": r.author_id },
+                "license": r.license,
+            })
+        })
+        .collect();
 
     (StatusCode::OK, Json(json!({ "themes": themes }))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/themes/:themeId — Get single theme details
+// ---------------------------------------------------------------------------
+
+async fn get_theme_detail(
+    State(state): State<AppState>,
+    Path(theme_id): Path<String>,
+) -> Response {
+    let base_url = if state.s3.is_some() && !state.config.r2_public_url.is_empty() {
+        format!("{}/themes", state.config.r2_public_url)
+    } else {
+        "/themes".to_string()
+    };
+
+    let row = sqlx::query_as::<_, ThemeRow>(
+        "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license FROM themes WHERE id = $1",
+    )
+    .bind(&theme_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(r)) => {
+            let preview_url = format!("{}/{}/{}", base_url, r.id, r.preview);
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "id": r.id,
+                    "name": r.name,
+                    "version": r.version,
+                    "description": r.description,
+                    "renderer": r.renderer,
+                    "previewUrl": preview_url,
+                    "price": if r.price == 0 { json!("free") } else { json!(r.price) },
+                    "maxAgents": r.max_agents,
+                    "tags": r.tags,
+                    "author": { "name": r.author_name, "id": r.author_id },
+                    "license": r.license,
+                })),
+            )
+                .into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Theme not found"})),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!("get_theme_detail query failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Internal error"})),
+            )
+                .into_response()
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
