@@ -415,6 +415,28 @@ export class PixiRenderer implements OfficeRenderer {
   private seatSpriteTimer = 0;
   private seatAgentMap = new Map<string, string>(); // seatId → agentId
 
+  // Pan / zoom state
+  private static MIN_SCALE = 0.5;
+  private static MAX_SCALE = 3;
+  private isMobile = false;
+  private userScale = 1;
+  private panX = 0;
+  private panY = 0;
+  private baseScale = 1;
+  private baseOffsetX = 0;
+  private baseOffsetY = 0;
+  private dragging = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private panStartX = 0;
+  private panStartY = 0;
+  private pinching = false;
+  private pinchStartDist = 0;
+  private pinchStartScale = 1;
+  private pinchMidX = 0;
+  private pinchMidY = 0;
+  private canvasElement: HTMLCanvasElement | null = null;
+
   // Callback
   onAgentClick?: (agentId: string) => void;
 
@@ -457,6 +479,7 @@ export class PixiRenderer implements OfficeRenderer {
 
     container.appendChild(app.canvas);
     this.app = app;
+    this.canvasElement = app.canvas as HTMLCanvasElement;
     app.stage.eventMode = "static";
     app.stage.hitArea = new Rectangle(0, 0, width, height);
 
@@ -464,6 +487,20 @@ export class PixiRenderer implements OfficeRenderer {
       await this.initThemeMode(app, manifest);
     } else {
       this.initFallbackMode(app);
+    }
+
+    // Set up pan/zoom for theme mode
+    if (!this.useFallback && manifest) {
+      this.isMobile = width < PixiRenderer.MOBILE_BREAKPOINT;
+      const viewportCfg = manifest.viewport;
+      if (this.isMobile && viewportCfg?.mobile?.defaultZoom) {
+        this.userScale = viewportCfg.mobile.defaultZoom;
+      } else if (viewportCfg?.defaultZoom) {
+        this.userScale = viewportCfg.defaultZoom;
+      }
+      this.centerPan();
+      this.applyRootTransform();
+      this.bindPanEvents();
     }
 
     this.startAnimationLoop();
@@ -489,6 +526,9 @@ export class PixiRenderer implements OfficeRenderer {
     const { scale, offsetX, offsetY } = computeScale(
       this.width, this.height, manifest.canvas.width, manifest.canvas.height,
     );
+    this.baseScale = scale;
+    this.baseOffsetX = offsetX;
+    this.baseOffsetY = offsetY;
     root.scale.set(scale);
     root.x = offsetX;
     root.y = offsetY;
@@ -644,6 +684,7 @@ export class PixiRenderer implements OfficeRenderer {
   // ── destroy ───────────────────────────────────────────────────
 
   destroy(): void {
+    this.unbindPanEvents();
     cancelAnimationFrame(this.animId);
 
     for (const [, sprite] of this.sprites) {
@@ -682,6 +723,7 @@ export class PixiRenderer implements OfficeRenderer {
     this.seatOverlays.clear();
     this.seatAgentMap.clear();
     this.seatAssignments = new Map();
+    this.canvasElement = null;
   }
 
   // ── resize ────────────────────────────────────────────────────
@@ -702,14 +744,15 @@ export class PixiRenderer implements OfficeRenderer {
     }
 
     if (!this.useFallback && this.manifest && this.root) {
-      // Theme mode: zones are in canvas space, root container scaling
-      // handles the viewport transform — only update root transform.
       const { scale, offsetX, offsetY } = computeScale(
         width, height, this.manifest.canvas.width, this.manifest.canvas.height,
       );
-      this.root.scale.set(scale);
-      this.root.x = offsetX;
-      this.root.y = offsetY;
+      this.baseScale = scale;
+      this.baseOffsetX = offsetX;
+      this.baseOffsetY = offsetY;
+      this.isMobile = width < PixiRenderer.MOBILE_BREAKPOINT;
+      this.clampPan();
+      this.applyRootTransform();
     } else {
       // Fallback mode: zone layout depends on screen size, must redraw.
       this.drawZones();
@@ -738,6 +781,172 @@ export class PixiRenderer implements OfficeRenderer {
       }
     }
   }
+
+  // ── Pan / Zoom ──────────────────────────────────────────────
+
+  private static MOBILE_BREAKPOINT = 768;
+  private static MOBILE_DEFAULT_SCALE = 1.8;
+
+  private applyRootTransform(): void {
+    if (!this.root) return;
+    const s = this.baseScale * this.userScale;
+    this.root.scale.set(s);
+    this.root.x = this.panX;
+    this.root.y = this.panY;
+  }
+
+  private centerPan(): void {
+    const scaledW = this.manifest!.canvas.width * this.baseScale * this.userScale;
+    const scaledH = this.manifest!.canvas.height * this.baseScale * this.userScale;
+    this.panX = (this.width - scaledW) / 2;
+    this.panY = (this.height - scaledH) / 2;
+    this.clampPan();
+  }
+
+  private clampPan(): void {
+    if (!this.manifest) return;
+    const scaledW = this.manifest.canvas.width * this.baseScale * this.userScale;
+    const scaledH = this.manifest.canvas.height * this.baseScale * this.userScale;
+
+    if (scaledW <= this.width) {
+      this.panX = (this.width - scaledW) / 2;
+    } else {
+      this.panX = Math.min(0, Math.max(this.width - scaledW, this.panX));
+    }
+
+    if (scaledH <= this.height) {
+      this.panY = (this.height - scaledH) / 2;
+    } else {
+      this.panY = Math.min(0, Math.max(this.height - scaledH, this.panY));
+    }
+  }
+
+  private bindPanEvents(): void {
+    const el = this.canvasElement;
+    if (!el) return;
+    el.addEventListener("touchstart", this.onPointerDown, { passive: false });
+    el.addEventListener("touchmove", this.onPointerMove, { passive: false });
+    el.addEventListener("touchend", this.onPointerUp);
+    el.addEventListener("mousedown", this.onPointerDown);
+    el.addEventListener("mousemove", this.onPointerMove);
+    el.addEventListener("mouseup", this.onPointerUp);
+    el.addEventListener("mouseleave", this.onPointerUp);
+    el.addEventListener("wheel", this.onWheel, { passive: false });
+  }
+
+  private unbindPanEvents(): void {
+    const el = this.canvasElement;
+    if (!el) return;
+    el.removeEventListener("touchstart", this.onPointerDown);
+    el.removeEventListener("touchmove", this.onPointerMove);
+    el.removeEventListener("touchend", this.onPointerUp);
+    el.removeEventListener("mousedown", this.onPointerDown);
+    el.removeEventListener("mousemove", this.onPointerMove);
+    el.removeEventListener("mouseup", this.onPointerUp);
+    el.removeEventListener("mouseleave", this.onPointerUp);
+    el.removeEventListener("wheel", this.onWheel);
+  }
+
+  private clientPos(e: MouseEvent | TouchEvent): { x: number; y: number } {
+    if ("touches" in e && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY };
+  }
+
+  private touchDist(e: TouchEvent): number {
+    const [a, b] = [e.touches[0], e.touches[1]];
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  private onPointerDown = (e: MouseEvent | TouchEvent): void => {
+    // Pinch start (2 fingers)
+    if ("touches" in e && e.touches.length === 2) {
+      e.preventDefault();
+      this.dragging = false;
+      this.pinching = true;
+      this.pinchStartDist = this.touchDist(e);
+      this.pinchStartScale = this.userScale;
+      const rect = this.canvasElement!.getBoundingClientRect();
+      const [a, b] = [e.touches[0], e.touches[1]];
+      this.pinchMidX = (a.clientX + b.clientX) / 2 - rect.left;
+      this.pinchMidY = (a.clientY + b.clientY) / 2 - rect.top;
+      this.panStartX = this.panX;
+      this.panStartY = this.panY;
+      return;
+    }
+
+    // Single-finger drag (mobile) or mouse drag
+    if (this.isMobile || e instanceof MouseEvent) {
+      const pos = this.clientPos(e);
+      this.dragging = true;
+      this.dragStartX = pos.x;
+      this.dragStartY = pos.y;
+      this.panStartX = this.panX;
+      this.panStartY = this.panY;
+    }
+  };
+
+  private onPointerMove = (e: MouseEvent | TouchEvent): void => {
+    // Pinch zoom
+    if (this.pinching && "touches" in e && e.touches.length === 2) {
+      e.preventDefault();
+      if (this.pinchStartDist <= 0) return;
+      const dist = this.touchDist(e);
+      const ratio = dist / this.pinchStartDist;
+      const viewportCfg = this.manifest?.viewport;
+      const minScale = viewportCfg?.minZoom ?? PixiRenderer.MIN_SCALE;
+      const maxScale = viewportCfg?.maxZoom ?? PixiRenderer.MAX_SCALE;
+      const newScale = Math.min(maxScale, Math.max(minScale, this.pinchStartScale * ratio));
+
+      const rect = this.canvasElement!.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+      this.panX = midX - (this.pinchMidX - this.panStartX) * (newScale / this.pinchStartScale);
+      this.panY = midY - (this.pinchMidY - this.panStartY) * (newScale / this.pinchStartScale);
+      this.userScale = newScale;
+      this.clampPan();
+      this.applyRootTransform();
+      return;
+    }
+
+    if (!this.dragging) return;
+    e.preventDefault();
+    const pos = this.clientPos(e);
+    this.panX = this.panStartX + (pos.x - this.dragStartX);
+    this.panY = this.panStartY + (pos.y - this.dragStartY);
+    this.clampPan();
+    this.applyRootTransform();
+  };
+
+  private onPointerUp = (e: MouseEvent | TouchEvent): void => {
+    if (this.pinching) {
+      if ("touches" in e && e.touches.length < 2) {
+        this.pinching = false;
+      }
+      return;
+    }
+    this.dragging = false;
+  };
+
+  private onWheel = (e: WheelEvent): void => {
+    e.preventDefault();
+    const viewportCfg = this.manifest?.viewport;
+    const minScale = viewportCfg?.minZoom ?? PixiRenderer.MIN_SCALE;
+    const maxScale = viewportCfg?.maxZoom ?? PixiRenderer.MAX_SCALE;
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.min(maxScale, Math.max(minScale, this.userScale * zoomFactor));
+
+    // Zoom toward cursor
+    const rect = this.canvasElement!.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    this.panX = cx - (cx - this.panX) * (newScale / this.userScale);
+    this.panY = cy - (cy - this.panY) * (newScale / this.userScale);
+    this.userScale = newScale;
+    this.clampPan();
+    this.applyRootTransform();
+  };
 
   // ── selectAgent ───────────────────────────────────────────────
 
