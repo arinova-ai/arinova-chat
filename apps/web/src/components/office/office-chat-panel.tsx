@@ -136,8 +136,8 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
         showCloseButton={false}
         className="w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col"
       >
-        {/* Header */}
-        <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0">
+        {/* Header — respects safe area */}
+        <SheetHeader className="px-4 pb-3 border-b shrink-0" style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 1rem))" }}>
           <div className="flex items-center justify-between">
             <SheetTitle className="text-sm flex items-center gap-1.5">
               <MessageSquare className="h-4 w-4" />
@@ -176,8 +176,8 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
           )}
         </div>
 
-        {/* Input */}
-        <div className="shrink-0 border-t px-3 py-3">
+        {/* Input — respects safe area */}
+        <div className="shrink-0 border-t px-3 py-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}>
           <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}
