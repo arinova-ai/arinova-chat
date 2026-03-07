@@ -29,4 +29,13 @@ export const THEME_REGISTRY: ThemeEntry[] = [
     maxAgents: 1,
     tags: ["warm", "cozy", "illustrated"],
   },
+  {
+    id: "avg-classroom",
+    name: "AVG Classroom",
+    description: "An anime-style classroom where your agents sit as students. Six desk positions with real-time status visualization.",
+    previewUrl: "https://uploads.chat.arinova.ai/themes/avg-classroom/preview.png",
+    price: 1000,
+    maxAgents: 6,
+    tags: ["anime", "classroom", "school", "multi-agent"],
+  },
 ];
