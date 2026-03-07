@@ -55,24 +55,33 @@ function OfficeViewInner() {
     fetchBindings();
   }, [fetchBindings]);
 
-  // Auto-bind all display agents to slots when no bindings exist
+  // Auto-bind unbound agents to empty slots
   useEffect(() => {
-    if (bindings.length > 0 || displayAgents.length === 0 || autoBindAttempted.current) return;
+    if (displayAgents.length === 0 || autoBindAttempted.current) return;
+    const boundAgentIds = new Set(bindings.map((b) => b.agentId));
+    const boundSlots = new Set(bindings.map((b) => b.slotIndex));
+    const unboundAgents = displayAgents.filter((a) => !boundAgentIds.has(a.id));
+    if (unboundAgents.length === 0) return;
     autoBindAttempted.current = true;
     const bindAll = async () => {
-      for (let i = 0; i < displayAgents.length; i++) {
+      let slotIdx = 0;
+      for (const agent of unboundAgents) {
+        while (boundSlots.has(slotIdx) && slotIdx < maxAgents) slotIdx++;
+        if (slotIdx >= maxAgents) break;
         try {
           await api("/api/office/bindings", {
             method: "PUT",
-            body: JSON.stringify({ themeId, slotIndex: i, agentId: displayAgents[i].id }),
+            body: JSON.stringify({ themeId, slotIndex: slotIdx, agentId: agent.id }),
             silent: true,
           });
+          boundSlots.add(slotIdx);
         } catch { /* skip failed slots */ }
+        slotIdx++;
       }
       fetchBindings();
     };
     bindAll();
-  }, [bindings.length, displayAgents, themeId, fetchBindings]);
+  }, [bindings, displayAgents, themeId, maxAgents, fetchBindings]);
 
   // Derive character agent from the clicked slot's binding.
   // For multi-slot themes (avg) unbound slots show null; single-slot themes fall back to first agent.
