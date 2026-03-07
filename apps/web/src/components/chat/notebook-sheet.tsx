@@ -307,7 +307,12 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                     <button
                       key={note.id}
                       type="button"
-                      className="flex flex-col gap-1 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/60 transition-colors"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("application/x-arinova-note", JSON.stringify({ id: note.id, title: note.title || t("common.untitled") }));
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      className="flex flex-col gap-1 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/60 transition-colors cursor-grab active:cursor-grabbing"
                       onClick={() => handleOpenNote(note)}
                     >
                       <p className="text-sm font-semibold truncate">
