@@ -67,6 +67,7 @@ function InfoRow({ label, value }: { label: string; value: ReactNode }) {
 /** Portrait cropped from the full-scene sprite layer */
 function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manifest: ThemeManifest; slotIndex: number }) {
   const [themeBase, setThemeBase] = useState("");
+  const [imgRatio, setImgRatio] = useState(0); // naturalW / naturalH
   useEffect(() => {
     getThemeBaseUrl(themeId).then(setThemeBase);
   }, [themeId]);
@@ -78,17 +79,22 @@ function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manife
   if (!sprites) return null;
 
   const { left, top, width, height } = charDef.hotspot;
-  // Uniform scale: enlarge the full-scene image so the hotspot region covers the container
   const cw = 220;
   const ch = 320;
-  const sx = cw / (width / 100);
-  const sy = ch / (height / 100);
-  const scale = Math.max(sx, sy);
-  // Position so the hotspot region is centered in the container
-  const hotW = (width / 100) * scale;
-  const hotH = (height / 100) * scale;
-  const ox = -(left / 100) * scale + (cw - hotW) / 2;
-  const oy = -(top / 100) * scale + (ch - hotH) / 2;
+
+  // Compute positions once we know the image aspect ratio
+  let imgW = 0, imgH = 0, ox = 0, oy = 0;
+  if (imgRatio > 0) {
+    // Scale so the hotspot region covers the container
+    const sxFull = cw / (width / 100); // image width if hotspot width = container width
+    const syFull = ch / (height / 100) * imgRatio; // image width if hotspot height = container height
+    imgW = Math.max(sxFull, syFull);
+    imgH = imgW / imgRatio;
+    const hotW = (width / 100) * imgW;
+    const hotH = (height / 100) * imgH;
+    ox = -(left / 100) * imgW + (cw - hotW) / 2;
+    oy = -(top / 100) * imgH + (ch - hotH) / 2;
+  }
 
   return (
     <div className="relative mx-auto mb-4 overflow-hidden rounded-xl bg-slate-800/50" style={{ width: cw, height: ch }}>
@@ -97,12 +103,16 @@ function AvgPortrait({ themeId, manifest, slotIndex }: { themeId: string; manife
         alt={charDef.name}
         draggable={false}
         className="absolute"
-        style={{
-          width: scale,
-          height: "auto",
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          if (img.naturalWidth && img.naturalHeight) setImgRatio(img.naturalWidth / img.naturalHeight);
+        }}
+        style={imgRatio > 0 ? {
+          width: imgW,
+          height: imgH,
           left: ox,
           top: oy,
-        }}
+        } : { opacity: 0 }}
       />
     </div>
   );
