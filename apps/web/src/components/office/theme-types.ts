@@ -160,6 +160,13 @@ export interface CharactersConfig {
   statusBadge: StatusBadgeConfig;
   states: Record<string, CharacterState>;
   directions: SeatDirection[];
+  /**
+   * Per-seat sprite overrides. Key = seat ID.
+   * Value = map of status → array of sprite image paths (frames for animation).
+   * When present, the renderer uses these full-canvas overlay sprites
+   * instead of the shared atlas for agents assigned to matching seats.
+   */
+  seatSprites?: Record<string, Record<string, string[]>>;
 }
 
 // ── Effects ─────────────────────────────────────────────────────

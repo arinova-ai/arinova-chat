@@ -125,11 +125,24 @@ export function validateManifest(data: unknown): ThemeManifest {
     }
   }
 
-  // Path safety: preview, atlas, audio
+  // Path safety: preview, atlas, seatSprites, audio
   if (d.preview != null) assertSafePath(d.preview, "preview");
   const charsForPath = d.characters as Record<string, unknown> | undefined;
   if (charsForPath && typeof charsForPath.atlas === "string" && charsForPath.atlas.length > 0) {
     assertSafePath(charsForPath.atlas, "characters.atlas");
+  }
+  // Validate seatSprites paths
+  if (charsForPath?.seatSprites && typeof charsForPath.seatSprites === "object") {
+    const ss = charsForPath.seatSprites as Record<string, Record<string, string[]>>;
+    for (const [seatId, statusMap] of Object.entries(ss)) {
+      for (const [status, paths] of Object.entries(statusMap)) {
+        if (Array.isArray(paths)) {
+          for (const p of paths) {
+            assertSafePath(p, `characters.seatSprites.${seatId}.${status}`);
+          }
+        }
+      }
+    }
   }
   const audio = d.audio as Record<string, unknown> | undefined;
   if (audio?.ambient) {

@@ -409,6 +409,12 @@ export class PixiRenderer implements OfficeRenderer {
   private prevSeat = new Map<string, string>();
   private animId = 0;
 
+  // Seat sprites (per-seat overlay system)
+  private seatSpriteTextures = new Map<string, Map<string, Texture[]>>();
+  private seatOverlays = new Map<string, { sprite: PixiSprite; currentStatus: string; frameIndex: number }>();
+  private seatSpriteTimer = 0;
+  private seatAgentMap = new Map<string, string>(); // seatId → agentId
+
   // Callback
   onAgentClick?: (agentId: string) => void;
 
@@ -523,6 +529,12 @@ export class PixiRenderer implements OfficeRenderer {
       }
     }
 
+    // Load per-seat sprites (full-canvas overlays)
+    const seatSprites = manifest.characters?.seatSprites;
+    if (seatSprites && this.themeId) {
+      await this.loadSeatSprites(seatSprites, manifest.canvas.width, manifest.canvas.height);
+    }
+
     // Collaboration lines
     const effectsLayer = map.get("effects");
     if (effectsLayer) {
@@ -547,6 +559,97 @@ export class PixiRenderer implements OfficeRenderer {
 
     this.drawZones();
   }
+
+  // ── seat sprites (per-seat overlay system) ───────────────────
+
+  private async loadSeatSprites(
+    seatSprites: Record<string, Record<string, string[]>>,
+    canvasW: number,
+    canvasH: number,
+  ) {
+    const charsLayer = this.layerMap.get("characters");
+    if (!charsLayer) return;
+
+    for (const [seatId, statusMap] of Object.entries(seatSprites)) {
+      const texMap = new Map<string, Texture[]>();
+
+      for (const [status, paths] of Object.entries(statusMap)) {
+        const textures: Texture[] = [];
+        for (const path of paths) {
+          try {
+            const url = `${this.assetsBaseUrl}/${this.themeId}/${path}`;
+            const tex = await Assets.load(url);
+            this.loadedAssetUrls.push(url);
+            textures.push(tex);
+          } catch (err) {
+            console.warn(`[PixiRenderer] Failed to load seat sprite ${path}:`, err);
+          }
+        }
+        if (textures.length > 0) texMap.set(status, textures);
+      }
+
+      this.seatSpriteTextures.set(seatId, texMap);
+
+      // Create an overlay sprite (initially invisible)
+      const firstTextures = texMap.values().next().value;
+      if (firstTextures && firstTextures.length > 0) {
+        const sprite = new PixiSprite(firstTextures[0]);
+        sprite.width = canvasW;
+        sprite.height = canvasH;
+        sprite.visible = false;
+        charsLayer.addChild(sprite);
+        this.seatOverlays.set(seatId, { sprite, currentStatus: "", frameIndex: 0 });
+      }
+    }
+  }
+
+  private updateSeatOverlays() {
+    if (this.seatSpriteTextures.size === 0) return;
+
+    // Build seatId → agentId mapping from current assignments
+    const newSeatAgentMap = new Map<string, string>();
+    for (const [agentId, assignment] of this.seatAssignments) {
+      newSeatAgentMap.set(assignment.seatId, agentId);
+    }
+    this.seatAgentMap = newSeatAgentMap;
+
+    // Update each overlay
+    for (const [seatId, overlay] of this.seatOverlays) {
+      const agentId = this.seatAgentMap.get(seatId);
+      if (!agentId) {
+        // No agent assigned — show default/idle sprite or hide
+        const texMap = this.seatSpriteTextures.get(seatId);
+        const defaultTextures = texMap?.get("idle") ?? texMap?.values().next().value;
+        if (defaultTextures && defaultTextures.length > 0) {
+          overlay.sprite.texture = defaultTextures[overlay.frameIndex % defaultTextures.length];
+          overlay.currentStatus = "idle";
+          overlay.sprite.visible = true;
+          overlay.sprite.alpha = 0.4; // dimmed when no agent
+        } else {
+          overlay.sprite.visible = false;
+        }
+        continue;
+      }
+
+      const agent = this.agents.find((a) => a.id === agentId);
+      if (!agent) { overlay.sprite.visible = false; continue; }
+
+      const texMap = this.seatSpriteTextures.get(seatId);
+      if (!texMap) { overlay.sprite.visible = false; continue; }
+
+      const status = agent.status;
+      const textures = texMap.get(status) ?? texMap.get("idle");
+      if (!textures || textures.length === 0) { overlay.sprite.visible = false; continue; }
+
+      overlay.sprite.texture = textures[overlay.frameIndex % textures.length];
+      overlay.currentStatus = status;
+      overlay.sprite.visible = true;
+      overlay.sprite.alpha = 1.0;
+    }
+  }
+
+  // Store seat assignments for overlay lookup
+  private seatAssignments = new Map<string, { x: number; y: number; seatId: string }>();
 
   // ── destroy ───────────────────────────────────────────────────
 
@@ -585,6 +688,10 @@ export class PixiRenderer implements OfficeRenderer {
     this.prevSeat.clear();
     this.pos = {};
     this.target = {};
+    this.seatSpriteTextures.clear();
+    this.seatOverlays.clear();
+    this.seatAgentMap.clear();
+    this.seatAssignments = new Map();
   }
 
   // ── resize ────────────────────────────────────────────────────
@@ -626,7 +733,20 @@ export class PixiRenderer implements OfficeRenderer {
     this.agents = agents;
     this.syncSprites();
     this.computePositions();
+    this.updateSeatOverlays();
+    this.hideSpritesBehindOverlays();
     this.updateAllVisuals();
+  }
+
+  /** Hide standard agent sprites for agents assigned to seats with overlay sprites. */
+  private hideSpritesBehindOverlays() {
+    if (this.seatSpriteTextures.size === 0) return;
+    for (const [agentId, assignment] of this.seatAssignments) {
+      if (this.seatOverlays.has(assignment.seatId)) {
+        const sprite = this.sprites.get(agentId);
+        if (sprite) sprite.container.visible = false;
+      }
+    }
   }
 
   // ── selectAgent ───────────────────────────────────────────────
@@ -754,6 +874,9 @@ export class PixiRenderer implements OfficeRenderer {
     if (!this.useFallback && this.manifest) {
       const seatMap = assignSeats(this.agents, this.manifest.zones, this.manifest.canvas.width);
 
+      // Store assignments for seat overlay lookup
+      this.seatAssignments = seatMap;
+
       for (const [agentId, { x, y, seatId }] of seatMap) {
         const prevSeatId = this.prevSeat.get(agentId);
         if (prevSeatId !== undefined && prevSeatId !== seatId) {
@@ -804,7 +927,25 @@ export class PixiRenderer implements OfficeRenderer {
   // ── Private: animation loop ───────────────────────────────────
 
   private startAnimationLoop() {
+    let lastSeatFrameToggle = performance.now();
+
     const tick = () => {
+      // A/B frame toggle for seat sprites (every 2 seconds)
+      const now = performance.now();
+      if (now - lastSeatFrameToggle >= 2000 && this.seatOverlays.size > 0) {
+        lastSeatFrameToggle = now;
+        for (const [seatId, overlay] of this.seatOverlays) {
+          overlay.frameIndex = (overlay.frameIndex + 1) % 2;
+          const texMap = this.seatSpriteTextures.get(seatId);
+          if (texMap) {
+            const textures = texMap.get(overlay.currentStatus) ?? texMap.get("idle");
+            if (textures && textures.length > 0) {
+              overlay.sprite.texture = textures[overlay.frameIndex % textures.length];
+            }
+          }
+        }
+      }
+
       for (const [id, t] of Object.entries(this.target)) {
         const cur = this.pos[id];
         if (!cur) continue;
