@@ -58,8 +58,13 @@ async fn create_capsule(
     }
 
     // Validate user is a member of the conversation
+    // Direct convs store owner in conversations.user_id; group convs use conversation_user_members
     let is_member = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+        r#"SELECT COUNT(*) FROM (
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+            UNION ALL
+            SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+        ) sub"#,
     )
     .bind(body.conversation_id)
     .bind(&user.id)
