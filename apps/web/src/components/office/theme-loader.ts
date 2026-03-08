@@ -138,8 +138,13 @@ export function validateManifest(data: unknown): ThemeManifest {
 
   // Path safety: preview (shared by all renderers)
   if (d.preview != null) assertSafePath(d.preview, "preview");
-  // Path safety: iframe entry
-  if (isIframe && typeof d.entry === "string") assertSafePath(d.entry, "entry");
+  // iframe: entry is required
+  if (isIframe) {
+    if (typeof d.entry !== "string" || d.entry.length === 0) {
+      throw new Error("iframe theme missing required 'entry' path");
+    }
+    assertSafePath(d.entry, "entry");
+  }
 
   return data as ThemeManifest;
 }
