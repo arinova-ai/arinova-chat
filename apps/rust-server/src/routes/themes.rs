@@ -411,7 +411,9 @@ async fn upload_theme(
     let theme_id = meta.id.clone();
 
     // Phase 2b: Validate that preview file exists in the ZIP bundle
-    let preview_file = meta.preview.as_deref().unwrap_or("preview.png");
+    let preview_file = meta.preview.as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("preview.png");
     if let Some(ref zip_data) = bundle_bytes {
         let cursor = std::io::Cursor::new(zip_data.as_slice());
         match zip::ZipArchive::new(cursor) {

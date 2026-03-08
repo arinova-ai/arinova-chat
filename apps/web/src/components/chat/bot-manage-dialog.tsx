@@ -45,6 +45,32 @@ import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { BACKEND_URL, assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 
+/** Popover that opens on hover (desktop) and tap (mobile). */
+function HoverPopover({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-64 text-xs text-muted-foreground p-3"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
+        {content}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 const CATEGORIES = [
   { value: "assistant", label: "AI Assistant" },
   { value: "coding", label: "Coding" },
@@ -346,16 +372,7 @@ export function BotManageDialog({
           <div className="space-y-2">
             <label className="flex items-center gap-1.5 text-sm font-medium">
               {t("botManage.category")}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-                    <HelpCircle className="h-3.5 w-3.5" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-64 text-xs text-muted-foreground p-3">
-                  {t("botManage.categoryTooltip")}
-                </PopoverContent>
-              </Popover>
+              <HoverPopover content={t("botManage.categoryTooltip")} />
             </label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="bg-secondary border-none">
@@ -375,16 +392,7 @@ export function BotManageDialog({
           <div className="space-y-2">
             <label className="flex items-center gap-1.5 text-sm font-medium">
               {t("botManage.systemPrompt")}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
-                    <HelpCircle className="h-3.5 w-3.5" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-64 text-xs text-muted-foreground p-3">
-                  {t("botManage.systemPromptTooltip")}
-                </PopoverContent>
-              </Popover>
+              <HoverPopover content={t("botManage.systemPromptTooltip")} />
             </label>
             <Textarea
               value={systemPrompt}
