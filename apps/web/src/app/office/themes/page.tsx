@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Palette, Check, Lock, Users, Search } from "lucide-react";
+import { Palette, Check, Lock, Users, Search, Download } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -13,15 +13,17 @@ import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
 function ThemeCard({ entry }: { entry: ThemeEntry }) {
-  const { themeId, switchTheme, ownedThemes, refreshOwned } = useTheme();
+  const { themeId, switchTheme, ownedThemes, refreshOwned, isDownloaded, downloadTheme } = useTheme();
   const { t } = useTranslation();
   const [toast, setToast] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
   const isOwned = ownedThemes.has(entry.id);
   const isPremium = !isFree;
+  const downloaded = isDownloaded(entry.id);
 
   useEffect(() => {
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -33,9 +35,20 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
     toastTimer.current = setTimeout(() => setToast(false), 2000);
   };
 
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadTheme(entry.id);
+    } catch {
+      alert("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleApply = () => {
-    if (isActive) return;
-    if (!isFree && !isOwned) return;
+    if (isActive || !downloaded) return;
     switchTheme(entry.id);
     showToast();
   };
@@ -56,13 +69,66 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
         return;
       }
       await refreshOwned();
-      switchTheme(entry.id);
-      showToast();
     } catch {
       alert("Purchase failed. Please try again.");
     } finally {
       setPurchasing(false);
     }
+  };
+
+  // Determine button state
+  const renderButton = () => {
+    if (isActive) {
+      return (
+        <button
+          disabled
+          className="w-full rounded-lg bg-emerald-500/15 py-2 text-sm font-medium text-emerald-400 flex items-center justify-center gap-1.5"
+        >
+          <Check className="h-4 w-4" />
+          {t("theme.applied")}
+        </button>
+      );
+    }
+    if (isPremium && !isOwned) {
+      return (
+        <button
+          onClick={handlePurchase}
+          disabled={purchasing}
+          className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80 disabled:opacity-60 flex items-center justify-center gap-1.5"
+        >
+          {purchasing ? (
+            <span className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
+          ) : (
+            <Lock className="h-3.5 w-3.5" />
+          )}
+          {entry.price} {t("theme.credits")}
+        </button>
+      );
+    }
+    if (!downloaded) {
+      return (
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80 disabled:opacity-60 flex items-center justify-center gap-1.5"
+        >
+          {downloading ? (
+            <span className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
+          {downloading ? t("theme.downloading") : isFree ? t("theme.downloadFree") : t("theme.download")}
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={handleApply}
+        className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80"
+      >
+        {t("theme.apply")}
+      </button>
+    );
   };
 
   return (
@@ -76,7 +142,7 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(max-width: 768px) 100vw, 50vw"
         />
-        {isPremium && (
+        {isPremium && !isOwned && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
             <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-bold tracking-wider text-amber-400 uppercase">
               {t("theme.premium")}
@@ -119,35 +185,7 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
         </div>
 
         {/* Action button */}
-        {isActive ? (
-          <button
-            disabled
-            className="w-full rounded-lg bg-emerald-500/15 py-2 text-sm font-medium text-emerald-400 flex items-center justify-center gap-1.5"
-          >
-            <Check className="h-4 w-4" />
-            {t("theme.applied")}
-          </button>
-        ) : isFree || isOwned ? (
-          <button
-            onClick={handleApply}
-            className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80"
-          >
-            {t("theme.apply")}
-          </button>
-        ) : (
-          <button
-            onClick={handlePurchase}
-            disabled={purchasing}
-            className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80 disabled:opacity-60 flex items-center justify-center gap-1.5"
-          >
-            {purchasing ? (
-              <span className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
-            ) : (
-              <Lock className="h-3.5 w-3.5" />
-            )}
-            {entry.price} {t("theme.credits")}
-          </button>
-        )}
+        {renderButton()}
 
         {/* Success toast */}
         {toast && (

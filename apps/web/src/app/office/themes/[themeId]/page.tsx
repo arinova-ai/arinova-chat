@@ -15,6 +15,7 @@ import {
   Maximize,
   Tag,
   Sparkles,
+  Download,
 } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -94,17 +95,20 @@ function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
 }
 
 function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: ThemeDetails }) {
-  const { themeId, switchTheme, ownedThemes, refreshOwned } = useTheme();
+  const { themeId, switchTheme, ownedThemes, refreshOwned, isDownloaded, downloadTheme } = useTheme();
   const { t } = useTranslation();
   const [toast, setToast] = useState(false);
   const [liked, setLiked] = useState(false);
   const [activeThumb, setActiveThumb] = useState(0);
   const [qualityModes, setQualityModes] = useState("Standard");
   const [purchasing, setPurchasing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
   const isOwned = ownedThemes.has(entry.id);
+  const isPremium = !isFree;
+  const downloaded = isDownloaded(entry.id);
 
   useEffect(() => {
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -124,9 +128,20 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
     toastTimer.current = setTimeout(() => setToast(false), 2000);
   };
 
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadTheme(entry.id);
+    } catch {
+      alert("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleApply = () => {
-    if (isActive) return;
-    if (!isFree && !isOwned) return;
+    if (isActive || !downloaded) return;
     switchTheme(entry.id);
     showToast();
   };
@@ -147,8 +162,6 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
         return;
       }
       await refreshOwned();
-      switchTheme(entry.id);
-      showToast();
     } catch {
       alert("Purchase failed. Please try again.");
     } finally {
@@ -325,14 +338,7 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                     <Check className="h-5 w-5" />
                     {t("theme.applied")}
                   </button>
-                ) : isFree || isOwned ? (
-                  <button
-                    onClick={handleApply}
-                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90"
-                  >
-                    {t("theme.applyTheme")}
-                  </button>
-                ) : (
+                ) : isPremium && !isOwned ? (
                   <button
                     onClick={handlePurchase}
                     disabled={purchasing}
@@ -343,7 +349,27 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                     ) : (
                       <Lock className="h-4 w-4" />
                     )}
-                    {t("theme.purchaseAndApply")}
+                    {entry.price} {t("theme.credits")}
+                  </button>
+                ) : !downloaded ? (
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {downloading ? (
+                      <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {downloading ? t("theme.downloading") : isFree ? t("theme.downloadFree") : t("theme.download")}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleApply}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90"
+                  >
+                    {t("theme.applyTheme")}
                   </button>
                 )}
                 <button
