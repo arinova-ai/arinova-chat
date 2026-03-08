@@ -25,6 +25,7 @@ import {
   Check,
   Copy,
   Circle,
+  HelpCircle,
   Loader2,
   RefreshCw,
   Download,
@@ -34,6 +35,11 @@ import {
   Globe,
   Lock,
 } from "lucide-react";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -338,7 +344,19 @@ export function BotManageDialog({
 
           {/* Category */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">{t("botManage.category")}</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium">
+              {t("botManage.category")}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                    <HelpCircle className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 text-xs text-muted-foreground p-3">
+                  {t("botManage.categoryTooltip")}
+                </PopoverContent>
+              </Popover>
+            </label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="bg-secondary border-none">
                 <SelectValue placeholder={t("botManage.selectCategory")} />
@@ -355,7 +373,19 @@ export function BotManageDialog({
 
           {/* System Prompt */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">{t("botManage.systemPrompt")}</label>
+            <label className="flex items-center gap-1.5 text-sm font-medium">
+              {t("botManage.systemPrompt")}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="text-muted-foreground hover:text-foreground transition-colors">
+                    <HelpCircle className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 text-xs text-muted-foreground p-3">
+                  {t("botManage.systemPromptTooltip")}
+                </PopoverContent>
+              </Popover>
+            </label>
             <Textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
