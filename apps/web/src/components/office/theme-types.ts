@@ -197,7 +197,7 @@ export interface AudioConfig {
 
 // ── Renderer ───────────────────────────────────────────────────
 
-export type RendererType = "pixi" | "threejs";
+export type RendererType = "pixi" | "threejs" | "iframe";
 
 // ── v3: Room Model ─────────────────────────────────────────────
 

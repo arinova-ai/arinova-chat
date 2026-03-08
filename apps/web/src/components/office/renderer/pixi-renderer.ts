@@ -63,7 +63,7 @@ function parseStatusColors(manifest: ThemeManifest | null): Record<AgentStatus, 
 }
 
 function parseBgColor(manifest: ThemeManifest): number {
-  const raw = manifest.canvas.background.color;
+  const raw = manifest.canvas?.background?.color;
   if (!raw) return 0x0f172a;
   return Number(raw) || 0x0f172a;
 }
@@ -523,8 +523,10 @@ export class PixiRenderer implements OfficeRenderer {
     root.sortableChildren = true;
     this.layerMap = map;
 
+    const canvasW = manifest.canvas?.width ?? this.width;
+    const canvasH = manifest.canvas?.height ?? this.height;
     const { scale, offsetX, offsetY } = computeScale(
-      this.width, this.height, manifest.canvas.width, manifest.canvas.height,
+      this.width, this.height, canvasW, canvasH,
     );
     this.baseScale = scale;
     this.baseOffsetX = offsetX;
@@ -538,12 +540,12 @@ export class PixiRenderer implements OfficeRenderer {
     const hasBgImage = !!manifest.canvas?.background?.image;
     if (bgLayer && hasBgImage && this.themeId) {
       try {
-        const bgUrl = `${this.assetsBaseUrl}/${this.themeId}/${manifest.canvas.background.image}`;
+        const bgUrl = `${this.assetsBaseUrl}/${this.themeId}/${manifest.canvas!.background.image}`;
         const texture = await Assets.load(bgUrl);
         this.loadedAssetUrls.push(bgUrl);
         const bgSprite = new PixiSprite(texture);
-        bgSprite.width = manifest.canvas.width;
-        bgSprite.height = manifest.canvas.height;
+        bgSprite.width = canvasW;
+        bgSprite.height = canvasH;
         bgLayer.addChild(bgSprite);
         this.bgLoaded = true;
       } catch (err) {
@@ -572,7 +574,7 @@ export class PixiRenderer implements OfficeRenderer {
     // Load per-seat sprites (full-canvas overlays)
     const seatSprites = manifest.characters?.seatSprites;
     if (seatSprites && this.themeId) {
-      await this.loadSeatSprites(seatSprites, manifest.canvas.width, manifest.canvas.height);
+      await this.loadSeatSprites(seatSprites, canvasW, canvasH);
     }
 
     // Collaboration lines
@@ -745,7 +747,7 @@ export class PixiRenderer implements OfficeRenderer {
 
     if (!this.useFallback && this.manifest && this.root) {
       const { scale, offsetX, offsetY } = computeScale(
-        width, height, this.manifest.canvas.width, this.manifest.canvas.height,
+        width, height, this.manifest.canvas?.width ?? width, this.manifest.canvas?.height ?? height,
       );
       this.baseScale = scale;
       this.baseOffsetX = offsetX;
@@ -796,8 +798,8 @@ export class PixiRenderer implements OfficeRenderer {
   }
 
   private centerPan(): void {
-    const scaledW = this.manifest!.canvas.width * this.baseScale * this.userScale;
-    const scaledH = this.manifest!.canvas.height * this.baseScale * this.userScale;
+    const scaledW = (this.manifest?.canvas?.width ?? this.width) * this.baseScale * this.userScale;
+    const scaledH = (this.manifest?.canvas?.height ?? this.height) * this.baseScale * this.userScale;
     this.panX = (this.width - scaledW) / 2;
     this.panY = (this.height - scaledH) / 2;
     this.clampPan();
@@ -805,8 +807,8 @@ export class PixiRenderer implements OfficeRenderer {
 
   private clampPan(): void {
     if (!this.manifest) return;
-    const scaledW = this.manifest.canvas.width * this.baseScale * this.userScale;
-    const scaledH = this.manifest.canvas.height * this.baseScale * this.userScale;
+    const scaledW = (this.manifest.canvas?.width ?? this.width) * this.baseScale * this.userScale;
+    const scaledH = (this.manifest.canvas?.height ?? this.height) * this.baseScale * this.userScale;
 
     if (scaledW <= this.width) {
       this.panX = (this.width - scaledW) / 2;
@@ -1071,7 +1073,7 @@ export class PixiRenderer implements OfficeRenderer {
 
   private computePositions() {
     if (!this.useFallback && this.manifest) {
-      const seatMap = assignSeats(this.agents, this.manifest.zones, this.manifest.canvas.width);
+      const seatMap = assignSeats(this.agents, this.manifest.zones, this.manifest.canvas?.width);
 
       // Store assignments for seat overlay lookup
       this.seatAssignments = seatMap;

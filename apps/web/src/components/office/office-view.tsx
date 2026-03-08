@@ -14,22 +14,6 @@ import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
 import type { Agent } from "./types";
 
-const THEME_SDK_V2_KEY = "arinova_theme_sdk_v2";
-
-function useThemeSdkV2(): boolean {
-  const [enabled, setEnabled] = useState(false);
-  useEffect(() => {
-    const env = process.env.NEXT_PUBLIC_THEME_SDK_V2;
-    if (env === "true" || env === "1") {
-      setEnabled(true);
-      return;
-    }
-    if (typeof window !== "undefined" && localStorage.getItem(THEME_SDK_V2_KEY) === "true") {
-      setEnabled(true);
-    }
-  }, []);
-  return enabled;
-}
 
 interface BindingRow {
   slotIndex: number;
@@ -47,7 +31,7 @@ function OfficeViewInner() {
   const themeEntry = themes.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
   const displayAgents = stream.agents.slice(0, maxAgents);
-  const sdkV2 = useThemeSdkV2();
+
 
   const { data: session } = authClient.useSession();
   const sessionUser = session?.user as { id?: string; name?: string; username?: string } | undefined;
@@ -178,7 +162,7 @@ function OfficeViewInner() {
           <div className="flex h-full items-center justify-center">
             <ArinovaSpinner />
           </div>
-        ) : sdkV2 ? (
+        ) : manifest.renderer === "iframe" ? (
           mapSize.width > 0 && mapSize.height > 0 && (
             <ThemeIframe
               themeId={themeId}
