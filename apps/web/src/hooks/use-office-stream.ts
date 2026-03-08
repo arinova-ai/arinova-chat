@@ -111,10 +111,18 @@ export function useOfficeStream() {
           healthAgentsRef.current.set(h.agentId, h);
         }
 
-        // Seed agents as idle — only if SSE hasn't delivered data yet
+        // Seed agents as idle, or merge with SSE agents if they arrived first
         setAgents((prev) => {
-          if (prev.length > 0) return prev;
-          return healthList.map(healthToAgent);
+          if (prev.length === 0) return healthList.map(healthToAgent);
+          // SSE arrived first — merge health agents not yet present
+          const existingIds = new Set(prev.map((a) => a.id));
+          const merged = [...prev];
+          for (const h of healthList) {
+            if (!existingIds.has(h.agentId)) {
+              merged.push(healthToAgent(h));
+            }
+          }
+          return merged;
         });
       } catch (e) {
         console.warn("[useOfficeStream] Failed to fetch initial agents:", e);
@@ -142,14 +150,24 @@ export function useOfficeStream() {
           const sseIds = new Set(sseAgents.map((a) => a.id));
 
           setAgents((prev) => {
-            // Merge: SSE agents take priority; keep health-seeded agents
-            // that aren't in this SSE update (they stay idle)
             const merged = [...sseAgents];
+            const mergedIds = new Set(sseIds);
+
+            // Keep existing non-SSE agents
             for (const existing of prev) {
-              if (!sseIds.has(existing.id)) {
+              if (!mergedIds.has(existing.id)) {
                 merged.push({ ...existing, status: "idle" as const, online: false });
+                mergedIds.add(existing.id);
               }
             }
+
+            // Include health-seeded agents not yet in the list
+            for (const [id, h] of healthAgentsRef.current) {
+              if (!mergedIds.has(id)) {
+                merged.push(healthToAgent(h));
+              }
+            }
+
             return merged;
           });
         }
