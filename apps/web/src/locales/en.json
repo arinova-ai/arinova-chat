@@ -95,6 +95,13 @@
   "chat.actions.pin": "Pin",
   "chat.actions.unpin": "Unpin",
   "chat.actions.report": "Report",
+  "chat.actions.share": "Share",
+
+  "share.title": "Share",
+  "share.sendToConversation": "Send to Conversation",
+  "share.shareExternal": "Share External",
+  "share.copyContent": "Copy Content",
+  "share.sentToConversation": "Sent to conversation",
 
   "chat.selection.count": "{count} selected",
   "chat.selection.copied": "Copied to clipboard",

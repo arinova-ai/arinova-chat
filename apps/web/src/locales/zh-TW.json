@@ -98,6 +98,13 @@
   "chat.actions.pin": "釘選",
   "chat.actions.unpin": "取消釘選",
   "chat.actions.report": "檢舉",
+  "chat.actions.share": "分享",
+
+  "share.title": "分享",
+  "share.sendToConversation": "傳送到對話",
+  "share.shareExternal": "分享到外部",
+  "share.copyContent": "複製內容",
+  "share.sentToConversation": "已傳送到對話",
 
   "chat.selection.count": "{count} 則已選取",
   "chat.selection.copied": "已複製到剪貼簿",

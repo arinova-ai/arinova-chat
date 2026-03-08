@@ -96,6 +96,13 @@
   "chat.actions.pin": "Fijar",
   "chat.actions.unpin": "Desfijar",
   "chat.actions.report": "Reportar",
+  "chat.actions.share": "Compartir",
+
+  "share.title": "Compartir",
+  "share.sendToConversation": "Enviar a conversación",
+  "share.shareExternal": "Compartir externamente",
+  "share.copyContent": "Copiar contenido",
+  "share.sentToConversation": "Enviado a la conversación",
 
   "chat.selection.count": "{count} seleccionados",
   "chat.selection.copied": "Copiado al portapapeles",

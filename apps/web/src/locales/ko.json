@@ -96,6 +96,13 @@
   "chat.actions.pin": "고정",
   "chat.actions.unpin": "고정 해제",
   "chat.actions.report": "신고",
+  "chat.actions.share": "공유",
+
+  "share.title": "공유",
+  "share.sendToConversation": "대화로 보내기",
+  "share.shareExternal": "외부 공유",
+  "share.copyContent": "내용 복사",
+  "share.sentToConversation": "대화로 전송됨",
 
   "chat.selection.count": "{count}개 선택됨",
   "chat.selection.copied": "클립보드에 복사됨",

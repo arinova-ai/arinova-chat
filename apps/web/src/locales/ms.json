@@ -96,6 +96,13 @@
   "chat.actions.pin": "Semat",
   "chat.actions.unpin": "Nyahsemat",
   "chat.actions.report": "Laporkan",
+  "chat.actions.share": "Kongsi",
+
+  "share.title": "Kongsi",
+  "share.sendToConversation": "Hantar ke perbualan",
+  "share.shareExternal": "Kongsi luaran",
+  "share.copyContent": "Salin kandungan",
+  "share.sentToConversation": "Dihantar ke perbualan",
 
   "chat.selection.count": "{count} dipilih",
   "chat.selection.copied": "Disalin ke papan keratan",

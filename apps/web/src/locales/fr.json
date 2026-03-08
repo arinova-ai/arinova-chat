@@ -96,6 +96,13 @@
   "chat.actions.pin": "Épingler",
   "chat.actions.unpin": "Désépingler",
   "chat.actions.report": "Signaler",
+  "chat.actions.share": "Partager",
+
+  "share.title": "Partager",
+  "share.sendToConversation": "Envoyer à la conversation",
+  "share.shareExternal": "Partager en externe",
+  "share.copyContent": "Copier le contenu",
+  "share.sentToConversation": "Envoyé à la conversation",
 
   "chat.selection.count": "{count} sélectionnés",
   "chat.selection.copied": "Copié dans le presse-papiers",

@@ -96,6 +96,13 @@
   "chat.actions.pin": "ピン留め",
   "chat.actions.unpin": "ピン留め解除",
   "chat.actions.report": "報告",
+  "chat.actions.share": "共有",
+
+  "share.title": "共有",
+  "share.sendToConversation": "会話に送信",
+  "share.shareExternal": "外部に共有",
+  "share.copyContent": "内容をコピー",
+  "share.sentToConversation": "会話に送信しました",
 
   "chat.selection.count": "{count}件選択中",
   "chat.selection.copied": "クリップボードにコピーしました",

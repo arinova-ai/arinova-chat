@@ -96,6 +96,13 @@
   "chat.actions.pin": "置顶",
   "chat.actions.unpin": "取消置顶",
   "chat.actions.report": "举报",
+  "chat.actions.share": "分享",
+
+  "share.title": "分享",
+  "share.sendToConversation": "发送到对话",
+  "share.shareExternal": "分享到外部",
+  "share.copyContent": "复制内容",
+  "share.sentToConversation": "已发送到对话",
 
   "chat.selection.count": "已选择 {count} 条",
   "chat.selection.copied": "已复制到剪贴板",
