@@ -97,6 +97,9 @@ async fn get_theme_asset(
         "mp3" => "audio/mpeg",
         "ogg" => "audio/ogg",
         "wav" => "audio/wav",
+        "js" => "application/javascript",
+        "css" => "text/css",
+        "html" => "text/html",
         _ => "application/octet-stream",
     };
 
