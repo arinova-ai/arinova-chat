@@ -16,6 +16,7 @@ const STATUS_LABELS: Record<AgentStatus, string> = {
   idle: "Idle",
   blocked: "Blocked",
   collaborating: "Collab",
+  unbound: "Not Connected",
 };
 
 const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
@@ -23,6 +24,7 @@ const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
   idle: 0xf59e0b,
   blocked: 0xdc2626,
   collaborating: 0x2563eb,
+  unbound: 0x666666,
 };
 
 // ── Reusable text styles ─────────────────────────────────────────
@@ -59,6 +61,7 @@ function parseStatusColors(manifest: ThemeManifest | null): Record<AgentStatus, 
     idle: parse(c.idle, DEFAULT_STATUS_COLORS.idle),
     blocked: parse(c.blocked, DEFAULT_STATUS_COLORS.blocked),
     collaborating: parse(c.collaborating, DEFAULT_STATUS_COLORS.collaborating),
+    unbound: parse(c.unbound, DEFAULT_STATUS_COLORS.unbound),
   };
 }
 

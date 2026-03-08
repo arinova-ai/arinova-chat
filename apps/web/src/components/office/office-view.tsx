@@ -24,13 +24,23 @@ interface BindingRow {
 // Dynamic import — PixiJS only works client-side
 const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 
+function makeEmptySlot(index: number): Agent {
+  return {
+    id: `empty-${index}`,
+    name: "Not Connected",
+    status: "unbound",
+    emoji: "\u{1F4A4}",
+    role: "",
+    color: "#666",
+    recentActivity: [],
+  };
+}
+
 function OfficeViewInner() {
   const stream = useOfficeStream();
   const { manifest, loading, themeId, themes } = useTheme();
   const themeEntry = themes.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
-  const displayAgents = stream.agents.slice(0, maxAgents);
-
 
   const { data: session } = authClient.useSession();
   const sessionUser = session?.user as { id?: string; name?: string; username?: string } | undefined;
@@ -41,7 +51,7 @@ function OfficeViewInner() {
   };
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [showCharacterModal, setShowCharacterModal] = useState(false);
+  const [characterModalSlot, setCharacterModalSlot] = useState<number | null>(null);
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
@@ -63,6 +73,30 @@ function OfficeViewInner() {
   useEffect(() => {
     fetchBindings();
   }, [fetchBindings]);
+
+  // Build slot-based agent array
+  const displayAgents = stream.agents.slice(0, maxAgents);
+
+  const slots: Agent[] = Array.from({ length: maxAgents }, (_, i) => {
+    const binding = bindings.find((b) => b.slotIndex === i);
+    if (binding) {
+      const agent = stream.agents.find((a) => a.id === binding.agentId);
+      if (agent) return agent;
+      // Agent bound but not streaming — show fallback with idle status
+      if (binding.agentName) {
+        return {
+          id: binding.agentId,
+          name: binding.agentName,
+          role: "",
+          emoji: "\u{1F916}",
+          color: "#64748b",
+          status: "idle" as const,
+          recentActivity: [],
+        };
+      }
+    }
+    return makeEmptySlot(i);
+  });
 
   // Auto-bind unbound agents to empty slots
   useEffect(() => {
@@ -92,35 +126,39 @@ function OfficeViewInner() {
     bindAll();
   }, [bindings, displayAgents, themeId, maxAgents, fetchBindings]);
 
-  // Derive character agent from binding → all stream agents (not just displayAgents,
-  // which may be capped by maxAgents). If the bound agent isn't streaming office
-  // events at all, create a minimal fallback from the binding metadata so the
-  // character modal shows agent info with "Idle" status instead of "not connected".
-  const slot0Binding = bindings.find((b) => b.slotIndex === 0);
-  const characterAgent: Agent | null = slot0Binding
-    ? stream.agents.find((a) => a.id === slot0Binding.agentId)
-      ?? (slot0Binding.agentName ? {
-          id: slot0Binding.agentId,
-          name: slot0Binding.agentName,
-          role: "",
-          emoji: "\u{1F916}",
-          color: "#64748b",
-          status: "idle" as const,
-          recentActivity: [],
-        } : null)
-    : displayAgents[0] ?? null;
+  // Find slot index from agentId (including empty-N pattern)
+  const findSlotIndex = useCallback((agentId: string): number => {
+    const emptyMatch = agentId.match(/^empty-(\d+)$/);
+    if (emptyMatch) return parseInt(emptyMatch[1], 10);
+    return slots.findIndex((a) => a.id === agentId);
+  }, [slots]);
 
   const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
 
+  // Character modal agent/binding for the selected slot
+  const characterSlotAgent = characterModalSlot !== null ? slots[characterModalSlot] ?? null : null;
+  const characterSlotBinding = characterModalSlot !== null
+    ? bindings.find((b) => b.slotIndex === characterModalSlot)
+    : undefined;
+
   const selectAgent = useCallback((id: string | null) => {
+    if (!id) return;
+    // For iframe themes, open CharacterModal for the slot
+    if (manifest?.renderer === "iframe") {
+      const slotIdx = findSlotIndex(id);
+      if (slotIdx >= 0) {
+        setCharacterModalSlot(slotIdx);
+        return;
+      }
+    }
+    // Fallback: open AgentModal
     setSelectedAgentId(id);
-  }, []);
+  }, [manifest, findSlotIndex]);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
-  const handleCharacterClick = useCallback(() => setShowCharacterModal(true), []);
-  const closeCharacterModal = useCallback(() => setShowCharacterModal(false), []);
+  const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
   const handleOpenChat = useCallback((agentId: string) => {
-    setShowCharacterModal(false);
+    setCharacterModalSlot(null);
     setChatAgentId(agentId);
   }, []);
   const closeChatPanel = useCallback(() => setChatAgentId(null), []);
@@ -158,7 +196,7 @@ function OfficeViewInner() {
           mapSize.width > 0 && mapSize.height > 0 && (
             <ThemeIframe
               themeId={themeId}
-              agents={displayAgents}
+              agents={slots}
               user={iframeUser}
               width={mapSize.width}
               height={mapSize.height}
@@ -173,7 +211,7 @@ function OfficeViewInner() {
               agents={displayAgents}
               selectedAgentId={selectedAgentId}
               onSelectAgent={selectAgent}
-              onCharacterClick={handleCharacterClick}
+              onCharacterClick={() => setCharacterModalSlot(0)}
               width={mapSize.width}
               height={mapSize.height}
               manifest={manifest}
@@ -183,18 +221,18 @@ function OfficeViewInner() {
         )}
       </div>
 
-      {/* Agent detail modal (v2/PixiJS themes — multi-agent click) */}
+      {/* Agent detail modal (non-iframe themes — multi-agent click) */}
       <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
 
-      {/* Character modal (v3/v4 single-character themes) */}
+      {/* Character modal (any slot — bind/unbind/switch) */}
       <CharacterModal
-        isOpen={showCharacterModal}
+        isOpen={characterModalSlot !== null}
         onClose={closeCharacterModal}
-        agent={characterAgent}
+        agent={characterSlotAgent?.status !== "unbound" ? characterSlotAgent : null}
         agents={displayAgents}
         themeId={themeId}
-        slotIndex={0}
-        boundAgentId={slot0Binding?.agentId ?? null}
+        slotIndex={characterModalSlot ?? 0}
+        boundAgentId={characterSlotBinding?.agentId ?? null}
         onBindingChange={fetchBindings}
         onOpenChat={handleOpenChat}
       />

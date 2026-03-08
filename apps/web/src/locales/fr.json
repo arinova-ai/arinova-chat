@@ -301,6 +301,10 @@
 
   "office.title": "Bureau",
   "office.subtitle": "Espace de travail virtuel",
+  "office.tab.scene": "Scène",
+  "office.tab.tasks": "Tâches",
+  "office.tab.activity": "Activité",
+  "office.tab.dashboard": "Tableau de bord",
 
   "settings.title": "Paramètres",
   "settings.subtitle": "Personnalisez votre expérience",

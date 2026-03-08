@@ -22,6 +22,7 @@ const STATUS_BADGE: Record<AgentStatus, { label: string; bg: string; text: strin
   idle: { label: "Idle", bg: "bg-yellow-500/15", text: "text-yellow-400" },
   blocked: { label: "Blocked", bg: "bg-red-500/15", text: "text-red-400" },
   collaborating: { label: "Collaborating", bg: "bg-blue-500/15", text: "text-blue-400" },
+  unbound: { label: "Not Connected", bg: "bg-slate-500/15", text: "text-slate-400" },
 };
 
 const STATUS_DOT: Record<AgentStatus, string> = {
@@ -29,6 +30,7 @@ const STATUS_DOT: Record<AgentStatus, string> = {
   idle: "bg-yellow-400",
   blocked: "bg-red-400",
   collaborating: "bg-blue-400",
+  unbound: "bg-slate-400",
 };
 
 interface Props {

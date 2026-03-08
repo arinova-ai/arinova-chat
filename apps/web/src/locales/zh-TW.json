@@ -303,6 +303,10 @@
 
   "office.title": "辦公室",
   "office.subtitle": "虛擬工作空間",
+  "office.tab.scene": "場景",
+  "office.tab.tasks": "任務",
+  "office.tab.activity": "動態",
+  "office.tab.dashboard": "儀表板",
 
   "settings.title": "設定",
   "settings.subtitle": "自訂你的使用體驗",

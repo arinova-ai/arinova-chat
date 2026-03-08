@@ -301,6 +301,10 @@
 
   "office.title": "オフィス",
   "office.subtitle": "バーチャルワークスペース",
+  "office.tab.scene": "シーン",
+  "office.tab.tasks": "タスク",
+  "office.tab.activity": "アクティビティ",
+  "office.tab.dashboard": "ダッシュボード",
 
   "settings.title": "設定",
   "settings.subtitle": "使用体験をカスタマイズ",

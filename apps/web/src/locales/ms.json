@@ -301,6 +301,10 @@
 
   "office.title": "Pejabat",
   "office.subtitle": "Ruang Kerja Maya",
+  "office.tab.scene": "Pemandangan",
+  "office.tab.tasks": "Tugas",
+  "office.tab.activity": "Aktiviti",
+  "office.tab.dashboard": "Papan Pemuka",
 
   "settings.title": "Tetapan",
   "settings.subtitle": "Sesuaikan pengalaman anda",

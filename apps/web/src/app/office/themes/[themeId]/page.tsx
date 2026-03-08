@@ -17,10 +17,7 @@ import {
   Sparkles,
   Download,
 } from "lucide-react";
-import { AuthGuard } from "@/components/auth-guard";
-import { IconRail } from "@/components/chat/icon-rail";
-import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
-import { ThemeProvider, useTheme } from "@/components/office/theme-context";
+import { useTheme } from "@/components/office/theme-context";
 import { loadTheme } from "@/components/office/theme-loader";
 import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
@@ -170,25 +167,20 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
   };
 
   return (
-    <div className="app-dvh flex bg-background">
-      <div className="hidden h-full md:block">
-        <IconRail />
+    <div className="flex h-full flex-col min-w-0">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border px-6 py-3">
+        <Link
+          href="/office/themes"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {t("theme.backToThemes")}
+        </Link>
       </div>
 
-      <div className="flex flex-1 flex-col min-w-0">
-        {/* Header */}
-        <div className="shrink-0 border-b border-border px-6 py-3">
-          <Link
-            href="/office/themes"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {t("theme.backToThemes")}
-          </Link>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
           <div className="max-w-[1200px] mx-auto px-6 py-8 flex flex-col lg:flex-row gap-8">
             {/* Left: Preview + Reviews */}
             <div className="flex-1 min-w-0">
@@ -412,8 +404,6 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
           </div>
         </div>
 
-        <MobileBottomNav />
-      </div>
     </div>
   );
 }
@@ -463,20 +453,14 @@ function NotFoundContent() {
   const { t } = useTranslation();
 
   return (
-    <div className="app-dvh flex bg-background">
-      <div className="hidden h-full md:block">
-        <IconRail />
-      </div>
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 min-w-0">
-        <p className="text-muted-foreground">{t("theme.notFound")}</p>
-        <Link
-          href="/office/themes"
-          className="text-sm text-brand-text hover:underline"
-        >
-          {t("theme.backToThemes")}
-        </Link>
-        <MobileBottomNav />
-      </div>
+    <div className="flex h-full flex-col items-center justify-center gap-4">
+      <p className="text-muted-foreground">{t("theme.notFound")}</p>
+      <Link
+        href="/office/themes"
+        className="text-sm text-brand-text hover:underline"
+      >
+        {t("theme.backToThemes")}
+      </Link>
     </div>
   );
 }
@@ -511,11 +495,5 @@ export default function ThemeDetailPage({
 }) {
   const { themeId } = use(params);
 
-  return (
-    <AuthGuard>
-      <ThemeProvider>
-        <ThemeDetailInner themeId={themeId} />
-      </ThemeProvider>
-    </AuthGuard>
-  );
+  return <ThemeDetailInner themeId={themeId} />;
 }

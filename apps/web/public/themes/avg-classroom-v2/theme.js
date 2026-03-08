@@ -20,6 +20,7 @@ var SPRITE_MAP = {
   working:       { suffix: "step4",  suffixB: "step4b" },
   collaborating: { suffix: "step3",  suffixB: "step3b" },
   blocked:       { suffix: "step3",  suffixB: "step3b" },
+  unbound:       { suffix: "step2",  suffixB: "step2b" },
 };
 
 var NAMETAG_POSITIONS = {
@@ -432,7 +433,11 @@ export default {
 
     function drawDialog(seatId) {
       var agent = seatAgent[seatId];
-      if (!agent) return;
+      if (!agent) {
+        dialogContainer.visible = false;
+        btnContainer.visible = false;
+        return;
+      }
 
       var dw = 620, dh = 380;
       var dx = CANVAS_W - dw - 60;
@@ -505,26 +510,31 @@ export default {
       hit.fill({ color: 0x000000, alpha: 0.001 });
       hit.eventMode = "static";
       hit.cursor = "pointer";
-      (function (seatId) {
+      (function (seatId, seatIdx) {
         hit.on("pointerdown", function () {
-          var agent = seatAgent[seatId];
-          if (!agent) return;
           if (portraitOpen) {
             hidePortrait();
-          } else {
+            return;
+          }
+          var agent = seatAgent[seatId];
+          if (agent) {
             showPortrait(seatId);
+          } else {
+            // Unbound seat — notify host to open bind UI
+            sdk.selectAgent("empty-" + seatIdx);
           }
         });
-      })(hSeat.id);
+      })(hSeat.id, hi);
       root.addChild(hit);
     }
 
     // ── Update functions ─────────────────────────────────────
     function updateChalkboard() {
-      var working = 0, idle = 0, collab = 0, blocked = 0;
+      var working = 0, idle = 0, collab = 0, blocked = 0, connected = 0;
       for (var ci = 0; ci < SEATS.length; ci++) {
         var agent = seatAgent[SEATS[ci].id];
         if (!agent) continue;
+        connected++;
         var s = agent.status;
         if (s === "working") working++;
         else if (s === "idle") idle++;
@@ -534,7 +544,7 @@ export default {
       chalkWorking.text = "Working: " + working;
       chalkIdle.text = "Idle: " + idle;
       chalkCollab.text = "Collaborating: " + collab;
-      chalkBlocked.text = "Blocked: " + blocked;
+      chalkBlocked.text = "Connected: " + connected + " / " + SEATS.length;
     }
 
     function updateOverlays() {
@@ -543,17 +553,13 @@ export default {
         var overlay = overlays[uSeat.id];
         if (!overlay) continue;
         var agent = seatAgent[uSeat.id];
-        if (!agent) {
-          overlay.sprite.visible = false;
-          continue;
-        }
-        var st = agent.status || "idle";
+        var st = agent ? (agent.status || "idle") : "unbound";
         if (!SPRITE_MAP[st]) st = "idle";
         var frames = textures[uSeat.id] && textures[uSeat.id][st];
         if (!frames) { overlay.sprite.visible = false; continue; }
         overlay.sprite.texture = frames[overlay.frameIndex % frames.length];
         overlay.sprite.visible = true;
-        overlay.sprite.alpha = 1.0;
+        overlay.sprite.alpha = st === "unbound" ? 0.4 : 1.0;
       }
     }
 
@@ -596,8 +602,7 @@ export default {
           var overlay = overlays[fSeat.id];
           if (!overlay || !overlay.sprite.visible) continue;
           var agent = seatAgent[fSeat.id];
-          if (!agent) continue;
-          var st = agent.status || "idle";
+          var st = agent ? (agent.status || "idle") : "unbound";
           if (!SPRITE_MAP[st]) st = "idle";
           var frames = textures[fSeat.id] && textures[fSeat.id][st];
           if (!frames || frames.length < 2) continue;

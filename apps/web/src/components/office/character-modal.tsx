@@ -34,6 +34,7 @@ const STATUS_BADGE: Record<string, { label: string; dot: string; bg: string; tex
   blocked: { label: "Blocked", dot: "bg-red-400", bg: "bg-red-500/15", text: "text-red-400" },
   collaborating: { label: "Collaborating", dot: "bg-blue-400", bg: "bg-blue-500/15", text: "text-blue-400" },
   sleeping: { label: "Sleeping", dot: "bg-purple-400", bg: "bg-purple-500/15", text: "text-purple-400" },
+  unbound: { label: "Not Connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" },
 };
 
 function formatDuration(ms: number): string {
@@ -79,15 +80,36 @@ interface CharacterModalProps {
 
 const OFFLINE_BADGE = { label: "No agent connected", dot: "bg-slate-500", bg: "bg-slate-500/15", text: "text-slate-400" };
 
-function CharacterDetailOffline() {
+function CharacterDetailOffline({ themeId, slotIndex, onBindingChange }: {
+  themeId: string; slotIndex: number; onBindingChange?: () => void;
+}) {
+  const chatAgents = useChatStore((s) => s.agents);
+  const loadAgents = useChatStore((s) => s.loadAgents);
+  const [bindOpen, setBindOpen] = useState(false);
+
+  useEffect(() => {
+    if (chatAgents.length === 0) loadAgents();
+  }, [chatAgents.length, loadAgents]);
+
+  const handleBind = useCallback(async (agentId: string) => {
+    try {
+      await api("/api/office/bindings", {
+        method: "PUT",
+        body: JSON.stringify({ themeId, slotIndex, agentId }),
+      });
+      onBindingChange?.();
+    } catch { /* api() shows toast */ }
+    setBindOpen(false);
+  }, [themeId, slotIndex, onBindingChange]);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-700/30 text-2xl">
-          🤖
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-700/50 text-2xl">
+          {"\u{1F4A4}"}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-slate-100">Arinova Assistant</div>
+          <div className="font-semibold text-slate-100">Slot {slotIndex + 1}</div>
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${OFFLINE_BADGE.bg} ${OFFLINE_BADGE.text}`}
           >
@@ -97,17 +119,53 @@ function CharacterDetailOffline() {
         </div>
       </div>
 
-      <p className="text-sm text-slate-400">No agent is currently connected to this office.</p>
+      <p className="text-sm text-slate-400">No agent is bound to this slot. Bind an agent to get started.</p>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled
-          className="flex-1 rounded-lg bg-amber-600/50 px-4 py-2 text-sm font-medium text-white/50 cursor-not-allowed"
+      <Popover open={bindOpen} onOpenChange={setBindOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="w-full rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-amber-500 flex items-center justify-center gap-2"
+          >
+            <Link2 className="h-4 w-4" />
+            Bind Agent
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-64 border-slate-700 bg-slate-900 p-0"
+          align="center"
+          sideOffset={8}
         >
-          Chat
-        </button>
-      </div>
+          <div className="border-b border-slate-700 px-3 py-2">
+            <p className="text-xs font-semibold text-slate-300">Select Agent</p>
+          </div>
+          <div className="max-h-48 overflow-y-auto py-1">
+            {chatAgents.length === 0 && (
+              <p className="px-3 py-2 text-xs text-slate-500">No agents available</p>
+            )}
+            {chatAgents.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => handleBind(a.id)}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-slate-800"
+              >
+                <Avatar className="h-6 w-6">
+                  <AvatarImage
+                    src={a.avatarUrl ? assetUrl(a.avatarUrl) : AGENT_DEFAULT_AVATAR}
+                    alt={a.name}
+                    className="object-cover"
+                  />
+                  <AvatarFallback className="bg-slate-700 text-slate-300 text-[10px]">
+                    <Bot className="h-3 w-3" />
+                  </AvatarFallback>
+                </Avatar>
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-200">{a.name}</span>
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -300,7 +358,7 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
             <button
               type="button"
               className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700"
-              title="Bind to Agent"
+              title="Switch Agent"
             >
               <Link2 className="h-4 w-4" />
             </button>
@@ -311,7 +369,7 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
             sideOffset={8}
           >
             <div className="border-b border-slate-700 px-3 py-2">
-              <p className="text-xs font-semibold text-slate-300">Bind to Agent</p>
+              <p className="text-xs font-semibold text-slate-300">Switch Agent</p>
             </div>
             <div className="max-h-48 overflow-y-auto py-1">
               {chatAgents.length === 0 && (
@@ -343,6 +401,16 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
             </div>
           </PopoverContent>
         </Popover>
+        {boundChatAgent && (
+          <button
+            type="button"
+            onClick={handleUnbind}
+            className="rounded-lg border border-red-800/50 bg-red-900/30 px-3 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-900/50"
+            title="Unbind agent"
+          >
+            <Link2Off className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -360,10 +428,10 @@ export function CharacterModal({ isOpen, onClose, agent, agents = [], themeId, s
   }, []);
 
   const isUuidName = agent?.name && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(agent.name);
-  const title = (!agent?.name || isUuidName) ? "Arinova Assistant" : agent.name;
+  const title = (!agent?.name || isUuidName) ? `Slot ${slotIndex + 1}` : agent.name;
   const content = agent
     ? <CharacterDetail agent={agent} agents={agents} themeId={themeId} slotIndex={slotIndex} boundAgentId={boundAgentId} onBindingChange={onBindingChange} onOpenChat={onOpenChat} />
-    : <CharacterDetailOffline />;
+    : <CharacterDetailOffline themeId={themeId} slotIndex={slotIndex} onBindingChange={onBindingChange} />;
 
   if (isMobile) {
     return (

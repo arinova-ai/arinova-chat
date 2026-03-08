@@ -7,6 +7,7 @@ const STATUS_INFO: Record<AgentStatus, { label: string; dot: string; color: stri
   idle: { label: "Idle", dot: "🟡", color: "text-yellow-400" },
   blocked: { label: "Blocked", dot: "🔴", color: "text-red-400" },
   collaborating: { label: "Collab", dot: "🔵", color: "text-blue-400" },
+  unbound: { label: "Not Connected", dot: "⚪", color: "text-slate-400" },
 };
 
 interface Props {
@@ -19,6 +20,7 @@ export default function StatusBar({ agents }: Props) {
     idle: 0,
     blocked: 0,
     collaborating: 0,
+    unbound: 0,
   };
   for (const a of agents) {
     counts[a.status]++;

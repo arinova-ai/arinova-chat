@@ -300,6 +300,10 @@
 
   "office.title": "Office",
   "office.subtitle": "Virtual Workspace",
+  "office.tab.scene": "Scene",
+  "office.tab.tasks": "Tasks",
+  "office.tab.activity": "Activity",
+  "office.tab.dashboard": "Dashboard",
 
   "settings.title": "Settings",
   "settings.subtitle": "Customize your experience",

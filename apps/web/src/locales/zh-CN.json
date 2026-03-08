@@ -301,6 +301,10 @@
 
   "office.title": "办公室",
   "office.subtitle": "虚拟工作空间",
+  "office.tab.scene": "场景",
+  "office.tab.tasks": "任务",
+  "office.tab.activity": "动态",
+  "office.tab.dashboard": "仪表板",
 
   "settings.title": "设置",
   "settings.subtitle": "自定义你的使用体验",

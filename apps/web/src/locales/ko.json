@@ -301,6 +301,10 @@
 
   "office.title": "오피스",
   "office.subtitle": "가상 워크스페이스",
+  "office.tab.scene": "씬",
+  "office.tab.tasks": "작업",
+  "office.tab.activity": "활동",
+  "office.tab.dashboard": "대시보드",
 
   "settings.title": "설정",
   "settings.subtitle": "사용 환경을 맞춤 설정하세요",

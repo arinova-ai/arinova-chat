@@ -25,6 +25,9 @@ Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = use
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;
 
+/// Max characters per chunk sent to Gemini (~7500 tokens)
+const CHUNK_CHAR_LIMIT: usize = 30_000;
+
 #[derive(Deserialize)]
 struct GeminiResponse {
     candidates: Option<Vec<GeminiCandidate>>,
@@ -168,14 +171,27 @@ async fn do_extraction(
         .unwrap(); // safe: messages is non-empty
     let new_watermark_utc = chrono::DateTime::from_naive_utc_and_offset(new_watermark, chrono::Utc);
 
-    // 4. Concatenate messages into a text block
-    let transcript: String = messages
-        .iter()
-        .map(|(role, content, ts)| format!("[{}] {}: {}", role, ts.format("%Y-%m-%d %H:%M"), content))
-        .collect::<Vec<_>>()
-        .join("\n");
+    // 4. Build chunks from messages (each chunk ≤ CHUNK_CHAR_LIMIT chars)
+    let mut chunks: Vec<String> = Vec::new();
+    let mut current_chunk = String::new();
 
-    // 5. Call Gemini to extract key memories
+    for (role, content, ts) in &messages {
+        let line = format!("[{}] {}: {}\n", role, ts.format("%Y-%m-%d %H:%M"), content);
+        if !current_chunk.is_empty() && current_chunk.len() + line.len() > CHUNK_CHAR_LIMIT {
+            chunks.push(std::mem::take(&mut current_chunk));
+        }
+        current_chunk.push_str(&line);
+    }
+    if !current_chunk.is_empty() {
+        chunks.push(current_chunk);
+    }
+
+    tracing::info!(
+        "Memory extraction: {} messages split into {} chunk(s) for capsule {}",
+        messages.len(), chunks.len(), capsule_id
+    );
+
+    // 5. Call Gemini per chunk to extract key memories (with 1 retry on failure)
     let gemini_key = config
         .gemini_api_key
         .as_deref()
@@ -188,44 +204,66 @@ async fn do_extraction(
         .context("Failed to build HTTP client")?;
 
     let url = format!("{}?key={}", GEMINI_MODEL_URL, gemini_key);
-    let resp = client
-        .post(&url)
-        .json(&serde_json::json!({
-            "systemInstruction": {"parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]},
-            "contents": [{"parts": [{"text": transcript}]}],
-            "generationConfig": {"maxOutputTokens": 4096}
-        }))
-        .send()
-        .await
-        .context("Failed to call Gemini API")?;
 
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        return Err(anyhow!("Gemini API returned {}: {}", status, body));
+    let mut parsed_entries: Vec<(String, f64)> = Vec::new();
+    let mut chunks_succeeded = 0usize;
+
+    for (chunk_idx, chunk_text) in chunks.iter().enumerate() {
+        let body = serde_json::json!({
+            "systemInstruction": {"parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]},
+            "contents": [{"parts": [{"text": chunk_text}]}],
+            "generationConfig": {"maxOutputTokens": 8192}
+        });
+
+        let chunk_result = call_gemini_with_retry(&client, &url, &body, chunk_idx).await;
+
+        match chunk_result {
+            Ok(text) => {
+                let entries: Vec<(String, f64)> = text
+                    .lines()
+                    .map(|l| l.trim())
+                    .filter(|l| !l.is_empty())
+                    .map(|line| parse_importance_line(line))
+                    .collect();
+                tracing::info!(
+                    "Chunk {}/{}: extracted {} entries",
+                    chunk_idx + 1, chunks.len(), entries.len()
+                );
+                parsed_entries.extend(entries);
+                chunks_succeeded += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Chunk {}/{} failed after retry, skipping: {}",
+                    chunk_idx + 1, chunks.len(), e
+                );
+            }
+        }
     }
 
-    let parsed: GeminiResponse = resp.json().await.context("Failed to parse Gemini response")?;
+    if chunks_succeeded == 0 {
+        return Err(anyhow!("All {} chunk(s) failed during Gemini extraction", chunks.len()));
+    }
 
-    // 6. Split response into individual memory entries
-    let full_text = parsed
-        .candidates
-        .and_then(|c| c.into_iter().next())
-        .and_then(|c| c.content)
-        .and_then(|c| c.parts)
-        .map(|parts| parts.into_iter().filter_map(|p| p.text).collect::<Vec<_>>().join("\n"))
-        .unwrap_or_default();
-
-    // Parse entries with importance: "[importance:0.8] content" or plain text
-    let parsed_entries: Vec<(String, f64)> = full_text
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty())
-        .map(|line| parse_importance_line(line))
-        .collect();
+    // Only advance watermark if ALL chunks succeeded to avoid permanently skipping failed chunks
+    let effective_watermark = if chunks_succeeded == chunks.len() {
+        new_watermark_utc
+    } else {
+        tracing::warn!(
+            "Partial extraction: {}/{} chunks succeeded — watermark NOT advanced so failed chunks can be retried",
+            chunks_succeeded, chunks.len()
+        );
+        // Keep existing watermark (or epoch if first extraction)
+        extracted_through
+            .map(|dt| chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc))
+            .unwrap_or_else(|| chrono::DateTime::from_naive_utc_and_offset(
+                chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(),
+                chrono::Utc,
+            ))
+    };
 
     if parsed_entries.is_empty() {
-        return Ok((0, new_watermark_utc));
+        return Ok((0, effective_watermark));
     }
 
     let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _)| t.clone()).collect();
@@ -263,7 +301,51 @@ async fn do_extraction(
 
     tx.commit().await.context("Failed to commit memory entries")?;
 
-    Ok((parsed_entries.len(), new_watermark_utc))
+    Ok((parsed_entries.len(), effective_watermark))
+}
+
+/// Send a single chunk to Gemini, retry once on failure, return extracted text.
+async fn call_gemini_with_retry(
+    client: &Client,
+    url: &str,
+    body: &serde_json::Value,
+    chunk_idx: usize,
+) -> anyhow::Result<String> {
+    for attempt in 0..2u8 {
+        let resp = client.post(url).json(body).send().await;
+        match resp {
+            Ok(r) if r.status().is_success() => {
+                let parsed: GeminiResponse = r.json().await.context("Failed to parse Gemini response")?;
+                let text = parsed
+                    .candidates
+                    .and_then(|c| c.into_iter().next())
+                    .and_then(|c| c.content)
+                    .and_then(|c| c.parts)
+                    .map(|parts| parts.into_iter().filter_map(|p| p.text).collect::<Vec<_>>().join("\n"))
+                    .unwrap_or_default();
+                return Ok(text);
+            }
+            Ok(r) => {
+                let status = r.status();
+                let body_text = r.text().await.unwrap_or_default();
+                if attempt == 0 {
+                    tracing::warn!("Chunk {} attempt 1 failed ({}), retrying...", chunk_idx, status);
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    continue;
+                }
+                return Err(anyhow!("Gemini API returned {}: {}", status, body_text));
+            }
+            Err(e) => {
+                if attempt == 0 {
+                    tracing::warn!("Chunk {} attempt 1 network error, retrying: {}", chunk_idx, e);
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    continue;
+                }
+                return Err(anyhow!("Gemini request failed: {}", e));
+            }
+        }
+    }
+    unreachable!()
 }
 
 /// Parse a line like "[importance:0.8] memory content" into (content, importance).

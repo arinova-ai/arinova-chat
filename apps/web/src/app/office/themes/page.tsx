@@ -5,10 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Palette, Check, Lock, Users, Search, Download } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
-import { AuthGuard } from "@/components/auth-guard";
-import { IconRail } from "@/components/chat/icon-rail";
-import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
-import { ThemeProvider, useTheme } from "@/components/office/theme-context";
+import { useTheme } from "@/components/office/theme-context";
 import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
@@ -237,102 +234,88 @@ function ThemesGrid() {
   };
 
   return (
-    <div className="app-dvh flex bg-background">
-      <div className="hidden h-full md:block">
-        <IconRail />
+    <div className="flex h-full flex-col min-w-0">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border px-6 py-5">
+        <PageTitle
+          title={t("theme.title")}
+          subtitle={t("theme.subtitle")}
+          icon={Palette}
+        />
       </div>
 
-      <div className="flex flex-1 flex-col min-w-0">
-        {/* Header */}
-        <div className="shrink-0 border-b border-border px-6 py-5">
-          <PageTitle
-            title={t("theme.title")}
-            subtitle={t("theme.subtitle")}
-            icon={Palette}
+      {/* Search + filters */}
+      <div className="shrink-0 border-b border-border px-6 py-3 space-y-3">
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder={t("theme.searchPlaceholder")}
+            aria-label={t("theme.searchPlaceholder")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
           />
         </div>
 
-        {/* Search + filters */}
-        <div className="shrink-0 border-b border-border px-6 py-3 space-y-3">
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder={t("theme.searchPlaceholder")}
-              aria-label={t("theme.searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
-            />
-          </div>
+        {/* Price filter chips */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Price filter">
+          {(["all", "free", "premium"] as const).map((value) => (
+            <button
+              key={value}
+              onClick={() => setPriceFilter(value)}
+              aria-pressed={priceFilter === value}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                priceFilter === value
+                  ? "bg-brand text-brand-text"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {t(`theme.filter.${value}`)}
+            </button>
+          ))}
+        </div>
 
-          {/* Price filter chips */}
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Price filter">
-            {(["all", "free", "premium"] as const).map((value) => (
+        {/* Tag filter chips */}
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Tag filter">
+            {allTags.map((tag) => (
               <button
-                key={value}
-                onClick={() => setPriceFilter(value)}
-                aria-pressed={priceFilter === value}
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                aria-pressed={selectedTags.has(tag)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  priceFilter === value
-                    ? "bg-brand text-brand-text"
+                  selectedTags.has(tag)
+                    ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
-                {t(`theme.filter.${value}`)}
+                #{tag}
               </button>
             ))}
           </div>
+        )}
+      </div>
 
-          {/* Tag filter chips */}
-          {allTags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Tag filter">
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => toggleTag(tag)}
-                  aria-pressed={selectedTags.has(tag)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    selectedTags.has(tag)
-                      ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  #{tag}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Theme cards grid */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {filtered.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-12">
-              {t("theme.noResults")}
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-              {filtered.map((entry) => (
-                <ThemeCard key={entry.id} entry={entry} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <MobileBottomNav />
+      {/* Theme cards grid */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {filtered.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-12">
+            {t("theme.noResults")}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {filtered.map((entry) => (
+              <ThemeCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export default function OfficeThemesPage() {
-  return (
-    <AuthGuard>
-      <ThemeProvider>
-        <ThemesGrid />
-      </ThemeProvider>
-    </AuthGuard>
-  );
+  return <ThemesGrid />;
 }
