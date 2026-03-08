@@ -8,6 +8,6 @@
   "preview": "preview.png",
   "maxAgents": 1,
   "tags": ["cozy", "studio", "room"],
-  "author": "Arinova",
+  "author": { "name": "Arinova Official", "id": "arinova-official" },
   "license": "standard"
 }

@@ -266,8 +266,9 @@ fn validate_manifest(raw: &[u8]) -> Result<ManifestMeta, String> {
         || meta.room.as_ref().and_then(|r| r.get("model")).is_some();
 
     match renderer {
-        "sprite" => {
+        "sprite" | "iframe" => {
             // sprite themes have their own structure — skip v2 zone/layer validation
+            // iframe (SDK v2) themes use entry JS loaded in sandboxed iframe — no zones/layers needed
         }
         _ if is_v3 => {
             // v3: needs room.model
