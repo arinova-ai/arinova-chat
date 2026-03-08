@@ -120,10 +120,10 @@ async fn create_capsule(
     .await
     .unwrap_or(0) as i32;
 
-    // Create capsule (status=ready for now; Phase 4 will add async extraction)
+    // Create capsule with status=extracting; background task will update to 'ready'
     let capsule_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO memory_capsules (owner_id, name, source_conversation_id, message_count, status)
-           VALUES ($1, $2, $3, $4, 'ready')
+           VALUES ($1, $2, $3, $4, 'extracting')
            RETURNING id"#,
     )
     .bind(&user.id)
@@ -144,6 +144,15 @@ async fn create_capsule(
         }
     };
 
+    // Spawn background extraction task
+    let db_clone = state.db.clone();
+    let config_clone = state.config.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id).await {
+            tracing::error!("Memory extraction failed for capsule {}: {}", capsule_id, e);
+        }
+    });
+
     // Increment daily usage
     let _ = sqlx::query(
         r#"INSERT INTO memory_usage_daily (user_id, date, extract_count)
@@ -159,7 +168,7 @@ async fn create_capsule(
         Json(json!({
             "id": capsule_id,
             "name": name,
-            "status": "ready",
+            "status": "extracting",
             "messageCount": message_count,
         })),
     )

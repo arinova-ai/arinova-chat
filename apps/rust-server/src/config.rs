@@ -28,6 +28,8 @@ pub struct Config {
     pub openai_api_key: Option<String>,
     /// OpenRouter API key for agent hub chat LLM calls.
     pub openrouter_api_key: Option<String>,
+    /// Anthropic API key for memory capsule extraction.
+    pub anthropic_api_key: Option<String>,
 }
 
 impl Config {
@@ -71,6 +73,7 @@ impl Config {
             sentry_dsn: env::var("SENTRY_DSN").unwrap_or_default(),
             openai_api_key: env::var("OPENAI_API_KEY").ok().filter(|s| !s.is_empty()),
             openrouter_api_key: env::var("OPENROUTER_API_KEY").ok().filter(|s| !s.is_empty()),
+            anthropic_api_key: env::var("ANTHROPIC_API_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
 

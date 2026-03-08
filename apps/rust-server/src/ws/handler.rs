@@ -1675,6 +1675,36 @@ async fn do_trigger_agent_response(
         task_payload["attachments"] = json!(att_json);
     }
 
+    // Inject memory capsule context for 1:1 agent conversations
+    if conv_type == "direct" {
+        let memory_entries = sqlx::query_as::<_, (String, String)>(
+            r#"SELECT me.content, mc.name AS capsule_name
+               FROM memory_entries me
+               JOIN memory_capsules mc ON mc.id = me.capsule_id
+               JOIN memory_capsule_grants mcg ON mcg.capsule_id = me.capsule_id
+               WHERE mcg.agent_id = $1::uuid
+                 AND mc.owner_id = $2
+                 AND mc.status = 'ready'
+               ORDER BY me.created_at DESC
+               LIMIT 20"#,
+        )
+        .bind(agent_id)
+        .bind(user_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default();
+
+        if !memory_entries.is_empty() {
+            let memories: Vec<serde_json::Value> = memory_entries
+                .into_iter()
+                .map(|(content, capsule_name)| {
+                    json!({ "content": content, "capsuleName": capsule_name })
+                })
+                .collect();
+            task_payload["memoryContext"] = json!(memories);
+        }
+    }
+
     // Send full task payload to agent
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     ws_state
