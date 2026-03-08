@@ -325,6 +325,7 @@ async fn main() {
         .merge(routes::official::router())
         .merge(routes::lounge::router())
         .merge(routes::api_keys::router())
+        .merge(routes::memory::router())
         .merge(routes::media::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
