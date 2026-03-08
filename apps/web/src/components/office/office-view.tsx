@@ -31,6 +31,7 @@ function OfficeViewInner() {
   const themeEntry = themes.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
   const displayAgents = stream.agents.slice(0, maxAgents);
+  console.log("[office-view] themeId:", themeId, "maxAgents:", maxAgents, "stream:", stream.agents.length, "display:", displayAgents.length, "themeEntry:", themeEntry?.id, themeEntry?.maxAgents);
 
 
   const { data: session } = authClient.useSession();
