@@ -141,36 +141,8 @@ describe("updateAgentSchema", () => {
       description: null,
       a2aEndpoint: null,
       systemPrompt: null,
-      welcomeMessage: null,
-      quickReplies: null,
     });
     expect(result.success).toBe(true);
-  });
-
-  it("validates quickReplies structure", () => {
-    const result = updateAgentSchema.safeParse({
-      quickReplies: [
-        { label: "Hi", message: "Hello there" },
-        { label: "Bye", message: "Goodbye" },
-      ],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects quickReplies with empty label", () => {
-    const result = updateAgentSchema.safeParse({
-      quickReplies: [{ label: "", message: "Hello" }],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects more than 10 quickReplies", () => {
-    const replies = Array.from({ length: 11 }, (_, i) => ({
-      label: `Q${i}`,
-      message: `Answer ${i}`,
-    }));
-    const result = updateAgentSchema.safeParse({ quickReplies: replies });
-    expect(result.success).toBe(false);
   });
 
   it("rejects description over 500 chars", () => {

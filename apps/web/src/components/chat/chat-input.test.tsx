@@ -22,7 +22,6 @@ vi.mock("@/store/chat-store", () => ({
         {
           id: "agent-1",
           name: "TestBot",
-          quickReplies: null,
         },
       ],
       agentSkills: {},

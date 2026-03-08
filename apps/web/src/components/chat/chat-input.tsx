@@ -193,9 +193,6 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
   const agentId =
     activeConversation?.type === "direct" ? activeConversation.agentId : null;
 
-  // Get quick replies for the active agent
-  const activeAgent = agentId ? agents.find((a) => a.id === agentId) : null;
-  const quickReplies = activeAgent?.quickReplies ?? [];
 
   // Load skills when agentId is available
   useEffect(() => {
@@ -1129,24 +1126,6 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
             onSelect={selectMention}
             onHover={setMentionIndex}
           />
-        )}
-
-        {/* Quick reply buttons */}
-        {quickReplies.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {quickReplies.map((qr, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-                  sendMessage(qr.message);
-                }}
-                className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground transition-colors hover:bg-accent"
-              >
-                {qr.label}
-              </button>
-            ))}
-          </div>
         )}
 
         {/* Reply preview bar */}

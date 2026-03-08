@@ -40,7 +40,6 @@ struct ListingRow {
     description: String,
     category: String,
     avatar_url: Option<String>,
-    welcome_message: Option<String>,
     model: String,
     input_char_limit: i32,
     price_per_message: i32,
@@ -65,7 +64,6 @@ struct ListingDetailRow {
     description: String,
     category: String,
     avatar_url: Option<String>,
-    welcome_message: Option<String>,
     model: String,
     input_char_limit: i32,
     price_per_message: i32,
@@ -93,7 +91,6 @@ struct ManageListingRow {
     description: String,
     category: String,
     avatar_url: Option<String>,
-    welcome_message: Option<String>,
     model: String,
     input_char_limit: i32,
     system_prompt: String,
@@ -121,7 +118,6 @@ fn listing_row_to_json(r: &ListingRow) -> Value {
         "description": r.description,
         "category": r.category,
         "avatarUrl": r.avatar_url,
-        "welcomeMessage": r.welcome_message,
         "model": r.model,
         "inputCharLimit": r.input_char_limit,
         "pricePerMessage": r.price_per_message,
@@ -146,7 +142,6 @@ fn detail_row_to_json(r: &ListingDetailRow) -> Value {
         "description": r.description,
         "category": r.category,
         "avatarUrl": r.avatar_url,
-        "welcomeMessage": r.welcome_message,
         "model": r.model,
         "inputCharLimit": r.input_char_limit,
         "pricePerMessage": r.price_per_message,
@@ -174,7 +169,6 @@ fn manage_row_to_json(r: &ManageListingRow) -> Value {
         "description": r.description,
         "category": r.category,
         "avatarUrl": r.avatar_url,
-        "welcomeMessage": r.welcome_message,
         "model": r.model,
         "inputCharLimit": r.input_char_limit,
         "systemPrompt": r.system_prompt,
@@ -228,8 +222,6 @@ struct CreateListingBody {
     category: Option<String>,
     #[serde(rename = "systemPrompt")]
     system_prompt: String,
-    #[serde(rename = "welcomeMessage")]
-    welcome_message: Option<String>,
     #[serde(rename = "exampleConversations")]
     example_conversations: Option<Value>,
     /// OpenRouter model ID, e.g. "openai/gpt-4o", "anthropic/claude-3-sonnet".
@@ -282,11 +274,11 @@ async fn create_listing(
     // 3. INSERT
     let row = sqlx::query_as::<_, ListingRow>(
         r#"INSERT INTO agent_listings
-           (creator_id, agent_name, description, category, avatar_url, welcome_message,
+           (creator_id, agent_name, description, category, avatar_url,
             model, input_char_limit, price, price_per_message, free_trial_messages,
             system_prompt, status, example_conversations)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, 'active', $12)
-           RETURNING id, agent_name, description, category, avatar_url, welcome_message,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, $10, 'active', $11)
+           RETURNING id, agent_name, description, category, avatar_url,
                      model, input_char_limit, price_per_message, free_trial_messages,
                      sales_count, status::text AS status, avg_rating::float8 AS avg_rating,
                      review_count, total_messages, total_revenue,
@@ -297,7 +289,6 @@ async fn create_listing(
     .bind(&body.description)
     .bind(category)
     .bind(&body.avatar_url)
-    .bind(&body.welcome_message)
     .bind(model)
     .bind(input_char_limit)
     .bind(price_per_message)
@@ -336,8 +327,6 @@ struct UpdateListingBody {
     category: Option<String>,
     #[serde(rename = "systemPrompt")]
     system_prompt: Option<String>,
-    #[serde(rename = "welcomeMessage")]
-    welcome_message: Option<String>,
     #[serde(rename = "exampleConversations")]
     example_conversations: Option<Value>,
     /// OpenRouter model ID, e.g. "openai/gpt-4o". Must be non-empty if provided.
@@ -436,15 +425,14 @@ async fn update_listing(
                category = COALESCE($4, category),
                avatar_url = COALESCE($5, avatar_url),
                system_prompt = COALESCE($6, system_prompt),
-               welcome_message = COALESCE($7, welcome_message),
-               model = COALESCE($8, model),
-               input_char_limit = COALESCE($9, input_char_limit),
-               example_conversations = COALESCE($10, example_conversations),
-               price_per_message = COALESCE($11, price_per_message),
-               free_trial_messages = COALESCE($12, free_trial_messages),
+               model = COALESCE($7, model),
+               input_char_limit = COALESCE($8, input_char_limit),
+               example_conversations = COALESCE($9, example_conversations),
+               price_per_message = COALESCE($10, price_per_message),
+               free_trial_messages = COALESCE($11, free_trial_messages),
                updated_at = NOW()
            WHERE id = $1
-           RETURNING id, agent_name, description, category, avatar_url, welcome_message,
+           RETURNING id, agent_name, description, category, avatar_url,
                      model, input_char_limit, price_per_message, free_trial_messages,
                      sales_count, status::text AS status, avg_rating::float8 AS avg_rating,
                      review_count, total_messages, total_revenue,
@@ -456,7 +444,6 @@ async fn update_listing(
     .bind(&body.category)
     .bind(&body.avatar_url)
     .bind(&body.system_prompt)
-    .bind(&body.welcome_message)
     .bind(&body.model)
     .bind(&body.input_char_limit)
     .bind(&body.example_conversations)
@@ -588,7 +575,7 @@ async fn browse(
 
     let data_sql = format!(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
-                  al.avatar_url, al.welcome_message, al.model, al.input_char_limit,
+                  al.avatar_url, al.model, al.input_char_limit,
                   al.price_per_message, al.free_trial_messages,
                   al.sales_count, al.status::text AS status,
                   al.avg_rating::float8 AS avg_rating, al.review_count,
@@ -645,7 +632,7 @@ async fn get_detail(
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, ListingDetailRow>(
         r#"SELECT al.id, al.creator_id, al.agent_name, al.description, al.category,
-                  al.avatar_url, al.welcome_message, al.model, al.input_char_limit,
+                  al.avatar_url, al.model, al.input_char_limit,
                   al.price_per_message, al.free_trial_messages,
                   al.sales_count, al.status::text AS status,
                   al.avg_rating::float8 AS avg_rating, al.review_count,
@@ -688,7 +675,7 @@ async fn manage_detail(
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, ManageListingRow>(
         r#"SELECT id, creator_id, agent_name, description, category,
-                  avatar_url, welcome_message, model, input_char_limit,
+                  avatar_url, model, input_char_limit,
                   system_prompt, price_per_message, free_trial_messages,
                   sales_count, status::text AS status,
                   avg_rating::float8 AS avg_rating, review_count,
@@ -728,7 +715,7 @@ async fn my_listings(
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, ListingRow>(
         r#"SELECT id, agent_name, description, category,
-                  avatar_url, welcome_message, model, input_char_limit,
+                  avatar_url, model, input_char_limit,
                   price_per_message, free_trial_messages,
                   sales_count, status::text AS status,
                   avg_rating::float8 AS avg_rating, review_count,

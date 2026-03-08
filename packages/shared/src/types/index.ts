@@ -22,8 +22,6 @@ export interface Agent {
   category: string | null;
   usageCount: number;
   systemPrompt: string | null;
-  welcomeMessage: string | null;
-  quickReplies: { label: string; message: string }[] | null;
   voiceCapable?: boolean;
   notificationsEnabled: boolean;
   createdAt: Date;

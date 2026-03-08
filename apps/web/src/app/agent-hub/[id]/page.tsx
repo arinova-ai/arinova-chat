@@ -26,7 +26,6 @@ interface AgentDetail {
   description: string;
   avatarUrl: string | null;
   category: string;
-  welcomeMessage: string | null;
   exampleConversations: { question: string; answer: string }[];
   model: string;
   inputCharLimit: number;

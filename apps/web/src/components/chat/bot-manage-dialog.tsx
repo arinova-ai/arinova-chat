@@ -27,8 +27,6 @@ import {
   Circle,
   Loader2,
   RefreshCw,
-  Plus,
-  X,
   Download,
   Trash2,
   Bell,
@@ -63,8 +61,6 @@ interface BotManageDialogProps {
     isPublic: boolean;
     category: string | null;
     systemPrompt: string | null;
-    welcomeMessage: string | null;
-    quickReplies: { label: string; message: string }[] | null;
     notificationsEnabled: boolean;
   };
   open: boolean;
@@ -93,10 +89,6 @@ export function BotManageDialog({
   const [description, setDescription] = useState(agent.description ?? "");
   const [category, setCategory] = useState(agent.category ?? "");
   const [systemPrompt, setSystemPrompt] = useState(agent.systemPrompt ?? "");
-  const [welcomeMessage, setWelcomeMessage] = useState(agent.welcomeMessage ?? "");
-  const [quickReplies, setQuickReplies] = useState<{ label: string; message: string }[]>(
-    agent.quickReplies ?? []
-  );
   const [notificationsEnabled, setNotificationsEnabled] = useState(agent.notificationsEnabled);
   const [isPublic, setIsPublic] = useState(agent.isPublic);
 
@@ -124,10 +116,6 @@ export function BotManageDialog({
   // Stats
   const [stats, setStats] = useState<AgentStats | null>(null);
 
-  // Quick reply editing
-  const [newQrLabel, setNewQrLabel] = useState("");
-  const [newQrMessage, setNewQrMessage] = useState("");
-
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
@@ -135,8 +123,6 @@ export function BotManageDialog({
       setDescription(agent.description ?? "");
       setCategory(agent.category ?? "");
       setSystemPrompt(agent.systemPrompt ?? "");
-      setWelcomeMessage(agent.welcomeMessage ?? "");
-      setQuickReplies(agent.quickReplies ?? []);
       setNotificationsEnabled(agent.notificationsEnabled);
       setIsPublic(agent.isPublic);
       setAvatarUrl(agent.avatarUrl);
@@ -149,9 +135,6 @@ export function BotManageDialog({
       setLocalToken(agent.secretToken);
       setShowToken(false);
       setRegeneratingToken(false);
-      setNewQrLabel("");
-      setNewQrMessage("");
-
       // Load stats
       api<AgentStats>(`/api/agents/${agent.id}/stats`)
         .then(setStats)
@@ -164,8 +147,6 @@ export function BotManageDialog({
     (description || null) !== (agent.description || null) ||
     (category || null) !== (agent.category || null) ||
     (systemPrompt || null) !== (agent.systemPrompt || null) ||
-    (welcomeMessage || null) !== (agent.welcomeMessage || null) ||
-    JSON.stringify(quickReplies) !== JSON.stringify(agent.quickReplies ?? []) ||
     notificationsEnabled !== agent.notificationsEnabled ||
     isPublic !== agent.isPublic;
 
@@ -200,8 +181,6 @@ export function BotManageDialog({
         description: description || null,
         category: category || null,
         systemPrompt: systemPrompt || null,
-        welcomeMessage: welcomeMessage || null,
-        quickReplies: quickReplies.length > 0 ? quickReplies : null,
         notificationsEnabled,
         isPublic,
       });
@@ -266,18 +245,6 @@ export function BotManageDialog({
     } finally {
       setExporting(false);
     }
-  };
-
-  const addQuickReply = () => {
-    if (!newQrLabel.trim() || !newQrMessage.trim()) return;
-    if (quickReplies.length >= 10) return;
-    setQuickReplies([...quickReplies, { label: newQrLabel.trim(), message: newQrMessage.trim() }]);
-    setNewQrLabel("");
-    setNewQrMessage("");
-  };
-
-  const removeQuickReply = (index: number) => {
-    setQuickReplies(quickReplies.filter((_, i) => i !== index));
   };
 
   const health = agentHealth[agent.id];
@@ -399,79 +366,6 @@ export function BotManageDialog({
             <p className="text-xs text-muted-foreground">
               {t("botManage.systemPromptHint")}
             </p>
-          </div>
-
-          {/* Welcome Message */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t("botManage.welcomeMessage")}</label>
-            <Textarea
-              value={welcomeMessage}
-              onChange={(e) => setWelcomeMessage(e.target.value)}
-              placeholder={t("botManage.welcomeMessagePlaceholder")}
-              className="bg-secondary border-none min-h-[60px] resize-none text-sm"
-              rows={2}
-            />
-          </div>
-
-          {/* Quick Replies */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              {t("botManage.quickReplies")}
-              <span className="ml-1 text-xs text-muted-foreground">
-                ({quickReplies.length}/10)
-              </span>
-            </label>
-            {quickReplies.length > 0 && (
-              <div className="space-y-1.5">
-                {quickReplies.map((qr, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium">{qr.label}</span>
-                      <span className="ml-2 text-xs text-muted-foreground truncate">
-                        {qr.message}
-                      </span>
-                    </div>
-                    <button onClick={() => removeQuickReply(i)} className="shrink-0 text-muted-foreground hover:text-destructive">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {quickReplies.length < 10 && (
-              <div className="flex gap-2">
-                <Input
-                  value={newQrLabel}
-                  onChange={(e) => setNewQrLabel(e.target.value)}
-                  placeholder="Label"
-                  className="bg-secondary border-none text-sm flex-[1] min-w-0"
-                />
-                <Input
-                  value={newQrMessage}
-                  onChange={(e) => setNewQrMessage(e.target.value)}
-                  placeholder="Message"
-                  className="bg-secondary border-none text-sm flex-[2] min-w-0"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addQuickReply();
-                    }
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={addQuickReply}
-                  disabled={!newQrLabel.trim() || !newQrMessage.trim()}
-                  className="shrink-0"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
           </div>
 
           {/* Toggles: Notifications + Public */}

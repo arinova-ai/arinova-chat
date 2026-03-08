@@ -46,10 +46,6 @@ struct UpdateAgentBody {
     a2a_endpoint: Option<String>,
     #[serde(rename = "systemPrompt")]
     system_prompt: Option<String>,
-    #[serde(rename = "welcomeMessage")]
-    welcome_message: Option<String>,
-    #[serde(rename = "quickReplies")]
-    quick_replies: Option<serde_json::Value>,
     #[serde(rename = "notificationsEnabled")]
     notifications_enabled: Option<bool>,
     #[serde(rename = "isPublic")]
@@ -197,11 +193,9 @@ async fn update_agent(
            description = COALESCE($4, description),
            a2a_endpoint = COALESCE($5, a2a_endpoint),
            system_prompt = COALESCE($6, system_prompt),
-           welcome_message = COALESCE($7, welcome_message),
-           quick_replies = COALESCE($8, quick_replies),
-           notifications_enabled = COALESCE($9, notifications_enabled),
-           is_public = COALESCE($10, is_public),
-           category = COALESCE($11, category),
+           notifications_enabled = COALESCE($7, notifications_enabled),
+           is_public = COALESCE($8, is_public),
+           category = COALESCE($9, category),
            updated_at = NOW()
            WHERE id = $1 AND owner_id = $2
            RETURNING *"#,
@@ -212,8 +206,6 @@ async fn update_agent(
     .bind(&body.description)
     .bind(&body.a2a_endpoint)
     .bind(&body.system_prompt)
-    .bind(&body.welcome_message)
-    .bind(&body.quick_replies)
     .bind(body.notifications_enabled)
     .bind(body.is_public)
     .bind(&body.category)

@@ -40,7 +40,6 @@ function NewAgentContent() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [category, setCategory] = useState("other");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [welcomeMessage, setWelcomeMessage] = useState("");
   const [model, setModel] = useState("openai/gpt-4o-mini");
   const [inputCharLimit, setInputCharLimit] = useState(2000);
   const [pricePerMessage, setPricePerMessage] = useState(1);
@@ -117,7 +116,6 @@ function NewAgentContent() {
           ...(avatarUrl ? { avatarUrl } : {}),
           category,
           systemPrompt,
-          ...(welcomeMessage ? { welcomeMessage } : {}),
           exampleConversations: exampleConversations.filter(
             (ex) => ex.question.trim() && ex.answer.trim(),
           ),
@@ -258,16 +256,6 @@ function NewAgentContent() {
                   rows={5}
                   placeholder={t("creator.form.systemPromptPlaceholder")}
                   className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">{t("creator.form.welcomeMessage")}</label>
-                <input
-                  value={welcomeMessage}
-                  onChange={(e) => setWelcomeMessage(e.target.value)}
-                  placeholder={t("creator.form.welcomeMessagePlaceholder")}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
