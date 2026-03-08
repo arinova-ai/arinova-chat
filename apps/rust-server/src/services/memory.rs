@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::config::Config;
 use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
+use crate::services::push::{send_push_to_user, PushPayload};
 
 const HAIKU_MODEL: &str = "claude-haiku-4-5-20241022";
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
@@ -38,9 +39,9 @@ pub async fn extract_capsule(
     config: Config,
     capsule_id: Uuid,
 ) -> anyhow::Result<usize> {
-    // 1. Fetch capsule to get source_conversation_id
-    let (conv_id, owner_id) = sqlx::query_as::<_, (Uuid, String)>(
-        "SELECT source_conversation_id, owner_id FROM memory_capsules WHERE id = $1",
+    // 1. Fetch capsule to get source_conversation_id, owner, and name
+    let (conv_id, owner_id, capsule_name) = sqlx::query_as::<_, (Uuid, String, String)>(
+        "SELECT source_conversation_id, owner_id, name FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
     .fetch_optional(&db)
@@ -64,6 +65,19 @@ pub async fn extract_capsule(
                 "Memory extraction complete for capsule {} (owner={}): {} entries",
                 capsule_id, owner_id, count
             );
+            let _ = send_push_to_user(
+                &db,
+                &config,
+                &owner_id,
+                &PushPayload {
+                    notification_type: "memory_capsule".into(),
+                    title: "Memory Capsule Ready".into(),
+                    body: format!("{} extraction complete", capsule_name),
+                    url: None,
+                    message_id: None,
+                },
+            )
+            .await;
             Ok(count)
         }
         Err(e) => {
@@ -71,6 +85,19 @@ pub async fn extract_capsule(
                 .bind(capsule_id)
                 .execute(&db)
                 .await;
+            let _ = send_push_to_user(
+                &db,
+                &config,
+                &owner_id,
+                &PushPayload {
+                    notification_type: "memory_capsule".into(),
+                    title: "Memory Capsule Failed".into(),
+                    body: format!("{} extraction failed", capsule_name),
+                    url: None,
+                    message_id: None,
+                },
+            )
+            .await;
             Err(e)
         }
     }

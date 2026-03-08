@@ -750,5 +750,7 @@
   "memoryCapsule.namePlaceholder": "Capsule name",
   "memoryCapsule.extract": "Extract",
   "memoryCapsule.approveTitle": "Approve Agent Access",
-  "memoryCapsule.empty": "No capsules yet"
+  "memoryCapsule.empty": "No capsules yet",
+  "memoryCapsule.statusExtracting": "Extracting...",
+  "memoryCapsule.statusFailed": "Failed"
 }

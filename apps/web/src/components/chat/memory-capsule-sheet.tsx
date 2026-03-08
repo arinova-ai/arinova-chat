@@ -84,6 +84,16 @@ export function MemoryCapsuleSheet({
     }
   }, [open, conversationName, fetchData]);
 
+  // Auto-refresh while any capsule is extracting
+  useEffect(() => {
+    const hasExtracting = capsules.some((c) => c.status === "extracting");
+    if (!hasExtracting || !open) return;
+    const interval = setInterval(() => {
+      fetchData();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [capsules, open, fetchData]);
+
   const handleExtract = async () => {
     if (!capsuleName.trim()) return;
     setExtracting(true);
@@ -218,7 +228,7 @@ export function MemoryCapsuleSheet({
                   >
                     <Switch
                       checked={granted}
-                      disabled={isToggling}
+                      disabled={isToggling || capsule.status !== "ready"}
                       onCheckedChange={() =>
                         handleToggleGrant(capsule.id, granted)
                       }
@@ -227,9 +237,20 @@ export function MemoryCapsuleSheet({
                       <p className="truncate text-sm font-medium">
                         {capsule.name}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(capsule.createdAt).toLocaleDateString()}
-                      </p>
+                      {capsule.status === "extracting" ? (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>{t("memoryCapsule.statusExtracting")}</span>
+                        </div>
+                      ) : capsule.status === "failed" ? (
+                        <p className="text-xs text-destructive">
+                          {t("memoryCapsule.statusFailed")}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(capsule.createdAt).toLocaleDateString()}
+                        </p>
+                      )}
                     </div>
                     {isConfirming ? (
                       <div className="flex items-center gap-1">
@@ -260,6 +281,7 @@ export function MemoryCapsuleSheet({
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                        disabled={capsule.status === "extracting"}
                         onClick={() => setConfirmDeleteId(capsule.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />

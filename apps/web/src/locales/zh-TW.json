@@ -748,5 +748,7 @@
   "memoryCapsule.namePlaceholder": "膠囊名稱",
   "memoryCapsule.extract": "提取",
   "memoryCapsule.approveTitle": "授權智慧體存取",
-  "memoryCapsule.empty": "尚無膠囊"
+  "memoryCapsule.empty": "尚無膠囊",
+  "memoryCapsule.statusExtracting": "提取中...",
+  "memoryCapsule.statusFailed": "提取失敗"
 }
