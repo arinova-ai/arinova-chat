@@ -1,0 +1,13 @@
+{
+  "id": "cozy-studio-v2",
+  "name": "Cozy Studio",
+  "version": "5.0.0",
+  "description": "溫馨工作室 — 你的 AI 夥伴在舒適的房間裡工作",
+  "renderer": "iframe",
+  "entry": "theme.js",
+  "preview": "preview.png",
+  "maxAgents": 1,
+  "tags": ["cozy", "studio", "room"],
+  "author": "Arinova",
+  "license": "standard"
+}
