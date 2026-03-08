@@ -30,6 +30,8 @@ pub struct Config {
     pub openrouter_api_key: Option<String>,
     /// Anthropic API key for memory capsule extraction.
     pub anthropic_api_key: Option<String>,
+    /// Gemini API key for memory capsule extraction (V2).
+    pub gemini_api_key: Option<String>,
 }
 
 impl Config {
@@ -74,6 +76,7 @@ impl Config {
             openai_api_key: env::var("OPENAI_API_KEY").ok().filter(|s| !s.is_empty()),
             openrouter_api_key: env::var("OPENROUTER_API_KEY").ok().filter(|s| !s.is_empty()),
             anthropic_api_key: env::var("ANTHROPIC_API_KEY").ok().filter(|s| !s.is_empty()),
+            gemini_api_key: env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
 

@@ -11,7 +11,9 @@ use crate::config::Config;
 use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
 use crate::services::push::{send_push_to_user, PushPayload};
 
-const HAIKU_MODEL: &str = "claude-haiku-4-5-20241022";
+const GEMINI_MODEL_URL: &str =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
 Extract key facts, preferences, and important information from this conversation. \
 Output each memory as a separate line. Focus on: user preferences, decisions made, \
@@ -22,26 +24,34 @@ Be concise — each line should be one self-contained memory.";
 const EMBEDDING_BATCH_SIZE: usize = 100;
 
 #[derive(Deserialize)]
-struct AnthropicResponse {
-    content: Vec<ContentBlock>,
+struct GeminiResponse {
+    candidates: Option<Vec<GeminiCandidate>>,
 }
-
 #[derive(Deserialize)]
-struct ContentBlock {
+struct GeminiCandidate {
+    content: Option<GeminiContent>,
+}
+#[derive(Deserialize)]
+struct GeminiContent {
+    parts: Option<Vec<GeminiPart>>,
+}
+#[derive(Deserialize)]
+struct GeminiPart {
     text: Option<String>,
 }
 
-/// Extract memories from a capsule's source conversation using Haiku,
+/// Extract memories from a capsule's source conversation using Gemini,
 /// generate embeddings, and store in memory_entries.
+/// Supports incremental extraction via `extracted_through` watermark.
 /// Returns the number of memory entries created.
 pub async fn extract_capsule(
     db: PgPool,
     config: Config,
     capsule_id: Uuid,
 ) -> anyhow::Result<usize> {
-    // 1. Fetch capsule to get source_conversation_id, owner, and name
-    let (conv_id, owner_id, capsule_name) = sqlx::query_as::<_, (Uuid, String, String)>(
-        "SELECT source_conversation_id, owner_id, name FROM memory_capsules WHERE id = $1",
+    // 1. Fetch capsule metadata
+    let (conv_id, owner_id, capsule_name, extracted_through) = sqlx::query_as::<_, (Uuid, String, String, Option<chrono::DateTime<chrono::Utc>>)>(
+        "SELECT source_conversation_id, owner_id, name, extracted_through FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
     .fetch_optional(&db)
@@ -54,13 +64,19 @@ pub async fn extract_capsule(
         .execute(&db)
         .await?;
 
+    let extracted_through_naive = extracted_through.map(|dt| dt.naive_utc());
+
     // Run extraction, and on any error mark as 'failed'
-    match do_extraction(&db, &config, capsule_id, conv_id).await {
-        Ok(count) => {
-            sqlx::query("UPDATE memory_capsules SET status = 'ready' WHERE id = $1")
-                .bind(capsule_id)
-                .execute(&db)
-                .await?;
+    match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive).await {
+        Ok((count, new_watermark)) => {
+            sqlx::query(
+                "UPDATE memory_capsules SET status = 'ready', extracted_through = $2, entry_count = entry_count + $3 WHERE id = $1",
+            )
+            .bind(capsule_id)
+            .bind(new_watermark)
+            .bind(count as i32)
+            .execute(&db)
+            .await?;
             tracing::info!(
                 "Memory extraction complete for capsule {} (owner={}): {} entries",
                 capsule_id, owner_id, count
@@ -108,22 +124,47 @@ async fn do_extraction(
     config: &Config,
     capsule_id: Uuid,
     conversation_id: Uuid,
-) -> anyhow::Result<usize> {
-    // 3. Fetch all completed messages from the conversation
-    let messages = sqlx::query_as::<_, (String, String, chrono::NaiveDateTime)>(
-        r#"SELECT role::text, content, created_at
-           FROM messages
-           WHERE conversation_id = $1 AND status = 'completed'
-           ORDER BY seq ASC"#,
-    )
-    .bind(conversation_id)
-    .fetch_all(db)
-    .await
-    .context("Failed to fetch messages")?;
+    extracted_through: Option<chrono::NaiveDateTime>,
+) -> anyhow::Result<(usize, chrono::DateTime<chrono::Utc>)> {
+    // 3. Fetch messages (incremental: only after extracted_through if set)
+    let messages = if let Some(watermark) = extracted_through {
+        sqlx::query_as::<_, (String, String, chrono::NaiveDateTime)>(
+            r#"SELECT role::text, content, created_at
+               FROM messages
+               WHERE conversation_id = $1 AND status = 'completed' AND created_at > $2
+               ORDER BY seq ASC"#,
+        )
+        .bind(conversation_id)
+        .bind(watermark)
+        .fetch_all(db)
+        .await
+        .context("Failed to fetch messages")?
+    } else {
+        sqlx::query_as::<_, (String, String, chrono::NaiveDateTime)>(
+            r#"SELECT role::text, content, created_at
+               FROM messages
+               WHERE conversation_id = $1 AND status = 'completed'
+               ORDER BY seq ASC"#,
+        )
+        .bind(conversation_id)
+        .fetch_all(db)
+        .await
+        .context("Failed to fetch messages")?
+    };
 
     if messages.is_empty() {
-        return Ok(0);
+        // No new messages — return 0 entries, keep existing watermark
+        let now = chrono::Utc::now();
+        return Ok((0, extracted_through.map(|w| chrono::DateTime::from_naive_utc_and_offset(w, chrono::Utc)).unwrap_or(now)));
     }
+
+    // New watermark = MAX created_at from fetched messages
+    let new_watermark = messages
+        .iter()
+        .map(|(_, _, ts)| *ts)
+        .max()
+        .unwrap(); // safe: messages is non-empty
+    let new_watermark_utc = chrono::DateTime::from_naive_utc_and_offset(new_watermark, chrono::Utc);
 
     // 4. Concatenate messages into a text block
     let transcript: String = messages
@@ -132,11 +173,11 @@ async fn do_extraction(
         .collect::<Vec<_>>()
         .join("\n");
 
-    // 5. Call Haiku to extract key memories
-    let anthropic_key = config
-        .anthropic_api_key
+    // 5. Call Gemini to extract key memories
+    let gemini_key = config
+        .gemini_api_key
         .as_deref()
-        .ok_or_else(|| anyhow!("ANTHROPIC_API_KEY not configured"))?;
+        .ok_or_else(|| anyhow!("GEMINI_API_KEY not configured"))?;
 
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -144,35 +185,34 @@ async fn do_extraction(
         .build()
         .context("Failed to build HTTP client")?;
 
+    let url = format!("{}?key={}", GEMINI_MODEL_URL, gemini_key);
     let resp = client
-        .post("https://api.anthropic.com/v1/messages")
-        .header("x-api-key", anthropic_key)
-        .header("anthropic-version", "2023-06-01")
+        .post(&url)
         .json(&serde_json::json!({
-            "model": HAIKU_MODEL,
-            "max_tokens": 4096,
-            "system": EXTRACTION_SYSTEM_PROMPT,
-            "messages": [{"role": "user", "content": transcript}]
+            "systemInstruction": {"parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]},
+            "contents": [{"parts": [{"text": transcript}]}],
+            "generationConfig": {"maxOutputTokens": 4096}
         }))
         .send()
         .await
-        .context("Failed to call Anthropic API")?;
+        .context("Failed to call Gemini API")?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(anyhow!("Anthropic API returned {}: {}", status, body));
+        return Err(anyhow!("Gemini API returned {}: {}", status, body));
     }
 
-    let parsed: AnthropicResponse = resp.json().await.context("Failed to parse Anthropic response")?;
+    let parsed: GeminiResponse = resp.json().await.context("Failed to parse Gemini response")?;
 
     // 6. Split response into individual memory entries
     let full_text = parsed
-        .content
-        .into_iter()
-        .filter_map(|b| b.text)
-        .collect::<Vec<_>>()
-        .join("\n");
+        .candidates
+        .and_then(|c| c.into_iter().next())
+        .and_then(|c| c.content)
+        .and_then(|c| c.parts)
+        .map(|parts| parts.into_iter().filter_map(|p| p.text).collect::<Vec<_>>().join("\n"))
+        .unwrap_or_default();
 
     let entries: Vec<String> = full_text
         .lines()
@@ -181,7 +221,7 @@ async fn do_extraction(
         .collect();
 
     if entries.is_empty() {
-        return Ok(0);
+        return Ok((0, new_watermark_utc));
     }
 
     // 7. Generate embeddings
@@ -216,5 +256,5 @@ async fn do_extraction(
 
     tx.commit().await.context("Failed to commit memory entries")?;
 
-    Ok(entries.len())
+    Ok((entries.len(), new_watermark_utc))
 }

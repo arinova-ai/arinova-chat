@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         // Static path must come before dynamic {id} to avoid conflict
         .route("/api/memory/capsules/grants", get(list_grants_for_agent))
         .route("/api/memory/capsules/{id}", delete(delete_capsule))
+        .route("/api/memory/capsules/{id}/refresh", post(refresh_capsule))
         .route(
             "/api/memory/capsules/{id}/grants",
             post(grant_agent_access),
@@ -196,10 +197,13 @@ async fn list_capsules(
         message_count: i32,
         status: String,
         created_at: chrono::DateTime<chrono::Utc>,
+        extracted_through: Option<chrono::DateTime<chrono::Utc>>,
+        entry_count: i32,
     }
 
     let rows = sqlx::query_as::<_, CapsuleRow>(
-        r#"SELECT id, name, source_conversation_id, message_count, status, created_at
+        r#"SELECT id, name, source_conversation_id, message_count, status, created_at,
+                  extracted_through, entry_count
            FROM memory_capsules
            WHERE owner_id = $1
            ORDER BY created_at DESC"#,
@@ -219,6 +223,8 @@ async fn list_capsules(
                 "messageCount": r.message_count,
                 "status": r.status,
                 "createdAt": r.created_at.to_rfc3339(),
+                "extractedThrough": r.extracted_through.map(|dt| dt.to_rfc3339()),
+                "entryCount": r.entry_count,
             })
         })
         .collect();
@@ -374,6 +380,91 @@ async fn grant_agent_access(
         Json(json!({"capsuleId": capsule_id, "agentId": body.agent_id})),
     )
         .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/memory/capsules/:id/refresh — Re-extract (incremental)
+// ---------------------------------------------------------------------------
+
+async fn refresh_capsule(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(capsule_id): Path<Uuid>,
+) -> Response {
+    // Verify ownership and status
+    let row = sqlx::query_as::<_, (String, String)>(
+        "SELECT owner_id, status FROM memory_capsules WHERE id = $1",
+    )
+    .bind(capsule_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some((ref oid, _))) if oid != &user.id => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
+        }
+        Ok(Some((_, ref status))) if status != "ready" && status != "failed" => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"error": format!("Capsule is currently {}", status)})),
+            )
+                .into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("refresh_capsule: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+        _ => {}
+    }
+
+    // Check daily extraction limit
+    let daily_count = sqlx::query_scalar::<_, i32>(
+        "SELECT extract_count FROM memory_usage_daily WHERE user_id = $1 AND date = CURRENT_DATE",
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(0);
+
+    if daily_count >= MAX_DAILY_EXTRACTIONS {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": format!("Daily extraction limit ({}) reached", MAX_DAILY_EXTRACTIONS)})),
+        )
+            .into_response();
+    }
+
+    // Set status to extracting
+    let _ = sqlx::query("UPDATE memory_capsules SET status = 'extracting' WHERE id = $1")
+        .bind(capsule_id)
+        .execute(&state.db)
+        .await;
+
+    // Spawn background extraction
+    let db_clone = state.db.clone();
+    let config_clone = state.config.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id).await {
+            tracing::error!("Memory refresh failed for capsule {}: {}", capsule_id, e);
+        }
+    });
+
+    // Increment daily usage
+    let _ = sqlx::query(
+        r#"INSERT INTO memory_usage_daily (user_id, date, extract_count)
+           VALUES ($1, CURRENT_DATE, 1)
+           ON CONFLICT (user_id, date) DO UPDATE SET extract_count = memory_usage_daily.extract_count + 1"#,
+    )
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    (StatusCode::OK, Json(json!({"status": "extracting"}))).into_response()
 }
 
 // ---------------------------------------------------------------------------
