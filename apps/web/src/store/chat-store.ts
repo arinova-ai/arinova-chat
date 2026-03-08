@@ -1563,7 +1563,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             threadMessages: {
               ...get().threadMessages,
               [threadId]: threadMsgs.map((m) => {
-                if (!replaced && m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role) {
+                if (!replaced && (
+                  m.id === msg.id ||
+                  (m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role)
+                )) {
                   replaced = true;
                   return {
                     ...newMsg,
@@ -1619,13 +1622,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
 
       if (alreadyExists) {
-        // Replace first matching temp message with real one
+        // Replace first matching message with the server-confirmed version
         let replaced = false;
         set({
           messagesByConversation: {
             ...get().messagesByConversation,
             [conversationId]: current.map((m) => {
-              if (!replaced && m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role) {
+              if (!replaced && (
+                m.id === msg.id ||
+                (m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role)
+              )) {
                 replaced = true;
                 return {
                   ...newMsg,

@@ -489,7 +489,7 @@ async fn handle_message(
         }
         "sync" => {
             let conversations = event.get("conversations").cloned().unwrap_or(json!({}));
-            handle_sync(user_id, &conversations, ws_state, db, redis).await;
+            handle_sync(user_id, tx, &conversations, ws_state, db, redis).await;
         }
         "mark_read" => {
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
@@ -610,6 +610,7 @@ async fn check_rate_limit(
 /// Handle sync request: returns missed messages + conversation summaries
 async fn handle_sync(
     user_id: &str,
+    tx: &mpsc::UnboundedSender<String>,
     client_conversations: &Value,
     ws_state: &WsState,
     db: &PgPool,
@@ -633,7 +634,7 @@ async fn handle_sync(
     };
 
     if conv_ids.is_empty() {
-        ws_state.send_to_user(user_id, &json!({
+        send_event(tx, &json!({
             "type": "sync_response",
             "conversations": [],
             "missedMessages": []
@@ -765,7 +766,7 @@ async fn handle_sync(
         }
     }
 
-    ws_state.send_to_user(user_id, &json!({
+    send_event(tx, &json!({
         "type": "sync_response",
         "conversations": summaries,
         "missedMessages": missed_messages
@@ -807,7 +808,7 @@ async fn handle_sync(
 
             let agent_id = agent_info.and_then(|a| a.0);
 
-            ws_state.send_to_user(user_id, &json!({
+            send_event(tx, &json!({
                 "type": "stream_resume",
                 "conversationId": conv_id,
                 "messageId": msg_id,
