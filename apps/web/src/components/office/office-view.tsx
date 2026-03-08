@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import StatusBar from "./status-bar";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
 import { OfficeChatPanel } from "./office-chat-panel";
@@ -149,13 +148,6 @@ function OfficeViewInner() {
 
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
-      {/* Status summary */}
-      {themeReady && (
-        <div className="shrink-0 pb-3">
-          <StatusBar agents={displayAgents} />
-        </div>
-      )}
-
       {/* Office map area — always takes full remaining space; ref must always mount for ResizeObserver */}
       <div ref={mapContainerRef} className="flex-1 min-h-0">
         {!themeReady ? (

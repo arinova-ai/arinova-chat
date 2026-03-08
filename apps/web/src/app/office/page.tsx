@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
-import { Building2, Radio, Monitor, Zap, Info } from "lucide-react";
-import { useOfficePlugin } from "@/hooks/use-office-plugin";
+import { Building2, Monitor, Zap } from "lucide-react";
 import { OfficeView } from "@/components/office/office-view";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
@@ -22,7 +21,6 @@ function readQuality(): ThemeQuality {
 
 function OfficeContent() {
   const { t } = useTranslation();
-  const { state } = useOfficePlugin();
   const { manifest } = useTheme();
   const [quality, setQuality] = useState<ThemeQuality>(readQuality);
   const isThreeJS = manifest?.renderer === "threejs";
@@ -75,22 +73,8 @@ function OfficeContent() {
               </button>
             )}
 
-            {state !== "connected" && state !== "loading" && (
-              <div className="flex items-center gap-1.5 rounded-full bg-yellow-500/10 px-3 py-1">
-                <Radio className="h-3 w-3 text-yellow-500" />
-                <span className="text-xs font-medium text-yellow-500">Offline</span>
-              </div>
-            )}
           </div>
         </div>
-
-        {/* Guidance when offline / disconnected */}
-        {state !== "connected" && state !== "loading" && (
-          <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-4 py-3 text-sm text-yellow-400">
-            <Info className="h-4 w-4 shrink-0" />
-            <span>Welcome to your office! Set your status to get started.</span>
-          </div>
-        )}
 
         {/* Body — always show OfficeView */}
         <div className="flex-1 min-h-0 overflow-hidden p-3 md:p-4">
