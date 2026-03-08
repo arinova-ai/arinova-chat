@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import type { ThemeManifest } from "./theme-types";
 import { loadTheme } from "./theme-loader";
-import { fetchThemeRegistry, isKnownTheme, isFreeTheme, type ThemeEntry } from "./theme-registry";
+import { fetchThemeRegistry, invalidateThemeCache, isKnownTheme, isFreeTheme, type ThemeEntry } from "./theme-registry";
 import { api } from "@/lib/api";
 
 const DEFAULT_THEME_ID = "cozy-studio-v2";
@@ -101,6 +101,7 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
   // Fetch theme registry + owned themes on mount
   const refreshThemes = useCallback(async () => {
     try {
+      invalidateThemeCache();
       const list = await fetchThemeRegistry();
       setThemes(list);
     } catch { /* ignore */ }
