@@ -422,7 +422,7 @@ export function ConversationItem({
                   <Pin className="h-3.5 w-3.5 shrink-0 text-amber-500" />
                 )}
                 {isMuted && (
-                  <BellOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <BellOff className="h-3.5 w-3.5 shrink-0 text-red-500" />
                 )}
                 {renaming ? null : (title ?? agentName)}
                 {!renaming && isVerified && <VerifiedBadge className="h-3.5 w-3.5 text-blue-500" />}
