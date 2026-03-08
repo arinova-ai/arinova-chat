@@ -146,7 +146,7 @@ export function MediaFilesPanel({ open, onOpenChange, conversationId, initialTab
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-80 sm:max-w-sm p-0 flex flex-col">
+      <SheetContent side="right" className="w-80 sm:max-w-sm p-0 flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <SheetHeader className="px-4 pt-4 pb-2">
           <SheetTitle className="text-base">
             {tab === "media" ? t("chat.mediaFiles.media") : t("chat.mediaFiles.files")}
