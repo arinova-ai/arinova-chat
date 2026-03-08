@@ -740,5 +740,11 @@
   "theme.reviews": "评价",
   "theme.reviewsCount": "条评价",
   "theme.notFound": "未找到主题。",
-  "theme.users": "用户"
+  "theme.users": "用户",
+  "memoryCapsule.title": "记忆胶囊",
+  "memoryCapsule.extractTitle": "提取记忆",
+  "memoryCapsule.namePlaceholder": "胶囊名称",
+  "memoryCapsule.extract": "提取",
+  "memoryCapsule.approveTitle": "授权智能体访问",
+  "memoryCapsule.empty": "暂无胶囊"
 }

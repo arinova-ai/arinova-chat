@@ -742,5 +742,11 @@
   "theme.reviews": "評價",
   "theme.reviewsCount": "則評價",
   "theme.notFound": "找不到主題。",
-  "theme.users": "使用者"
+  "theme.users": "使用者",
+  "memoryCapsule.title": "記憶膠囊",
+  "memoryCapsule.extractTitle": "提取記憶",
+  "memoryCapsule.namePlaceholder": "膠囊名稱",
+  "memoryCapsule.extract": "提取",
+  "memoryCapsule.approveTitle": "授權智慧體存取",
+  "memoryCapsule.empty": "尚無膠囊"
 }

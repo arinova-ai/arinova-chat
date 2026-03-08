@@ -736,5 +736,11 @@
   "theme.reviews": "리뷰",
   "theme.reviewsCount": "개 리뷰",
   "theme.notFound": "테마를 찾을 수 없습니다.",
-  "theme.users": "사용자"
+  "theme.users": "사용자",
+  "memoryCapsule.title": "메모리 캡슐",
+  "memoryCapsule.extractTitle": "메모리 추출",
+  "memoryCapsule.namePlaceholder": "캡슐 이름",
+  "memoryCapsule.extract": "추출",
+  "memoryCapsule.approveTitle": "에이전트 접근 승인",
+  "memoryCapsule.empty": "캡슐이 아직 없습니다"
 }

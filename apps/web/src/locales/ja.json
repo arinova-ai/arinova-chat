@@ -736,5 +736,11 @@
   "theme.reviews": "レビュー",
   "theme.reviewsCount": "件のレビュー",
   "theme.notFound": "テーマが見つかりません。",
-  "theme.users": "ユーザー"
+  "theme.users": "ユーザー",
+  "memoryCapsule.title": "メモリーカプセル",
+  "memoryCapsule.extractTitle": "メモリーを抽出",
+  "memoryCapsule.namePlaceholder": "カプセル名",
+  "memoryCapsule.extract": "抽出",
+  "memoryCapsule.approveTitle": "エージェントのアクセスを承認",
+  "memoryCapsule.empty": "カプセルはまだありません"
 }

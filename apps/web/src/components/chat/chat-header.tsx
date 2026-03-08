@@ -27,6 +27,7 @@ import {
   Search,
   Headset,
   ArrowRightLeft,
+  Brain,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
@@ -35,6 +36,7 @@ import type { ConversationType } from "@arinova/shared/types";
 import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
+import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -91,6 +93,9 @@ export function ChatHeader({
   const convSearchIndex = useChatStore((s) => s.convSearchIndex);
   const convSearchLoading = useChatStore((s) => s.convSearchLoading);
   const setConvSearchIndex = useChatStore((s) => s.setConvSearchIndex);
+
+  // Memory Capsule sheet
+  const [memoryCapsuleOpen, setMemoryCapsuleOpen] = useState(false);
 
   // Official CS status
   const [csStatus, setCsStatus] = useState<string | null>(null);
@@ -375,6 +380,12 @@ export function ChatHeader({
                   <FileText className="h-4 w-4" />
                   {t("chat.header.files")}
                 </DropdownMenuItem>
+                {agentId && conversationId && type === "direct" && (
+                  <DropdownMenuItem onClick={() => setMemoryCapsuleOpen(true)}>
+                    <Brain className="h-4 w-4" />
+                    {t("memoryCapsule.title")}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </>
@@ -441,6 +452,16 @@ export function ChatHeader({
           <ArrowLeft className="h-3.5 w-3.5 -rotate-90" />
         </Button>
       </div>
+    )}
+
+    {agentId && conversationId && type === "direct" && (
+      <MemoryCapsuleSheet
+        open={memoryCapsuleOpen}
+        onOpenChange={setMemoryCapsuleOpen}
+        conversationId={conversationId}
+        conversationName={agentName}
+        agentId={agentId}
+      />
     )}
     </div>
   );

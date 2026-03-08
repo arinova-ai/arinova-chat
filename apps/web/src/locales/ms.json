@@ -736,5 +736,11 @@
   "theme.reviews": "Ulasan",
   "theme.reviewsCount": "ulasan",
   "theme.notFound": "Tema tidak dijumpai.",
-  "theme.users": "pengguna"
+  "theme.users": "pengguna",
+  "memoryCapsule.title": "Kapsul Memori",
+  "memoryCapsule.extractTitle": "Ekstrak Memori",
+  "memoryCapsule.namePlaceholder": "Nama kapsul",
+  "memoryCapsule.extract": "Ekstrak",
+  "memoryCapsule.approveTitle": "Luluskan Akses Ejen",
+  "memoryCapsule.empty": "Tiada kapsul lagi"
 }

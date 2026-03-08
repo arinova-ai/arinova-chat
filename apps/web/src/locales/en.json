@@ -743,5 +743,12 @@
   "theme.reviews": "Reviews",
   "theme.reviewsCount": "reviews",
   "theme.notFound": "Theme not found.",
-  "theme.users": "users"
+  "theme.users": "users",
+
+  "memoryCapsule.title": "Memory Capsule",
+  "memoryCapsule.extractTitle": "Extract Memory",
+  "memoryCapsule.namePlaceholder": "Capsule name",
+  "memoryCapsule.extract": "Extract",
+  "memoryCapsule.approveTitle": "Approve Agent Access",
+  "memoryCapsule.empty": "No capsules yet"
 }

@@ -736,5 +736,11 @@
   "theme.reviews": "Avis",
   "theme.reviewsCount": "avis",
   "theme.notFound": "Thème introuvable.",
-  "theme.users": "utilisateurs"
+  "theme.users": "utilisateurs",
+  "memoryCapsule.title": "Capsule Mémoire",
+  "memoryCapsule.extractTitle": "Extraire la Mémoire",
+  "memoryCapsule.namePlaceholder": "Nom de la capsule",
+  "memoryCapsule.extract": "Extraire",
+  "memoryCapsule.approveTitle": "Approuver l'Accès de l'Agent",
+  "memoryCapsule.empty": "Aucune capsule pour le moment"
 }
