@@ -13,7 +13,6 @@ import { NotificationBanner } from "@/components/notification-banner";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
-import { refreshPushSubscription, setupNotificationClickHandler } from "@/lib/push";
 import { initChatDiagnostics, useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
 
@@ -89,25 +88,6 @@ export function ChatLayout() {
     }
   }, [searchParams, setActiveConversation, jumpToMessage, router]);
 
-  // Push notification setup: refresh subscription + wire click handler
-  useEffect(() => {
-    refreshPushSubscription();
-    const cleanup = setupNotificationClickHandler((url) => {
-      const params = new URLSearchParams(url.split("?")[1] || "");
-      const convId = params.get("c");
-      const msgId = params.get("m");
-      if (convId) {
-        if (msgId) {
-          jumpToMessage(convId, msgId);
-        } else {
-          setActiveConversation(convId);
-        }
-      } else {
-        router.push(url);
-      }
-    });
-    return cleanup;
-  }, [router, setActiveConversation, jumpToMessage]);
 
   // Listen for global new-chat event (e.g. from sidebar header button)
   useEffect(() => {
