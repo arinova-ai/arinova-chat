@@ -16,9 +16,11 @@ const GEMINI_MODEL_URL: &str =
 
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
 Extract key facts, preferences, and important information from this conversation. \
-Output each memory as a separate line. Focus on: user preferences, decisions made, \
-important facts mentioned, action items, and relationship context. \
-Be concise — each line should be one self-contained memory.";
+Output each memory as a separate line, prefixed with an importance score from 0.0 to 1.0. \
+Format: [importance:0.8] memory content here \
+Focus on: user preferences, decisions made, important facts mentioned, action items, and relationship context. \
+Be concise — each line should be one self-contained memory. \
+Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details.";
 
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;
@@ -214,15 +216,19 @@ async fn do_extraction(
         .map(|parts| parts.into_iter().filter_map(|p| p.text).collect::<Vec<_>>().join("\n"))
         .unwrap_or_default();
 
-    let entries: Vec<String> = full_text
+    // Parse entries with importance: "[importance:0.8] content" or plain text
+    let parsed_entries: Vec<(String, f64)> = full_text
         .lines()
-        .map(|l| l.trim().to_string())
+        .map(|l| l.trim())
         .filter(|l| !l.is_empty())
+        .map(|line| parse_importance_line(line))
         .collect();
 
-    if entries.is_empty() {
+    if parsed_entries.is_empty() {
         return Ok((0, new_watermark_utc));
     }
+
+    let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _)| t.clone()).collect();
 
     // 7. Generate embeddings
     let openai_key = config
@@ -230,25 +236,26 @@ async fn do_extraction(
         .as_deref()
         .ok_or_else(|| anyhow!("OPENAI_API_KEY not configured"))?;
 
-    let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(entries.len());
-    for batch in entries.chunks(EMBEDDING_BATCH_SIZE) {
+    let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(entry_texts.len());
+    for batch in entry_texts.chunks(EMBEDDING_BATCH_SIZE) {
         let batch_vec: Vec<String> = batch.to_vec();
         let embeddings = generate_embeddings(&client, openai_key, &batch_vec, EMBEDDING_MODEL).await?;
         all_embeddings.extend(embeddings);
     }
 
-    // 8. Insert into memory_entries
+    // 8. Insert into memory_entries with importance
     let mut tx = db.begin().await.context("Failed to begin transaction")?;
 
-    for (entry, embedding) in entries.iter().zip(all_embeddings.iter()) {
+    for ((content, importance), embedding) in parsed_entries.iter().zip(all_embeddings.iter()) {
         let vec = Vector::from(embedding.clone());
         sqlx::query(
-            r#"INSERT INTO memory_entries (capsule_id, content, embedding)
-               VALUES ($1, $2, $3::vector)"#,
+            r#"INSERT INTO memory_entries (capsule_id, content, embedding, importance)
+               VALUES ($1, $2, $3::vector, $4)"#,
         )
         .bind(capsule_id)
-        .bind(entry)
+        .bind(content)
         .bind(vec)
+        .bind(*importance)
         .execute(&mut *tx)
         .await
         .context("Failed to insert memory entry")?;
@@ -256,5 +263,98 @@ async fn do_extraction(
 
     tx.commit().await.context("Failed to commit memory entries")?;
 
-    Ok((entries.len(), new_watermark_utc))
+    Ok((parsed_entries.len(), new_watermark_utc))
+}
+
+/// Parse a line like "[importance:0.8] memory content" into (content, importance).
+/// Falls back to 0.5 importance if prefix is missing or malformed.
+fn parse_importance_line(line: &str) -> (String, f64) {
+    if let Some(rest) = line.strip_prefix("[importance:") {
+        if let Some(bracket_end) = rest.find(']') {
+            let score_str = &rest[..bracket_end];
+            let content = rest[bracket_end + 1..].trim().to_string();
+            if let Ok(score) = score_str.parse::<f64>() {
+                let clamped = score.clamp(0.0, 1.0);
+                if !content.is_empty() {
+                    return (content, clamped);
+                }
+            }
+        }
+    }
+    // Fallback: no importance prefix
+    (line.to_string(), 0.5)
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid memory search
+// ---------------------------------------------------------------------------
+
+/// A single memory search result with scoring breakdown.
+#[derive(Debug)]
+pub struct MemorySearchResult {
+    pub content: String,
+    pub capsule_name: String,
+    pub score: f64,
+}
+
+/// Hybrid search: vector similarity + BM25 full-text + time decay + importance.
+/// Requires the query to already be embedded.
+pub async fn hybrid_search(
+    db: &PgPool,
+    capsule_ids: &[Uuid],
+    query_embedding: Vec<f32>,
+    query_text: &str,
+    limit: i32,
+) -> anyhow::Result<Vec<MemorySearchResult>> {
+    if capsule_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let query_vec = Vector::from(query_embedding);
+
+    let rows = sqlx::query_as::<_, (String, String, f64)>(
+        r#"WITH vector_search AS (
+               SELECT me.id, me.content, me.capsule_id, me.created_at, me.importance,
+                      1.0 - (me.embedding <=> $1::vector) AS vector_score
+               FROM memory_entries me
+               WHERE me.capsule_id = ANY($2)
+               ORDER BY me.embedding <=> $1::vector
+               LIMIT 50
+           ),
+           text_search AS (
+               SELECT me.id,
+                      ts_rank(me.search_vector, plainto_tsquery('english', $3)) AS text_score
+               FROM memory_entries me
+               WHERE me.capsule_id = ANY($2)
+                 AND me.search_vector @@ plainto_tsquery('english', $3)
+           )
+           SELECT v.content,
+                  mc.name AS capsule_name,
+                  (0.5 * v.vector_score
+                   + 0.2 * COALESCE(t.text_score, 0)
+                   + 0.15 * EXP(-0.693 * EXTRACT(EPOCH FROM (NOW() - v.created_at)) / (30.0 * 86400.0))
+                   + 0.15 * v.importance
+                  ) AS final_score
+           FROM vector_search v
+           JOIN memory_capsules mc ON mc.id = v.capsule_id
+           LEFT JOIN text_search t ON v.id = t.id
+           ORDER BY final_score DESC
+           LIMIT $4"#,
+    )
+    .bind(query_vec)
+    .bind(capsule_ids)
+    .bind(query_text)
+    .bind(limit)
+    .fetch_all(db)
+    .await
+    .context("Hybrid memory search failed")?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(content, capsule_name, score)| MemorySearchResult {
+            content,
+            capsule_name,
+            score,
+        })
+        .collect())
 }
