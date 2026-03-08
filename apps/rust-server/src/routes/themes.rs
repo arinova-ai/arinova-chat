@@ -410,6 +410,38 @@ async fn upload_theme(
 
     let theme_id = meta.id.clone();
 
+    // Phase 2b: Validate that preview file exists in the ZIP bundle
+    let preview_file = meta.preview.as_deref().unwrap_or("preview.png");
+    if let Some(ref zip_data) = bundle_bytes {
+        let cursor = std::io::Cursor::new(zip_data.as_slice());
+        match zip::ZipArchive::new(cursor) {
+            Ok(archive) => {
+                let has_preview = archive.file_names().any(|name| name == preview_file);
+                if !has_preview {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": format!("Missing preview file '{}' in ZIP bundle", preview_file)})),
+                    )
+                        .into_response();
+                }
+            }
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "Invalid ZIP bundle"})),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        // No bundle at all — preview file can't exist
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("Missing preview file '{}': no bundle provided", preview_file)})),
+        )
+            .into_response();
+    }
+
     // Phase 3: Upload to R2 if configured, otherwise fall back to local filesystem
     if let Some(s3) = &state.s3 {
         // ── R2 path ──────────────────────────────────────────────
