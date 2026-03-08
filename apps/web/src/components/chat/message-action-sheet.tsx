@@ -7,7 +7,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag, CheckSquare } from "lucide-react";
+import { Copy, Trash2, RotateCcw, Reply, Pin, PinOff, MessageSquare, Flag, CheckSquare, Share2 } from "lucide-react";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
 
@@ -28,6 +28,7 @@ interface MessageActionSheetProps {
   isPinned?: boolean;
   onStartThread?: () => void;
   onReport?: () => void;
+  onShare?: () => void;
   isInThread?: boolean;
   onSelect?: () => void;
 }
@@ -48,6 +49,7 @@ export function MessageActionSheet({
   isPinned,
   onStartThread,
   onReport,
+  onShare,
   isInThread,
   onSelect,
 }: MessageActionSheetProps) {
@@ -132,6 +134,12 @@ export function MessageActionSheet({
                 <Pin className="h-4 w-4 text-yellow-400" />
               )}
               <span className="text-yellow-400">{isPinned ? t("chat.actions.unpin") : t("chat.actions.pin")}</span>
+            </button>
+          )}
+          {onShare && (
+            <button className={ACTION_BUTTON} onClick={() => handle(onShare)}>
+              <Share2 className="h-4 w-4 text-green-400" />
+              <span className="text-green-400">{t("chat.actions.share")}</span>
             </button>
           )}
           {onReport && (
