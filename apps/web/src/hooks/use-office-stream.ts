@@ -95,101 +95,67 @@ export function useOfficeStream() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [connected, setConnected] = useState(false);
   const esRef = useRef<EventSource | null>(null);
-  const healthAgentsRef = useRef<Map<string, AgentHealthItem>>(new Map());
 
-  // On mount: fetch all agents via health endpoint to seed initial state
+  // Single effect: fetch health first, then connect SSE.
+  // Health data is captured in a closure variable so SSE handler always has it.
   useEffect(() => {
     let cancelled = false;
+    const healthMap = new Map<string, AgentHealthItem>();
 
-    async function fetchInitialAgents() {
-      try {
-        const healthList = await api<AgentHealthItem[]>("/api/agents/health", { silent: true });
+    // 1. Fetch all agents from health endpoint
+    api<AgentHealthItem[]>("/api/agents/health", { silent: true })
+      .then((healthList) => {
+        if (cancelled) return;
+        for (const h of healthList) {
+          healthMap.set(h.agentId, h);
+        }
+        // Seed initial agent list
+        setAgents(healthList.map(healthToAgent));
+      })
+      .catch(() => {
+        // Health fetch failed — SSE will still work below
+      })
+      .finally(() => {
         if (cancelled) return;
 
-        // Store health data for SSE merging
-        for (const h of healthList) {
-          healthAgentsRef.current.set(h.agentId, h);
-        }
+        // 2. Connect SSE after health data is available
+        const es = new EventSource(OFFICE_STREAM_URL, { withCredentials: true });
+        esRef.current = es;
 
-        // Seed agents as idle, or merge with SSE agents if they arrived first
-        setAgents((prev) => {
-          console.log("[useOfficeStream] health merge: prev=", prev.length, "healthList=", healthList.length);
-          if (prev.length === 0) {
-            console.log("[useOfficeStream] → seeding", healthList.length, "agents from health");
-            return healthList.map(healthToAgent);
-          }
-          // SSE arrived first — merge health agents not yet present
-          const existingIds = new Set(prev.map((a) => a.id));
-          const merged = [...prev];
-          for (const h of healthList) {
-            if (!existingIds.has(h.agentId)) {
-              merged.push(healthToAgent(h));
-            }
-          }
-          console.log("[useOfficeStream] → merged to", merged.length, "agents");
-          return merged;
-        });
-      } catch (e) {
-        console.warn("[useOfficeStream] Failed to fetch initial agents:", e);
-      }
-    }
+        es.onopen = () => setConnected(true);
 
-    fetchInitialAgents();
-    return () => { cancelled = true; };
-  }, []);
+        es.onmessage = (event) => {
+          try {
+            const data: OfficeStatusEvent = JSON.parse(event.data);
+            if (data.type !== "status_update") return;
 
-  useEffect(() => {
-    const url = OFFICE_STREAM_URL;
-    const es = new EventSource(url, { withCredentials: true });
-    esRef.current = es;
-
-    es.onopen = () => {
-      setConnected(true);
-    };
-
-    es.onmessage = (event) => {
-      try {
-        const data: OfficeStatusEvent = JSON.parse(event.data);
-        if (data.type === "status_update") {
-          const sseAgents = data.agents.map(toAgent);
-          const sseIds = new Set(sseAgents.map((a) => a.id));
-
-          setAgents((prev) => {
+            const sseAgents = data.agents.map(toAgent);
+            const mergedIds = new Set(sseAgents.map((a) => a.id));
             const merged = [...sseAgents];
-            const mergedIds = new Set(sseIds);
 
-            // Keep existing non-SSE agents
-            for (const existing of prev) {
-              if (!mergedIds.has(existing.id)) {
-                merged.push({ ...existing, status: "idle" as const, online: false });
-                mergedIds.add(existing.id);
-              }
-            }
-
-            // Include health-seeded agents not yet in the list
-            for (const [id, h] of healthAgentsRef.current) {
+            // Append health-only agents not present in SSE
+            for (const [id, h] of healthMap) {
               if (!mergedIds.has(id)) {
                 merged.push(healthToAgent(h));
+                mergedIds.add(id);
               }
             }
 
-            console.log("[useOfficeStream] SSE merge: sse=", sseAgents.length, "prev=", prev.length, "healthRef=", healthAgentsRef.current.size, "→", merged.length);
-            return merged;
-          });
-        }
-      } catch {
-        // Ignore malformed events
-      }
-    };
+            setAgents(merged);
+          } catch {
+            // Ignore malformed events
+          }
+        };
 
-    es.onerror = () => {
-      setConnected(false);
-      // EventSource auto-reconnects
-    };
+        es.onerror = () => setConnected(false);
+      });
 
     return () => {
-      es.close();
-      esRef.current = null;
+      cancelled = true;
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
     };
   }, []);
 
