@@ -20,8 +20,9 @@ const MAX_DAILY_EXTRACTIONS: i32 = 10;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/memory/capsules", post(create_capsule).get(list_capsules))
-        .route("/api/memory/capsules/{id}", delete(delete_capsule))
+        // Static path must come before dynamic {id} to avoid conflict
         .route("/api/memory/capsules/grants", get(list_grants_for_agent))
+        .route("/api/memory/capsules/{id}", delete(delete_capsule))
         .route(
             "/api/memory/capsules/{id}/grants",
             post(grant_agent_access),
@@ -58,7 +59,7 @@ async fn create_capsule(
 
     // Validate user is a member of the conversation
     let is_member = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM conversation_members WHERE conversation_id = $1 AND user_id = $2",
+        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
     )
     .bind(body.conversation_id)
     .bind(Uuid::parse_str(&user.id).unwrap_or_default())
