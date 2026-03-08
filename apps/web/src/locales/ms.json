@@ -742,5 +742,20 @@
   "memoryCapsule.namePlaceholder": "Nama kapsul",
   "memoryCapsule.extract": "Ekstrak",
   "memoryCapsule.approveTitle": "Luluskan Akses Ejen",
-  "memoryCapsule.empty": "Tiada kapsul lagi"
+  "memoryCapsule.empty": "Tiada kapsul lagi",
+
+  "promo.free": "Percuma",
+  "promo.coins": "syiling",
+  "promo.limitedTime": "Masa Terhad",
+  "promo.saleEnds": "Jualan tamat dalam",
+  "promo.off": "diskaun",
+  "promo.redeemCode": "Tebus Kod",
+  "promo.enterCode": "Masukkan kod promosi",
+  "promo.apply": "Guna",
+  "promo.invalidCode": "Kod tidak sah atau telah tamat tempoh",
+  "promo.codeExhausted": "Kod ini telah ditebus sepenuhnya",
+  "promo.perUserLimitReached": "Anda telah menggunakan promosi ini",
+  "promo.freeItemNotEligible": "Item percuma tidak layak untuk promosi",
+  "promo.itemNotEligible": "Item ini tidak layak untuk promosi ini",
+  "promo.promotionExhausted": "Promosi ini telah mencapai had penggunaan"
 }

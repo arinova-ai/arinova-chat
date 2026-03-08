@@ -750,5 +750,20 @@
   "memoryCapsule.approveTitle": "授權智慧體存取",
   "memoryCapsule.empty": "尚無膠囊",
   "memoryCapsule.statusExtracting": "提取中...",
-  "memoryCapsule.statusFailed": "提取失敗"
+  "memoryCapsule.statusFailed": "提取失敗",
+
+  "promo.free": "免費",
+  "promo.coins": "金幣",
+  "promo.limitedTime": "限時優惠",
+  "promo.saleEnds": "優惠倒數",
+  "promo.off": "折扣",
+  "promo.redeemCode": "兌換代碼",
+  "promo.enterCode": "輸入促銷代碼",
+  "promo.apply": "套用",
+  "promo.invalidCode": "代碼無效或已過期",
+  "promo.codeExhausted": "此代碼已全數兌換完畢",
+  "promo.perUserLimitReached": "您已使用過此促銷活動",
+  "promo.freeItemNotEligible": "免費項目不適用於促銷活動",
+  "promo.itemNotEligible": "此項目不適用於此促銷活動",
+  "promo.promotionExhausted": "此促銷活動已達使用上限"
 }

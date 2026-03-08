@@ -1675,33 +1675,59 @@ async fn do_trigger_agent_response(
         task_payload["attachments"] = json!(att_json);
     }
 
-    // Inject memory capsule context for 1:1 agent conversations
+    // Inject memory capsule context for 1:1 agent conversations (hybrid search)
     if conv_type == "direct" {
-        let memory_entries = sqlx::query_as::<_, (String, String)>(
-            r#"SELECT me.content, mc.name AS capsule_name
-               FROM memory_entries me
-               JOIN memory_capsules mc ON mc.id = me.capsule_id
-               JOIN memory_capsule_grants mcg ON mcg.capsule_id = me.capsule_id
+        // Find granted capsule IDs for this agent+user
+        let capsule_ids = sqlx::query_as::<_, (uuid::Uuid,)>(
+            r#"SELECT mcg.capsule_id
+               FROM memory_capsule_grants mcg
+               JOIN memory_capsules mc ON mc.id = mcg.capsule_id
                WHERE mcg.agent_id = $1::uuid
                  AND mc.owner_id = $2
-                 AND mc.status = 'ready'
-               ORDER BY me.created_at DESC
-               LIMIT 20"#,
+                 AND mc.status = 'ready'"#,
         )
         .bind(agent_id)
         .bind(user_id)
         .fetch_all(db)
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id,)| id)
+        .collect::<Vec<_>>();
 
-        if !memory_entries.is_empty() {
-            let memories: Vec<serde_json::Value> = memory_entries
-                .into_iter()
-                .map(|(content, capsule_name)| {
-                    json!({ "content": content, "capsuleName": capsule_name })
-                })
-                .collect();
-            task_payload["memoryContext"] = json!(memories);
+        if !capsule_ids.is_empty() {
+            // Embed the user query for vector search
+            if let Some(ref openai_key) = config.openai_api_key {
+                let embed_client = reqwest::Client::new();
+                if let Ok(embeddings) = crate::services::embedding::generate_embeddings(
+                    &embed_client,
+                    openai_key,
+                    &[content.to_string()],
+                    crate::services::embedding::EMBEDDING_MODEL,
+                ).await {
+                    if let Some(query_emb) = embeddings.into_iter().next() {
+                        if let Ok(results) = crate::services::memory::hybrid_search(
+                            db,
+                            &capsule_ids,
+                            query_emb,
+                            content,
+                            10,
+                        ).await {
+                            if !results.is_empty() {
+                                let memories: Vec<serde_json::Value> = results
+                                    .into_iter()
+                                    .map(|r| json!({
+                                        "content": r.content,
+                                        "capsuleName": r.capsule_name,
+                                        "relevance": (r.score * 100.0).round() / 100.0,
+                                    }))
+                                    .collect();
+                                task_payload["memoryContext"] = json!(memories);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

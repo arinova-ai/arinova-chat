@@ -752,5 +752,20 @@
   "memoryCapsule.approveTitle": "Approve Agent Access",
   "memoryCapsule.empty": "No capsules yet",
   "memoryCapsule.statusExtracting": "Extracting...",
-  "memoryCapsule.statusFailed": "Failed"
+  "memoryCapsule.statusFailed": "Failed",
+
+  "promo.free": "Free",
+  "promo.coins": "coins",
+  "promo.limitedTime": "Limited Time",
+  "promo.saleEnds": "Sale ends in",
+  "promo.off": "off",
+  "promo.redeemCode": "Redeem Code",
+  "promo.enterCode": "Enter promo code",
+  "promo.apply": "Apply",
+  "promo.invalidCode": "Invalid or expired code",
+  "promo.codeExhausted": "This code has been fully redeemed",
+  "promo.perUserLimitReached": "You've already used this promotion",
+  "promo.freeItemNotEligible": "Free items are not eligible for promotions",
+  "promo.itemNotEligible": "This item is not eligible for this promotion",
+  "promo.promotionExhausted": "This promotion has reached its usage limit"
 }

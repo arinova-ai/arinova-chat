@@ -742,5 +742,20 @@
   "memoryCapsule.namePlaceholder": "캡슐 이름",
   "memoryCapsule.extract": "추출",
   "memoryCapsule.approveTitle": "에이전트 접근 승인",
-  "memoryCapsule.empty": "캡슐이 아직 없습니다"
+  "memoryCapsule.empty": "캡슐이 아직 없습니다",
+
+  "promo.free": "무료",
+  "promo.coins": "코인",
+  "promo.limitedTime": "한정 기간",
+  "promo.saleEnds": "세일 종료까지",
+  "promo.off": "할인",
+  "promo.redeemCode": "코드 사용",
+  "promo.enterCode": "프로모션 코드 입력",
+  "promo.apply": "적용",
+  "promo.invalidCode": "유효하지 않거나 만료된 코드입니다",
+  "promo.codeExhausted": "이 코드는 모두 사용되었습니다",
+  "promo.perUserLimitReached": "이미 이 프로모션을 사용하셨습니다",
+  "promo.freeItemNotEligible": "무료 항목은 프로모션 대상이 아닙니다",
+  "promo.itemNotEligible": "이 항목은 이 프로모션 대상이 아닙니다",
+  "promo.promotionExhausted": "이 프로모션의 사용 한도에 도달했습니다"
 }

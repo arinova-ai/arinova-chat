@@ -742,5 +742,20 @@
   "memoryCapsule.namePlaceholder": "カプセル名",
   "memoryCapsule.extract": "抽出",
   "memoryCapsule.approveTitle": "エージェントのアクセスを承認",
-  "memoryCapsule.empty": "カプセルはまだありません"
+  "memoryCapsule.empty": "カプセルはまだありません",
+
+  "promo.free": "無料",
+  "promo.coins": "コイン",
+  "promo.limitedTime": "期間限定",
+  "promo.saleEnds": "セール終了まで",
+  "promo.off": "オフ",
+  "promo.redeemCode": "コードを引き換え",
+  "promo.enterCode": "プロモコードを入力",
+  "promo.apply": "適用",
+  "promo.invalidCode": "無効または期限切れのコードです",
+  "promo.codeExhausted": "このコードはすべて引き換え済みです",
+  "promo.perUserLimitReached": "このプロモーションは既にご利用済みです",
+  "promo.freeItemNotEligible": "無料アイテムはプロモーション対象外です",
+  "promo.itemNotEligible": "このアイテムはこのプロモーションの対象外です",
+  "promo.promotionExhausted": "このプロモーションは利用上限に達しました"
 }

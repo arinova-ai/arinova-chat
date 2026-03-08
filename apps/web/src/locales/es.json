@@ -742,5 +742,20 @@
   "memoryCapsule.namePlaceholder": "Nombre de la cápsula",
   "memoryCapsule.extract": "Extraer",
   "memoryCapsule.approveTitle": "Aprobar Acceso del Agente",
-  "memoryCapsule.empty": "Aún no hay cápsulas"
+  "memoryCapsule.empty": "Aún no hay cápsulas",
+
+  "promo.free": "Gratis",
+  "promo.coins": "monedas",
+  "promo.limitedTime": "Tiempo Limitado",
+  "promo.saleEnds": "La oferta termina en",
+  "promo.off": "de descuento",
+  "promo.redeemCode": "Canjear Código",
+  "promo.enterCode": "Ingresa el código promocional",
+  "promo.apply": "Aplicar",
+  "promo.invalidCode": "Código inválido o expirado",
+  "promo.codeExhausted": "Este código ya ha sido completamente canjeado",
+  "promo.perUserLimitReached": "Ya has utilizado esta promoción",
+  "promo.freeItemNotEligible": "Los artículos gratuitos no son elegibles para promociones",
+  "promo.itemNotEligible": "Este artículo no es elegible para esta promoción",
+  "promo.promotionExhausted": "Esta promoción ha alcanzado su límite de uso"
 }

@@ -746,5 +746,20 @@
   "memoryCapsule.namePlaceholder": "胶囊名称",
   "memoryCapsule.extract": "提取",
   "memoryCapsule.approveTitle": "授权智能体访问",
-  "memoryCapsule.empty": "暂无胶囊"
+  "memoryCapsule.empty": "暂无胶囊",
+
+  "promo.free": "免费",
+  "promo.coins": "金币",
+  "promo.limitedTime": "限时优惠",
+  "promo.saleEnds": "优惠倒计时",
+  "promo.off": "折扣",
+  "promo.redeemCode": "兑换代码",
+  "promo.enterCode": "输入促销代码",
+  "promo.apply": "应用",
+  "promo.invalidCode": "代码无效或已过期",
+  "promo.codeExhausted": "此代码已全部兑换完毕",
+  "promo.perUserLimitReached": "您已使用过此促销活动",
+  "promo.freeItemNotEligible": "免费项目不适用于促销活动",
+  "promo.itemNotEligible": "此项目不适用于此促销活动",
+  "promo.promotionExhausted": "此促销活动已达使用上限"
 }
