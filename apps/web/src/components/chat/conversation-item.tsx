@@ -419,7 +419,10 @@ export function ConversationItem({
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1 truncate text-sm font-medium">
                 {isPinned && (
-                  <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <Pin className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                )}
+                {isMuted && (
+                  <BellOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
                 {renaming ? null : (title ?? agentName)}
                 {!renaming && isVerified && <VerifiedBadge className="h-3.5 w-3.5 text-blue-500" />}
