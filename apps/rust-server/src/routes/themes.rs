@@ -41,6 +41,7 @@ const ALLOWED_EXTENSIONS: &[&str] = &[
     "glb", "gltf",
     "mp3", "ogg", "wav",
     "json",
+    "js", "css", "html",
 ];
 
 pub fn router() -> Router<AppState> {
@@ -663,6 +664,9 @@ fn mime_from_extension(name: &str) -> String {
         "ogg" => "audio/ogg",
         "wav" => "audio/wav",
         "json" => "application/json",
+        "js" => "application/javascript",
+        "css" => "text/css",
+        "html" => "text/html",
         _ => "application/octet-stream",
     }
     .to_string()
