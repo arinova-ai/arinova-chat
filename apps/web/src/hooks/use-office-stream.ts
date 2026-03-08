@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { OFFICE_STREAM_URL } from "@/lib/office-config";
 import type { Agent } from "@/components/office/types";
 import { useChatStore } from "@/store/chat-store";
+import { api } from "@/lib/api";
 
 /** Shape of the SSE status event from the office plugin */
 interface OfficeStatusEvent {
@@ -22,6 +23,17 @@ interface OfficeStatusEvent {
     currentToolDetail?: string;
   }[];
   timestamp: number;
+}
+
+/** Shape of GET /api/agents/health response item */
+interface AgentHealthItem {
+  agentId: string;
+  agentName: string;
+  status: string;
+  wsConnected: boolean;
+  a2aReachable: boolean | null;
+  latencyMs: number | null;
+  checkedAt: string;
 }
 
 /** Default display properties for agents without rich metadata */
@@ -64,10 +76,54 @@ function toAgent(raw: OfficeStatusEvent["agents"][number]): Agent {
   };
 }
 
+/** Convert a health-check agent into an idle/not-connected Agent */
+function healthToAgent(h: AgentHealthItem): Agent {
+  const name = UUID_RE.test(h.agentName) ? "Agent" : h.agentName;
+  return {
+    id: h.agentId,
+    name,
+    role: "",
+    emoji: DEFAULT_EMOJI,
+    color: DEFAULT_COLOR,
+    status: "idle",
+    online: h.wsConnected,
+    recentActivity: [],
+  };
+}
+
 export function useOfficeStream() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [connected, setConnected] = useState(false);
   const esRef = useRef<EventSource | null>(null);
+  const healthAgentsRef = useRef<Map<string, AgentHealthItem>>(new Map());
+
+  // On mount: fetch all agents via health endpoint to seed initial state
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchInitialAgents() {
+      try {
+        const healthList = await api<AgentHealthItem[]>("/api/agents/health", { silent: true });
+        if (cancelled) return;
+
+        // Store health data for SSE merging
+        for (const h of healthList) {
+          healthAgentsRef.current.set(h.agentId, h);
+        }
+
+        // Seed agents as idle — only if SSE hasn't delivered data yet
+        setAgents((prev) => {
+          if (prev.length > 0) return prev;
+          return healthList.map(healthToAgent);
+        });
+      } catch (e) {
+        console.warn("[useOfficeStream] Failed to fetch initial agents:", e);
+      }
+    }
+
+    fetchInitialAgents();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const url = OFFICE_STREAM_URL;
@@ -82,7 +138,20 @@ export function useOfficeStream() {
       try {
         const data: OfficeStatusEvent = JSON.parse(event.data);
         if (data.type === "status_update") {
-          setAgents(data.agents.map(toAgent));
+          const sseAgents = data.agents.map(toAgent);
+          const sseIds = new Set(sseAgents.map((a) => a.id));
+
+          setAgents((prev) => {
+            // Merge: SSE agents take priority; keep health-seeded agents
+            // that aren't in this SSE update (they stay idle)
+            const merged = [...sseAgents];
+            for (const existing of prev) {
+              if (!sseIds.has(existing.id)) {
+                merged.push({ ...existing, status: "idle" as const, online: false });
+              }
+            }
+            return merged;
+          });
         }
       } catch {
         // Ignore malformed events

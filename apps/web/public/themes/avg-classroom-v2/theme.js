@@ -1,6 +1,7 @@
 // AVG Classroom v2 — PixiJS Theme for Arinova Office SDK v2
 // Anime-style classroom with 6 agent seats, blackboard stats,
-// A/B frame animation, name tags, task bubbles, pan/zoom/pinch.
+// A/B frame animation, name tags, task bubbles, portrait system,
+// info dialog, action buttons, pan/zoom/pinch.
 
 var CANVAS_W = 1920;
 var CANVAS_H = 1072;
@@ -49,6 +50,12 @@ var SEAT_HITAREAS = {
 };
 
 var BACK_ROW_CHARS = ["char1", "char2", "char3"];
+
+/** Truncate text to maxLen characters with ellipsis */
+function truncate(text, maxLen) {
+  if (!text) return "";
+  return text.length > maxLen ? text.slice(0, maxLen) + "…" : text;
+}
 
 export default {
   async init(sdk, container) {
@@ -183,7 +190,6 @@ export default {
     }
 
     // ── Agent state tracking ─────────────────────────────────
-    // Maps seat id → agent data (or null)
     var seatAgent = {};
     SEATS.forEach(function (s) { seatAgent[s.id] = null; });
 
@@ -205,15 +211,11 @@ export default {
         align: "center",
       }});
 
-      var padX = 16, padY = 6;
       var tagBg = new PIXI.Graphics();
 
-      // Closure to capture nSeat, tagText, tagBg
       (function (seatId, tt, tbg) {
         nameTags[seatId] = {
           container: tagContainer,
-          textObj: tt,
-          bgObj: tbg,
           update: function () {
             var agent = seatAgent[seatId];
             var name = agent ? agent.name : null;
@@ -237,7 +239,7 @@ export default {
       root.addChild(tagContainer);
     }
 
-    // ── Task bubbles ─────────────────────────────────────────
+    // ── Task bubbles (speech bubble above head) ──────────────
     var taskBubbles = {};
     for (var bi = 0; bi < SEATS.length; bi++) {
       var bSeat = SEATS[bi];
@@ -277,9 +279,11 @@ export default {
           container: bc,
           update: function () {
             var agent = seatAgent[seatId];
-            var task = agent && agent.currentTask ? agent.currentTask.title || agent.currentTask : null;
+            var task = agent && agent.currentTask
+              ? (agent.currentTask.title || agent.currentTask)
+              : null;
             if (!task) { bc.visible = false; return; }
-            bt.text = task;
+            bt.text = truncate(task, 30);
             var tw = Math.min(bt.width, 200) + 14 * 2;
             var th = bt.height + 8 * 2;
             bbg.clear();
@@ -298,7 +302,200 @@ export default {
       root.addChild(bubbleC);
     }
 
-    // ── Hit areas for click → sdk.selectAgent ────────────────
+    // ── Portrait system ──────────────────────────────────────
+    // Load portrait textures
+    var portraits = {};
+    for (var pi = 0; pi < SEATS.length; pi++) {
+      try {
+        portraits[SEATS[pi].id] = await PIXI.Assets.load(
+          sdk.assetUrl(SEATS[pi].charId + "-portrait.png")
+        );
+      } catch (e) {
+        console.warn("Portrait load failed: " + SEATS[pi].charId, e);
+      }
+    }
+
+    // Portrait overlay layer (above everything in root)
+    var portraitLayer = new PIXI.Container();
+    root.addChild(portraitLayer);
+
+    // Dark backdrop (50% opacity)
+    var backdrop = new PIXI.Graphics();
+    backdrop.rect(0, 0, CANVAS_W, CANVAS_H);
+    backdrop.fill({ color: 0x000000, alpha: 0.5 });
+    backdrop.visible = false;
+    backdrop.eventMode = "static";
+    backdrop.cursor = "pointer";
+    portraitLayer.addChild(backdrop);
+
+    // Portrait sprite
+    var portraitSprite = new PIXI.Sprite();
+    portraitSprite.width = CANVAS_W;
+    portraitSprite.height = CANVAS_H;
+    portraitSprite.visible = false;
+    portraitLayer.addChild(portraitSprite);
+
+    // ── Info dialog (right-bottom, 620x380) ──────────────────
+    var dialogContainer = new PIXI.Container();
+    dialogContainer.visible = false;
+    portraitLayer.addChild(dialogContainer);
+
+    var dialogBg = new PIXI.Graphics();
+    dialogContainer.addChild(dialogBg);
+
+    var dialogTitle = new PIXI.Text({ text: "", style: {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: 36,
+      fontWeight: "bold",
+      fill: 0x60a5fa,
+    }});
+    dialogContainer.addChild(dialogTitle);
+
+    var dialogText = new PIXI.Text({ text: "", style: {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: 28,
+      fill: 0xffffff,
+      wordWrap: true,
+      wordWrapWidth: 560,
+      lineHeight: 40,
+    }});
+    dialogContainer.addChild(dialogText);
+
+    // ── Action buttons (left-bottom) ─────────────────────────
+    var btnContainer = new PIXI.Container();
+    btnContainer.visible = false;
+    portraitLayer.addChild(btnContainer);
+
+    function createButton(label, icon, x, y, bw, bh, onClick) {
+      var btn = new PIXI.Container();
+      btn.x = x; btn.y = y;
+
+      var bbg = new PIXI.Graphics();
+      bbg.roundRect(0, 0, bw, bh, 12);
+      bbg.fill({ color: 0x1e293b, alpha: 0.95 });
+      bbg.stroke({ color: 0x475569, width: 2 });
+      btn.addChild(bbg);
+
+      var iconText = new PIXI.Text({ text: icon, style: {
+        fontFamily: "system-ui, sans-serif", fontSize: 40, fill: 0xffffff,
+      }});
+      iconText.x = (bw - iconText.width) / 2;
+      iconText.y = 16;
+      btn.addChild(iconText);
+
+      var labelText = new PIXI.Text({ text: label, style: {
+        fontFamily: "system-ui, sans-serif", fontSize: 22, fill: 0x94a3b8,
+      }});
+      labelText.x = (bw - labelText.width) / 2;
+      labelText.y = bh - 38;
+      btn.addChild(labelText);
+
+      btn.eventMode = "static";
+      btn.cursor = "pointer";
+      btn.on("pointerover", function () { bbg.tint = 0x334155; });
+      btn.on("pointerout", function () { bbg.tint = 0xffffff; });
+      btn.on("pointerdown", onClick);
+      return btn;
+    }
+
+    var btnW = 180, btnH = 100, btnGap = 24;
+    var btnX = 60;
+    var btnY = CANVAS_H - 100 - btnH * 2 - btnGap;
+    var portraitOpenSeatId = null;
+
+    var switchBtn = createButton("Switch Agent", "\uD83D\uDD04", btnX, btnY, btnW, btnH, function () {
+      if (portraitOpenSeatId) {
+        var agent = seatAgent[portraitOpenSeatId];
+        if (agent) sdk.selectAgent(agent.id);
+        hidePortrait();
+      }
+    });
+    btnContainer.addChild(switchBtn);
+
+    var chatBtn = createButton("Chat", "\uD83D\uDCAC", btnX, btnY + btnH + btnGap, btnW, btnH, function () {
+      if (portraitOpenSeatId) {
+        var agent = seatAgent[portraitOpenSeatId];
+        if (agent) {
+          if (typeof sdk.openChat === "function") {
+            sdk.openChat(agent.id);
+          } else {
+            sdk.selectAgent(agent.id);
+          }
+        }
+        hidePortrait();
+      }
+    });
+    btnContainer.addChild(chatBtn);
+
+    // ── Portrait show/hide ───────────────────────────────────
+    var portraitOpen = false;
+
+    function drawDialog(seatId) {
+      var agent = seatAgent[seatId];
+      if (!agent) return;
+
+      var dw = 620, dh = 380;
+      var dx = CANVAS_W - dw - 60;
+      var dy = CANVAS_H - dh - 60;
+
+      dialogBg.clear();
+      dialogBg.roundRect(dx, dy, dw, dh, 16);
+      dialogBg.fill({ color: 0x1e293b, alpha: 0.95 });
+      dialogBg.stroke({ color: 0x334155, width: 2 });
+
+      dialogTitle.text = agent.name || "Agent";
+      dialogTitle.x = dx + 24;
+      dialogTitle.y = dy + 20;
+
+      var statusText = agent.status || "idle";
+      var modelText = agent.model || "—";
+      var taskText = agent.currentTask
+        ? (agent.currentTask.title || agent.currentTask || "—")
+        : "—";
+      var activityText = "—";
+      if (agent.recentActivity && agent.recentActivity.length > 0) {
+        var ra = agent.recentActivity[0];
+        activityText = (ra.time ? ra.time + " — " : "") + ra.text;
+      }
+      if (agent.currentToolDetail) {
+        activityText = agent.currentToolDetail;
+      }
+
+      dialogText.text =
+        "Status: " + statusText + "\n" +
+        "Model: " + modelText + "\n" +
+        "Current Task: " + truncate(taskText, 60) + "\n" +
+        "Recent Activity: " + truncate(activityText, 60);
+      dialogText.x = dx + 24;
+      dialogText.y = dy + 68;
+
+      dialogContainer.visible = true;
+      btnContainer.visible = true;
+    }
+
+    function showPortrait(seatId) {
+      var tex = portraits[seatId];
+      if (!tex) return;
+      portraitSprite.texture = tex;
+      portraitSprite.visible = true;
+      backdrop.visible = true;
+      drawDialog(seatId);
+      portraitOpenSeatId = seatId;
+      portraitOpen = true;
+    }
+
+    function hidePortrait() {
+      portraitSprite.visible = false;
+      backdrop.visible = false;
+      dialogContainer.visible = false;
+      btnContainer.visible = false;
+      portraitOpenSeatId = null;
+      portraitOpen = false;
+    }
+
+    backdrop.on("pointerdown", function () { hidePortrait(); });
+
+    // ── Hit areas for click → portrait ───────────────────────
     for (var hi = 0; hi < renderOrder.length; hi++) {
       var hSeat = renderOrder[hi];
       var area = SEAT_HITAREAS[hSeat.id];
@@ -311,7 +508,12 @@ export default {
       (function (seatId) {
         hit.on("pointerdown", function () {
           var agent = seatAgent[seatId];
-          if (agent) sdk.selectAgent(agent.id);
+          if (!agent) return;
+          if (portraitOpen) {
+            hidePortrait();
+          } else {
+            showPortrait(seatId);
+          }
         });
       })(hSeat.id);
       root.addChild(hit);
@@ -345,10 +547,9 @@ export default {
           overlay.sprite.visible = false;
           continue;
         }
-        var status = agent.status || "idle";
-        // Normalize status to known values
-        if (!SPRITE_MAP[status]) status = "idle";
-        var frames = textures[uSeat.id] && textures[uSeat.id][status];
+        var st = agent.status || "idle";
+        if (!SPRITE_MAP[st]) st = "idle";
+        var frames = textures[uSeat.id] && textures[uSeat.id][st];
         if (!frames) { overlay.sprite.visible = false; continue; }
         overlay.sprite.texture = frames[overlay.frameIndex % frames.length];
         overlay.sprite.visible = true;
@@ -364,6 +565,10 @@ export default {
         if (nameTags[id]) nameTags[id].update();
         if (taskBubbles[id]) taskBubbles[id].update();
       }
+      // Update portrait dialog if open
+      if (portraitOpen && portraitOpenSeatId) {
+        drawDialog(portraitOpenSeatId);
+      }
     }
 
     // ── Map sdk.agents to seats ──────────────────────────────
@@ -374,10 +579,8 @@ export default {
       updateAllUI();
     }
 
-    // Initial render
     applyAgents(sdk.agents || []);
 
-    // Listen for agent changes
     sdk.onAgentsChange(function (agents) {
       applyAgents(agents);
     });
@@ -394,9 +597,9 @@ export default {
           if (!overlay || !overlay.sprite.visible) continue;
           var agent = seatAgent[fSeat.id];
           if (!agent) continue;
-          var status = agent.status || "idle";
-          if (!SPRITE_MAP[status]) status = "idle";
-          var frames = textures[fSeat.id] && textures[fSeat.id][status];
+          var st = agent.status || "idle";
+          if (!SPRITE_MAP[st]) st = "idle";
+          var frames = textures[fSeat.id] && textures[fSeat.id][st];
           if (!frames || frames.length < 2) continue;
           overlay.frameIndex = (overlay.frameIndex + 1) % 2;
           overlay.sprite.texture = frames[overlay.frameIndex];
@@ -417,6 +620,7 @@ export default {
     }
 
     canvas.addEventListener("touchstart", function (e) {
+      if (portraitOpen) return; // Don't pan while portrait is open
       if (e.touches.length === 2) {
         e.preventDefault();
         dragging = false;
@@ -435,6 +639,7 @@ export default {
     }, { passive: false });
 
     canvas.addEventListener("touchmove", function (e) {
+      if (portraitOpen) return;
       if (pinching && e.touches.length === 2) {
         e.preventDefault();
         if (pinchStartDist <= 0) return;
@@ -462,6 +667,7 @@ export default {
     });
 
     canvas.addEventListener("wheel", function (e) {
+      if (portraitOpen) return;
       e.preventDefault();
       var factor = e.deltaY > 0 ? 0.9 : 1.1;
       var ns = Math.min(MAX_SCALE, Math.max(MIN_SCALE, userScale * factor));
@@ -475,16 +681,9 @@ export default {
 
     // Store references for resize/destroy
     this._app = app;
-    this._root = root;
-    this._baseScale = baseScale;
-    this._userScale = userScale;
     this._getBaseScale = getBaseScale;
     this._clampPan = clampPan;
     this._applyTransform = applyTransform;
-    this._panX = function () { return panX; };
-    this._setPanX = function (v) { panX = v; };
-    this._panY = function () { return panY; };
-    this._setPanY = function (v) { panY = v; };
     this._setBaseScale = function (v) { baseScale = v; };
   },
 
