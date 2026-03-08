@@ -113,7 +113,11 @@ export function useOfficeStream() {
 
         // Seed agents as idle, or merge with SSE agents if they arrived first
         setAgents((prev) => {
-          if (prev.length === 0) return healthList.map(healthToAgent);
+          console.log("[useOfficeStream] health merge: prev=", prev.length, "healthList=", healthList.length);
+          if (prev.length === 0) {
+            console.log("[useOfficeStream] → seeding", healthList.length, "agents from health");
+            return healthList.map(healthToAgent);
+          }
           // SSE arrived first — merge health agents not yet present
           const existingIds = new Set(prev.map((a) => a.id));
           const merged = [...prev];
@@ -122,6 +126,7 @@ export function useOfficeStream() {
               merged.push(healthToAgent(h));
             }
           }
+          console.log("[useOfficeStream] → merged to", merged.length, "agents");
           return merged;
         });
       } catch (e) {
@@ -168,6 +173,7 @@ export function useOfficeStream() {
               }
             }
 
+            console.log("[useOfficeStream] SSE merge: sse=", sseAgents.length, "prev=", prev.length, "healthRef=", healthAgentsRef.current.size, "→", merged.length);
             return merged;
           });
         }
