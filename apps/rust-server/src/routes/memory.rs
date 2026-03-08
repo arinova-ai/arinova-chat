@@ -62,7 +62,7 @@ async fn create_capsule(
         "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
     )
     .bind(body.conversation_id)
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .fetch_one(&state.db)
     .await
     .unwrap_or(0);
@@ -79,7 +79,7 @@ async fn create_capsule(
     let capsule_count = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM memory_capsules WHERE owner_id = $1",
     )
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .fetch_one(&state.db)
     .await
     .unwrap_or(0);
@@ -96,7 +96,7 @@ async fn create_capsule(
     let daily_count = sqlx::query_scalar::<_, i32>(
         "SELECT extract_count FROM memory_usage_daily WHERE user_id = $1 AND date = CURRENT_DATE",
     )
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await
     .ok()
@@ -126,7 +126,7 @@ async fn create_capsule(
            VALUES ($1, $2, $3, $4, 'ready')
            RETURNING id"#,
     )
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .bind(&name)
     .bind(body.conversation_id)
     .bind(message_count)
@@ -150,7 +150,7 @@ async fn create_capsule(
            VALUES ($1, CURRENT_DATE, 1)
            ON CONFLICT (user_id, date) DO UPDATE SET extract_count = memory_usage_daily.extract_count + 1"#,
     )
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .execute(&state.db)
     .await;
 
@@ -190,7 +190,7 @@ async fn list_capsules(
            WHERE owner_id = $1
            ORDER BY created_at DESC"#,
     )
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
@@ -221,8 +221,8 @@ async fn delete_capsule(
     user: AuthUser,
     Path(capsule_id): Path<Uuid>,
 ) -> Response {
-    // Verify ownership
-    let owner = sqlx::query_scalar::<_, Uuid>(
+    // Verify ownership (owner_id is TEXT)
+    let owner = sqlx::query_scalar::<_, String>(
         "SELECT owner_id FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
@@ -230,7 +230,7 @@ async fn delete_capsule(
     .await;
 
     match owner {
-        Ok(Some(oid)) if oid.to_string() == user.id => {}
+        Ok(Some(ref oid)) if oid == &user.id => {}
         Ok(Some(_)) => {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
         }
@@ -284,7 +284,7 @@ async fn list_grants_for_agent(
            ORDER BY g.created_at DESC"#,
     )
     .bind(query.agent_id)
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
@@ -318,8 +318,8 @@ async fn grant_agent_access(
     Path(capsule_id): Path<Uuid>,
     Json(body): Json<GrantBody>,
 ) -> Response {
-    // Verify capsule ownership
-    let owner = sqlx::query_scalar::<_, Uuid>(
+    // Verify capsule ownership (owner_id is TEXT)
+    let owner = sqlx::query_scalar::<_, String>(
         "SELECT owner_id FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
@@ -327,7 +327,7 @@ async fn grant_agent_access(
     .await;
 
     match owner {
-        Ok(Some(oid)) if oid.to_string() == user.id => {}
+        Ok(Some(ref oid)) if oid == &user.id => {}
         Ok(Some(_)) => {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
         }
@@ -347,7 +347,7 @@ async fn grant_agent_access(
     )
     .bind(capsule_id)
     .bind(body.agent_id)
-    .bind(Uuid::parse_str(&user.id).unwrap_or_default())
+    .bind(&user.id)
     .execute(&state.db)
     .await
     {
@@ -371,8 +371,8 @@ async fn revoke_agent_access(
     user: AuthUser,
     Path((capsule_id, agent_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    // Verify capsule ownership
-    let owner = sqlx::query_scalar::<_, Uuid>(
+    // Verify capsule ownership (owner_id is TEXT)
+    let owner = sqlx::query_scalar::<_, String>(
         "SELECT owner_id FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
@@ -380,7 +380,7 @@ async fn revoke_agent_access(
     .await;
 
     match owner {
-        Ok(Some(oid)) if oid.to_string() == user.id => {}
+        Ok(Some(ref oid)) if oid == &user.id => {}
         Ok(Some(_)) => {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
         }
