@@ -1284,7 +1284,10 @@ html,body{{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:
 <div id="container"></div>
 <script>window.__ARINOVA_THEME_ID__="{theme_id}";window.__ARINOVA_ASSETS_BASE__="{assets_base}/{theme_id}";</script>
 <script src="/sdk/bridge.js"></script>
-<script type="module" src="{assets_base}/{theme_id}/theme.js?v={cache_bust}"></script>
+<script type="module">
+import theme from "{assets_base}/{theme_id}/theme.js?v={cache_bust}";
+if (window.__ARINOVA_REGISTER_THEME__) window.__ARINOVA_REGISTER_THEME__(theme);
+</script>
 </body>
 </html>"#,
         theme_id = theme_id,
