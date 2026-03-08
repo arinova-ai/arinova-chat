@@ -231,6 +231,8 @@ struct ManifestMeta {
     layers: Option<Vec<Value>>,
     #[serde(default)]
     characters: Option<Value>,
+    #[serde(default, rename = "maxAgents")]
+    max_agents: Option<i32>,
 }
 
 #[derive(Deserialize, Default)]
@@ -592,15 +594,18 @@ async fn upload_theme(
     let author_name = meta.author.as_ref().map(|a| a.name.as_str()).unwrap_or("").to_string();
     let license = meta.license.as_deref().unwrap_or("standard").to_string();
     let max_agents: i32 = meta
-        .zones
-        .as_ref()
-        .map(|zones| {
-            zones
-                .iter()
-                .filter_map(|z| z.get("capacity").and_then(|c| c.as_i64()))
-                .sum::<i64>() as i32
+        .max_agents
+        .unwrap_or_else(|| {
+            meta.zones
+                .as_ref()
+                .map(|zones| {
+                    zones
+                        .iter()
+                        .filter_map(|z| z.get("capacity").and_then(|c| c.as_i64()))
+                        .sum::<i64>() as i32
+                })
+                .unwrap_or(1)
         })
-        .unwrap_or(1)
         .max(1);
 
     if let Err(e) = sqlx::query(

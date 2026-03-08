@@ -105,35 +105,23 @@ export function useOfficeStream() {
     // 1. Fetch all agents from health endpoint
     api<AgentHealthItem[]>("/api/agents/health", { silent: true })
       .then((healthList) => {
-        if (cancelled) {
-          console.log("[office] health fetched but cancelled, skipping");
-          return;
-        }
+        if (cancelled) return;
         for (const h of healthList) {
           healthMap.set(h.agentId, h);
         }
-        console.log("[office] health seeded:", healthList.length, "agents, cancelled:", cancelled);
-        // Seed initial agent list
         setAgents(healthList.map(healthToAgent));
       })
-      .catch((err) => {
-        console.warn("[office] health fetch FAILED:", err);
+      .catch(() => {
+        // Health fetch failed — SSE will still work below
       })
       .finally(() => {
-        if (cancelled) {
-          console.log("[office] finally: cancelled, skipping SSE connect");
-          return;
-        }
-        console.log("[office] connecting SSE, healthMap size:", healthMap.size);
+        if (cancelled) return;
 
         // 2. Connect SSE after health data is available
         const es = new EventSource(OFFICE_STREAM_URL, { withCredentials: true });
         esRef.current = es;
 
-        es.onopen = () => {
-          console.log("[office] SSE connected");
-          setConnected(true);
-        };
+        es.onopen = () => setConnected(true);
 
         es.onmessage = (event) => {
           try {
@@ -152,17 +140,13 @@ export function useOfficeStream() {
               }
             }
 
-            console.log("[office] SSE update: sse=" + sseAgents.length + " healthMap=" + healthMap.size + " → " + merged.length);
             setAgents(merged);
           } catch {
             // Ignore malformed events
           }
         };
 
-        es.onerror = () => {
-          console.log("[office] SSE error/disconnect");
-          setConnected(false);
-        };
+        es.onerror = () => setConnected(false);
       });
 
     return () => {
