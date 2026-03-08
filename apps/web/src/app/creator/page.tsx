@@ -35,6 +35,9 @@ import {
   Copy,
   Check,
   Trash2,
+  MoreVertical,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -444,6 +447,10 @@ interface ThemeListing {
   id: string;
   name: string;
   version: string;
+  description: string;
+  renderer: string;
+  price: number;
+  published: boolean;
 }
 
 function CreateThemeDialog({
@@ -593,10 +600,13 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
   const [themes, setThemes] = useState<ThemeListing[]>([]);
   const [tLoading, setTLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const fetchThemes = useCallback(() => {
     setTLoading(true);
-    api<{ themes: ThemeListing[] }>("/api/themes")
+    api<{ themes: ThemeListing[] }>("/api/creator/themes")
       .then((data) => setThemes(data.themes))
       .catch(() => {})
       .finally(() => setTLoading(false));
@@ -605,6 +615,29 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
   useEffect(() => {
     fetchThemes();
   }, [fetchThemes]);
+
+  const handleDelete = async (themeId: string) => {
+    setActionLoading(themeId);
+    try {
+      await api(`/api/themes/${themeId}`, { method: "DELETE" });
+      setDeleteConfirm(null);
+      fetchThemes();
+    } catch { /* auto-handled */ }
+    setActionLoading(null);
+  };
+
+  const handleTogglePublish = async (theme: ThemeListing) => {
+    setActionLoading(theme.id);
+    try {
+      await api(`/api/themes/${theme.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: theme.published ? "draft" : "published" }),
+      });
+      fetchThemes();
+    } catch { /* auto-handled */ }
+    setActionLoading(null);
+    setMenuOpen(null);
+  };
 
   return (
     <div className="space-y-4">
@@ -637,11 +670,84 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
                 <Palette className="h-5 w-5 text-brand-text" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold truncate">{theme.name}</h3>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">v{theme.version}</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold truncate">{theme.name}</h3>
+                  <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">
+                    {theme.renderer}
+                  </span>
+                  {theme.published ? (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-500/15 text-green-500">
+                      Published
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-yellow-500/15 text-yellow-500">
+                      Draft
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
+                  v{theme.version}
+                  {theme.description && <> · {theme.description}</>}
+                  {theme.price > 0 && <> · {theme.price} coins</>}
+                </p>
+              </div>
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setMenuOpen(menuOpen === theme.id ? null : theme.id)}
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+                {menuOpen === theme.id && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(null)} />
+                    <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border bg-card shadow-lg py-1">
+                      <button
+                        onClick={() => handleTogglePublish(theme)}
+                        disabled={actionLoading === theme.id}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      >
+                        {theme.published ? (
+                          <><EyeOff className="h-4 w-4" /> Unpublish</>
+                        ) : (
+                          <><Eye className="h-4 w-4" /> Publish</>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => { setMenuOpen(null); setDeleteConfirm(theme.id); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-muted transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-2xl border border-border bg-card p-6 space-y-4">
+            <h3 className="text-lg font-semibold">Delete Theme</h3>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this theme? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                disabled={actionLoading === deleteConfirm}
+                onClick={() => handleDelete(deleteConfirm)}
+              >
+                {actionLoading === deleteConfirm ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

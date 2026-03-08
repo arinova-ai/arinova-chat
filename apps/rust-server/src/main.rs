@@ -116,6 +116,7 @@ async fn main() {
             author_id TEXT NOT NULL DEFAULT '',
             author_name TEXT NOT NULL DEFAULT '',
             license TEXT NOT NULL DEFAULT 'standard',
+            published BOOLEAN NOT NULL DEFAULT true,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );

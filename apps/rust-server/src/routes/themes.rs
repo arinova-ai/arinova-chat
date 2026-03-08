@@ -28,6 +28,7 @@ struct ThemeRow {
     author_id: String,
     author_name: String,
     license: String,
+    published: bool,
 }
 
 /// Maximum total bundle size: 200 MB
@@ -737,7 +738,7 @@ async fn list_themes(
     };
 
     let rows = sqlx::query_as::<_, ThemeRow>(
-        "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license FROM themes ORDER BY created_at DESC",
+        "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license, published FROM themes WHERE published = true ORDER BY created_at DESC",
     )
     .fetch_all(&state.db)
     .await
@@ -781,7 +782,7 @@ async fn get_theme_detail(
     };
 
     let row = sqlx::query_as::<_, ThemeRow>(
-        "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license FROM themes WHERE id = $1",
+        "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license, published FROM themes WHERE id = $1",
     )
     .bind(&theme_id)
     .fetch_optional(&state.db)
@@ -1082,7 +1083,7 @@ async fn creator_themes(
     user: AuthUser,
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, ThemeRow>(
-        r#"SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license
+        r#"SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license, published
            FROM themes
            WHERE author_id = $1
            ORDER BY created_at DESC"#,
@@ -1105,6 +1106,7 @@ async fn creator_themes(
                 "maxAgents": r.max_agents,
                 "tags": r.tags,
                 "license": r.license,
+                "published": r.published,
             })
         })
         .collect();
@@ -1193,11 +1195,22 @@ async fn update_theme_status(
         }
     }
 
-    // Note: themes table doesn't have a status column yet; this is a placeholder
-    // that succeeds but doesn't persist status. A migration would be needed for full support.
+    let published = body.status == "published";
+    if let Err(e) = sqlx::query(
+        "UPDATE themes SET published = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(published)
+    .bind(&theme_id)
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!("update_theme_status: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+    }
+
     (
         StatusCode::OK,
-        Json(json!({"id": theme_id, "status": body.status})),
+        Json(json!({"id": theme_id, "status": body.status, "published": published})),
     )
 }
 
