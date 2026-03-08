@@ -73,28 +73,11 @@ export function validateManifest(data: unknown): ThemeManifest {
   if (bg.image2x != null) assertSafePath(bg.image2x, "canvas.background.image2x");
   if (bg.mobile != null) assertSafePath(bg.mobile, "canvas.background.mobile");
 
-  // v3 themes use room.model, v4 sprite themes use scenes
+  // v3 themes use room.model
   const room = d.room as Record<string, unknown> | undefined;
   const isV3 = !!room?.model;
-  const isSprite = d.renderer === "sprite";
 
-
-  // v4 (sprite) themes must have scenes with at least a working scene
-  if (isSprite) {
-    const scenes = d.scenes as Record<string, unknown> | undefined;
-    if (!scenes?.working) {
-      throw new Error("Sprite themes require 'scenes' with at least a 'working' scene");
-    }
-    // Path safety: scene background images
-    for (const key of ["working", "idle", "sleeping"] as const) {
-      const scene = scenes[key] as Record<string, unknown> | undefined;
-      if (scene?.background != null) {
-        assertSafePath(scene.background, `scenes.${key}.background`);
-      }
-    }
-  }
-
-  if (!isV3 && !isSprite) {
+  if (!isV3) {
     // Zones: must be non-empty, each zone must have ≥1 seat
     if (!Array.isArray(d.zones)) throw new Error("Manifest missing 'zones' array");
     const zones = d.zones as unknown[];

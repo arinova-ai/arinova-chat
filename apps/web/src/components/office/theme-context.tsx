@@ -6,7 +6,7 @@ import { loadTheme } from "./theme-loader";
 import { fetchThemeRegistry, isKnownTheme, isFreeTheme, type ThemeEntry } from "./theme-registry";
 import { api } from "@/lib/api";
 
-const DEFAULT_THEME_ID = "cozy-studio";
+const DEFAULT_THEME_ID = "cozy-studio-v2";
 const STORAGE_KEY = "arinova-office-theme";
 
 function readSavedThemeId(): string {

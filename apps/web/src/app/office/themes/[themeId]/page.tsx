@@ -46,15 +46,15 @@ interface ThemeDetails {
 }
 
 const THEME_DETAILS: Record<string, ThemeDetails> = {
-  "cozy-studio": {
+  "cozy-studio-v2": {
     author: { name: "Arinova Official", initial: "A" },
     rating: 4.8,
     reviewCount: 23,
     userCount: 142,
-    renderer: "Sprite 2D",
+    renderer: "SDK v2 (iframe)",
     animationCount: 6,
-    roomSize: "Small",
-    version: "v4.0",
+    roomSize: "Small (1 agent)",
+    version: "v5.0",
     reviews: [
       { name: "Mike C.", initial: "M", color: "from-indigo-500 to-indigo-700", date: "2 days ago", stars: 5, text: "Love the warm atmosphere! The illustrated scenes feel so cozy. Animations are smooth and the sleeping scene is a nice touch." },
       { name: "Sarah K.", initial: "S", color: "from-pink-500 to-pink-700", date: "1 week ago", stars: 4, text: "Beautiful design, well worth it. Would love more furniture options in future updates." },

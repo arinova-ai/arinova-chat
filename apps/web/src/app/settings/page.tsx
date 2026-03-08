@@ -878,7 +878,7 @@ function readThemeQuality(): "high" | "performance" {
 function useCurrentThemeRenderer(): string | null {
   const [renderer, setRenderer] = useState<string | null>(null);
   useEffect(() => {
-    const themeId = localStorage.getItem("arinova-office-theme") ?? "cozy-studio";
+    const themeId = localStorage.getItem("arinova-office-theme") ?? "cozy-studio-v2";
     fetch(`/themes/${themeId}/theme.json`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.renderer) setRenderer(data.renderer); })
