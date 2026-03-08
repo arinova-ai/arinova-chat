@@ -1284,11 +1284,15 @@ html,body{{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:
 <div id="container"></div>
 <script>window.__ARINOVA_THEME_ID__="{theme_id}";window.__ARINOVA_ASSETS_BASE__="{assets_base}/{theme_id}";</script>
 <script src="/sdk/bridge.js"></script>
-<script type="module" src="{assets_base}/{theme_id}/theme.js"></script>
+<script type="module" src="{assets_base}/{theme_id}/theme.js?v={cache_bust}"></script>
 </body>
 </html>"#,
         theme_id = theme_id,
         assets_base = assets_base,
+        cache_bust = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() / 3600, // changes every hour
     );
 
     (
