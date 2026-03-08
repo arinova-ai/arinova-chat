@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { BACKEND_URL } from "@/lib/config";
+import { THEME_RUNTIME_URL } from "@/lib/config";
 import type { Agent } from "./types";
 
 export interface ThemeIframeProps {
@@ -103,14 +103,14 @@ export function ThemeIframe({
     readyRef.current = false;
   }, [themeId]);
 
-  const src = `${BACKEND_URL}/runtime/${encodeURIComponent(themeId)}`;
+  const src = `${THEME_RUNTIME_URL}/runtime/${encodeURIComponent(themeId)}`;
 
   return (
     <iframe
       ref={iframeRef}
       key={themeId}
       src={src}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-same-origin"
       title={`Office theme: ${themeId}`}
       className="h-full w-full border-0"
       style={{ display: "block" }}
