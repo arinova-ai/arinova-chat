@@ -28,6 +28,7 @@ import {
   Headset,
   ArrowRightLeft,
   Brain,
+  Phone,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
@@ -37,6 +38,7 @@ import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
+import { useVoiceCallStore } from "@/store/voice-call-store";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -93,6 +95,11 @@ export function ChatHeader({
   const convSearchIndex = useChatStore((s) => s.convSearchIndex);
   const convSearchLoading = useChatStore((s) => s.convSearchLoading);
   const setConvSearchIndex = useChatStore((s) => s.setConvSearchIndex);
+
+  // Voice call
+  const voiceCallState = useVoiceCallStore((s) => s.callState);
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const isInCall = voiceCallState !== "idle";
 
   // Memory Capsule sheet
   const [memoryCapsuleOpen, setMemoryCapsuleOpen] = useState(false);
@@ -316,6 +323,22 @@ export function ChatHeader({
               >
                 <ArrowRightLeft className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{t("community.cs.transferHuman")}</span>
+              </Button>
+            )}
+            {agentId && conversationId && type === "direct" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-8 w-8", isInCall && "text-green-400")}
+                onClick={() => {
+                  if (!isInCall && conversationId && agentId) {
+                    startCall(conversationId, agentId, agentName, agentAvatarUrl ?? null, "native");
+                  }
+                }}
+                disabled={isInCall}
+                title={isInCall ? t("voice.inCall") : t("voice.startCall")}
+              >
+                <Phone className="h-4 w-4" />
               </Button>
             )}
             <Button
