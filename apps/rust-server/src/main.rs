@@ -207,6 +207,34 @@ async fn main() {
         Err(e) => tracing::warn!("Startup migration warning: {}", e),
     }
 
+    // Backfill Backlog + Review columns for existing kanban boards
+    let kanban_backfill = r#"
+        -- Add Backlog column (sort_order 0) to boards that don't have it
+        INSERT INTO kanban_columns (board_id, name, sort_order)
+        SELECT b.id, 'Backlog', 0
+        FROM kanban_boards b
+        WHERE NOT EXISTS (
+            SELECT 1 FROM kanban_columns c WHERE c.board_id = b.id AND c.name = 'Backlog'
+        );
+
+        -- Add Review column (sort_order 3) to boards that don't have it
+        INSERT INTO kanban_columns (board_id, name, sort_order)
+        SELECT b.id, 'Review', 3
+        FROM kanban_boards b
+        WHERE NOT EXISTS (
+            SELECT 1 FROM kanban_columns c WHERE c.board_id = b.id AND c.name = 'Review'
+        );
+
+        -- Update sort_order for existing columns: To Do=1, In Progress=2, Done=4
+        UPDATE kanban_columns SET sort_order = 1 WHERE name = 'To Do' AND sort_order = 0;
+        UPDATE kanban_columns SET sort_order = 2 WHERE name = 'In Progress' AND sort_order = 1;
+        UPDATE kanban_columns SET sort_order = 4 WHERE name = 'Done' AND sort_order = 2;
+    "#;
+    match sqlx::raw_sql(kanban_backfill).execute(&db).await {
+        Ok(_) => tracing::info!("Kanban column backfill completed"),
+        Err(e) => tracing::warn!("Kanban column backfill warning: {}", e),
+    }
+
     // Clean up stuck streaming messages from previous run
     match sqlx::query(
         r#"UPDATE messages SET status = 'error', content = CASE WHEN content = '' THEN 'Stream interrupted by server restart' ELSE content END, updated_at = NOW()

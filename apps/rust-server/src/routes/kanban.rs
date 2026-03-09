@@ -124,7 +124,7 @@ async fn ensure_default_board(db: &sqlx::PgPool, owner_id: &str) -> Result<Uuid,
         return Ok(board_id);
     }
 
-    // Create default board + 3 columns
+    // Create default board + 5 columns
     let board_id = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, 'My Board') RETURNING id",
     )
@@ -135,7 +135,7 @@ async fn ensure_default_board(db: &sqlx::PgPool, owner_id: &str) -> Result<Uuid,
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
     })?;
 
-    for (name, order) in [("To Do", 0), ("In Progress", 1), ("Done", 2)] {
+    for (name, order) in [("Backlog", 0), ("To Do", 1), ("In Progress", 2), ("Review", 3), ("Done", 4)] {
         sqlx::query(
             "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
         )
@@ -528,7 +528,7 @@ async fn agent_create_card(
     };
 
     // Find column by name or default to first column
-    let column_name = body.column_name.as_deref().unwrap_or("To Do");
+    let column_name = body.column_name.as_deref().unwrap_or("Backlog");
     let column_id = sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM kanban_columns WHERE board_id = $1 AND name = $2 LIMIT 1",
     )
