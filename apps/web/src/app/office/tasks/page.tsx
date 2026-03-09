@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, GripVertical, Trash2, X } from "lucide-react";
+import { Plus, GripVertical, Trash2, X, Clock } from "lucide-react";
 import { api } from "@/lib/api";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import {
@@ -50,6 +50,7 @@ interface KanbanCard {
   sortOrder: number;
   createdBy: string | null;
   createdAt: string | null;
+  updatedAt?: string | null;
 }
 
 interface CardAgent {
@@ -83,6 +84,16 @@ function PriorityBadge({ priority }: { priority: string | null }) {
   );
 }
 
+function formatTime(iso: string | null | undefined) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return iso;
+  }
+}
+
 // ── Sortable Card ─────────────────────────────────────────────
 
 function SortableCard({
@@ -90,11 +101,13 @@ function SortableCard({
   agents,
   agentEmojis,
   onDelete,
+  onSelect,
 }: {
   card: KanbanCard;
   agents: string[];
   agentEmojis: Map<string, string>;
   onDelete: (id: string) => void;
+  onSelect: (card: KanbanCard) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -111,7 +124,8 @@ function SortableCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative rounded-lg border border-border bg-card p-3 shadow-sm hover:border-border/80 transition-colors"
+      className="group relative rounded-lg border border-border bg-card p-3 shadow-sm hover:border-border/80 transition-colors cursor-pointer"
+      onClick={() => onSelect(card)}
     >
       <div className="flex items-start gap-2">
         <button
@@ -119,6 +133,7 @@ function SortableCard({
           className="mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
           {...attributes}
           {...listeners}
+          onClick={(e) => e.stopPropagation()}
         >
           <GripVertical className="h-4 w-4" />
         </button>
@@ -146,7 +161,7 @@ function SortableCard({
         </div>
         <button
           type="button"
-          onClick={() => onDelete(card.id)}
+          onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
           className="shrink-0 rounded p-1 text-muted-foreground/0 group-hover:text-muted-foreground hover:text-red-400 transition-colors"
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -169,6 +184,211 @@ function CardOverlay({ card }: { card: KanbanCard }) {
   );
 }
 
+// ── Card Detail Sheet ─────────────────────────────────────────
+
+function CardDetailSheet({
+  card,
+  cardAgents,
+  agentEmojis,
+  onClose,
+  onUpdate,
+}: {
+  card: KanbanCard | null;
+  cardAgents: string[];
+  agentEmojis: Map<string, string>;
+  onClose: () => void;
+  onUpdate: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [saving, setSaving] = useState(false);
+
+  // Sync local state when card changes
+  useEffect(() => {
+    if (card) {
+      setTitle(card.title);
+      setDescription(card.description ?? "");
+      setPriority(card.priority ?? "medium");
+      setEditing(false);
+    }
+  }, [card]);
+
+  const handleSave = async () => {
+    if (!card || !title.trim()) return;
+    setSaving(true);
+    try {
+      await api(`/api/kanban/cards/${card.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+          priority,
+        }),
+        silent: true,
+      });
+      setEditing(false);
+      onUpdate();
+    } catch { /* api shows toast */ }
+    setSaving(false);
+  };
+
+  return (
+    <Sheet open={card !== null} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background">
+        <SheetHeader>
+          <SheetTitle>{editing ? "Edit Card" : "Card Details"}</SheetTitle>
+          <SheetDescription className="sr-only">View and edit kanban card details</SheetDescription>
+        </SheetHeader>
+
+        {card && (
+          <div className="mt-4 space-y-4 px-1">
+            {editing ? (
+              <>
+                {/* Editable title */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Title *</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Editable description */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={5}
+                    className="mt-1 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-brand resize-none"
+                  />
+                </div>
+
+                {/* Editable priority */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Priority</label>
+                  <div className="mt-1 flex gap-1.5">
+                    {(["low", "medium", "high", "urgent"] as const).map((p) => {
+                      const cfg = PRIORITY_CONFIG[p];
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPriority(p)}
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                            priority === p
+                              ? `${cfg.bg} ${cfg.color} ring-1 ring-current`
+                              : "bg-muted text-muted-foreground hover:bg-muted/80"
+                          }`}
+                        >
+                          {cfg.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Save / Cancel */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!title.trim() || saving}
+                    className="flex-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTitle(card.title);
+                      setDescription(card.description ?? "");
+                      setPriority(card.priority ?? "medium");
+                      setEditing(false);
+                    }}
+                    className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Read-only title */}
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">{card.title}</h3>
+                </div>
+
+                {/* Priority */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Priority</label>
+                  <div className="mt-1">
+                    <PriorityBadge priority={card.priority} />
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Description</label>
+                  <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">
+                    {card.description || "No description."}
+                  </p>
+                </div>
+
+                {/* Assigned agents */}
+                {cardAgents.length > 0 && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Assigned Agents</label>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {cardAgents.map((aid) => (
+                        <span
+                          key={aid}
+                          className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
+                        >
+                          <span>{agentEmojis.get(aid) ?? "\u{1F916}"}</span>
+                          <span className="truncate max-w-[120px]">{aid}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Timestamps */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    <span>Created: {formatTime(card.createdAt)}</span>
+                  </div>
+                  {card.updatedAt && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>Updated: {formatTime(card.updatedAt)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit button */}
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand/90"
+                >
+                  Edit Card
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Column ────────────────────────────────────────────────────
 
 function KanbanColumnView({
@@ -178,6 +398,7 @@ function KanbanColumnView({
   agentEmojis,
   onAddCard,
   onDeleteCard,
+  onSelectCard,
 }: {
   column: KanbanColumn;
   cards: KanbanCard[];
@@ -185,6 +406,7 @@ function KanbanColumnView({
   agentEmojis: Map<string, string>;
   onAddCard: (columnId: string) => void;
   onDeleteCard: (id: string) => void;
+  onSelectCard: (card: KanbanCard) => void;
 }) {
   return (
     <div className="flex w-72 shrink-0 flex-col rounded-xl border border-border bg-muted/30 md:w-80">
@@ -215,6 +437,7 @@ function KanbanColumnView({
               agents={cardAgentsMap.get(card.id) ?? []}
               agentEmojis={agentEmojis}
               onDelete={onDeleteCard}
+              onSelect={onSelectCard}
             />
           ))}
         </SortableContext>
@@ -368,6 +591,7 @@ export default function OfficeTasksPage() {
   const [loading, setLoading] = useState(true);
   const [addColumnId, setAddColumnId] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<KanbanCard | null>(null);
+  const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
 
   const agentEmojis = useMemo(() => {
     const map = new Map<string, string>();
@@ -586,6 +810,8 @@ export default function OfficeTasksPage() {
   // Delete card
   const handleDeleteCard = useCallback(
     async (cardId: string) => {
+      // Close detail sheet if deleting the viewed card
+      if (selectedCard?.id === cardId) setSelectedCard(null);
       // Optimistic remove
       setBoard((prev) => {
         if (!prev) return prev;
@@ -597,8 +823,28 @@ export default function OfficeTasksPage() {
         fetchBoard(); // rollback
       }
     },
-    [fetchBoard],
+    [fetchBoard, selectedCard],
   );
+
+  // Select card for detail view
+  const handleSelectCard = useCallback((card: KanbanCard) => {
+    setSelectedCard(card);
+  }, []);
+
+  // After editing, refresh and keep detail sheet open with updated data
+  const handleCardUpdate = useCallback(async () => {
+    await fetchBoard();
+  }, [fetchBoard]);
+
+  // Keep selectedCard in sync with board data after refresh
+  useEffect(() => {
+    if (selectedCard && board) {
+      const updated = board.cards.find((c) => c.id === selectedCard.id);
+      if (updated && (updated.title !== selectedCard.title || updated.description !== selectedCard.description || updated.priority !== selectedCard.priority)) {
+        setSelectedCard(updated);
+      }
+    }
+  }, [board, selectedCard]);
 
   if (loading) {
     return (
@@ -638,6 +884,7 @@ export default function OfficeTasksPage() {
               agentEmojis={agentEmojis}
               onAddCard={setAddColumnId}
               onDeleteCard={handleDeleteCard}
+              onSelectCard={handleSelectCard}
             />
           ))}
 
@@ -652,6 +899,14 @@ export default function OfficeTasksPage() {
         onClose={() => setAddColumnId(null)}
         onSubmit={handleCreateCard}
         streamAgents={streamAgentsList}
+      />
+
+      <CardDetailSheet
+        card={selectedCard}
+        cardAgents={selectedCard ? (cardAgentsMap.get(selectedCard.id) ?? []) : []}
+        agentEmojis={agentEmojis}
+        onClose={() => setSelectedCard(null)}
+        onUpdate={handleCardUpdate}
       />
     </>
   );
