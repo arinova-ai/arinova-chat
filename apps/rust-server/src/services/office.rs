@@ -184,16 +184,22 @@ impl OfficeState {
         }
 
         // Patch agent name from AuthAgent if available (resolves UUID-as-name issue)
+        // NOTE: broadcast() must be called OUTSIDE get_mut scope to avoid DashMap deadlock
+        // (get_mut holds a shard write lock; broadcast->snapshot->iter needs to lock all shards)
+        let mut name_changed = false;
         if let Some(ref real_name) = event.agent_name {
             if !event.agent_id.is_empty() {
                 if let Some(mut entry) = self.inner.agents.get_mut(&event.agent_id) {
                     let a = entry.value_mut();
                     if a.name != *real_name {
                         a.name = real_name.clone();
-                        self.broadcast();
+                        name_changed = true;
                     }
                 }
             }
+        }
+        if name_changed {
+            self.broadcast();
         }
     }
 
