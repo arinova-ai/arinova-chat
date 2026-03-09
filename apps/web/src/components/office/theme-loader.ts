@@ -1,6 +1,10 @@
 import type { ThemeManifest } from "./theme-types";
 import { BACKEND_URL } from "@/lib/config";
 
+// ── Constants ──
+
+export const BUILTIN_DEFAULT_THEME_ID = "default";
+
 // ── Theme assets base URL (resolved from backend /api/themes/config) ──
 
 let _themeAssetsBaseUrl: string | null = null;
@@ -23,6 +27,7 @@ async function getThemeAssetsBaseUrl(): Promise<string> {
 
 /** Get the base URL for a specific theme's assets. */
 export async function getThemeBaseUrl(themeId: string): Promise<string> {
+  if (themeId === BUILTIN_DEFAULT_THEME_ID) return `/themes/${BUILTIN_DEFAULT_THEME_ID}`;
   const base = await getThemeAssetsBaseUrl();
   return `${base}/${themeId}`;
 }
@@ -150,18 +155,40 @@ export function validateManifest(data: unknown): ThemeManifest {
 }
 
 /**
- * Load and validate a theme manifest by ID.
- * Fetches via backend API to avoid CORS issues with R2.
- * No in-memory cache — avoids stale version issues on theme updates.
+ * Load the built-in default theme directly from /themes/default/ (no backend API).
+ * This is the ultimate fallback — must never fail due to backend issues.
  */
-export async function loadTheme(themeId: string): Promise<ThemeManifest> {
-  const res = await fetch(`${BACKEND_URL}/api/themes/${encodeURIComponent(themeId)}/manifest`, {
-    credentials: "include",
-  });
+async function loadBuiltinDefaultTheme(): Promise<ThemeManifest> {
+  const res = await fetch(`/themes/${BUILTIN_DEFAULT_THEME_ID}/theme.json`);
   if (!res.ok) {
-    throw new Error(`Failed to load theme "${themeId}": ${res.status} ${res.statusText}`);
+    throw new Error(`Failed to load built-in default theme: ${res.status}`);
   }
-
   const raw = await res.json();
   return validateManifest(raw);
+}
+
+/**
+ * Load and validate a theme manifest by ID.
+ * Fetches via backend API to avoid CORS issues with R2.
+ * Falls back to built-in default theme on any error.
+ */
+export async function loadTheme(themeId: string): Promise<ThemeManifest> {
+  // Built-in default: load directly from static assets, skip backend
+  if (themeId === BUILTIN_DEFAULT_THEME_ID) {
+    return loadBuiltinDefaultTheme();
+  }
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/themes/${encodeURIComponent(themeId)}/manifest`, {
+      credentials: "include",
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to load theme "${themeId}": ${res.status} ${res.statusText}`);
+    }
+    const raw = await res.json();
+    return validateManifest(raw);
+  } catch (err) {
+    console.error(`[theme-loader] Failed to load theme "${themeId}", falling back to default:`, err);
+    return loadBuiltinDefaultTheme();
+  }
 }

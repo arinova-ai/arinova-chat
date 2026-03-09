@@ -3,24 +3,27 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Palette, Check, Lock, Users, Search, Download } from "lucide-react";
+import { Palette, Check, Lock, Users, Search, Download, Trash2, RotateCcw } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { useTheme } from "@/components/office/theme-context";
+import { BUILTIN_DEFAULT_THEME_ID } from "@/components/office/theme-loader";
 import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
 function ThemeCard({ entry }: { entry: ThemeEntry }) {
-  const { themeId, switchTheme, ownedThemes, refreshOwned, isDownloaded, downloadTheme } = useTheme();
+  const { themeId, switchTheme, ownedThemes, refreshOwned, isDownloaded, downloadTheme, uninstallTheme } = useTheme();
   const { t } = useTranslation();
   const [toast, setToast] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [confirmUninstall, setConfirmUninstall] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
   const isOwned = ownedThemes.has(entry.id);
   const isPremium = !isFree;
   const downloaded = isDownloaded(entry.id);
+  const isDefault = entry.id === BUILTIN_DEFAULT_THEME_ID;
 
   useEffect(() => {
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -71,6 +74,11 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
     } finally {
       setPurchasing(false);
     }
+  };
+
+  const handleUninstall = () => {
+    uninstallTheme(entry.id);
+    setConfirmUninstall(false);
   };
 
   // Determine button state
@@ -182,7 +190,40 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
         </div>
 
         {/* Action button */}
-        {renderButton()}
+        <div className="flex gap-2">
+          <div className="flex-1">{renderButton()}</div>
+          {/* Uninstall button — only for downloaded non-default, non-active themes */}
+          {downloaded && !isDefault && !isActive && (
+            <button
+              onClick={() => setConfirmUninstall(true)}
+              className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-muted-foreground transition-colors hover:text-red-400 hover:border-red-400/40"
+              title={t("theme.uninstall")}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Uninstall confirmation */}
+        {confirmUninstall && (
+          <div className="rounded-lg border border-red-400/30 bg-red-400/5 p-3 space-y-2">
+            <p className="text-xs text-red-400">{t("theme.uninstallConfirm")}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleUninstall}
+                className="flex-1 rounded-md bg-red-500 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
+              >
+                {t("theme.uninstallYes")}
+              </button>
+              <button
+                onClick={() => setConfirmUninstall(false)}
+                className="flex-1 rounded-md border border-border py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Success toast */}
         {toast && (
@@ -197,10 +238,11 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
 
 function ThemesGrid() {
   const { t } = useTranslation();
-  const { themes } = useTheme();
+  const { themes, resetToDefault } = useTheme();
   const [search, setSearch] = useState("");
   const [priceFilter, setPriceFilter] = useState<"all" | "free" | "premium">("all");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -233,15 +275,50 @@ function ThemesGrid() {
     });
   };
 
+  const handleReset = () => {
+    resetToDefault();
+    setConfirmReset(false);
+  };
+
   return (
     <div className="flex h-full flex-col min-w-0">
       {/* Header */}
       <div className="shrink-0 border-b border-border px-6 py-5">
-        <PageTitle
-          title={t("theme.title")}
-          subtitle={t("theme.subtitle")}
-          icon={Palette}
-        />
+        <div className="flex items-center justify-between gap-4">
+          <PageTitle
+            title={t("theme.title")}
+            subtitle={t("theme.subtitle")}
+            icon={Palette}
+          />
+          <button
+            onClick={() => setConfirmReset(true)}
+            className="shrink-0 flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:border-foreground/20"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {t("theme.resetDefault")}
+          </button>
+        </div>
+
+        {/* Reset confirmation */}
+        {confirmReset && (
+          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 space-y-2">
+            <p className="text-xs text-amber-400">{t("theme.resetConfirm")}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleReset}
+                className="rounded-md bg-amber-500 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-600"
+              >
+                {t("theme.resetYes")}
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="rounded-md border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Search + filters */}

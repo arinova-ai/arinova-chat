@@ -1,0 +1,13 @@
+{
+  "id": "default",
+  "name": "Arinova Default",
+  "version": "1.0.0",
+  "description": "Built-in safe fallback theme — the Arinova mascot in a clean workspace",
+  "renderer": "iframe",
+  "entry": "theme.js",
+  "preview": "preview.png",
+  "maxAgents": 1,
+  "tags": ["default", "safe", "builtin"],
+  "author": { "name": "Arinova Official", "id": "arinova-official" },
+  "license": "standard"
+}

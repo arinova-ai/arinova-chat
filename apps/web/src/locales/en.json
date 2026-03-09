@@ -748,6 +748,12 @@
   "theme.reviewsCount": "reviews",
   "theme.notFound": "Theme not found.",
   "theme.users": "users",
+  "theme.uninstall": "Uninstall",
+  "theme.uninstallConfirm": "Are you sure you want to uninstall this theme?",
+  "theme.uninstallYes": "Uninstall",
+  "theme.resetDefault": "Reset to Default",
+  "theme.resetConfirm": "Reset to default theme and clear all downloaded themes?",
+  "theme.resetYes": "Reset",
 
   "memoryCapsule.title": "Memory Capsule",
   "memoryCapsule.extractTitle": "Extract Memory",
