@@ -116,6 +116,7 @@ dependencies = [
  "mime",
  "mime_guess",
  "p256 0.13.2",
+ "parking_lot",
  "pgvector",
  "rand 0.8.5",
  "redis",

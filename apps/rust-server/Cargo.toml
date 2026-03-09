@@ -58,6 +58,7 @@ hyper = { version = "1", features = ["client"] }
 
 # Concurrent data structures
 dashmap = "6"
+parking_lot = "0.12"
 
 # Utilities
 futures = "0.3"

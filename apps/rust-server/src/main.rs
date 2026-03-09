@@ -7,7 +7,7 @@ use tracing_subscriber::EnvFilter;
 
 use arinova_server::{config, db, services, routes, ws, AppState};
 
-#[tokio::main]
+#[tokio::main(worker_threads = 4)]
 async fn main() {
     // Load .env
     dotenvy::dotenv().ok();

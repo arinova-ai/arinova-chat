@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -408,7 +409,7 @@ impl OfficeState {
             .unwrap_or_else(|| parent_session_key.clone());
 
         {
-            let mut links = self.inner.subagent_links.lock().unwrap();
+            let mut links = self.inner.subagent_links.lock();
             links.push(SubagentLink {
                 parent_agent_id,
                 child_agent_id: event.agent_id.clone(),
@@ -423,7 +424,7 @@ impl OfficeState {
 
     fn handle_subagent_end(&self, event: &InternalEvent) {
         {
-            let mut links = self.inner.subagent_links.lock().unwrap();
+            let mut links = self.inner.subagent_links.lock();
             links.retain(|l| l.child_session_key != event.session_id);
         }
         self.update_collaboration_status();
@@ -460,7 +461,7 @@ impl OfficeState {
         }
 
         // Build collaboration links
-        let links = self.inner.subagent_links.lock().unwrap();
+        let links = self.inner.subagent_links.lock();
         for link in links.iter() {
             if let Some(mut parent) = self.inner.agents.get_mut(&link.parent_agent_id) {
                 if !parent.collaborating_with.contains(&link.child_agent_id) {
@@ -491,7 +492,7 @@ impl OfficeState {
     }
 
     fn remove_subagent_links(&self, agent_id: &str) {
-        let mut links = self.inner.subagent_links.lock().unwrap();
+        let mut links = self.inner.subagent_links.lock();
         links.retain(|l| l.parent_agent_id != agent_id && l.child_agent_id != agent_id);
     }
 
