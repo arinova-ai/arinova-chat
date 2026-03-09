@@ -341,6 +341,10 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("Server listening on {}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| panic!("Failed to bind TCP listener on {addr}: {e}"));
+    axum::serve(listener, app)
+        .await
+        .unwrap_or_else(|e| panic!("Server error: {e}"));
 }

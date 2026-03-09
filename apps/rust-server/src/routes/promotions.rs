@@ -354,9 +354,15 @@ async fn redeem_code(
     let discount_amount = original_price - final_price;
 
     // Record usage + increment counters in a transaction
-    let mut tx = state.db.begin().await.unwrap();
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("redeem_code begin tx: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
-    sqlx::query(
+    if let Err(e) = sqlx::query(
         r#"INSERT INTO promotion_usages (promotion_id, user_id, promo_code_id, item_type, item_id, original_price, discount_amount, final_price)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
     )
@@ -370,21 +376,33 @@ async fn redeem_code(
     .bind(final_price)
     .execute(&mut *tx)
     .await
-    .unwrap();
+    {
+        tracing::error!("redeem_code insert usage: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
-    sqlx::query("UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = $1")
+    if let Err(e) = sqlx::query("UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = $1")
         .bind(code_id)
         .execute(&mut *tx)
         .await
-        .unwrap();
+    {
+        tracing::error!("redeem_code update promo_codes: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
-    sqlx::query("UPDATE promotions SET current_uses = current_uses + 1 WHERE id = $1")
+    if let Err(e) = sqlx::query("UPDATE promotions SET current_uses = current_uses + 1 WHERE id = $1")
         .bind(promo_id)
         .execute(&mut *tx)
         .await
-        .unwrap();
+    {
+        tracing::error!("redeem_code update promotions: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
-    tx.commit().await.unwrap();
+    if let Err(e) = tx.commit().await {
+        tracing::error!("redeem_code commit: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     Json(json!({
         "promotionId": promo_id,
@@ -562,9 +580,15 @@ async fn creator_create(
         "draft"
     };
 
-    let mut tx = state.db.begin().await.unwrap();
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("creator_create begin tx: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
-    let row: (Uuid,) = sqlx::query_as(
+    let row = match sqlx::query_as::<_, (Uuid,)>(
         r#"INSERT INTO promotions (name, display_name, description, discount_type, discount_value,
                                     scope, category, starts_at, ends_at, max_uses, max_uses_per_user,
                                     creator_id, status)
@@ -586,14 +610,20 @@ async fn creator_create(
     .bind(initial_status)
     .fetch_one(&mut *tx)
     .await
-    .unwrap();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("creator_create insert: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let promo_id = row.0;
 
     // Insert items if scope = 'specific'
     if let Some(items) = body.items {
         for item in &items {
-            sqlx::query(
+            if let Err(e) = sqlx::query(
                 "INSERT INTO promotion_items (promotion_id, item_type, item_id, override_discount_value) VALUES ($1, $2, $3, $4)",
             )
             .bind(promo_id)
@@ -602,11 +632,17 @@ async fn creator_create(
             .bind(item.override_discount_value)
             .execute(&mut *tx)
             .await
-            .unwrap();
+            {
+                tracing::error!("creator_create insert item: {e}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
         }
     }
 
-    tx.commit().await.unwrap();
+    if let Err(e) = tx.commit().await {
+        tracing::error!("creator_create commit: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     (
         StatusCode::CREATED,
@@ -653,9 +689,15 @@ async fn creator_update(
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "invalidEndsAt" }))).into_response(),
     };
 
-    let mut tx = state.db.begin().await.unwrap();
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("creator_update begin tx: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
-    sqlx::query(
+    if let Err(e) = sqlx::query(
         r#"UPDATE promotions SET name=$2, display_name=$3, description=$4, discount_type=$5, discount_value=$6,
                                   scope=$7, category=$8, starts_at=$9, ends_at=$10, max_uses=$11, max_uses_per_user=$12,
                                   updated_at=NOW()
@@ -675,18 +717,24 @@ async fn creator_update(
     .bind(body.max_uses_per_user.unwrap_or(1))
     .execute(&mut *tx)
     .await
-    .unwrap();
+    {
+        tracing::error!("creator_update update: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     // Replace items
-    sqlx::query("DELETE FROM promotion_items WHERE promotion_id = $1")
+    if let Err(e) = sqlx::query("DELETE FROM promotion_items WHERE promotion_id = $1")
         .bind(id)
         .execute(&mut *tx)
         .await
-        .unwrap();
+    {
+        tracing::error!("creator_update delete items: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     if let Some(items) = body.items {
         for item in &items {
-            sqlx::query(
+            if let Err(e) = sqlx::query(
                 "INSERT INTO promotion_items (promotion_id, item_type, item_id, override_discount_value) VALUES ($1, $2, $3, $4)",
             )
             .bind(id)
@@ -695,11 +743,17 @@ async fn creator_update(
             .bind(item.override_discount_value)
             .execute(&mut *tx)
             .await
-            .unwrap();
+            {
+                tracing::error!("creator_update insert item: {e}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
         }
     }
 
-    tx.commit().await.unwrap();
+    if let Err(e) = tx.commit().await {
+        tracing::error!("creator_update commit: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     Json(json!({ "ok": true })).into_response()
 }
@@ -896,9 +950,15 @@ async fn admin_create(
         "draft"
     };
 
-    let mut tx = state.db.begin().await.unwrap();
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("admin_create begin tx: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
-    let row: (Uuid,) = sqlx::query_as(
+    let row = match sqlx::query_as::<_, (Uuid,)>(
         r#"INSERT INTO promotions (name, display_name, description, discount_type, discount_value,
                                     scope, category, starts_at, ends_at, max_uses, max_uses_per_user,
                                     creator_id, status)
@@ -919,13 +979,19 @@ async fn admin_create(
     .bind(initial_status)
     .fetch_one(&mut *tx)
     .await
-    .unwrap();
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("admin_create insert: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let promo_id = row.0;
 
     if let Some(items) = body.items {
         for item in &items {
-            sqlx::query(
+            if let Err(e) = sqlx::query(
                 "INSERT INTO promotion_items (promotion_id, item_type, item_id, override_discount_value) VALUES ($1, $2, $3, $4)",
             )
             .bind(promo_id)
@@ -934,11 +1000,17 @@ async fn admin_create(
             .bind(item.override_discount_value)
             .execute(&mut *tx)
             .await
-            .unwrap();
+            {
+                tracing::error!("admin_create insert item: {e}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
         }
     }
 
-    tx.commit().await.unwrap();
+    if let Err(e) = tx.commit().await {
+        tracing::error!("admin_create commit: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
 
     (
         StatusCode::CREATED,
