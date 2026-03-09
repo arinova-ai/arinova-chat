@@ -202,6 +202,22 @@ async fn main() {
             quiet_hours_start TEXT,
             quiet_hours_end TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS voice_calls (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL,
+            caller_id TEXT NOT NULL,
+            agent_id UUID,
+            session_id VARCHAR(255) UNIQUE NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            started_at TIMESTAMPTZ,
+            ended_at TIMESTAMPTZ,
+            duration_seconds INTEGER,
+            end_reason VARCHAR(100),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_voice_calls_conv ON voice_calls(conversation_id);
+        CREATE INDEX IF NOT EXISTS idx_voice_calls_caller ON voice_calls(caller_id);
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
@@ -365,8 +381,10 @@ async fn main() {
         .merge(routes::kanban::router())
         .merge(routes::activity::router())
         .merge(routes::dashboard::router())
+        .merge(routes::voice::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
+        .merge(ws::voice_handler::router())
         .with_state(state)
         .layer(DefaultBodyLimit::max(config.max_file_size))
         .layer(cors)

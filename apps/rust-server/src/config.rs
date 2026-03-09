@@ -32,6 +32,10 @@ pub struct Config {
     pub anthropic_api_key: Option<String>,
     /// Gemini API key for memory capsule extraction (V2).
     pub gemini_api_key: Option<String>,
+    /// TURN server shared secret for time-limited credentials.
+    pub turn_secret: Option<String>,
+    /// TURN server host (default: turn.arinova.ai).
+    pub turn_host: String,
 }
 
 impl Config {
@@ -77,6 +81,8 @@ impl Config {
             openrouter_api_key: env::var("OPENROUTER_API_KEY").ok().filter(|s| !s.is_empty()),
             anthropic_api_key: env::var("ANTHROPIC_API_KEY").ok().filter(|s| !s.is_empty()),
             gemini_api_key: env::var("GEMINI_API_KEY").ok().filter(|s| !s.is_empty()),
+            turn_secret: env::var("TURN_SECRET").ok().filter(|s| !s.is_empty()),
+            turn_host: env::var("TURN_HOST").unwrap_or_else(|_| "turn.arinova.ai".into()),
         }
     }
 

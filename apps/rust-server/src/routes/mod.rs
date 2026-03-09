@@ -44,6 +44,7 @@ pub mod promotions;
 pub mod kanban;
 pub mod activity;
 pub mod dashboard;
+pub mod voice;
 
 use axum::Router;
 use crate::AppState;
