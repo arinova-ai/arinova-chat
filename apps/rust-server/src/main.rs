@@ -100,6 +100,7 @@ async fn main() {
                 FILTER (WHERE m.sender_user_id IS NOT NULL OR m.sender_agent_id IS NOT NULL)
         FROM messages m
         WHERE m.thread_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM thread_summaries ts WHERE ts.thread_id = m.thread_id)
         GROUP BY m.thread_id
         ON CONFLICT (thread_id) DO NOTHING;
 

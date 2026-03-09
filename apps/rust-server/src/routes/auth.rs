@@ -105,10 +105,11 @@ async fn sign_up_email(
         _ => {}
     }
 
-    // Hash password
-    let password_hash = match hash_password(&body.password) {
-        Ok(h) => h,
-        Err(_) => {
+    // Hash password (CPU-intensive, run off async worker)
+    let pw = body.password.clone();
+    let password_hash = match tokio::task::spawn_blocking(move || hash_password(&pw)).await {
+        Ok(Ok(h)) => h,
+        _ => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({"error": "Failed to hash password"})),
@@ -244,8 +245,13 @@ async fn sign_in_email(
         }
     };
 
-    // Verify password
-    if !verify_password(&body.password, &stored_hash) {
+    // Verify password (CPU-intensive, run off async worker)
+    let pw = body.password.clone();
+    let hash = stored_hash.clone();
+    let pw_valid = tokio::task::spawn_blocking(move || verify_password(&pw, &hash))
+        .await
+        .unwrap_or(false);
+    if !pw_valid {
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({"error": "Invalid email or password"})),

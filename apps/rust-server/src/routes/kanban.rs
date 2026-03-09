@@ -104,6 +104,7 @@ struct AgentCreateCardBody {
     description: Option<String>,
     priority: Option<String>,
     column_name: Option<String>,
+    column_id: Option<Uuid>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -527,36 +528,56 @@ async fn agent_create_card(
         Err(e) => return e,
     };
 
-    // Find column by name or default to first column
-    let column_name = body.column_name.as_deref().unwrap_or("Backlog");
-    let column_id = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM kanban_columns WHERE board_id = $1 AND name = $2 LIMIT 1",
-    )
-    .bind(board_id)
-    .bind(column_name)
-    .fetch_optional(&state.db)
-    .await
-    .ok()
-    .flatten();
+    // Resolve column: prefer column_id, then column_name, then first column
+    let column_id = if let Some(cid) = body.column_id {
+        let valid = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM kanban_columns WHERE id = $1 AND board_id = $2)",
+        )
+        .bind(cid)
+        .bind(board_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
+        if valid { Some(cid) } else { None }
+    } else {
+        None
+    };
 
     let column_id = match column_id {
         Some(id) => id,
         None => {
-            // Fall back to first column
-            match sqlx::query_scalar::<_, Uuid>(
-                "SELECT id FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order LIMIT 1",
+            // Try column_name lookup
+            let column_name = body.column_name.as_deref().unwrap_or("Backlog");
+            let by_name = sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM kanban_columns WHERE board_id = $1 AND name = $2 LIMIT 1",
             )
             .bind(board_id)
+            .bind(column_name)
             .fetch_optional(&state.db)
             .await
-            {
-                Ok(Some(id)) => id,
-                _ => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({ "error": "No columns found" })),
+            .ok()
+            .flatten();
+
+            match by_name {
+                Some(id) => id,
+                None => {
+                    // Fall back to first column
+                    match sqlx::query_scalar::<_, Uuid>(
+                        "SELECT id FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order LIMIT 1",
                     )
-                        .into_response()
+                    .bind(board_id)
+                    .fetch_optional(&state.db)
+                    .await
+                    {
+                        Ok(Some(id)) => id,
+                        _ => {
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(json!({ "error": "No columns found" })),
+                            )
+                                .into_response()
+                        }
+                    }
                 }
             }
         }
