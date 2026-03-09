@@ -169,6 +169,44 @@ async fn handle_voice_message(
                 }
             };
 
+            // Verify caller is a member of the conversation
+            let is_member = sqlx::query_scalar::<_, i64>(
+                r#"SELECT COUNT(*) FROM (
+                    SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+                    UNION ALL
+                    SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+                ) sub"#,
+            )
+            .bind(conv_uuid)
+            .bind(user_id)
+            .fetch_one(db)
+            .await
+            .unwrap_or(0);
+
+            if is_member == 0 {
+                send_event(tx, &json!({"type": "voice_error", "error": "Not a member of this conversation"}));
+                return;
+            }
+
+            // Verify agent belongs to the conversation
+            let agent_in_conv = sqlx::query_scalar::<_, i64>(
+                r#"SELECT COUNT(*) FROM (
+                    SELECT 1 FROM conversations WHERE id = $1 AND agent_id = $2
+                    UNION ALL
+                    SELECT 1 FROM conversation_agent_members WHERE conversation_id = $1 AND agent_id = $2
+                ) sub"#,
+            )
+            .bind(conv_uuid)
+            .bind(agent_uuid)
+            .fetch_one(db)
+            .await
+            .unwrap_or(0);
+
+            if agent_in_conv == 0 {
+                send_event(tx, &json!({"type": "voice_error", "error": "Agent is not in this conversation"}));
+                return;
+            }
+
             // Create session ID
             let session_id = Uuid::new_v4().to_string();
 
@@ -232,6 +270,23 @@ async fn handle_voice_message(
                 return;
             }
 
+            // Verify the user is the caller of this call
+            let caller_id = match sqlx::query_scalar::<_, String>(
+                "SELECT caller_id FROM voice_calls WHERE session_id = $1",
+            )
+            .bind(session_id)
+            .fetch_optional(db)
+            .await
+            {
+                Ok(Some(cid)) => cid,
+                _ => return,
+            };
+
+            if caller_id != user_id {
+                send_event(tx, &json!({"type": "voice_error", "error": "Not authorized for this call"}));
+                return;
+            }
+
             // Update status to connected
             let _ = sqlx::query(
                 "UPDATE voice_calls SET status = 'connected', started_at = NOW() WHERE session_id = $1 AND status = 'pending'",
@@ -240,19 +295,11 @@ async fn handle_voice_message(
             .execute(db)
             .await;
 
-            // Look up caller to forward the answer
-            if let Ok(Some(caller_id)) = sqlx::query_scalar::<_, String>(
-                "SELECT caller_id FROM voice_calls WHERE session_id = $1",
-            )
-            .bind(session_id)
-            .fetch_optional(db)
-            .await
-            {
-                ws_state.send_to_user(&caller_id, &json!({
-                    "type": "voice_answer",
-                    "sdp": sdp,
-                }));
-            }
+            // Forward the answer back to the caller
+            ws_state.send_to_user(&caller_id, &json!({
+                "type": "voice_answer",
+                "sdp": sdp,
+            }));
         }
 
         "voice_ice_candidate" => {
@@ -282,8 +329,22 @@ async fn handle_voice_message(
                 .or_else(|| active_session_id.clone());
 
             if let Some(sid) = session_id {
-                end_call(db, ws_state, &sid, user_id, "hangup").await;
-                *active_session_id = None;
+                // Verify the user is the caller before allowing hangup
+                let is_caller = sqlx::query_scalar::<_, String>(
+                    "SELECT caller_id FROM voice_calls WHERE session_id = $1",
+                )
+                .bind(&sid)
+                .fetch_optional(db)
+                .await
+                .ok()
+                .flatten()
+                .map(|cid| cid == user_id)
+                .unwrap_or(false);
+
+                if is_caller {
+                    end_call(db, ws_state, &sid, user_id, "hangup").await;
+                    *active_session_id = None;
+                }
             }
         }
 
@@ -292,6 +353,7 @@ async fn handle_voice_message(
 }
 
 /// Forward an ICE candidate to the other party in the call.
+/// Only the caller (user) is allowed to forward candidates from the user WS.
 async fn forward_ice_candidate(
     db: &PgPool,
     ws_state: &WsState,
@@ -299,36 +361,37 @@ async fn forward_ice_candidate(
     session_id: &str,
     candidate: &Value,
 ) {
-    // Look up the call to find the other party
     #[derive(sqlx::FromRow)]
     struct CallParties {
         caller_id: String,
         agent_id: Option<Uuid>,
     }
 
-    let call = sqlx::query_as::<_, CallParties>(
+    let call = match sqlx::query_as::<_, CallParties>(
         "SELECT caller_id, agent_id FROM voice_calls WHERE session_id = $1",
     )
     .bind(session_id)
     .fetch_optional(db)
-    .await;
+    .await
+    {
+        Ok(Some(c)) => c,
+        _ => return,
+    };
 
-    if let Ok(Some(call)) = call {
-        let ice_event = json!({
-            "type": "voice_ice_candidate",
-            "sessionId": session_id,
-            "candidate": candidate,
-        });
+    // Verify the sender is the caller
+    if call.caller_id != sender_user_id {
+        return;
+    }
 
-        if call.caller_id == sender_user_id {
-            // Sender is the caller → forward to agent
-            if let Some(agent_id) = call.agent_id {
-                ws_state.send_to_agent(&agent_id.to_string(), &ice_event);
-            }
-        } else {
-            // Sender is the agent → forward to caller
-            ws_state.send_to_user(&call.caller_id, &ice_event);
-        }
+    let ice_event = json!({
+        "type": "voice_ice_candidate",
+        "sessionId": session_id,
+        "candidate": candidate,
+    });
+
+    // Caller → forward to agent
+    if let Some(agent_id) = call.agent_id {
+        ws_state.send_to_agent(&agent_id.to_string(), &ice_event);
     }
 }
 

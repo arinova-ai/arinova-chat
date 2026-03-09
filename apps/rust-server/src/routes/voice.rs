@@ -93,9 +93,31 @@ async fn get_ice_servers(State(state): State<AppState>, user: AuthUser) -> Respo
 
 async fn get_call_history(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(conversation_id): Path<Uuid>,
 ) -> Response {
+    // Verify caller is a member of the conversation
+    let is_member = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM (
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+            UNION ALL
+            SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+        ) sub"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if is_member == 0 {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
     #[derive(sqlx::FromRow)]
     struct CallRow {
         id: Uuid,
