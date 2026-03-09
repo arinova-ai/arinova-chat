@@ -407,7 +407,13 @@ export default {
     var switchBtn = createButton("Switch Agent", "\uD83D\uDD04", btnX, btnY, btnW, btnH, function () {
       if (portraitOpenSeatId) {
         var agent = seatAgent[portraitOpenSeatId];
-        if (agent) sdk.selectAgent(agent.id);
+        if (agent) {
+          if (typeof sdk.openChat === "function") {
+            sdk.openChat(agent.id);
+          } else {
+            sdk.selectAgent(agent.id);
+          }
+        }
         hidePortrait();
       }
     });
