@@ -77,7 +77,7 @@ pub async fn send_push_to_user(
 
     // Clean up expired subscriptions
     for id in &expired_ids {
-        sqlx::query(r#"DELETE FROM push_subscriptions WHERE id = $1"#)
+        sqlx::query(r#"DELETE FROM push_subscriptions WHERE id = $1::uuid"#)
             .bind(id)
             .execute(pool)
             .await?;
