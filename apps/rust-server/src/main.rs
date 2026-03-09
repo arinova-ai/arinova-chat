@@ -209,23 +209,29 @@ async fn main() {
 
     // Backfill Backlog + Review columns for existing kanban boards
     let kanban_backfill = r#"
-        -- Add Backlog column (sort_order 0) to boards that don't have it
+        -- Ensure unique constraint on (board_id, name) to prevent duplicates
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_kanban_columns_board_name
+            ON kanban_columns (board_id, name);
+
+        -- Add Backlog column to boards that don't have it
         INSERT INTO kanban_columns (board_id, name, sort_order)
         SELECT b.id, 'Backlog', 0
         FROM kanban_boards b
         WHERE NOT EXISTS (
             SELECT 1 FROM kanban_columns c WHERE c.board_id = b.id AND c.name = 'Backlog'
-        );
+        )
+        ON CONFLICT (board_id, name) DO NOTHING;
 
-        -- Add Review column (sort_order 3) to boards that don't have it
+        -- Add Review column to boards that don't have it
         INSERT INTO kanban_columns (board_id, name, sort_order)
         SELECT b.id, 'Review', 3
         FROM kanban_boards b
         WHERE NOT EXISTS (
             SELECT 1 FROM kanban_columns c WHERE c.board_id = b.id AND c.name = 'Review'
-        );
+        )
+        ON CONFLICT (board_id, name) DO NOTHING;
 
-        -- Update sort_order for existing columns: To Do=1, In Progress=2, Done=4
+        -- Update sort_order for existing columns
         UPDATE kanban_columns SET sort_order = 1 WHERE name = 'To Do' AND sort_order = 0;
         UPDATE kanban_columns SET sort_order = 2 WHERE name = 'In Progress' AND sort_order = 1;
         UPDATE kanban_columns SET sort_order = 4 WHERE name = 'Done' AND sort_order = 2;
