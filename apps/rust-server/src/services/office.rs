@@ -83,6 +83,7 @@ pub struct InternalEvent {
 
 // ── Internal helpers ─────────────────────────────────────────
 
+#[derive(Clone)]
 struct SubagentLink {
     parent_agent_id: String,
     child_agent_id: String,
@@ -455,38 +456,50 @@ impl OfficeState {
     }
 
     fn update_collaboration_status(&self) {
-        // Reset all collaboration arrays
-        for mut entry in self.inner.agents.iter_mut() {
-            entry.value_mut().collaborating_with.clear();
+        // Snapshot links to avoid holding Mutex while accessing DashMap
+        let links_snapshot: Vec<SubagentLink> = {
+            let links = self.inner.subagent_links.lock();
+            links.clone()
+        };
+
+        // Build collaboration map from snapshot (no locks held)
+        let mut collab_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for link in &links_snapshot {
+            collab_map
+                .entry(link.parent_agent_id.clone())
+                .or_default()
+                .push(link.child_agent_id.clone());
+            collab_map
+                .entry(link.child_agent_id.clone())
+                .or_default()
+                .push(link.parent_agent_id.clone());
         }
 
-        // Build collaboration links
-        let links = self.inner.subagent_links.lock();
-        for link in links.iter() {
-            if let Some(mut parent) = self.inner.agents.get_mut(&link.parent_agent_id) {
-                if !parent.collaborating_with.contains(&link.child_agent_id) {
-                    parent.collaborating_with.push(link.child_agent_id.clone());
-                }
-            }
-            if let Some(mut child) = self.inner.agents.get_mut(&link.child_agent_id) {
-                if !child.collaborating_with.contains(&link.parent_agent_id) {
-                    child.collaborating_with.push(link.parent_agent_id.clone());
-                }
-            }
-        }
-        drop(links);
+        // Apply collaboration status — one agent at a time, no overlapping locks
+        let agent_ids: Vec<String> = self
+            .inner
+            .agents
+            .iter()
+            .map(|e| e.key().clone())
+            .collect();
 
-        // Set collaborating status
-        for mut entry in self.inner.agents.iter_mut() {
-            let a = entry.value_mut();
-            if !a.collaborating_with.is_empty() && a.online {
-                a.status = AgentStatus::Collaborating;
-            } else if a.status == AgentStatus::Collaborating {
-                a.status = if a.online {
-                    AgentStatus::Working
-                } else {
-                    AgentStatus::Idle
-                };
+        for agent_id in &agent_ids {
+            if let Some(mut entry) = self.inner.agents.get_mut(agent_id) {
+                let a = entry.value_mut();
+                a.collaborating_with = collab_map
+                    .get(agent_id)
+                    .cloned()
+                    .unwrap_or_default();
+                if !a.collaborating_with.is_empty() && a.online {
+                    a.status = AgentStatus::Collaborating;
+                } else if a.status == AgentStatus::Collaborating {
+                    a.status = if a.online {
+                        AgentStatus::Working
+                    } else {
+                        AgentStatus::Idle
+                    };
+                }
             }
         }
     }
