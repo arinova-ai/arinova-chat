@@ -75,6 +75,9 @@ pub struct InternalEvent {
     pub timestamp: i64,
     #[serde(default)]
     pub data: serde_json::Value,
+    /// Resolved agent name (set by office_ingest from AuthAgent, not from JSON).
+    #[serde(skip)]
+    pub agent_name: Option<String>,
 }
 
 // ── Internal helpers ─────────────────────────────────────────
@@ -177,6 +180,19 @@ impl OfficeState {
             "subagent_end" => self.handle_subagent_end(&event),
             _ => {}
         }
+
+        // Patch agent name from AuthAgent if available (resolves UUID-as-name issue)
+        if let Some(ref real_name) = event.agent_name {
+            if !event.agent_id.is_empty() {
+                if let Some(mut entry) = self.inner.agents.get_mut(&event.agent_id) {
+                    let a = entry.value_mut();
+                    if a.name != *real_name {
+                        a.name = real_name.clone();
+                        self.broadcast();
+                    }
+                }
+            }
+        }
     }
 
     /// Periodic tick — age out idle/offline agents.
@@ -221,10 +237,12 @@ impl OfficeState {
         let existing = self.inner.agents.get(&event.agent_id);
         let agent = AgentState {
             agent_id: event.agent_id.clone(),
-            name: existing.as_ref().map_or_else(
-                || event.agent_id.clone(),
-                |e| e.name.clone(),
-            ),
+            name: event.agent_name.clone().unwrap_or_else(|| {
+                existing.as_ref().map_or_else(
+                    || event.agent_id.clone(),
+                    |e| e.name.clone(),
+                )
+            }),
             status: AgentStatus::Working,
             last_activity: event.timestamp,
             collaborating_with: existing

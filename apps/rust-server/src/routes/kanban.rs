@@ -470,7 +470,7 @@ async fn unassign_agent(
 /// Find the owner_id for a given agent (via agents table).
 async fn agent_owner_id(db: &sqlx::PgPool, agent_id: Uuid) -> Result<String, Response> {
     let owner = sqlx::query_scalar::<_, String>(
-        "SELECT user_id FROM agents WHERE id = $1",
+        "SELECT owner_id FROM agents WHERE id = $1",
     )
     .bind(agent_id)
     .fetch_optional(db)

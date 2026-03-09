@@ -54,6 +54,7 @@ where
 pub struct AuthAgent {
     pub id: Uuid,
     pub name: String,
+    pub owner_id: String,
 }
 
 impl<S> FromRequestParts<S> for AuthUser
@@ -203,8 +204,8 @@ where
             .ok_or_else(reject)?;
 
         // Look up agent by secret_token
-        let agent = sqlx::query_as::<_, (Uuid, String)>(
-            "SELECT id, name FROM agents WHERE secret_token = $1",
+        let agent = sqlx::query_as::<_, (Uuid, String, String)>(
+            "SELECT id, name, owner_id FROM agents WHERE secret_token = $1",
         )
         .bind(token)
         .fetch_optional(&app_state.db)
@@ -215,6 +216,7 @@ where
         Ok(AuthAgent {
             id: agent.0,
             name: agent.1,
+            owner_id: agent.2,
         })
     }
 }
