@@ -24,9 +24,9 @@ export interface VoiceCapability {
 /** Voice signaling WS events (client → server) */
 export type VoiceWSClientEvent =
   | { type: "voice_offer"; sdp: string; conversationId: string; agentId: string }
-  | { type: "voice_answer"; sdp: string }
-  | { type: "voice_ice_candidate"; candidate: RTCIceCandidateInit }
-  | { type: "voice_hangup" }
+  | { type: "voice_answer"; sdp: string; sessionId: string }
+  | { type: "voice_ice_candidate"; candidate: RTCIceCandidateInit; sessionId?: string }
+  | { type: "voice_hangup"; sessionId?: string }
   | { type: "voice_ping" };
 
 /** Voice signaling WS events (server → client) */

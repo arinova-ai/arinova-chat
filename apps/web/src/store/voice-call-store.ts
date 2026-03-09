@@ -87,6 +87,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
       } else if (event.type === "voice_ice_candidate" && state._rtcClient) {
         state._rtcClient.handleIceCandidate(event.candidate);
       } else if (event.type === "voice_call_start") {
+        state._rtcClient?.setSessionId(event.sessionId);
         set({
           callState: "connected",
           sessionId: event.sessionId,
@@ -136,8 +137,8 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
 
     if (callState === "idle") return;
 
-    // Send hangup signal
-    _rtcClient?.sendSignaling({ type: "voice_hangup" });
+    // Send hangup signal (includes sessionId if available)
+    _rtcClient?.sendHangup();
     _rtcClient?.close();
 
     // Stop browser STT/TTS
