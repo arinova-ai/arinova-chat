@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::auth::middleware::AuthUser;
+use crate::auth::middleware::{AuthAgent, AuthUser};
 use crate::AppState;
 
 /// Max capsules per user
@@ -32,6 +32,8 @@ pub fn router() -> Router<AppState> {
             "/api/memory/capsules/{id}/grants/{agentId}",
             delete(revoke_agent_access),
         )
+        // Agent API
+        .route("/api/agent/capsules", get(agent_query_capsules))
 }
 
 // ---------------------------------------------------------------------------
@@ -511,4 +513,116 @@ async fn revoke_agent_access(
     }
 
     StatusCode::NO_CONTENT.into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/agent/capsules?query=<text>&limit=<n> — Agent queries granted capsules
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct AgentCapsuleQuery {
+    query: String,
+    limit: Option<i32>,
+}
+
+async fn agent_query_capsules(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Query(params): Query<AgentCapsuleQuery>,
+) -> Response {
+    let query = params.query.trim().to_string();
+    if query.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "query parameter is required"})),
+        )
+            .into_response();
+    }
+
+    let limit = params.limit.unwrap_or(10).min(20).max(1);
+
+    // Check for OpenAI API key (needed for embedding)
+    let openai_key = match state.config.openai_api_key.as_deref() {
+        Some(key) => key.to_string(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "Memory search is not available (embedding service not configured)"})),
+            )
+                .into_response();
+        }
+    };
+
+    // Get capsule IDs granted to this agent
+    let capsule_ids = sqlx::query_scalar::<_, Uuid>(
+        "SELECT capsule_id FROM memory_capsule_grants WHERE agent_id = $1",
+    )
+    .bind(agent.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    if capsule_ids.is_empty() {
+        return (StatusCode::OK, Json(json!([]))).into_response();
+    }
+
+    // Generate embedding for the query
+    let client = reqwest::Client::new();
+    let query_texts = vec![query.clone()];
+    let embeddings = match crate::services::embedding::generate_embeddings(
+        &client,
+        &openai_key,
+        &query_texts,
+        crate::services::embedding::EMBEDDING_MODEL,
+    )
+    .await
+    {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::error!("agent_query_capsules: embedding failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to generate query embedding"})),
+            )
+                .into_response();
+        }
+    };
+
+    let query_embedding = match embeddings.into_iter().next() {
+        Some(emb) => emb,
+        None => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Empty embedding response"})),
+            )
+                .into_response();
+        }
+    };
+
+    // Run hybrid search
+    match crate::services::memory::hybrid_search(&state.db, &capsule_ids, query_embedding, &query, limit).await {
+        Ok(results) => {
+            let items: Vec<serde_json::Value> = results
+                .into_iter()
+                .map(|r| {
+                    json!({
+                        "content": r.content,
+                        "capsule_name": r.capsule_name,
+                        "capsule_id": r.capsule_id,
+                        "score": (r.score * 100.0).round() / 100.0,
+                        "importance": r.importance,
+                    })
+                })
+                .collect();
+            (StatusCode::OK, Json(json!(items))).into_response()
+        }
+        Err(e) => {
+            tracing::error!("agent_query_capsules: search failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Memory search failed"})),
+            )
+                .into_response()
+        }
+    }
 }

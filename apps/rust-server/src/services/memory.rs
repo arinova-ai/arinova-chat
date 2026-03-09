@@ -376,7 +376,9 @@ fn parse_importance_line(line: &str) -> (String, f64) {
 pub struct MemorySearchResult {
     pub content: String,
     pub capsule_name: String,
+    pub capsule_id: Uuid,
     pub score: f64,
+    pub importance: f64,
 }
 
 /// Hybrid search: vector similarity + BM25 full-text + time decay + importance.
@@ -394,7 +396,7 @@ pub async fn hybrid_search(
 
     let query_vec = Vector::from(query_embedding);
 
-    let rows = sqlx::query_as::<_, (String, String, f64)>(
+    let rows = sqlx::query_as::<_, (String, String, Uuid, f64, f64)>(
         r#"WITH vector_search AS (
                SELECT me.id, me.content, me.capsule_id, me.created_at, me.importance,
                       1.0 - (me.embedding <=> $1::vector) AS vector_score
@@ -412,6 +414,8 @@ pub async fn hybrid_search(
            )
            SELECT v.content,
                   mc.name AS capsule_name,
+                  v.capsule_id,
+                  v.importance,
                   (0.5 * v.vector_score
                    + 0.2 * COALESCE(t.text_score, 0)
                    + 0.15 * EXP(-0.693 * EXTRACT(EPOCH FROM (NOW() - v.created_at)) / (30.0 * 86400.0))
@@ -433,10 +437,12 @@ pub async fn hybrid_search(
 
     Ok(rows
         .into_iter()
-        .map(|(content, capsule_name, score)| MemorySearchResult {
+        .map(|(content, capsule_name, capsule_id, importance, score)| MemorySearchResult {
             content,
             capsule_name,
+            capsule_id,
             score,
+            importance,
         })
         .collect())
 }
