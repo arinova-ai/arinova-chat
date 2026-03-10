@@ -408,11 +408,7 @@ export default {
       if (portraitOpenSeatId) {
         var agent = seatAgent[portraitOpenSeatId];
         if (agent) {
-          if (typeof sdk.openChat === "function") {
-            sdk.openChat(agent.id);
-          } else {
-            sdk.selectAgent(agent.id);
-          }
+          sdk.selectAgent(agent.id);
         }
         hidePortrait();
       }

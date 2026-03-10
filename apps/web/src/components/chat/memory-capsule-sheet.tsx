@@ -14,6 +14,7 @@ import {
   Brain,
   Loader2,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -109,6 +110,19 @@ export function MemoryCapsuleSheet({
       });
       setCapsuleName("");
       await fetchData();
+    } catch (err: unknown) {
+      // 409 = capsule already exists for this conversation — offer refresh
+      const resp = err as { status?: number; existingCapsuleId?: string };
+      if (resp.status === 409 || (typeof err === "object" && err !== null && "existingCapsuleId" in err)) {
+        // Auto-refresh the existing capsule
+        const body = err as { existingCapsuleId?: string };
+        if (body.existingCapsuleId) {
+          try {
+            await api(`/api/memory/capsules/${body.existingCapsuleId}/refresh`, { method: "POST" });
+          } catch { /* toast shown by api */ }
+        }
+        await fetchData();
+      }
     } finally {
       setExtracting(false);
     }
@@ -152,6 +166,13 @@ export function MemoryCapsuleSheet({
       setDeletingId(null);
       setConfirmDeleteId(null);
     }
+  };
+
+  const handleAbort = async (capsuleId: string) => {
+    try {
+      await api(`/api/memory/capsules/${capsuleId}/abort`, { method: "POST" });
+      await fetchData();
+    } catch { /* api shows toast */ }
   };
 
   return (
@@ -230,7 +251,7 @@ export function MemoryCapsuleSheet({
                   >
                     <Switch
                       checked={granted}
-                      disabled={isToggling || capsule.status !== "ready"}
+                      disabled={isToggling || (capsule.status !== "ready" && capsule.status !== "aborted")}
                       onCheckedChange={() =>
                         handleToggleGrant(capsule.id, granted)
                       }
@@ -243,7 +264,19 @@ export function MemoryCapsuleSheet({
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Loader2 className="h-3 w-3 animate-spin" />
                           <span>{t("memoryCapsule.statusExtracting")}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleAbort(capsule.id)}
+                            className="ml-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
+                          >
+                            <XCircle className="h-3 w-3" />
+                            Abort
+                          </button>
                         </div>
+                      ) : capsule.status === "aborted" ? (
+                        <p className="text-xs text-amber-500">
+                          Aborted
+                        </p>
                       ) : capsule.status === "failed" ? (
                         <p className="text-xs text-destructive">
                           {t("memoryCapsule.statusFailed")}

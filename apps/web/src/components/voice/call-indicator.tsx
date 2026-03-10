@@ -15,6 +15,8 @@ export function CallIndicator() {
   const callConversationId = useVoiceCallStore((s) => s.conversationId);
   const voiceMode = useVoiceCallStore((s) => s.voiceMode);
   const endCall = useVoiceCallStore((s) => s.endCall);
+  const minimized = useVoiceCallStore((s) => s.minimized);
+  const toggleMinimized = useVoiceCallStore((s) => s.toggleMinimized);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
 
   const [elapsed, setElapsed] = useState("00:00");
@@ -30,9 +32,9 @@ export function CallIndicator() {
     return () => clearInterval(interval);
   }, [callState, callStartTime]);
 
-  // Hide when idle or when user is viewing the conversation with the call overlay
+  // Hide when idle, or when viewing the call conversation and NOT minimized
   if (callState === "idle") return null;
-  if (activeConversationId === callConversationId) return null;
+  if (activeConversationId === callConversationId && !minimized) return null;
 
   const isRinging = callState === "ringing" || callState === "requesting_mic";
   const isFallback = voiceMode !== "native";
@@ -40,9 +42,11 @@ export function CallIndicator() {
   return (
     <div
       className={cn(
-        "fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-full px-4 py-2 shadow-lg",
+        "fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-full px-4 py-2 shadow-lg cursor-pointer",
         isRinging ? "bg-amber-600" : "bg-green-600"
       )}
+      onClick={minimized ? toggleMinimized : undefined}
+      title={minimized ? t("voice.expand") : undefined}
     >
       <Phone className="h-4 w-4 text-white" />
       <div className="text-sm text-white">
