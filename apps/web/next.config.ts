@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "uploads.chat.arinova.ai",
       },
+      {
+        protocol: "https",
+        hostname: "**.arinova.ai",
+      },
     ],
   },
 };
