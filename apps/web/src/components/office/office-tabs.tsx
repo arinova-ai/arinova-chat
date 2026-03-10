@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { key: "scene", href: "/office" },
   { key: "tasks", href: "/office/tasks" },
+  { key: "notes", href: "/office/notes" },
   { key: "activity", href: "/office/activity" },
   { key: "dashboard", href: "/office/dashboard" },
 ] as const;

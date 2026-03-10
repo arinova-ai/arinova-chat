@@ -324,6 +324,12 @@
   "office.tab.tasks": "任務",
   "office.tab.activity": "動態",
   "office.tab.dashboard": "儀表板",
+  "office.tab.notes": "我的筆記",
+  "office.notes.title": "我的筆記",
+  "office.notes.empty": "尚無筆記",
+  "office.notes.search": "搜尋筆記...",
+  "office.notes.linkedConversations": "關聯對話",
+  "office.notes.allTags": "所有標籤",
 
   "settings.title": "設定",
   "settings.subtitle": "自訂你的使用體驗",

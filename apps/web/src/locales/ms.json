@@ -322,6 +322,12 @@
   "office.tab.tasks": "Tugas",
   "office.tab.activity": "Aktiviti",
   "office.tab.dashboard": "Papan Pemuka",
+  "office.tab.notes": "Nota Saya",
+  "office.notes.title": "Nota Saya",
+  "office.notes.empty": "Tiada nota lagi",
+  "office.notes.search": "Cari nota...",
+  "office.notes.linkedConversations": "Perbualan Dipautkan",
+  "office.notes.allTags": "Semua Tag",
 
   "settings.title": "Tetapan",
   "settings.subtitle": "Sesuaikan pengalaman anda",

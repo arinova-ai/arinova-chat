@@ -592,6 +592,7 @@ export interface Note {
     capsuleName: string;
   }>;
   suggestedTags?: string[];
+  linkedConversations?: Array<{ conversationId: string; title: string }>;
 }
 
 // ===== Push Notifications =====

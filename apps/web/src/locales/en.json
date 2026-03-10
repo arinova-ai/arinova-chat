@@ -321,6 +321,12 @@
   "office.tab.tasks": "Tasks",
   "office.tab.activity": "Activity",
   "office.tab.dashboard": "Dashboard",
+  "office.tab.notes": "My Notes",
+  "office.notes.title": "My Notes",
+  "office.notes.empty": "No notes yet",
+  "office.notes.search": "Search notes...",
+  "office.notes.linkedConversations": "Linked Conversations",
+  "office.notes.allTags": "All Tags",
 
   "settings.title": "Settings",
   "settings.subtitle": "Customize your experience",

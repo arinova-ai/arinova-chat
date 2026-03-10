@@ -322,6 +322,12 @@
   "office.tab.tasks": "任务",
   "office.tab.activity": "动态",
   "office.tab.dashboard": "仪表板",
+  "office.tab.notes": "我的笔记",
+  "office.notes.title": "我的笔记",
+  "office.notes.empty": "暂无笔记",
+  "office.notes.search": "搜索笔记...",
+  "office.notes.linkedConversations": "关联对话",
+  "office.notes.allTags": "所有标签",
 
   "settings.title": "设置",
   "settings.subtitle": "自定义你的使用体验",

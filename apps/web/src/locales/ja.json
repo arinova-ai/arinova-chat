@@ -322,6 +322,12 @@
   "office.tab.tasks": "タスク",
   "office.tab.activity": "アクティビティ",
   "office.tab.dashboard": "ダッシュボード",
+  "office.tab.notes": "マイノート",
+  "office.notes.title": "マイノート",
+  "office.notes.empty": "ノートがありません",
+  "office.notes.search": "ノートを検索...",
+  "office.notes.linkedConversations": "リンクされた会話",
+  "office.notes.allTags": "すべてのタグ",
 
   "settings.title": "設定",
   "settings.subtitle": "使用体験をカスタマイズ",
