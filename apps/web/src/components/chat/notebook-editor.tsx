@@ -28,6 +28,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SlashCommand } from "./slash-command";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -122,6 +123,7 @@ export function NotebookEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       WikiLinkHighlight,
+      ...(editable ? [SlashCommand] : []),
     ],
     content: markdownToHtml(content),
     editable,
