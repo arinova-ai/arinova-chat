@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, FileText, ChevronRight, Loader2, X, MessageSquare } from "lucide-react";
+import { Search, FileText, ChevronRight, Loader2, X, MessageSquare, Share2, Link, XCircle, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -42,6 +42,8 @@ interface UserNote {
   createdAt: string;
   updatedAt: string;
   linkedConversations?: LinkedConversation[];
+  shareToken?: string | null;
+  isPublic?: boolean;
 }
 
 interface ListResponse {
@@ -97,6 +99,8 @@ export default function MyNotesPage() {
   const [selectedNote, setSelectedNote] = useState<UserNote | null>(null);
   const [editingContent, setEditingContent] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sharingLoading, setSharingLoading] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Debounce search input
@@ -184,6 +188,49 @@ export default function MyNotesPage() {
       setSaving(false);
     }
   }, [selectedNote, editingContent]);
+
+  // Share / unshare handlers
+  const handleShare = useCallback(async () => {
+    if (!selectedNote) return;
+    setSharingLoading(true);
+    try {
+      const data = await api<{ shareToken: string; shareUrl: string }>(
+        `/api/notes/${selectedNote.id}/public-share`,
+        { method: "POST" },
+      );
+      const updated = { ...selectedNote, shareToken: data.shareToken, isPublic: true };
+      setSelectedNote(updated);
+      setNotes((prev) => prev.map((n) => (n.id === selectedNote.id ? updated : n)));
+    } catch {
+      // api handles error toast
+    } finally {
+      setSharingLoading(false);
+    }
+  }, [selectedNote]);
+
+  const handleStopSharing = useCallback(async () => {
+    if (!selectedNote) return;
+    setSharingLoading(true);
+    try {
+      await api(`/api/notes/${selectedNote.id}/public-share`, { method: "DELETE" });
+      const updated = { ...selectedNote, shareToken: null, isPublic: false };
+      setSelectedNote(updated);
+      setNotes((prev) => prev.map((n) => (n.id === selectedNote.id ? updated : n)));
+    } catch {
+      // api handles error toast
+    } finally {
+      setSharingLoading(false);
+    }
+  }, [selectedNote]);
+
+  const handleCopyLink = useCallback(() => {
+    if (!selectedNote?.shareToken) return;
+    const url = `${window.location.origin}/shared/notes/${selectedNote.shareToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  }, [selectedNote]);
 
   return (
     <div className="flex h-full flex-col">
@@ -343,6 +390,60 @@ export default function MyNotesPage() {
                 <> &middot; {t("office.notes.byAgent", { name: selectedNote.agentName })}</>
               )}
             </SheetDescription>
+
+            {/* Share controls */}
+            {selectedNote && (
+              <div className="mt-2 flex items-center gap-2">
+                {selectedNote.shareToken ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className="flex items-center gap-1 rounded-md border border-border/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    >
+                      {linkCopied ? (
+                        <>
+                          <Check className="h-3 w-3 text-green-500" />
+                          {t("office.notes.linkCopied")}
+                        </>
+                      ) : (
+                        <>
+                          <Link className="h-3 w-3" />
+                          {t("office.notes.copyLink")}
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStopSharing}
+                      disabled={sharingLoading}
+                      className="flex items-center gap-1 rounded-md border border-red-500/30 px-2 py-1 text-[11px] text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      {sharingLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <XCircle className="h-3 w-3" />
+                      )}
+                      {t("office.notes.stopSharing")}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    disabled={sharingLoading}
+                    className="flex items-center gap-1 rounded-md border border-border/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-50"
+                  >
+                    {sharingLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Share2 className="h-3 w-3" />
+                    )}
+                    {t("office.notes.share")}
+                  </button>
+                )}
+              </div>
+            )}
           </SheetHeader>
 
           {selectedNote && (

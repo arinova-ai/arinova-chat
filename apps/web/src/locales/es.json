@@ -338,6 +338,11 @@
   "office.notes.minutesAgo": "hace {{count}}m",
   "office.notes.hoursAgo": "hace {{count}}h",
   "office.notes.daysAgo": "hace {{count}}d",
+  "office.notes.share": "Compartir",
+  "office.notes.copyLink": "Copiar enlace",
+  "office.notes.stopSharing": "Dejar de compartir",
+  "office.notes.linkCopied": "Enlace copiado!",
+  "office.notes.publicNote": "Nota compartida",
 
   "settings.title": "Configuracion",
   "settings.subtitle": "Personaliza tu experiencia",

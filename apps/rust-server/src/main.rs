@@ -302,6 +302,9 @@ async fn main() {
 
         ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_start TIMESTAMPTZ;
         ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_end TIMESTAMPTZ;
+
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

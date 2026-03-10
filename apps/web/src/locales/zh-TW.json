@@ -340,6 +340,11 @@
   "office.notes.minutesAgo": "{{count}} 分鐘前",
   "office.notes.hoursAgo": "{{count}} 小時前",
   "office.notes.daysAgo": "{{count}} 天前",
+  "office.notes.share": "分享",
+  "office.notes.copyLink": "複製連結",
+  "office.notes.stopSharing": "停止分享",
+  "office.notes.linkCopied": "連結已複製！",
+  "office.notes.publicNote": "公開筆記",
 
   "settings.title": "設定",
   "settings.subtitle": "自訂你的使用體驗",

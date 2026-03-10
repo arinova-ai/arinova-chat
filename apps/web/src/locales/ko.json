@@ -338,6 +338,11 @@
   "office.notes.minutesAgo": "{{count}}분 전",
   "office.notes.hoursAgo": "{{count}}시간 전",
   "office.notes.daysAgo": "{{count}}일 전",
+  "office.notes.share": "공유",
+  "office.notes.copyLink": "링크 복사",
+  "office.notes.stopSharing": "공유 중지",
+  "office.notes.linkCopied": "링크가 복사되었습니다!",
+  "office.notes.publicNote": "공유 노트",
 
   "settings.title": "설정",
   "settings.subtitle": "사용 환경을 맞춤 설정하세요",

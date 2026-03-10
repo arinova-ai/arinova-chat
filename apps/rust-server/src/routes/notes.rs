@@ -58,6 +58,11 @@ pub fn router() -> Router<AppState> {
             "/api/notes/{noteId}/links/{conversationId}",
             delete(unlink_note_from_conversation),
         )
+        .route(
+            "/api/notes/{noteId}/public-share",
+            post(create_public_share).delete(revoke_public_share),
+        )
+        .route("/api/public/notes/{shareToken}", get(get_public_note))
 }
 
 // ===== Internal types =====
@@ -78,6 +83,8 @@ struct NoteRow {
     updated_at: DateTime<Utc>,
     creator_name: String,
     agent_name: Option<String>,
+    share_token: Option<String>,
+    is_public: bool,
 }
 
 // ===== Helpers =====
@@ -152,6 +159,8 @@ fn note_to_json(n: &NoteRow) -> serde_json::Value {
         "archivedAt": n.archived_at.map(|t| t.to_rfc3339()),
         "createdAt": n.created_at.to_rfc3339(),
         "updatedAt": n.updated_at.to_rfc3339(),
+        "shareToken": n.share_token,
+        "isPublic": n.is_public,
     })
 }
 
@@ -410,7 +419,8 @@ const NOTE_QUERY_BASE: &str = r#"
            n.title, n.content, n.tags, n.archived_at, n.summary,
            n.created_at, n.updated_at,
            COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
-           a.name AS agent_name
+           a.name AS agent_name,
+           n.share_token, COALESCE(n.is_public, false) AS is_public
     FROM conversation_notes n
     LEFT JOIN "user" u ON u.id = n.creator_id
     LEFT JOIN agents a ON a.id = n.agent_id
@@ -2139,6 +2149,168 @@ async fn unlink_note_from_conversation(
 
     match result {
         Ok(_) => Json(json!({"ok": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+// ===== Public sharing =====
+
+/// POST /api/notes/:noteId/public-share — create a public share link
+async fn create_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    // Verify user owns the note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &owner {
+        Ok(Some(oid)) if oid == &user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    // Generate a 32-char hex token
+    let token = Uuid::new_v4().to_string().replace("-", "");
+
+    let result = sqlx::query(
+        "UPDATE conversation_notes SET share_token = $1, is_public = true WHERE id = $2 AND owner_id = $3",
+    )
+    .bind(&token)
+    .bind(note_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({
+            "shareToken": token,
+            "shareUrl": format!("/shared/notes/{}", token),
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// DELETE /api/notes/:noteId/public-share — revoke public sharing
+async fn revoke_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    // Verify user owns the note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &owner {
+        Ok(Some(oid)) if oid == &user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    let result = sqlx::query(
+        "UPDATE conversation_notes SET share_token = NULL, is_public = false WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(note_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"ok": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/public/notes/:shareToken — view a publicly shared note (no auth required)
+async fn get_public_note(
+    State(state): State<AppState>,
+    Path(share_token): Path<String>,
+) -> Response {
+    #[derive(FromRow)]
+    struct PublicNoteRow {
+        title: String,
+        content: String,
+        tags: Vec<String>,
+        creator_type: String,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        creator_name: String,
+    }
+
+    let row = sqlx::query_as::<_, PublicNoteRow>(
+        r#"SELECT n.title, n.content, n.tags, n.creator_type,
+                  n.created_at, n.updated_at,
+                  COALESCE(u.name, 'Unknown') AS creator_name
+           FROM conversation_notes n
+           LEFT JOIN "user" u ON u.id = n.creator_id
+           WHERE n.share_token = $1 AND n.is_public = true"#,
+    )
+    .bind(&share_token)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(n)) => Json(json!({
+            "title": n.title,
+            "content": n.content,
+            "tags": n.tags,
+            "creatorType": n.creator_type,
+            "creatorName": n.creator_name,
+            "createdAt": n.created_at.to_rfc3339(),
+            "updatedAt": n.updated_at.to_rfc3339(),
+        }))
+        .into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Note not found or not publicly shared"})),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),

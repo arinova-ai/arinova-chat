@@ -338,6 +338,11 @@
   "office.notes.minutesAgo": "{{count}}m lalu",
   "office.notes.hoursAgo": "{{count}}j lalu",
   "office.notes.daysAgo": "{{count}}h lalu",
+  "office.notes.share": "Kongsi",
+  "office.notes.copyLink": "Salin Pautan",
+  "office.notes.stopSharing": "Henti Kongsi",
+  "office.notes.linkCopied": "Pautan disalin!",
+  "office.notes.publicNote": "Nota Dikongsi",
 
   "settings.title": "Tetapan",
   "settings.subtitle": "Sesuaikan pengalaman anda",

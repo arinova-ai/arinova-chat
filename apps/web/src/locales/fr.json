@@ -338,6 +338,11 @@
   "office.notes.minutesAgo": "il y a {{count}}m",
   "office.notes.hoursAgo": "il y a {{count}}h",
   "office.notes.daysAgo": "il y a {{count}}j",
+  "office.notes.share": "Partager",
+  "office.notes.copyLink": "Copier le lien",
+  "office.notes.stopSharing": "Arrêter le partage",
+  "office.notes.linkCopied": "Lien copié !",
+  "office.notes.publicNote": "Note partagée",
 
   "settings.title": "Paramètres",
   "settings.subtitle": "Personnalisez votre expérience",

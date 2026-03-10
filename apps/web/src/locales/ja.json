@@ -338,6 +338,11 @@
   "office.notes.minutesAgo": "{{count}}分前",
   "office.notes.hoursAgo": "{{count}}時間前",
   "office.notes.daysAgo": "{{count}}日前",
+  "office.notes.share": "共有",
+  "office.notes.copyLink": "リンクをコピー",
+  "office.notes.stopSharing": "共有を停止",
+  "office.notes.linkCopied": "リンクをコピーしました！",
+  "office.notes.publicNote": "共有ノート",
 
   "settings.title": "設定",
   "settings.subtitle": "使用体験をカスタマイズ",
