@@ -436,6 +436,26 @@ async fn agent_create_note(
                 &state.redis,
             );
 
+            // #urgent tag → notify agents
+            if tags.iter().any(|t| t == "urgent") {
+                state.ws.broadcast_to_members(
+                    &member_ids,
+                    &json!({
+                        "type": "note:urgent",
+                        "conversationId": conv_id.to_string(),
+                        "noteId": note_id.to_string(),
+                        "title": title,
+                        "tags": &tags,
+                    }),
+                    &state.redis,
+                );
+            }
+
+            // #prd tag → auto-create Kanban card in Backlog
+            if tags.iter().any(|t| t == "prd") {
+                crate::routes::notes::auto_create_prd_card(&state.db, &agent.owner_id, note_id, title).await;
+            }
+
             (StatusCode::CREATED, Json(note_json)).into_response()
         }
         Err(e) => (
@@ -589,6 +609,26 @@ async fn agent_update_note(
                         }),
                         &state.redis,
                     );
+
+                    // #urgent tag → notify agents
+                    if note.tags.iter().any(|t| t == "urgent") {
+                        state.ws.broadcast_to_members(
+                            &member_ids,
+                            &json!({
+                                "type": "note:urgent",
+                                "conversationId": conv_id.to_string(),
+                                "noteId": note_id.to_string(),
+                                "title": &note.title,
+                                "tags": &note.tags,
+                            }),
+                            &state.redis,
+                        );
+                    }
+
+                    // #prd tag → auto-create Kanban card in Backlog
+                    if note.tags.iter().any(|t| t == "prd") {
+                        crate::routes::notes::auto_create_prd_card(&state.db, &agent.owner_id, note_id, &note.title).await;
+                    }
 
                     Json(note_json).into_response()
                 }

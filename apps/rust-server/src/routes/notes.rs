@@ -177,6 +177,77 @@ async fn is_moderator(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
     matches!(role.as_deref(), Some("admin") | Some("vice_admin"))
 }
 
+/// Auto-create a Kanban card in Backlog when note gets #prd tag.
+/// Links the card to the note via kanban_card_notes. Skips if a card with same title exists.
+pub async fn auto_create_prd_card(db: &PgPool, owner_id: &str, note_id: Uuid, note_title: &str) {
+    // Find the user's board
+    let board_id = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM kanban_boards WHERE owner_id = $1 LIMIT 1",
+    )
+    .bind(owner_id)
+    .fetch_optional(db)
+    .await;
+
+    let board_id = match board_id {
+        Ok(Some((id,))) => id,
+        _ => return,
+    };
+
+    // Find the Backlog column
+    let backlog_id = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM kanban_columns WHERE board_id = $1 AND name = 'Backlog' LIMIT 1",
+    )
+    .bind(board_id)
+    .fetch_optional(db)
+    .await;
+
+    let backlog_id = match backlog_id {
+        Ok(Some((id,))) => id,
+        _ => return,
+    };
+
+    // Check if a card with same title already exists in this board
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_cards c
+            JOIN kanban_columns col ON col.id = c.column_id
+            WHERE col.board_id = $1 AND c.title = $2 AND c.archived = FALSE
+        )"#,
+    )
+    .bind(board_id)
+    .bind(note_title)
+    .fetch_one(db)
+    .await
+    .unwrap_or(false);
+
+    if exists {
+        return;
+    }
+
+    // Create the card
+    let card_id = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO kanban_cards (column_id, title, priority, sort_order, created_by)
+           VALUES ($1, $2, 'medium', 0, $3)
+           RETURNING id"#,
+    )
+    .bind(backlog_id)
+    .bind(note_title)
+    .bind(owner_id)
+    .fetch_optional(db)
+    .await;
+
+    if let Ok(Some(card_id)) = card_id {
+        // Link the card to the note
+        let _ = sqlx::query(
+            "INSERT INTO kanban_card_notes (card_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(card_id)
+        .bind(note_id)
+        .execute(db)
+        .await;
+    }
+}
+
 /// Parse [[Note Title]] references from content, returning unique titles.
 pub fn parse_note_links(content: &str) -> Vec<String> {
     let mut titles = Vec::new();
@@ -552,6 +623,26 @@ async fn create_note(
                 &state.redis,
             );
 
+            // #urgent tag → notify agents
+            if tags.iter().any(|t| t == "urgent") {
+                state.ws.broadcast_to_members(
+                    &member_ids,
+                    &json!({
+                        "type": "note:urgent",
+                        "conversationId": conv_id.to_string(),
+                        "noteId": note_id.to_string(),
+                        "title": title,
+                        "tags": &tags,
+                    }),
+                    &state.redis,
+                );
+            }
+
+            // #prd tag → auto-create Kanban card in Backlog
+            if tags.iter().any(|t| t == "prd") {
+                auto_create_prd_card(&state.db, &user.id, note_id, title).await;
+            }
+
             (StatusCode::CREATED, Json(note_json)).into_response()
         }
         Err(e) => (
@@ -719,6 +810,26 @@ async fn update_note(
                         }),
                         &state.redis,
                     );
+
+                    // #urgent tag → notify agents
+                    if note.tags.iter().any(|t| t == "urgent") {
+                        state.ws.broadcast_to_members(
+                            &member_ids,
+                            &json!({
+                                "type": "note:urgent",
+                                "conversationId": conv_id.to_string(),
+                                "noteId": note_id.to_string(),
+                                "title": &note.title,
+                                "tags": &note.tags,
+                            }),
+                            &state.redis,
+                        );
+                    }
+
+                    // #prd tag → auto-create Kanban card in Backlog
+                    if note.tags.iter().any(|t| t == "prd") {
+                        auto_create_prd_card(&state.db, &user.id, note_id, &note.title).await;
+                    }
 
                     Json(note_json).into_response()
                 }
