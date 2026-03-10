@@ -98,6 +98,7 @@ interface BotManageDialogProps {
     notificationsEnabled: boolean;
   };
   conversationId?: string;
+  conversationType?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -142,6 +143,7 @@ function VoiceCallButton({
 export function BotManageDialog({
   agent,
   conversationId,
+  conversationType,
   open,
   onOpenChange,
 }: BotManageDialogProps) {
@@ -378,7 +380,7 @@ export function BotManageDialog({
               }}
             />
             <p className="text-xs text-muted-foreground">{t("botManage.clickChangeAvatar")}</p>
-            {conversationId && <VoiceCallButton conversationId={conversationId} agent={agent} />}
+            {conversationId && conversationType === "direct" && <VoiceCallButton conversationId={conversationId} agent={agent} />}
           </div>
 
           {/* Name */}
