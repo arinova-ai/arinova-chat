@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SlashCommand } from "./slash-command";
+import { DragHandle } from "./drag-handle";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -123,13 +124,13 @@ export function NotebookEditor({
       TaskList,
       TaskItem.configure({ nested: true }),
       WikiLinkHighlight,
-      ...(editable ? [SlashCommand] : []),
+      ...(editable ? [SlashCommand, DragHandle] : []),
     ],
     content: markdownToHtml(content),
     editable,
     editorProps: {
       attributes: {
-        class: "notebook-tiptap-content outline-none min-h-[200px] px-3 py-2 text-sm",
+        class: `notebook-tiptap-content outline-none min-h-[200px] py-2 text-sm ${editable ? "pl-7 pr-3" : "px-3"}`,
       },
     },
     onUpdate: ({ editor: e }) => {

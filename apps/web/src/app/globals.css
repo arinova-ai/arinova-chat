@@ -279,6 +279,30 @@
   height: 0;
 }
 
+/* Drag handle for notebook blocks */
+.notebook-drag-handle {
+  position: absolute;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: grab;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  opacity: 0.4;
+  z-index: 50;
+  transition: opacity 0.15s, background 0.15s;
+  user-select: none;
+}
+.notebook-drag-handle:hover {
+  opacity: 1;
+  background: var(--accent);
+}
+.notebook-drag-handle:active {
+  cursor: grabbing;
+}
+
 /* Hidden scrollbar utility */
 .scrollbar-none {
   -ms-overflow-style: none;
