@@ -121,6 +121,11 @@
   "chat.thread.startDiscussion": "Lancez la discussion ci-dessous",
   "chat.thread.placeholder": "Répondre dans le fil...",
 
+  "chat.kanban.title": "Tâches",
+  "chat.kanban.empty": "Pas encore de tâches",
+  "chat.kanban.addCard": "Ajouter une carte",
+  "chat.kanban.newCardPlaceholder": "Titre de la carte...",
+
   "chat.notebook.title": "Notes",
   "chat.notebook.empty": "Aucune note pour le moment",
   "chat.notebook.create": "Creer",
@@ -139,6 +144,7 @@
   "chat.notebook.shareToChat": "Partager",
   "chat.notebook.addTag": "+ Ajouter un tag",
   "chat.notebook.openNote": "Ouvrir la note",
+  "chat.notebook.askAiPlaceholder": "Poser une question sur cette note...",
 
   "chat.kanban.openTask": "Ouvrir la tâche",
 
@@ -392,6 +398,14 @@
   "settings.privacy.noBlocked": "Aucun utilisateur bloqué",
   "settings.privacy.mutedUsers": "Utilisateurs muets",
   "settings.privacy.noMuted": "Aucun utilisateur muet",
+  "settings.nav.ai": "IA",
+  "settings.ai.title": "Paramètres IA",
+  "settings.ai.description": "Configurez vos clés API pour les fonctionnalités IA.",
+  "settings.ai.geminiKey": "Clé API Gemini",
+  "settings.ai.keySet": "Clé API configurée",
+  "settings.ai.removeKey": "Supprimer",
+  "settings.ai.keyHint": "Obtenez votre clé API sur Google AI Studio (aistudio.google.com). Requise pour Ask AI dans les notes.",
+  "settings.ai.needKey": "Configurez votre clé API Gemini dans les Paramètres pour utiliser Ask AI.",
 
   "userProfile.title": "Profil utilisateur",
   "userProfile.joined": "Inscrit le",

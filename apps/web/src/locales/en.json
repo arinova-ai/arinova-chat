@@ -120,6 +120,11 @@
   "chat.thread.startDiscussion": "Start the discussion below",
   "chat.thread.placeholder": "Reply in thread...",
 
+  "chat.kanban.title": "Tasks",
+  "chat.kanban.empty": "No tasks yet",
+  "chat.kanban.addCard": "Add card",
+  "chat.kanban.newCardPlaceholder": "Card title...",
+
   "chat.notebook.title": "Notes",
   "chat.notebook.empty": "No notes yet",
   "chat.notebook.create": "Create",
@@ -138,6 +143,7 @@
   "chat.notebook.shareToChat": "Share",
   "chat.notebook.addTag": "+ Add tag",
   "chat.notebook.openNote": "Open note",
+  "chat.notebook.askAiPlaceholder": "Ask a question about this note...",
 
   "chat.kanban.openTask": "Open task",
 
@@ -391,6 +397,14 @@
   "settings.privacy.noBlocked": "No blocked users",
   "settings.privacy.mutedUsers": "Muted Users",
   "settings.privacy.noMuted": "No muted users",
+  "settings.nav.ai": "AI",
+  "settings.ai.title": "AI Settings",
+  "settings.ai.description": "Configure your AI API keys for AI-powered features.",
+  "settings.ai.geminiKey": "Gemini API Key",
+  "settings.ai.keySet": "API key is set",
+  "settings.ai.removeKey": "Remove",
+  "settings.ai.keyHint": "Get your API key from Google AI Studio (aistudio.google.com). Required for Ask AI in notes.",
+  "settings.ai.needKey": "Set your Gemini API key in Settings to use Ask AI.",
 
   "userProfile.title": "User Profile",
   "userProfile.joined": "Joined",

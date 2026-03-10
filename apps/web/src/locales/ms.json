@@ -121,6 +121,11 @@
   "chat.thread.startDiscussion": "Mulakan perbincangan di bawah",
   "chat.thread.placeholder": "Balas dalam utas...",
 
+  "chat.kanban.title": "Tugasan",
+  "chat.kanban.empty": "Tiada tugasan lagi",
+  "chat.kanban.addCard": "Tambah kad",
+  "chat.kanban.newCardPlaceholder": "Tajuk kad...",
+
   "chat.notebook.title": "Nota",
   "chat.notebook.empty": "Tiada nota lagi",
   "chat.notebook.create": "Cipta",
@@ -139,6 +144,7 @@
   "chat.notebook.shareToChat": "Kongsi",
   "chat.notebook.addTag": "+ Tambah tag",
   "chat.notebook.openNote": "Buka nota",
+  "chat.notebook.askAiPlaceholder": "Tanya soalan tentang nota ini...",
 
   "chat.kanban.openTask": "Buka tugas",
 
@@ -392,6 +398,14 @@
   "settings.privacy.noBlocked": "Tiada pengguna disekat",
   "settings.privacy.mutedUsers": "Pengguna yang disenyapkan",
   "settings.privacy.noMuted": "Tiada pengguna yang disenyapkan",
+  "settings.nav.ai": "AI",
+  "settings.ai.title": "Tetapan AI",
+  "settings.ai.description": "Konfigurasikan kunci API AI anda untuk ciri AI.",
+  "settings.ai.geminiKey": "Kunci API Gemini",
+  "settings.ai.keySet": "Kunci API telah ditetapkan",
+  "settings.ai.removeKey": "Buang",
+  "settings.ai.keyHint": "Dapatkan kunci API anda dari Google AI Studio (aistudio.google.com). Diperlukan untuk Ask AI dalam nota.",
+  "settings.ai.needKey": "Tetapkan kunci API Gemini anda di Tetapan untuk menggunakan Ask AI.",
 
   "userProfile.title": "Profil Pengguna",
   "userProfile.joined": "Menyertai",

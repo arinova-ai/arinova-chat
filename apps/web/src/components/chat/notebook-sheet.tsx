@@ -30,12 +30,15 @@ import {
   Link2,
   Brain,
   Sparkles,
+  Bot,
+  Send,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 import { ShareSheet, type ShareContent } from "./share-sheet";
+import { Input } from "@/components/ui/input";
 
 interface NotebookSheetProps {
   open: boolean;
@@ -262,6 +265,11 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   // Auto tag state
   const [autoTagging, setAutoTagging] = useState(false);
+  // Ask AI state
+  const [askAiOpen, setAskAiOpen] = useState(false);
+  const [askAiQuestion, setAskAiQuestion] = useState("");
+  const [askAiAnswer, setAskAiAnswer] = useState("");
+  const [askAiLoading, setAskAiLoading] = useState(false);
 
   useEffect(() => {
     if (open && conversationId) {
@@ -475,6 +483,23 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     setSuggestedTags([]);
   }, []);
 
+  const handleAskAi = async () => {
+    if (!selectedNote || !askAiQuestion.trim()) return;
+    setAskAiLoading(true);
+    setAskAiAnswer("");
+    try {
+      const res = await api<{ answer: string }>(`/api/conversations/${conversationId}/notes/${selectedNote.id}/ask-ai`, {
+        method: "POST",
+        body: JSON.stringify({ question: askAiQuestion.trim() }),
+      });
+      setAskAiAnswer(res.answer);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setAskAiAnswer(error?.message || "Failed to get answer");
+    }
+    setAskAiLoading(false);
+  };
+
   const handleAddTag = useCallback((tag: string) => {
     const trimmed = tag.trim();
     if (trimmed && !tagsInput.includes(trimmed)) {
@@ -529,7 +554,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
           "fixed z-50 shadow-lg animate-in",
           isMobile
             ? "inset-x-0 bottom-0 rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[80vh] slide-in-from-bottom"
-            : "inset-y-0 right-0 w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col bg-secondary border-l border-border slide-in-from-right"
+            : "inset-y-0 right-0 w-full sm:w-full sm:max-w-none p-0 flex flex-col bg-secondary border-l border-border slide-in-from-right"
         )}
       >
         {isMobile && (
@@ -833,7 +858,35 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 {autoTagging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 Auto Tag
               </Button>
+              <Button variant="ghost" size="sm" className={cn("h-7 text-xs gap-1", askAiOpen && "bg-accent")} onClick={() => setAskAiOpen(!askAiOpen)}>
+                <Bot className="h-3.5 w-3.5" />
+                Ask AI
+              </Button>
             </div>
+            {askAiOpen && (
+              <div className="border-t border-border px-3 py-2 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={askAiQuestion}
+                    onChange={(e) => setAskAiQuestion(e.target.value)}
+                    placeholder={t("chat.notebook.askAiPlaceholder")}
+                    className="flex-1 h-8 text-sm"
+                    onKeyDown={(e) => e.key === "Enter" && handleAskAi()}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8"
+                    onClick={handleAskAi}
+                    disabled={askAiLoading || !askAiQuestion.trim()}
+                  >
+                    {askAiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  </Button>
+                </div>
+                {askAiAnswer && (
+                  <div className="rounded-md bg-muted/50 p-2 text-xs whitespace-pre-wrap">{askAiAnswer}</div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

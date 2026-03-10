@@ -1389,9 +1389,16 @@ async fn ask_ai(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
     }
 
-    let gemini_key = match &state.config.gemini_api_key {
-        Some(k) => k.clone(),
-        None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
+    // Use user's own Gemini API key
+    let gemini_key = match sqlx::query_scalar::<_, Option<String>>(
+        "SELECT gemini_api_key FROM user_settings WHERE user_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(Some(k))) if !k.is_empty() => k,
+        _ => return (StatusCode::PAYMENT_REQUIRED, Json(json!({"error": "Please set your Gemini API key in Settings to use Ask AI."}))).into_response(),
     };
 
     if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {

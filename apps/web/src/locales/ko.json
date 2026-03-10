@@ -121,6 +121,11 @@
   "chat.thread.startDiscussion": "아래에서 토론을 시작하세요",
   "chat.thread.placeholder": "스레드에 답글 작성...",
 
+  "chat.kanban.title": "작업",
+  "chat.kanban.empty": "아직 작업이 없습니다",
+  "chat.kanban.addCard": "카드 추가",
+  "chat.kanban.newCardPlaceholder": "카드 제목...",
+
   "chat.notebook.title": "노트",
   "chat.notebook.empty": "아직 노트가 없습니다",
   "chat.notebook.create": "만들기",
@@ -139,6 +144,7 @@
   "chat.notebook.shareToChat": "공유",
   "chat.notebook.addTag": "+ 태그 추가",
   "chat.notebook.openNote": "노트 열기",
+  "chat.notebook.askAiPlaceholder": "이 노트에 대해 질문...",
 
   "chat.kanban.openTask": "작업 열기",
 
@@ -392,6 +398,14 @@
   "settings.privacy.noBlocked": "차단된 사용자가 없습니다",
   "settings.privacy.mutedUsers": "음소거된 사용자",
   "settings.privacy.noMuted": "음소거된 사용자가 없습니다",
+  "settings.nav.ai": "AI",
+  "settings.ai.title": "AI 설정",
+  "settings.ai.description": "AI 기능을 위한 API 키를 설정합니다.",
+  "settings.ai.geminiKey": "Gemini API 키",
+  "settings.ai.keySet": "API 키 설정됨",
+  "settings.ai.removeKey": "제거",
+  "settings.ai.keyHint": "Google AI Studio (aistudio.google.com)에서 API 키를 받으세요. Ask AI에 필요합니다.",
+  "settings.ai.needKey": "Ask AI를 사용하려면 설정에서 Gemini API 키를 설정하세요.",
 
   "userProfile.title": "사용자 프로필",
   "userProfile.joined": "가입일",

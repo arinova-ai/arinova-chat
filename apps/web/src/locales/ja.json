@@ -121,6 +121,11 @@
   "chat.thread.startDiscussion": "以下からディスカッションを始めましょう",
   "chat.thread.placeholder": "スレッドに返信...",
 
+  "chat.kanban.title": "タスク",
+  "chat.kanban.empty": "タスクはまだありません",
+  "chat.kanban.addCard": "カードを追加",
+  "chat.kanban.newCardPlaceholder": "カードタイトル...",
+
   "chat.notebook.title": "ノート",
   "chat.notebook.empty": "ノートはまだありません",
   "chat.notebook.create": "作成",
@@ -139,6 +144,7 @@
   "chat.notebook.shareToChat": "共有",
   "chat.notebook.addTag": "+ タグを追加",
   "chat.notebook.openNote": "ノートを開く",
+  "chat.notebook.askAiPlaceholder": "このノートについて質問...",
 
   "chat.kanban.openTask": "タスクを開く",
 
@@ -392,6 +398,14 @@
   "settings.privacy.noBlocked": "ブロックしたユーザーはいません",
   "settings.privacy.mutedUsers": "ミュート中のユーザー",
   "settings.privacy.noMuted": "ミュート中のユーザーはいません",
+  "settings.nav.ai": "AI",
+  "settings.ai.title": "AI設定",
+  "settings.ai.description": "AI機能のAPIキーを設定します。",
+  "settings.ai.geminiKey": "Gemini APIキー",
+  "settings.ai.keySet": "APIキー設定済み",
+  "settings.ai.removeKey": "削除",
+  "settings.ai.keyHint": "Google AI Studio (aistudio.google.com) からAPIキーを取得してください。ノートのAsk AI機能に必要です。",
+  "settings.ai.needKey": "Ask AIを使用するには、設定でGemini APIキーを設定してください。",
 
   "userProfile.title": "ユーザー情報",
   "userProfile.joined": "参加日",

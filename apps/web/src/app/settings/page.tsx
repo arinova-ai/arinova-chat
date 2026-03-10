@@ -44,7 +44,7 @@ import { isSoundEnabled, setSoundEnabled } from "@/lib/sounds";
 
 // ───── Types ─────
 
-type SettingsSection = "profile" | "language" | "notifications" | "privacy";
+type SettingsSection = "profile" | "language" | "notifications" | "privacy" | "ai";
 
 interface NotificationPrefs {
   globalEnabled: boolean;
@@ -76,6 +76,7 @@ const NAV_ITEMS: { id: SettingsSection; labelKey: string; icon: React.ReactNode 
   { id: "language", labelKey: "settings.nav.language", icon: <Languages className="h-4 w-4" /> },
   { id: "notifications", labelKey: "settings.nav.notifications", icon: <Bell className="h-4 w-4" /> },
   { id: "privacy", labelKey: "settings.nav.privacy", icon: <ShieldBan className="h-4 w-4" /> },
+  { id: "ai", labelKey: "settings.nav.ai", icon: <Zap className="h-4 w-4" /> },
 ];
 
 // ───── Avatar Crop Dialog ─────
@@ -1371,6 +1372,94 @@ function PrivacyPanel() {
   );
 }
 
+// ───── AI Panel ─────
+
+function AiPanel() {
+  const { t } = useTranslation();
+  const [apiKey, setApiKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api<{ hasGeminiKey: boolean; geminiApiKey: string | null }>("/api/user/settings", { silent: true })
+      .then((res) => {
+        setHasKey(res.hasGeminiKey);
+        if (res.geminiApiKey) setApiKey(res.geminiApiKey);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await api<{ hasGeminiKey: boolean }>("/api/user/settings", {
+        method: "PUT",
+        body: JSON.stringify({ geminiApiKey: apiKey }),
+      });
+      setHasKey(res.hasGeminiKey);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClear = async () => {
+    setSaving(true);
+    try {
+      await api("/api/user/settings", {
+        method: "PUT",
+        body: JSON.stringify({ geminiApiKey: null }),
+      });
+      setHasKey(false);
+      setApiKey("");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 p-4">
+      <div>
+        <h3 className="text-lg font-semibold">{t("settings.ai.title")}</h3>
+        <p className="text-sm text-muted-foreground mt-1">{t("settings.ai.description")}</p>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-sm font-medium">{t("settings.ai.geminiKey")}</label>
+        <div className="flex gap-2">
+          <Input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="AIza..."
+            className="flex-1"
+          />
+          <Button onClick={handleSave} disabled={saving || !apiKey.trim()} size="sm">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t("common.save")}
+          </Button>
+        </div>
+        {hasKey && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-green-500">{t("settings.ai.keySet")}</span>
+            <button type="button" onClick={handleClear} className="text-xs text-destructive hover:underline">
+              {t("settings.ai.removeKey")}
+            </button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">{t("settings.ai.keyHint")}</p>
+      </div>
+    </div>
+  );
+}
+
 // ───── Settings Layout ─────
 
 function SettingsContent() {
@@ -1395,6 +1484,7 @@ function SettingsContent() {
       case "language": return <LanguagePanel />;
       case "notifications": return <NotificationPanel />;
       case "privacy": return <PrivacyPanel />;
+      case "ai": return <AiPanel />;
     }
   };
 

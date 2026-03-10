@@ -123,6 +123,11 @@
   "chat.thread.startDiscussion": "在下方開始討論",
   "chat.thread.placeholder": "在討論串中回覆...",
 
+  "chat.kanban.title": "任務",
+  "chat.kanban.empty": "尚無任務",
+  "chat.kanban.addCard": "新增卡片",
+  "chat.kanban.newCardPlaceholder": "卡片標題...",
+
   "chat.notebook.title": "筆記",
   "chat.notebook.empty": "尚無筆記",
   "chat.notebook.create": "建立",
@@ -141,6 +146,7 @@
   "chat.notebook.shareToChat": "分享",
   "chat.notebook.addTag": "+ 新增標籤",
   "chat.notebook.openNote": "開啟筆記",
+  "chat.notebook.askAiPlaceholder": "關於此筆記提問...",
 
   "chat.kanban.openTask": "開啟任務",
 
@@ -394,6 +400,14 @@
   "settings.privacy.noBlocked": "沒有已封鎖的使用者",
   "settings.privacy.mutedUsers": "已靜音的使用者",
   "settings.privacy.noMuted": "沒有已靜音的使用者",
+  "settings.nav.ai": "AI",
+  "settings.ai.title": "AI 設定",
+  "settings.ai.description": "設定您的 AI API 金鑰以使用 AI 功能。",
+  "settings.ai.geminiKey": "Gemini API 金鑰",
+  "settings.ai.keySet": "已設定 API 金鑰",
+  "settings.ai.removeKey": "移除",
+  "settings.ai.keyHint": "從 Google AI Studio (aistudio.google.com) 取得您的 API 金鑰。Ask AI 功能需要此金鑰。",
+  "settings.ai.needKey": "請至設定頁面設定您的 Gemini API 金鑰以使用 Ask AI。",
 
   "userProfile.title": "使用者資訊",
   "userProfile.joined": "加入於",

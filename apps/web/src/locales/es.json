@@ -121,6 +121,11 @@
   "chat.thread.startDiscussion": "Inicia la discusion a continuacion",
   "chat.thread.placeholder": "Responder en el hilo...",
 
+  "chat.kanban.title": "Tareas",
+  "chat.kanban.empty": "Sin tareas aún",
+  "chat.kanban.addCard": "Añadir tarjeta",
+  "chat.kanban.newCardPlaceholder": "Título de la tarjeta...",
+
   "chat.notebook.title": "Notas",
   "chat.notebook.empty": "Aun no hay notas",
   "chat.notebook.create": "Crear",
@@ -139,6 +144,7 @@
   "chat.notebook.shareToChat": "Compartir",
   "chat.notebook.addTag": "+ Agregar etiqueta",
   "chat.notebook.openNote": "Abrir nota",
+  "chat.notebook.askAiPlaceholder": "Hacer una pregunta sobre esta nota...",
 
   "chat.kanban.openTask": "Abrir tarea",
 
@@ -392,6 +398,14 @@
   "settings.privacy.noBlocked": "No hay usuarios bloqueados",
   "settings.privacy.mutedUsers": "Usuarios silenciados",
   "settings.privacy.noMuted": "No hay usuarios silenciados",
+  "settings.nav.ai": "IA",
+  "settings.ai.title": "Configuración de IA",
+  "settings.ai.description": "Configura tus claves API para funciones de IA.",
+  "settings.ai.geminiKey": "Clave API de Gemini",
+  "settings.ai.keySet": "Clave API configurada",
+  "settings.ai.removeKey": "Eliminar",
+  "settings.ai.keyHint": "Obtén tu clave API en Google AI Studio (aistudio.google.com). Requerida para Ask AI en notas.",
+  "settings.ai.needKey": "Configura tu clave API de Gemini en Ajustes para usar Ask AI.",
 
   "userProfile.title": "Perfil de Usuario",
   "userProfile.joined": "Se unio",
