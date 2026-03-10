@@ -186,11 +186,16 @@ async fn create_capsule(
         }
     };
 
-    // Spawn background extraction task
+    // Spawn background extraction task with cancellation token
     let db_clone = state.db.clone();
     let config_clone = state.config.clone();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    state.extraction_tokens.insert(capsule_id, cancel.clone());
+    let tokens_ref = state.extraction_tokens.clone();
     tokio::spawn(async move {
-        if let Err(e) = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id).await {
+        let result = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id, cancel).await;
+        tokens_ref.remove(&capsule_id);
+        if let Err(e) = result {
             tracing::error!("Memory extraction failed for capsule {}: {}", capsule_id, e);
         }
     });
@@ -322,24 +327,25 @@ async fn abort_capsule(
     user: AuthUser,
     Path(capsule_id): Path<Uuid>,
 ) -> Response {
-    let row = sqlx::query_as::<_, (String, String)>(
-        "SELECT owner_id, status FROM memory_capsules WHERE id = $1",
+    let row = sqlx::query_as::<_, (String, String, i32)>(
+        "SELECT owner_id, status, entry_count FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
     .fetch_optional(&state.db)
     .await;
 
-    match row {
-        Ok(Some((ref oid, _))) if oid != &user.id => {
+    let entry_count = match row {
+        Ok(Some((ref oid, _, _))) if oid != &user.id => {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
         }
-        Ok(Some((_, ref status))) if status != "extracting" => {
+        Ok(Some((_, ref status, _))) if status != "extracting" => {
             return (
                 StatusCode::CONFLICT,
                 Json(json!({"error": format!("Cannot abort capsule with status '{}'", status)})),
             )
                 .into_response();
         }
+        Ok(Some((_, _, count))) => count,
         Ok(None) => {
             return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
         }
@@ -347,19 +353,28 @@ async fn abort_capsule(
             tracing::error!("abort_capsule: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
         }
-        _ => {}
+    };
+
+    // Cancel the running extraction task
+    if let Some((_, token)) = state.extraction_tokens.remove(&capsule_id) {
+        token.cancel();
     }
 
-    if let Err(e) = sqlx::query("UPDATE memory_capsules SET status = 'aborted' WHERE id = $1")
-        .bind(capsule_id)
-        .execute(&state.db)
-        .await
-    {
-        tracing::error!("abort_capsule: {}", e);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to abort capsule"}))).into_response();
+    if entry_count == 0 {
+        // First-time extraction: delete the entire capsule
+        let _ = sqlx::query("DELETE FROM memory_capsules WHERE id = $1")
+            .bind(capsule_id)
+            .execute(&state.db)
+            .await;
+        (StatusCode::OK, Json(json!({"action": "deleted"}))).into_response()
+    } else {
+        // Refresh extraction: revert to ready, keep existing entries
+        let _ = sqlx::query("UPDATE memory_capsules SET status = 'ready' WHERE id = $1")
+            .bind(capsule_id)
+            .execute(&state.db)
+            .await;
+        (StatusCode::OK, Json(json!({"action": "reverted", "status": "ready"}))).into_response()
     }
-
-    (StatusCode::OK, Json(json!({"status": "aborted"}))).into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -490,7 +505,7 @@ async fn refresh_capsule(
         Ok(Some((ref oid, _))) if oid != &user.id => {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
         }
-        Ok(Some((_, ref status))) if status != "ready" && status != "failed" && status != "aborted" => {
+        Ok(Some((_, ref status))) if status != "ready" && status != "failed" => {
             return (
                 StatusCode::CONFLICT,
                 Json(json!({"error": format!("Capsule is currently {}", status)})),
@@ -532,11 +547,16 @@ async fn refresh_capsule(
         .execute(&state.db)
         .await;
 
-    // Spawn background extraction
+    // Spawn background extraction with cancellation token
     let db_clone = state.db.clone();
     let config_clone = state.config.clone();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    state.extraction_tokens.insert(capsule_id, cancel.clone());
+    let tokens_ref = state.extraction_tokens.clone();
     tokio::spawn(async move {
-        if let Err(e) = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id).await {
+        let result = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id, cancel).await;
+        tokens_ref.remove(&capsule_id);
+        if let Err(e) = result {
             tracing::error!("Memory refresh failed for capsule {}: {}", capsule_id, e);
         }
     });

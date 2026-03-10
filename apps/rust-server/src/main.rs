@@ -260,13 +260,23 @@ async fn main() {
         -- Add note_count column to memory_capsules
         ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS note_count INTEGER NOT NULL DEFAULT 0;
 
-        -- Update memory_capsules status constraint to include 'aborted'
+        -- Update memory_capsules status constraint (remove 'aborted', use real cancellation)
         DO $$ BEGIN
             ALTER TABLE memory_capsules DROP CONSTRAINT IF EXISTS memory_capsules_status_check;
             ALTER TABLE memory_capsules ADD CONSTRAINT memory_capsules_status_check
-                CHECK (status = ANY (ARRAY['pending', 'extracting', 'ready', 'failed', 'aborted']));
+                CHECK (status = ANY (ARRAY['pending', 'extracting', 'ready', 'failed']));
         EXCEPTION WHEN others THEN NULL;
         END $$;
+
+        -- Migrate any existing 'aborted' capsules to 'failed'
+        UPDATE memory_capsules SET status = 'failed' WHERE status = 'aborted';
+
+        -- User settings table for API keys
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id TEXT PRIMARY KEY,
+            gemini_api_key TEXT,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
@@ -358,6 +368,7 @@ async fn main() {
         ws: ws_state,
         s3,
         office: office_state,
+        extraction_tokens: std::sync::Arc::new(dashmap::DashMap::new()),
     };
 
     // Build CORS layer
@@ -430,6 +441,7 @@ async fn main() {
         .merge(routes::kanban::router())
         .merge(routes::activity::router())
         .merge(routes::dashboard::router())
+        .merge(routes::user_settings::router())
         .merge(routes::voice::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())

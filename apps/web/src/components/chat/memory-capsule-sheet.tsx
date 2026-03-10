@@ -285,7 +285,7 @@ export function MemoryCapsuleSheet({
                   >
                     <Switch
                       checked={granted}
-                      disabled={isToggling || (capsule.status !== "ready" && capsule.status !== "aborted")}
+                      disabled={isToggling || capsule.status !== "ready"}
                       onCheckedChange={() =>
                         handleToggleGrant(capsule.id, granted)
                       }
@@ -304,13 +304,9 @@ export function MemoryCapsuleSheet({
                             className="ml-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
                           >
                             <XCircle className="h-3 w-3" />
-                            Abort
+                            Cancel
                           </button>
                         </div>
-                      ) : capsule.status === "aborted" ? (
-                        <p className="text-xs text-amber-500">
-                          Aborted
-                        </p>
                       ) : capsule.status === "failed" ? (
                         <p className="text-xs text-destructive">
                           {t("memoryCapsule.statusFailed")}

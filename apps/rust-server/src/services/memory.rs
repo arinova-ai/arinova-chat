@@ -7,6 +7,8 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::config::Config;
 use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
 use crate::services::push::{send_push_to_user, PushPayload};
@@ -54,6 +56,7 @@ pub async fn extract_capsule(
     db: PgPool,
     config: Config,
     capsule_id: Uuid,
+    cancel: CancellationToken,
 ) -> anyhow::Result<usize> {
     // 1. Fetch capsule metadata
     let (conv_id, owner_id, capsule_name, extracted_through) = sqlx::query_as::<_, (Uuid, String, String, Option<chrono::DateTime<chrono::Utc>>)>(
@@ -73,7 +76,7 @@ pub async fn extract_capsule(
     let extracted_through_naive = extracted_through.map(|dt| dt.naive_utc());
 
     // Run extraction, and on any error mark as 'failed'
-    match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive).await {
+    match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive, &cancel).await {
         Ok((count, msg_count, first_msg_time, new_watermark)) => {
             // Update note_count from conversation notes
             let note_count = sqlx::query_scalar::<_, i64>(
@@ -129,23 +132,28 @@ pub async fn extract_capsule(
             Ok(count)
         }
         Err(e) => {
-            let _ = sqlx::query("UPDATE memory_capsules SET status = 'failed' WHERE id = $1")
-                .bind(capsule_id)
-                .execute(&db)
+            if cancel.is_cancelled() {
+                // Cancelled by user — abort handler already handled DB state
+                tracing::info!("Extraction cancelled for capsule {}", capsule_id);
+            } else {
+                let _ = sqlx::query("UPDATE memory_capsules SET status = 'failed' WHERE id = $1")
+                    .bind(capsule_id)
+                    .execute(&db)
+                    .await;
+                let _ = send_push_to_user(
+                    &db,
+                    &config,
+                    &owner_id,
+                    &PushPayload {
+                        notification_type: "memory_capsule".into(),
+                        title: "Memory Capsule Failed".into(),
+                        body: format!("{} extraction failed", capsule_name),
+                        url: None,
+                        message_id: None,
+                    },
+                )
                 .await;
-            let _ = send_push_to_user(
-                &db,
-                &config,
-                &owner_id,
-                &PushPayload {
-                    notification_type: "memory_capsule".into(),
-                    title: "Memory Capsule Failed".into(),
-                    body: format!("{} extraction failed", capsule_name),
-                    url: None,
-                    message_id: None,
-                },
-            )
-            .await;
+            }
             Err(e)
         }
     }
@@ -157,6 +165,7 @@ async fn do_extraction(
     capsule_id: Uuid,
     conversation_id: Uuid,
     extracted_through: Option<chrono::NaiveDateTime>,
+    cancel: &CancellationToken,
 ) -> anyhow::Result<(usize, usize, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> {
     // Returns (entry_count, message_count, first_message_time, new_watermark)
     // 3. Fetch messages (incremental: only after extracted_through if set)
@@ -267,6 +276,10 @@ async fn do_extraction(
     let mut chunks_succeeded = 0usize;
 
     for (chunk_idx, chunk_text) in chunks.iter().enumerate() {
+        if cancel.is_cancelled() {
+            return Err(anyhow!("Extraction cancelled"));
+        }
+
         let body = serde_json::json!({
             "systemInstruction": {"parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]},
             "contents": [{"parts": [{"text": chunk_text}]}],
@@ -334,6 +347,9 @@ async fn do_extraction(
 
     let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(entry_texts.len());
     for batch in entry_texts.chunks(EMBEDDING_BATCH_SIZE) {
+        if cancel.is_cancelled() {
+            return Err(anyhow!("Extraction cancelled"));
+        }
         let batch_vec: Vec<String> = batch.to_vec();
         let embeddings = generate_embeddings(&client, openai_key, &batch_vec, EMBEDDING_MODEL).await?;
         all_embeddings.extend(embeddings);
