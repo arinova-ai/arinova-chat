@@ -28,6 +28,9 @@ interface VoiceCallState {
   // Incoming call (from another user via main WS)
   incomingCall: IncomingCallInfo | null;
 
+  // Minimize state
+  minimized: boolean;
+
   // Internal
   _rtcClient: WebRTCClient | null;
 
@@ -41,6 +44,7 @@ interface VoiceCallState {
   toggleMute: () => void;
   setVolume: (volume: number) => void;
   toggleTranscript: () => void;
+  toggleMinimized: () => void;
   addTranscriptLine: (line: TranscriptLine) => void;
   saveTranscript: () => Promise<void>;
 }
@@ -63,6 +67,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
   callStartTime: null,
   endReason: null,
   incomingCall: null,
+  minimized: false,
   _rtcClient: null,
 
   startCall: async (conversationId, target, peerName, peerAvatarUrl, voiceMode) => {
@@ -285,6 +290,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
       peerName: null,
       peerAvatarUrl: null,
       peerType: null,
+      minimized: false,
     });
   },
 
@@ -315,6 +321,10 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
     if (typeof window !== "undefined") {
       localStorage.setItem("arinova_voice_transcript", String(next));
     }
+  },
+
+  toggleMinimized: () => {
+    set({ minimized: !get().minimized });
   },
 
   addTranscriptLine: (line) => {

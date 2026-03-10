@@ -12,6 +12,7 @@ import {
   Bot,
   User,
   FileText,
+  Minimize2,
 } from "lucide-react";
 import { useVoiceCallStore } from "@/store/voice-call-store";
 import { assetUrl } from "@/lib/config";
@@ -34,6 +35,8 @@ export function ActiveCall() {
   const setVolume = useVoiceCallStore((s) => s.setVolume);
   const endCall = useVoiceCallStore((s) => s.endCall);
   const toggleTranscript = useVoiceCallStore((s) => s.toggleTranscript);
+  const minimized = useVoiceCallStore((s) => s.minimized);
+  const toggleMinimized = useVoiceCallStore((s) => s.toggleMinimized);
 
   const [elapsed, setElapsed] = useState("00:00");
 
@@ -50,6 +53,7 @@ export function ActiveCall() {
   }, [callState, callStartTime]);
 
   if (callState === "idle") return null;
+  if (minimized) return null;
 
   const isRinging = callState === "ringing" || callState === "requesting_mic";
   const isFallback = voiceMode !== "native";
@@ -57,6 +61,19 @@ export function ActiveCall() {
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col bg-neutral-900/95 backdrop-blur-sm">
+      {/* Minimize button */}
+      <div className="absolute right-4 top-4 z-10">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full bg-neutral-800 text-neutral-400 hover:text-white"
+          onClick={toggleMinimized}
+          title={t("voice.minimize")}
+        >
+          <Minimize2 className="h-4 w-4" />
+        </Button>
+      </div>
+
       {/* Fallback mode badge */}
       {isFallback && callState === "connected" && (
         <div className="flex justify-center pt-3">
