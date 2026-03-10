@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
             "/api/kanban/cards/{card_id}/agents/{agent_id}",
             delete(unassign_agent),
         )
+        .route("/api/kanban/cards/{id}/archive", post(archive_card))
         .route("/api/kanban/cards/{id}/unarchive", post(unarchive_card))
         .route(
             "/api/kanban/cards/{id}/notes",
@@ -604,8 +605,24 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
 
     lazy_archive_done_cards_by_owner(&state.db, &owner_id).await;
 
-    let cards = sqlx::query_as::<_, CardRow>(
-        r#"SELECT c.id, c.column_id, c.title, c.description, c.priority,
+    #[derive(Debug, Serialize, sqlx::FromRow)]
+    #[serde(rename_all = "camelCase")]
+    struct AgentCardRow {
+        id: Uuid,
+        column_id: Uuid,
+        column_name: String,
+        title: String,
+        description: Option<String>,
+        priority: Option<String>,
+        due_date: Option<chrono::DateTime<chrono::Utc>>,
+        sort_order: i32,
+        created_by: Option<String>,
+        created_at: Option<chrono::DateTime<chrono::Utc>>,
+        updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    }
+
+    let cards = sqlx::query_as::<_, AgentCardRow>(
+        r#"SELECT c.id, c.column_id, col.name AS column_name, c.title, c.description, c.priority,
                   c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at
            FROM kanban_cards c
            JOIN kanban_columns col ON col.id = c.column_id
@@ -881,6 +898,30 @@ async fn list_archived_cards(
             "limit": limit,
         }))
         .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// POST /api/kanban/cards/:id/archive — archive a card
+async fn archive_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "UPDATE kanban_cards SET archived = TRUE, archived_at = NOW(), updated_at = NOW() WHERE id = $1",
+    )
+    .bind(card_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
