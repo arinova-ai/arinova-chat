@@ -260,6 +260,23 @@ async fn lazy_archive_done_cards(db: &sqlx::PgPool, board_id: Uuid) {
     .await;
 }
 
+/// Lazy-archive across all boards owned by a user.
+async fn lazy_archive_done_cards_by_owner(db: &sqlx::PgPool, owner_id: &str) {
+    let _ = sqlx::query(
+        r#"UPDATE kanban_cards SET archived = TRUE, archived_at = NOW()
+           WHERE archived = FALSE
+             AND column_id IN (
+               SELECT kc.id FROM kanban_columns kc
+               JOIN kanban_boards kb ON kb.id = kc.board_id
+               WHERE kb.owner_id = $1 AND kc.name = 'Done'
+             )
+             AND updated_at < NOW() - INTERVAL '3 days'"#,
+    )
+    .bind(owner_id)
+    .execute(db)
+    .await;
+}
+
 // ── User API ──────────────────────────────────────────────────
 
 /// GET /api/kanban/boards — list user's boards (auto-create default if none)
@@ -553,6 +570,8 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
         Err(e) => return e,
     };
 
+    lazy_archive_done_cards_by_owner(&state.db, &owner_id).await;
+
     let cards = sqlx::query_as::<_, CardRow>(
         r#"SELECT c.id, c.column_id, c.title, c.description, c.priority,
                   c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at
@@ -791,6 +810,8 @@ async fn list_archived_cards(
         return e;
     }
 
+    lazy_archive_done_cards(&state.db, board_id).await;
+
     let limit = params.limit.unwrap_or(20).min(100).max(1);
     let page = params.page.unwrap_or(1).max(1);
     let offset = (page - 1) * limit;
@@ -872,6 +893,8 @@ async fn agent_list_archived_cards(
     if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
         return e;
     }
+
+    lazy_archive_done_cards(&state.db, board_id).await;
 
     let limit = params.limit.unwrap_or(20).min(100).max(1);
     let page = params.page.unwrap_or(1).max(1);
