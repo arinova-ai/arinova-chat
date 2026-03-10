@@ -30,9 +30,10 @@ export default {
     await app.init({
       width: w, height: h,
       backgroundColor: 0x1a1a2e,
-      antialias: true,
+      antialias: false,
       resolution: sdk.pixelRatio || window.devicePixelRatio || 1,
       autoDensity: true,
+      roundPixels: true,
     });
     container.appendChild(app.canvas);
 
@@ -88,6 +89,8 @@ export default {
     var COLS = 4;
     var mascotFrames = [];
     if (mascotTex) {
+      // Use nearest-neighbor scaling for pixel art look
+      mascotTex.source.scaleMode = "nearest";
       for (var row = 0; row < 4; row++) {
         for (var col = 0; col < COLS; col++) {
           var rect = new PIXI.Rectangle(col * FRAME_SIZE, row * FRAME_SIZE, FRAME_SIZE, FRAME_SIZE);
@@ -166,7 +169,8 @@ export default {
         mascot.y = hb.y * CANVAS_H;
         mascot.width = hb.w * CANVAS_W;
         mascot.height = hb.h * CANVAS_H;
-        mascot.visible = !!agent;
+        mascot.visible = true;
+        mascot.alpha = agent ? 1.0 : 0.5;
       }
 
       // Hit area
