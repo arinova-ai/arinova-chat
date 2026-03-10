@@ -78,9 +78,11 @@ pub async fn extract_capsule(
     // Run extraction, and on any error mark as 'failed'
     match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive, &cancel).await {
         Ok((count, msg_count, first_msg_time, new_watermark)) => {
-            // Update note_count from conversation notes
+            // Update note_count from linked conversation notes
             let note_count = sqlx::query_scalar::<_, i64>(
-                "SELECT COUNT(*) FROM conversation_notes WHERE conversation_id = $1 AND content != ''",
+                r#"SELECT COUNT(*) FROM conversation_notes n
+                   JOIN note_conversation_links ncl ON ncl.note_id = n.id
+                   WHERE ncl.conversation_id = $1 AND n.content != ''"#,
             )
             .bind(conv_id)
             .fetch_one(&db)
@@ -226,9 +228,13 @@ async fn do_extraction(
         .unwrap(); // safe: messages is non-empty
     let new_watermark_utc = chrono::DateTime::from_naive_utc_and_offset(new_watermark, chrono::Utc);
 
-    // 3b. Fetch conversation notes to include as context
+    // 3b. Fetch linked notes to include as context (via note_conversation_links)
     let notes: Vec<(String, String)> = sqlx::query_as(
-        "SELECT title, content FROM conversation_notes WHERE conversation_id = $1 AND content != '' ORDER BY created_at ASC",
+        r#"SELECT n.title, n.content
+           FROM conversation_notes n
+           JOIN note_conversation_links ncl ON ncl.note_id = n.id
+           WHERE ncl.conversation_id = $1 AND n.content != ''
+           ORDER BY n.created_at ASC"#,
     )
     .bind(conversation_id)
     .fetch_all(db)

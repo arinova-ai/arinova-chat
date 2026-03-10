@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -47,6 +47,16 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/conversations/{id}/notes/{noteId}/auto-tag",
             post(auto_tag_note),
+        )
+        // User-level note endpoints
+        .route("/api/users/me/notes", get(list_user_notes))
+        .route(
+            "/api/notes/{noteId}/links",
+            post(link_note_to_conversation),
+        )
+        .route(
+            "/api/notes/{noteId}/links/{conversationId}",
+            delete(unlink_note_from_conversation),
         )
 }
 
@@ -423,7 +433,7 @@ async fn get_note(
     }
 
     let row = sqlx::query_as::<_, NoteRow>(&format!(
-        "{} WHERE n.id = $1 AND n.conversation_id = $2",
+        "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE n.id = $1 AND ncl.conversation_id = $2",
         NOTE_QUERY_BASE
     ))
     .bind(note_id)
@@ -535,7 +545,7 @@ async fn list_notes(
 
     let rows = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
+            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
@@ -545,7 +555,7 @@ async fn list_notes(
         .await
     } else {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
+            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
@@ -622,8 +632,8 @@ async fn create_note(
     let tags: Vec<String> = body.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
 
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, title, content, tags, created_at, updated_at)
-           VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $7)"#,
+        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, owner_id, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, $3, 'user', $3, $4, $5, $6, $7, $7)"#,
     )
     .bind(note_id)
     .bind(conv_id)
@@ -637,6 +647,15 @@ async fn create_note(
 
     match result {
         Ok(_) => {
+            // Insert note_conversation_links entry
+            let _ = sqlx::query(
+                "INSERT INTO note_conversation_links (note_id, conversation_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            )
+            .bind(note_id)
+            .bind(conv_id)
+            .execute(&state.db)
+            .await;
+
             // Sync [[Note Title]] backlinks
             if !body.content.is_empty() {
                 sync_note_links(&state.db, note_id, conv_id, &body.content).await;
@@ -1710,4 +1729,385 @@ async fn auto_tag_note(
     .await;
 
     Json(json!({"tags": merged_tags})).into_response()
+}
+
+// ===== User-level note endpoints =====
+
+#[derive(Deserialize)]
+struct ListUserNotesQuery {
+    before: Option<String>,
+    limit: Option<String>,
+    archived: Option<String>,
+    tags: Option<String>,
+    search: Option<String>,
+}
+
+/// GET /api/users/me/notes — list all notes owned by the authenticated user (across conversations)
+async fn list_user_notes(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Query(query): Query<ListUserNotesQuery>,
+) -> Response {
+    let limit: i64 = query
+        .limit
+        .as_deref()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(20)
+        .min(50);
+
+    let show_archived = query.archived.as_deref() == Some("true");
+    let tag_filter: Vec<String> = query
+        .tags
+        .as_deref()
+        .map(|t| {
+            t.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let search_term = query.search.as_deref().unwrap_or("").trim().to_string();
+
+    // Resolve cursor
+    let cursor_ts: Option<DateTime<Utc>> = if let Some(ref before_id) = query.before {
+        let before_uuid = match Uuid::parse_str(before_id) {
+            Ok(u) => u,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "Invalid cursor"})),
+                )
+                    .into_response()
+            }
+        };
+        sqlx::query_as::<_, (DateTime<Utc>,)>(
+            "SELECT created_at FROM conversation_notes WHERE id = $1",
+        )
+        .bind(before_uuid)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .map(|(ts,)| ts)
+    } else {
+        None
+    };
+
+    let archive_cond = if show_archived {
+        "n.archived_at IS NOT NULL"
+    } else {
+        "n.archived_at IS NULL"
+    };
+
+    let tag_cond = if tag_filter.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " AND n.tags @> ARRAY[{}]::text[]",
+            tag_filter
+                .iter()
+                .map(|t| format!("'{}'", t.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    };
+
+    // Build search pattern for ILIKE
+    let search_pattern = if search_term.is_empty() {
+        None
+    } else {
+        Some(format!("%{}%", search_term))
+    };
+
+    // Build query dynamically with correct parameter numbering
+    // $1 = user.id, then cursor/search/limit params follow
+    let mut conditions = format!("n.owner_id = $1 AND {}{}", archive_cond, tag_cond);
+    let mut param_idx = 2u32;
+
+    let cursor_param = if cursor_ts.is_some() {
+        let p = param_idx;
+        param_idx += 1;
+        Some(p)
+    } else {
+        None
+    };
+
+    let search_param = if search_pattern.is_some() {
+        let p = param_idx;
+        param_idx += 1;
+        Some(p)
+    } else {
+        None
+    };
+
+    let limit_param = param_idx;
+
+    if let Some(p) = cursor_param {
+        conditions.push_str(&format!(" AND n.created_at < ${}", p));
+    }
+    if let Some(p) = search_param {
+        conditions.push_str(&format!(
+            " AND (n.title ILIKE ${p} OR n.content ILIKE ${p})"
+        ));
+    }
+
+    let q = format!(
+        r#"SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
+                  n.title, n.content, n.tags, n.archived_at, n.summary,
+                  n.created_at, n.updated_at,
+                  COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
+                  a.name AS agent_name
+           FROM conversation_notes n
+           LEFT JOIN "user" u ON u.id = n.creator_id
+           LEFT JOIN agents a ON a.id = n.agent_id
+           WHERE {}
+           ORDER BY n.created_at DESC LIMIT ${}"#,
+        conditions, limit_param
+    );
+
+    let rows = match (cursor_ts, &search_pattern) {
+        (Some(ts), Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(ts)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (Some(ts), None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(ts)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (None, Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (None, None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+    };
+
+    match rows {
+        Ok(rows) => {
+            let has_more = rows.len() as i64 > limit;
+            let items: Vec<serde_json::Value> = rows
+                .iter()
+                .take(limit as usize)
+                .map(|n| {
+                    let mut j = note_to_json(n);
+                    j
+                })
+                .collect();
+
+            let next_cursor = if has_more {
+                items.last().and_then(|n| n.get("id").cloned())
+            } else {
+                None
+            };
+
+            // Fetch linked conversations for these notes
+            let note_ids: Vec<Uuid> = rows.iter().take(limit as usize).map(|n| n.id).collect();
+            let linked_convs = if !note_ids.is_empty() {
+                sqlx::query_as::<_, (Uuid, Uuid, String)>(
+                    r#"SELECT ncl.note_id, ncl.conversation_id,
+                              COALESCE(c.title, 'Untitled') AS conv_title
+                       FROM note_conversation_links ncl
+                       LEFT JOIN conversations c ON c.id = ncl.conversation_id
+                       WHERE ncl.note_id = ANY($1)"#,
+                )
+                .bind(&note_ids)
+                .fetch_all(&state.db)
+                .await
+                .unwrap_or_default()
+            } else {
+                vec![]
+            };
+
+            // Build a map: note_id -> linked conversations
+            let mut conv_map: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
+                std::collections::HashMap::new();
+            for (note_id, conv_id, conv_title) in &linked_convs {
+                conv_map.entry(*note_id).or_default().push(json!({
+                    "conversationId": conv_id,
+                    "title": conv_title,
+                }));
+            }
+
+            // Enrich items with linkedConversations
+            let enriched_items: Vec<serde_json::Value> = items
+                .into_iter()
+                .map(|mut item| {
+                    if let Some(id_str) = item.get("id").and_then(|v| v.as_str()) {
+                        if let Ok(nid) = Uuid::parse_str(id_str) {
+                            item.as_object_mut().unwrap().insert(
+                                "linkedConversations".into(),
+                                json!(conv_map.get(&nid).cloned().unwrap_or_default()),
+                            );
+                        }
+                    }
+                    item
+                })
+                .collect();
+
+            Json(json!({
+                "notes": enriched_items,
+                "hasMore": has_more,
+                "nextCursor": next_cursor,
+            }))
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct LinkNoteBody {
+    #[serde(rename = "conversationId")]
+    conversation_id: Uuid,
+}
+
+/// POST /api/notes/:noteId/links — link a note to a conversation
+async fn link_note_to_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+    Json(body): Json<LinkNoteBody>,
+) -> Response {
+    // Verify the user owns this note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    // Verify user is a member of the target conversation
+    if !is_member(&state.db, body.conversation_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of the target conversation"})),
+        )
+            .into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO note_conversation_links (note_id, conversation_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(note_id)
+    .bind(body.conversation_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"ok": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// DELETE /api/notes/:noteId/links/:conversationId — unlink a note from a conversation
+async fn unlink_note_from_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((note_id, conversation_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    // Verify the user owns this note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    // Don't allow unlinking from the original conversation
+    let original_conv = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM conversation_notes WHERE id = $1",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    if let Ok(Some(orig)) = original_conv {
+        if orig == conversation_id {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Cannot unlink from the original conversation"})),
+            )
+                .into_response();
+        }
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM note_conversation_links WHERE note_id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conversation_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"ok": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }

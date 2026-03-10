@@ -387,14 +387,26 @@ async fn agent_create_note(
         }
     };
 
+    // Resolve conversation owner for owner_id
+    let conv_owner_id = sqlx::query_scalar::<_, String>(
+        "SELECT user_id FROM conversations WHERE id = $1",
+    )
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| creator_id.clone());
+
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, agent_id, title, content, tags, created_at, updated_at)
-           VALUES ($1, $2, $3, 'agent', $4, $5, $6, $7, $8, $8)"#,
+        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, agent_id, owner_id, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, $3, 'agent', $4, $5, $6, $7, $8, $9, $9)"#,
     )
     .bind(note_id)
     .bind(conv_id)
     .bind(&creator_id)
     .bind(agent.id)
+    .bind(&conv_owner_id)
     .bind(title)
     .bind(&body.content)
     .bind(&tags)
@@ -404,6 +416,15 @@ async fn agent_create_note(
 
     match result {
         Ok(_) => {
+            // Insert note_conversation_links entry
+            let _ = sqlx::query(
+                "INSERT INTO note_conversation_links (note_id, conversation_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            )
+            .bind(note_id)
+            .bind(conv_id)
+            .execute(&state.db)
+            .await;
+
             // Sync [[Note Title]] backlinks
             if !body.content.is_empty() {
                 sync_note_links(&state.db, note_id, conv_id, &body.content).await;
