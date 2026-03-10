@@ -299,6 +299,9 @@ async fn main() {
         INSERT INTO note_conversation_links (note_id, conversation_id)
         SELECT id, conversation_id FROM conversation_notes
         ON CONFLICT (note_id, conversation_id) DO NOTHING;
+
+        ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_start TIMESTAMPTZ;
+        ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_end TIMESTAMPTZ;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

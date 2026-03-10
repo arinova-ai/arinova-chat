@@ -245,7 +245,10 @@ async fn do_extraction(
 
     // 4. Build chunks from messages (each chunk ≤ CHUNK_CHAR_LIMIT chars)
     let mut chunks: Vec<String> = Vec::new();
+    let mut chunk_time_ranges: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> = Vec::new();
     let mut current_chunk = String::new();
+    let mut chunk_start: Option<chrono::NaiveDateTime> = None;
+    let mut chunk_end: Option<chrono::NaiveDateTime> = None;
 
     // Prepend notes as context in the first chunk
     if !notes.is_empty() {
@@ -261,11 +264,21 @@ async fn do_extraction(
         let line = format!("[{}] {}: {}\n", role, ts.format("%Y-%m-%d %H:%M"), content);
         if !current_chunk.is_empty() && current_chunk.len() + line.len() > CHUNK_CHAR_LIMIT {
             chunks.push(std::mem::take(&mut current_chunk));
+            if let (Some(s), Some(e)) = (chunk_start.take(), chunk_end.take()) {
+                chunk_time_ranges.push((s, e));
+            }
         }
+        if chunk_start.is_none() {
+            chunk_start = Some(*ts);
+        }
+        chunk_end = Some(*ts);
         current_chunk.push_str(&line);
     }
     if !current_chunk.is_empty() {
         chunks.push(current_chunk);
+        if let (Some(s), Some(e)) = (chunk_start, chunk_end) {
+            chunk_time_ranges.push((s, e));
+        }
     }
 
     tracing::info!(
@@ -287,7 +300,7 @@ async fn do_extraction(
 
     let url = format!("{}?key={}", GEMINI_MODEL_URL, gemini_key);
 
-    let mut parsed_entries: Vec<(String, f64, Vec<String>)> = Vec::new();
+    let mut parsed_entries: Vec<(String, f64, Vec<String>, usize)> = Vec::new(); // (content, importance, tags, chunk_idx)
     let mut chunks_succeeded = 0usize;
 
     for (chunk_idx, chunk_text) in chunks.iter().enumerate() {
@@ -305,11 +318,14 @@ async fn do_extraction(
 
         match chunk_result {
             Ok(text) => {
-                let entries: Vec<(String, f64, Vec<String>)> = text
+                let entries: Vec<(String, f64, Vec<String>, usize)> = text
                     .lines()
                     .map(|l| l.trim())
                     .filter(|l| !l.is_empty())
-                    .map(|line| parse_tagged_line(line))
+                    .map(|line| {
+                        let (content, importance, tags) = parse_tagged_line(line);
+                        (content, importance, tags, chunk_idx)
+                    })
                     .collect();
                 tracing::info!(
                     "Chunk {}/{}: extracted {} entries",
@@ -352,7 +368,7 @@ async fn do_extraction(
         return Ok((0, msg_count, first_msg_utc, effective_watermark));
     }
 
-    let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _, _)| t.clone()).collect();
+    let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _, _, _)| t.clone()).collect();
 
     // 7. Generate embeddings
     let openai_key = config
@@ -373,17 +389,28 @@ async fn do_extraction(
     // 8. Insert into memory_entries with importance
     let mut tx = db.begin().await.context("Failed to begin transaction")?;
 
-    for ((content, importance, tags), embedding) in parsed_entries.iter().zip(all_embeddings.iter()) {
+    for ((content, importance, tags, chunk_idx), embedding) in parsed_entries.iter().zip(all_embeddings.iter()) {
         let vec = Vector::from(embedding.clone());
+        let (source_start, source_end) = if *chunk_idx < chunk_time_ranges.len() {
+            let (s, e) = chunk_time_ranges[*chunk_idx];
+            (
+                Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(s, chrono::Utc)),
+                Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(e, chrono::Utc)),
+            )
+        } else {
+            (None, None)
+        };
         sqlx::query(
-            r#"INSERT INTO memory_entries (capsule_id, content, embedding, importance, tags)
-               VALUES ($1, $2, $3::vector, $4, $5)"#,
+            r#"INSERT INTO memory_entries (capsule_id, content, embedding, importance, tags, source_start, source_end)
+               VALUES ($1, $2, $3::vector, $4, $5, $6, $7)"#,
         )
         .bind(capsule_id)
         .bind(content)
         .bind(vec)
         .bind(*importance)
         .bind(tags)
+        .bind(source_start)
+        .bind(source_end)
         .execute(&mut *tx)
         .await
         .context("Failed to insert memory entry")?;

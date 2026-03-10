@@ -1595,8 +1595,9 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
         return vec![];
     }
 
-    let rows: Vec<(Uuid, String, f64, Uuid, String)> = sqlx::query_as(
-        r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name
+    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name,
+                  me.source_start, me.source_end
            FROM memory_entries me
            JOIN memory_capsules mc ON mc.id = me.capsule_id
            WHERE mc.owner_id = $1
@@ -1611,13 +1612,15 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
     .unwrap_or_default();
 
     rows.iter()
-        .map(|(id, content, importance, capsule_id, capsule_name)| {
+        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end)| {
             json!({
                 "id": id,
                 "content": content,
                 "importance": importance,
                 "capsuleId": capsule_id,
                 "capsuleName": capsule_name,
+                "sourceStart": source_start.map(|t| t.to_rfc3339()),
+                "sourceEnd": source_end.map(|t| t.to_rfc3339()),
             })
         })
         .collect()

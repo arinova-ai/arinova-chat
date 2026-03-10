@@ -590,6 +590,8 @@ export interface Note {
     importance: number;
     capsuleId: string;
     capsuleName: string;
+    sourceStart?: string | null;
+    sourceEnd?: string | null;
   }>;
   suggestedTags?: string[];
   linkedConversations?: Array<{ conversationId: string; title: string }>;
