@@ -103,6 +103,7 @@ async fn get_theme_asset(
         _ => "application/octet-stream",
     };
 
+    // Try R2 first if configured
     if let Some(s3) = &state.s3 {
         let bucket = &state.config.r2_bucket;
         let key = format!("themes/{}/{}", theme_id, filename);
@@ -110,7 +111,7 @@ async fn get_theme_asset(
             Ok(obj) => match obj.body.collect().await {
                 Ok(body) => {
                     let bytes = body.into_bytes();
-                    (
+                    return (
                         StatusCode::OK,
                         [
                             ("content-type", content_type),
@@ -118,16 +119,23 @@ async fn get_theme_asset(
                         ],
                         bytes.to_vec(),
                     )
-                        .into_response()
+                        .into_response();
                 }
-                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to read asset"}))).into_response(),
+                Err(_) => {
+                    // Fall through to local filesystem
+                }
             },
-            Err(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Asset not found"}))).into_response(),
+            Err(_) => {
+                // Fall through to local filesystem
+            }
         }
-    } else {
-        let asset_path = themes_base_dir(&state).join(&theme_id).join(&filename);
-        match tokio::fs::read(&asset_path).await {
-            Ok(data) => (
+    }
+
+    // Local filesystem fallback: try themes_base_dir first, then web public dir
+    for base in theme_local_paths(&state) {
+        let asset_path = base.join(&theme_id).join(&filename);
+        if let Ok(data) = tokio::fs::read(&asset_path).await {
+            return (
                 StatusCode::OK,
                 [
                     ("content-type", content_type),
@@ -135,10 +143,11 @@ async fn get_theme_asset(
                 ],
                 data,
             )
-                .into_response(),
-            Err(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Asset not found"}))).into_response(),
+                .into_response();
         }
     }
+
+    (StatusCode::NOT_FOUND, Json(json!({"error": "Asset not found"}))).into_response()
 }
 
 /// GET /api/themes/:themeId/manifest — Proxy theme.json from R2 (or local).
@@ -157,6 +166,7 @@ async fn get_theme_manifest(
             .into_response();
     }
 
+    // Try R2 first if configured
     if let Some(s3) = &state.s3 {
         let bucket = &state.config.r2_bucket;
         let key = format!("themes/{}/theme.json", theme_id);
@@ -164,41 +174,41 @@ async fn get_theme_manifest(
             Ok(obj) => match obj.body.collect().await {
                 Ok(body) => {
                     let bytes = body.into_bytes();
-                    (
+                    return (
                         StatusCode::OK,
                         [("content-type", "application/json")],
                         bytes.to_vec(),
                     )
-                        .into_response()
+                        .into_response();
                 }
-                Err(_) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "Failed to read theme manifest"})),
-                )
-                    .into_response(),
+                Err(_) => {
+                    // Fall through to local filesystem
+                }
             },
-            Err(_) => (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Theme not found"})),
-            )
-                .into_response(),
+            Err(_) => {
+                // Fall through to local filesystem
+            }
         }
-    } else {
-        let manifest_path = themes_base_dir(&state).join(&theme_id).join("theme.json");
-        match tokio::fs::read(&manifest_path).await {
-            Ok(data) => (
+    }
+
+    // Local filesystem fallback
+    for base in theme_local_paths(&state) {
+        let manifest_path = base.join(&theme_id).join("theme.json");
+        if let Ok(data) = tokio::fs::read(&manifest_path).await {
+            return (
                 StatusCode::OK,
                 [("content-type", "application/json")],
                 data,
             )
-                .into_response(),
-            Err(_) => (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Theme not found"})),
-            )
-                .into_response(),
+                .into_response();
         }
     }
+
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({"error": "Theme not found"})),
+    )
+        .into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -773,11 +783,7 @@ fn extract_zip(data: &[u8], out_dir: &std::path::Path) -> Result<usize, String> 
 async fn list_themes(
     State(state): State<AppState>,
 ) -> Response {
-    let base_url = if state.s3.is_some() && !state.config.r2_public_url.is_empty() {
-        format!("{}/themes", state.config.r2_public_url)
-    } else {
-        "/themes".to_string()
-    };
+    let base_url = format!("{}/api/themes/assets", state.config.better_auth_url);
 
     let rows = sqlx::query_as::<_, ThemeRow>(
         "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license, published FROM themes WHERE published = true ORDER BY created_at DESC",
@@ -817,11 +823,7 @@ async fn get_theme_detail(
     State(state): State<AppState>,
     Path(theme_id): Path<String>,
 ) -> Response {
-    let base_url = if state.s3.is_some() && !state.config.r2_public_url.is_empty() {
-        format!("{}/themes", state.config.r2_public_url)
-    } else {
-        "/themes".to_string()
-    };
+    let base_url = format!("{}/api/themes/assets", state.config.better_auth_url);
 
     let row = sqlx::query_as::<_, ThemeRow>(
         "SELECT id, name, version, description, renderer, preview, price, max_agents, tags, author_id, author_name, license, published FROM themes WHERE id = $1",
@@ -1340,4 +1342,15 @@ fn themes_base_dir(state: &AppState) -> PathBuf {
     std::env::var("THEMES_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(&state.config.upload_dir).join("themes"))
+}
+
+/// Returns a list of local directories to search for theme assets, in priority order.
+/// 1. themes_base_dir (upload_dir/themes or THEMES_DIR) — for user-uploaded themes
+/// 2. Web public themes dir (WEB_PUBLIC_DIR env or ../web/public) — for built-in themes
+fn theme_local_paths(state: &AppState) -> Vec<PathBuf> {
+    let mut paths = vec![themes_base_dir(state)];
+    let web_public = std::env::var("WEB_PUBLIC_DIR")
+        .unwrap_or_else(|_| "../web/public".to_string());
+    paths.push(PathBuf::from(web_public).join("themes"));
+    paths
 }
