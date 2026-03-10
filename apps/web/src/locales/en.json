@@ -139,6 +139,8 @@
   "chat.notebook.addTag": "+ Add tag",
   "chat.notebook.openNote": "Open note",
 
+  "chat.kanban.openTask": "Open task",
+
   "chat.search.title": "Search",
   "chat.search.results": "results",
   "chat.search.result": "result",

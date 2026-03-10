@@ -140,6 +140,8 @@
   "chat.notebook.addTag": "+ タグを追加",
   "chat.notebook.openNote": "ノートを開く",
 
+  "chat.kanban.openTask": "タスクを開く",
+
   "chat.search.title": "検索",
   "chat.search.results": "件の結果",
   "chat.search.result": "件の結果",

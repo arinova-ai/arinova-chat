@@ -142,6 +142,8 @@
   "chat.notebook.addTag": "+ 新增標籤",
   "chat.notebook.openNote": "開啟筆記",
 
+  "chat.kanban.openTask": "開啟任務",
+
   "chat.search.title": "搜尋",
   "chat.search.results": "筆結果",
   "chat.search.result": "筆結果",

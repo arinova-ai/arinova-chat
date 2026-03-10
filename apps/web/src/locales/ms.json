@@ -140,6 +140,8 @@
   "chat.notebook.addTag": "+ Tambah tag",
   "chat.notebook.openNote": "Buka nota",
 
+  "chat.kanban.openTask": "Buka tugas",
+
   "chat.search.title": "Cari",
   "chat.search.results": "keputusan",
   "chat.search.result": "keputusan",

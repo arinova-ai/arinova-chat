@@ -140,6 +140,8 @@
   "chat.notebook.addTag": "+ 添加标签",
   "chat.notebook.openNote": "打开笔记",
 
+  "chat.kanban.openTask": "打开任务",
+
   "chat.search.title": "搜索",
   "chat.search.results": "条结果",
   "chat.search.result": "条结果",

@@ -12,6 +12,8 @@ import { ArrowDown, Check, Copy, Gift, Loader2, X } from "lucide-react";
 import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
+import { NotePreviewCard } from "./note-preview-card";
+import { KanbanCardPreview } from "./kanban-card-preview";
 import { useTranslation } from "@/lib/i18n";
 import { diagCount, useRenderDiag } from "@/lib/chat-diagnostics";
 
@@ -401,6 +403,14 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
         {message.role === "system" ? (
           (message.metadata as Record<string, unknown>)?.type === "sticker_gift" ? (
             <StickerGiftMessage message={message} />
+          ) : typeof (message.metadata as Record<string, unknown>)?.noteId === "string" ? (
+            <div className="flex justify-center py-1.5">
+              <NotePreviewCard metadata={message.metadata as { noteId: string; title: string; preview: string; tags: string[] }} />
+            </div>
+          ) : (message.metadata as Record<string, unknown>)?.type === "kanban_card" ? (
+            <div className="flex justify-center py-1.5">
+              <KanbanCardPreview metadata={message.metadata as { cardId: string; title: string; preview?: string; priority?: string; columnName?: string }} />
+            </div>
           ) : (
             <div className="flex justify-center py-1.5">
               <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">

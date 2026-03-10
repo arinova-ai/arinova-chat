@@ -140,6 +140,8 @@
   "chat.notebook.addTag": "+ Agregar etiqueta",
   "chat.notebook.openNote": "Abrir nota",
 
+  "chat.kanban.openTask": "Abrir tarea",
+
   "chat.search.title": "Buscar",
   "chat.search.results": "resultados",
   "chat.search.result": "resultado",
