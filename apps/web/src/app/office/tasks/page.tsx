@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight, FileText, Search } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useOfficeStream } from "@/hooks/use-office-stream";
@@ -216,6 +216,8 @@ function CardDetailSheet({
   const [saving, setSaving] = useState(false);
   const [linkingNote, setLinkingNote] = useState(false);
   const [noteSearchQuery, setNoteSearchQuery] = useState("");
+  const [availableNotes, setAvailableNotes] = useState<Array<{ id: string; title: string; tags: string[] }>>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
 
   // Sync local state when card changes
   useEffect(() => {
@@ -226,6 +228,36 @@ function CardDetailSheet({
       setEditing(false);
     }
   }, [card]);
+
+  // Fetch available notes when opening the note selector
+  const fetchAvailableNotes = useCallback(async (search?: string) => {
+    setNotesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set("q", search);
+      params.set("limit", "20");
+      const notes = await api<Array<{ id: string; title: string; tags: string[] }>>(
+        `/api/kanban/owner-notes?${params}`,
+        { silent: true },
+      );
+      setAvailableNotes(notes);
+    } catch { /* ignore */ }
+    setNotesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (linkingNote) {
+      fetchAvailableNotes();
+    }
+  }, [linkingNote, fetchAvailableNotes]);
+
+  useEffect(() => {
+    if (!linkingNote) return;
+    const t = setTimeout(() => {
+      fetchAvailableNotes(noteSearchQuery || undefined);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [noteSearchQuery, linkingNote, fetchAvailableNotes]);
 
   const handleLinkNote = async (noteId: string) => {
     if (!card) return;
@@ -412,21 +444,41 @@ function CardDetailSheet({
                     </button>
                   </div>
                   {linkingNote && (
-                    <div className="mt-1.5">
-                      <input
-                        type="text"
-                        placeholder="Paste note ID to link..."
-                        value={noteSearchQuery}
-                        onChange={(e) => setNoteSearchQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && noteSearchQuery.trim()) {
-                            handleLinkNote(noteSearchQuery.trim());
-                          }
-                        }}
-                        className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
-                        autoFocus
-                      />
-                      <p className="mt-0.5 text-[10px] text-muted-foreground">Enter note ID and press Enter</p>
+                    <div className="mt-1.5 space-y-1.5">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <input
+                          type="text"
+                          placeholder="Search notes..."
+                          value={noteSearchQuery}
+                          onChange={(e) => setNoteSearchQuery(e.target.value)}
+                          className="w-full rounded-lg border border-border bg-muted/50 pl-7 pr-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-muted/30">
+                        {notesLoading ? (
+                          <div className="flex items-center justify-center py-3">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : availableNotes.length === 0 ? (
+                          <p className="py-3 text-center text-[11px] text-muted-foreground">No notes found</p>
+                        ) : (
+                          availableNotes
+                            .filter((n) => !cardNotes.some((cn) => cn.noteId === n.id))
+                            .map((note) => (
+                              <button
+                                key={note.id}
+                                type="button"
+                                onClick={() => handleLinkNote(note.id)}
+                                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+                              >
+                                <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span className="flex-1 truncate text-foreground">{note.title || "Untitled"}</span>
+                              </button>
+                            ))
+                        )}
+                      </div>
                     </div>
                   )}
                   {cardNotes.length > 0 ? (

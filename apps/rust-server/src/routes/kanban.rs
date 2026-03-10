@@ -45,6 +45,8 @@ pub fn router() -> Router<AppState> {
             "/api/agent/kanban/boards/{id}/archived-cards",
             get(agent_list_archived_cards),
         )
+        // User notes lookup (for note selector in card detail)
+        .route("/api/kanban/owner-notes", get(list_owner_notes))
 }
 
 // ── Types ─────────────────────────────────────────────────────
@@ -1075,4 +1077,54 @@ async fn list_card_notes(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
+}
+
+/// GET /api/kanban/owner-notes — list all notes owned by the current user (for note picker)
+async fn list_owner_notes(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Query(q): Query<OwnerNotesQuery>,
+) -> Response {
+    let search = q.q.unwrap_or_default();
+    let limit = q.limit.unwrap_or(20).min(50);
+
+    let notes = if search.is_empty() {
+        sqlx::query_as::<_, LinkedNoteRow>(
+            r#"SELECT id, title, tags, created_at
+               FROM conversation_notes
+               WHERE creator_id = $1 AND archived_at IS NULL
+               ORDER BY updated_at DESC
+               LIMIT $2"#,
+        )
+        .bind(&user.id)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, LinkedNoteRow>(
+            r#"SELECT id, title, tags, created_at
+               FROM conversation_notes
+               WHERE creator_id = $1 AND archived_at IS NULL
+                 AND LOWER(title) LIKE '%' || LOWER($2) || '%'
+               ORDER BY updated_at DESC
+               LIMIT $3"#,
+        )
+        .bind(&user.id)
+        .bind(&search)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    };
+
+    match notes {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct OwnerNotesQuery {
+    q: Option<String>,
+    limit: Option<i64>,
 }
