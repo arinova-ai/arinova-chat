@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { Note } from "@arinova/shared/types";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
@@ -438,8 +438,17 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     );
   }, []);
 
-  // Collect all unique tags from notes for filter UI
-  const allTags = Array.from(new Set(notes.flatMap((n) => n.tags ?? [])));
+  // Collect tag counts from notes for filter UI
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const note of notes) {
+      for (const tag of note.tags ?? []) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [notes]);
+  const allTags = Array.from(tagCounts.keys());
 
   const handleToggleAgentNotes = useCallback(
     (checked: boolean) => {
@@ -530,7 +539,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               </button>
             </div>
 
-            {/* Tag filter */}
+            {/* Tag statistics panel */}
             {allTags.length > 0 && (
               <div className={cn("flex flex-wrap gap-1", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
                 {allTags.map((tag) => (
@@ -539,7 +548,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                     type="button"
                     onClick={() => toggleFilterTag(tag)}
                     className={cn(
-                      "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
                       filterTags.includes(tag)
                         ? "bg-brand text-white"
                         : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -547,6 +556,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   >
                     <Tag className="h-2.5 w-2.5" />
                     {tag}
+                    <span className={cn(
+                      "inline-flex items-center justify-center rounded-full min-w-[16px] h-4 px-1 text-[9px] font-semibold",
+                      filterTags.includes(tag)
+                        ? "bg-white/20 text-white"
+                        : "bg-foreground/10 text-muted-foreground"
+                    )}>
+                      {tagCounts.get(tag) ?? 0}
+                    </span>
                   </button>
                 ))}
               </div>
