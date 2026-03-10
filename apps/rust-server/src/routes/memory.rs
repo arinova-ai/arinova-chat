@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         // Static path must come before dynamic {id} to avoid conflict
         .route("/api/memory/capsules/grants", get(list_grants_for_agent))
         .route("/api/memory/capsules/{id}", delete(delete_capsule))
+        .route("/api/memory/capsules/{id}/abort", post(abort_capsule))
         .route("/api/memory/capsules/{id}/refresh", post(refresh_capsule))
         .route(
             "/api/memory/capsules/{id}/grants",
@@ -83,6 +84,29 @@ async fn create_capsule(
             .into_response();
     }
 
+    // Check if a capsule already exists for this conversation
+    let existing = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT id, status FROM memory_capsules WHERE owner_id = $1 AND source_conversation_id = $2 LIMIT 1",
+    )
+    .bind(&user.id)
+    .bind(body.conversation_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some((existing_id, existing_status)) = existing {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "error": "A capsule already exists for this conversation. Use refresh instead.",
+                "existingCapsuleId": existing_id,
+                "existingStatus": existing_status,
+            })),
+        )
+            .into_response();
+    }
+
     // Check capsule limit
     let capsule_count = sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM memory_capsules WHERE owner_id = $1",
@@ -119,25 +143,35 @@ async fn create_capsule(
             .into_response();
     }
 
-    // Count messages in the conversation
-    let message_count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM messages WHERE conversation_id = $1",
+    // Count messages and get time range from actual message timestamps
+    #[derive(sqlx::FromRow)]
+    struct MsgStats {
+        cnt: i64,
+        min_at: Option<chrono::DateTime<chrono::Utc>>,
+        max_at: Option<chrono::DateTime<chrono::Utc>>,
+    }
+    let stats = sqlx::query_as::<_, MsgStats>(
+        "SELECT COUNT(*) AS cnt, MIN(created_at) AS min_at, MAX(created_at) AS max_at FROM messages WHERE conversation_id = $1",
     )
     .bind(body.conversation_id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0) as i32;
+    .unwrap_or(MsgStats { cnt: 0, min_at: None, max_at: None });
 
-    // Create capsule with status=extracting; background task will update to 'ready'
+    let message_count = stats.cnt as i32;
+
+    // Create capsule with status=extracting; set extracted_through to last message time
     let capsule_id = match sqlx::query_scalar::<_, Uuid>(
-        r#"INSERT INTO memory_capsules (owner_id, name, source_conversation_id, message_count, status)
-           VALUES ($1, $2, $3, $4, 'extracting')
+        r#"INSERT INTO memory_capsules (owner_id, name, source_conversation_id, message_count, status, created_at, extracted_through)
+           VALUES ($1, $2, $3, $4, 'extracting', COALESCE($5, NOW()), $6)
            RETURNING id"#,
     )
     .bind(&user.id)
     .bind(&name)
     .bind(body.conversation_id)
     .bind(message_count)
+    .bind(stats.min_at)
+    .bind(stats.max_at)
     .fetch_one(&state.db)
     .await
     {
@@ -278,6 +312,55 @@ async fn delete_capsule(
 }
 
 // ---------------------------------------------------------------------------
+// POST /api/memory/capsules/:id/abort — Abort an extracting capsule
+// ---------------------------------------------------------------------------
+
+async fn abort_capsule(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(capsule_id): Path<Uuid>,
+) -> Response {
+    let row = sqlx::query_as::<_, (String, String)>(
+        "SELECT owner_id, status FROM memory_capsules WHERE id = $1",
+    )
+    .bind(capsule_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some((ref oid, _))) if oid != &user.id => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
+        }
+        Ok(Some((_, ref status))) if status != "extracting" => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"error": format!("Cannot abort capsule with status '{}'", status)})),
+            )
+                .into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("abort_capsule: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+        _ => {}
+    }
+
+    if let Err(e) = sqlx::query("UPDATE memory_capsules SET status = 'aborted' WHERE id = $1")
+        .bind(capsule_id)
+        .execute(&state.db)
+        .await
+    {
+        tracing::error!("abort_capsule: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to abort capsule"}))).into_response();
+    }
+
+    (StatusCode::OK, Json(json!({"status": "aborted"}))).into_response()
+}
+
+// ---------------------------------------------------------------------------
 // GET /api/memory/capsules/grants?agent_id=UUID — Get grants for an agent
 // ---------------------------------------------------------------------------
 
@@ -405,7 +488,7 @@ async fn refresh_capsule(
         Ok(Some((ref oid, _))) if oid != &user.id => {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
         }
-        Ok(Some((_, ref status))) if status != "ready" && status != "failed" => {
+        Ok(Some((_, ref status))) if status != "ready" && status != "failed" && status != "aborted" => {
             return (
                 StatusCode::CONFLICT,
                 Json(json!({"error": format!("Capsule is currently {}", status)})),
