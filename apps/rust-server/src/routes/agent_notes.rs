@@ -160,7 +160,7 @@ async fn agent_get_note(
     }
 
     let row = sqlx::query_as::<_, NoteRow>(&format!(
-        "{} WHERE n.id = $1 AND n.conversation_id = $2",
+        "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE n.id = $1 AND ncl.conversation_id = $2",
         NOTE_QUERY_BASE
     ))
     .bind(note_id)
@@ -274,7 +274,7 @@ async fn agent_list_notes(
 
     let rows = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
+            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
@@ -284,7 +284,7 @@ async fn agent_list_notes(
         .await
     } else {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
+            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)

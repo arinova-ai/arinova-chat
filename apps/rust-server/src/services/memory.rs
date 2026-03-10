@@ -205,29 +205,6 @@ async fn do_extraction(
 
     let msg_count = messages.len();
 
-    if messages.is_empty() {
-        // No new messages — return 0 entries, 0 messages, keep existing watermark
-        let now = chrono::Utc::now();
-        let wm = extracted_through.map(|w| chrono::DateTime::from_naive_utc_and_offset(w, chrono::Utc)).unwrap_or(now);
-        return Ok((0, 0, wm, wm));
-    }
-
-    // Time range from fetched messages
-    let first_msg_time = messages
-        .iter()
-        .map(|(_, _, ts)| *ts)
-        .min()
-        .unwrap(); // safe: messages is non-empty
-    let first_msg_utc = chrono::DateTime::from_naive_utc_and_offset(first_msg_time, chrono::Utc);
-
-    // New watermark = MAX created_at from fetched messages
-    let new_watermark = messages
-        .iter()
-        .map(|(_, _, ts)| *ts)
-        .max()
-        .unwrap(); // safe: messages is non-empty
-    let new_watermark_utc = chrono::DateTime::from_naive_utc_and_offset(new_watermark, chrono::Utc);
-
     // 3b. Fetch linked notes to include as context (via note_conversation_links)
     let notes: Vec<(String, String)> = sqlx::query_as(
         r#"SELECT n.title, n.content
@@ -240,6 +217,31 @@ async fn do_extraction(
     .fetch_all(db)
     .await
     .unwrap_or_default();
+
+    if messages.is_empty() && notes.is_empty() {
+        // No new messages and no linked notes — return 0 entries
+        let now = chrono::Utc::now();
+        let wm = extracted_through.map(|w| chrono::DateTime::from_naive_utc_and_offset(w, chrono::Utc)).unwrap_or(now);
+        return Ok((0, 0, wm, wm));
+    }
+
+    // Time range from fetched messages
+    let first_msg_time = messages
+        .iter()
+        .map(|(_, _, ts)| *ts)
+        .min();
+    let first_msg_utc = first_msg_time
+        .map(|t| chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc))
+        .unwrap_or_else(chrono::Utc::now);
+
+    // New watermark = MAX created_at from fetched messages (or now if notes-only)
+    let new_watermark = messages
+        .iter()
+        .map(|(_, _, ts)| *ts)
+        .max();
+    let new_watermark_utc = new_watermark
+        .map(|t| chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc))
+        .unwrap_or_else(chrono::Utc::now);
 
     // 4. Build chunks from messages (each chunk ≤ CHUNK_CHAR_LIMIT chars)
     let mut chunks: Vec<String> = Vec::new();

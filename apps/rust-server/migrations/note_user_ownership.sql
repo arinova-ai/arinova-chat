@@ -23,7 +23,7 @@ WHERE n.conversation_id = c.id
 CREATE TABLE IF NOT EXISTS note_conversation_links (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     note_id         UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
-    conversation_id UUID NOT NULL,
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     linked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(note_id, conversation_id)
 );

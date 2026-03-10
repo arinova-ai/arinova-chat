@@ -1800,19 +1800,6 @@ async fn list_user_notes(
         "n.archived_at IS NULL"
     };
 
-    let tag_cond = if tag_filter.is_empty() {
-        String::new()
-    } else {
-        format!(
-            " AND n.tags @> ARRAY[{}]::text[]",
-            tag_filter
-                .iter()
-                .map(|t| format!("'{}'", t.replace('\'', "''")))
-                .collect::<Vec<_>>()
-                .join(",")
-        )
-    };
-
     // Build search pattern for ILIKE
     let search_pattern = if search_term.is_empty() {
         None
@@ -1821,9 +1808,18 @@ async fn list_user_notes(
     };
 
     // Build query dynamically with correct parameter numbering
-    // $1 = user.id, then cursor/search/limit params follow
-    let mut conditions = format!("n.owner_id = $1 AND {}{}", archive_cond, tag_cond);
+    // $1 = user.id, then optional params follow in order
+    let mut conditions = format!("n.owner_id = $1 AND {}", archive_cond);
     let mut param_idx = 2u32;
+
+    let tag_param = if !tag_filter.is_empty() {
+        let p = param_idx;
+        param_idx += 1;
+        conditions.push_str(&format!(" AND n.tags @> ${}::text[]", p));
+        Some(p)
+    } else {
+        None
+    };
 
     let cursor_param = if cursor_ts.is_some() {
         let p = param_idx;
@@ -1866,8 +1862,47 @@ async fn list_user_notes(
         conditions, limit_param
     );
 
-    let rows = match (cursor_ts, &search_pattern) {
-        (Some(ts), Some(sp)) => {
+    // Bind all parameters dynamically using sqlx::query + manual row mapping
+    // Since sqlx doesn't support conditional binding easily, use explicit match arms
+    // for the 8 possible combinations of (tags, cursor, search)
+    let rows = match (tag_param.is_some(), cursor_ts, &search_pattern) {
+        (true, Some(ts), Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(ts)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (true, Some(ts), None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(ts)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (true, None, Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (true, None, None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (false, Some(ts), Some(sp)) => {
             sqlx::query_as::<_, NoteRow>(&q)
                 .bind(&user.id)
                 .bind(ts)
@@ -1876,7 +1911,7 @@ async fn list_user_notes(
                 .fetch_all(&state.db)
                 .await
         }
-        (Some(ts), None) => {
+        (false, Some(ts), None) => {
             sqlx::query_as::<_, NoteRow>(&q)
                 .bind(&user.id)
                 .bind(ts)
@@ -1884,7 +1919,7 @@ async fn list_user_notes(
                 .fetch_all(&state.db)
                 .await
         }
-        (None, Some(sp)) => {
+        (false, None, Some(sp)) => {
             sqlx::query_as::<_, NoteRow>(&q)
                 .bind(&user.id)
                 .bind(sp)
@@ -1892,7 +1927,7 @@ async fn list_user_notes(
                 .fetch_all(&state.db)
                 .await
         }
-        (None, None) => {
+        (false, None, None) => {
             sqlx::query_as::<_, NoteRow>(&q)
                 .bind(&user.id)
                 .bind(limit + 1)
@@ -1907,10 +1942,7 @@ async fn list_user_notes(
             let items: Vec<serde_json::Value> = rows
                 .iter()
                 .take(limit as usize)
-                .map(|n| {
-                    let mut j = note_to_json(n);
-                    j
-                })
+                .map(note_to_json)
                 .collect();
 
             let next_cursor = if has_more {

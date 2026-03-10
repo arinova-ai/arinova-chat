@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, FileText, Tag, ChevronRight, Loader2, X, MessageSquare } from "lucide-react";
+import { Search, FileText, ChevronRight, Loader2, X, MessageSquare } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -52,22 +52,28 @@ interface ListResponse {
 
 // ── Helpers ───────────────────────────────────────────────────
 
-function formatTime(date: string): string {
-  const d = new Date(date);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHr = Math.floor(diffMs / 3600000);
-  const diffDay = Math.floor(diffMs / 86400000);
+function useRelativeTime() {
+  const { t } = useTranslation();
+  return useCallback(
+    (date: string): string => {
+      const d = new Date(date);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffHr = Math.floor(diffMs / 3600000);
+      const diffDay = Math.floor(diffMs / 86400000);
 
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
+      if (diffMin < 1) return t("office.notes.justNow");
+      if (diffMin < 60) return t("office.notes.minutesAgo", { count: diffMin });
+      if (diffHr < 24) return t("office.notes.hoursAgo", { count: diffHr });
+      if (diffDay < 7) return t("office.notes.daysAgo", { count: diffDay });
 
-  const isThisYear = d.getFullYear() === now.getFullYear();
-  if (isThisYear) return d.toLocaleDateString([], { month: "short", day: "numeric" });
-  return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+      const isThisYear = d.getFullYear() === now.getFullYear();
+      if (isThisYear) return d.toLocaleDateString([], { month: "short", day: "numeric" });
+      return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+    },
+    [t],
+  );
 }
 
 function excerpt(content: string, maxLen = 120): string {
@@ -79,17 +85,29 @@ function excerpt(content: string, maxLen = 120): string {
 
 export default function MyNotesPage() {
   const { t } = useTranslation();
+  const formatTime = useRelativeTime();
   const [notes, setNotes] = useState<UserNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedNote, setSelectedNote] = useState<UserNote | null>(null);
   const [editingContent, setEditingContent] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Debounce search input
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [search]);
 
   // Fetch notes
   const fetchNotes = useCallback(
@@ -101,7 +119,7 @@ export default function MyNotesPage() {
       try {
         const params = new URLSearchParams();
         if (cursor) params.set("before", cursor);
-        if (search.trim()) params.set("search", search.trim());
+        if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
         if (selectedTag) params.set("tags", selectedTag);
         params.set("limit", "20");
 
@@ -124,24 +142,12 @@ export default function MyNotesPage() {
         setLoadingMore(false);
       }
     },
-    [search, selectedTag],
+    [debouncedSearch, selectedTag],
   );
 
   useEffect(() => {
     fetchNotes();
   }, [fetchNotes]);
-
-  // Debounced search
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setSearch(value);
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-      searchTimerRef.current = setTimeout(() => {
-        setNextCursor(null);
-      }, 300);
-    },
-    [],
-  );
 
   // Collect all unique tags
   const allTags = useMemo(() => {
@@ -194,7 +200,7 @@ export default function MyNotesPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder={t("office.notes.search")}
             className="h-8 w-full rounded-md border border-border/50 bg-muted/30 pl-8 pr-8 text-xs placeholder:text-muted-foreground/60 focus:border-brand/40 focus:outline-none"
           />
@@ -301,7 +307,7 @@ export default function MyNotesPage() {
 
                   {note.creatorType === "agent" && note.agentName && (
                     <span className="text-[9px] text-muted-foreground/70">
-                      by {note.agentName}
+                      {t("office.notes.byAgent", { name: note.agentName })}
                     </span>
                   )}
                 </div>
@@ -318,7 +324,7 @@ export default function MyNotesPage() {
                 {loadingMore ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Load more"
+                  t("office.notes.loadMore")
                 )}
               </button>
             )}
@@ -334,7 +340,7 @@ export default function MyNotesPage() {
             <SheetDescription className="text-[11px] text-muted-foreground">
               {selectedNote && formatTime(selectedNote.updatedAt)}
               {selectedNote?.creatorType === "agent" && selectedNote.agentName && (
-                <> &middot; by {selectedNote.agentName}</>
+                <> &middot; {t("office.notes.byAgent", { name: selectedNote.agentName })}</>
               )}
             </SheetDescription>
           </SheetHeader>
@@ -370,14 +376,14 @@ export default function MyNotesPage() {
                         disabled={saving}
                         className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-50"
                       >
-                        {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                        {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : t("office.notes.save")}
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingContent(null)}
                         className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50"
                       >
-                        Cancel
+                        {t("office.notes.cancel")}
                       </button>
                     </div>
                   </div>
@@ -388,10 +394,10 @@ export default function MyNotesPage() {
                       onClick={() => setEditingContent(selectedNote.content)}
                       className="mb-3 rounded-md border border-border/40 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                     >
-                      Edit
+                      {t("office.notes.edit")}
                     </button>
                     <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
-                      <ReactMarkdown>{selectedNote.content || "*No content*"}</ReactMarkdown>
+                      <ReactMarkdown>{selectedNote.content || `*${t("office.notes.noContent")}*`}</ReactMarkdown>
                     </div>
                   </div>
                 )}
