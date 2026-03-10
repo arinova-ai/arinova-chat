@@ -253,6 +253,14 @@ async fn main() {
         );
 
         ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS summary TEXT DEFAULT NULL;
+
+        -- Update memory_capsules status constraint to include 'aborted'
+        DO $$ BEGIN
+            ALTER TABLE memory_capsules DROP CONSTRAINT IF EXISTS memory_capsules_status_check;
+            ALTER TABLE memory_capsules ADD CONSTRAINT memory_capsules_status_check
+                CHECK (status = ANY (ARRAY['pending', 'extracting', 'ready', 'failed', 'aborted']));
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
