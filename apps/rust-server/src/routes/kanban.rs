@@ -82,13 +82,23 @@ struct CreateCardBody {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct UpdateCardBody {
     title: Option<String>,
     description: Option<String>,
     priority: Option<String>,
     column_id: Option<Uuid>,
     sort_order: Option<i32>,
+}
+
+impl UpdateCardBody {
+    fn is_empty(&self) -> bool {
+        self.title.is_none()
+            && self.description.is_none()
+            && self.priority.is_none()
+            && self.column_id.is_none()
+            && self.sort_order.is_none()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -343,6 +353,11 @@ async fn update_card(
     Path(card_id): Path<Uuid>,
     Json(body): Json<UpdateCardBody>,
 ) -> Response {
+    if body.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "No fields to update" })))
+            .into_response();
+    }
+
     if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
         return e;
     }
@@ -631,6 +646,11 @@ async fn agent_update_card(
     Path(card_id): Path<Uuid>,
     Json(body): Json<UpdateCardBody>,
 ) -> Response {
+    if body.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "No fields to update" })))
+            .into_response();
+    }
+
     let owner_id = match agent_owner_id(&state.db, agent.id).await {
         Ok(id) => id,
         Err(e) => return e,

@@ -630,6 +630,7 @@ async fn create_pack(
 // ===== PATCH /api/creator/stickers/:id — update pack =====
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct UpdatePackBody {
     name: Option<String>,
     #[serde(rename = "nameZh")]
@@ -652,6 +653,22 @@ async fn update_pack(
     Path(pack_id): Path<Uuid>,
     Json(body): Json<UpdatePackBody>,
 ) -> (StatusCode, Json<Value>) {
+    if body.name.is_none()
+        && body.name_zh.is_none()
+        && body.description.is_none()
+        && body.character_name.is_none()
+        && body.category.is_none()
+        && body.price.is_none()
+        && body.status.is_none()
+        && body.cover_image.is_none()
+        && body.agent_compatible.is_none()
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "No fields to update" })),
+        );
+    }
+
     // Verify ownership
     let owner = sqlx::query_scalar::<_, String>(
         "SELECT creator_id FROM sticker_packs WHERE id = $1",

@@ -398,6 +398,7 @@ async fn agent_create_note(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct UpdateNoteBody {
     title: Option<String>,
     content: Option<String>,

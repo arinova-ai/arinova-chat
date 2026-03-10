@@ -763,6 +763,7 @@ async fn kick_user(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct UpdateSettingsBody {
     title: Option<String>,
     #[serde(rename = "historyVisible")]
@@ -780,6 +781,18 @@ async fn update_settings(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateSettingsBody>,
 ) -> Response {
+    if body.title.is_none()
+        && body.history_visible.is_none()
+        && body.invite_enabled.is_none()
+        && body.mention_only.is_none()
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "No fields to update"})),
+        )
+            .into_response();
+    }
+
     let role = get_user_role(&state.db, id, &user.id).await;
     if !matches!(role.as_deref(), Some("admin")) {
         return (
