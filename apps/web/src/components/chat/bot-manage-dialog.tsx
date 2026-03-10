@@ -34,7 +34,6 @@ import {
   BellOff,
   Globe,
   Lock,
-  Phone,
 } from "lucide-react";
 import {
   Popover,
@@ -44,7 +43,6 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
-import { useVoiceCallStore } from "@/store/voice-call-store";
 import { BACKEND_URL, assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 
 /** Popover that opens on hover (desktop) and tap (mobile). */
@@ -97,8 +95,6 @@ interface BotManageDialogProps {
     systemPrompt: string | null;
     notificationsEnabled: boolean;
   };
-  conversationId?: string;
-  conversationType?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -109,41 +105,8 @@ interface AgentStats {
   lastActive: string | null;
 }
 
-function VoiceCallButton({
-  conversationId,
-  agent,
-}: {
-  conversationId: string;
-  agent: { id: string; name: string; avatarUrl: string | null };
-}) {
-  const { t } = useTranslation();
-  const voiceCallState = useVoiceCallStore((s) => s.callState);
-  const startCall = useVoiceCallStore((s) => s.startCall);
-  const isInCall = voiceCallState !== "idle";
-
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      className={cn("gap-2 mt-1", isInCall && "text-green-400")}
-      onClick={() => {
-        if (!isInCall) {
-          startCall(conversationId, { agentId: agent.id }, agent.name, agent.avatarUrl, "native");
-        }
-      }}
-      disabled={isInCall}
-      title={isInCall ? t("voice.inCall") : t("voice.startCall")}
-    >
-      <Phone className="h-4 w-4" />
-      {isInCall ? t("voice.inCall") : t("voice.startCall")}
-    </Button>
-  );
-}
-
 export function BotManageDialog({
   agent,
-  conversationId,
-  conversationType,
   open,
   onOpenChange,
 }: BotManageDialogProps) {
@@ -380,7 +343,6 @@ export function BotManageDialog({
               }}
             />
             <p className="text-xs text-muted-foreground">{t("botManage.clickChangeAvatar")}</p>
-            {conversationId && conversationType === "direct" && <VoiceCallButton conversationId={conversationId} agent={agent} />}
           </div>
 
           {/* Name */}

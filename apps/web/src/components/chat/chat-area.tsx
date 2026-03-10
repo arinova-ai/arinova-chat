@@ -193,8 +193,6 @@ export function ChatArea() {
       {agent && (
         <BotManageDialog
           agent={agent}
-          conversationId={conversation.id}
-          conversationType={conversation.type}
           open={manageOpen}
           onOpenChange={setManageOpen}
         />

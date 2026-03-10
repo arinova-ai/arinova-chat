@@ -13,13 +13,15 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, User, Pencil, Check, X, MessageSquare, Radio, Loader2, Settings } from "lucide-react";
+import { Bot, User, Pencil, Check, X, MessageSquare, Radio, Loader2, Settings, Phone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { VisuallyHidden } from "radix-ui";
 import { authClient } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
+import { useVoiceCallStore } from "@/store/voice-call-store";
+import { cn } from "@/lib/utils";
 
 interface AgentProfileSheetProps {
   agentId: string;
@@ -92,6 +94,12 @@ export function AgentProfileSheet({
         : null;
 
   const isOwner = !!(currentUserId && resolved?.ownerId && currentUserId === resolved.ownerId);
+
+  // Voice call
+  const voiceCallState = useVoiceCallStore((s) => s.callState);
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const isInCall = voiceCallState !== "idle";
+  const isDirectChat = conversations.find((c) => c.id === conversationId)?.type === "direct";
 
   // Is agent currently thinking in any conversation?
   const isThinking = Object.values(thinkingAgents).some((arr) =>
@@ -265,6 +273,22 @@ export function AgentProfileSheet({
               title="Edit agent"
             >
               <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+          {isDirectChat && !editing && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={cn("shrink-0", isInCall ? "text-green-400" : "text-muted-foreground hover:text-foreground")}
+              onClick={() => {
+                if (!isInCall && resolved) {
+                  startCall(conversationId, { agentId: resolved.id }, resolved.name, resolved.avatarUrl, "native");
+                }
+              }}
+              disabled={isInCall}
+              title={isInCall ? t("voice.inCall") : t("voice.startCall")}
+            >
+              <Phone className="h-4 w-4" />
             </Button>
           )}
         </div>

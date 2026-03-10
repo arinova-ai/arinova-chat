@@ -10,11 +10,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, Crown, ShieldCheck } from "lucide-react";
+import { Bot, Crown, Phone, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { VisuallyHidden } from "radix-ui";
 import { useTranslation } from "@/lib/i18n";
+import { useVoiceCallStore } from "@/store/voice-call-store";
+import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 interface UserProfileSheetProps {
   userId: string;
@@ -60,6 +64,14 @@ export function UserProfileSheet({
   onOpenChange,
 }: UserProfileSheetProps) {
   const { t } = useTranslation();
+  const { data: session } = authClient.useSession();
+  const currentUserId = session?.user?.id;
+  const conversations = useChatStore((s) => s.conversations);
+  const isDirectChat = conversations.find((c) => c.id === conversationId)?.type === "direct";
+  const voiceCallState = useVoiceCallStore((s) => s.callState);
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const isInCall = voiceCallState !== "idle";
+  const isSelf = currentUserId === userId;
   const groupMembersData = useChatStore((s) => s.groupMembersData);
   const members = groupMembersData[conversationId];
 
@@ -143,6 +155,22 @@ export function UserProfileSheet({
                   </p>
                 )}
               </div>
+              {isDirectChat && !isSelf && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={cn("shrink-0", isInCall ? "text-green-400" : "text-muted-foreground hover:text-foreground")}
+                  onClick={() => {
+                    if (!isInCall) {
+                      startCall(conversationId, { targetUserId: userId }, user.name, user.image, "native");
+                    }
+                  }}
+                  disabled={isInCall}
+                  title={isInCall ? t("voice.inCall") : t("voice.startCall")}
+                >
+                  <Phone className="h-4 w-4" />
+                </Button>
+              )}
             </div>
 
             {/* Agents section (group context only) */}
