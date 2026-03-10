@@ -42,8 +42,12 @@ export function ChatArea() {
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
-  const [notebookOpen, setNotebookOpen] = useState(false);
-  const [kanbanSidebarOpen, setKanbanSidebarOpen] = useState(false);
+  const notebookOpen = useChatStore((s) => s.notebookOpen);
+  const kanbanSidebarOpen = useChatStore((s) => s.kanbanSidebarOpen);
+  const openNotebook = useChatStore((s) => s.openNotebook);
+  const closeNotebook = useChatStore((s) => s.closeNotebook);
+  const openKanbanSidebar = useChatStore((s) => s.openKanbanSidebar);
+  const closeKanbanSidebar = useChatStore((s) => s.closeKanbanSidebar);
   const [mediaFilesOpen, setMediaFilesOpen] = useState(false);
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
@@ -167,8 +171,8 @@ export function ChatArea() {
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
-        onKanbanClick={() => setKanbanSidebarOpen(true)}
-        onNotebookClick={() => setNotebookOpen(true)}
+        onKanbanClick={openKanbanSidebar}
+        onNotebookClick={openNotebook}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
@@ -231,7 +235,7 @@ export function ChatArea() {
         <ErrorBoundary scope="NotebookSheet">
           <NotebookSheet
             open={notebookOpen}
-            onOpenChange={setNotebookOpen}
+            onOpenChange={(v) => { if (!v) closeNotebook(); }}
             conversationId={activeConversationId}
           />
         </ErrorBoundary>
@@ -240,7 +244,7 @@ export function ChatArea() {
         <ErrorBoundary scope="KanbanSidebar">
           <KanbanSidebar
             open={kanbanSidebarOpen}
-            onOpenChange={setKanbanSidebarOpen}
+            onOpenChange={(v) => { if (!v) closeKanbanSidebar(); }}
           />
         </ErrorBoundary>
       )}

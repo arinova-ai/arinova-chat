@@ -293,6 +293,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       setShowArchived(false);
       setFilterTags([]);
       setSuggestedTags([]);
+      setAskAiOpen(false);
+      setAskAiQuestion("");
+      setAskAiAnswer("");
+      setAskAiLoading(false);
     }
   }, [open]);
 
@@ -856,11 +860,11 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               </Button>
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleAutoTag} disabled={autoTagging}>
                 {autoTagging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Auto Tag
+                {t("chat.notebook.autoTag")}
               </Button>
               <Button variant="ghost" size="sm" className={cn("h-7 text-xs gap-1", askAiOpen && "bg-accent")} onClick={() => setAskAiOpen(!askAiOpen)}>
                 <Bot className="h-3.5 w-3.5" />
-                Ask AI
+                {t("chat.notebook.askAi")}
               </Button>
             </div>
             {askAiOpen && (

@@ -1376,28 +1376,29 @@ function PrivacyPanel() {
 
 function AiPanel() {
   const { t } = useTranslation();
-  const [apiKey, setApiKey] = useState("");
+  const [newKey, setNewKey] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api<{ hasGeminiKey: boolean; geminiApiKey: string | null }>("/api/user/settings", { silent: true })
+    api<{ hasGeminiKey: boolean }>("/api/user/settings", { silent: true })
       .then((res) => {
         setHasKey(res.hasGeminiKey);
-        if (res.geminiApiKey) setApiKey(res.geminiApiKey);
       })
       .finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
+    if (!newKey.trim()) return;
     setSaving(true);
     try {
       const res = await api<{ hasGeminiKey: boolean }>("/api/user/settings", {
         method: "PUT",
-        body: JSON.stringify({ geminiApiKey: apiKey }),
+        body: JSON.stringify({ geminiApiKey: newKey.trim() }),
       });
       setHasKey(res.hasGeminiKey);
+      setNewKey("");
     } finally {
       setSaving(false);
     }
@@ -1411,7 +1412,7 @@ function AiPanel() {
         body: JSON.stringify({ geminiApiKey: null }),
       });
       setHasKey(false);
-      setApiKey("");
+      setNewKey("");
     } finally {
       setSaving(false);
     }
@@ -1437,12 +1438,12 @@ function AiPanel() {
         <div className="flex gap-2">
           <Input
             type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="AIza..."
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder={hasKey ? t("settings.ai.keyReplace") : "AIza..."}
             className="flex-1"
           />
-          <Button onClick={handleSave} disabled={saving || !apiKey.trim()} size="sm">
+          <Button onClick={handleSave} disabled={saving || !newKey.trim()} size="sm">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t("common.save")}
           </Button>
         </div>

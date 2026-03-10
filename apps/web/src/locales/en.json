@@ -144,6 +144,8 @@
   "chat.notebook.addTag": "+ Add tag",
   "chat.notebook.openNote": "Open note",
   "chat.notebook.askAiPlaceholder": "Ask a question about this note...",
+  "chat.notebook.autoTag": "Auto Tag",
+  "chat.notebook.askAi": "Ask AI",
 
   "chat.kanban.openTask": "Open task",
 
@@ -404,6 +406,7 @@
   "settings.ai.keySet": "API key is set",
   "settings.ai.removeKey": "Remove",
   "settings.ai.keyHint": "Get your API key from Google AI Studio (aistudio.google.com). Required for Ask AI in notes.",
+  "settings.ai.keyReplace": "Enter new key to replace...",
   "settings.ai.needKey": "Set your Gemini API key in Settings to use Ask AI.",
 
   "userProfile.title": "User Profile",

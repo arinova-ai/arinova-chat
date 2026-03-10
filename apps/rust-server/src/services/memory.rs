@@ -87,8 +87,9 @@ pub async fn extract_capsule(
             .await
             .unwrap_or(0);
 
-            sqlx::query(
-                "UPDATE memory_capsules SET status = 'ready', created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5, note_count = $6 WHERE id = $1",
+            // Only finalize if not cancelled (abort handler may have changed status)
+            let result = sqlx::query(
+                "UPDATE memory_capsules SET status = 'ready', created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5, note_count = $6 WHERE id = $1 AND status = 'extracting'",
             )
             .bind(capsule_id)
             .bind(first_msg_time)
@@ -98,6 +99,12 @@ pub async fn extract_capsule(
             .bind(note_count as i32)
             .execute(&db)
             .await?;
+
+            if result.rows_affected() == 0 {
+                // Capsule was cancelled/deleted while we were finishing
+                tracing::info!("Extraction for capsule {} completed but capsule was already cancelled", capsule_id);
+                return Ok(count);
+            }
             // Auto-grant capsule to all agents in the conversation
             let _ = sqlx::query(
                 r#"INSERT INTO memory_capsule_grants (capsule_id, agent_id, granted_by)

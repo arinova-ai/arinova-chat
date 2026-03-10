@@ -260,16 +260,13 @@ async fn main() {
         -- Add note_count column to memory_capsules
         ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS note_count INTEGER NOT NULL DEFAULT 0;
 
-        -- Update memory_capsules status constraint (remove 'aborted', use real cancellation)
-        DO $$ BEGIN
-            ALTER TABLE memory_capsules DROP CONSTRAINT IF EXISTS memory_capsules_status_check;
-            ALTER TABLE memory_capsules ADD CONSTRAINT memory_capsules_status_check
-                CHECK (status = ANY (ARRAY['pending', 'extracting', 'ready', 'failed']));
-        EXCEPTION WHEN others THEN NULL;
-        END $$;
-
-        -- Migrate any existing 'aborted' capsules to 'failed'
+        -- Migrate any existing 'aborted' capsules to 'failed' (before constraint change)
         UPDATE memory_capsules SET status = 'failed' WHERE status = 'aborted';
+
+        -- Update memory_capsules status constraint (remove 'aborted', use real cancellation)
+        ALTER TABLE memory_capsules DROP CONSTRAINT IF EXISTS memory_capsules_status_check;
+        ALTER TABLE memory_capsules ADD CONSTRAINT memory_capsules_status_check
+            CHECK (status = ANY (ARRAY['pending', 'extracting', 'ready', 'failed']));
 
         -- User settings table for API keys
         CREATE TABLE IF NOT EXISTS user_settings (

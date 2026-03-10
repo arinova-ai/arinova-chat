@@ -1397,7 +1397,7 @@ async fn ask_ai(
     .fetch_optional(&state.db)
     .await
     {
-        Ok(Some(Some(k))) if !k.is_empty() => k,
+        Ok(Some(Some(k))) if !k.is_empty() => crate::routes::user_settings::decrypt_api_key(&state.config, &k),
         _ => return (StatusCode::PAYMENT_REQUIRED, Json(json!({"error": "Please set your Gemini API key in Settings to use Ask AI."}))).into_response(),
     };
 
