@@ -73,11 +73,12 @@ pub async fn extract_capsule(
 
     // Run extraction, and on any error mark as 'failed'
     match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive).await {
-        Ok((count, msg_count, new_watermark)) => {
+        Ok((count, msg_count, first_msg_time, new_watermark)) => {
             sqlx::query(
-                "UPDATE memory_capsules SET status = 'ready', extracted_through = $2, entry_count = entry_count + $3, message_count = message_count + $4 WHERE id = $1",
+                "UPDATE memory_capsules SET status = 'ready', created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5 WHERE id = $1",
             )
             .bind(capsule_id)
+            .bind(first_msg_time)
             .bind(new_watermark)
             .bind(count as i32)
             .bind(msg_count as i32)
@@ -131,8 +132,8 @@ async fn do_extraction(
     capsule_id: Uuid,
     conversation_id: Uuid,
     extracted_through: Option<chrono::NaiveDateTime>,
-) -> anyhow::Result<(usize, usize, chrono::DateTime<chrono::Utc>)> {
-    // Returns (entry_count, message_count, new_watermark)
+) -> anyhow::Result<(usize, usize, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> {
+    // Returns (entry_count, message_count, first_message_time, new_watermark)
     // 3. Fetch messages (incremental: only after extracted_through if set)
     let messages = if let Some(watermark) = extracted_through {
         sqlx::query_as::<_, (String, String, chrono::NaiveDateTime)>(
@@ -164,8 +165,17 @@ async fn do_extraction(
     if messages.is_empty() {
         // No new messages — return 0 entries, 0 messages, keep existing watermark
         let now = chrono::Utc::now();
-        return Ok((0, 0, extracted_through.map(|w| chrono::DateTime::from_naive_utc_and_offset(w, chrono::Utc)).unwrap_or(now)));
+        let wm = extracted_through.map(|w| chrono::DateTime::from_naive_utc_and_offset(w, chrono::Utc)).unwrap_or(now);
+        return Ok((0, 0, wm, wm));
     }
+
+    // Time range from fetched messages
+    let first_msg_time = messages
+        .iter()
+        .map(|(_, _, ts)| *ts)
+        .min()
+        .unwrap(); // safe: messages is non-empty
+    let first_msg_utc = chrono::DateTime::from_naive_utc_and_offset(first_msg_time, chrono::Utc);
 
     // New watermark = MAX created_at from fetched messages
     let new_watermark = messages
@@ -267,7 +277,7 @@ async fn do_extraction(
     };
 
     if parsed_entries.is_empty() {
-        return Ok((0, msg_count, effective_watermark));
+        return Ok((0, msg_count, first_msg_utc, effective_watermark));
     }
 
     let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _)| t.clone()).collect();
@@ -305,7 +315,7 @@ async fn do_extraction(
 
     tx.commit().await.context("Failed to commit memory entries")?;
 
-    Ok((parsed_entries.len(), msg_count, effective_watermark))
+    Ok((parsed_entries.len(), msg_count, first_msg_utc, effective_watermark))
 }
 
 /// Send a single chunk to Gemini, retry once on failure, return extracted text.
