@@ -1690,7 +1690,8 @@ async fn auto_tag_note(
         }
     }
 
-    let merged_tags: Vec<String> = tag_set.into_iter().collect();
+    let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
+    merged_tags.sort_unstable();
 
     // Update note tags
     let _ = sqlx::query(
