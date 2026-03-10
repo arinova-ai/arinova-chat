@@ -142,6 +142,7 @@ interface ChatState {
   // Notebook state
   notesByConversation: Record<string, Note[]>;
   notebookOpen: boolean;
+  kanbanSidebarOpen: boolean;
   pendingNoteId: string | null;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
@@ -246,6 +247,8 @@ interface ChatState {
   openNotebook: () => void;
   openNoteById: (noteId: string) => void;
   closeNotebook: () => void;
+  openKanbanSidebar: () => void;
+  closeKanbanSidebar: () => void;
   loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
   createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
   updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[] }) => Promise<void>;
@@ -302,6 +305,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pinnedMessageIds: {},
   notesByConversation: {},
   notebookOpen: false,
+  kanbanSidebarOpen: false,
   pendingNoteId: null,
   agentNotesEnabledByConversation: {},
   convSearchOpen: false,
@@ -1415,16 +1419,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
   openNotebook: () => {
     diagCount("action:openNotebook");
     if (get().notebookOpen) return;
-    set({ notebookOpen: true });
+    set({ notebookOpen: true, kanbanSidebarOpen: false });
   },
   openNoteById: (noteId: string) => {
     diagCount("action:openNoteById");
-    set({ notebookOpen: true, pendingNoteId: noteId });
+    set({ notebookOpen: true, kanbanSidebarOpen: false, pendingNoteId: noteId });
   },
   closeNotebook: () => {
     diagCount("action:closeNotebook");
     if (!get().notebookOpen) return;
     set({ notebookOpen: false, pendingNoteId: null });
+  },
+  openKanbanSidebar: () => {
+    diagCount("action:openKanbanSidebar");
+    if (get().kanbanSidebarOpen) return;
+    set({ kanbanSidebarOpen: true, notebookOpen: false });
+  },
+  closeKanbanSidebar: () => {
+    diagCount("action:closeKanbanSidebar");
+    if (!get().kanbanSidebarOpen) return;
+    set({ kanbanSidebarOpen: false });
   },
 
   loadNotes: async (conversationId, opts) => {

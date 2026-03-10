@@ -24,6 +24,7 @@ import {
   Settings,
   MessageSquare,
   BookOpen,
+  SquareKanban,
   Search,
   Headset,
   ArrowRightLeft,
@@ -54,6 +55,7 @@ interface ChatHeaderProps {
   onSettingsClick?: () => void;
   onAddMemberClick?: () => void;
   onThreadsClick?: () => void;
+  onKanbanClick?: () => void;
   onNotebookClick?: () => void;
   onPhotosClick?: () => void;
   onFilesClick?: () => void;
@@ -75,6 +77,7 @@ export function ChatHeader({
   onSettingsClick,
   onAddMemberClick,
   onThreadsClick,
+  onKanbanClick,
   onNotebookClick,
   onPhotosClick,
   onFilesClick,
@@ -247,6 +250,17 @@ export function ChatHeader({
                 <UsersRound className="h-4 w-4" />
               </Button>
             )}
+            {onKanbanClick && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onKanbanClick}
+                title={t("chat.kanban.title")}
+              >
+                <SquareKanban className="h-4 w-4" />
+              </Button>
+            )}
             {onNotebookClick && (
               <Button
                 variant="ghost"
@@ -336,6 +350,17 @@ export function ChatHeader({
                 title={isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
               >
                 {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              </Button>
+            )}
+            {onKanbanClick && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onKanbanClick}
+                title={t("chat.kanban.title")}
+              >
+                <SquareKanban className="h-4 w-4" />
               </Button>
             )}
             {onNotebookClick && (

@@ -16,6 +16,7 @@ import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
 import { NotebookSheet } from "./notebook-sheet";
+import { KanbanSidebar } from "./kanban-sidebar";
 import { MediaFilesPanel, type MediaFilesTab } from "./media-files-panel";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
@@ -42,6 +43,7 @@ export function ChatArea() {
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
   const [notebookOpen, setNotebookOpen] = useState(false);
+  const [kanbanSidebarOpen, setKanbanSidebarOpen] = useState(false);
   const [mediaFilesOpen, setMediaFilesOpen] = useState(false);
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
@@ -165,6 +167,7 @@ export function ChatArea() {
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
+        onKanbanClick={() => setKanbanSidebarOpen(true)}
         onNotebookClick={() => setNotebookOpen(true)}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
@@ -230,6 +233,14 @@ export function ChatArea() {
             open={notebookOpen}
             onOpenChange={setNotebookOpen}
             conversationId={activeConversationId}
+          />
+        </ErrorBoundary>
+      )}
+      {kanbanSidebarOpen && (
+        <ErrorBoundary scope="KanbanSidebar">
+          <KanbanSidebar
+            open={kanbanSidebarOpen}
+            onOpenChange={setKanbanSidebarOpen}
           />
         </ErrorBoundary>
       )}
