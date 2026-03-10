@@ -1866,7 +1866,8 @@ async fn list_user_notes(
                   n.title, n.content, n.tags, n.archived_at, n.summary,
                   n.created_at, n.updated_at,
                   COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
-                  a.name AS agent_name
+                  a.name AS agent_name,
+                  n.share_token, COALESCE(n.is_public, false) AS is_public
            FROM conversation_notes n
            LEFT JOIN "user" u ON u.id = n.creator_id
            LEFT JOIN agents a ON a.id = n.agent_id
