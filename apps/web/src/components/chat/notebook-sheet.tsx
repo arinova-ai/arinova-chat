@@ -243,6 +243,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     (s) => s.agentNotesEnabledByConversation[conversationId] ?? true
   );
   const toggleAgentNotesEnabled = useChatStore((s) => s.toggleAgentNotesEnabled);
+  const pendingNoteId = useChatStore((s) => s.pendingNoteId);
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
@@ -290,6 +291,21 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   useEffect(() => {
     setNotesLoaded(false);
   }, [conversationId]);
+
+  // Navigate to a specific note when pendingNoteId is set
+  useEffect(() => {
+    if (!pendingNoteId || !notesLoaded) return;
+    const note = notes.find((n) => n.id === pendingNoteId);
+    if (note) {
+      setSelectedNote(note);
+      setViewMode("detail");
+      // Fetch full note
+      api(`/api/conversations/${conversationId}/notes/${note.id}`)
+        .then((full) => setSelectedNote(full as Note))
+        .catch(() => {});
+    }
+    useChatStore.setState({ pendingNoteId: null });
+  }, [pendingNoteId, notesLoaded, notes, conversationId]);
 
   const handleOpenNote = useCallback(async (note: Note) => {
     setSelectedNote(note);

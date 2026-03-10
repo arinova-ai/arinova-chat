@@ -142,6 +142,7 @@ interface ChatState {
   // Notebook state
   notesByConversation: Record<string, Note[]>;
   notebookOpen: boolean;
+  pendingNoteId: string | null;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
   // Conversation search state (in-conversation search bar)
@@ -243,6 +244,7 @@ interface ChatState {
 
   // Notebook actions
   openNotebook: () => void;
+  openNoteById: (noteId: string) => void;
   closeNotebook: () => void;
   loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
   createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
@@ -300,6 +302,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pinnedMessageIds: {},
   notesByConversation: {},
   notebookOpen: false,
+  pendingNoteId: null,
   agentNotesEnabledByConversation: {},
   convSearchOpen: false,
   convSearchQuery: "",
@@ -1414,10 +1417,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (get().notebookOpen) return;
     set({ notebookOpen: true });
   },
+  openNoteById: (noteId: string) => {
+    diagCount("action:openNoteById");
+    set({ notebookOpen: true, pendingNoteId: noteId });
+  },
   closeNotebook: () => {
     diagCount("action:closeNotebook");
     if (!get().notebookOpen) return;
-    set({ notebookOpen: false });
+    set({ notebookOpen: false, pendingNoteId: null });
   },
 
   loadNotes: async (conversationId, opts) => {

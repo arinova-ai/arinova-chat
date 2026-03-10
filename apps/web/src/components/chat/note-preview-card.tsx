@@ -13,12 +13,12 @@ interface NoteShareMetadata {
 
 export function NotePreviewCard({ metadata }: { metadata: NoteShareMetadata }) {
   const { t } = useTranslation();
-  const openNotebook = useChatStore((s) => s.openNotebook);
+  const openNoteById = useChatStore((s) => s.openNoteById);
 
   return (
     <button
       type="button"
-      onClick={openNotebook}
+      onClick={() => openNoteById(metadata.noteId)}
       className="mt-2 w-full max-w-[320px] rounded-lg border border-border bg-card p-3 text-left hover:bg-accent/50 transition-colors"
     >
       <div className="flex items-start gap-2">
