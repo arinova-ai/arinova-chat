@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import {
@@ -335,9 +336,13 @@ function CardDetailSheet({
                 {/* Description */}
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Description</label>
-                  <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">
-                    {card.description || "No description."}
-                  </p>
+                  {card.description ? (
+                    <div className="mt-1 text-sm text-foreground prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-code:text-foreground prose-pre:bg-muted">
+                      <ReactMarkdown>{card.description}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">No description.</p>
+                  )}
                 </div>
 
                 {/* Assigned agents */}

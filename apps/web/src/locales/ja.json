@@ -132,6 +132,13 @@
   "chat.notebook.noContent": "内容なし",
   "chat.notebook.settings": "設定",
   "chat.notebook.agentAccess": "エージェントにノートへのアクセスを許可",
+  "chat.notebook.active": "アクティブ",
+  "chat.notebook.archived": "アーカイブ済み",
+  "chat.notebook.archive": "アーカイブ",
+  "chat.notebook.unarchive": "アーカイブ解除",
+  "chat.notebook.shareToChat": "共有",
+  "chat.notebook.addTag": "+ タグを追加",
+  "chat.notebook.openNote": "ノートを開く",
 
   "chat.search.title": "検索",
   "chat.search.results": "件の結果",

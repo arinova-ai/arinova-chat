@@ -45,6 +45,7 @@ import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageContextMenu } from "./message-context-menu";
 import { ShareSheet, type ShareContent } from "./share-sheet";
 import { LinkPreviewCards } from "./link-preview-card";
+import { NotePreviewCard } from "./note-preview-card";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -809,6 +810,9 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
             />
             {!isStreaming && message.linkPreviews && message.linkPreviews.length > 0 && (
               <LinkPreviewCards linkPreviews={message.linkPreviews} />
+            )}
+            {message.metadata && typeof (message.metadata as Record<string, unknown>).noteId === "string" && (
+              <NotePreviewCard metadata={message.metadata as { noteId: string; title: string; preview: string; tags: string[] }} />
             )}
           </div>
           )}

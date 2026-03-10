@@ -134,6 +134,13 @@
   "chat.notebook.noContent": "無內容",
   "chat.notebook.settings": "設定",
   "chat.notebook.agentAccess": "允許 Agent 存取筆記",
+  "chat.notebook.active": "進行中",
+  "chat.notebook.archived": "已封存",
+  "chat.notebook.archive": "封存",
+  "chat.notebook.unarchive": "取消封存",
+  "chat.notebook.shareToChat": "分享",
+  "chat.notebook.addTag": "+ 新增標籤",
+  "chat.notebook.openNote": "開啟筆記",
 
   "chat.search.title": "搜尋",
   "chat.search.results": "筆結果",

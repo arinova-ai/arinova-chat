@@ -577,6 +577,8 @@ export interface Note {
   agentName: string | null;
   title: string;
   content: string;
+  tags: string[];
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

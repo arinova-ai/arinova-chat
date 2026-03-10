@@ -23,6 +23,9 @@ import {
   X,
   Pin,
   Share2,
+  Archive,
+  ArchiveRestore,
+  Tag,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
@@ -228,6 +231,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const createNote = useChatStore((s) => s.createNote);
   const updateNote = useChatStore((s) => s.updateNote);
   const deleteNote = useChatStore((s) => s.deleteNote);
+  const archiveNote = useChatStore((s) => s.archiveNote);
+  const unarchiveNote = useChatStore((s) => s.unarchiveNote);
+  const shareNoteApi = useChatStore((s) => s.shareNote);
   const currentUserId = useChatStore((s) => s.currentUserId);
   const agentNotesEnabled = useChatStore(
     (s) => s.agentNotesEnabledByConversation[conversationId] ?? true
@@ -238,21 +244,25 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [titleInput, setTitleInput] = useState("");
   const [contentInput, setContentInput] = useState("");
+  const [tagsInput, setTagsInput] = useState<string[]>([]);
+  const [tagInputValue, setTagInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareContent, setShareContent] = useState<ShareContent | null>(null);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [filterTags, setFilterTags] = useState<string[]>([]);
 
   useEffect(() => {
-    if (open && conversationId && !notesLoaded) {
+    if (open && conversationId) {
       setLoading(true);
-      loadNotes(conversationId).finally(() => {
+      loadNotes(conversationId, { archived: showArchived, tags: filterTags.length ? filterTags : undefined }).finally(() => {
         setLoading(false);
         setNotesLoaded(true);
       });
     }
-  }, [open, conversationId, loadNotes, notesLoaded]);
+  }, [open, conversationId, loadNotes, showArchived, filterTags]);
 
   useEffect(() => {
     if (!open) {
@@ -260,7 +270,11 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       setSelectedNote(null);
       setTitleInput("");
       setContentInput("");
+      setTagsInput([]);
+      setTagInputValue("");
       setSettingsOpen(false);
+      setShowArchived(false);
+      setFilterTags([]);
     }
   }, [open]);
 
@@ -276,6 +290,8 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const handleStartCreate = useCallback(() => {
     setTitleInput("");
     setContentInput("");
+    setTagsInput([]);
+    setTagInputValue("");
     setViewMode("create");
   }, []);
 
@@ -283,6 +299,8 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     if (!selectedNote) return;
     setTitleInput(selectedNote.title);
     setContentInput(selectedNote.content);
+    setTagsInput(selectedNote.tags ?? []);
+    setTagInputValue("");
     setViewMode("edit");
   }, [selectedNote]);
 
@@ -303,7 +321,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     if (!titleInput.trim()) return;
     setLoading(true);
     try {
-      const note = await createNote(conversationId, titleInput.trim(), contentInput);
+      const note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput);
       setSelectedNote(note);
       setViewMode("detail");
     } catch {
@@ -311,7 +329,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     } finally {
       setLoading(false);
     }
-  }, [conversationId, titleInput, contentInput, createNote]);
+  }, [conversationId, titleInput, contentInput, tagsInput, createNote]);
 
   const handleSave = useCallback(async () => {
     if (!selectedNote || !titleInput.trim()) return;
@@ -320,11 +338,13 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       await updateNote(conversationId, selectedNote.id, {
         title: titleInput.trim(),
         content: contentInput,
+        tags: tagsInput,
       });
       setSelectedNote({
         ...selectedNote,
         title: titleInput.trim(),
         content: contentInput,
+        tags: tagsInput,
         updatedAt: new Date().toISOString(),
       });
       setViewMode("detail");
@@ -333,7 +353,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     } finally {
       setLoading(false);
     }
-  }, [selectedNote, conversationId, titleInput, contentInput, updateNote]);
+  }, [selectedNote, conversationId, titleInput, contentInput, tagsInput, updateNote]);
 
   const handleDelete = useCallback(async (note?: Note) => {
     const target = note || selectedNote;
@@ -360,6 +380,59 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     });
     setShareSheetOpen(true);
   }, []);
+
+  const handleArchiveNote = useCallback(async (note?: Note) => {
+    const target = note || selectedNote;
+    if (!target) return;
+    setLoading(true);
+    try {
+      await archiveNote(conversationId, target.id);
+      if (selectedNote?.id === target.id) {
+        setSelectedNote(null);
+        setViewMode("list");
+      }
+    } catch { /* api shows toast */ }
+    setLoading(false);
+  }, [selectedNote, conversationId, archiveNote]);
+
+  const handleUnarchiveNote = useCallback(async (note: Note) => {
+    setLoading(true);
+    try {
+      await unarchiveNote(conversationId, note.id);
+    } catch { /* api shows toast */ }
+    setLoading(false);
+  }, [conversationId, unarchiveNote]);
+
+  const handleShareNoteToChat = useCallback(async (note?: Note) => {
+    const target = note || selectedNote;
+    if (!target) return;
+    setLoading(true);
+    try {
+      await shareNoteApi(conversationId, target.id);
+    } catch { /* api shows toast */ }
+    setLoading(false);
+  }, [selectedNote, conversationId, shareNoteApi]);
+
+  const handleAddTag = useCallback((tag: string) => {
+    const trimmed = tag.trim();
+    if (trimmed && !tagsInput.includes(trimmed)) {
+      setTagsInput([...tagsInput, trimmed]);
+    }
+    setTagInputValue("");
+  }, [tagsInput]);
+
+  const handleRemoveTag = useCallback((tag: string) => {
+    setTagsInput(tagsInput.filter((t) => t !== tag));
+  }, [tagsInput]);
+
+  const toggleFilterTag = useCallback((tag: string) => {
+    setFilterTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  }, []);
+
+  // Collect all unique tags from notes for filter UI
+  const allTags = Array.from(new Set(notes.flatMap((n) => n.tags ?? [])));
 
   const handleToggleAgentNotes = useCallback(
     (checked: boolean) => {
@@ -431,6 +504,47 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               </div>
             </div>
 
+            {/* Tabs: Active / Archived */}
+            <div className={cn("flex items-center gap-1 border-b border-border", isMobile ? "px-2 pb-1" : "px-4 pb-1")}>
+              <button
+                type="button"
+                onClick={() => setShowArchived(false)}
+                className={cn("px-2.5 py-1 text-xs font-medium rounded-md transition-colors", !showArchived ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                {t("chat.notebook.active")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowArchived(true)}
+                className={cn("px-2.5 py-1 text-xs font-medium rounded-md transition-colors", showArchived ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                <Archive className="h-3 w-3 inline mr-1" />
+                {t("chat.notebook.archived")}
+              </button>
+            </div>
+
+            {/* Tag filter */}
+            {allTags.length > 0 && (
+              <div className={cn("flex flex-wrap gap-1", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleFilterTag(tag)}
+                    className={cn(
+                      "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+                      filterTags.includes(tag)
+                        ? "bg-brand text-white"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    )}
+                  >
+                    <Tag className="h-2.5 w-2.5" />
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-1" : "flex-1 min-h-0 px-1")}>
               {loading && notes.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
@@ -444,15 +558,43 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               ) : (
                 <div className="flex flex-col gap-1">
                   {notes.map((note) => (
-                    <SwipeableNoteItem
-                      key={note.id}
-                      note={note}
-                      isMobile={isMobile}
-                      onOpen={handleOpenNote}
-                      onDelete={handleDelete}
-                      onShare={handleShareNote}
-                      t={t}
-                    />
+                    <div key={note.id} className="relative">
+                      {showArchived ? (
+                        <div className="flex items-center gap-1 rounded-lg px-3 py-2.5 bg-secondary hover:bg-accent/60 transition-colors">
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleOpenNote(note)}>
+                            <p className="text-sm font-semibold truncate">{note.title || t("common.untitled")}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                              <span>{note.creatorName}</span>
+                              <span>&middot;</span>
+                              <span suppressHydrationWarning>{formatTime(note.updatedAt)}</span>
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => handleUnarchiveNote(note)} title={t("chat.notebook.unarchive")}>
+                            <ArchiveRestore className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <SwipeableNoteItem
+                          note={note}
+                          isMobile={isMobile}
+                          onOpen={handleOpenNote}
+                          onDelete={handleDelete}
+                          onShare={handleShareNote}
+                          t={t}
+                        />
+                      )}
+                      {/* Tag badges */}
+                      {note.tags && note.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 px-3 pb-1.5 -mt-1">
+                          {note.tags.map((tag) => (
+                            <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              <Tag className="h-2 w-2" />
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -487,16 +629,38 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               </div>
             </div>
             <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-3" : "flex-1 min-h-0 px-4 py-3")}>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                 <span>{selectedNote.creatorName}</span>
                 <span>&middot;</span>
                 <span suppressHydrationWarning>{formatTime(selectedNote.updatedAt)}</span>
               </div>
+              {/* Tags */}
+              {selectedNote.tags && selectedNote.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {selectedNote.tags.map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-brand/10 text-brand-text px-2 py-0.5 text-[10px] font-medium">
+                      <Tag className="h-2.5 w-2.5" />
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
               {selectedNote.content ? (
                 <NotebookEditor content={selectedNote.content} editable={false} />
               ) : (
                 <p className="text-sm text-muted-foreground italic">{t("chat.notebook.noContent")}</p>
               )}
+            </div>
+            {/* Bottom Toolbar */}
+            <div className={cn("border-t border-border flex items-center gap-1 shrink-0", isMobile ? "px-3 py-2" : "px-4 py-2")}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleArchiveNote()} disabled={loading}>
+                <Archive className="h-3.5 w-3.5" />
+                {t("chat.notebook.archive")}
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleShareNoteToChat()} disabled={loading}>
+                <Share2 className="h-3.5 w-3.5" />
+                {t("chat.notebook.shareToChat")}
+              </Button>
             </div>
           </div>
         )}
@@ -517,6 +681,24 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
             </div>
             <div className={cn("flex flex-col gap-3 overflow-y-auto", isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0")}>
               <input type="text" placeholder={t("chat.notebook.titlePlaceholder")} value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" autoFocus />
+              {/* Tag Input */}
+              <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 min-h-[32px]">
+                {tagsInput.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-brand/10 text-brand-text px-2 py-0.5 text-[10px] font-medium">
+                    {tag}
+                    <button type="button" onClick={() => handleRemoveTag(tag)} className="ml-0.5 hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={tagInputValue}
+                  onChange={(e) => setTagInputValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); handleAddTag(tagInputValue); } }}
+                  onBlur={() => { if (tagInputValue.trim()) handleAddTag(tagInputValue); }}
+                  placeholder={tagsInput.length === 0 ? t("chat.notebook.addTag") : ""}
+                  className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                />
+              </div>
               <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>
@@ -545,6 +727,24 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
             </div>
             <div className={cn("flex flex-col gap-3 overflow-y-auto", isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0")}>
               <input type="text" placeholder={t("chat.notebook.titlePlaceholder")} value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" autoFocus />
+              {/* Tag Input */}
+              <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 min-h-[32px]">
+                {tagsInput.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-0.5 rounded-full bg-brand/10 text-brand-text px-2 py-0.5 text-[10px] font-medium">
+                    {tag}
+                    <button type="button" onClick={() => handleRemoveTag(tag)} className="ml-0.5 hover:text-destructive"><X className="h-2.5 w-2.5" /></button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={tagInputValue}
+                  onChange={(e) => setTagInputValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); handleAddTag(tagInputValue); } }}
+                  onBlur={() => { if (tagInputValue.trim()) handleAddTag(tagInputValue); }}
+                  placeholder={tagsInput.length === 0 ? t("chat.notebook.addTag") : ""}
+                  className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                />
+              </div>
               <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>

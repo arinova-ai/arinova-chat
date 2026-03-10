@@ -132,6 +132,13 @@
   "chat.notebook.noContent": "내용 없음",
   "chat.notebook.settings": "설정",
   "chat.notebook.agentAccess": "에이전트가 노트에 접근하도록 허용",
+  "chat.notebook.active": "활성",
+  "chat.notebook.archived": "보관됨",
+  "chat.notebook.archive": "보관",
+  "chat.notebook.unarchive": "보관 취소",
+  "chat.notebook.shareToChat": "공유",
+  "chat.notebook.addTag": "+ 태그 추가",
+  "chat.notebook.openNote": "노트 열기",
 
   "chat.search.title": "검색",
   "chat.search.results": "개 결과",

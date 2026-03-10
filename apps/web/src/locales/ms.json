@@ -132,6 +132,13 @@
   "chat.notebook.noContent": "Tiada kandungan",
   "chat.notebook.settings": "Tetapan",
   "chat.notebook.agentAccess": "Benarkan ejen mengakses nota",
+  "chat.notebook.active": "Aktif",
+  "chat.notebook.archived": "Diarkibkan",
+  "chat.notebook.archive": "Arkib",
+  "chat.notebook.unarchive": "Nyaharkib",
+  "chat.notebook.shareToChat": "Kongsi",
+  "chat.notebook.addTag": "+ Tambah tag",
+  "chat.notebook.openNote": "Buka nota",
 
   "chat.search.title": "Cari",
   "chat.search.results": "keputusan",

@@ -132,6 +132,13 @@
   "chat.notebook.noContent": "无内容",
   "chat.notebook.settings": "设置",
   "chat.notebook.agentAccess": "允许 Agent 访问笔记",
+  "chat.notebook.active": "进行中",
+  "chat.notebook.archived": "已归档",
+  "chat.notebook.archive": "归档",
+  "chat.notebook.unarchive": "取消归档",
+  "chat.notebook.shareToChat": "分享",
+  "chat.notebook.addTag": "+ 添加标签",
+  "chat.notebook.openNote": "打开笔记",
 
   "chat.search.title": "搜索",
   "chat.search.results": "条结果",

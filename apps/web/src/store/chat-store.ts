@@ -244,10 +244,13 @@ interface ChatState {
   // Notebook actions
   openNotebook: () => void;
   closeNotebook: () => void;
-  loadNotes: (conversationId: string) => Promise<void>;
-  createNote: (conversationId: string, title: string, content: string) => Promise<Note>;
-  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string }) => Promise<void>;
+  loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
+  createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
+  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[] }) => Promise<void>;
   deleteNote: (conversationId: string, noteId: string) => Promise<void>;
+  archiveNote: (conversationId: string, noteId: string) => Promise<void>;
+  unarchiveNote: (conversationId: string, noteId: string) => Promise<void>;
+  shareNote: (conversationId: string, noteId: string) => Promise<void>;
   toggleAgentNotesEnabled: (conversationId: string, enabled: boolean) => Promise<void>;
 
   handleWSEvent: (event: WSServerEvent) => void;
@@ -1417,10 +1420,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ notebookOpen: false });
   },
 
-  loadNotes: async (conversationId) => {
+  loadNotes: async (conversationId, opts) => {
     try {
+      const qs = new URLSearchParams();
+      if (opts?.archived) qs.set("archived", "true");
+      if (opts?.tags?.length) qs.set("tags", opts.tags.join(","));
+      const qStr = qs.toString();
       const res = await api<{ notes: Note[]; hasMore: boolean; nextCursor: string | null }>(
-        `/api/conversations/${conversationId}/notes`
+        `/api/conversations/${conversationId}/notes${qStr ? "?" + qStr : ""}`
       );
       set({
         notesByConversation: {
@@ -1433,12 +1440,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  createNote: async (conversationId, title, content) => {
+  createNote: async (conversationId, title, content, tags) => {
     const note = await api<Note>(
       `/api/conversations/${conversationId}/notes`,
       {
         method: "POST",
-        body: JSON.stringify({ title, content }),
+        body: JSON.stringify({ title, content, tags: tags ?? [] }),
       }
     );
     const current = get().notesByConversation[conversationId] ?? [];
@@ -1485,6 +1492,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: current.filter((n) => n.id !== noteId),
       },
     });
+  },
+
+  archiveNote: async (conversationId, noteId) => {
+    await api(
+      `/api/conversations/${conversationId}/notes/${noteId}/archive`,
+      { method: "POST" }
+    );
+    // Remove from active list
+    const current = get().notesByConversation[conversationId] ?? [];
+    set({
+      notesByConversation: {
+        ...get().notesByConversation,
+        [conversationId]: current.filter((n) => n.id !== noteId),
+      },
+    });
+  },
+
+  unarchiveNote: async (conversationId, noteId) => {
+    await api(
+      `/api/conversations/${conversationId}/notes/${noteId}/unarchive`,
+      { method: "POST" }
+    );
+    // Remove from archived list (will reload)
+    const current = get().notesByConversation[conversationId] ?? [];
+    set({
+      notesByConversation: {
+        ...get().notesByConversation,
+        [conversationId]: current.filter((n) => n.id !== noteId),
+      },
+    });
+  },
+
+  shareNote: async (conversationId, noteId) => {
+    await api(
+      `/api/conversations/${conversationId}/notes/${noteId}/share`,
+      { method: "POST" }
+    );
   },
 
   toggleAgentNotesEnabled: async (conversationId, enabled) => {

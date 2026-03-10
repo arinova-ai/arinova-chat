@@ -132,6 +132,13 @@
   "chat.notebook.noContent": "Sin contenido",
   "chat.notebook.settings": "Configuración",
   "chat.notebook.agentAccess": "Permitir acceso de agentes a notas",
+  "chat.notebook.active": "Activas",
+  "chat.notebook.archived": "Archivadas",
+  "chat.notebook.archive": "Archivar",
+  "chat.notebook.unarchive": "Desarchivar",
+  "chat.notebook.shareToChat": "Compartir",
+  "chat.notebook.addTag": "+ Agregar etiqueta",
+  "chat.notebook.openNote": "Abrir nota",
 
   "chat.search.title": "Buscar",
   "chat.search.results": "resultados",
