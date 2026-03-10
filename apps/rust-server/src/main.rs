@@ -305,6 +305,9 @@ async fn main() {
 
         ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
         ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
+        ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

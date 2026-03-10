@@ -344,6 +344,14 @@
   "office.notes.linkCopied": "リンクをコピーしました！",
   "office.notes.publicNote": "共有ノート",
 
+  "kanban.share.title": "共有",
+  "kanban.share.publicLink": "公開リンクを作成",
+  "kanban.share.toChat": "チャットに共有",
+  "kanban.share.copyLink": "リンクをコピー",
+  "kanban.share.stopSharing": "共有を停止",
+  "kanban.share.linkCopied": "リンクをコピーしました！",
+  "kanban.share.publicCard": "共有カード",
+
   "settings.title": "設定",
   "settings.subtitle": "使用体験をカスタマイズ",
 

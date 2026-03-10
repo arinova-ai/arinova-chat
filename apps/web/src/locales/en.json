@@ -343,6 +343,14 @@
   "office.notes.linkCopied": "Link copied!",
   "office.notes.publicNote": "Shared Note",
 
+  "kanban.share.title": "Share",
+  "kanban.share.publicLink": "Create Public Link",
+  "kanban.share.toChat": "Share to Chat",
+  "kanban.share.copyLink": "Copy Link",
+  "kanban.share.stopSharing": "Stop Sharing",
+  "kanban.share.linkCopied": "Link copied!",
+  "kanban.share.publicCard": "Shared Card",
+
   "settings.title": "Settings",
   "settings.subtitle": "Customize your experience",
 

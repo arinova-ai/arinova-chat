@@ -344,6 +344,14 @@
   "office.notes.linkCopied": "링크가 복사되었습니다!",
   "office.notes.publicNote": "공유 노트",
 
+  "kanban.share.title": "공유",
+  "kanban.share.publicLink": "공개 링크 만들기",
+  "kanban.share.toChat": "채팅으로 공유",
+  "kanban.share.copyLink": "링크 복사",
+  "kanban.share.stopSharing": "공유 중지",
+  "kanban.share.linkCopied": "링크가 복사되었습니다!",
+  "kanban.share.publicCard": "공유 카드",
+
   "settings.title": "설정",
   "settings.subtitle": "사용 환경을 맞춤 설정하세요",
 

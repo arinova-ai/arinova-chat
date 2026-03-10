@@ -346,6 +346,14 @@
   "office.notes.linkCopied": "連結已複製！",
   "office.notes.publicNote": "公開筆記",
 
+  "kanban.share.title": "分享",
+  "kanban.share.publicLink": "建立公開連結",
+  "kanban.share.toChat": "分享到對話",
+  "kanban.share.copyLink": "複製連結",
+  "kanban.share.stopSharing": "停止分享",
+  "kanban.share.linkCopied": "連結已複製！",
+  "kanban.share.publicCard": "公開卡片",
+
   "settings.title": "設定",
   "settings.subtitle": "自訂你的使用體驗",
 

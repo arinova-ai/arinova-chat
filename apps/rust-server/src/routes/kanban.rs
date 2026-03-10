@@ -30,6 +30,11 @@ pub fn router() -> Router<AppState> {
             delete(unassign_agent),
         )
         .route("/api/kanban/cards/{id}/share", post(share_card))
+        .route(
+            "/api/kanban/cards/{id}/public-share",
+            post(create_card_public_share).delete(revoke_card_public_share),
+        )
+        .route("/api/public/cards/{shareToken}", get(get_public_card))
         .route("/api/kanban/cards/{id}/archive", post(archive_card))
         .route("/api/kanban/cards/{id}/unarchive", post(unarchive_card))
         .route(
@@ -85,6 +90,8 @@ struct CardRow {
     created_by: Option<String>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    share_token: Option<String>,
+    is_public: bool,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -341,7 +348,8 @@ async fn get_board(
 
     let cards = sqlx::query_as::<_, CardRow>(
         r#"SELECT c.id, c.column_id, c.title, c.description, c.priority,
-                  c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at
+                  c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at,
+                  c.share_token, COALESCE(c.is_public, false) AS is_public
            FROM kanban_cards c
            JOIN kanban_columns col ON col.id = c.column_id
            WHERE col.board_id = $1 AND c.archived = FALSE
@@ -427,7 +435,7 @@ async fn create_card(
     let result = sqlx::query_as::<_, CardRow>(
         r#"INSERT INTO kanban_cards (column_id, title, description, priority, sort_order, created_by)
            VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at"#,
+           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at, share_token, COALESCE(is_public, false) AS is_public"#,
     )
     .bind(body.column_id)
     .bind(&body.title)
@@ -750,7 +758,7 @@ async fn agent_create_card(
     let result = sqlx::query_as::<_, CardRow>(
         r#"INSERT INTO kanban_cards (column_id, title, description, priority, sort_order, created_by)
            VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at"#,
+           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at, share_token, COALESCE(is_public, false) AS is_public"#,
     )
     .bind(column_id)
     .bind(&body.title)
@@ -1343,6 +1351,110 @@ async fn share_card(
             }))
             .into_response()
         }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+// ── Public sharing ───────────────────────────────────────────
+
+/// POST /api/kanban/cards/:id/public-share — create a public share link
+async fn create_card_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let token = Uuid::new_v4().to_string().replace("-", "");
+
+    let result = sqlx::query(
+        "UPDATE kanban_cards SET share_token = $1, is_public = true WHERE id = $2",
+    )
+    .bind(&token)
+    .bind(card_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({
+            "shareToken": token,
+            "shareUrl": format!("/shared/cards/{}", token),
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// DELETE /api/kanban/cards/:id/public-share — revoke public sharing
+async fn revoke_card_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "UPDATE kanban_cards SET share_token = NULL, is_public = false WHERE id = $1",
+    )
+    .bind(card_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// GET /api/public/cards/:shareToken — view a publicly shared card (no auth)
+async fn get_public_card(
+    State(state): State<AppState>,
+    Path(share_token): Path<String>,
+) -> Response {
+    #[derive(sqlx::FromRow)]
+    struct PublicCardRow {
+        title: String,
+        description: Option<String>,
+        priority: Option<String>,
+        created_at: Option<chrono::DateTime<chrono::Utc>>,
+        updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        column_name: String,
+    }
+
+    let row = sqlx::query_as::<_, PublicCardRow>(
+        r#"SELECT c.title, c.description, c.priority,
+                  c.created_at, c.updated_at,
+                  col.name AS column_name
+           FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE c.share_token = $1 AND c.is_public = true"#,
+    )
+    .bind(&share_token)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(c)) => Json(json!({
+            "title": c.title,
+            "description": c.description,
+            "priority": c.priority,
+            "columnName": c.column_name,
+            "createdAt": c.created_at.map(|t| t.to_rfc3339()),
+            "updatedAt": c.updated_at.map(|t| t.to_rfc3339()),
+        }))
+        .into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Card not found or not publicly shared" })),
+        )
+            .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }

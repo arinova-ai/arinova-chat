@@ -344,6 +344,14 @@
   "office.notes.linkCopied": "Pautan disalin!",
   "office.notes.publicNote": "Nota Dikongsi",
 
+  "kanban.share.title": "Kongsi",
+  "kanban.share.publicLink": "Cipta Pautan Awam",
+  "kanban.share.toChat": "Kongsi ke Chat",
+  "kanban.share.copyLink": "Salin Pautan",
+  "kanban.share.stopSharing": "Berhenti Berkongsi",
+  "kanban.share.linkCopied": "Pautan disalin!",
+  "kanban.share.publicCard": "Kad Dikongsi",
+
   "settings.title": "Tetapan",
   "settings.subtitle": "Sesuaikan pengalaman anda",
 
