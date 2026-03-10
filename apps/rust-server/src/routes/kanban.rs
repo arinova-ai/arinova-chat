@@ -17,6 +17,10 @@ pub fn router() -> Router<AppState> {
         // User API
         .route("/api/kanban/boards", get(list_boards))
         .route("/api/kanban/boards/{id}", get(get_board))
+        .route(
+            "/api/kanban/boards/{id}/archived-cards",
+            get(list_archived_cards),
+        )
         .route("/api/kanban/cards", post(create_card))
         .route("/api/kanban/cards/{id}", patch(update_card).delete(delete_card))
         .route("/api/kanban/cards/{id}/agents", post(assign_agent))
@@ -24,10 +28,15 @@ pub fn router() -> Router<AppState> {
             "/api/kanban/cards/{card_id}/agents/{agent_id}",
             delete(unassign_agent),
         )
+        .route("/api/kanban/cards/{id}/unarchive", post(unarchive_card))
         // Agent API
         .route("/api/agent/kanban/cards", get(agent_list_cards).post(agent_create_card))
         .route("/api/agent/kanban/cards/{id}", patch(agent_update_card))
         .route("/api/agent/kanban/cards/{id}/complete", post(agent_complete_card))
+        .route(
+            "/api/agent/kanban/boards/{id}/archived-cards",
+            get(agent_list_archived_cards),
+        )
 }
 
 // ── Types ─────────────────────────────────────────────────────
@@ -115,6 +124,25 @@ struct AgentCreateCardBody {
     priority: Option<String>,
     column_name: Option<String>,
     column_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct ArchivedCardRow {
+    id: Uuid,
+    column_id: Uuid,
+    title: String,
+    description: Option<String>,
+    priority: Option<String>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    archived_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PaginationQuery {
+    page: Option<i64>,
+    limit: Option<i64>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -217,6 +245,21 @@ async fn verify_card_owner(
     Ok(())
 }
 
+/// Lazy-archive: mark cards in Done columns as archived if updated_at > 3 days ago.
+async fn lazy_archive_done_cards(db: &sqlx::PgPool, board_id: Uuid) {
+    let _ = sqlx::query(
+        r#"UPDATE kanban_cards SET archived = TRUE, archived_at = NOW()
+           WHERE archived = FALSE
+             AND column_id IN (
+               SELECT id FROM kanban_columns WHERE board_id = $1 AND name = 'Done'
+             )
+             AND updated_at < NOW() - INTERVAL '3 days'"#,
+    )
+    .bind(board_id)
+    .execute(db)
+    .await;
+}
+
 // ── User API ──────────────────────────────────────────────────
 
 /// GET /api/kanban/boards — list user's boards (auto-create default if none)
@@ -247,6 +290,9 @@ async fn get_board(
         return e;
     }
 
+    // Lazy-archive Done cards older than 3 days
+    lazy_archive_done_cards(&state.db, board_id).await;
+
     let columns = sqlx::query_as::<_, ColumnRow>(
         "SELECT id, board_id, name, sort_order FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
     )
@@ -259,7 +305,7 @@ async fn get_board(
                   c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at
            FROM kanban_cards c
            JOIN kanban_columns col ON col.id = c.column_id
-           WHERE col.board_id = $1
+           WHERE col.board_id = $1 AND c.archived = FALSE
            ORDER BY c.sort_order"#,
     )
     .bind(board_id)
@@ -513,7 +559,7 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
            FROM kanban_cards c
            JOIN kanban_columns col ON col.id = c.column_id
            JOIN kanban_boards b ON b.id = col.board_id
-           WHERE b.owner_id = $1
+           WHERE b.owner_id = $1 AND c.archived = FALSE
            ORDER BY c.sort_order"#,
     )
     .bind(&owner_id)
@@ -728,6 +774,143 @@ async fn agent_complete_card(
             StatusCode::NOT_FOUND,
             Json(json!({ "error": "Done column not found" })),
         )
+            .into_response(),
+    }
+}
+
+// ── Archived cards endpoints ─────────────────────────────────
+
+/// GET /api/kanban/boards/:id/archived-cards?page=1&limit=20
+async fn list_archived_cards(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+    Query(params): Query<PaginationQuery>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let limit = params.limit.unwrap_or(20).min(100).max(1);
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * limit;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1 AND c.archived = TRUE"#,
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let cards = sqlx::query_as::<_, ArchivedCardRow>(
+        r#"SELECT c.id, c.column_id, c.title, c.description, c.priority,
+                  c.created_at, c.updated_at, c.archived_at
+           FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1 AND c.archived = TRUE
+           ORDER BY c.archived_at DESC NULLS LAST
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(board_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await;
+
+    match cards {
+        Ok(rows) => Json(json!({
+            "cards": rows,
+            "total": total,
+            "page": page,
+            "limit": limit,
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// POST /api/kanban/cards/:id/unarchive — move card back to Done column (un-archived)
+async fn unarchive_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "UPDATE kanban_cards SET archived = FALSE, archived_at = NULL, updated_at = NOW() WHERE id = $1",
+    )
+    .bind(card_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// GET /api/agent/kanban/boards/:id/archived-cards?page=1&limit=20
+async fn agent_list_archived_cards(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+    Query(params): Query<PaginationQuery>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    let limit = params.limit.unwrap_or(20).min(100).max(1);
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * limit;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1 AND c.archived = TRUE"#,
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let cards = sqlx::query_as::<_, ArchivedCardRow>(
+        r#"SELECT c.id, c.column_id, c.title, c.description, c.priority,
+                  c.created_at, c.updated_at, c.archived_at
+           FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1 AND c.archived = TRUE
+           ORDER BY c.archived_at DESC NULLS LAST
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(board_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await;
+
+    match cards {
+        Ok(rows) => Json(json!({
+            "cards": rows,
+            "total": total,
+            "page": page,
+            "limit": limit,
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
 }

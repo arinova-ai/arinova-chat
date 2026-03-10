@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, GripVertical, Trash2, X, Clock } from "lucide-react";
+import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import {
@@ -583,6 +583,168 @@ function AddCardSheet({
   );
 }
 
+// ── Archived Cards Sheet ──────────────────────────────────────
+
+interface ArchivedCard {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  archivedAt: string | null;
+}
+
+interface ArchivedResponse {
+  cards: ArchivedCard[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+function ArchivedCardsSheet({
+  open,
+  boardId,
+  onClose,
+  onUnarchived,
+}: {
+  open: boolean;
+  boardId: string;
+  onClose: () => void;
+  onUnarchived: () => void;
+}) {
+  const [data, setData] = useState<ArchivedResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [unarchivingId, setUnarchivingId] = useState<string | null>(null);
+  const limit = 20;
+
+  const fetchArchived = useCallback(async (p: number) => {
+    setLoading(true);
+    try {
+      const res = await api<ArchivedResponse>(
+        `/api/kanban/boards/${boardId}/archived-cards?page=${p}&limit=${limit}`,
+        { silent: true },
+      );
+      setData(res);
+      setPage(p);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [boardId]);
+
+  useEffect(() => {
+    if (open) fetchArchived(1);
+  }, [open, fetchArchived]);
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
+
+  const handleUnarchive = async (cardId: string) => {
+    setUnarchivingId(cardId);
+    try {
+      await api(`/api/kanban/cards/${cardId}/unarchive`, { method: "POST", silent: true });
+      onUnarchived();
+      await fetchArchived(page);
+    } catch { /* ignore */ }
+    setUnarchivingId(null);
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Archive className="h-4 w-4" />
+            Archived Cards
+          </SheetTitle>
+          <SheetDescription className="sr-only">View and restore archived kanban cards</SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-4 space-y-2 px-1">
+          {loading && !data ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : !data || data.cards.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No archived cards</p>
+          ) : (
+            <>
+              {data.cards.map((card) => (
+                <div
+                  key={card.id}
+                  className="rounded-lg border border-border bg-card p-3 space-y-1.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">{card.title}</p>
+                      {card.description && (
+                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{card.description}</p>
+                      )}
+                    </div>
+                    <PriorityBadge priority={card.priority} />
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                    {card.updatedAt && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Done: {formatTime(card.updatedAt)}
+                      </span>
+                    )}
+                    {card.archivedAt && (
+                      <span>Archived: {formatTime(card.archivedAt)}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleUnarchive(card.id)}
+                    disabled={unarchivingId === card.id}
+                    className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-brand-text hover:bg-brand/10 transition-colors disabled:opacity-50"
+                  >
+                    {unarchivingId === card.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-3 w-3" />
+                    )}
+                    Unarchive
+                  </button>
+                </div>
+              ))}
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1 || loading}
+                    onClick={() => fetchArchived(page - 1)}
+                    className="rounded-md p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages || loading}
+                    onClick={() => fetchArchived(page + 1)}
+                    className="rounded-md p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              <p className="text-center text-[11px] text-muted-foreground">
+                {data.total} archived card{data.total !== 1 ? "s" : ""}
+              </p>
+            </>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────
 
 export default function OfficeTasksPage() {
@@ -592,6 +754,7 @@ export default function OfficeTasksPage() {
   const [addColumnId, setAddColumnId] = useState<string | null>(null);
   const [activeCard, setActiveCard] = useState<KanbanCard | null>(null);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
 
   const agentEmojis = useMemo(() => {
     const map = new Map<string, string>();
@@ -867,7 +1030,19 @@ export default function OfficeTasksPage() {
 
   return (
     <>
-      <div className="flex h-full overflow-x-auto p-3 md:p-4 gap-3">
+      <div className="flex h-full flex-col">
+      {/* Board toolbar */}
+      <div className="flex items-center justify-end px-3 pt-3 md:px-4 md:pt-4 pb-0">
+        <button
+          type="button"
+          onClick={() => setArchivedOpen(true)}
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <Archive className="h-3.5 w-3.5" />
+          Archived
+        </button>
+      </div>
+      <div className="flex flex-1 overflow-x-auto px-3 pb-3 md:px-4 md:pb-4 pt-2 gap-3">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -893,6 +1068,7 @@ export default function OfficeTasksPage() {
           </DragOverlay>
         </DndContext>
       </div>
+      </div>
 
       <AddCardSheet
         open={addColumnId !== null}
@@ -908,6 +1084,15 @@ export default function OfficeTasksPage() {
         onClose={() => setSelectedCard(null)}
         onUpdate={handleCardUpdate}
       />
+
+      {board && (
+        <ArchivedCardsSheet
+          open={archivedOpen}
+          boardId={board.id}
+          onClose={() => setArchivedOpen(false)}
+          onUnarchived={fetchBoard}
+        />
+      )}
     </>
   );
 }
