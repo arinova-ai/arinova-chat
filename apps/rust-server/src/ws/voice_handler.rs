@@ -238,6 +238,20 @@ async fn handle_voice_message(
                 _ => return,
             };
 
+            // Verify the sender is a legitimate participant of this call
+            let is_participant = if let Some(ref callee_id) = call.callee_id {
+                // H2H: must be caller or callee
+                user_id == call.caller_id || user_id == callee_id
+            } else {
+                // H2A: only the caller participates on the user voice WS
+                user_id == call.caller_id
+            };
+
+            if !is_participant {
+                send_event(tx, &json!({"type": "voice_error", "error": "Not authorized for this call"}));
+                return;
+            }
+
             // Update status to connected
             let _ = sqlx::query(
                 "UPDATE voice_calls SET status = 'connected', started_at = NOW() WHERE session_id = $1 AND status = 'pending'",
@@ -245,6 +259,9 @@ async fn handle_voice_message(
             .bind(session_id)
             .execute(db)
             .await;
+
+            // Set active_session_id so disconnect cleanup works for this participant
+            *active_session_id = Some(session_id.to_string());
 
             if let Some(ref callee_id) = call.callee_id {
                 // H2H call: callee sends answer → forward to caller

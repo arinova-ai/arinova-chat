@@ -157,11 +157,11 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
 
     set({ incomingCall: info });
 
-    // Auto-dismiss after 30 seconds if not handled
+    // Auto-reject after 30 seconds if not handled
     setTimeout(() => {
       const current = get();
       if (current.incomingCall?.sessionId === info.sessionId) {
-        set({ incomingCall: null });
+        current.rejectCall();
       }
     }, 30000);
   },
