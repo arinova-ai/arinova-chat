@@ -274,6 +274,31 @@ async fn main() {
             gemini_api_key TEXT,
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
+
+        -- Note user-level ownership
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES "user"(id) ON DELETE SET NULL;
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_owner ON conversation_notes(owner_id, created_at DESC);
+
+        -- Backfill owner_id for user-created notes
+        UPDATE conversation_notes SET owner_id = creator_id WHERE creator_type = 'user' AND owner_id IS NULL;
+        -- Backfill owner_id for agent-created notes
+        UPDATE conversation_notes n SET owner_id = c.user_id FROM conversations c WHERE n.conversation_id = c.id AND n.creator_type = 'agent' AND n.owner_id IS NULL;
+
+        -- Note-conversation linking table
+        CREATE TABLE IF NOT EXISTS note_conversation_links (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            note_id         UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            conversation_id UUID NOT NULL,
+            linked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(note_id, conversation_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_note_conv_links_note ON note_conversation_links(note_id);
+        CREATE INDEX IF NOT EXISTS idx_note_conv_links_conv ON note_conversation_links(conversation_id);
+
+        -- Backfill links for existing notes
+        INSERT INTO note_conversation_links (note_id, conversation_id)
+        SELECT id, conversation_id FROM conversation_notes
+        ON CONFLICT (note_id, conversation_id) DO NOTHING;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
