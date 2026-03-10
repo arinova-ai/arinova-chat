@@ -797,6 +797,8 @@ CREATE TABLE kanban_cards (
   created_by TEXT,
   archived BOOLEAN NOT NULL DEFAULT FALSE,
   archived_at TIMESTAMPTZ,
+  share_token TEXT UNIQUE,
+  is_public BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
