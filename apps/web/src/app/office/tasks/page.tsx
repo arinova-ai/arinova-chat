@@ -23,6 +23,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight, FileText, Search, Share2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
+import { useToastStore } from "@/store/toast-store";
 import { useOfficeStream } from "@/hooks/use-office-stream";
 import {
   Sheet,
@@ -305,10 +306,13 @@ function CardDetailSheet({
 
   const handleShare = () => {
     if (!card) return;
+    const addToast = useToastStore.getState().addToast;
     const url = `${window.location.origin}/office/tasks?card=${card.id}`;
     navigator.clipboard.writeText(url).then(() => {
-      // Brief visual feedback would be nice but we don't have toast access here
-    }).catch(() => {});
+      addToast("Link copied to clipboard");
+    }).catch(() => {
+      addToast("Failed to copy link");
+    });
   };
 
   const handleSave = async () => {
