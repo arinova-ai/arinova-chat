@@ -122,6 +122,20 @@ async fn main() {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
+        INSERT INTO themes (id, name, version, description, renderer, preview, max_agents, tags, author_id, author_name, license)
+        VALUES
+          ('default', 'Arinova Default', '1.0.0', 'Built-in safe fallback theme — the Arinova mascot in a clean workspace', 'iframe', 'preview.png', 1, '{"default","safe","builtin"}', 'arinova-official', 'Arinova Official', 'standard'),
+          ('cozy-studio-v2', 'Cozy Studio', '5.0.0', '溫馨工作室 — 你的 AI 夥伴在舒適的房間裡工作', 'iframe', 'preview.png', 1, '{"cozy","studio","room"}', 'arinova-official', 'Arinova Official', 'standard'),
+          ('avg-classroom-v2', 'AVG Classroom', '1.1.0', 'Anime-style classroom with 6 agent seats — PixiJS', 'iframe', 'preview.png', 6, '{"anime","classroom","office","pixi"}', 'arinova-official', 'Arinova Official', 'standard')
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          version = EXCLUDED.version,
+          description = EXCLUDED.description,
+          renderer = EXCLUDED.renderer,
+          preview = EXCLUDED.preview,
+          max_agents = EXCLUDED.max_agents,
+          tags = EXCLUDED.tags;
+
         CREATE TABLE IF NOT EXISTS theme_purchases (
             user_id TEXT NOT NULL,
             theme_id TEXT NOT NULL,
