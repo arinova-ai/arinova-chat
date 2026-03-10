@@ -823,3 +823,19 @@ CREATE TABLE kanban_card_labels (
   label_id UUID NOT NULL REFERENCES kanban_labels(id) ON DELETE CASCADE,
   PRIMARY KEY (card_id, label_id)
 );
+
+-- Kanban Card ↔ Note links
+CREATE TABLE kanban_card_notes (
+  card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
+  note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (card_id, note_id)
+);
+
+-- Note cross-references (backlinks)
+CREATE TABLE note_links (
+  source_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+  target_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_note_id, target_note_id)
+);

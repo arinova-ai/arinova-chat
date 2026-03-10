@@ -237,6 +237,20 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_voice_calls_conv ON voice_calls(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_voice_calls_caller ON voice_calls(caller_id);
         CREATE INDEX IF NOT EXISTS idx_voice_calls_callee ON voice_calls(callee_id);
+
+        CREATE TABLE IF NOT EXISTS kanban_card_notes (
+            card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
+            note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (card_id, note_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS note_links (
+            source_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            target_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (source_note_id, target_note_id)
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
