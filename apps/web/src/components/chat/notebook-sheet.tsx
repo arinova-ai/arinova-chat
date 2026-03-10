@@ -28,6 +28,10 @@ import {
   ArchiveRestore,
   Tag,
   Link2,
+  Bot,
+  Send,
+  Brain,
+  Sparkles,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
@@ -207,9 +211,9 @@ function SwipeableNoteItem({
         <p className="text-sm font-semibold truncate">
           {note.title || t("common.untitled")}
         </p>
-        {note.content && (
+        {(note.summary || note.content) && (
           <p className="text-xs text-muted-foreground line-clamp-2 break-words">
-            {note.content}
+            {note.summary || note.content}
           </p>
         )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
@@ -255,6 +259,15 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterTags, setFilterTags] = useState<string[]>([]);
+  // Ask AI state
+  const [askAiOpen, setAskAiOpen] = useState(false);
+  const [askAiQuestion, setAskAiQuestion] = useState("");
+  const [askAiAnswer, setAskAiAnswer] = useState("");
+  const [askAiLoading, setAskAiLoading] = useState(false);
+  // Tag suggestions state
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  // Extract capsule state
+  const [extracting, setExtracting] = useState(false);
 
   useEffect(() => {
     if (open && conversationId) {
@@ -277,6 +290,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       setSettingsOpen(false);
       setShowArchived(false);
       setFilterTags([]);
+      setAskAiOpen(false);
+      setAskAiQuestion("");
+      setAskAiAnswer("");
+      setSuggestedTags([]);
     }
   }, [open]);
 
@@ -329,6 +346,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     setLoading(true);
     try {
       const note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput);
+      if (note.suggestedTags?.length) {
+        setSuggestedTags(note.suggestedTags.filter((t) => !tagsInput.includes(t)));
+      }
       setSelectedNote(note);
       setViewMode("detail");
     } catch {
@@ -419,6 +439,52 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     } catch { /* api shows toast */ }
     setLoading(false);
   }, [selectedNote, conversationId, shareNoteApi]);
+
+  const handleAskAi = useCallback(async () => {
+    if (!selectedNote || !askAiQuestion.trim()) return;
+    setAskAiLoading(true);
+    setAskAiAnswer("");
+    try {
+      const res = await api<{ answer: string }>(
+        `/api/conversations/${conversationId}/notes/${selectedNote.id}/ask-ai`,
+        { method: "POST", body: JSON.stringify({ question: askAiQuestion.trim() }) }
+      );
+      setAskAiAnswer(res.answer);
+    } catch {
+      setAskAiAnswer("Failed to get AI answer.");
+    } finally {
+      setAskAiLoading(false);
+    }
+  }, [selectedNote, askAiQuestion, conversationId]);
+
+  const handleExtractCapsule = useCallback(async () => {
+    if (!selectedNote) return;
+    setExtracting(true);
+    try {
+      const res = await api<{ capsuleId: string; entriesCreated: number; entries: string[] }>(
+        `/api/conversations/${conversationId}/notes/${selectedNote.id}/extract-capsule`,
+        { method: "POST" }
+      );
+      // Refresh note detail to show related capsules
+      const full = await api(`/api/conversations/${conversationId}/notes/${selectedNote.id}`) as Note;
+      setSelectedNote(full);
+    } catch { /* api shows toast */ }
+    setExtracting(false);
+  }, [selectedNote, conversationId]);
+
+  const handleAcceptSuggestedTag = useCallback(async (tag: string) => {
+    if (!selectedNote) return;
+    const newTags = [...(selectedNote.tags ?? []), tag];
+    setSuggestedTags((prev) => prev.filter((t) => t !== tag));
+    try {
+      await updateNote(conversationId, selectedNote.id, { tags: newTags });
+      setSelectedNote({ ...selectedNote, tags: newTags });
+    } catch { /* api shows toast */ }
+  }, [selectedNote, conversationId, updateNote]);
+
+  const handleDismissSuggestedTags = useCallback(() => {
+    setSuggestedTags([]);
+  }, []);
 
   const handleAddTag = useCallback((tag: string) => {
     const trimmed = tag.trim();
@@ -721,6 +787,77 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   </div>
                 </div>
               )}
+              {/* Related Capsules (Task 3) */}
+              {selectedNote.relatedCapsules && selectedNote.relatedCapsules.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
+                    <Brain className="h-3 w-3" />
+                    Related Memories
+                  </h4>
+                  <div className="flex flex-col gap-1.5">
+                    {selectedNote.relatedCapsules.map((cap) => (
+                      <div key={cap.id} className="rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs">
+                        <p className="text-foreground">{cap.content}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1">{cap.capsuleName}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Suggested Tags (Task 4) */}
+              {suggestedTags.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Sparkles className="h-3 w-3 text-amber-500" />
+                    <span className="text-xs font-medium text-muted-foreground">Suggested tags</span>
+                    <button type="button" onClick={handleDismissSuggestedTags} className="ml-auto text-muted-foreground hover:text-foreground">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {suggestedTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 text-[10px] font-medium hover:bg-amber-500/20 transition-colors"
+                        onClick={() => handleAcceptSuggestedTag(tag)}
+                      >
+                        <Plus className="h-2.5 w-2.5" />
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Ask AI (Task 1) */}
+              {askAiOpen && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
+                    <Bot className="h-3 w-3" />
+                    Ask AI about this note
+                  </h4>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={askAiQuestion}
+                      onChange={(e) => setAskAiQuestion(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAskAi(); }}
+                      placeholder="Ask a question..."
+                      className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      disabled={askAiLoading}
+                      autoFocus
+                    />
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleAskAi} disabled={askAiLoading || !askAiQuestion.trim()}>
+                      {askAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                  {askAiAnswer && (
+                    <div className="mt-2 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap">
+                      {askAiAnswer}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {/* Bottom Toolbar */}
             <div className={cn("border-t border-border flex items-center gap-1 shrink-0", isMobile ? "px-3 py-2" : "px-4 py-2")}>
@@ -731,6 +868,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleShareNoteToChat()} disabled={loading}>
                 <Share2 className="h-3.5 w-3.5" />
                 {t("chat.notebook.shareToChat")}
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setAskAiOpen(!askAiOpen); setAskAiAnswer(""); setAskAiQuestion(""); }}>
+                <Bot className="h-3.5 w-3.5" />
+                Ask AI
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleExtractCapsule} disabled={extracting}>
+                {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+                Capsule
               </Button>
             </div>
           </div>

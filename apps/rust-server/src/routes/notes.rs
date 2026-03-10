@@ -40,6 +40,14 @@ pub fn router() -> Router<AppState> {
             "/api/conversations/{id}/notes/{noteId}/share",
             post(share_note),
         )
+        .route(
+            "/api/conversations/{id}/notes/{noteId}/ask-ai",
+            post(ask_ai),
+        )
+        .route(
+            "/api/conversations/{id}/notes/{noteId}/extract-capsule",
+            post(extract_capsule_from_note),
+        )
 }
 
 // ===== Internal types =====
@@ -55,6 +63,7 @@ struct NoteRow {
     content: String,
     tags: Vec<String>,
     archived_at: Option<DateTime<Utc>>,
+    summary: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     creator_name: String,
@@ -129,6 +138,7 @@ fn note_to_json(n: &NoteRow) -> serde_json::Value {
         "title": n.title,
         "content": n.content,
         "tags": n.tags,
+        "summary": n.summary,
         "archivedAt": n.archived_at.map(|t| t.to_rfc3339()),
         "createdAt": n.created_at.to_rfc3339(),
         "updatedAt": n.updated_at.to_rfc3339(),
@@ -387,7 +397,8 @@ pub async fn get_linked_cards(db: &PgPool, note_id: Uuid) -> Vec<serde_json::Val
 
 const NOTE_QUERY_BASE: &str = r#"
     SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
-           n.title, n.content, n.tags, n.archived_at, n.created_at, n.updated_at,
+           n.title, n.content, n.tags, n.archived_at, n.summary,
+           n.created_at, n.updated_at,
            COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
            a.name AS agent_name
     FROM conversation_notes n
@@ -425,8 +436,10 @@ async fn get_note(
             let mut j = note_to_json(&note);
             let backlinks = get_backlinks(&state.db, note.id).await;
             let linked_cards = get_linked_cards(&state.db, note.id).await;
+            let related_capsules = get_related_capsules(&state.db, &user.id, &note.content).await;
             j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
             j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
+            j.as_object_mut().unwrap().insert("relatedCapsules".into(), json!(related_capsules));
             Json(j).into_response()
         }
         Ok(None) => (
@@ -677,7 +690,21 @@ async fn create_note(
                 auto_create_prd_card(&state.db, &user.id, note_id, title).await;
             }
 
-            (StatusCode::CREATED, Json(note_json)).into_response()
+            // Auto-summary (background, Task 2)
+            if let Some(ref gk) = state.config.gemini_api_key {
+                spawn_summary_if_needed(state.db.clone(), gk.clone(), note_id, body.content.clone());
+            }
+
+            // AI tag suggestions (Task 4)
+            let mut resp = note_json;
+            if let Some(ref gk) = state.config.gemini_api_key {
+                let suggested = suggest_tags(gk, title, &body.content).await;
+                if !suggested.is_empty() {
+                    resp.as_object_mut().unwrap().insert("suggestedTags".into(), json!(suggested));
+                }
+            }
+
+            (StatusCode::CREATED, Json(resp)).into_response()
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -863,6 +890,13 @@ async fn update_note(
                     // #prd tag → auto-create Kanban card in Backlog
                     if note.tags.iter().any(|t| normalize_tag(t) == "prd") {
                         auto_create_prd_card(&state.db, &user.id, note_id, &note.title).await;
+                    }
+
+                    // Re-generate summary if content was updated (background, Task 2)
+                    if dyn_params.content.is_some() {
+                        if let Some(ref gk) = state.config.gemini_api_key {
+                            spawn_summary_if_needed(state.db.clone(), gk.clone(), note_id, note.content.clone());
+                        }
                     }
 
                     Json(note_json).into_response()
@@ -1143,21 +1177,23 @@ async fn share_note(
     }
 
     // Fetch the note
-    let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
-        "SELECT title, content, tags FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    let note = sqlx::query_as::<_, (String, String, Vec<String>, Option<String>)>(
+        "SELECT title, content, tags, summary FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
     .bind(note_id)
     .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
-    let (title, content, tags) = match note {
+    let (title, content, tags, summary) = match note {
         Ok(Some(n)) => n,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     };
 
-    let preview = if content.len() > 100 { format!("{}...", &content[..content.char_indices().nth(100).map(|(i, _)| i).unwrap_or(content.len())]) } else { content.clone() };
+    let preview = summary.unwrap_or_else(|| {
+        if content.len() > 100 { format!("{}...", &content[..content.char_indices().nth(100).map(|(i, _)| i).unwrap_or(content.len())]) } else { content.clone() }
+    });
     let metadata = json!({
         "noteId": note_id,
         "title": title,
@@ -1214,5 +1250,311 @@ async fn share_note(
             .into_response()
         }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+// ===== Gemini helper =====
+
+const GEMINI_URL: &str =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+#[derive(Deserialize)]
+struct GeminiResp {
+    candidates: Option<Vec<GeminiCandidate>>,
+}
+#[derive(Deserialize)]
+struct GeminiCandidate {
+    content: Option<GeminiContentPart>,
+}
+#[derive(Deserialize)]
+struct GeminiContentPart {
+    parts: Option<Vec<GeminiPart>>,
+}
+#[derive(Deserialize)]
+struct GeminiPart {
+    text: Option<String>,
+}
+
+/// Call Gemini 2.0 Flash with a system instruction and user prompt.
+async fn call_gemini(
+    api_key: &str,
+    system: &str,
+    user_prompt: &str,
+    max_tokens: u32,
+) -> Result<String, String> {
+    let url = format!("{}?key={}", GEMINI_URL, api_key);
+    let body = json!({
+        "systemInstruction": {
+            "parts": [{ "text": system }]
+        },
+        "contents": [{
+            "role": "user",
+            "parts": [{ "text": user_prompt }]
+        }],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens
+        }
+    });
+
+    let client = reqwest::Client::new();
+    let resp = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Gemini API error {}: {}", status, text));
+    }
+
+    let parsed: GeminiResp = resp.json().await.map_err(|e| e.to_string())?;
+    let text = parsed
+        .candidates
+        .and_then(|c| c.into_iter().next())
+        .and_then(|c| c.content)
+        .and_then(|c| c.parts)
+        .map(|parts| parts.into_iter().filter_map(|p| p.text).collect::<Vec<_>>().join("\n"))
+        .unwrap_or_default();
+
+    Ok(text)
+}
+
+// ===== Task 1: Ask AI =====
+
+#[derive(Deserialize)]
+struct AskAiBody {
+    question: String,
+}
+
+/// POST /api/conversations/:id/notes/:noteId/ask-ai
+async fn ask_ai(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<AskAiBody>,
+) -> Response {
+    let question = body.question.trim();
+    if question.is_empty() || question.len() > 2000 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Question is required (max 2000 chars)"}))).into_response();
+    }
+
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    let gemini_key = match &state.config.gemini_api_key {
+        Some(k) => k.clone(),
+        None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
+    };
+
+    let note = sqlx::query_as::<_, (String, String)>(
+        "SELECT title, content FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let system = "You are a helpful AI assistant. The user will provide a note and ask a question about it. \
+                  Answer concisely based on the note content. If the answer is not in the note, say so.";
+    let prompt = format!("# Note: {}\n\n{}\n\n---\nQuestion: {}", title, content, question);
+
+    match call_gemini(&gemini_key, system, &prompt, 1024).await {
+        Ok(answer) => Json(json!({ "answer": answer })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("AI error: {}", e)}))).into_response(),
+    }
+}
+
+// ===== Task 2: Auto-summary helper =====
+
+/// Generate a summary for note content and store it. Runs as a background task.
+pub fn spawn_summary_if_needed(db: PgPool, gemini_key: String, note_id: Uuid, content: String) {
+    if content.len() < 500 {
+        return;
+    }
+    tokio::spawn(async move {
+        let system = "Summarize the following note in 1-2 concise sentences. Output only the summary, nothing else.";
+        match call_gemini(&gemini_key, system, &content, 256).await {
+            Ok(summary) => {
+                let _ = sqlx::query("UPDATE conversation_notes SET summary = $1 WHERE id = $2")
+                    .bind(summary.trim())
+                    .bind(note_id)
+                    .execute(&db)
+                    .await;
+            }
+            Err(e) => {
+                tracing::warn!("Summary generation failed for note {}: {}", note_id, e);
+            }
+        }
+    });
+}
+
+// ===== Task 3: Extract capsule from note =====
+
+/// POST /api/conversations/:id/notes/:noteId/extract-capsule
+async fn extract_capsule_from_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    let gemini_key = match &state.config.gemini_api_key {
+        Some(k) => k.clone(),
+        None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
+    };
+
+    let note = sqlx::query_as::<_, (String, String)>(
+        "SELECT title, content FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if content.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Note has no content to extract from"}))).into_response();
+    }
+
+    let system = "Extract key facts, preferences, decisions, and action items from this note. \
+                  Output each memory as a separate line. Be concise — each line should be one self-contained fact or item.";
+    let prompt = format!("# {}\n\n{}", title, content);
+
+    let entries = match call_gemini(&gemini_key, system, &prompt, 1024).await {
+        Ok(text) => text.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect::<Vec<_>>(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("AI error: {}", e)}))).into_response(),
+    };
+
+    // Find or create a capsule for this conversation
+    let capsule_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM memory_capsules WHERE owner_id = $1 AND source_conversation_id = $2 AND status = 'ready' LIMIT 1",
+    )
+    .bind(&user.id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let capsule_id = match capsule_id {
+        Some(id) => id,
+        None => {
+            match sqlx::query_scalar::<_, Uuid>(
+                "INSERT INTO memory_capsules (owner_id, name, source_conversation_id, status) VALUES ($1, $2, $3, 'ready') RETURNING id",
+            )
+            .bind(&user.id)
+            .bind(format!("Note: {}", title))
+            .bind(conv_id)
+            .fetch_one(&state.db)
+            .await
+            {
+                Ok(id) => id,
+                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            }
+        }
+    };
+
+    let mut inserted = 0u32;
+    for entry in &entries {
+        let _ = sqlx::query(
+            "INSERT INTO memory_entries (capsule_id, content, importance) VALUES ($1, $2, 0.7)",
+        )
+        .bind(capsule_id)
+        .bind(entry)
+        .execute(&state.db)
+        .await;
+        inserted += 1;
+    }
+
+    let _ = sqlx::query("UPDATE memory_capsules SET entry_count = (SELECT COUNT(*) FROM memory_entries WHERE capsule_id = $1) WHERE id = $1")
+        .bind(capsule_id)
+        .execute(&state.db)
+        .await;
+
+    Json(json!({
+        "capsuleId": capsule_id,
+        "entriesCreated": inserted,
+        "entries": entries,
+    }))
+    .into_response()
+}
+
+/// Get related memory capsule entries for a note.
+pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> Vec<serde_json::Value> {
+    if content.trim().len() < 20 {
+        return vec![];
+    }
+    let query_text = &content[..content.len().min(200)];
+    let tsquery = query_text
+        .split_whitespace()
+        .take(8)
+        .map(|w| w.replace('\'', ""))
+        .filter(|w| w.len() > 2)
+        .collect::<Vec<_>>()
+        .join(" | ");
+
+    if tsquery.is_empty() {
+        return vec![];
+    }
+
+    let rows: Vec<(Uuid, String, f64, Uuid, String)> = sqlx::query_as(
+        r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name
+           FROM memory_entries me
+           JOIN memory_capsules mc ON mc.id = me.capsule_id
+           WHERE mc.owner_id = $1
+             AND me.search_vector @@ to_tsquery('english', $2)
+           ORDER BY ts_rank(me.search_vector, to_tsquery('english', $2)) DESC
+           LIMIT 5"#,
+    )
+    .bind(user_id)
+    .bind(&tsquery)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    rows.iter()
+        .map(|(id, content, importance, capsule_id, capsule_name)| {
+            json!({
+                "id": id,
+                "content": content,
+                "importance": importance,
+                "capsuleId": capsule_id,
+                "capsuleName": capsule_name,
+            })
+        })
+        .collect()
+}
+
+// ===== Task 4: AI tag suggestions =====
+
+/// Generate tag suggestions for note content using AI.
+pub async fn suggest_tags(gemini_key: &str, title: &str, content: &str) -> Vec<String> {
+    if content.trim().len() < 20 && title.trim().len() < 5 {
+        return vec![];
+    }
+    let system = "Based on the note title and content, suggest 2-3 short tags (single words, lowercase, no #). \
+                  Output only the tags separated by commas. Example: feature, urgent, design";
+    let prompt = format!("Title: {}\n\nContent: {}", title, &content[..content.len().min(1000)]);
+
+    match call_gemini(gemini_key, system, &prompt, 64).await {
+        Ok(text) => text
+            .split(',')
+            .map(|t| t.trim().to_lowercase().replace('#', ""))
+            .filter(|t| !t.is_empty() && t.len() <= 30)
+            .take(3)
+            .collect(),
+        Err(_) => vec![],
     }
 }

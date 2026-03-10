@@ -578,11 +578,20 @@ export interface Note {
   title: string;
   content: string;
   tags: string[];
+  summary?: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
   backlinks?: Array<{ id: string; title: string }>;
   linkedCards?: Array<{ id: string; title: string }>;
+  relatedCapsules?: Array<{
+    id: string;
+    content: string;
+    importance: number;
+    capsuleId: string;
+    capsuleName: string;
+  }>;
+  suggestedTags?: string[];
 }
 
 // ===== Push Notifications =====

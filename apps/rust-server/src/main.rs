@@ -251,6 +251,8 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (source_note_id, target_note_id)
         );
+
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS summary TEXT DEFAULT NULL;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
