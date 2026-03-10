@@ -10,11 +10,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { ArrowLeft, CalendarDays, Settings, X, ShieldBan, VolumeX, Loader2, UserPlus, UserMinus, Clock } from "lucide-react";
+import { ArrowLeft, CalendarDays, Phone, Settings, X, ShieldBan, VolumeX, Loader2, UserPlus, UserMinus, Clock } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { useVoiceCallStore } from "@/store/voice-call-store";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 interface UserProfile {
   id: string;
@@ -44,7 +46,12 @@ function UserProfileContent() {
   const [friendshipId, setFriendshipId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  const conversations = useChatStore((s) => s.conversations);
   const blockedUserIds = useChatStore((s) => s.blockedUserIds);
+  const voiceCallState = useVoiceCallStore((s) => s.callState);
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const isInCall = voiceCallState !== "idle";
+  const directConv = conversations.find((c) => c.peerUserId === userId && c.type === "direct");
 
   const closeLightbox = useCallback(() => setLightboxOpen(false), []);
 
@@ -293,9 +300,26 @@ function UserProfileContent() {
                     </div>
                   )}
 
-                  {/* Friend / Block / Mute actions (not shown on own profile) */}
+                  {/* Friend / Block / Mute / Call actions (not shown on own profile) */}
                   {!isOwnProfile && (
                     <div className="mt-4 flex gap-2">
+                      {directConv && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={cn("gap-1.5", isInCall && "text-green-400")}
+                          disabled={isInCall}
+                          onClick={() => {
+                            if (!isInCall && user) {
+                              startCall(directConv.id, { targetUserId: userId }, user.name, user.image, "native");
+                            }
+                          }}
+                          title={isInCall ? t("voice.inCall") : t("voice.startCall")}
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                          {isInCall ? t("voice.inCall") : t("voice.startCall")}
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
