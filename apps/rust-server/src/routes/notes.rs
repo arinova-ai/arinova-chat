@@ -177,6 +177,109 @@ async fn is_moderator(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
     matches!(role.as_deref(), Some("admin") | Some("vice_admin"))
 }
 
+/// Parse [[Note Title]] references from content, returning unique titles.
+pub fn parse_note_links(content: &str) -> Vec<String> {
+    let mut titles = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut start = 0;
+    let bytes = content.as_bytes();
+    while start + 3 < bytes.len() {
+        if bytes[start] == b'[' && bytes.get(start + 1) == Some(&b'[') {
+            if let Some(end) = content[start + 2..].find("]]") {
+                let title = content[start + 2..start + 2 + end].trim().to_string();
+                if !title.is_empty() && seen.insert(title.clone()) {
+                    titles.push(title);
+                }
+                start = start + 2 + end + 2;
+                continue;
+            }
+        }
+        start += 1;
+    }
+    titles
+}
+
+/// Sync note_links table for a given source note based on parsed [[]] references.
+pub async fn sync_note_links(db: &PgPool, source_note_id: Uuid, conv_id: Uuid, content: &str) {
+    let titles = parse_note_links(content);
+
+    // Delete old links from this source
+    let _ = sqlx::query("DELETE FROM note_links WHERE source_note_id = $1")
+        .bind(source_note_id)
+        .execute(db)
+        .await;
+
+    if titles.is_empty() {
+        return;
+    }
+
+    // Find target notes by title within the same conversation
+    for title in &titles {
+        let target = sqlx::query_as::<_, (Uuid,)>(
+            "SELECT id FROM conversation_notes WHERE conversation_id = $1 AND LOWER(title) = LOWER($2) AND id != $3 LIMIT 1",
+        )
+        .bind(conv_id)
+        .bind(title)
+        .bind(source_note_id)
+        .fetch_optional(db)
+        .await;
+
+        if let Ok(Some((target_id,))) = target {
+            let _ = sqlx::query(
+                "INSERT INTO note_links (source_note_id, target_note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            )
+            .bind(source_note_id)
+            .bind(target_id)
+            .execute(db)
+            .await;
+        }
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct BacklinkRow {
+    id: Uuid,
+    title: String,
+}
+
+/// Get backlinks (notes that reference this note via [[]]).
+pub async fn get_backlinks(db: &PgPool, note_id: Uuid) -> Vec<serde_json::Value> {
+    let rows = sqlx::query_as::<_, BacklinkRow>(
+        r#"SELECT n.id, n.title
+           FROM note_links nl
+           JOIN conversation_notes n ON n.id = nl.source_note_id
+           WHERE nl.target_note_id = $1
+           ORDER BY n.title"#,
+    )
+    .bind(note_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    rows.iter()
+        .map(|r| serde_json::json!({ "id": r.id, "title": r.title }))
+        .collect()
+}
+
+/// Get kanban cards linked to a note.
+pub async fn get_linked_cards(db: &PgPool, note_id: Uuid) -> Vec<serde_json::Value> {
+    let rows = sqlx::query_as::<_, (Uuid, String)>(
+        r#"SELECT c.id, c.title
+           FROM kanban_cards c
+           JOIN kanban_card_notes cn ON cn.card_id = c.id
+           WHERE cn.note_id = $1
+           ORDER BY c.title"#,
+    )
+    .bind(note_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    rows.iter()
+        .map(|(id, title)| serde_json::json!({ "id": id, "title": title }))
+        .collect()
+}
+
 const NOTE_QUERY_BASE: &str = r#"
     SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
            n.title, n.content, n.tags, n.archived_at, n.created_at, n.updated_at,
@@ -213,7 +316,14 @@ async fn get_note(
     .await;
 
     match row {
-        Ok(Some(note)) => Json(note_to_json(&note)).into_response(),
+        Ok(Some(note)) => {
+            let mut j = note_to_json(&note);
+            let backlinks = get_backlinks(&state.db, note.id).await;
+            let linked_cards = get_linked_cards(&state.db, note.id).await;
+            j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
+            j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
+            Json(j).into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Note not found"})),
@@ -409,6 +519,11 @@ async fn create_note(
 
     match result {
         Ok(_) => {
+            // Sync [[Note Title]] backlinks
+            if !body.content.is_empty() {
+                sync_note_links(&state.db, note_id, conv_id, &body.content).await;
+            }
+
             let note_json = json!({
                 "id": note_id,
                 "conversationId": conv_id,
@@ -587,6 +702,11 @@ async fn update_note(
 
             match row {
                 Ok(Some(note)) => {
+                    // Sync [[Note Title]] backlinks if content was updated
+                    if dyn_params.content.is_some() {
+                        sync_note_links(&state.db, note_id, conv_id, &note.content).await;
+                    }
+
                     let note_json = note_to_json(&note);
 
                     let member_ids = get_conv_member_ids(&state.db, conv_id).await;

@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthAgent;
 use crate::AppState;
+use crate::routes::notes::{get_backlinks, get_linked_cards, sync_note_links};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -168,7 +169,14 @@ async fn agent_get_note(
     .await;
 
     match row {
-        Ok(Some(note)) => Json(note_to_json(&note)).into_response(),
+        Ok(Some(note)) => {
+            let mut j = note_to_json(&note);
+            let backlinks = get_backlinks(&state.db, note.id).await;
+            let linked_cards = get_linked_cards(&state.db, note.id).await;
+            j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
+            j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
+            Json(j).into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Note not found"})),
@@ -396,6 +404,11 @@ async fn agent_create_note(
 
     match result {
         Ok(_) => {
+            // Sync [[Note Title]] backlinks
+            if !body.content.is_empty() {
+                sync_note_links(&state.db, note_id, conv_id, &body.content).await;
+            }
+
             let note_json = json!({
                 "id": note_id,
                 "conversationId": conv_id,
@@ -559,6 +572,11 @@ async fn agent_update_note(
 
             match row {
                 Ok(Some(note)) => {
+                    // Sync [[Note Title]] backlinks if content was updated
+                    if content_val.is_some() {
+                        sync_note_links(&state.db, note_id, conv_id, &note.content).await;
+                    }
+
                     let note_json = note_to_json(&note);
 
                     let member_ids = get_conv_member_ids(&state.db, conv_id).await;

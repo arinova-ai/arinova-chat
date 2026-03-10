@@ -29,6 +29,14 @@ pub fn router() -> Router<AppState> {
             delete(unassign_agent),
         )
         .route("/api/kanban/cards/{id}/unarchive", post(unarchive_card))
+        .route(
+            "/api/kanban/cards/{id}/notes",
+            get(list_card_notes).post(link_note_to_card),
+        )
+        .route(
+            "/api/kanban/cards/{card_id}/notes/{note_id}",
+            delete(unlink_note_from_card),
+        )
         // Agent API
         .route("/api/agent/kanban/cards", get(agent_list_cards).post(agent_create_card))
         .route("/api/agent/kanban/cards/{id}", patch(agent_update_card))
@@ -78,6 +86,14 @@ struct CardRow {
 struct CardAgentRow {
     card_id: Uuid,
     agent_id: String,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct CardNoteRow {
+    card_id: Uuid,
+    note_id: Uuid,
+    note_title: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -340,12 +356,26 @@ async fn get_board(
     .fetch_all(&state.db)
     .await;
 
-    match (columns, cards, card_agents) {
-        (Ok(cols), Ok(crds), Ok(agents)) => Json(json!({
+    let card_notes = sqlx::query_as::<_, CardNoteRow>(
+        r#"SELECT cn.card_id, n.id AS note_id, n.title AS note_title
+           FROM kanban_card_notes cn
+           JOIN conversation_notes n ON n.id = cn.note_id
+           JOIN kanban_cards c ON c.id = cn.card_id
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1
+           ORDER BY cn.created_at"#,
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match (columns, cards, card_agents, card_notes) {
+        (Ok(cols), Ok(crds), Ok(agents), Ok(notes)) => Json(json!({
             "id": board_id,
             "columns": cols,
             "cards": crds,
             "cardAgents": agents,
+            "cardNotes": notes,
         }))
         .into_response(),
         _ => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Failed to fetch board" })))
@@ -933,6 +963,115 @@ async fn agent_list_archived_cards(
             "limit": limit,
         }))
         .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+// ── Kanban Card ↔ Note Links ─────────────────────────────────
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct LinkedNoteRow {
+    id: Uuid,
+    title: String,
+    tags: Vec<String>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LinkNoteBody {
+    note_id: Uuid,
+}
+
+/// POST /api/kanban/cards/:id/notes — link a note to a card
+async fn link_note_to_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<LinkNoteBody>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    // Verify the note exists
+    let note_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversation_notes WHERE id = $1)",
+    )
+    .bind(body.note_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !note_exists {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "Note not found" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_notes (card_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(body.note_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// DELETE /api/kanban/cards/:card_id/notes/:note_id — unlink a note from a card
+async fn unlink_note_from_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((card_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM kanban_card_notes WHERE card_id = $1 AND note_id = $2",
+    )
+    .bind(card_id)
+    .bind(note_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// GET /api/kanban/cards/:id/notes — list notes linked to a card
+async fn list_card_notes(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let notes = sqlx::query_as::<_, LinkedNoteRow>(
+        r#"SELECT n.id, n.title, n.tags, n.created_at
+           FROM conversation_notes n
+           JOIN kanban_card_notes cn ON cn.note_id = n.id
+           WHERE cn.card_id = $1
+           ORDER BY cn.created_at DESC"#,
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match notes {
+        Ok(rows) => Json(json!(rows)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
