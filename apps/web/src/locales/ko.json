@@ -753,6 +753,11 @@
   "memoryCapsule.extract": "추출",
   "memoryCapsule.approveTitle": "에이전트 접근 승인",
   "memoryCapsule.empty": "캡슐이 아직 없습니다",
+  "memoryCapsule.statusExtracting": "추출 중...",
+  "memoryCapsule.statusFailed": "실패",
+  "memoryCapsule.entries": "개 메모리",
+  "memoryCapsule.messages": "개 메시지",
+  "memoryCapsule.notExtracted": "아직 추출되지 않음",
 
   "promo.free": "무료",
   "promo.coins": "코인",

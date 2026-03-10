@@ -753,6 +753,11 @@
   "memoryCapsule.extract": "抽出",
   "memoryCapsule.approveTitle": "エージェントのアクセスを承認",
   "memoryCapsule.empty": "カプセルはまだありません",
+  "memoryCapsule.statusExtracting": "抽出中...",
+  "memoryCapsule.statusFailed": "失敗",
+  "memoryCapsule.entries": "件のメモリ",
+  "memoryCapsule.messages": "件のメッセージ",
+  "memoryCapsule.notExtracted": "未抽出",
 
   "promo.free": "無料",
   "promo.coins": "コイン",

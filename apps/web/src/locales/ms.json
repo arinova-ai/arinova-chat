@@ -753,6 +753,11 @@
   "memoryCapsule.extract": "Ekstrak",
   "memoryCapsule.approveTitle": "Luluskan Akses Ejen",
   "memoryCapsule.empty": "Tiada kapsul lagi",
+  "memoryCapsule.statusExtracting": "Mengekstrak...",
+  "memoryCapsule.statusFailed": "Gagal",
+  "memoryCapsule.entries": "memori",
+  "memoryCapsule.messages": "mesej",
+  "memoryCapsule.notExtracted": "Belum diekstrak",
 
   "promo.free": "Percuma",
   "promo.coins": "syiling",

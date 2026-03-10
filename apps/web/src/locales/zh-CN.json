@@ -757,6 +757,11 @@
   "memoryCapsule.extract": "提取",
   "memoryCapsule.approveTitle": "授权智能体访问",
   "memoryCapsule.empty": "暂无胶囊",
+  "memoryCapsule.statusExtracting": "提取中...",
+  "memoryCapsule.statusFailed": "提取失败",
+  "memoryCapsule.entries": "条记忆",
+  "memoryCapsule.messages": "条消息",
+  "memoryCapsule.notExtracted": "尚未提取",
 
   "promo.free": "免费",
   "promo.coins": "金币",

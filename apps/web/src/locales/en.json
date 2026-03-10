@@ -763,6 +763,9 @@
   "memoryCapsule.empty": "No capsules yet",
   "memoryCapsule.statusExtracting": "Extracting...",
   "memoryCapsule.statusFailed": "Failed",
+  "memoryCapsule.entries": "entries",
+  "memoryCapsule.messages": "messages",
+  "memoryCapsule.notExtracted": "Not yet extracted",
 
   "promo.free": "Free",
   "promo.coins": "coins",

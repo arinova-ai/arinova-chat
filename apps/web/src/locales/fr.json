@@ -753,6 +753,11 @@
   "memoryCapsule.extract": "Extraire",
   "memoryCapsule.approveTitle": "Approuver l'Accès de l'Agent",
   "memoryCapsule.empty": "Aucune capsule pour le moment",
+  "memoryCapsule.statusExtracting": "Extraction...",
+  "memoryCapsule.statusFailed": "Échec",
+  "memoryCapsule.entries": "mémoires",
+  "memoryCapsule.messages": "messages",
+  "memoryCapsule.notExtracted": "Pas encore extrait",
 
   "promo.free": "Gratuit",
   "promo.coins": "crédits",

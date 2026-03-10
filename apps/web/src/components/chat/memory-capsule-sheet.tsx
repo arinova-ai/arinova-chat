@@ -25,6 +25,8 @@ interface Capsule {
   messageCount: number;
   status: string;
   createdAt: string;
+  extractedThrough: string | null;
+  entryCount: number;
 }
 
 interface Grant {
@@ -247,9 +249,19 @@ export function MemoryCapsuleSheet({
                           {t("memoryCapsule.statusFailed")}
                         </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(capsule.createdAt).toLocaleDateString()}
-                        </p>
+                        <div className="space-y-0.5">
+                          <p className="text-xs text-muted-foreground">
+                            {capsule.entryCount > 0
+                              ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}`
+                              : `${capsule.messageCount} ${t("memoryCapsule.messages")}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(capsule.createdAt).toLocaleDateString()}
+                            {capsule.extractedThrough
+                              ? ` ~ ${new Date(capsule.extractedThrough).toLocaleDateString()}`
+                              : ` · ${t("memoryCapsule.notExtracted")}`}
+                          </p>
+                        </div>
                       )}
                     </div>
                     {isConfirming ? (

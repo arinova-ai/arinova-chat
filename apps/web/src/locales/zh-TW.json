@@ -761,6 +761,9 @@
   "memoryCapsule.empty": "尚無膠囊",
   "memoryCapsule.statusExtracting": "提取中...",
   "memoryCapsule.statusFailed": "提取失敗",
+  "memoryCapsule.entries": "則記憶",
+  "memoryCapsule.messages": "則訊息",
+  "memoryCapsule.notExtracted": "尚未提取",
 
   "promo.free": "免費",
   "promo.coins": "金幣",
