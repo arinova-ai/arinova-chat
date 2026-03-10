@@ -10,16 +10,20 @@ import {
   Volume2,
   VolumeX,
   Bot,
+  User,
   FileText,
 } from "lucide-react";
 import { useVoiceCallStore } from "@/store/voice-call-store";
 import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 export function ActiveCall() {
+  const { t } = useTranslation();
   const callState = useVoiceCallStore((s) => s.callState);
-  const agentName = useVoiceCallStore((s) => s.agentName);
-  const agentAvatarUrl = useVoiceCallStore((s) => s.agentAvatarUrl);
+  const peerName = useVoiceCallStore((s) => s.peerName);
+  const peerAvatarUrl = useVoiceCallStore((s) => s.peerAvatarUrl);
+  const peerType = useVoiceCallStore((s) => s.peerType);
   const isMuted = useVoiceCallStore((s) => s.isMuted);
   const volume = useVoiceCallStore((s) => s.volume);
   const voiceMode = useVoiceCallStore((s) => s.voiceMode);
@@ -49,6 +53,7 @@ export function ActiveCall() {
 
   const isRinging = callState === "ringing" || callState === "requesting_mic";
   const isFallback = voiceMode !== "native";
+  const FallbackIcon = peerType === "agent" ? Bot : User;
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col bg-neutral-900/95 backdrop-blur-sm">
@@ -56,25 +61,25 @@ export function ActiveCall() {
       {isFallback && callState === "connected" && (
         <div className="flex justify-center pt-3">
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-3 py-1 text-xs font-medium text-amber-400">
-            降級模式
+            {t("voice.fallbackMode")}
           </span>
         </div>
       )}
 
       {/* Main content */}
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
-        {/* Agent avatar */}
+        {/* Peer avatar */}
         <div className={cn("relative", isRinging && "animate-pulse")}>
           <Avatar className="h-24 w-24">
-            {agentAvatarUrl ? (
+            {peerAvatarUrl ? (
               <img
-                src={assetUrl(agentAvatarUrl)}
-                alt={agentName ?? "Agent"}
+                src={assetUrl(peerAvatarUrl)}
+                alt={peerName ?? ""}
                 className="h-full w-full object-cover"
               />
             ) : (
               <AvatarFallback className="bg-neutral-700 text-neutral-200 text-2xl">
-                <Bot className="h-10 w-10" />
+                <FallbackIcon className="h-10 w-10" />
               </AvatarFallback>
             )}
           </Avatar>
@@ -83,16 +88,16 @@ export function ActiveCall() {
           )}
         </div>
 
-        {/* Agent name */}
+        {/* Peer name */}
         <div className="text-center">
-          <h2 className="text-lg font-semibold">{agentName ?? "Agent"}</h2>
+          <h2 className="text-lg font-semibold">{peerName ?? ""}</h2>
           <p className="text-sm text-muted-foreground">
-            {isRinging ? "呼叫中..." : elapsed}
+            {isRinging ? t("voice.ringing") : elapsed}
           </p>
         </div>
 
-        {/* Live transcript */}
-        {transcriptEnabled && callState === "connected" && transcript.length > 0 && (
+        {/* Live transcript (only for agent calls) */}
+        {peerType === "agent" && transcriptEnabled && callState === "connected" && transcript.length > 0 && (
           <div className="mx-4 max-h-40 w-full max-w-md overflow-y-auto rounded-lg bg-neutral-800 p-3">
             {transcript.slice(-5).map((line) => (
               <p
@@ -104,7 +109,7 @@ export function ActiveCall() {
                 )}
               >
                 <span className="font-medium">
-                  {line.speaker === "user" ? "你: " : "AI: "}
+                  {line.speaker === "user" ? t("voice.labelYou") : t("voice.labelAI")}
                 </span>
                 {line.text}
               </p>
@@ -145,21 +150,23 @@ export function ActiveCall() {
         <div className="flex items-center gap-4">
           {callState === "connected" && (
             <>
-              {/* Transcript toggle */}
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                className={cn(
-                  "rounded-full",
-                  transcriptEnabled
-                    ? "bg-neutral-700 text-white"
-                    : "bg-neutral-800 text-muted-foreground"
-                )}
-                onClick={toggleTranscript}
-                title={transcriptEnabled ? "隱藏字幕" : "顯示字幕"}
-              >
-                <FileText className="h-5 w-5" />
-              </Button>
+              {/* Transcript toggle (agent calls only) */}
+              {peerType === "agent" && (
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  className={cn(
+                    "rounded-full",
+                    transcriptEnabled
+                      ? "bg-neutral-700 text-white"
+                      : "bg-neutral-800 text-muted-foreground"
+                  )}
+                  onClick={toggleTranscript}
+                  title={transcriptEnabled ? t("voice.hideTranscript") : t("voice.showTranscript")}
+                >
+                  <FileText className="h-5 w-5" />
+                </Button>
+              )}
 
               {/* Mute toggle */}
               <Button
@@ -172,7 +179,7 @@ export function ActiveCall() {
                     : "bg-neutral-700 text-white"
                 )}
                 onClick={toggleMute}
-                title={isMuted ? "取消靜音" : "靜音"}
+                title={isMuted ? t("voice.unmute") : t("voice.mute")}
               >
                 {isMuted ? (
                   <MicOff className="h-5 w-5" />
@@ -189,7 +196,7 @@ export function ActiveCall() {
             size="icon-lg"
             className="rounded-full bg-red-500 text-white hover:bg-red-600"
             onClick={endCall}
-            title={isRinging ? "取消通話" : "掛斷"}
+            title={isRinging ? t("voice.cancelCall") : t("voice.hangup")}
           >
             <PhoneOff className="h-5 w-5" />
           </Button>

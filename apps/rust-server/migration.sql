@@ -847,4 +847,7 @@ CREATE TABLE IF NOT EXISTS user_favorite_stickers (
 );
 CREATE INDEX IF NOT EXISTS idx_user_favorite_stickers_user ON user_favorite_stickers(user_id);
 
+-- Theme published status
+ALTER TABLE themes ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT true;
+
 COMMIT;

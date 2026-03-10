@@ -1,4 +1,4 @@
-export type AgentStatus = "working" | "idle" | "blocked" | "collaborating";
+export type AgentStatus = "working" | "idle" | "blocked" | "collaborating" | "unbound";
 
 export interface AgentTask {
   title: string;

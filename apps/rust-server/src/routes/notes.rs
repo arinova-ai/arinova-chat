@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, patch},
+    routing::{get, patch, post},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -26,7 +26,27 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/conversations/{id}/notes/{noteId}",
-            patch(update_note).delete(delete_note),
+            get(get_note).patch(update_note).delete(delete_note),
+        )
+        .route(
+            "/api/conversations/{id}/notes/{noteId}/archive",
+            post(archive_note),
+        )
+        .route(
+            "/api/conversations/{id}/notes/{noteId}/unarchive",
+            post(unarchive_note),
+        )
+        .route(
+            "/api/conversations/{id}/notes/{noteId}/share",
+            post(share_note),
+        )
+        .route(
+            "/api/conversations/{id}/notes/{noteId}/ask-ai",
+            post(ask_ai),
+        )
+        .route(
+            "/api/conversations/{id}/notes/{noteId}/extract-capsule",
+            post(extract_capsule_from_note),
         )
 }
 
@@ -41,6 +61,9 @@ struct NoteRow {
     agent_id: Option<Uuid>,
     title: String,
     content: String,
+    tags: Vec<String>,
+    archived_at: Option<DateTime<Utc>>,
+    summary: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     creator_name: String,
@@ -114,6 +137,9 @@ fn note_to_json(n: &NoteRow) -> serde_json::Value {
         "agentName": n.agent_name,
         "title": n.title,
         "content": n.content,
+        "tags": n.tags,
+        "summary": n.summary,
+        "archivedAt": n.archived_at.map(|t| t.to_rfc3339()),
         "createdAt": n.created_at.to_rfc3339(),
         "updatedAt": n.updated_at.to_rfc3339(),
     })
@@ -161,9 +187,218 @@ async fn is_moderator(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
     matches!(role.as_deref(), Some("admin") | Some("vice_admin"))
 }
 
+/// Normalize a tag for comparison: trim, lowercase, strip leading '#'.
+pub fn normalize_tag(tag: &str) -> String {
+    let s = tag.trim().to_lowercase();
+    s.strip_prefix('#').unwrap_or(&s).to_string()
+}
+
+/// Auto-create a Kanban card in Backlog when note gets #prd tag.
+/// Auto-creates a default board if user has none. Deduplicates by note_id via kanban_card_notes.
+pub async fn auto_create_prd_card(db: &PgPool, owner_id: &str, note_id: Uuid, note_title: &str) {
+    // Ensure user has a board; create default if missing
+    let board_id = match sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM kanban_boards WHERE owner_id = $1 LIMIT 1",
+    )
+    .bind(owner_id)
+    .fetch_optional(db)
+    .await
+    {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            // Auto-create default board with 5 columns
+            let new_board = sqlx::query_scalar::<_, Uuid>(
+                "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, 'My Board') RETURNING id",
+            )
+            .bind(owner_id)
+            .fetch_one(db)
+            .await;
+
+            let new_board = match new_board {
+                Ok(id) => id,
+                Err(_) => return,
+            };
+
+            for (name, order) in [("Backlog", 0), ("To Do", 1), ("In Progress", 2), ("Review", 3), ("Done", 4)] {
+                let _ = sqlx::query(
+                    "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+                )
+                .bind(new_board)
+                .bind(name)
+                .bind(order)
+                .execute(db)
+                .await;
+            }
+
+            new_board
+        }
+        Err(_) => return,
+    };
+
+    // Find the Backlog column
+    let backlog_id = match sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM kanban_columns WHERE board_id = $1 AND name = 'Backlog' LIMIT 1",
+    )
+    .bind(board_id)
+    .fetch_optional(db)
+    .await
+    {
+        Ok(Some(id)) => id,
+        _ => return,
+    };
+
+    // Deduplicate by note_id — skip if this note already has a linked card
+    let already_linked = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM kanban_card_notes WHERE note_id = $1)",
+    )
+    .bind(note_id)
+    .fetch_one(db)
+    .await
+    .unwrap_or(false);
+
+    if already_linked {
+        // Sync card title to latest note title
+        let _ = sqlx::query(
+            r#"UPDATE kanban_cards SET title = $1
+               WHERE id = (SELECT card_id FROM kanban_card_notes WHERE note_id = $2 LIMIT 1)"#,
+        )
+        .bind(note_title)
+        .bind(note_id)
+        .execute(db)
+        .await;
+        return;
+    }
+
+    // Create the card
+    let card_id = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO kanban_cards (column_id, title, priority, sort_order, created_by)
+           VALUES ($1, $2, 'medium', 0, $3)
+           RETURNING id"#,
+    )
+    .bind(backlog_id)
+    .bind(note_title)
+    .bind(owner_id)
+    .fetch_optional(db)
+    .await;
+
+    if let Ok(Some(card_id)) = card_id {
+        let _ = sqlx::query(
+            "INSERT INTO kanban_card_notes (card_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(card_id)
+        .bind(note_id)
+        .execute(db)
+        .await;
+    }
+}
+
+/// Parse [[Note Title]] references from content, returning unique titles.
+pub fn parse_note_links(content: &str) -> Vec<String> {
+    let mut titles = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut start = 0;
+    let bytes = content.as_bytes();
+    while start + 3 < bytes.len() {
+        if bytes[start] == b'[' && bytes.get(start + 1) == Some(&b'[') {
+            if let Some(end) = content[start + 2..].find("]]") {
+                let title = content[start + 2..start + 2 + end].trim().to_string();
+                if !title.is_empty() && seen.insert(title.clone()) {
+                    titles.push(title);
+                }
+                start = start + 2 + end + 2;
+                continue;
+            }
+        }
+        start += 1;
+    }
+    titles
+}
+
+/// Sync note_links table for a given source note based on parsed [[]] references.
+pub async fn sync_note_links(db: &PgPool, source_note_id: Uuid, conv_id: Uuid, content: &str) {
+    let titles = parse_note_links(content);
+
+    // Delete old links from this source
+    let _ = sqlx::query("DELETE FROM note_links WHERE source_note_id = $1")
+        .bind(source_note_id)
+        .execute(db)
+        .await;
+
+    if titles.is_empty() {
+        return;
+    }
+
+    // Find target notes by title within the same conversation
+    for title in &titles {
+        let target = sqlx::query_as::<_, (Uuid,)>(
+            "SELECT id FROM conversation_notes WHERE conversation_id = $1 AND LOWER(title) = LOWER($2) AND id != $3 LIMIT 1",
+        )
+        .bind(conv_id)
+        .bind(title)
+        .bind(source_note_id)
+        .fetch_optional(db)
+        .await;
+
+        if let Ok(Some((target_id,))) = target {
+            let _ = sqlx::query(
+                "INSERT INTO note_links (source_note_id, target_note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            )
+            .bind(source_note_id)
+            .bind(target_id)
+            .execute(db)
+            .await;
+        }
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct BacklinkRow {
+    id: Uuid,
+    title: String,
+}
+
+/// Get backlinks (notes that reference this note via [[]]).
+pub async fn get_backlinks(db: &PgPool, note_id: Uuid) -> Vec<serde_json::Value> {
+    let rows = sqlx::query_as::<_, BacklinkRow>(
+        r#"SELECT n.id, n.title
+           FROM note_links nl
+           JOIN conversation_notes n ON n.id = nl.source_note_id
+           WHERE nl.target_note_id = $1
+           ORDER BY n.title"#,
+    )
+    .bind(note_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    rows.iter()
+        .map(|r| serde_json::json!({ "id": r.id, "title": r.title }))
+        .collect()
+}
+
+/// Get kanban cards linked to a note.
+pub async fn get_linked_cards(db: &PgPool, note_id: Uuid) -> Vec<serde_json::Value> {
+    let rows = sqlx::query_as::<_, (Uuid, String)>(
+        r#"SELECT c.id, c.title
+           FROM kanban_cards c
+           JOIN kanban_card_notes cn ON cn.card_id = c.id
+           WHERE cn.note_id = $1
+           ORDER BY c.title"#,
+    )
+    .bind(note_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    rows.iter()
+        .map(|(id, title)| serde_json::json!({ "id": id, "title": title }))
+        .collect()
+}
+
 const NOTE_QUERY_BASE: &str = r#"
     SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
-           n.title, n.content, n.created_at, n.updated_at,
+           n.title, n.content, n.tags, n.archived_at, n.summary,
+           n.created_at, n.updated_at,
            COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
            a.name AS agent_name
     FROM conversation_notes n
@@ -173,10 +408,59 @@ const NOTE_QUERY_BASE: &str = r#"
 
 // ===== Handlers =====
 
+/// GET /api/conversations/:id/notes/:noteId
+async fn get_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
+    let row = sqlx::query_as::<_, NoteRow>(&format!(
+        "{} WHERE n.id = $1 AND n.conversation_id = $2",
+        NOTE_QUERY_BASE
+    ))
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(note)) => {
+            let mut j = note_to_json(&note);
+            let backlinks = get_backlinks(&state.db, note.id).await;
+            let linked_cards = get_linked_cards(&state.db, note.id).await;
+            let related_capsules = get_related_capsules(&state.db, &user.id, &note.content).await;
+            j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
+            j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
+            j.as_object_mut().unwrap().insert("relatedCapsules".into(), json!(related_capsules));
+            Json(j).into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Note not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
 #[derive(Deserialize)]
 struct ListNotesQuery {
     before: Option<String>,
     limit: Option<String>,
+    archived: Option<String>,
+    tags: Option<String>,
 }
 
 /// GET /api/conversations/:id/notes
@@ -200,6 +484,13 @@ async fn list_notes(
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(20)
         .min(50);
+
+    let show_archived = query.archived.as_deref() == Some("true");
+    let tag_filter: Vec<String> = query
+        .tags
+        .as_deref()
+        .map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .unwrap_or_default();
 
     // Resolve cursor
     let cursor_ts: Option<DateTime<Utc>> = if let Some(ref before_id) = query.before {
@@ -226,10 +517,26 @@ async fn list_notes(
         None
     };
 
+    // Build archive condition
+    let archive_cond = if show_archived {
+        "n.archived_at IS NOT NULL"
+    } else {
+        "n.archived_at IS NULL"
+    };
+
+    // Build tag condition
+    let tag_cond = if tag_filter.is_empty() {
+        String::new()
+    } else {
+        // AND logic: note must contain ALL specified tags
+        format!(" AND n.tags @> ARRAY[{}]::text[]",
+            tag_filter.iter().map(|t| format!("'{}'", t.replace('\'', "''"))).collect::<Vec<_>>().join(","))
+    };
+
     let rows = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
-            NOTE_QUERY_BASE
+            "{} WHERE n.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
+            NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
         .bind(ts)
@@ -238,8 +545,8 @@ async fn list_notes(
         .await
     } else {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 ORDER BY n.created_at DESC LIMIT $2",
-            NOTE_QUERY_BASE
+            "{} WHERE n.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
+            NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
         .bind(limit + 1)
@@ -282,6 +589,8 @@ struct CreateNoteBody {
     title: String,
     #[serde(default)]
     content: String,
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 /// POST /api/conversations/:id/notes
@@ -310,22 +619,29 @@ async fn create_note(
 
     let note_id = Uuid::new_v4();
     let now = Utc::now();
+    let tags: Vec<String> = body.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
 
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, title, content, created_at, updated_at)
-           VALUES ($1, $2, $3, 'user', $4, $5, $6, $6)"#,
+        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $7)"#,
     )
     .bind(note_id)
     .bind(conv_id)
     .bind(&user.id)
     .bind(title)
     .bind(&body.content)
+    .bind(&tags)
     .bind(now)
     .execute(&state.db)
     .await;
 
     match result {
         Ok(_) => {
+            // Sync [[Note Title]] backlinks
+            if !body.content.is_empty() {
+                sync_note_links(&state.db, note_id, conv_id, &body.content).await;
+            }
+
             let note_json = json!({
                 "id": note_id,
                 "conversationId": conv_id,
@@ -336,6 +652,8 @@ async fn create_note(
                 "agentName": null,
                 "title": title,
                 "content": &body.content,
+                "tags": &tags,
+                "archivedAt": null,
                 "createdAt": now.to_rfc3339(),
                 "updatedAt": now.to_rfc3339(),
             });
@@ -352,7 +670,41 @@ async fn create_note(
                 &state.redis,
             );
 
-            (StatusCode::CREATED, Json(note_json)).into_response()
+            // #urgent tag → notify agents
+            if tags.iter().any(|t| normalize_tag(t) == "urgent") {
+                state.ws.broadcast_to_members(
+                    &member_ids,
+                    &json!({
+                        "type": "note:urgent",
+                        "conversationId": conv_id.to_string(),
+                        "noteId": note_id.to_string(),
+                        "title": title,
+                        "tags": &tags,
+                    }),
+                    &state.redis,
+                );
+            }
+
+            // #prd tag → auto-create Kanban card in Backlog
+            if tags.iter().any(|t| normalize_tag(t) == "prd") {
+                auto_create_prd_card(&state.db, &user.id, note_id, title).await;
+            }
+
+            // Auto-summary (background, Task 2)
+            if let Some(ref gk) = state.config.gemini_api_key {
+                spawn_summary_if_needed(state.db.clone(), gk.clone(), note_id, body.content.clone());
+            }
+
+            // AI tag suggestions (Task 4)
+            let mut resp = note_json;
+            if let Some(ref gk) = state.config.gemini_api_key {
+                let suggested = suggest_tags(gk, title, &body.content).await;
+                if !suggested.is_empty() {
+                    resp.as_object_mut().unwrap().insert("suggestedTags".into(), json!(suggested));
+                }
+            }
+
+            (StatusCode::CREATED, Json(resp)).into_response()
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -363,9 +715,11 @@ async fn create_note(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct UpdateNoteBody {
     title: Option<String>,
     content: Option<String>,
+    tags: Option<Vec<String>>,
 }
 
 /// PATCH /api/conversations/:id/notes/:noteId
@@ -375,7 +729,7 @@ async fn update_note(
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<UpdateNoteBody>,
 ) -> Response {
-    if body.title.is_none() && body.content.is_none() {
+    if body.title.is_none() && body.content.is_none() && body.tags.is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Nothing to update"})),
@@ -441,45 +795,51 @@ async fn update_note(
         }
     }
 
-    // Dynamic UPDATE
+    // Dynamic UPDATE — build SET clauses
     let now = Utc::now();
-    let updated = match (&body.title, &body.content) {
-        (Some(title), Some(content)) => {
-            sqlx::query(
-                "UPDATE conversation_notes SET title = $1, content = $2, updated_at = $3 WHERE id = $4 AND conversation_id = $5",
-            )
-            .bind(title.trim())
-            .bind(content)
-            .bind(now)
-            .bind(note_id)
-            .bind(conv_id)
-            .execute(&state.db)
-            .await
-        }
-        (Some(title), None) => {
-            sqlx::query(
-                "UPDATE conversation_notes SET title = $1, updated_at = $2 WHERE id = $3 AND conversation_id = $4",
-            )
-            .bind(title.trim())
-            .bind(now)
-            .bind(note_id)
-            .bind(conv_id)
-            .execute(&state.db)
-            .await
-        }
-        (None, Some(content)) => {
-            sqlx::query(
-                "UPDATE conversation_notes SET content = $1, updated_at = $2 WHERE id = $3 AND conversation_id = $4",
-            )
-            .bind(content)
-            .bind(now)
-            .bind(note_id)
-            .bind(conv_id)
-            .execute(&state.db)
-            .await
-        }
-        (None, None) => unreachable!(),
+    let mut set_clauses = vec!["updated_at = NOW()".to_string()];
+    let mut param_idx = 1u32;
+
+    // We'll build a raw SQL string with positional params
+    // Collect bind values in order
+    struct DynParam {
+        title: Option<String>,
+        content: Option<String>,
+        tags: Option<Vec<String>>,
+    }
+    let dyn_params = DynParam {
+        title: body.title.as_ref().map(|t| t.trim().to_string()),
+        content: body.content.clone(),
+        tags: body.tags.as_ref().map(|t| t.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()),
     };
+
+    if dyn_params.title.is_some() {
+        set_clauses.push(format!("title = ${param_idx}"));
+        param_idx += 1;
+    }
+    if dyn_params.content.is_some() {
+        set_clauses.push(format!("content = ${param_idx}"));
+        param_idx += 1;
+    }
+    if dyn_params.tags.is_some() {
+        set_clauses.push(format!("tags = ${param_idx}"));
+        param_idx += 1;
+    }
+
+    let sql = format!(
+        "UPDATE conversation_notes SET {} WHERE id = ${} AND conversation_id = ${}",
+        set_clauses.join(", "),
+        param_idx,
+        param_idx + 1
+    );
+
+    let mut q = sqlx::query(&sql);
+    if let Some(ref title) = dyn_params.title { q = q.bind(title); }
+    if let Some(ref content) = dyn_params.content { q = q.bind(content); }
+    if let Some(ref tags) = dyn_params.tags { q = q.bind(tags); }
+    q = q.bind(note_id).bind(conv_id);
+
+    let updated = q.execute(&state.db).await;
 
     match updated {
         Ok(r) if r.rows_affected() > 0 => {
@@ -494,6 +854,11 @@ async fn update_note(
 
             match row {
                 Ok(Some(note)) => {
+                    // Sync [[Note Title]] backlinks if content was updated
+                    if dyn_params.content.is_some() {
+                        sync_note_links(&state.db, note_id, conv_id, &note.content).await;
+                    }
+
                     let note_json = note_to_json(&note);
 
                     let member_ids = get_conv_member_ids(&state.db, conv_id).await;
@@ -506,6 +871,39 @@ async fn update_note(
                         }),
                         &state.redis,
                     );
+
+                    // #urgent tag → notify agents
+                    if note.tags.iter().any(|t| normalize_tag(t) == "urgent") {
+                        state.ws.broadcast_to_members(
+                            &member_ids,
+                            &json!({
+                                "type": "note:urgent",
+                                "conversationId": conv_id.to_string(),
+                                "noteId": note_id.to_string(),
+                                "title": &note.title,
+                                "tags": &note.tags,
+                            }),
+                            &state.redis,
+                        );
+                    }
+
+                    // #prd tag → auto-create Kanban card in Backlog
+                    if note.tags.iter().any(|t| normalize_tag(t) == "prd") {
+                        auto_create_prd_card(&state.db, &user.id, note_id, &note.title).await;
+                    }
+
+                    // Re-generate or clear summary if content was updated (Task 2)
+                    if dyn_params.content.is_some() {
+                        if note.content.len() < 500 {
+                            // Content too short — clear stale summary
+                            let _ = sqlx::query("UPDATE conversation_notes SET summary = NULL WHERE id = $1")
+                                .bind(note_id)
+                                .execute(&state.db)
+                                .await;
+                        } else if let Some(ref gk) = state.config.gemini_api_key {
+                            spawn_summary_if_needed(state.db.clone(), gk.clone(), note_id, note.content.clone());
+                        }
+                    }
 
                     Json(note_json).into_response()
                 }
@@ -664,5 +1062,559 @@ async fn update_notes_settings(
             Json(json!({"error": e.to_string()})),
         )
             .into_response(),
+    }
+}
+
+/// POST /api/conversations/:id/notes/:noteId/archive
+async fn archive_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    // Check permission
+    let note = sqlx::query_as::<_, (String, String, Option<Uuid>)>(
+        "SELECT creator_id, creator_type, agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (cid, ctype, aid) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if !can_edit_note(&state.db, &user.id, &cid, &ctype, aid).await
+        && !is_moderator(&state.db, conv_id, &user.id).await
+    {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not authorized"}))).into_response();
+    }
+
+    let result = sqlx::query(
+        "UPDATE conversation_notes SET archived_at = NOW() WHERE id = $1 AND conversation_id = $2 AND archived_at IS NULL",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => {
+            let member_ids = get_conv_member_ids(&state.db, conv_id).await;
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({ "type": "note:archived", "conversationId": conv_id.to_string(), "noteId": note_id.to_string() }),
+                &state.redis,
+            );
+            Json(json!({"archived": true})).into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found or already archived"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/conversations/:id/notes/:noteId/unarchive
+async fn unarchive_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    let note = sqlx::query_as::<_, (String, String, Option<Uuid>)>(
+        "SELECT creator_id, creator_type, agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (cid, ctype, aid) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if !can_edit_note(&state.db, &user.id, &cid, &ctype, aid).await
+        && !is_moderator(&state.db, conv_id, &user.id).await
+    {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not authorized"}))).into_response();
+    }
+
+    let result = sqlx::query(
+        "UPDATE conversation_notes SET archived_at = NULL WHERE id = $1 AND conversation_id = $2 AND archived_at IS NOT NULL",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => {
+            let member_ids = get_conv_member_ids(&state.db, conv_id).await;
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({ "type": "note:unarchived", "conversationId": conv_id.to_string(), "noteId": note_id.to_string() }),
+                &state.redis,
+            );
+            Json(json!({"archived": false})).into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found or not archived"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/conversations/:id/notes/:noteId/share
+async fn share_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    // Fetch the note
+    let note = sqlx::query_as::<_, (String, String, Vec<String>, Option<String>)>(
+        "SELECT title, content, tags, summary FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content, tags, summary) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let preview = summary.unwrap_or_else(|| {
+        if content.len() > 100 { format!("{}...", &content[..content.char_indices().nth(100).map(|(i, _)| i).unwrap_or(content.len())]) } else { content.clone() }
+    });
+    let metadata = json!({
+        "noteId": note_id,
+        "title": title,
+        "preview": preview,
+        "tags": tags,
+    });
+
+    // Insert a system message with note_share type via metadata
+    let msg_id = Uuid::new_v4();
+    let result = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
+           VALUES ($1, $2, 0, 'system', $3, 'completed', $4, $5, NOW(), NOW())"#,
+    )
+    .bind(msg_id)
+    .bind(conv_id)
+    .bind(format!("shared a note: {}", title))
+    .bind(&user.id)
+    .bind(metadata.clone())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            // Broadcast to conversation members
+            let member_ids = get_conv_member_ids(&state.db, conv_id).await;
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({
+                    "type": "new_message",
+                    "conversationId": conv_id.to_string(),
+                    "message": {
+                        "id": msg_id.to_string(),
+                        "conversationId": conv_id.to_string(),
+                        "seq": 0,
+                        "role": "system",
+                        "content": format!("shared a note: {}", title),
+                        "status": "completed",
+                        "senderUserId": &user.id,
+                        "metadata": metadata,
+                        "createdAt": Utc::now().to_rfc3339(),
+                        "updatedAt": Utc::now().to_rfc3339(),
+                    },
+                }),
+                &state.redis,
+            );
+
+            Json(json!({
+                "messageId": msg_id,
+                "noteId": note_id,
+                "title": title,
+                "preview": preview,
+                "tags": tags,
+            }))
+            .into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+// ===== Gemini helper =====
+
+const GEMINI_URL: &str =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+#[derive(Deserialize)]
+struct GeminiResp {
+    candidates: Option<Vec<GeminiCandidate>>,
+}
+#[derive(Deserialize)]
+struct GeminiCandidate {
+    content: Option<GeminiContentPart>,
+}
+#[derive(Deserialize)]
+struct GeminiContentPart {
+    parts: Option<Vec<GeminiPart>>,
+}
+#[derive(Deserialize)]
+struct GeminiPart {
+    text: Option<String>,
+}
+
+/// Shared reqwest client with 30s timeout for all Gemini calls.
+fn gemini_client() -> &'static reqwest::Client {
+    use std::sync::OnceLock;
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("Failed to build reqwest client")
+    })
+}
+
+/// Call Gemini 2.0 Flash with a system instruction and user prompt.
+/// API key sent via header (x-goog-api-key), never in URL.
+/// Errors logged server-side; only generic message returned to caller.
+async fn call_gemini(
+    api_key: &str,
+    system: &str,
+    user_prompt: &str,
+    max_tokens: u32,
+) -> Result<String, String> {
+    let body = json!({
+        "systemInstruction": {
+            "parts": [{ "text": system }]
+        },
+        "contents": [{
+            "role": "user",
+            "parts": [{ "text": user_prompt }]
+        }],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens
+        }
+    });
+
+    let resp = gemini_client()
+        .post(GEMINI_URL)
+        .header("x-goog-api-key", api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Gemini request failed: {}", e);
+            "AI service error".to_string()
+        })?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        tracing::error!("Gemini API error {}: {}", status, text);
+        return Err("AI service error".to_string());
+    }
+
+    let parsed: GeminiResp = resp.json().await.map_err(|e| {
+        tracing::error!("Gemini response parse error: {}", e);
+        "AI service error".to_string()
+    })?;
+    let text = parsed
+        .candidates
+        .and_then(|c| c.into_iter().next())
+        .and_then(|c| c.content)
+        .and_then(|c| c.parts)
+        .map(|parts| parts.into_iter().filter_map(|p| p.text).collect::<Vec<_>>().join("\n"))
+        .unwrap_or_default();
+
+    Ok(text)
+}
+
+/// Per-user rate limit check via Redis. Returns Ok(()) if allowed, Err(Response) if rate limited.
+async fn check_ai_rate_limit(redis: &deadpool_redis::Pool, user_id: &str) -> Result<(), Response> {
+    use deadpool_redis::redis::AsyncCommands;
+    let key = format!("ai_ratelimit:{}:{}", user_id, chrono::Utc::now().format("%Y%m%d%H%M"));
+    let mut conn = match redis.get().await {
+        Ok(c) => c,
+        Err(_) => return Ok(()), // fail open if Redis unavailable
+    };
+    let count: i64 = conn.incr(&key, 1i64).await.unwrap_or(1);
+    if count == 1 {
+        let _: Result<(), _> = conn.expire(&key, 60).await;
+    }
+    if count > 10 {
+        return Err((StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": "Rate limit exceeded. Max 10 AI requests per minute."}))).into_response());
+    }
+    Ok(())
+}
+
+// ===== Task 1: Ask AI =====
+
+#[derive(Deserialize)]
+struct AskAiBody {
+    question: String,
+}
+
+/// POST /api/conversations/:id/notes/:noteId/ask-ai
+async fn ask_ai(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<AskAiBody>,
+) -> Response {
+    let question = body.question.trim();
+    if question.is_empty() || question.len() > 2000 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Question is required (max 2000 chars)"}))).into_response();
+    }
+
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    let gemini_key = match &state.config.gemini_api_key {
+        Some(k) => k.clone(),
+        None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
+    };
+
+    if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
+        return resp;
+    }
+
+    let note = sqlx::query_as::<_, (String, String)>(
+        "SELECT title, content FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let system = "You are a helpful AI assistant. The user will provide a note and ask a question about it. \
+                  Answer concisely based on the note content. If the answer is not in the note, say so.";
+    let prompt = format!("# Note: {}\n\n{}\n\n---\nQuestion: {}", title, content, question);
+
+    match call_gemini(&gemini_key, system, &prompt, 1024).await {
+        Ok(answer) => Json(json!({ "answer": answer })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response(),
+    }
+}
+
+// ===== Task 2: Auto-summary helper =====
+
+/// Generate a summary for note content and store it. Runs as a background task.
+pub fn spawn_summary_if_needed(db: PgPool, gemini_key: String, note_id: Uuid, content: String) {
+    if content.len() < 500 {
+        return;
+    }
+    tokio::spawn(async move {
+        let system = "Summarize the following note in 1-2 concise sentences. Output only the summary, nothing else.";
+        match call_gemini(&gemini_key, system, &content, 256).await {
+            Ok(summary) => {
+                let _ = sqlx::query("UPDATE conversation_notes SET summary = $1 WHERE id = $2")
+                    .bind(summary.trim())
+                    .bind(note_id)
+                    .execute(&db)
+                    .await;
+            }
+            Err(e) => {
+                tracing::warn!("Summary generation failed for note {}: {}", note_id, e);
+            }
+        }
+    });
+}
+
+// ===== Task 3: Extract capsule from note =====
+
+/// POST /api/conversations/:id/notes/:noteId/extract-capsule
+async fn extract_capsule_from_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    let gemini_key = match &state.config.gemini_api_key {
+        Some(k) => k.clone(),
+        None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
+    };
+
+    if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
+        return resp;
+    }
+
+    let note = sqlx::query_as::<_, (String, String)>(
+        "SELECT title, content FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if content.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Note has no content to extract from"}))).into_response();
+    }
+
+    let system = "Extract key facts, preferences, decisions, and action items from this note. \
+                  Output each memory as a separate line. Be concise — each line should be one self-contained fact or item.";
+    let prompt = format!("# {}\n\n{}", title, content);
+
+    let entries = match call_gemini(&gemini_key, system, &prompt, 1024).await {
+        Ok(text) => text.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect::<Vec<_>>(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response(),
+    };
+
+    // Find or create a capsule for this conversation
+    let capsule_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM memory_capsules WHERE owner_id = $1 AND source_conversation_id = $2 AND status = 'ready' LIMIT 1",
+    )
+    .bind(&user.id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let capsule_id = match capsule_id {
+        Some(id) => id,
+        None => {
+            match sqlx::query_scalar::<_, Uuid>(
+                "INSERT INTO memory_capsules (owner_id, name, source_conversation_id, status) VALUES ($1, $2, $3, 'ready') RETURNING id",
+            )
+            .bind(&user.id)
+            .bind(format!("Note: {}", title))
+            .bind(conv_id)
+            .fetch_one(&state.db)
+            .await
+            {
+                Ok(id) => id,
+                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            }
+        }
+    };
+
+    let mut inserted = 0u32;
+    for entry in &entries {
+        if sqlx::query(
+            "INSERT INTO memory_entries (capsule_id, content, importance) VALUES ($1, $2, 0.7)",
+        )
+        .bind(capsule_id)
+        .bind(entry)
+        .execute(&state.db)
+        .await
+        .is_ok()
+        {
+            inserted += 1;
+        }
+    }
+
+    let _ = sqlx::query("UPDATE memory_capsules SET entry_count = (SELECT COUNT(*) FROM memory_entries WHERE capsule_id = $1) WHERE id = $1")
+        .bind(capsule_id)
+        .execute(&state.db)
+        .await;
+
+    Json(json!({
+        "capsuleId": capsule_id,
+        "entriesCreated": inserted,
+        "entries": entries,
+    }))
+    .into_response()
+}
+
+/// Get related memory capsule entries for a note.
+pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> Vec<serde_json::Value> {
+    if content.trim().len() < 20 {
+        return vec![];
+    }
+    let query_text = &content[..content.len().min(200)];
+    let tsquery = query_text
+        .split_whitespace()
+        .take(8)
+        .map(|w| w.replace('\'', ""))
+        .filter(|w| w.len() > 2)
+        .collect::<Vec<_>>()
+        .join(" | ");
+
+    if tsquery.is_empty() {
+        return vec![];
+    }
+
+    let rows: Vec<(Uuid, String, f64, Uuid, String)> = sqlx::query_as(
+        r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name
+           FROM memory_entries me
+           JOIN memory_capsules mc ON mc.id = me.capsule_id
+           WHERE mc.owner_id = $1
+             AND me.search_vector @@ to_tsquery('english', $2)
+           ORDER BY ts_rank(me.search_vector, to_tsquery('english', $2)) DESC
+           LIMIT 5"#,
+    )
+    .bind(user_id)
+    .bind(&tsquery)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    rows.iter()
+        .map(|(id, content, importance, capsule_id, capsule_name)| {
+            json!({
+                "id": id,
+                "content": content,
+                "importance": importance,
+                "capsuleId": capsule_id,
+                "capsuleName": capsule_name,
+            })
+        })
+        .collect()
+}
+
+// ===== Task 4: AI tag suggestions =====
+
+/// Generate tag suggestions for note content using AI.
+pub async fn suggest_tags(gemini_key: &str, title: &str, content: &str) -> Vec<String> {
+    if content.trim().len() < 20 && title.trim().len() < 5 {
+        return vec![];
+    }
+    let system = "Based on the note title and content, suggest 2-3 short tags (single words, lowercase, no #). \
+                  Output only the tags separated by commas. Example: feature, urgent, design";
+    let prompt = format!("Title: {}\n\nContent: {}", title, &content[..content.len().min(1000)]);
+
+    match call_gemini(gemini_key, system, &prompt, 64).await {
+        Ok(text) => text
+            .split(',')
+            .map(|t| t.trim().to_lowercase().replace('#', ""))
+            .filter(|t| !t.is_empty() && t.len() <= 30)
+            .take(3)
+            .collect(),
+        Err(_) => vec![],
     }
 }

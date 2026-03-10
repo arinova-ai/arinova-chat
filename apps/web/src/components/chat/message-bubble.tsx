@@ -43,7 +43,9 @@ import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageContextMenu } from "./message-context-menu";
+import { ShareSheet, type ShareContent } from "./share-sheet";
 import { LinkPreviewCards } from "./link-preview-card";
+import { NotePreviewCard } from "./note-preview-card";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -700,6 +702,18 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
     togglePin(message.conversationId, message.id);
   }, [togglePin, message.conversationId, message.id]);
 
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [shareContent, setShareContent] = useState<ShareContent | null>(null);
+
+  const handleShare = useCallback(() => {
+    setShareContent({
+      type: "message",
+      title: senderInfo?.name ?? "",
+      text: message.content,
+    });
+    setShareSheetOpen(true);
+  }, [senderInfo?.name, message.content]);
+
   return (
     <div
       data-message-id={message.id}
@@ -796,6 +810,9 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
             />
             {!isStreaming && message.linkPreviews && message.linkPreviews.length > 0 && (
               <LinkPreviewCards linkPreviews={message.linkPreviews} />
+            )}
+            {message.metadata && typeof (message.metadata as Record<string, unknown>).noteId === "string" && (
+              <NotePreviewCard metadata={message.metadata as { noteId: string; title: string; preview: string; tags: string[] }} />
             )}
           </div>
           )}
@@ -901,6 +918,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
           isPinned={isPinned}
           onStartThread={() => openThread(message.id)}
           onReport={() => setReportOpen(true)}
+          onShare={handleShare}
           isInThread={isInThread}
           onSelect={handleSelect}
         />
@@ -955,6 +973,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
         </DialogContent>
       </Dialog>
 
+      <ShareSheet open={shareSheetOpen} onOpenChange={setShareSheetOpen} content={shareContent} />
     </div>
   );
 });

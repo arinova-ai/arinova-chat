@@ -1,0 +1,11 @@
+{
+  "id": "avg-classroom-v2",
+  "name": "AVG Classroom",
+  "version": "1.1.0",
+  "renderer": "iframe",
+  "description": "Anime-style classroom with 6 agent seats — PixiJS",
+  "maxAgents": 6,
+  "entry": "theme.js",
+  "author": { "name": "Arinova Official", "id": "arinova-official" },
+  "tags": ["anime", "classroom", "office", "pixi"]
+}

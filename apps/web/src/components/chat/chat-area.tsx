@@ -46,6 +46,7 @@ export function ChatArea() {
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
+  const [droppedNote, setDroppedNote] = useState<{ id: string; title: string } | null>(null);
   const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
   useRenderDiag("ChatArea", () => ({
@@ -63,7 +64,7 @@ export function ChatArea() {
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current++;
-    if (e.dataTransfer.types.includes("Files")) {
+    if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes("application/x-arinova-note")) {
       setIsDragging(true);
     }
   }, []);
@@ -87,6 +88,17 @@ export function ChatArea() {
     e.stopPropagation();
     setIsDragging(false);
     dragCounterRef.current = 0;
+
+    // Check for note drop first
+    const noteData = e.dataTransfer.getData("application/x-arinova-note");
+    if (noteData) {
+      try {
+        const note = JSON.parse(noteData) as { id: string; title: string };
+        setDroppedNote(note);
+        return;
+      } catch { /* fall through to file handling */ }
+    }
+
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       setDroppedFiles(Array.from(files));
@@ -168,6 +180,8 @@ export function ChatArea() {
         <ChatInput
           droppedFiles={droppedFiles}
           onDropHandled={() => setDroppedFiles(null)}
+          droppedNote={droppedNote}
+          onNoteDropHandled={() => setDroppedNote(null)}
           stickerOpen={stickerOpen}
           onStickerToggle={() => setStickerOpen((prev) => !prev)}
         />

@@ -24,6 +24,12 @@ export class WebRTCClient {
   private _onRemoteTrack: ((track: MediaStreamTrack, stream: MediaStream) => void) | null = null;
   private _onConnectionStateChange: ((state: RTCPeerConnectionState) => void) | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private _sessionId: string | null = null;
+
+  /** Store the sessionId received from voice_call_start */
+  setSessionId(sessionId: string) {
+    this._sessionId = sessionId;
+  }
 
   onSignaling(handler: SignalingHandler) {
     this._onSignaling = handler;
@@ -129,6 +135,7 @@ export class WebRTCClient {
         this.sendSignaling({
           type: "voice_ice_candidate",
           candidate: event.candidate.toJSON(),
+          ...(this._sessionId ? { sessionId: this._sessionId } : {}),
         });
       }
     };
@@ -144,7 +151,7 @@ export class WebRTCClient {
   }
 
   /** Create and send SDP offer */
-  async createOffer(conversationId: string, agentId: string): Promise<void> {
+  async createOffer(conversationId: string, target: { agentId?: string; targetUserId?: string }): Promise<void> {
     if (!this.pc) throw new Error("Peer connection not created");
 
     const offer = await this.pc.createOffer();
@@ -154,7 +161,8 @@ export class WebRTCClient {
       type: "voice_offer",
       sdp: offer.sdp!,
       conversationId,
-      agentId,
+      ...(target.agentId ? { agentId: target.agentId } : {}),
+      ...(target.targetUserId ? { targetUserId: target.targetUserId } : {}),
     });
   }
 
@@ -162,6 +170,28 @@ export class WebRTCClient {
   async handleAnswer(sdp: string): Promise<void> {
     if (!this.pc) return;
     await this.pc.setRemoteDescription({ type: "answer", sdp });
+  }
+
+  /** Handle incoming SDP offer and send answer back (for receiving calls) */
+  async handleOffer(sdp: string, sessionId: string): Promise<void> {
+    if (!this.pc) return;
+    this._sessionId = sessionId;
+    await this.pc.setRemoteDescription({ type: "offer", sdp });
+    const answer = await this.pc.createAnswer();
+    await this.pc.setLocalDescription(answer);
+    this.sendSignaling({
+      type: "voice_answer",
+      sdp: answer.sdp!,
+      sessionId,
+    });
+  }
+
+  /** Send hangup with sessionId */
+  sendHangup() {
+    this.sendSignaling({
+      type: "voice_hangup",
+      ...(this._sessionId ? { sessionId: this._sessionId } : {}),
+    });
   }
 
   /** Handle incoming ICE candidate */

@@ -185,7 +185,7 @@ pub async fn generate_embeddings(
 
 const CHUNK_SIZE: usize = 2000;
 const CHUNK_OVERLAP: usize = 200;
-const EMBEDDING_MODEL: &str = "text-embedding-3-small";
+pub const EMBEDDING_MODEL: &str = "text-embedding-3-small";
 /// Max texts per OpenAI batch call
 const BATCH_SIZE: usize = 100;
 

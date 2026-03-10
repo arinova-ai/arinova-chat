@@ -22,8 +22,6 @@ export interface Agent {
   category: string | null;
   usageCount: number;
   systemPrompt: string | null;
-  welcomeMessage: string | null;
-  quickReplies: { label: string; message: string }[] | null;
   voiceCapable?: boolean;
   notificationsEnabled: boolean;
   createdAt: Date;
@@ -529,6 +527,8 @@ export type WSServerEvent =
   | { type: "note:updated"; conversationId: string; note: Note }
   | { type: "note:deleted"; conversationId: string; noteId: string }
   | { type: "link_previews_ready"; conversationId: string; messageId: string; linkPreviews: LinkPreview[] }
+  | { type: "voice_incoming_call"; sessionId: string; callerId: string; callerName: string; callerAvatarUrl: string | null; conversationId: string; sdp: string }
+  | { type: "voice_call_end"; sessionId: string; reason?: string }
   | { type: "pong" };
 
 // ===== Agent Skill =====
@@ -577,8 +577,21 @@ export interface Note {
   agentName: string | null;
   title: string;
   content: string;
+  tags: string[];
+  summary?: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  backlinks?: Array<{ id: string; title: string }>;
+  linkedCards?: Array<{ id: string; title: string }>;
+  relatedCapsules?: Array<{
+    id: string;
+    content: string;
+    importance: number;
+    capsuleId: string;
+    capsuleName: string;
+  }>;
+  suggestedTags?: string[];
 }
 
 // ===== Push Notifications =====

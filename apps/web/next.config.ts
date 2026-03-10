@@ -8,6 +8,18 @@ const nextConfig: NextConfig = {
   output: "standalone",
   transpilePackages: ["@arinova/shared"],
   outputFileTracingRoot: path.join(__dirname, "../../"),
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "uploads.chat.arinova.ai",
+      },
+      {
+        protocol: "https",
+        hostname: "**.arinova.ai",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

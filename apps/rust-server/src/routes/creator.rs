@@ -48,7 +48,6 @@ struct CreatorListingRow {
     review_count: i32,
     total_messages: i32,
     total_revenue: i32,
-    welcome_message: Option<String>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
 }
@@ -130,7 +129,7 @@ async fn creator_agents(
                   price_per_message, free_trial_messages,
                   status::text AS status, sales_count,
                   avg_rating::float8 AS avg_rating, review_count,
-                  total_messages, total_revenue, welcome_message,
+                  total_messages, total_revenue,
                   created_at, updated_at
            FROM agent_listings
            WHERE creator_id = $1
@@ -162,7 +161,6 @@ async fn creator_agents(
                         "reviewCount": r.review_count,
                         "totalMessages": r.total_messages,
                         "totalRevenue": r.total_revenue,
-                        "welcomeMessage": r.welcome_message,
                         "createdAt": r.created_at.and_utc().to_rfc3339(),
                         "updatedAt": r.updated_at.and_utc().to_rfc3339(),
                     })

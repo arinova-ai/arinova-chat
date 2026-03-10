@@ -22,6 +22,7 @@ import type { Message } from "@arinova/shared/types";
 import { useToastStore } from "@/store/toast-store";
 import { MentionPopup, type MentionItem } from "./mention-popup";
 import { wsManager } from "@/lib/ws";
+import { playSendSound } from "@/lib/sounds";
 
 // ---------- Popup item types ----------
 
@@ -69,6 +70,8 @@ function isFileTooLarge(file: File): boolean {
 interface ChatInputProps {
   droppedFiles?: File[] | null;
   onDropHandled?: () => void;
+  droppedNote?: { id: string; title: string } | null;
+  onNoteDropHandled?: () => void;
   stickerOpen?: boolean;
   onStickerToggle?: () => void;
 }
@@ -141,7 +144,7 @@ function FilePreviewGrid({
 
 // ---------- Component ----------
 
-export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerToggle }: ChatInputProps = {}) {
+export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDropHandled, stickerOpen, onStickerToggle }: ChatInputProps = {}) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -190,9 +193,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   const agentId =
     activeConversation?.type === "direct" ? activeConversation.agentId : null;
 
-  // Get quick replies for the active agent
-  const activeAgent = agentId ? agents.find((a) => a.id === agentId) : null;
-  const quickReplies = activeAgent?.quickReplies ?? [];
 
   // Load skills when agentId is available
   useEffect(() => {
@@ -215,7 +215,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     }
     const validFiles = accepted.filter((f) => !isFileTooLarge(f));
     if (validFiles.length === 0) {
-      if (accepted.length === 0) useToastStore.getState().addToast("Unsupported file type");
+      if (accepted.length === 0) useToastStore.getState().addToast(t("chat.unsupportedFileType"), "error");
     } else {
       setPendingFiles((prev) => {
         const combined = [...prev, ...validFiles];
@@ -228,6 +228,16 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     }
     onDropHandled?.();
   }, [droppedFiles, onDropHandled, t]);
+
+  // Handle note dropped from notebook
+  useEffect(() => {
+    if (!droppedNote) return;
+    const prefix = `[Note: ${droppedNote.title}] `;
+    setValue((prev) => prefix + prev);
+    onNoteDropHandled?.();
+    // Focus the textarea after inserting
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [droppedNote, onNoteDropHandled]);
 
   // Restore draft when switching conversations
   useEffect(() => {
@@ -597,6 +607,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     const prevValue = value;
     setPendingFiles([]);
     clearInput();
+    playSendSound();
     setUploading(true);
     try {
       const formData = new FormData();
@@ -868,6 +879,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     }
 
     sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
+    playSendSound();
     clearInput();
   }, [value, sendMessage, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
 
@@ -988,7 +1000,11 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const accepted = Array.from(files).filter(isAcceptedFile);
-    if (accepted.length === 0) return;
+    if (accepted.length === 0) {
+      useToastStore.getState().addToast(t("chat.unsupportedFileType"), "error");
+      e.target.value = "";
+      return;
+    }
     const tooLarge = accepted.filter(isFileTooLarge);
     if (tooLarge.length > 0) {
       const names = tooLarge.map((f) => f.name).join(", ");
@@ -1110,24 +1126,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
             onSelect={selectMention}
             onHover={setMentionIndex}
           />
-        )}
-
-        {/* Quick reply buttons */}
-        {quickReplies.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {quickReplies.map((qr, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-                  sendMessage(qr.message);
-                }}
-                className="rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground transition-colors hover:bg-accent"
-              >
-                {qr.label}
-              </button>
-            ))}
-          </div>
         )}
 
         {/* Reply preview bar */}

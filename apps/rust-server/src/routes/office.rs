@@ -131,8 +131,81 @@ async fn office_ingest(
 ) -> Response {
     // Enforce: event must belong to the authenticated agent
     event.agent_id = agent.id.to_string();
+    event.agent_name = Some(agent.name.clone());
+
+    // Map event type to activity fields
+    let activity = match event.event_type.as_str() {
+        "tool_call" => {
+            let tool_name = event.data.get("toolName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            Some(("tool_use", format!("Used tool: {}", tool_name), Some(tool_name.to_string())))
+        }
+        "tool_result" => {
+            let tool_name = event.data.get("toolName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let error = event.data.get("error").and_then(|v| v.as_str());
+            if let Some(err) = error {
+                Some(("error", format!("Tool error: {}", tool_name), Some(err.to_string())))
+            } else {
+                Some(("tool_use", format!("Tool result: {}", tool_name), None))
+            }
+        }
+        "session_start" => Some(("status_change", "Session started".to_string(), None)),
+        "session_end" => {
+            let dur = event.data.get("durationMs").and_then(|v| v.as_f64());
+            let detail = dur.map(|d| format!("{:.1}s", d / 1000.0));
+            Some(("status_change", "Session ended".to_string(), detail))
+        }
+        "llm_input" => {
+            let model = event.data.get("model").and_then(|v| v.as_str()).unwrap_or("unknown");
+            Some(("status_change", format!("LLM call: {}", model), None))
+        }
+        "llm_output" => {
+            let model = event.data.get("model").and_then(|v| v.as_str()).unwrap_or("unknown");
+            Some(("task_complete", format!("LLM response: {}", model), None))
+        }
+        "message_in" => Some(("message", "Message received".to_string(), None)),
+        "message_out" => Some(("message", "Message sent".to_string(), None)),
+        "agent_end" => Some(("task_complete", "Agent run completed".to_string(), None)),
+        "agent_error" => {
+            let err = event.data.get("error").and_then(|v| v.as_str()).unwrap_or("unknown error");
+            Some(("error", format!("Error: {}", err), Some(err.to_string())))
+        }
+        "subagent_start" => Some(("status_change", "Subagent spawned".to_string(), None)),
+        "subagent_end" => Some(("status_change", "Subagent ended".to_string(), None)),
+        _ => None, // unknown type, skip DB insert
+    };
 
     state.office.ingest(event);
+
+    // Fire-and-forget DB insert
+    if let Some((activity_type, title, detail)) = activity {
+        let db = state.db.clone();
+        let owner_id = agent.owner_id.clone();
+        let agent_id_str = agent.id.to_string();
+        let agent_name = agent.name.clone();
+        tracing::debug!(
+            owner_id = %owner_id,
+            agent_id = %agent_id_str,
+            activity_type = %activity_type,
+            title = %title,
+            "Inserting activity log"
+        );
+        tokio::spawn(async move {
+            super::activity::insert_activity(
+                &db,
+                &owner_id,
+                &agent_id_str,
+                Some(&agent_name),
+                activity_type,
+                &title,
+                detail.as_deref(),
+            ).await;
+        });
+    }
+
     StatusCode::NO_CONTENT.into_response()
 }
 

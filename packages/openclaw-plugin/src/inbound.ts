@@ -250,7 +250,14 @@ export async function handleArinovaChatInbound(params: {
 
         if (!text.trim()) return;
 
-        finalText += (finalText ? "\n\n" : "") + text;
+        if (finalText) {
+          // If we're inside a GFM table (previous block ends with a table row
+          // and next block starts with one), join with \n to avoid breaking it.
+          const prevEndsWithTableRow = /\|[^\n]*\|\s*$/.test(finalText);
+          const nextStartsWithTableRow = /^\s*\|/.test(text);
+          finalText += (prevEndsWithTableRow && nextStartsWithTableRow) ? "\n" : "\n\n";
+        }
+        finalText += text;
         statusSink?.({ lastOutboundAt: Date.now() });
       },
       onError: (err, info) => {

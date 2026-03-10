@@ -10,9 +10,11 @@ import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import { ArrowLeft, MessageSquare, Radio } from "lucide-react";
+import { ArrowLeft, MessageSquare, Phone, Radio } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
+import { useVoiceCallStore } from "@/store/voice-call-store";
+import { cn } from "@/lib/utils";
 
 /** Public agent profile returned by /api/agents/:id/profile */
 interface AgentProfile {
@@ -52,6 +54,10 @@ function AgentProfileContent() {
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const updateAgentListenMode = useChatStore((s) => s.updateAgentListenMode);
   const setAgentAllowedUsers = useChatStore((s) => s.setAgentAllowedUsers);
+
+  const voiceCallState = useVoiceCallStore((s) => s.callState);
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const isInCall = voiceCallState !== "idle";
 
   const health = agentHealth[agentId];
   const isOnline = health?.status === "online";
@@ -285,14 +291,42 @@ function AgentProfileContent() {
                     </p>
                   )}
 
-                  {/* Chat button */}
-                  <Button
-                    className="mt-4 gap-2"
-                    onClick={handleChat}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    {t("profilePage.chat")}
-                  </Button>
+                  {/* Action buttons */}
+                  {(() => {
+                    const directConv = conversations.find(
+                      (c) => c.agentId === agentId && c.type === "direct"
+                    );
+                    return (
+                      <div className="mt-4 flex items-center gap-2">
+                        <Button className="gap-2" onClick={handleChat}>
+                          <MessageSquare className="h-4 w-4" />
+                          {t("profilePage.chat")}
+                        </Button>
+                        {directConv && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className={cn(isInCall && "text-green-400")}
+                            onClick={() => {
+                              if (!isInCall) {
+                                startCall(
+                                  directConv.id,
+                                  { agentId },
+                                  agent.name,
+                                  agent.avatarUrl,
+                                  "native"
+                                );
+                              }
+                            }}
+                            disabled={isInCall}
+                            title={isInCall ? t("voice.inCall") : t("voice.startCall")}
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Info section */}

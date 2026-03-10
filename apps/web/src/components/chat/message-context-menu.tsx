@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Flag,
   CheckSquare,
+  Share2,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
@@ -47,6 +48,7 @@ interface MessageContextMenuProps {
   isPinned?: boolean;
   onStartThread?: () => void;
   onReport?: () => void;
+  onShare?: () => void;
   isInThread?: boolean;
   onSelect?: () => void;
 }
@@ -82,6 +84,7 @@ export function MessageContextMenu({
   isPinned,
   onStartThread,
   onReport,
+  onShare,
   isInThread,
   onSelect,
 }: MessageContextMenuProps) {
@@ -336,6 +339,13 @@ export function MessageContextMenu({
               icon={isPinned ? <PinOff className="h-[18px] w-[18px]" /> : <Pin className="h-[18px] w-[18px]" />}
               label={isPinned ? t("chat.actions.unpin") : t("chat.actions.pin")}
               onClick={() => handle(onPin)}
+            />
+          )}
+          {onShare && (
+            <MenuButton
+              icon={<Share2 className="h-[18px] w-[18px]" />}
+              label={t("chat.actions.share")}
+              onClick={() => handle(onShare)}
             />
           )}
           {onReport && (

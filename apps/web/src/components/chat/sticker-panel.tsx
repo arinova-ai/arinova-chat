@@ -521,13 +521,29 @@ export function StickerPanel({ open, onClose }: StickerPanelProps) {
                 <p className="text-xs text-blue-300">{previewSticker.sticker.agentPrompt}</p>
               </div>
             )}
-            <button
-              type="button"
-              onClick={handleSendPreview}
-              className="mt-4 rounded-full bg-brand px-6 py-2 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
-            >
-              Send
-            </button>
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleToggleFavorite(previewSticker.sticker.id)}
+                className="rounded-full p-2.5 border border-border hover:bg-accent transition-colors"
+                title={favoriteIds.has(previewSticker.sticker.id) ? "Remove from Favorites" : "Add to Favorites"}
+              >
+                <Heart
+                  className={`h-5 w-5 ${
+                    favoriteIds.has(previewSticker.sticker.id)
+                      ? "fill-red-400 text-red-400"
+                      : "text-muted-foreground"
+                  }`}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={handleSendPreview}
+                className="rounded-full bg-brand px-6 py-2 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
+              >
+                Send
+              </button>
+            </div>
           </div>
         )}
 

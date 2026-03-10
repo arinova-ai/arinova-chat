@@ -9,6 +9,7 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
+use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
@@ -373,6 +374,10 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
             state.ws.agent_connections.remove(&agent_id);
             state.ws.agent_skills.remove(&agent_id);
             cleanup_agent_tasks(&state.ws, &agent_id);
+
+            // End any active voice calls for this agent
+            cleanup_agent_voice_calls(&state.db, &state.ws, &agent_id).await;
+
             tracing::info!("Agent WS disconnected: agentId={}", agent_id);
         } else {
             tracing::info!("Agent WS closed (superseded by reconnect): agentId={}", agent_id);
@@ -420,6 +425,55 @@ fn cleanup_agent_tasks(ws_state: &WsState, agent_id: &str) {
             agent_id
         );
     }
+}
+
+/// End any active voice calls involving this agent and notify the callers.
+async fn cleanup_agent_voice_calls(db: &PgPool, ws_state: &WsState, agent_id: &str) {
+    let agent_uuid = match uuid::Uuid::parse_str(agent_id) {
+        Ok(u) => u,
+        Err(_) => return,
+    };
+
+    // Find active voice calls for this agent
+    #[derive(sqlx::FromRow)]
+    struct ActiveCall {
+        session_id: String,
+        caller_id: String,
+    }
+
+    let calls = sqlx::query_as::<_, ActiveCall>(
+        "SELECT session_id, caller_id FROM voice_calls WHERE agent_id = $1 AND status IN ('pending', 'connected')",
+    )
+    .bind(agent_uuid)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if calls.is_empty() {
+        return;
+    }
+
+    // End all active calls
+    let _ = sqlx::query(
+        r#"UPDATE voice_calls
+           SET status = 'ended', ended_at = NOW(), end_reason = 'agent_disconnect',
+               duration_seconds = CASE WHEN started_at IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER ELSE NULL END
+           WHERE agent_id = $1 AND status IN ('pending', 'connected')"#,
+    )
+    .bind(agent_uuid)
+    .execute(db)
+    .await;
+
+    // Notify each caller
+    for call in &calls {
+        ws_state.send_to_user(&call.caller_id, &serde_json::json!({
+            "type": "voice_call_end",
+            "sessionId": &call.session_id,
+            "reason": "agent_disconnect",
+        }));
+    }
+
+    tracing::info!("Cleaned up {} active voice calls for agent {}", calls.len(), agent_id);
 }
 
 /// Send a task to a connected agent. Returns a receiver for streaming events.

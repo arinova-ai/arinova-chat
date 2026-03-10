@@ -263,39 +263,6 @@ const lightingConfigSchema = z.object({
   }).optional(),
 });
 
-// ── v4: Sprite Renderer ─────────────────────────────────────────
-
-const spriteOverlayTypeSchema = z.enum([
-  "thought-bubble", "zzz", "music-notes", "led", "screen-glow", "sun-rays",
-]);
-
-const spriteOverlaySchema = z.object({
-  type: spriteOverlayTypeSchema,
-  position: z.tuple([z.number(), z.number()]),
-  color: z.string().optional(),
-});
-
-const spriteSceneSchema = z.object({
-  background: safePathSchema,
-  overlays: z.array(spriteOverlaySchema).default([]),
-});
-
-const spriteScenesSchema = z.object({
-  working: spriteSceneSchema,
-  idle: spriteSceneSchema,
-  sleeping: spriteSceneSchema,
-});
-
-const spriteCharacterHitboxSchema = z.object({
-  rect: z.tuple([z.number(), z.number(), z.number(), z.number()]),
-});
-
-const characterHitboxConfigSchema = z.object({
-  working: spriteCharacterHitboxSchema.optional(),
-  idle: spriteCharacterHitboxSchema.optional(),
-  sleeping: spriteCharacterHitboxSchema.optional(),
-});
-
 // ── Quality Modes ────────────────────────────────────────────────
 
 const qualityRendererHintsSchema = z.object({
@@ -341,7 +308,7 @@ export const themeManifestSchema = z.object({
   effects: z.array(effectDefSchema).default([]),
   audio: audioConfigSchema.optional(),
 
-  renderer: z.enum(["pixi", "threejs", "sprite"]).optional(),
+  renderer: z.enum(["pixi", "threejs"]).optional(),
 
   // v3 fields
   room: roomConfigSchema.optional(),
@@ -349,16 +316,11 @@ export const themeManifestSchema = z.object({
   camera: cameraConfigSchema.optional(),
   lighting: lightingConfigSchema.optional(),
 
-  // v4 fields (sprite renderer)
-  scenes: spriteScenesSchema.optional(),
-  characterHitbox: characterHitboxConfigSchema.optional(),
-
   quality: qualityConfigSchema.optional(),
 }).refine((m) => {
   // v2 (pixi) themes must have zones, layers, and characters
   const isV3 = m.renderer === "threejs" || !!m.room?.model;
-  const isSprite = m.renderer === "sprite";
-  if (!isV3 && !isSprite) {
+  if (!isV3) {
     if (m.zones.length === 0) return false;
     if (m.layers.length === 0) return false;
     if (!m.characters) return false;
@@ -372,13 +334,7 @@ export const themeManifestSchema = z.object({
   return true;
 }, {
   message: "v3 (threejs) themes require room.model",
-}).refine((m) => {
-  // v4 (sprite) themes must have scenes.working
-  if (m.renderer === "sprite" && !m.scenes?.working) return false;
-  return true;
-}, {
-  message: "v4 (sprite) themes require scenes with at least a working scene",
-});
+);
 
 export type ThemeManifestInput = z.input<typeof themeManifestSchema>;
 export type ThemeManifestOutput = z.output<typeof themeManifestSchema>;
@@ -470,13 +426,6 @@ export function validateThemeResources(manifest: ThemeManifestOutput): ThemeReso
     checkModelPath(manifest.character.idleModel, "character.idleModel");
   }
 
-  // v4 sprite scene backgrounds
-  if (manifest.scenes) {
-    for (const [key, scene] of Object.entries(manifest.scenes)) {
-      checkImagePath(scene.background, `scenes.${key}.background`);
-    }
-  }
-
   // Quality overrides — if defined, both high and performance should have matching keys
   if (manifest.quality) {
     const q = manifest.quality;
@@ -523,13 +472,6 @@ export function collectAssetPaths(manifest: ThemeManifestOutput): string[] {
     add(manifest.character.model);
     add(manifest.character.idleModel);
   }
-  // v4 sprite scene backgrounds
-  if (manifest.scenes) {
-    for (const scene of Object.values(manifest.scenes)) {
-      add(scene.background);
-    }
-  }
-
   if (manifest.quality) {
     const q = manifest.quality;
     add(q.high?.room?.model);

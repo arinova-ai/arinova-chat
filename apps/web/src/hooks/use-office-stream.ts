@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { OFFICE_STREAM_URL } from "@/lib/office-config";
 import type { Agent } from "@/components/office/types";
 import { useChatStore } from "@/store/chat-store";
+import { api } from "@/lib/api";
 
 /** Shape of the SSE status event from the office plugin */
 interface OfficeStatusEvent {
@@ -22,6 +23,17 @@ interface OfficeStatusEvent {
     currentToolDetail?: string;
   }[];
   timestamp: number;
+}
+
+/** Shape of GET /api/agents/health response item */
+interface AgentHealthItem {
+  agentId: string;
+  agentName: string;
+  status: string;
+  wsConnected: boolean;
+  a2aReachable: boolean | null;
+  latencyMs: number | null;
+  checkedAt: string;
 }
 
 /** Default display properties for agents without rich metadata */
@@ -64,39 +76,85 @@ function toAgent(raw: OfficeStatusEvent["agents"][number]): Agent {
   };
 }
 
+/** Convert a health-check agent into an idle/not-connected Agent */
+function healthToAgent(h: AgentHealthItem): Agent {
+  const name = UUID_RE.test(h.agentName) ? "Agent" : h.agentName;
+  return {
+    id: h.agentId,
+    name,
+    role: "",
+    emoji: DEFAULT_EMOJI,
+    color: DEFAULT_COLOR,
+    status: "idle",
+    online: h.wsConnected,
+    recentActivity: [],
+  };
+}
+
 export function useOfficeStream() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [connected, setConnected] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
+  // Single effect: fetch health first, then connect SSE.
+  // Health data is captured in a closure variable so SSE handler always has it.
   useEffect(() => {
-    const url = OFFICE_STREAM_URL;
-    const es = new EventSource(url, { withCredentials: true });
-    esRef.current = es;
+    let cancelled = false;
+    const healthMap = new Map<string, AgentHealthItem>();
 
-    es.onopen = () => {
-      setConnected(true);
-    };
-
-    es.onmessage = (event) => {
-      try {
-        const data: OfficeStatusEvent = JSON.parse(event.data);
-        if (data.type === "status_update") {
-          setAgents(data.agents.map(toAgent));
+    // 1. Fetch all agents from health endpoint
+    api<AgentHealthItem[]>("/api/agents/health", { silent: true })
+      .then((healthList) => {
+        if (cancelled) return;
+        for (const h of healthList) {
+          healthMap.set(h.agentId, h);
         }
-      } catch {
-        // Ignore malformed events
-      }
-    };
+        setAgents(healthList.map(healthToAgent));
+      })
+      .catch(() => {
+        // Health fetch failed — SSE will still work below
+      })
+      .finally(() => {
+        if (cancelled) return;
 
-    es.onerror = () => {
-      setConnected(false);
-      // EventSource auto-reconnects
-    };
+        // 2. Connect SSE after health data is available
+        const es = new EventSource(OFFICE_STREAM_URL, { withCredentials: true });
+        esRef.current = es;
+
+        es.onopen = () => setConnected(true);
+
+        es.onmessage = (event) => {
+          try {
+            const data: OfficeStatusEvent = JSON.parse(event.data);
+            if (data.type !== "status_update") return;
+
+            const sseAgents = data.agents.map(toAgent);
+            const mergedIds = new Set(sseAgents.map((a) => a.id));
+            const merged = [...sseAgents];
+
+            // Append health-only agents not present in SSE
+            for (const [id, h] of healthMap) {
+              if (!mergedIds.has(id)) {
+                merged.push(healthToAgent(h));
+                mergedIds.add(id);
+              }
+            }
+
+            setAgents(merged);
+          } catch {
+            // Ignore malformed events
+          }
+        };
+
+        es.onerror = () => setConnected(false);
+      });
 
     return () => {
-      es.close();
-      esRef.current = null;
+      cancelled = true;
+      if (esRef.current) {
+        esRef.current.close();
+        esRef.current = null;
+      }
     };
   }, []);
 

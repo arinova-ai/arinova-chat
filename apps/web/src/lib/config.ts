@@ -24,6 +24,9 @@ function getWsUrl(): string {
 export const BACKEND_URL = getBackendUrl();
 export const WS_URL = getWsUrl();
 
+/** Isolated origin for theme iframe runtime (falls back to BACKEND_URL in dev) */
+export const THEME_RUNTIME_URL = process.env.NEXT_PUBLIC_THEME_RUNTIME_URL || BACKEND_URL;
+
 /** Default avatar for agents without a custom one */
 export const AGENT_DEFAULT_AVATAR = "/assets/branding/agent-default-avatar.png";
 

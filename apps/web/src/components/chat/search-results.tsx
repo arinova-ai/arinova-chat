@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Bot, Loader2, SearchX, User } from "lucide-react";
@@ -66,6 +67,25 @@ export function SearchResults() {
   const searchQuery = useChatStore((s) => s.searchQuery);
   const clearSearch = useChatStore((s) => s.clearSearch);
   const jumpToMessage = useChatStore((s) => s.jumpToMessage);
+  const searchMore = useChatStore((s) => s.searchMore);
+
+  const hasMore = searchResults.length < searchTotal;
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !searchLoading) {
+          searchMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, searchLoading, searchMore]);
 
   return (
     <div className="flex h-full flex-col">
@@ -88,7 +108,7 @@ export function SearchResults() {
 
       {/* Results */}
       <div className="flex-1 overflow-y-auto">
-        {searchLoading ? (
+        {searchLoading && searchResults.length === 0 ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -143,6 +163,12 @@ export function SearchResults() {
                 </div>
               </button>
             ))}
+            {/* Sentinel for infinite scroll */}
+            {hasMore && (
+              <div ref={sentinelRef} className="flex items-center justify-center py-4">
+                {searchLoading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+              </div>
+            )}
           </div>
         )}
       </div>

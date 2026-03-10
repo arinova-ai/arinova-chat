@@ -54,7 +54,7 @@ fn is_private_ip(ip: &IpAddr) -> bool {
 }
 
 /// Validate that a URL is safe to fetch (not targeting internal resources).
-fn validate_url_safe(target_url: &str) -> Option<()> {
+async fn validate_url_safe(target_url: &str) -> Option<()> {
     let parsed = url::Url::parse(target_url).ok()?;
 
     let host = parsed.host_str()?;
@@ -64,10 +64,16 @@ fn validate_url_safe(target_url: &str) -> Option<()> {
         return None;
     }
 
-    // DNS resolve and check all IPs
+    // DNS resolve via spawn_blocking to avoid blocking the tokio runtime
     use std::net::ToSocketAddrs;
     let port = parsed.port().unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
-    let addrs = format!("{}:{}", host, port).to_socket_addrs().ok()?;
+    let addr_str = format!("{}:{}", host, port);
+    let addrs = tokio::task::spawn_blocking(move || {
+        addr_str.to_socket_addrs()
+    })
+    .await
+    .ok()?
+    .ok()?;
     for addr in addrs {
         if is_private_ip(&addr.ip()) {
             return None;
@@ -80,7 +86,7 @@ fn validate_url_safe(target_url: &str) -> Option<()> {
 /// Fetch OG metadata from a URL. Returns None on failure.
 pub async fn fetch_og_metadata(target_url: &str) -> Option<OgMeta> {
     // SSRF protection: block private/internal IPs
-    validate_url_safe(target_url)?;
+    validate_url_safe(target_url).await?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
@@ -98,7 +104,7 @@ pub async fn fetch_og_metadata(target_url: &str) -> Option<OgMeta> {
     // After redirect, verify the final URL is also safe
     let final_url = resp.url().as_str();
     if final_url != target_url {
-        if validate_url_safe(final_url).is_none() {
+        if validate_url_safe(final_url).await.is_none() {
             return None;
         }
     }

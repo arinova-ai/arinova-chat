@@ -16,6 +16,7 @@ const STATUS_LABELS: Record<AgentStatus, string> = {
   idle: "Idle",
   blocked: "Blocked",
   collaborating: "Collab",
+  unbound: "Not Connected",
 };
 
 const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
@@ -23,6 +24,7 @@ const DEFAULT_STATUS_COLORS: Record<AgentStatus, number> = {
   idle: 0xf59e0b,
   blocked: 0xdc2626,
   collaborating: 0x2563eb,
+  unbound: 0x666666,
 };
 
 // ── Reusable text styles ─────────────────────────────────────────
@@ -59,11 +61,12 @@ function parseStatusColors(manifest: ThemeManifest | null): Record<AgentStatus, 
     idle: parse(c.idle, DEFAULT_STATUS_COLORS.idle),
     blocked: parse(c.blocked, DEFAULT_STATUS_COLORS.blocked),
     collaborating: parse(c.collaborating, DEFAULT_STATUS_COLORS.collaborating),
+    unbound: parse(c.unbound, DEFAULT_STATUS_COLORS.unbound),
   };
 }
 
 function parseBgColor(manifest: ThemeManifest): number {
-  const raw = manifest.canvas.background.color;
+  const raw = manifest.canvas?.background?.color;
   if (!raw) return 0x0f172a;
   return Number(raw) || 0x0f172a;
 }
@@ -86,6 +89,7 @@ function statusToZoneType(status: AgentStatus): ZoneType {
 function assignSeats(
   agents: Agent[],
   zones: ZoneDef[],
+  canvasW?: number,
 ): Map<string, { x: number; y: number; seatId: string }> {
   const assignments = new Map<string, { x: number; y: number; seatId: string }>();
   if (zones.length === 0) return assignments;
@@ -93,10 +97,19 @@ function assignSeats(
   const usableZones = zones.filter((z) => z.seats.length > 0);
   if (usableZones.length === 0) return assignments;
 
+  // Sort zones by distance from canvas center so agents are placed in the
+  // most central (and therefore most visible on mobile) zones first.
+  const cx = (canvasW ?? 1920) / 2;
+  const sorted = [...usableZones].sort((a, b) => {
+    const aCx = a.bounds.x + a.bounds.width / 2;
+    const bCx = b.bounds.x + b.bounds.width / 2;
+    return Math.abs(aCx - cx) - Math.abs(bCx - cx);
+  });
+
   const grouped = new Map<string, Agent[]>();
   for (const agent of agents) {
     const targetType = statusToZoneType(agent.status);
-    const zone = usableZones.find((z) => z.type === targetType) ?? usableZones[0];
+    const zone = sorted.find((z) => z.type === targetType) ?? sorted[0];
     const list = grouped.get(zone.id) ?? [];
     list.push(agent);
     grouped.set(zone.id, list);
@@ -399,6 +412,34 @@ export class PixiRenderer implements OfficeRenderer {
   private prevSeat = new Map<string, string>();
   private animId = 0;
 
+  // Seat sprites (per-seat overlay system)
+  private seatSpriteTextures = new Map<string, Map<string, Texture[]>>();
+  private seatOverlays = new Map<string, { sprite: PixiSprite; currentStatus: string; frameIndex: number }>();
+  private seatSpriteTimer = 0;
+  private seatAgentMap = new Map<string, string>(); // seatId → agentId
+
+  // Pan / zoom state
+  private static MIN_SCALE = 0.5;
+  private static MAX_SCALE = 3;
+  private isMobile = false;
+  private userScale = 1;
+  private panX = 0;
+  private panY = 0;
+  private baseScale = 1;
+  private baseOffsetX = 0;
+  private baseOffsetY = 0;
+  private dragging = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private panStartX = 0;
+  private panStartY = 0;
+  private pinching = false;
+  private pinchStartDist = 0;
+  private pinchStartScale = 1;
+  private pinchMidX = 0;
+  private pinchMidY = 0;
+  private canvasElement: HTMLCanvasElement | null = null;
+
   // Callback
   onAgentClick?: (agentId: string) => void;
 
@@ -408,15 +449,19 @@ export class PixiRenderer implements OfficeRenderer {
 
   // ── init ──────────────────────────────────────────────────────
 
+  private assetsBaseUrl = "/themes";
+
   async init(
     container: HTMLDivElement,
     width: number,
     height: number,
     manifest: ThemeManifest | null,
     themeId?: string,
+    assetsBaseUrl?: string,
   ): Promise<void> {
     this.manifest = manifest;
     this.themeId = themeId;
+    if (assetsBaseUrl) this.assetsBaseUrl = assetsBaseUrl;
     this.width = width;
     this.height = height;
     this.statusColors = parseStatusColors(manifest);
@@ -437,6 +482,7 @@ export class PixiRenderer implements OfficeRenderer {
 
     container.appendChild(app.canvas);
     this.app = app;
+    this.canvasElement = app.canvas as HTMLCanvasElement;
     app.stage.eventMode = "static";
     app.stage.hitArea = new Rectangle(0, 0, width, height);
 
@@ -444,6 +490,20 @@ export class PixiRenderer implements OfficeRenderer {
       await this.initThemeMode(app, manifest);
     } else {
       this.initFallbackMode(app);
+    }
+
+    // Set up pan/zoom for theme mode
+    if (!this.useFallback && manifest) {
+      this.isMobile = width < PixiRenderer.MOBILE_BREAKPOINT;
+      const viewportCfg = manifest.viewport;
+      if (this.isMobile && viewportCfg?.mobile?.defaultZoom) {
+        this.userScale = viewportCfg.mobile.defaultZoom;
+      } else if (viewportCfg?.defaultZoom) {
+        this.userScale = viewportCfg.defaultZoom;
+      }
+      this.centerPan();
+      this.applyRootTransform();
+      this.bindPanEvents();
     }
 
     this.startAnimationLoop();
@@ -466,9 +526,14 @@ export class PixiRenderer implements OfficeRenderer {
     root.sortableChildren = true;
     this.layerMap = map;
 
+    const canvasW = manifest.canvas?.width ?? this.width;
+    const canvasH = manifest.canvas?.height ?? this.height;
     const { scale, offsetX, offsetY } = computeScale(
-      this.width, this.height, manifest.canvas.width, manifest.canvas.height,
+      this.width, this.height, canvasW, canvasH,
     );
+    this.baseScale = scale;
+    this.baseOffsetX = offsetX;
+    this.baseOffsetY = offsetY;
     root.scale.set(scale);
     root.x = offsetX;
     root.y = offsetY;
@@ -478,12 +543,12 @@ export class PixiRenderer implements OfficeRenderer {
     const hasBgImage = !!manifest.canvas?.background?.image;
     if (bgLayer && hasBgImage && this.themeId) {
       try {
-        const bgUrl = `/themes/${this.themeId}/${manifest.canvas.background.image}`;
+        const bgUrl = `${this.assetsBaseUrl}/${this.themeId}/${manifest.canvas!.background.image}`;
         const texture = await Assets.load(bgUrl);
         this.loadedAssetUrls.push(bgUrl);
         const bgSprite = new PixiSprite(texture);
-        bgSprite.width = manifest.canvas.width;
-        bgSprite.height = manifest.canvas.height;
+        bgSprite.width = canvasW;
+        bgSprite.height = canvasH;
         bgLayer.addChild(bgSprite);
         this.bgLoaded = true;
       } catch (err) {
@@ -496,7 +561,7 @@ export class PixiRenderer implements OfficeRenderer {
     const hasAtlas = !!manifest.characters?.atlas;
     if (hasAtlas && this.themeId) {
       try {
-        const atlasUrl = `/themes/${this.themeId}/${manifest.characters.atlas}`;
+        const atlasUrl = `${this.assetsBaseUrl}/${this.themeId}/${manifest.characters.atlas}`;
         const sheetTexture = await Assets.load(atlasUrl);
         this.loadedAssetUrls.push(atlasUrl);
         this.frameSets = extractFrames(
@@ -507,6 +572,12 @@ export class PixiRenderer implements OfficeRenderer {
       } catch (err) {
         console.warn("[PixiRenderer] Failed to load sprite sheet:", err);
       }
+    }
+
+    // Load per-seat sprites (full-canvas overlays)
+    const seatSprites = manifest.characters?.seatSprites;
+    if (seatSprites && this.themeId) {
+      await this.loadSeatSprites(seatSprites, canvasW, canvasH);
     }
 
     // Collaboration lines
@@ -534,9 +605,91 @@ export class PixiRenderer implements OfficeRenderer {
     this.drawZones();
   }
 
+  // ── seat sprites (per-seat overlay system) ───────────────────
+
+  private async loadSeatSprites(
+    seatSprites: Record<string, Record<string, string[]>>,
+    canvasW: number,
+    canvasH: number,
+  ) {
+    const charsLayer = this.layerMap.get("characters");
+    if (!charsLayer) return;
+
+    for (const [seatId, statusMap] of Object.entries(seatSprites)) {
+      const texMap = new Map<string, Texture[]>();
+
+      for (const [status, paths] of Object.entries(statusMap)) {
+        const textures: Texture[] = [];
+        for (const path of paths) {
+          try {
+            const url = `${this.assetsBaseUrl}/${this.themeId}/${path}`;
+            const tex = await Assets.load(url);
+            this.loadedAssetUrls.push(url);
+            textures.push(tex);
+          } catch (err) {
+            console.warn(`[PixiRenderer] Failed to load seat sprite ${path}:`, err);
+          }
+        }
+        if (textures.length > 0) texMap.set(status, textures);
+      }
+
+      this.seatSpriteTextures.set(seatId, texMap);
+
+      // Create an overlay sprite (initially invisible)
+      const firstTextures = texMap.values().next().value;
+      if (firstTextures && firstTextures.length > 0) {
+        const sprite = new PixiSprite(firstTextures[0]);
+        sprite.width = canvasW;
+        sprite.height = canvasH;
+        sprite.visible = false;
+        charsLayer.addChild(sprite);
+        this.seatOverlays.set(seatId, { sprite, currentStatus: "", frameIndex: 0 });
+      }
+    }
+  }
+
+  private updateSeatOverlays() {
+    if (this.seatSpriteTextures.size === 0) return;
+
+    // Build seatId → agentId mapping from current assignments
+    const newSeatAgentMap = new Map<string, string>();
+    for (const [agentId, assignment] of this.seatAssignments) {
+      newSeatAgentMap.set(assignment.seatId, agentId);
+    }
+    this.seatAgentMap = newSeatAgentMap;
+
+    // Update each overlay
+    for (const [seatId, overlay] of this.seatOverlays) {
+      const agentId = this.seatAgentMap.get(seatId);
+      if (!agentId) {
+        overlay.sprite.visible = false;
+        continue;
+      }
+
+      const agent = this.agents.find((a) => a.id === agentId);
+      if (!agent) { overlay.sprite.visible = false; continue; }
+
+      const texMap = this.seatSpriteTextures.get(seatId);
+      if (!texMap) { overlay.sprite.visible = false; continue; }
+
+      const status = agent.status;
+      const textures = texMap.get(status) ?? texMap.get("idle");
+      if (!textures || textures.length === 0) { overlay.sprite.visible = false; continue; }
+
+      overlay.sprite.texture = textures[overlay.frameIndex % textures.length];
+      overlay.currentStatus = status;
+      overlay.sprite.visible = true;
+      overlay.sprite.alpha = 1.0;
+    }
+  }
+
+  // Store seat assignments for overlay lookup
+  private seatAssignments = new Map<string, { x: number; y: number; seatId: string }>();
+
   // ── destroy ───────────────────────────────────────────────────
 
   destroy(): void {
+    this.unbindPanEvents();
     cancelAnimationFrame(this.animId);
 
     for (const [, sprite] of this.sprites) {
@@ -571,6 +724,11 @@ export class PixiRenderer implements OfficeRenderer {
     this.prevSeat.clear();
     this.pos = {};
     this.target = {};
+    this.seatSpriteTextures.clear();
+    this.seatOverlays.clear();
+    this.seatAgentMap.clear();
+    this.seatAssignments = new Map();
+    this.canvasElement = null;
   }
 
   // ── resize ────────────────────────────────────────────────────
@@ -591,14 +749,15 @@ export class PixiRenderer implements OfficeRenderer {
     }
 
     if (!this.useFallback && this.manifest && this.root) {
-      // Theme mode: zones are in canvas space, root container scaling
-      // handles the viewport transform — only update root transform.
       const { scale, offsetX, offsetY } = computeScale(
-        width, height, this.manifest.canvas.width, this.manifest.canvas.height,
+        width, height, this.manifest.canvas?.width ?? width, this.manifest.canvas?.height ?? height,
       );
-      this.root.scale.set(scale);
-      this.root.x = offsetX;
-      this.root.y = offsetY;
+      this.baseScale = scale;
+      this.baseOffsetX = offsetX;
+      this.baseOffsetY = offsetY;
+      this.isMobile = width < PixiRenderer.MOBILE_BREAKPOINT;
+      this.clampPan();
+      this.applyRootTransform();
     } else {
       // Fallback mode: zone layout depends on screen size, must redraw.
       this.drawZones();
@@ -612,8 +771,187 @@ export class PixiRenderer implements OfficeRenderer {
     this.agents = agents;
     this.syncSprites();
     this.computePositions();
+    this.updateSeatOverlays();
+    this.hideSpritesBehindOverlays();
     this.updateAllVisuals();
   }
+
+  /** Hide standard agent sprites for agents assigned to seats with overlay sprites. */
+  private hideSpritesBehindOverlays() {
+    if (this.seatSpriteTextures.size === 0) return;
+    for (const [agentId, assignment] of this.seatAssignments) {
+      if (this.seatOverlays.has(assignment.seatId)) {
+        const sprite = this.sprites.get(agentId);
+        if (sprite) sprite.container.visible = false;
+      }
+    }
+  }
+
+  // ── Pan / Zoom ──────────────────────────────────────────────
+
+  private static MOBILE_BREAKPOINT = 768;
+  private static MOBILE_DEFAULT_SCALE = 1.8;
+
+  private applyRootTransform(): void {
+    if (!this.root) return;
+    const s = this.baseScale * this.userScale;
+    this.root.scale.set(s);
+    this.root.x = this.panX;
+    this.root.y = this.panY;
+  }
+
+  private centerPan(): void {
+    const scaledW = (this.manifest?.canvas?.width ?? this.width) * this.baseScale * this.userScale;
+    const scaledH = (this.manifest?.canvas?.height ?? this.height) * this.baseScale * this.userScale;
+    this.panX = (this.width - scaledW) / 2;
+    this.panY = (this.height - scaledH) / 2;
+    this.clampPan();
+  }
+
+  private clampPan(): void {
+    if (!this.manifest) return;
+    const scaledW = (this.manifest.canvas?.width ?? this.width) * this.baseScale * this.userScale;
+    const scaledH = (this.manifest.canvas?.height ?? this.height) * this.baseScale * this.userScale;
+
+    if (scaledW <= this.width) {
+      this.panX = (this.width - scaledW) / 2;
+    } else {
+      this.panX = Math.min(0, Math.max(this.width - scaledW, this.panX));
+    }
+
+    if (scaledH <= this.height) {
+      this.panY = (this.height - scaledH) / 2;
+    } else {
+      this.panY = Math.min(0, Math.max(this.height - scaledH, this.panY));
+    }
+  }
+
+  private bindPanEvents(): void {
+    const el = this.canvasElement;
+    if (!el) return;
+    el.addEventListener("touchstart", this.onPointerDown, { passive: false });
+    el.addEventListener("touchmove", this.onPointerMove, { passive: false });
+    el.addEventListener("touchend", this.onPointerUp);
+    el.addEventListener("mousedown", this.onPointerDown);
+    el.addEventListener("mousemove", this.onPointerMove);
+    el.addEventListener("mouseup", this.onPointerUp);
+    el.addEventListener("mouseleave", this.onPointerUp);
+    el.addEventListener("wheel", this.onWheel, { passive: false });
+  }
+
+  private unbindPanEvents(): void {
+    const el = this.canvasElement;
+    if (!el) return;
+    el.removeEventListener("touchstart", this.onPointerDown);
+    el.removeEventListener("touchmove", this.onPointerMove);
+    el.removeEventListener("touchend", this.onPointerUp);
+    el.removeEventListener("mousedown", this.onPointerDown);
+    el.removeEventListener("mousemove", this.onPointerMove);
+    el.removeEventListener("mouseup", this.onPointerUp);
+    el.removeEventListener("mouseleave", this.onPointerUp);
+    el.removeEventListener("wheel", this.onWheel);
+  }
+
+  private clientPos(e: MouseEvent | TouchEvent): { x: number; y: number } {
+    if ("touches" in e && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY };
+  }
+
+  private touchDist(e: TouchEvent): number {
+    const [a, b] = [e.touches[0], e.touches[1]];
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  private onPointerDown = (e: MouseEvent | TouchEvent): void => {
+    // Pinch start (2 fingers)
+    if ("touches" in e && e.touches.length === 2) {
+      e.preventDefault();
+      this.dragging = false;
+      this.pinching = true;
+      this.pinchStartDist = this.touchDist(e);
+      this.pinchStartScale = this.userScale;
+      const rect = this.canvasElement!.getBoundingClientRect();
+      const [a, b] = [e.touches[0], e.touches[1]];
+      this.pinchMidX = (a.clientX + b.clientX) / 2 - rect.left;
+      this.pinchMidY = (a.clientY + b.clientY) / 2 - rect.top;
+      this.panStartX = this.panX;
+      this.panStartY = this.panY;
+      return;
+    }
+
+    // Single-finger drag (mobile) or mouse drag
+    if (this.isMobile || e instanceof MouseEvent) {
+      const pos = this.clientPos(e);
+      this.dragging = true;
+      this.dragStartX = pos.x;
+      this.dragStartY = pos.y;
+      this.panStartX = this.panX;
+      this.panStartY = this.panY;
+    }
+  };
+
+  private onPointerMove = (e: MouseEvent | TouchEvent): void => {
+    // Pinch zoom
+    if (this.pinching && "touches" in e && e.touches.length === 2) {
+      e.preventDefault();
+      if (this.pinchStartDist <= 0) return;
+      const dist = this.touchDist(e);
+      const ratio = dist / this.pinchStartDist;
+      const viewportCfg = this.manifest?.viewport;
+      const minScale = viewportCfg?.minZoom ?? PixiRenderer.MIN_SCALE;
+      const maxScale = viewportCfg?.maxZoom ?? PixiRenderer.MAX_SCALE;
+      const newScale = Math.min(maxScale, Math.max(minScale, this.pinchStartScale * ratio));
+
+      const rect = this.canvasElement!.getBoundingClientRect();
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+      this.panX = midX - (this.pinchMidX - this.panStartX) * (newScale / this.pinchStartScale);
+      this.panY = midY - (this.pinchMidY - this.panStartY) * (newScale / this.pinchStartScale);
+      this.userScale = newScale;
+      this.clampPan();
+      this.applyRootTransform();
+      return;
+    }
+
+    if (!this.dragging) return;
+    e.preventDefault();
+    const pos = this.clientPos(e);
+    this.panX = this.panStartX + (pos.x - this.dragStartX);
+    this.panY = this.panStartY + (pos.y - this.dragStartY);
+    this.clampPan();
+    this.applyRootTransform();
+  };
+
+  private onPointerUp = (e: MouseEvent | TouchEvent): void => {
+    if (this.pinching) {
+      if ("touches" in e && e.touches.length < 2) {
+        this.pinching = false;
+      }
+      return;
+    }
+    this.dragging = false;
+  };
+
+  private onWheel = (e: WheelEvent): void => {
+    e.preventDefault();
+    const viewportCfg = this.manifest?.viewport;
+    const minScale = viewportCfg?.minZoom ?? PixiRenderer.MIN_SCALE;
+    const maxScale = viewportCfg?.maxZoom ?? PixiRenderer.MAX_SCALE;
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.min(maxScale, Math.max(minScale, this.userScale * zoomFactor));
+
+    // Zoom toward cursor
+    const rect = this.canvasElement!.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    this.panX = cx - (cx - this.panX) * (newScale / this.userScale);
+    this.panY = cy - (cy - this.panY) * (newScale / this.userScale);
+    this.userScale = newScale;
+    this.clampPan();
+    this.applyRootTransform();
+  };
 
   // ── selectAgent ───────────────────────────────────────────────
 
@@ -738,7 +1076,10 @@ export class PixiRenderer implements OfficeRenderer {
 
   private computePositions() {
     if (!this.useFallback && this.manifest) {
-      const seatMap = assignSeats(this.agents, this.manifest.zones);
+      const seatMap = assignSeats(this.agents, this.manifest.zones, this.manifest.canvas?.width);
+
+      // Store assignments for seat overlay lookup
+      this.seatAssignments = seatMap;
 
       for (const [agentId, { x, y, seatId }] of seatMap) {
         const prevSeatId = this.prevSeat.get(agentId);
@@ -790,7 +1131,25 @@ export class PixiRenderer implements OfficeRenderer {
   // ── Private: animation loop ───────────────────────────────────
 
   private startAnimationLoop() {
+    let lastSeatFrameToggle = performance.now();
+
     const tick = () => {
+      // A/B frame toggle for seat sprites (every 2 seconds)
+      const now = performance.now();
+      if (now - lastSeatFrameToggle >= 2000 && this.seatOverlays.size > 0) {
+        lastSeatFrameToggle = now;
+        for (const [seatId, overlay] of this.seatOverlays) {
+          overlay.frameIndex = (overlay.frameIndex + 1) % 2;
+          const texMap = this.seatSpriteTextures.get(seatId);
+          if (texMap) {
+            const textures = texMap.get(overlay.currentStatus) ?? texMap.get("idle");
+            if (textures && textures.length > 0) {
+              overlay.sprite.texture = textures[overlay.frameIndex % textures.length];
+            }
+          }
+        }
+      }
+
       for (const [id, t] of Object.entries(this.target)) {
         const cur = this.pos[id];
         if (!cur) continue;

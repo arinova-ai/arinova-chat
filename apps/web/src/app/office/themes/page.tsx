@@ -3,34 +3,137 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Palette, Check, Lock, Users, Search } from "lucide-react";
+import { Palette, Check, Lock, Users, Search, Download, Trash2, RotateCcw } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
-import { AuthGuard } from "@/components/auth-guard";
-import { IconRail } from "@/components/chat/icon-rail";
-import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
-import { ThemeProvider, useTheme } from "@/components/office/theme-context";
-import { THEME_REGISTRY, type ThemeEntry } from "@/components/office/theme-registry";
+import { useTheme } from "@/components/office/theme-context";
+import { BUILTIN_DEFAULT_THEME_ID } from "@/components/office/theme-loader";
+import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
 function ThemeCard({ entry }: { entry: ThemeEntry }) {
-  const { themeId, switchTheme } = useTheme();
+  const { themeId, switchTheme, ownedThemes, refreshOwned, isDownloaded, downloadTheme, uninstallTheme } = useTheme();
   const { t } = useTranslation();
   const [toast, setToast] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [confirmUninstall, setConfirmUninstall] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
+  const isOwned = ownedThemes.has(entry.id);
   const isPremium = !isFree;
+  const downloaded = isDownloaded(entry.id);
+  const isDefault = entry.id === BUILTIN_DEFAULT_THEME_ID;
 
   useEffect(() => {
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
   }, []);
 
-  const handleApply = () => {
-    if (!isFree || isActive) return;
-    switchTheme(entry.id);
+  const showToast = () => {
     setToast(true);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(false), 2000);
+  };
+
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadTheme(entry.id);
+    } catch {
+      alert("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleApply = () => {
+    if (isActive || !downloaded) return;
+    switchTheme(entry.id);
+    showToast();
+  };
+
+  const handlePurchase = async () => {
+    if (purchasing || isFree || isOwned) return;
+    setPurchasing(true);
+    try {
+      const res = await fetch(`/api/themes/${entry.id}/purchase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ price: entry.price }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Purchase failed");
+        return;
+      }
+      await refreshOwned();
+    } catch {
+      alert("Purchase failed. Please try again.");
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  const handleUninstall = () => {
+    uninstallTheme(entry.id);
+    setConfirmUninstall(false);
+  };
+
+  // Determine button state
+  const renderButton = () => {
+    if (isActive) {
+      return (
+        <button
+          disabled
+          className="w-full rounded-lg bg-emerald-500/15 py-2 text-sm font-medium text-emerald-400 flex items-center justify-center gap-1.5"
+        >
+          <Check className="h-4 w-4" />
+          {t("theme.applied")}
+        </button>
+      );
+    }
+    if (isPremium && !isOwned) {
+      return (
+        <button
+          onClick={handlePurchase}
+          disabled={purchasing}
+          className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80 disabled:opacity-60 flex items-center justify-center gap-1.5"
+        >
+          {purchasing ? (
+            <span className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
+          ) : (
+            <Lock className="h-3.5 w-3.5" />
+          )}
+          {entry.price} {t("theme.credits")}
+        </button>
+      );
+    }
+    if (!downloaded) {
+      return (
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80 disabled:opacity-60 flex items-center justify-center gap-1.5"
+        >
+          {downloading ? (
+            <span className="animate-spin h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
+          {downloading ? t("theme.downloading") : isFree ? t("theme.downloadFree") : t("theme.download")}
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={handleApply}
+        className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80"
+      >
+        {t("theme.apply")}
+      </button>
+    );
   };
 
   return (
@@ -44,7 +147,7 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           sizes="(max-width: 768px) 100vw, 50vw"
         />
-        {isPremium && (
+        {isPremium && !isOwned && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
             <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-bold tracking-wider text-amber-400 uppercase">
               {t("theme.premium")}
@@ -87,29 +190,39 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
         </div>
 
         {/* Action button */}
-        {isActive ? (
-          <button
-            disabled
-            className="w-full rounded-lg bg-emerald-500/15 py-2 text-sm font-medium text-emerald-400 flex items-center justify-center gap-1.5"
-          >
-            <Check className="h-4 w-4" />
-            {t("theme.applied")}
-          </button>
-        ) : isFree ? (
-          <button
-            onClick={handleApply}
-            className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-text transition-colors hover:bg-brand/80"
-          >
-            {t("theme.apply")}
-          </button>
-        ) : (
-          <button
-            disabled
-            className="w-full rounded-lg bg-muted py-2 text-sm font-medium text-muted-foreground flex items-center justify-center gap-1.5"
-          >
-            <Lock className="h-3.5 w-3.5" />
-            {entry.price} {t("theme.credits")}
-          </button>
+        <div className="flex gap-2">
+          <div className="flex-1">{renderButton()}</div>
+          {/* Uninstall button — only for downloaded non-default, non-active themes */}
+          {downloaded && !isDefault && !isActive && (
+            <button
+              onClick={() => setConfirmUninstall(true)}
+              className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-muted-foreground transition-colors hover:text-red-400 hover:border-red-400/40"
+              title={t("theme.uninstall")}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Uninstall confirmation */}
+        {confirmUninstall && (
+          <div className="rounded-lg border border-red-400/30 bg-red-400/5 p-3 space-y-2">
+            <p className="text-xs text-red-400">{t("theme.uninstallConfirm")}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleUninstall}
+                className="flex-1 rounded-md bg-red-500 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
+              >
+                {t("theme.uninstallYes")}
+              </button>
+              <button
+                onClick={() => setConfirmUninstall(false)}
+                className="flex-1 rounded-md border border-border py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Success toast */}
@@ -125,21 +238,23 @@ function ThemeCard({ entry }: { entry: ThemeEntry }) {
 
 function ThemesGrid() {
   const { t } = useTranslation();
+  const { themes, resetToDefault } = useTheme();
   const [search, setSearch] = useState("");
   const [priceFilter, setPriceFilter] = useState<"all" | "free" | "premium">("all");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    for (const entry of THEME_REGISTRY) {
+    for (const entry of themes) {
       for (const tag of entry.tags) tags.add(tag);
     }
     return Array.from(tags).sort();
-  }, []);
+  }, [themes]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return THEME_REGISTRY.filter((entry) => {
+    return themes.filter((entry) => {
       if (priceFilter === "free" && entry.price !== "free") return false;
       if (priceFilter === "premium" && entry.price === "free") return false;
       if (selectedTags.size > 0 && !entry.tags.some((tag) => selectedTags.has(tag))) return false;
@@ -149,7 +264,7 @@ function ThemesGrid() {
       }
       return true;
     });
-  }, [search, priceFilter, selectedTags]);
+  }, [themes, search, priceFilter, selectedTags]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) => {
@@ -160,103 +275,124 @@ function ThemesGrid() {
     });
   };
 
-  return (
-    <div className="app-dvh flex bg-background">
-      <div className="hidden h-full md:block">
-        <IconRail />
-      </div>
+  const handleReset = () => {
+    resetToDefault();
+    setConfirmReset(false);
+  };
 
-      <div className="flex flex-1 flex-col min-w-0">
-        {/* Header */}
-        <div className="shrink-0 border-b border-border px-6 py-5">
+  return (
+    <div className="flex h-full flex-col min-w-0">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border px-6 py-5">
+        <div className="flex items-center justify-between gap-4">
           <PageTitle
             title={t("theme.title")}
             subtitle={t("theme.subtitle")}
             icon={Palette}
           />
+          <button
+            onClick={() => setConfirmReset(true)}
+            className="shrink-0 flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:border-foreground/20"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {t("theme.resetDefault")}
+          </button>
         </div>
 
-        {/* Search + filters */}
-        <div className="shrink-0 border-b border-border px-6 py-3 space-y-3">
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder={t("theme.searchPlaceholder")}
-              aria-label={t("theme.searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
-            />
-          </div>
-
-          {/* Price filter chips */}
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Price filter">
-            {(["all", "free", "premium"] as const).map((value) => (
+        {/* Reset confirmation */}
+        {confirmReset && (
+          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 space-y-2">
+            <p className="text-xs text-amber-400">{t("theme.resetConfirm")}</p>
+            <div className="flex gap-2">
               <button
-                key={value}
-                onClick={() => setPriceFilter(value)}
-                aria-pressed={priceFilter === value}
+                onClick={handleReset}
+                className="rounded-md bg-amber-500 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-600"
+              >
+                {t("theme.resetYes")}
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="rounded-md border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Search + filters */}
+      <div className="shrink-0 border-b border-border px-6 py-3 space-y-3">
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder={t("theme.searchPlaceholder")}
+            aria-label={t("theme.searchPlaceholder")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+          />
+        </div>
+
+        {/* Price filter chips */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Price filter">
+          {(["all", "free", "premium"] as const).map((value) => (
+            <button
+              key={value}
+              onClick={() => setPriceFilter(value)}
+              aria-pressed={priceFilter === value}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                priceFilter === value
+                  ? "bg-brand text-brand-text"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {t(`theme.filter.${value}`)}
+            </button>
+          ))}
+        </div>
+
+        {/* Tag filter chips */}
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Tag filter">
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                aria-pressed={selectedTags.has(tag)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  priceFilter === value
-                    ? "bg-brand text-brand-text"
+                  selectedTags.has(tag)
+                    ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
-                {t(`theme.filter.${value}`)}
+                #{tag}
               </button>
             ))}
           </div>
+        )}
+      </div>
 
-          {/* Tag filter chips */}
-          {allTags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Tag filter">
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => toggleTag(tag)}
-                  aria-pressed={selectedTags.has(tag)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    selectedTags.has(tag)
-                      ? "bg-brand/20 text-brand-text ring-1 ring-brand/40"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  #{tag}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Theme cards grid */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {filtered.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-12">
-              {t("theme.noResults")}
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-              {filtered.map((entry) => (
-                <ThemeCard key={entry.id} entry={entry} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <MobileBottomNav />
+      {/* Theme cards grid */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {filtered.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-12">
+            {t("theme.noResults")}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {filtered.map((entry) => (
+              <ThemeCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export default function OfficeThemesPage() {
-  return (
-    <AuthGuard>
-      <ThemeProvider>
-        <ThemesGrid />
-      </ThemeProvider>
-    </AuthGuard>
-  );
+  return <ThemesGrid />;
 }

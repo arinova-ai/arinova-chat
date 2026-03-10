@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -75,10 +76,14 @@ pub struct InternalEvent {
     pub timestamp: i64,
     #[serde(default)]
     pub data: serde_json::Value,
+    /// Resolved agent name (set by office_ingest from AuthAgent, not from JSON).
+    #[serde(skip)]
+    pub agent_name: Option<String>,
 }
 
 // ── Internal helpers ─────────────────────────────────────────
 
+#[derive(Clone)]
 struct SubagentLink {
     parent_agent_id: String,
     child_agent_id: String,
@@ -177,6 +182,25 @@ impl OfficeState {
             "subagent_end" => self.handle_subagent_end(&event),
             _ => {}
         }
+
+        // Patch agent name from AuthAgent if available (resolves UUID-as-name issue)
+        // NOTE: broadcast() must be called OUTSIDE get_mut scope to avoid DashMap deadlock
+        // (get_mut holds a shard write lock; broadcast->snapshot->iter needs to lock all shards)
+        let mut name_changed = false;
+        if let Some(ref real_name) = event.agent_name {
+            if !event.agent_id.is_empty() {
+                if let Some(mut entry) = self.inner.agents.get_mut(&event.agent_id) {
+                    let a = entry.value_mut();
+                    if a.name != *real_name {
+                        a.name = real_name.clone();
+                        name_changed = true;
+                    }
+                }
+            }
+        }
+        if name_changed {
+            self.broadcast();
+        }
     }
 
     /// Periodic tick — age out idle/offline agents.
@@ -221,10 +245,12 @@ impl OfficeState {
         let existing = self.inner.agents.get(&event.agent_id);
         let agent = AgentState {
             agent_id: event.agent_id.clone(),
-            name: existing.as_ref().map_or_else(
-                || event.agent_id.clone(),
-                |e| e.name.clone(),
-            ),
+            name: event.agent_name.clone().unwrap_or_else(|| {
+                existing.as_ref().map_or_else(
+                    || event.agent_id.clone(),
+                    |e| e.name.clone(),
+                )
+            }),
             status: AgentStatus::Working,
             last_activity: event.timestamp,
             collaborating_with: existing
@@ -390,7 +416,7 @@ impl OfficeState {
             .unwrap_or_else(|| parent_session_key.clone());
 
         {
-            let mut links = self.inner.subagent_links.lock().unwrap();
+            let mut links = self.inner.subagent_links.lock();
             links.push(SubagentLink {
                 parent_agent_id,
                 child_agent_id: event.agent_id.clone(),
@@ -405,7 +431,7 @@ impl OfficeState {
 
     fn handle_subagent_end(&self, event: &InternalEvent) {
         {
-            let mut links = self.inner.subagent_links.lock().unwrap();
+            let mut links = self.inner.subagent_links.lock();
             links.retain(|l| l.child_session_key != event.session_id);
         }
         self.update_collaboration_status();
@@ -436,44 +462,56 @@ impl OfficeState {
     }
 
     fn update_collaboration_status(&self) {
-        // Reset all collaboration arrays
-        for mut entry in self.inner.agents.iter_mut() {
-            entry.value_mut().collaborating_with.clear();
+        // Snapshot links to avoid holding Mutex while accessing DashMap
+        let links_snapshot: Vec<SubagentLink> = {
+            let links = self.inner.subagent_links.lock();
+            links.clone()
+        };
+
+        // Build collaboration map from snapshot (no locks held)
+        let mut collab_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for link in &links_snapshot {
+            collab_map
+                .entry(link.parent_agent_id.clone())
+                .or_default()
+                .push(link.child_agent_id.clone());
+            collab_map
+                .entry(link.child_agent_id.clone())
+                .or_default()
+                .push(link.parent_agent_id.clone());
         }
 
-        // Build collaboration links
-        let links = self.inner.subagent_links.lock().unwrap();
-        for link in links.iter() {
-            if let Some(mut parent) = self.inner.agents.get_mut(&link.parent_agent_id) {
-                if !parent.collaborating_with.contains(&link.child_agent_id) {
-                    parent.collaborating_with.push(link.child_agent_id.clone());
-                }
-            }
-            if let Some(mut child) = self.inner.agents.get_mut(&link.child_agent_id) {
-                if !child.collaborating_with.contains(&link.parent_agent_id) {
-                    child.collaborating_with.push(link.parent_agent_id.clone());
-                }
-            }
-        }
-        drop(links);
+        // Apply collaboration status — one agent at a time, no overlapping locks
+        let agent_ids: Vec<String> = self
+            .inner
+            .agents
+            .iter()
+            .map(|e| e.key().clone())
+            .collect();
 
-        // Set collaborating status
-        for mut entry in self.inner.agents.iter_mut() {
-            let a = entry.value_mut();
-            if !a.collaborating_with.is_empty() && a.online {
-                a.status = AgentStatus::Collaborating;
-            } else if a.status == AgentStatus::Collaborating {
-                a.status = if a.online {
-                    AgentStatus::Working
-                } else {
-                    AgentStatus::Idle
-                };
+        for agent_id in &agent_ids {
+            if let Some(mut entry) = self.inner.agents.get_mut(agent_id) {
+                let a = entry.value_mut();
+                a.collaborating_with = collab_map
+                    .get(agent_id)
+                    .cloned()
+                    .unwrap_or_default();
+                if !a.collaborating_with.is_empty() && a.online {
+                    a.status = AgentStatus::Collaborating;
+                } else if a.status == AgentStatus::Collaborating {
+                    a.status = if a.online {
+                        AgentStatus::Working
+                    } else {
+                        AgentStatus::Idle
+                    };
+                }
             }
         }
     }
 
     fn remove_subagent_links(&self, agent_id: &str) {
-        let mut links = self.inner.subagent_links.lock().unwrap();
+        let mut links = self.inner.subagent_links.lock();
         links.retain(|l| l.parent_agent_id != agent_id && l.child_agent_id != agent_id);
     }
 

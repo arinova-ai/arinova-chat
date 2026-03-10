@@ -1,0 +1,628 @@
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Json, Response},
+    routing::{delete, get, post},
+    Router,
+};
+use serde::Deserialize;
+use serde_json::{json, Value};
+use uuid::Uuid;
+
+use crate::auth::middleware::{AuthAgent, AuthUser};
+use crate::AppState;
+
+/// Max capsules per user
+const MAX_CAPSULES_PER_USER: i64 = 10;
+/// Max extractions per user per day
+const MAX_DAILY_EXTRACTIONS: i32 = 10;
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/api/memory/capsules", post(create_capsule).get(list_capsules))
+        // Static path must come before dynamic {id} to avoid conflict
+        .route("/api/memory/capsules/grants", get(list_grants_for_agent))
+        .route("/api/memory/capsules/{id}", delete(delete_capsule))
+        .route("/api/memory/capsules/{id}/refresh", post(refresh_capsule))
+        .route(
+            "/api/memory/capsules/{id}/grants",
+            post(grant_agent_access),
+        )
+        .route(
+            "/api/memory/capsules/{id}/grants/{agentId}",
+            delete(revoke_agent_access),
+        )
+        // Agent API
+        .route("/api/agent/capsules", get(agent_query_capsules))
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/memory/capsules — Create a capsule from a conversation
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CreateCapsuleBody {
+    conversation_id: Uuid,
+    name: String,
+}
+
+async fn create_capsule(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<CreateCapsuleBody>,
+) -> Response {
+    let name = body.name.trim().to_string();
+    if name.is_empty() || name.len() > 255 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "name must be 1-255 characters"})),
+        )
+            .into_response();
+    }
+
+    // Validate user is a member of the conversation
+    // Direct convs store owner in conversations.user_id; group convs use conversation_user_members
+    let is_member = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM (
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+            UNION ALL
+            SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+        ) sub"#,
+    )
+    .bind(body.conversation_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if is_member == 0 {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "You are not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
+    // Check capsule limit
+    let capsule_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM memory_capsules WHERE owner_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if capsule_count >= MAX_CAPSULES_PER_USER {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": format!("Maximum {} capsules per user", MAX_CAPSULES_PER_USER)})),
+        )
+            .into_response();
+    }
+
+    // Check daily extraction limit
+    let daily_count = sqlx::query_scalar::<_, i32>(
+        "SELECT extract_count FROM memory_usage_daily WHERE user_id = $1 AND date = CURRENT_DATE",
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(0);
+
+    if daily_count >= MAX_DAILY_EXTRACTIONS {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": format!("Daily extraction limit ({}) reached", MAX_DAILY_EXTRACTIONS)})),
+        )
+            .into_response();
+    }
+
+    // Count messages in the conversation
+    let message_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM messages WHERE conversation_id = $1",
+    )
+    .bind(body.conversation_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0) as i32;
+
+    // Create capsule with status=extracting; background task will update to 'ready'
+    let capsule_id = match sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO memory_capsules (owner_id, name, source_conversation_id, message_count, status)
+           VALUES ($1, $2, $3, $4, 'extracting')
+           RETURNING id"#,
+    )
+    .bind(&user.id)
+    .bind(&name)
+    .bind(body.conversation_id)
+    .bind(message_count)
+    .fetch_one(&state.db)
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to create capsule: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to create capsule"})),
+            )
+                .into_response();
+        }
+    };
+
+    // Spawn background extraction task
+    let db_clone = state.db.clone();
+    let config_clone = state.config.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id).await {
+            tracing::error!("Memory extraction failed for capsule {}: {}", capsule_id, e);
+        }
+    });
+
+    // Increment daily usage
+    let _ = sqlx::query(
+        r#"INSERT INTO memory_usage_daily (user_id, date, extract_count)
+           VALUES ($1, CURRENT_DATE, 1)
+           ON CONFLICT (user_id, date) DO UPDATE SET extract_count = memory_usage_daily.extract_count + 1"#,
+    )
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    (
+        StatusCode::CREATED,
+        Json(json!({
+            "id": capsule_id,
+            "name": name,
+            "status": "extracting",
+            "messageCount": message_count,
+        })),
+    )
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/memory/capsules — List user's capsules
+// ---------------------------------------------------------------------------
+
+async fn list_capsules(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Response {
+    #[derive(sqlx::FromRow)]
+    struct CapsuleRow {
+        id: Uuid,
+        name: String,
+        source_conversation_id: Option<Uuid>,
+        message_count: i32,
+        status: String,
+        created_at: chrono::DateTime<chrono::Utc>,
+        extracted_through: Option<chrono::DateTime<chrono::Utc>>,
+        entry_count: i32,
+    }
+
+    let rows = sqlx::query_as::<_, CapsuleRow>(
+        r#"SELECT id, name, source_conversation_id, message_count, status, created_at,
+                  extracted_through, entry_count
+           FROM memory_capsules
+           WHERE owner_id = $1
+           ORDER BY created_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let capsules: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "name": r.name,
+                "sourceConversationId": r.source_conversation_id,
+                "messageCount": r.message_count,
+                "status": r.status,
+                "createdAt": r.created_at.to_rfc3339(),
+                "extractedThrough": r.extracted_through.map(|dt| dt.to_rfc3339()),
+                "entryCount": r.entry_count,
+            })
+        })
+        .collect();
+
+    (StatusCode::OK, Json(json!({ "capsules": capsules }))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/memory/capsules/:id — Delete a capsule
+// ---------------------------------------------------------------------------
+
+async fn delete_capsule(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(capsule_id): Path<Uuid>,
+) -> Response {
+    // Verify ownership (owner_id is TEXT)
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM memory_capsules WHERE id = $1",
+    )
+    .bind(capsule_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(ref oid)) if oid == &user.id => {}
+        Ok(Some(_)) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("delete_capsule: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+    }
+
+    if let Err(e) = sqlx::query("DELETE FROM memory_capsules WHERE id = $1")
+        .bind(capsule_id)
+        .execute(&state.db)
+        .await
+    {
+        tracing::error!("delete_capsule: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to delete capsule"}))).into_response();
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/memory/capsules/grants?agent_id=UUID — Get grants for an agent
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct GrantsQuery {
+    agent_id: Uuid,
+}
+
+async fn list_grants_for_agent(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Query(query): Query<GrantsQuery>,
+) -> Response {
+    #[derive(sqlx::FromRow)]
+    struct GrantRow {
+        capsule_id: Uuid,
+        capsule_name: String,
+        created_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    let rows = sqlx::query_as::<_, GrantRow>(
+        r#"SELECT g.capsule_id, c.name AS capsule_name, g.created_at
+           FROM memory_capsule_grants g
+           JOIN memory_capsules c ON c.id = g.capsule_id
+           WHERE g.agent_id = $1 AND c.owner_id = $2
+           ORDER BY g.created_at DESC"#,
+    )
+    .bind(query.agent_id)
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let grants: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "capsuleId": r.capsule_id,
+                "capsuleName": r.capsule_name,
+                "createdAt": r.created_at.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    (StatusCode::OK, Json(json!({ "grants": grants }))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/memory/capsules/:id/grants — Grant agent access
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct GrantBody {
+    agent_id: Uuid,
+}
+
+async fn grant_agent_access(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(capsule_id): Path<Uuid>,
+    Json(body): Json<GrantBody>,
+) -> Response {
+    // Verify capsule ownership (owner_id is TEXT)
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM memory_capsules WHERE id = $1",
+    )
+    .bind(capsule_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(ref oid)) if oid == &user.id => {}
+        Ok(Some(_)) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("grant_agent_access: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+    }
+
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO memory_capsule_grants (capsule_id, agent_id, granted_by)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (capsule_id, agent_id) DO NOTHING"#,
+    )
+    .bind(capsule_id)
+    .bind(body.agent_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!("grant_agent_access: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to grant access"}))).into_response();
+    }
+
+    (
+        StatusCode::CREATED,
+        Json(json!({"capsuleId": capsule_id, "agentId": body.agent_id})),
+    )
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/memory/capsules/:id/refresh — Re-extract (incremental)
+// ---------------------------------------------------------------------------
+
+async fn refresh_capsule(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(capsule_id): Path<Uuid>,
+) -> Response {
+    // Verify ownership and status
+    let row = sqlx::query_as::<_, (String, String)>(
+        "SELECT owner_id, status FROM memory_capsules WHERE id = $1",
+    )
+    .bind(capsule_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some((ref oid, _))) if oid != &user.id => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
+        }
+        Ok(Some((_, ref status))) if status != "ready" && status != "failed" => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"error": format!("Capsule is currently {}", status)})),
+            )
+                .into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("refresh_capsule: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+        _ => {}
+    }
+
+    // Check daily extraction limit
+    let daily_count = sqlx::query_scalar::<_, i32>(
+        "SELECT extract_count FROM memory_usage_daily WHERE user_id = $1 AND date = CURRENT_DATE",
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(0);
+
+    if daily_count >= MAX_DAILY_EXTRACTIONS {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"error": format!("Daily extraction limit ({}) reached", MAX_DAILY_EXTRACTIONS)})),
+        )
+            .into_response();
+    }
+
+    // Set status to extracting
+    let _ = sqlx::query("UPDATE memory_capsules SET status = 'extracting' WHERE id = $1")
+        .bind(capsule_id)
+        .execute(&state.db)
+        .await;
+
+    // Spawn background extraction
+    let db_clone = state.db.clone();
+    let config_clone = state.config.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id).await {
+            tracing::error!("Memory refresh failed for capsule {}: {}", capsule_id, e);
+        }
+    });
+
+    // Increment daily usage
+    let _ = sqlx::query(
+        r#"INSERT INTO memory_usage_daily (user_id, date, extract_count)
+           VALUES ($1, CURRENT_DATE, 1)
+           ON CONFLICT (user_id, date) DO UPDATE SET extract_count = memory_usage_daily.extract_count + 1"#,
+    )
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    (StatusCode::OK, Json(json!({"status": "extracting"}))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/memory/capsules/:id/grants/:agentId — Revoke agent access
+// ---------------------------------------------------------------------------
+
+async fn revoke_agent_access(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((capsule_id, agent_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    // Verify capsule ownership (owner_id is TEXT)
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM memory_capsules WHERE id = $1",
+    )
+    .bind(capsule_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(ref oid)) if oid == &user.id => {}
+        Ok(Some(_)) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+        }
+        Err(e) => {
+            tracing::error!("revoke_agent_access: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+    }
+
+    if let Err(e) = sqlx::query(
+        "DELETE FROM memory_capsule_grants WHERE capsule_id = $1 AND agent_id = $2",
+    )
+    .bind(capsule_id)
+    .bind(agent_id)
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!("revoke_agent_access: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to revoke access"}))).into_response();
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/agent/capsules?query=<text>&limit=<n> — Agent queries granted capsules
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct AgentCapsuleQuery {
+    query: String,
+    limit: Option<i32>,
+}
+
+async fn agent_query_capsules(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Query(params): Query<AgentCapsuleQuery>,
+) -> Response {
+    let query = params.query.trim().to_string();
+    if query.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "query parameter is required"})),
+        )
+            .into_response();
+    }
+
+    let limit = params.limit.unwrap_or(10).min(20).max(1);
+
+    // Check for OpenAI API key (needed for embedding)
+    let openai_key = match state.config.openai_api_key.as_deref() {
+        Some(key) => key.to_string(),
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "Memory search is not available (embedding service not configured)"})),
+            )
+                .into_response();
+        }
+    };
+
+    // Get capsule IDs granted to this agent
+    let capsule_ids = sqlx::query_scalar::<_, Uuid>(
+        "SELECT capsule_id FROM memory_capsule_grants WHERE agent_id = $1",
+    )
+    .bind(agent.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    if capsule_ids.is_empty() {
+        return (StatusCode::OK, Json(json!([]))).into_response();
+    }
+
+    // Generate embedding for the query
+    let client = reqwest::Client::new();
+    let query_texts = vec![query.clone()];
+    let embeddings = match crate::services::embedding::generate_embeddings(
+        &client,
+        &openai_key,
+        &query_texts,
+        crate::services::embedding::EMBEDDING_MODEL,
+    )
+    .await
+    {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::error!("agent_query_capsules: embedding failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to generate query embedding"})),
+            )
+                .into_response();
+        }
+    };
+
+    let query_embedding = match embeddings.into_iter().next() {
+        Some(emb) => emb,
+        None => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Empty embedding response"})),
+            )
+                .into_response();
+        }
+    };
+
+    // Run hybrid search
+    match crate::services::memory::hybrid_search(&state.db, &capsule_ids, query_embedding, &query, limit).await {
+        Ok(results) => {
+            let items: Vec<serde_json::Value> = results
+                .into_iter()
+                .map(|r| {
+                    json!({
+                        "content": r.content,
+                        "capsule_name": r.capsule_name,
+                        "capsule_id": r.capsule_id,
+                        "score": (r.score * 100.0).round() / 100.0,
+                        "importance": r.importance,
+                    })
+                })
+                .collect();
+            (StatusCode::OK, Json(json!(items))).into_response()
+        }
+        Err(e) => {
+            tracing::error!("agent_query_capsules: search failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Memory search failed"})),
+            )
+                .into_response()
+        }
+    }
+}

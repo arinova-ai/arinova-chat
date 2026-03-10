@@ -15,13 +15,11 @@ import {
   Maximize,
   Tag,
   Sparkles,
+  Download,
 } from "lucide-react";
-import { AuthGuard } from "@/components/auth-guard";
-import { IconRail } from "@/components/chat/icon-rail";
-import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
-import { ThemeProvider, useTheme } from "@/components/office/theme-context";
+import { useTheme } from "@/components/office/theme-context";
 import { loadTheme } from "@/components/office/theme-loader";
-import { THEME_REGISTRY, type ThemeEntry } from "@/components/office/theme-registry";
+import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
 // ── Mock data for detail page ───────────────────────────────────
@@ -46,18 +44,32 @@ interface ThemeDetails {
 }
 
 const THEME_DETAILS: Record<string, ThemeDetails> = {
-  "cozy-studio": {
+  "cozy-studio-v2": {
     author: { name: "Arinova Official", initial: "A" },
     rating: 4.8,
     reviewCount: 23,
     userCount: 142,
-    renderer: "Sprite 2D",
+    renderer: "SDK v2 (iframe)",
     animationCount: 6,
-    roomSize: "Small",
-    version: "v4.0",
+    roomSize: "Small (1 agent)",
+    version: "v5.0",
     reviews: [
       { name: "Mike C.", initial: "M", color: "from-indigo-500 to-indigo-700", date: "2 days ago", stars: 5, text: "Love the warm atmosphere! The illustrated scenes feel so cozy. Animations are smooth and the sleeping scene is a nice touch." },
       { name: "Sarah K.", initial: "S", color: "from-pink-500 to-pink-700", date: "1 week ago", stars: 4, text: "Beautiful design, well worth it. Would love more furniture options in future updates." },
+    ],
+  },
+  "avg-classroom": {
+    author: { name: "Arinova Official", initial: "A" },
+    rating: 4.9,
+    reviewCount: 8,
+    userCount: 31,
+    renderer: "PixiJS 2D",
+    animationCount: 0,
+    roomSize: "Large (6 agents)",
+    version: "v2.0",
+    reviews: [
+      { name: "Alex T.", initial: "A", color: "from-blue-500 to-blue-700", date: "1 day ago", stars: 5, text: "The anime classroom aesthetic is gorgeous! Love seeing all my agents as students sitting at desks." },
+      { name: "Yuki M.", initial: "Y", color: "from-purple-500 to-purple-700", date: "3 days ago", stars: 5, text: "Finally a theme that supports 6 agents! Great classroom vibe." },
     ],
   },
 };
@@ -80,15 +92,20 @@ function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
 }
 
 function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: ThemeDetails }) {
-  const { themeId, switchTheme } = useTheme();
+  const { themeId, switchTheme, ownedThemes, refreshOwned, isDownloaded, downloadTheme } = useTheme();
   const { t } = useTranslation();
   const [toast, setToast] = useState(false);
   const [liked, setLiked] = useState(false);
   const [activeThumb, setActiveThumb] = useState(0);
   const [qualityModes, setQualityModes] = useState("Standard");
+  const [purchasing, setPurchasing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = themeId === entry.id;
   const isFree = entry.price === "free";
+  const isOwned = ownedThemes.has(entry.id);
+  const isPremium = !isFree;
+  const downloaded = isDownloaded(entry.id);
 
   useEffect(() => {
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
@@ -102,34 +119,68 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
       .catch(() => {});
   }, [entry.id]);
 
-  const handleApply = () => {
-    if (!isFree || isActive) return;
-    switchTheme(entry.id);
+  const showToast = () => {
     setToast(true);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(false), 2000);
   };
 
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadTheme(entry.id);
+    } catch {
+      alert("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleApply = () => {
+    if (isActive || !downloaded) return;
+    switchTheme(entry.id);
+    showToast();
+  };
+
+  const handlePurchase = async () => {
+    if (purchasing || isFree || isOwned) return;
+    setPurchasing(true);
+    try {
+      const res = await fetch(`/api/themes/${entry.id}/purchase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ price: entry.price }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Purchase failed");
+        return;
+      }
+      await refreshOwned();
+    } catch {
+      alert("Purchase failed. Please try again.");
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
   return (
-    <div className="app-dvh flex bg-background">
-      <div className="hidden h-full md:block">
-        <IconRail />
+    <div className="flex h-full flex-col min-w-0">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border px-6 py-3">
+        <Link
+          href="/office/themes"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {t("theme.backToThemes")}
+        </Link>
       </div>
 
-      <div className="flex flex-1 flex-col min-w-0">
-        {/* Header */}
-        <div className="shrink-0 border-b border-border px-6 py-3">
-          <Link
-            href="/office/themes"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {t("theme.backToThemes")}
-          </Link>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
           <div className="max-w-[1200px] mx-auto px-6 py-8 flex flex-col lg:flex-row gap-8">
             {/* Left: Preview + Reviews */}
             <div className="flex-1 min-w-0">
@@ -279,20 +330,38 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                     <Check className="h-5 w-5" />
                     {t("theme.applied")}
                   </button>
-                ) : isFree ? (
+                ) : isPremium && !isOwned ? (
+                  <button
+                    onClick={handlePurchase}
+                    disabled={purchasing}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {purchasing ? (
+                      <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                    ) : (
+                      <Lock className="h-4 w-4" />
+                    )}
+                    {entry.price} {t("theme.credits")}
+                  </button>
+                ) : !downloaded ? (
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {downloading ? (
+                      <span className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {downloading ? t("theme.downloading") : isFree ? t("theme.downloadFree") : t("theme.download")}
+                  </button>
+                ) : (
                   <button
                     onClick={handleApply}
                     className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white transition-opacity hover:opacity-90"
                   >
                     {t("theme.applyTheme")}
-                  </button>
-                ) : (
-                  <button
-                    disabled
-                    className="flex-1 rounded-xl bg-gradient-to-r from-brand to-orange-700 py-3.5 text-base font-bold text-white opacity-80 flex items-center justify-center gap-2"
-                  >
-                    <Lock className="h-4 w-4" />
-                    {t("theme.purchaseAndApply")}
                   </button>
                 )}
                 <button
@@ -335,8 +404,6 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
           </div>
         </div>
 
-        <MobileBottomNav />
-      </div>
     </div>
   );
 }
@@ -386,22 +453,39 @@ function NotFoundContent() {
   const { t } = useTranslation();
 
   return (
-    <div className="app-dvh flex bg-background">
-      <div className="hidden h-full md:block">
-        <IconRail />
-      </div>
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 min-w-0">
-        <p className="text-muted-foreground">{t("theme.notFound")}</p>
-        <Link
-          href="/office/themes"
-          className="text-sm text-brand-text hover:underline"
-        >
-          {t("theme.backToThemes")}
-        </Link>
-        <MobileBottomNav />
-      </div>
+    <div className="flex h-full flex-col items-center justify-center gap-4">
+      <p className="text-muted-foreground">{t("theme.notFound")}</p>
+      <Link
+        href="/office/themes"
+        className="text-sm text-brand-text hover:underline"
+      >
+        {t("theme.backToThemes")}
+      </Link>
     </div>
   );
+}
+
+function ThemeDetailInner({ themeId }: { themeId: string }) {
+  const { themes } = useTheme();
+  const entry = themes.find((e) => e.id === themeId);
+  const details: ThemeDetails | undefined = entry
+    ? THEME_DETAILS[entry.id] ?? {
+        author: { name: entry.author?.name ?? "Unknown", initial: (entry.author?.name ?? "?")[0] },
+        rating: 0,
+        reviewCount: 0,
+        userCount: 0,
+        renderer: entry.renderer ?? "PixiJS 2D",
+        animationCount: 0,
+        roomSize: `${entry.maxAgents} ${entry.maxAgents === 1 ? "agent" : "agents"}`,
+        version: entry.version ?? "v1.0",
+        reviews: [],
+      }
+    : undefined;
+
+  // themes not loaded yet — wait before showing not-found
+  if (themes.length === 0) return null;
+  if (!entry || !details) return <NotFoundContent />;
+  return <ThemeDetailContent entry={entry} details={details} />;
 }
 
 export default function ThemeDetailPage({
@@ -410,18 +494,6 @@ export default function ThemeDetailPage({
   params: Promise<{ themeId: string }>;
 }) {
   const { themeId } = use(params);
-  const entry = THEME_REGISTRY.find((e) => e.id === themeId);
-  const details = entry ? THEME_DETAILS[entry.id] : undefined;
 
-  return (
-    <AuthGuard>
-      <ThemeProvider>
-        {entry && details ? (
-          <ThemeDetailContent entry={entry} details={details} />
-        ) : (
-          <NotFoundContent />
-        )}
-      </ThemeProvider>
-    </AuthGuard>
-  );
+  return <ThemeDetailInner themeId={themeId} />;
 }

@@ -38,6 +38,13 @@ pub mod media;
 pub mod shortcuts;
 pub mod official;
 pub mod lounge;
+pub mod api_keys;
+pub mod memory;
+pub mod promotions;
+pub mod kanban;
+pub mod activity;
+pub mod dashboard;
+pub mod voice;
 
 use axum::Router;
 use crate::AppState;
@@ -84,5 +91,11 @@ pub fn create_router(state: AppState) -> Router {
         .merge(shortcuts::router())
         .merge(official::router())
         .merge(lounge::router())
+        .merge(api_keys::router())
+        .merge(memory::router())
+        .merge(promotions::router())
+        .merge(kanban::router())
+        .merge(activity::router())
+        .merge(dashboard::router())
         .with_state(state)
 }

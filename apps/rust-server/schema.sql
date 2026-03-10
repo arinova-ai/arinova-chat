@@ -765,3 +765,77 @@ CREATE TABLE user_stickers (
   purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(user_id, pack_id)
 );
+
+-- Kanban boards
+CREATE TABLE kanban_boards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'My Board',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_kanban_boards_owner ON kanban_boards(owner_id);
+
+-- Kanban columns
+CREATE TABLE kanban_columns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id UUID NOT NULL REFERENCES kanban_boards(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Kanban cards
+CREATE TABLE kanban_cards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  column_id UUID NOT NULL REFERENCES kanban_columns(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  priority TEXT DEFAULT 'medium',
+  due_date TIMESTAMPTZ,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by TEXT,
+  archived BOOLEAN NOT NULL DEFAULT FALSE,
+  archived_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_kanban_cards_archived ON kanban_cards(archived, column_id);
+
+-- Card-agent assignments
+CREATE TABLE kanban_card_agents (
+  card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,
+  PRIMARY KEY (card_id, agent_id)
+);
+
+-- Labels
+CREATE TABLE kanban_labels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id UUID NOT NULL REFERENCES kanban_boards(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#6366f1'
+);
+
+-- Card-label junction
+CREATE TABLE kanban_card_labels (
+  card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
+  label_id UUID NOT NULL REFERENCES kanban_labels(id) ON DELETE CASCADE,
+  PRIMARY KEY (card_id, label_id)
+);
+
+-- Kanban Card ↔ Note links
+CREATE TABLE kanban_card_notes (
+  card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
+  note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (card_id, note_id)
+);
+
+-- Note cross-references (backlinks)
+CREATE TABLE note_links (
+  source_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+  target_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_note_id, target_note_id)
+);

@@ -489,7 +489,7 @@ async fn handle_message(
         }
         "sync" => {
             let conversations = event.get("conversations").cloned().unwrap_or(json!({}));
-            handle_sync(user_id, &conversations, ws_state, db, redis).await;
+            handle_sync(user_id, tx, &conversations, ws_state, db, redis).await;
         }
         "mark_read" => {
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
@@ -610,6 +610,7 @@ async fn check_rate_limit(
 /// Handle sync request: returns missed messages + conversation summaries
 async fn handle_sync(
     user_id: &str,
+    tx: &mpsc::UnboundedSender<String>,
     client_conversations: &Value,
     ws_state: &WsState,
     db: &PgPool,
@@ -633,7 +634,7 @@ async fn handle_sync(
     };
 
     if conv_ids.is_empty() {
-        ws_state.send_to_user(user_id, &json!({
+        send_event(tx, &json!({
             "type": "sync_response",
             "conversations": [],
             "missedMessages": []
@@ -765,7 +766,7 @@ async fn handle_sync(
         }
     }
 
-    ws_state.send_to_user(user_id, &json!({
+    send_event(tx, &json!({
         "type": "sync_response",
         "conversations": summaries,
         "missedMessages": missed_messages
@@ -807,7 +808,7 @@ async fn handle_sync(
 
             let agent_id = agent_info.and_then(|a| a.0);
 
-            ws_state.send_to_user(user_id, &json!({
+            send_event(tx, &json!({
                 "type": "stream_resume",
                 "conversationId": conv_id,
                 "messageId": msg_id,
@@ -1672,6 +1673,62 @@ async fn do_trigger_agent_response(
             })
         }).collect();
         task_payload["attachments"] = json!(att_json);
+    }
+
+    // Inject memory capsule context for 1:1 agent conversations (hybrid search)
+    if conv_type == "direct" {
+        // Find granted capsule IDs for this agent+user
+        let capsule_ids = sqlx::query_as::<_, (uuid::Uuid,)>(
+            r#"SELECT mcg.capsule_id
+               FROM memory_capsule_grants mcg
+               JOIN memory_capsules mc ON mc.id = mcg.capsule_id
+               WHERE mcg.agent_id = $1::uuid
+                 AND mc.owner_id = $2
+                 AND mc.status = 'ready'"#,
+        )
+        .bind(agent_id)
+        .bind(user_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id,)| id)
+        .collect::<Vec<_>>();
+
+        if !capsule_ids.is_empty() {
+            // Embed the user query for vector search
+            if let Some(ref openai_key) = config.openai_api_key {
+                let embed_client = reqwest::Client::new();
+                if let Ok(embeddings) = crate::services::embedding::generate_embeddings(
+                    &embed_client,
+                    openai_key,
+                    &[content.to_string()],
+                    crate::services::embedding::EMBEDDING_MODEL,
+                ).await {
+                    if let Some(query_emb) = embeddings.into_iter().next() {
+                        if let Ok(results) = crate::services::memory::hybrid_search(
+                            db,
+                            &capsule_ids,
+                            query_emb,
+                            content,
+                            10,
+                        ).await {
+                            if !results.is_empty() {
+                                let memories: Vec<serde_json::Value> = results
+                                    .into_iter()
+                                    .map(|r| json!({
+                                        "content": r.content,
+                                        "capsuleName": r.capsule_name,
+                                        "relevance": (r.score * 100.0).round() / 100.0,
+                                    }))
+                                    .collect();
+                                task_payload["memoryContext"] = json!(memories);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Send full task payload to agent

@@ -9,11 +9,13 @@ import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
 import { NewChatDialog } from "./new-chat-dialog";
 import { CallIndicator } from "@/components/voice/call-indicator";
+import { IncomingCall } from "@/components/voice/incoming-call";
 import { NotificationBanner } from "@/components/notification-banner";
 import { useChatStore } from "@/store/chat-store";
+import { useVoiceCallStore } from "@/store/voice-call-store";
+import { wsManager } from "@/lib/ws";
 import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
-import { refreshPushSubscription, setupNotificationClickHandler } from "@/lib/push";
 import { initChatDiagnostics, useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
 
@@ -75,6 +77,34 @@ export function ChatLayout() {
     };
   }, []);
 
+  // Listen for voice events on main WS (incoming calls, call ends)
+  useEffect(() => {
+    const unsub = wsManager.subscribe((event) => {
+      if (event.type === "voice_incoming_call") {
+        useVoiceCallStore.getState().receiveIncomingCall({
+          sessionId: event.sessionId,
+          callerId: event.callerId,
+          callerName: event.callerName,
+          callerAvatarUrl: event.callerAvatarUrl,
+          conversationId: event.conversationId,
+          sdp: event.sdp,
+        });
+      } else if (event.type === "voice_call_end") {
+        // Dismiss incoming call if it was rejected/ended by caller
+        const incoming = useVoiceCallStore.getState().incomingCall;
+        if (incoming?.sessionId === event.sessionId) {
+          useVoiceCallStore.getState().dismissIncoming();
+        }
+        // Also end active call if session matches
+        const activeSession = useVoiceCallStore.getState().sessionId;
+        if (activeSession === event.sessionId) {
+          useVoiceCallStore.getState().endCall();
+        }
+      }
+    });
+    return unsub;
+  }, []);
+
   // Handle ?c= and ?m= query params from push notification deep links
   useEffect(() => {
     const convId = searchParams.get("c");
@@ -89,25 +119,6 @@ export function ChatLayout() {
     }
   }, [searchParams, setActiveConversation, jumpToMessage, router]);
 
-  // Push notification setup: refresh subscription + wire click handler
-  useEffect(() => {
-    refreshPushSubscription();
-    const cleanup = setupNotificationClickHandler((url) => {
-      const params = new URLSearchParams(url.split("?")[1] || "");
-      const convId = params.get("c");
-      const msgId = params.get("m");
-      if (convId) {
-        if (msgId) {
-          jumpToMessage(convId, msgId);
-        } else {
-          setActiveConversation(convId);
-        }
-      } else {
-        router.push(url);
-      }
-    });
-    return cleanup;
-  }, [router, setActiveConversation, jumpToMessage]);
 
   // Listen for global new-chat event (e.g. from sidebar header button)
   useEffect(() => {
@@ -192,6 +203,9 @@ export function ChatLayout() {
 
       {/* Floating call indicator (visible when navigating away from active call) */}
       <CallIndicator />
+
+      {/* Incoming call notification */}
+      <IncomingCall />
     </div>
   );
 }
