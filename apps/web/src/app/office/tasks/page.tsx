@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight, FileText, Search } from "lucide-react";
+import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight, FileText, Search, Share2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useOfficeStream } from "@/hooks/use-office-stream";
@@ -108,12 +108,14 @@ function SortableCard({
   card,
   agents,
   agentEmojis,
+  agentNames,
   onDelete,
   onSelect,
 }: {
   card: KanbanCard;
   agents: string[];
   agentEmojis: Map<string, string>;
+  agentNames: Map<string, string>;
   onDelete: (id: string) => void;
   onSelect: (card: KanbanCard) => void;
 }) {
@@ -158,7 +160,7 @@ function SortableCard({
                   <span
                     key={aid}
                     className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-[10px] ring-1 ring-card"
-                    title={aid}
+                    title={agentNames.get(aid) ?? aid}
                   >
                     {agentEmojis.get(aid) ?? "\u{1F916}"}
                   </span>
@@ -199,6 +201,7 @@ function CardDetailSheet({
   cardAgents,
   cardNotes,
   agentEmojis,
+  agentNames,
   onClose,
   onUpdate,
 }: {
@@ -206,6 +209,7 @@ function CardDetailSheet({
   cardAgents: string[];
   cardNotes: Array<{ noteId: string; noteTitle: string }>;
   agentEmojis: Map<string, string>;
+  agentNames: Map<string, string>;
   onClose: () => void;
   onUpdate: () => void;
 }) {
@@ -218,6 +222,7 @@ function CardDetailSheet({
   const [noteSearchQuery, setNoteSearchQuery] = useState("");
   const [availableNotes, setAvailableNotes] = useState<Array<{ id: string; title: string; tags: string[] }>>([]);
   const [notesLoading, setNotesLoading] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   // Sync local state when card changes
   useEffect(() => {
@@ -282,6 +287,28 @@ function CardDetailSheet({
       });
       onUpdate();
     } catch { /* api shows toast */ }
+  };
+
+  const handleArchive = async () => {
+    if (!card) return;
+    setArchiving(true);
+    try {
+      await api(`/api/kanban/cards/${card.id}/archive`, {
+        method: "POST",
+        silent: true,
+      });
+      onClose();
+      onUpdate();
+    } catch { /* api shows toast */ }
+    setArchiving(false);
+  };
+
+  const handleShare = () => {
+    if (!card) return;
+    const url = `${window.location.origin}/office/tasks?card=${card.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      // Brief visual feedback would be nice but we don't have toast access here
+    }).catch(() => {});
   };
 
   const handleSave = async () => {
@@ -424,7 +451,7 @@ function CardDetailSheet({
                           className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
                         >
                           <span>{agentEmojis.get(aid) ?? "\u{1F916}"}</span>
-                          <span className="truncate max-w-[120px]">{aid}</span>
+                          <span className="truncate max-w-[120px]">{agentNames.get(aid) ?? aid}</span>
                         </span>
                       ))}
                     </div>
@@ -519,14 +546,33 @@ function CardDetailSheet({
                   )}
                 </div>
 
-                {/* Edit button */}
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand/90"
-                >
-                  Edit Card
-                </button>
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand/90"
+                  >
+                    Edit Card
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleArchive}
+                    disabled={archiving}
+                    className="rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+                    title="Archive card"
+                  >
+                    <Archive className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+                    title="Copy card link"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -543,6 +589,7 @@ function KanbanColumnView({
   cards,
   cardAgentsMap,
   agentEmojis,
+  agentNames,
   onAddCard,
   onDeleteCard,
   onSelectCard,
@@ -551,6 +598,7 @@ function KanbanColumnView({
   cards: KanbanCard[];
   cardAgentsMap: Map<string, string[]>;
   agentEmojis: Map<string, string>;
+  agentNames: Map<string, string>;
   onAddCard: (columnId: string) => void;
   onDeleteCard: (id: string) => void;
   onSelectCard: (card: KanbanCard) => void;
@@ -583,6 +631,7 @@ function KanbanColumnView({
               card={card}
               agents={cardAgentsMap.get(card.id) ?? []}
               agentEmojis={agentEmojis}
+              agentNames={agentNames}
               onDelete={onDeleteCard}
               onSelect={onSelectCard}
             />
@@ -911,6 +960,14 @@ export default function OfficeTasksPage() {
     return map;
   }, [stream.agents]);
 
+  const agentNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of stream.agents) {
+      if (a.id && a.name) map.set(a.id, a.name);
+    }
+    return map;
+  }, [stream.agents]);
+
   const streamAgentsList = useMemo(
     () => stream.agents.filter((a) => a.id && !a.id.startsWith("empty-")).map((a) => ({
       id: a.id,
@@ -1214,6 +1271,7 @@ export default function OfficeTasksPage() {
               cards={cardsByColumn.get(col.id) ?? []}
               cardAgentsMap={cardAgentsMap}
               agentEmojis={agentEmojis}
+              agentNames={agentNames}
               onAddCard={setAddColumnId}
               onDeleteCard={handleDeleteCard}
               onSelectCard={handleSelectCard}
@@ -1239,6 +1297,7 @@ export default function OfficeTasksPage() {
         cardAgents={selectedCard ? (cardAgentsMap.get(selectedCard.id) ?? []) : []}
         cardNotes={selectedCard ? (cardNotesMap.get(selectedCard.id) ?? []) : []}
         agentEmojis={agentEmojis}
+        agentNames={agentNames}
         onClose={() => setSelectedCard(null)}
         onUpdate={handleCardUpdate}
       />
