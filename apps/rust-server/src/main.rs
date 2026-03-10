@@ -76,6 +76,9 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_conv_notes_conversation ON conversation_notes(conversation_id, created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_conv_notes_creator ON conversation_notes(creator_id);
 
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ DEFAULT NULL;
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+
         ALTER TABLE conversation_user_members ADD COLUMN IF NOT EXISTS agent_notes_enabled BOOLEAN NOT NULL DEFAULT true;
 
         ALTER TABLE messages ADD COLUMN IF NOT EXISTS thread_id UUID;
