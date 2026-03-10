@@ -28,8 +28,6 @@ import {
   ArchiveRestore,
   Tag,
   Link2,
-  Bot,
-  Send,
   Brain,
   Sparkles,
 } from "lucide-react";
@@ -259,15 +257,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterTags, setFilterTags] = useState<string[]>([]);
-  // Ask AI state
-  const [askAiOpen, setAskAiOpen] = useState(false);
-  const [askAiQuestion, setAskAiQuestion] = useState("");
-  const [askAiAnswer, setAskAiAnswer] = useState("");
-  const [askAiLoading, setAskAiLoading] = useState(false);
   // Tag suggestions state
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
-  // Extract capsule state
-  const [extracting, setExtracting] = useState(false);
+  // Auto tag state
+  const [autoTagging, setAutoTagging] = useState(false);
 
   useEffect(() => {
     if (open && conversationId) {
@@ -290,9 +283,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       setSettingsOpen(false);
       setShowArchived(false);
       setFilterTags([]);
-      setAskAiOpen(false);
-      setAskAiQuestion("");
-      setAskAiAnswer("");
       setSuggestedTags([]);
     }
   }, [open]);
@@ -440,36 +430,19 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     setLoading(false);
   }, [selectedNote, conversationId, shareNoteApi]);
 
-  const handleAskAi = useCallback(async () => {
-    if (!selectedNote || !askAiQuestion.trim()) return;
-    setAskAiLoading(true);
-    setAskAiAnswer("");
-    try {
-      const res = await api<{ answer: string }>(
-        `/api/conversations/${conversationId}/notes/${selectedNote.id}/ask-ai`,
-        { method: "POST", body: JSON.stringify({ question: askAiQuestion.trim() }) }
-      );
-      setAskAiAnswer(res.answer);
-    } catch {
-      setAskAiAnswer("Failed to get AI answer.");
-    } finally {
-      setAskAiLoading(false);
-    }
-  }, [selectedNote, askAiQuestion, conversationId]);
-
-  const handleExtractCapsule = useCallback(async () => {
+  const handleAutoTag = useCallback(async () => {
     if (!selectedNote) return;
-    setExtracting(true);
+    setAutoTagging(true);
     try {
-      const res = await api<{ capsuleId: string; entriesCreated: number; entries: string[] }>(
-        `/api/conversations/${conversationId}/notes/${selectedNote.id}/extract-capsule`,
+      const res = await api<{ tags: string[] }>(
+        `/api/conversations/${conversationId}/notes/${selectedNote.id}/auto-tag`,
         { method: "POST" }
       );
-      // Refresh note detail to show related capsules
-      const full = await api(`/api/conversations/${conversationId}/notes/${selectedNote.id}`) as Note;
-      setSelectedNote(full);
+      if (res.tags?.length) {
+        setSelectedNote({ ...selectedNote, tags: res.tags });
+      }
     } catch { /* api shows toast */ }
-    setExtracting(false);
+    setAutoTagging(false);
   }, [selectedNote, conversationId]);
 
   const handleAcceptSuggestedTag = useCallback(async (tag: string) => {
@@ -829,35 +802,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   </div>
                 </div>
               )}
-              {/* Ask AI (Task 1) */}
-              {askAiOpen && (
-                <div className="mt-4 pt-3 border-t border-border">
-                  <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                    <Bot className="h-3 w-3" />
-                    Ask AI about this note
-                  </h4>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={askAiQuestion}
-                      onChange={(e) => setAskAiQuestion(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAskAi(); }}
-                      placeholder="Ask a question..."
-                      className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                      disabled={askAiLoading}
-                      autoFocus
-                    />
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleAskAi} disabled={askAiLoading || !askAiQuestion.trim()}>
-                      {askAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                    </Button>
-                  </div>
-                  {askAiAnswer && (
-                    <div className="mt-2 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap">
-                      {askAiAnswer}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
             {/* Bottom Toolbar */}
             <div className={cn("border-t border-border flex items-center gap-1 shrink-0", isMobile ? "px-3 py-2" : "px-4 py-2")}>
@@ -869,13 +813,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 <Share2 className="h-3.5 w-3.5" />
                 {t("chat.notebook.shareToChat")}
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setAskAiOpen(!askAiOpen); setAskAiAnswer(""); setAskAiQuestion(""); }}>
-                <Bot className="h-3.5 w-3.5" />
-                Ask AI
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleExtractCapsule} disabled={extracting}>
-                {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
-                Capsule
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleAutoTag} disabled={autoTagging}>
+                {autoTagging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Auto Tag
               </Button>
             </div>
           </div>

@@ -129,6 +129,7 @@ export interface Note {
   agentName?: string;
   title: string;
   content: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -139,6 +140,10 @@ export interface ListNotesOptions {
   before?: string;
   /** Max notes to return (default 20, max 50). */
   limit?: number;
+  /** Filter by tags (AND logic). */
+  tags?: string[];
+  /** If true, list archived notes instead of active. */
+  archived?: boolean;
 }
 
 /** Result from listNotes(). */
@@ -152,12 +157,14 @@ export interface ListNotesResult {
 export interface CreateNoteBody {
   title: string;
   content?: string;
+  tags?: string[];
 }
 
 /** Body for updateNote(). */
 export interface UpdateNoteBody {
   title?: string;
   content?: string;
+  tags?: string[];
 }
 
 /** Task handler function. */

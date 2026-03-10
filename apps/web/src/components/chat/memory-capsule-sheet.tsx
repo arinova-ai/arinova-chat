@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Brain,
   Loader2,
+  RefreshCw,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -28,6 +29,7 @@ interface Capsule {
   createdAt: string;
   extractedThrough: string | null;
   entryCount: number;
+  noteCount: number;
 }
 
 interface Grant {
@@ -196,31 +198,63 @@ export function MemoryCapsuleSheet({
         </div>
 
         {/* Section 1: Extract Memory */}
-        <div className="mb-6">
-          <h3 className="mb-2 text-sm font-medium text-muted-foreground">
-            {t("memoryCapsule.extractTitle")}
-          </h3>
-          <div className="flex gap-2">
-            <Input
-              value={capsuleName}
-              onChange={(e) => setCapsuleName(e.target.value)}
-              placeholder={t("memoryCapsule.namePlaceholder")}
-              className="flex-1"
-              maxLength={255}
-            />
-            <Button
-              onClick={handleExtract}
-              disabled={extracting || !capsuleName.trim()}
-              size="sm"
-            >
-              {extracting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+        {(() => {
+          const existingCapsule = capsules.find(
+            (c) => c.sourceConversationId === conversationId
+          );
+          const isRefresh = !!existingCapsule;
+          return (
+            <div className="mb-6">
+              <h3 className="mb-2 text-sm font-medium text-muted-foreground">
+                {t("memoryCapsule.extractTitle")}
+              </h3>
+              {isRefresh ? (
+                <Button
+                  onClick={async () => {
+                    setExtracting(true);
+                    try {
+                      await api(`/api/memory/capsules/${existingCapsule.id}/refresh`, { method: "POST" });
+                      await fetchData();
+                    } catch { /* api shows toast */ }
+                    setExtracting(false);
+                  }}
+                  disabled={extracting || existingCapsule.status === "extracting"}
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                >
+                  {extracting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Refresh
+                </Button>
               ) : (
-                t("memoryCapsule.extract")
+                <div className="flex gap-2">
+                  <Input
+                    value={capsuleName}
+                    onChange={(e) => setCapsuleName(e.target.value)}
+                    placeholder={t("memoryCapsule.namePlaceholder")}
+                    className="flex-1"
+                    maxLength={255}
+                  />
+                  <Button
+                    onClick={handleExtract}
+                    disabled={extracting || !capsuleName.trim()}
+                    size="sm"
+                  >
+                    {extracting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      t("memoryCapsule.extract")
+                    )}
+                  </Button>
+                </div>
               )}
-            </Button>
-          </div>
-        </div>
+            </div>
+          );
+        })()}
 
         {/* Section 2: Capsule List with Agent Grants */}
         <div>
@@ -285,8 +319,8 @@ export function MemoryCapsuleSheet({
                         <div className="space-y-0.5">
                           <p className="text-xs text-muted-foreground">
                             {capsule.entryCount > 0
-                              ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}`
-                              : `${capsule.messageCount} ${t("memoryCapsule.messages")}`}
+                              ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} notes` : ""}`
+                              : `${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} notes` : ""}`}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(capsule.createdAt).toLocaleDateString()}

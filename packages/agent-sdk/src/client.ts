@@ -336,6 +336,8 @@ export class ArinovaAgent {
     const params = new URLSearchParams();
     if (options?.before) params.set("before", options.before);
     if (options?.limit != null) params.set("limit", String(options.limit));
+    if (options?.tags?.length) params.set("tags", options.tags.join(","));
+    if (options?.archived) params.set("archived", "true");
 
     const qs = params.toString();
     const url = `${httpUrl}/api/agent/conversations/${conversationId}/notes${qs ? `?${qs}` : ""}`;

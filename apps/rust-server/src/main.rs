@@ -254,6 +254,12 @@ async fn main() {
 
         ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS summary TEXT DEFAULT NULL;
 
+        -- Add tags column to memory_entries
+        ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+
+        -- Add note_count column to memory_capsules
+        ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS note_count INTEGER NOT NULL DEFAULT 0;
+
         -- Update memory_capsules status constraint to include 'aborted'
         DO $$ BEGIN
             ALTER TABLE memory_capsules DROP CONSTRAINT IF EXISTS memory_capsules_status_check;

@@ -45,8 +45,8 @@ pub fn router() -> Router<AppState> {
             post(ask_ai),
         )
         .route(
-            "/api/conversations/{id}/notes/{noteId}/extract-capsule",
-            post(extract_capsule_from_note),
+            "/api/conversations/{id}/notes/{noteId}/auto-tag",
+            post(auto_tag_note),
         )
 }
 
@@ -1617,4 +1617,89 @@ pub async fn suggest_tags(gemini_key: &str, title: &str, content: &str) -> Vec<S
             .collect(),
         Err(_) => vec![],
     }
+}
+
+// ===== Auto Tag from Related Memories =====
+
+/// POST /api/conversations/:id/notes/:noteId/auto-tag
+/// Uses note content to find related memory entries, collects their tags, deduplicates,
+/// and updates the note's tags. No API key needed — pure DB query.
+async fn auto_tag_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
+        "SELECT title, content, tags FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content, existing_tags) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if content.trim().len() < 20 && title.trim().len() < 5 {
+        return Json(json!({"tags": existing_tags})).into_response();
+    }
+
+    // Build tsquery from note content
+    let query_text = format!("{} {}", title, &content[..content.len().min(200)]);
+    let tsquery = query_text
+        .split_whitespace()
+        .take(8)
+        .map(|w| w.replace('\'', ""))
+        .filter(|w| w.len() > 2)
+        .collect::<Vec<_>>()
+        .join(" | ");
+
+    if tsquery.is_empty() {
+        return Json(json!({"tags": existing_tags})).into_response();
+    }
+
+    // Find related memory entries and collect their tags
+    let memory_tags: Vec<Vec<String>> = sqlx::query_scalar(
+        r#"SELECT me.tags
+           FROM memory_entries me
+           JOIN memory_capsules mc ON mc.id = me.capsule_id
+           WHERE mc.owner_id = $1
+             AND me.search_vector @@ to_tsquery('english', $2)
+             AND array_length(me.tags, 1) > 0
+           ORDER BY ts_rank(me.search_vector, to_tsquery('english', $2)) DESC
+           LIMIT 10"#,
+    )
+    .bind(&user.id)
+    .bind(&tsquery)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // Collect and deduplicate tags
+    let mut tag_set: std::collections::HashSet<String> = existing_tags.iter().cloned().collect();
+    for tags in &memory_tags {
+        for tag in tags {
+            tag_set.insert(tag.clone());
+        }
+    }
+
+    let merged_tags: Vec<String> = tag_set.into_iter().collect();
+
+    // Update note tags
+    let _ = sqlx::query(
+        "UPDATE conversation_notes SET tags = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(&merged_tags)
+    .bind(note_id)
+    .execute(&state.db)
+    .await;
+
+    Json(json!({"tags": merged_tags})).into_response()
 }
