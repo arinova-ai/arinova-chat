@@ -1591,6 +1591,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         replyToId: msg.replyToId ?? undefined,
         threadId: threadId ?? undefined,
         attachments: ((msg as Record<string, unknown>).attachments as Message["attachments"]) ?? [],
+        metadata: (msg as Record<string, unknown>).metadata as Record<string, unknown> | undefined,
+        linkPreviews: (msg as Record<string, unknown>).linkPreviews as Message["linkPreviews"],
         createdAt: new Date(msg.createdAt),
         updatedAt: new Date(msg.updatedAt),
       };
