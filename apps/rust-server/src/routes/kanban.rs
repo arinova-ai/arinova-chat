@@ -39,6 +39,7 @@ pub fn router() -> Router<AppState> {
             delete(unlink_note_from_card),
         )
         // Agent API
+        .route("/api/agent/kanban/boards", get(agent_list_boards))
         .route("/api/agent/kanban/cards", get(agent_list_cards).post(agent_create_card))
         .route("/api/agent/kanban/cards/{id}", patch(agent_update_card))
         .route("/api/agent/kanban/cards/{id}/complete", post(agent_complete_card))
@@ -594,6 +595,29 @@ async fn agent_owner_id(db: &sqlx::PgPool, agent_id: Uuid) -> Result<String, Res
     owner.ok_or_else(|| {
         (StatusCode::NOT_FOUND, Json(json!({ "error": "Agent owner not found" }))).into_response()
     })
+}
+
+/// GET /api/agent/kanban/boards — list owner's boards (auto-create default if none)
+async fn agent_list_boards(State(state): State<AppState>, agent: AuthAgent) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+
+    let _ = ensure_default_board(&state.db, &owner_id).await;
+
+    let boards = sqlx::query_as::<_, BoardRow>(
+        "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+    )
+    .bind(&owner_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match boards {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
 }
 
 /// GET /api/agent/kanban/cards — list owner's kanban cards
