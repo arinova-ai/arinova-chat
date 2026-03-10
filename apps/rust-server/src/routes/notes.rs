@@ -177,50 +177,85 @@ async fn is_moderator(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
     matches!(role.as_deref(), Some("admin") | Some("vice_admin"))
 }
 
+/// Normalize a tag for comparison: trim, lowercase, strip leading '#'.
+pub fn normalize_tag(tag: &str) -> String {
+    let s = tag.trim().to_lowercase();
+    s.strip_prefix('#').unwrap_or(&s).to_string()
+}
+
 /// Auto-create a Kanban card in Backlog when note gets #prd tag.
-/// Links the card to the note via kanban_card_notes. Skips if a card with same title exists.
+/// Auto-creates a default board if user has none. Deduplicates by note_id via kanban_card_notes.
 pub async fn auto_create_prd_card(db: &PgPool, owner_id: &str, note_id: Uuid, note_title: &str) {
-    // Find the user's board
-    let board_id = sqlx::query_as::<_, (Uuid,)>(
+    // Ensure user has a board; create default if missing
+    let board_id = match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM kanban_boards WHERE owner_id = $1 LIMIT 1",
     )
     .bind(owner_id)
     .fetch_optional(db)
-    .await;
+    .await
+    {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            // Auto-create default board with 5 columns
+            let new_board = sqlx::query_scalar::<_, Uuid>(
+                "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, 'My Board') RETURNING id",
+            )
+            .bind(owner_id)
+            .fetch_one(db)
+            .await;
 
-    let board_id = match board_id {
-        Ok(Some((id,))) => id,
-        _ => return,
+            let new_board = match new_board {
+                Ok(id) => id,
+                Err(_) => return,
+            };
+
+            for (name, order) in [("Backlog", 0), ("To Do", 1), ("In Progress", 2), ("Review", 3), ("Done", 4)] {
+                let _ = sqlx::query(
+                    "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+                )
+                .bind(new_board)
+                .bind(name)
+                .bind(order)
+                .execute(db)
+                .await;
+            }
+
+            new_board
+        }
+        Err(_) => return,
     };
 
     // Find the Backlog column
-    let backlog_id = sqlx::query_as::<_, (Uuid,)>(
+    let backlog_id = match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM kanban_columns WHERE board_id = $1 AND name = 'Backlog' LIMIT 1",
     )
     .bind(board_id)
     .fetch_optional(db)
-    .await;
-
-    let backlog_id = match backlog_id {
-        Ok(Some((id,))) => id,
+    .await
+    {
+        Ok(Some(id)) => id,
         _ => return,
     };
 
-    // Check if a card with same title already exists in this board
-    let exists = sqlx::query_scalar::<_, bool>(
-        r#"SELECT EXISTS(
-            SELECT 1 FROM kanban_cards c
-            JOIN kanban_columns col ON col.id = c.column_id
-            WHERE col.board_id = $1 AND c.title = $2 AND c.archived = FALSE
-        )"#,
+    // Deduplicate by note_id — skip if this note already has a linked card
+    let already_linked = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM kanban_card_notes WHERE note_id = $1)",
     )
-    .bind(board_id)
-    .bind(note_title)
+    .bind(note_id)
     .fetch_one(db)
     .await
     .unwrap_or(false);
 
-    if exists {
+    if already_linked {
+        // Sync card title to latest note title
+        let _ = sqlx::query(
+            r#"UPDATE kanban_cards SET title = $1
+               WHERE id = (SELECT card_id FROM kanban_card_notes WHERE note_id = $2 LIMIT 1)"#,
+        )
+        .bind(note_title)
+        .bind(note_id)
+        .execute(db)
+        .await;
         return;
     }
 
@@ -237,7 +272,6 @@ pub async fn auto_create_prd_card(db: &PgPool, owner_id: &str, note_id: Uuid, no
     .await;
 
     if let Ok(Some(card_id)) = card_id {
-        // Link the card to the note
         let _ = sqlx::query(
             "INSERT INTO kanban_card_notes (card_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
         )
@@ -624,7 +658,7 @@ async fn create_note(
             );
 
             // #urgent tag → notify agents
-            if tags.iter().any(|t| t == "urgent") {
+            if tags.iter().any(|t| normalize_tag(t) == "urgent") {
                 state.ws.broadcast_to_members(
                     &member_ids,
                     &json!({
@@ -639,7 +673,7 @@ async fn create_note(
             }
 
             // #prd tag → auto-create Kanban card in Backlog
-            if tags.iter().any(|t| t == "prd") {
+            if tags.iter().any(|t| normalize_tag(t) == "prd") {
                 auto_create_prd_card(&state.db, &user.id, note_id, title).await;
             }
 
@@ -812,7 +846,7 @@ async fn update_note(
                     );
 
                     // #urgent tag → notify agents
-                    if note.tags.iter().any(|t| t == "urgent") {
+                    if note.tags.iter().any(|t| normalize_tag(t) == "urgent") {
                         state.ws.broadcast_to_members(
                             &member_ids,
                             &json!({
@@ -827,7 +861,7 @@ async fn update_note(
                     }
 
                     // #prd tag → auto-create Kanban card in Backlog
-                    if note.tags.iter().any(|t| t == "prd") {
+                    if note.tags.iter().any(|t| normalize_tag(t) == "prd") {
                         auto_create_prd_card(&state.db, &user.id, note_id, &note.title).await;
                     }
 

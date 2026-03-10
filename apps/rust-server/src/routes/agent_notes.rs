@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::auth::middleware::AuthAgent;
 use crate::AppState;
-use crate::routes::notes::{get_backlinks, get_linked_cards, sync_note_links};
+use crate::routes::notes::{get_backlinks, get_linked_cards, normalize_tag, sync_note_links};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -437,7 +437,7 @@ async fn agent_create_note(
             );
 
             // #urgent tag → notify agents
-            if tags.iter().any(|t| t == "urgent") {
+            if tags.iter().any(|t| normalize_tag(t) == "urgent") {
                 state.ws.broadcast_to_members(
                     &member_ids,
                     &json!({
@@ -452,7 +452,7 @@ async fn agent_create_note(
             }
 
             // #prd tag → auto-create Kanban card in Backlog
-            if tags.iter().any(|t| t == "prd") {
+            if tags.iter().any(|t| normalize_tag(t) == "prd") {
                 crate::routes::notes::auto_create_prd_card(&state.db, &agent.owner_id, note_id, title).await;
             }
 
@@ -611,7 +611,7 @@ async fn agent_update_note(
                     );
 
                     // #urgent tag → notify agents
-                    if note.tags.iter().any(|t| t == "urgent") {
+                    if note.tags.iter().any(|t| normalize_tag(t) == "urgent") {
                         state.ws.broadcast_to_members(
                             &member_ids,
                             &json!({
@@ -626,7 +626,7 @@ async fn agent_update_note(
                     }
 
                     // #prd tag → auto-create Kanban card in Backlog
-                    if note.tags.iter().any(|t| t == "prd") {
+                    if note.tags.iter().any(|t| normalize_tag(t) == "prd") {
                         crate::routes::notes::auto_create_prd_card(&state.db, &agent.owner_id, note_id, &note.title).await;
                     }
 
