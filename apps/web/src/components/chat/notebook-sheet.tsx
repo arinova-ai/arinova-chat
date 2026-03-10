@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Note } from "@arinova/shared/types";
 import { createPortal } from "react-dom";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -26,6 +27,7 @@ import {
   Archive,
   ArchiveRestore,
   Tag,
+  Link2,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
@@ -282,10 +284,15 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     setNotesLoaded(false);
   }, [conversationId]);
 
-  const handleOpenNote = useCallback((note: Note) => {
+  const handleOpenNote = useCallback(async (note: Note) => {
     setSelectedNote(note);
     setViewMode("detail");
-  }, []);
+    // Fetch full note to get backlinks and linkedCards
+    try {
+      const full = await api(`/api/conversations/${conversationId}/notes/${note.id}`) as Note;
+      setSelectedNote(full);
+    } catch { /* keep list data if fetch fails */ }
+  }, [conversationId]);
 
   const handleStartCreate = useCallback(() => {
     setTitleInput("");
@@ -649,6 +656,53 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 <NotebookEditor content={selectedNote.content} editable={false} />
               ) : (
                 <p className="text-sm text-muted-foreground italic">{t("chat.notebook.noContent")}</p>
+              )}
+              {/* Backlinks */}
+              {selectedNote.backlinks && selectedNote.backlinks.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
+                    <Link2 className="h-3 w-3" />
+                    Backlinks
+                  </h4>
+                  <div className="flex flex-col gap-1">
+                    {selectedNote.backlinks.map((bl) => (
+                      <button
+                        key={bl.id}
+                        type="button"
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-brand-text hover:bg-accent transition-colors text-left"
+                        onClick={() => {
+                          const backlinkedNote = notes.find((n) => n.id === bl.id);
+                          if (backlinkedNote) {
+                            handleOpenNote(backlinkedNote);
+                          }
+                        }}
+                      >
+                        <BookOpen className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{bl.title || "Untitled"}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Linked Kanban Cards */}
+              {selectedNote.linkedCards && selectedNote.linkedCards.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-border">
+                  <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
+                    <Pin className="h-3 w-3" />
+                    Linked Cards
+                  </h4>
+                  <div className="flex flex-col gap-1">
+                    {selectedNote.linkedCards.map((lc) => (
+                      <div
+                        key={lc.id}
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground"
+                      >
+                        <Pin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{lc.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
             {/* Bottom Toolbar */}

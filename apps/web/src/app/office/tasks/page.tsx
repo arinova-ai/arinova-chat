@@ -20,7 +20,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, GripVertical, Trash2, X, Clock, Archive, RotateCcw, Loader2, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useOfficeStream } from "@/hooks/use-office-stream";
@@ -59,11 +59,18 @@ interface CardAgent {
   agentId: string;
 }
 
+interface CardNote {
+  cardId: string;
+  noteId: string;
+  noteTitle: string;
+}
+
 interface BoardData {
   id: string;
   columns: KanbanColumn[];
   cards: KanbanCard[];
   cardAgents: CardAgent[];
+  cardNotes: CardNote[];
 }
 
 // ── Priority helpers ──────────────────────────────────────────
@@ -190,12 +197,14 @@ function CardOverlay({ card }: { card: KanbanCard }) {
 function CardDetailSheet({
   card,
   cardAgents,
+  cardNotes,
   agentEmojis,
   onClose,
   onUpdate,
 }: {
   card: KanbanCard | null;
   cardAgents: string[];
+  cardNotes: Array<{ noteId: string; noteTitle: string }>;
   agentEmojis: Map<string, string>;
   onClose: () => void;
   onUpdate: () => void;
@@ -205,6 +214,8 @@ function CardDetailSheet({
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
   const [saving, setSaving] = useState(false);
+  const [linkingNote, setLinkingNote] = useState(false);
+  const [noteSearchQuery, setNoteSearchQuery] = useState("");
 
   // Sync local state when card changes
   useEffect(() => {
@@ -215,6 +226,31 @@ function CardDetailSheet({
       setEditing(false);
     }
   }, [card]);
+
+  const handleLinkNote = async (noteId: string) => {
+    if (!card) return;
+    try {
+      await api(`/api/kanban/cards/${card.id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ noteId }),
+        silent: true,
+      });
+      setLinkingNote(false);
+      setNoteSearchQuery("");
+      onUpdate();
+    } catch { /* api shows toast */ }
+  };
+
+  const handleUnlinkNote = async (noteId: string) => {
+    if (!card) return;
+    try {
+      await api(`/api/kanban/cards/${card.id}/notes/${noteId}`, {
+        method: "DELETE",
+        silent: true,
+      });
+      onUpdate();
+    } catch { /* api shows toast */ }
+  };
 
   const handleSave = async () => {
     if (!card || !title.trim()) return;
@@ -362,6 +398,60 @@ function CardDetailSheet({
                     </div>
                   </div>
                 )}
+
+                {/* Linked Notes */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">Linked Notes</label>
+                    <button
+                      type="button"
+                      onClick={() => setLinkingNote(!linkingNote)}
+                      className="text-xs text-brand hover:text-brand/80"
+                    >
+                      {linkingNote ? "Cancel" : "+ Link Note"}
+                    </button>
+                  </div>
+                  {linkingNote && (
+                    <div className="mt-1.5">
+                      <input
+                        type="text"
+                        placeholder="Paste note ID to link..."
+                        value={noteSearchQuery}
+                        onChange={(e) => setNoteSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && noteSearchQuery.trim()) {
+                            handleLinkNote(noteSearchQuery.trim());
+                          }
+                        }}
+                        className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+                        autoFocus
+                      />
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">Enter note ID and press Enter</p>
+                    </div>
+                  )}
+                  {cardNotes.length > 0 ? (
+                    <div className="mt-1.5 space-y-1">
+                      {cardNotes.map((cn) => (
+                        <div
+                          key={cn.noteId}
+                          className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs"
+                        >
+                          <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="flex-1 truncate text-foreground">{cn.noteTitle}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleUnlinkNote(cn.noteId)}
+                            className="text-muted-foreground hover:text-red-400 shrink-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">No linked notes.</p>
+                  )}
+                </div>
 
                 {/* Timestamps */}
                 <div className="space-y-1.5">
@@ -821,6 +911,16 @@ export default function OfficeTasksPage() {
     return map;
   }, [board]);
 
+  const cardNotesMap = useMemo(() => {
+    const map = new Map<string, Array<{ noteId: string; noteTitle: string }>>();
+    for (const cn of board?.cardNotes ?? []) {
+      const arr = map.get(cn.cardId) ?? [];
+      arr.push({ noteId: cn.noteId, noteTitle: cn.noteTitle });
+      map.set(cn.cardId, arr);
+    }
+    return map;
+  }, [board]);
+
   // Find card by id across all columns
   const findCard = useCallback(
     (id: string) => board?.cards.find((c) => c.id === id) ?? null,
@@ -1085,6 +1185,7 @@ export default function OfficeTasksPage() {
       <CardDetailSheet
         card={selectedCard}
         cardAgents={selectedCard ? (cardAgentsMap.get(selectedCard.id) ?? []) : []}
+        cardNotes={selectedCard ? (cardNotesMap.get(selectedCard.id) ?? []) : []}
         agentEmojis={agentEmojis}
         onClose={() => setSelectedCard(null)}
         onUpdate={handleCardUpdate}

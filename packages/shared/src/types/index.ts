@@ -581,6 +581,8 @@ export interface Note {
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  backlinks?: Array<{ id: string; title: string }>;
+  linkedCards?: Array<{ id: string; title: string }>;
 }
 
 // ===== Push Notifications =====

@@ -8,6 +8,9 @@ import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import { Mark } from "@tiptap/core";
+import { Plugin } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import TurndownService from "turndown";
@@ -39,6 +42,43 @@ turndown.addRule("taskListItem", {
   replacement: (content, node) => {
     const checked = (node as HTMLElement).getAttribute("data-checked") === "true";
     return `- [${checked ? "x" : " "}] ${content.trim()}\n`;
+  },
+});
+
+/**
+ * WikiLink highlight extension — decorates [[Note Title]] patterns
+ * with a distinct visual style. Cosmetic only; link resolution is backend-side.
+ */
+const WikiLinkHighlight = Mark.create({
+  name: "wikiLinkHighlight",
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+            const regex = /\[\[.+?\]\]/g;
+
+            state.doc.descendants((node, pos) => {
+              if (!node.isText || !node.text) return;
+              let match: RegExpExecArray | null;
+              while ((match = regex.exec(node.text)) !== null) {
+                const from = pos + match.index;
+                const to = from + match[0].length;
+                decorations.push(
+                  Decoration.inline(from, to, {
+                    class: "wikilink-highlight",
+                  }),
+                );
+              }
+            });
+
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
   },
 });
 
@@ -81,6 +121,7 @@ export function NotebookEditor({
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      WikiLinkHighlight,
     ],
     content: markdownToHtml(content),
     editable,
