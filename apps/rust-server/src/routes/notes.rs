@@ -892,9 +892,15 @@ async fn update_note(
                         auto_create_prd_card(&state.db, &user.id, note_id, &note.title).await;
                     }
 
-                    // Re-generate summary if content was updated (background, Task 2)
+                    // Re-generate or clear summary if content was updated (Task 2)
                     if dyn_params.content.is_some() {
-                        if let Some(ref gk) = state.config.gemini_api_key {
+                        if note.content.len() < 500 {
+                            // Content too short — clear stale summary
+                            let _ = sqlx::query("UPDATE conversation_notes SET summary = NULL WHERE id = $1")
+                                .bind(note_id)
+                                .execute(&state.db)
+                                .await;
+                        } else if let Some(ref gk) = state.config.gemini_api_key {
                             spawn_summary_if_needed(state.db.clone(), gk.clone(), note_id, note.content.clone());
                         }
                     }
@@ -1275,14 +1281,27 @@ struct GeminiPart {
     text: Option<String>,
 }
 
+/// Shared reqwest client with 30s timeout for all Gemini calls.
+fn gemini_client() -> &'static reqwest::Client {
+    use std::sync::OnceLock;
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("Failed to build reqwest client")
+    })
+}
+
 /// Call Gemini 2.0 Flash with a system instruction and user prompt.
+/// API key sent via header (x-goog-api-key), never in URL.
+/// Errors logged server-side; only generic message returned to caller.
 async fn call_gemini(
     api_key: &str,
     system: &str,
     user_prompt: &str,
     max_tokens: u32,
 ) -> Result<String, String> {
-    let url = format!("{}?key={}", GEMINI_URL, api_key);
     let body = json!({
         "systemInstruction": {
             "parts": [{ "text": system }]
@@ -1296,16 +1315,28 @@ async fn call_gemini(
         }
     });
 
-    let client = reqwest::Client::new();
-    let resp = client.post(&url).json(&body).send().await.map_err(|e| e.to_string())?;
+    let resp = gemini_client()
+        .post(GEMINI_URL)
+        .header("x-goog-api-key", api_key)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Gemini request failed: {}", e);
+            "AI service error".to_string()
+        })?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Gemini API error {}: {}", status, text));
+        tracing::error!("Gemini API error {}: {}", status, text);
+        return Err("AI service error".to_string());
     }
 
-    let parsed: GeminiResp = resp.json().await.map_err(|e| e.to_string())?;
+    let parsed: GeminiResp = resp.json().await.map_err(|e| {
+        tracing::error!("Gemini response parse error: {}", e);
+        "AI service error".to_string()
+    })?;
     let text = parsed
         .candidates
         .and_then(|c| c.into_iter().next())
@@ -1315,6 +1346,24 @@ async fn call_gemini(
         .unwrap_or_default();
 
     Ok(text)
+}
+
+/// Per-user rate limit check via Redis. Returns Ok(()) if allowed, Err(Response) if rate limited.
+async fn check_ai_rate_limit(redis: &deadpool_redis::Pool, user_id: &str) -> Result<(), Response> {
+    use deadpool_redis::redis::AsyncCommands;
+    let key = format!("ai_ratelimit:{}:{}", user_id, chrono::Utc::now().format("%Y%m%d%H%M"));
+    let mut conn = match redis.get().await {
+        Ok(c) => c,
+        Err(_) => return Ok(()), // fail open if Redis unavailable
+    };
+    let count: i64 = conn.incr(&key, 1i64).await.unwrap_or(1);
+    if count == 1 {
+        let _: Result<(), _> = conn.expire(&key, 60).await;
+    }
+    if count > 10 {
+        return Err((StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": "Rate limit exceeded. Max 10 AI requests per minute."}))).into_response());
+    }
+    Ok(())
 }
 
 // ===== Task 1: Ask AI =====
@@ -1345,6 +1394,10 @@ async fn ask_ai(
         None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
     };
 
+    if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
+        return resp;
+    }
+
     let note = sqlx::query_as::<_, (String, String)>(
         "SELECT title, content FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
@@ -1365,7 +1418,7 @@ async fn ask_ai(
 
     match call_gemini(&gemini_key, system, &prompt, 1024).await {
         Ok(answer) => Json(json!({ "answer": answer })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("AI error: {}", e)}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response(),
     }
 }
 
@@ -1410,6 +1463,10 @@ async fn extract_capsule_from_note(
         None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
     };
 
+    if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
+        return resp;
+    }
+
     let note = sqlx::query_as::<_, (String, String)>(
         "SELECT title, content FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
@@ -1434,7 +1491,7 @@ async fn extract_capsule_from_note(
 
     let entries = match call_gemini(&gemini_key, system, &prompt, 1024).await {
         Ok(text) => text.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect::<Vec<_>>(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("AI error: {}", e)}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response(),
     };
 
     // Find or create a capsule for this conversation
@@ -1468,14 +1525,17 @@ async fn extract_capsule_from_note(
 
     let mut inserted = 0u32;
     for entry in &entries {
-        let _ = sqlx::query(
+        if sqlx::query(
             "INSERT INTO memory_entries (capsule_id, content, importance) VALUES ($1, $2, 0.7)",
         )
         .bind(capsule_id)
         .bind(entry)
         .execute(&state.db)
-        .await;
-        inserted += 1;
+        .await
+        .is_ok()
+        {
+            inserted += 1;
+        }
     }
 
     let _ = sqlx::query("UPDATE memory_capsules SET entry_count = (SELECT COUNT(*) FROM memory_entries WHERE capsule_id = $1) WHERE id = $1")
