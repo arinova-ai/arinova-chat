@@ -259,7 +259,7 @@ export function registerTools(api: OpenClawPluginApi) {
       name: "arinova_list_notes",
       label: "List Notes",
       description:
-        "List shared notes in an Arinova Chat conversation. Notes are visible to all conversation members.",
+        "List shared notes in an Arinova Chat conversation. Notes are visible to all conversation members. By default excludes archived notes.",
       parameters: Type.Object({
         conversationId: Type.String({ description: "Conversation ID" }),
         limit: Type.Optional(
@@ -268,18 +268,28 @@ export function registerTools(api: OpenClawPluginApi) {
         before: Type.Optional(
           Type.String({ description: "Note ID cursor for pagination" }),
         ),
+        tags: Type.Optional(
+          Type.Array(Type.String(), { description: "Filter by tags (AND logic)" }),
+        ),
+        archived: Type.Optional(
+          Type.Boolean({ description: "If true, list archived notes instead of active" }),
+        ),
       }),
       async execute(_toolCallId, params) {
-        const { conversationId, limit, before } = params as {
+        const { conversationId, limit, before, tags, archived } = params as {
           conversationId: string;
           limit?: number;
           before?: string;
+          tags?: string[];
+          archived?: boolean;
         };
         try {
           const account = resolveAccount();
           const qs = new URLSearchParams();
           if (limit) qs.set("limit", String(limit));
           if (before) qs.set("before", before);
+          if (tags?.length) qs.set("tags", tags.join(","));
+          if (archived) qs.set("archived", "true");
           const qStr = qs.toString();
           const url = `${account.apiUrl}/api/agent/conversations/${encodeURIComponent(conversationId)}/notes${qStr ? "?" + qStr : ""}`;
 
@@ -290,8 +300,11 @@ export function registerTools(api: OpenClawPluginApi) {
           })) as { notes: unknown[]; hasMore: boolean; nextCursor?: string };
 
           const count = data.notes?.length ?? 0;
-          const lines = (data.notes as Array<{ id?: string; title?: string; content?: string }>)
-            .map((n, i) => `${i + 1}. [${n.id}] ${n.title ?? "(untitled)"}: ${(n.content ?? "").slice(0, 100)}`)
+          const lines = (data.notes as Array<{ id?: string; title?: string; content?: string; tags?: string[] }>)
+            .map((n, i) => {
+              const tagStr = n.tags?.length ? ` [${n.tags.join(", ")}]` : "";
+              return `${i + 1}. [${n.id}] ${n.title ?? "(untitled)"}${tagStr}: ${(n.content ?? "").slice(0, 100)}`;
+            })
             .join("\n");
 
           return {
@@ -312,17 +325,21 @@ export function registerTools(api: OpenClawPluginApi) {
       name: "arinova_create_note",
       label: "Create Note",
       description:
-        "Create a shared note in an Arinova Chat conversation. Supports markdown content.",
+        "Create a shared note in an Arinova Chat conversation. Supports markdown content and tags.",
       parameters: Type.Object({
         conversationId: Type.String({ description: "Conversation ID" }),
         title: Type.String({ description: "Note title" }),
         content: Type.String({ description: "Note content (markdown supported)" }),
+        tags: Type.Optional(
+          Type.Array(Type.String(), { description: "Tags for categorization" }),
+        ),
       }),
       async execute(_toolCallId, params) {
-        const { conversationId, title, content } = params as {
+        const { conversationId, title, content, tags } = params as {
           conversationId: string;
           title: string;
           content: string;
+          tags?: string[];
         };
         try {
           const account = resolveAccount();
@@ -330,7 +347,7 @@ export function registerTools(api: OpenClawPluginApi) {
             method: "POST",
             url: `${account.apiUrl}/api/agent/conversations/${encodeURIComponent(conversationId)}/notes`,
             token: account.botToken,
-            body: { title, content },
+            body: { title, content, tags: tags ?? [] },
           });
 
           return {
@@ -357,19 +374,24 @@ export function registerTools(api: OpenClawPluginApi) {
         noteId: Type.String({ description: "Note ID to update" }),
         title: Type.Optional(Type.String({ description: "New title" })),
         content: Type.Optional(Type.String({ description: "New content (markdown)" })),
+        tags: Type.Optional(
+          Type.Array(Type.String(), { description: "Replace tags" }),
+        ),
       }),
       async execute(_toolCallId, params) {
-        const { conversationId, noteId, title, content } = params as {
+        const { conversationId, noteId, title, content, tags } = params as {
           conversationId: string;
           noteId: string;
           title?: string;
           content?: string;
+          tags?: string[];
         };
         try {
           const account = resolveAccount();
-          const body: Record<string, string> = {};
+          const body: Record<string, unknown> = {};
           if (title !== undefined) body.title = title;
           if (content !== undefined) body.content = content;
+          if (tags !== undefined) body.tags = tags;
 
           const result = await apiCall({
             method: "PATCH",
@@ -619,5 +641,41 @@ export function registerTools(api: OpenClawPluginApi) {
       },
     },
     { name: "arinova_query_memory" },
+  );
+
+  // Tool 12: arinova_share_note
+  api.registerTool(
+    {
+      name: "arinova_share_note",
+      label: "Share Note",
+      description:
+        "Share a note as a message in the conversation. Creates a preview card that other members can click to open.",
+      parameters: Type.Object({
+        conversationId: Type.String({ description: "Conversation ID" }),
+        noteId: Type.String({ description: "Note ID to share" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { conversationId, noteId } = params as {
+          conversationId: string;
+          noteId: string;
+        };
+        try {
+          const account = resolveAccount();
+          const result = (await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/conversations/${encodeURIComponent(conversationId)}/notes/${encodeURIComponent(noteId)}/share`,
+            token: account.botToken,
+          })) as { messageId: string; title: string };
+
+          return {
+            content: [{ type: "text", text: `Note "${result.title}" shared in conversation.` }],
+            details: { result },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_share_note" },
   );
 }
