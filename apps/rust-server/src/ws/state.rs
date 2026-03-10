@@ -79,6 +79,9 @@ pub struct WsState {
 
     /// Conversation member cache: conversationId -> (member_user_ids, cached_at)
     pub conv_member_cache: Arc<DashMap<String, (Vec<String>, std::time::Instant)>>,
+
+    /// Voice WS connections: userId -> sender (for routing signaling between voice WS peers)
+    pub voice_connections: Arc<DashMap<String, WsSender>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -102,6 +105,7 @@ impl WsState {
             pending_tasks: Arc::new(DashMap::new()),
             ws_rate_limits: Arc::new(DashMap::new()),
             conv_member_cache: Arc::new(DashMap::new()),
+            voice_connections: Arc::new(DashMap::new()),
         }
     }
 
@@ -159,6 +163,16 @@ impl WsState {
                     });
                 }
             }
+        }
+    }
+
+    /// Send a JSON event to a user's voice WS connection
+    pub fn send_to_voice_user(&self, user_id: &str, event: &Value) -> bool {
+        if let Some(sender) = self.voice_connections.get(user_id) {
+            let msg = serde_json::to_string(event).unwrap_or_default();
+            sender.send(msg).is_ok()
+        } else {
+            false
         }
     }
 

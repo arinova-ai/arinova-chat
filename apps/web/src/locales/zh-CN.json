@@ -776,5 +776,18 @@
   "promo.perUserLimitReached": "您已使用过此促销活动",
   "promo.freeItemNotEligible": "免费项目不适用于促销活动",
   "promo.itemNotEligible": "此项目不适用于此促销活动",
-  "promo.promotionExhausted": "此促销活动已达使用上限"
+  "promo.promotionExhausted": "此促销活动已达使用上限",
+  "voice.startCall": "语音通话",
+  "voice.inCall": "通话中",
+  "voice.incomingCall": "来电中...",
+  "voice.ringing": "呼叫中...",
+  "voice.fallbackMode": "降级模式",
+  "voice.labelYou": "你: ",
+  "voice.labelAI": "AI: ",
+  "voice.hideTranscript": "隐藏字幕",
+  "voice.showTranscript": "显示字幕",
+  "voice.unmute": "取消静音",
+  "voice.mute": "静音",
+  "voice.cancelCall": "取消通话",
+  "voice.hangup": "挂断"
 }

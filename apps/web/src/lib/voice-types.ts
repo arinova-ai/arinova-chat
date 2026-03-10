@@ -21,9 +21,19 @@ export interface VoiceCapability {
   stt?: boolean;
 }
 
+/** Incoming call info received via main WS */
+export interface IncomingCallInfo {
+  sessionId: string;
+  callerId: string;
+  callerName: string;
+  callerAvatarUrl: string | null;
+  conversationId: string;
+  sdp: string;
+}
+
 /** Voice signaling WS events (client → server) */
 export type VoiceWSClientEvent =
-  | { type: "voice_offer"; sdp: string; conversationId: string; agentId: string }
+  | { type: "voice_offer"; sdp: string; conversationId: string; agentId?: string; targetUserId?: string }
   | { type: "voice_answer"; sdp: string; sessionId: string }
   | { type: "voice_ice_candidate"; candidate: RTCIceCandidateInit; sessionId?: string }
   | { type: "voice_hangup"; sessionId?: string }

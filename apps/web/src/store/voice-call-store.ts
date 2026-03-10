@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CallState, VoiceMode, TranscriptLine } from "@/lib/voice-types";
+import type { CallState, VoiceMode, TranscriptLine, IncomingCallInfo } from "@/lib/voice-types";
 import { WebRTCClient } from "@/lib/webrtc-client";
 import { speechRecognition } from "@/lib/speech-recognition";
 import { browserTTS } from "@/lib/speech-synthesis";
@@ -9,9 +9,13 @@ import { useToastStore } from "@/store/toast-store";
 interface VoiceCallState {
   callState: CallState;
   conversationId: string | null;
-  agentId: string | null;
-  agentName: string | null;
-  agentAvatarUrl: string | null;
+
+  // Peer info (works for both agent and user calls)
+  peerId: string | null;
+  peerName: string | null;
+  peerAvatarUrl: string | null;
+  peerType: "agent" | "user" | null;
+
   sessionId: string | null;
   isMuted: boolean;
   volume: number;
@@ -21,11 +25,18 @@ interface VoiceCallState {
   callStartTime: number | null;
   endReason: string | null;
 
+  // Incoming call (from another user via main WS)
+  incomingCall: IncomingCallInfo | null;
+
   // Internal
   _rtcClient: WebRTCClient | null;
 
   // Actions
-  startCall: (conversationId: string, agentId: string, agentName: string, agentAvatarUrl: string | null, voiceMode: VoiceMode) => Promise<void>;
+  startCall: (conversationId: string, target: { agentId?: string; targetUserId?: string }, peerName: string, peerAvatarUrl: string | null, voiceMode: VoiceMode) => Promise<void>;
+  receiveIncomingCall: (info: IncomingCallInfo) => void;
+  acceptCall: () => Promise<void>;
+  rejectCall: () => void;
+  dismissIncoming: () => void;
   endCall: () => void;
   toggleMute: () => void;
   setVolume: (volume: number) => void;
@@ -37,9 +48,10 @@ interface VoiceCallState {
 export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
   callState: "idle",
   conversationId: null,
-  agentId: null,
-  agentName: null,
-  agentAvatarUrl: null,
+  peerId: null,
+  peerName: null,
+  peerAvatarUrl: null,
+  peerType: null,
   sessionId: null,
   isMuted: false,
   volume: 0.8,
@@ -50,17 +62,22 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
     : true,
   callStartTime: null,
   endReason: null,
+  incomingCall: null,
   _rtcClient: null,
 
-  startCall: async (conversationId, agentId, agentName, agentAvatarUrl, voiceMode) => {
+  startCall: async (conversationId, target, peerName, peerAvatarUrl, voiceMode) => {
     const addToast = useToastStore.getState().addToast;
+
+    const peerType = target.agentId ? "agent" : "user";
+    const peerId = target.agentId ?? target.targetUserId ?? null;
 
     set({
       callState: "requesting_mic",
       conversationId,
-      agentId,
-      agentName,
-      agentAvatarUrl,
+      peerId,
+      peerName,
+      peerAvatarUrl,
+      peerType,
       voiceMode,
       transcript: [],
       endReason: null,
@@ -73,7 +90,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
       await client.requestMicrophone();
     } catch {
       addToast("無法存取麥克風，請檢查權限設定。");
-      set({ callState: "idle", conversationId: null, agentId: null });
+      set({ callState: "idle", conversationId: null, peerId: null });
       return;
     }
 
@@ -124,12 +141,120 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
     try {
       client.connectSignaling();
       await client.createPeerConnection();
-      await client.createOffer(conversationId, agentId);
+      await client.createOffer(conversationId, target);
     } catch {
       addToast("無法建立通話連線。");
       client.close();
-      set({ callState: "idle", conversationId: null, agentId: null, _rtcClient: null });
+      set({ callState: "idle", conversationId: null, peerId: null, _rtcClient: null });
     }
+  },
+
+  receiveIncomingCall: (info: IncomingCallInfo) => {
+    const { callState, incomingCall } = get();
+
+    // Ignore if already in a call or already have an incoming call
+    if (callState !== "idle" || incomingCall) return;
+
+    set({ incomingCall: info });
+
+    // Auto-dismiss after 30 seconds if not handled
+    setTimeout(() => {
+      const current = get();
+      if (current.incomingCall?.sessionId === info.sessionId) {
+        set({ incomingCall: null });
+      }
+    }, 30000);
+  },
+
+  acceptCall: async () => {
+    const addToast = useToastStore.getState().addToast;
+    const incoming = get().incomingCall;
+    if (!incoming) return;
+
+    set({
+      callState: "requesting_mic",
+      conversationId: incoming.conversationId,
+      peerId: incoming.callerId,
+      peerName: incoming.callerName,
+      peerAvatarUrl: incoming.callerAvatarUrl,
+      peerType: "user",
+      voiceMode: "native",
+      transcript: [],
+      endReason: null,
+      incomingCall: null,
+    });
+
+    const client = new WebRTCClient();
+
+    // Request microphone
+    try {
+      await client.requestMicrophone();
+    } catch {
+      addToast("無法存取麥克風，請檢查權限設定。");
+      set({ callState: "idle", conversationId: null, peerId: null });
+      // Reject the call since we can't answer
+      api(`/api/voice/calls/${incoming.sessionId}/reject`, { method: "POST", silent: true }).catch(() => {});
+      return;
+    }
+
+    set({ _rtcClient: client, sessionId: incoming.sessionId });
+
+    // Set up signaling handlers
+    client.onSignaling((event) => {
+      const state = get();
+      if (event.type === "voice_ice_candidate" && state._rtcClient) {
+        state._rtcClient.handleIceCandidate(event.candidate);
+      } else if (event.type === "voice_call_end") {
+        get().endCall();
+        if (event.reason) {
+          set({ endReason: event.reason });
+        }
+      } else if (event.type === "voice_error") {
+        addToast(event.error);
+        get().endCall();
+      }
+    });
+
+    // Set up remote audio
+    client.onRemoteTrack((_track, stream) => {
+      client.setupRemoteAudio(stream);
+      client.setVolume(get().volume);
+    });
+
+    client.onConnectionStateChange((state) => {
+      if (state === "disconnected" || state === "failed") {
+        get().endCall();
+      }
+    });
+
+    // Connect signaling, create peer connection, handle offer and send answer
+    try {
+      client.connectSignaling();
+      await client.createPeerConnection();
+      await client.handleOffer(incoming.sdp, incoming.sessionId);
+
+      set({
+        callState: "connected",
+        callStartTime: Date.now(),
+      });
+    } catch {
+      addToast("無法建立通話連線。");
+      client.close();
+      set({ callState: "idle", conversationId: null, peerId: null, _rtcClient: null, sessionId: null });
+    }
+  },
+
+  rejectCall: () => {
+    const incoming = get().incomingCall;
+    if (!incoming) return;
+
+    // Notify server
+    api(`/api/voice/calls/${incoming.sessionId}/reject`, { method: "POST", silent: true }).catch(() => {});
+    set({ incomingCall: null });
+  },
+
+  dismissIncoming: () => {
+    set({ incomingCall: null });
   },
 
   endCall: () => {
@@ -156,9 +281,10 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
       sessionId: null,
       callStartTime: null,
       conversationId: null,
-      agentId: null,
-      agentName: null,
-      agentAvatarUrl: null,
+      peerId: null,
+      peerName: null,
+      peerAvatarUrl: null,
+      peerType: null,
     });
   },
 

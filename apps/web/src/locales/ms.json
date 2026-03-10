@@ -772,5 +772,18 @@
   "promo.perUserLimitReached": "Anda telah menggunakan promosi ini",
   "promo.freeItemNotEligible": "Item percuma tidak layak untuk promosi",
   "promo.itemNotEligible": "Item ini tidak layak untuk promosi ini",
-  "promo.promotionExhausted": "Promosi ini telah mencapai had penggunaan"
+  "promo.promotionExhausted": "Promosi ini telah mencapai had penggunaan",
+  "voice.startCall": "Panggilan suara",
+  "voice.inCall": "Dalam panggilan",
+  "voice.incomingCall": "Panggilan masuk...",
+  "voice.ringing": "Memanggil...",
+  "voice.fallbackMode": "Mod sandaran",
+  "voice.labelYou": "Anda: ",
+  "voice.labelAI": "AI: ",
+  "voice.hideTranscript": "Sembunyikan sari kata",
+  "voice.showTranscript": "Tunjukkan sari kata",
+  "voice.unmute": "Nyahbisukan",
+  "voice.mute": "Bisukan",
+  "voice.cancelCall": "Batal panggilan",
+  "voice.hangup": "Tamatkan panggilan"
 }

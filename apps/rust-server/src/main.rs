@@ -207,6 +207,7 @@ async fn main() {
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             conversation_id UUID NOT NULL,
             caller_id TEXT NOT NULL,
+            callee_id TEXT,
             agent_id UUID,
             session_id VARCHAR(255) UNIQUE NOT NULL,
             status VARCHAR(20) DEFAULT 'pending',
@@ -218,6 +219,7 @@ async fn main() {
         );
         CREATE INDEX IF NOT EXISTS idx_voice_calls_conv ON voice_calls(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_voice_calls_caller ON voice_calls(caller_id);
+        CREATE INDEX IF NOT EXISTS idx_voice_calls_callee ON voice_calls(callee_id);
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

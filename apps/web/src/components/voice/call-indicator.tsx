@@ -5,10 +5,12 @@ import { Phone, PhoneOff } from "lucide-react";
 import { useVoiceCallStore } from "@/store/voice-call-store";
 import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/i18n";
 
 export function CallIndicator() {
+  const { t } = useTranslation();
   const callState = useVoiceCallStore((s) => s.callState);
-  const agentName = useVoiceCallStore((s) => s.agentName);
+  const peerName = useVoiceCallStore((s) => s.peerName);
   const callStartTime = useVoiceCallStore((s) => s.callStartTime);
   const callConversationId = useVoiceCallStore((s) => s.conversationId);
   const voiceMode = useVoiceCallStore((s) => s.voiceMode);
@@ -44,19 +46,19 @@ export function CallIndicator() {
     >
       <Phone className="h-4 w-4 text-white" />
       <div className="text-sm text-white">
-        <span className="font-medium">{agentName ?? "Agent"}</span>
+        <span className="font-medium">{peerName ?? ""}</span>
         <span className="ml-2 opacity-80">
-          {isRinging ? "呼叫中..." : elapsed}
+          {isRinging ? t("voice.ringing") : elapsed}
         </span>
         {isFallback && callState === "connected" && (
-          <span className="ml-1 text-xs opacity-60">(降級)</span>
+          <span className="ml-1 text-xs opacity-60">({t("voice.fallbackMode")})</span>
         )}
       </div>
       <button
         type="button"
         onClick={endCall}
         className="ml-1 rounded-full p-1 hover:bg-white/20"
-        title="掛斷"
+        title={t("voice.hangup")}
       >
         <PhoneOff className="h-3.5 w-3.5 text-white" />
       </button>

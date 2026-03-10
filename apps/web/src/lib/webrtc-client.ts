@@ -151,7 +151,7 @@ export class WebRTCClient {
   }
 
   /** Create and send SDP offer */
-  async createOffer(conversationId: string, agentId: string): Promise<void> {
+  async createOffer(conversationId: string, target: { agentId?: string; targetUserId?: string }): Promise<void> {
     if (!this.pc) throw new Error("Peer connection not created");
 
     const offer = await this.pc.createOffer();
@@ -161,7 +161,8 @@ export class WebRTCClient {
       type: "voice_offer",
       sdp: offer.sdp!,
       conversationId,
-      agentId,
+      ...(target.agentId ? { agentId: target.agentId } : {}),
+      ...(target.targetUserId ? { targetUserId: target.targetUserId } : {}),
     });
   }
 

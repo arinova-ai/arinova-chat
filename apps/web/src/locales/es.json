@@ -772,5 +772,18 @@
   "promo.perUserLimitReached": "Ya has utilizado esta promoción",
   "promo.freeItemNotEligible": "Los artículos gratuitos no son elegibles para promociones",
   "promo.itemNotEligible": "Este artículo no es elegible para esta promoción",
-  "promo.promotionExhausted": "Esta promoción ha alcanzado su límite de uso"
+  "promo.promotionExhausted": "Esta promoción ha alcanzado su límite de uso",
+  "voice.startCall": "Llamada de voz",
+  "voice.inCall": "En llamada",
+  "voice.incomingCall": "Llamada entrante...",
+  "voice.ringing": "Llamando...",
+  "voice.fallbackMode": "Modo alternativo",
+  "voice.labelYou": "Tú: ",
+  "voice.labelAI": "IA: ",
+  "voice.hideTranscript": "Ocultar subtítulos",
+  "voice.showTranscript": "Mostrar subtítulos",
+  "voice.unmute": "Activar micrófono",
+  "voice.mute": "Silenciar",
+  "voice.cancelCall": "Cancelar llamada",
+  "voice.hangup": "Colgar"
 }

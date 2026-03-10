@@ -61,6 +61,9 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
     let (mut ws_sender, mut ws_receiver) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
+    // Register voice connection for this user
+    state.ws.voice_connections.insert(user_id.clone(), tx.clone());
+
     // Send task: channel → WebSocket
     let send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -76,6 +79,7 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
     // Receive task: WebSocket → handler
     let ws_state = state.ws.clone();
     let db = state.db.clone();
+    let redis = state.redis.clone();
     let tx_clone = tx.clone();
     let user_id_clone = user_id.clone();
 
@@ -89,6 +93,7 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
                         &mut active_session_id,
                         &ws_state,
                         &db,
+                        &redis,
                         &tx_clone,
                     )
                     .await;
@@ -113,6 +118,9 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
         _ = send_task => {},
         _ = recv_task => {},
     }
+
+    // Remove voice connection on disconnect
+    state.ws.voice_connections.remove(&user_id);
 }
 
 async fn handle_voice_message(
@@ -121,6 +129,7 @@ async fn handle_voice_message(
     active_session_id: &mut Option<String>,
     ws_state: &WsState,
     db: &PgPool,
+    redis: &deadpool_redis::Pool,
     tx: &mpsc::UnboundedSender<String>,
 ) {
     if text.len() > 65536 {
@@ -146,10 +155,18 @@ async fn handle_voice_message(
         "voice_offer" => {
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
             let agent_id_str = event.get("agentId").and_then(|v| v.as_str()).unwrap_or("");
+            let target_user_id = event.get("targetUserId").and_then(|v| v.as_str()).unwrap_or("");
             let sdp = event.get("sdp").and_then(|v| v.as_str()).unwrap_or("");
 
-            if conversation_id.is_empty() || agent_id_str.is_empty() || sdp.is_empty() {
-                send_event(tx, &json!({"type": "voice_error", "error": "Missing conversationId, agentId, or sdp"}));
+            if conversation_id.is_empty() || sdp.is_empty() {
+                send_event(tx, &json!({"type": "voice_error", "error": "Missing conversationId or sdp"}));
+                return;
+            }
+
+            // Must have either agentId or targetUserId
+            let is_h2h = !target_user_id.is_empty();
+            if agent_id_str.is_empty() && target_user_id.is_empty() {
+                send_event(tx, &json!({"type": "voice_error", "error": "Missing agentId or targetUserId"}));
                 return;
             }
 
@@ -157,14 +174,6 @@ async fn handle_voice_message(
                 Ok(u) => u,
                 Err(_) => {
                     send_event(tx, &json!({"type": "voice_error", "error": "Invalid conversationId"}));
-                    return;
-                }
-            };
-
-            let agent_uuid = match Uuid::parse_str(agent_id_str) {
-                Ok(u) => u,
-                Err(_) => {
-                    send_event(tx, &json!({"type": "voice_error", "error": "Invalid agentId"}));
                     return;
                 }
             };
@@ -188,77 +197,18 @@ async fn handle_voice_message(
                 return;
             }
 
-            // Verify agent belongs to the conversation
-            let agent_in_conv = sqlx::query_scalar::<_, i64>(
-                r#"SELECT COUNT(*) FROM (
-                    SELECT 1 FROM conversations WHERE id = $1 AND agent_id = $2
-                    UNION ALL
-                    SELECT 1 FROM conversation_agent_members WHERE conversation_id = $1 AND agent_id = $2
-                ) sub"#,
-            )
-            .bind(conv_uuid)
-            .bind(agent_uuid)
-            .fetch_one(db)
-            .await
-            .unwrap_or(0);
-
-            if agent_in_conv == 0 {
-                send_event(tx, &json!({"type": "voice_error", "error": "Agent is not in this conversation"}));
-                return;
-            }
-
-            // Create session ID
-            let session_id = Uuid::new_v4().to_string();
-
-            // Insert voice_calls record
-            if let Err(e) = sqlx::query(
-                r#"INSERT INTO voice_calls (conversation_id, caller_id, agent_id, session_id, status)
-                   VALUES ($1, $2, $3, $4, 'pending')"#,
-            )
-            .bind(conv_uuid)
-            .bind(user_id)
-            .bind(agent_uuid)
-            .bind(&session_id)
-            .execute(db)
-            .await
-            {
-                tracing::error!("voice_offer: failed to create call record: {}", e);
-                send_event(tx, &json!({"type": "voice_error", "error": "Failed to create call"}));
-                return;
-            }
-
-            *active_session_id = Some(session_id.clone());
-
-            // Forward offer to agent
-            let forwarded = ws_state.send_to_agent(agent_id_str, &json!({
-                "type": "voice_offer",
-                "sdp": sdp,
-                "sessionId": &session_id,
-                "callerId": user_id,
-                "conversationId": conversation_id,
-            }));
-
-            if forwarded {
-                // Notify caller that the call is ringing
-                send_event(tx, &json!({
-                    "type": "voice_call_start",
-                    "sessionId": &session_id,
-                }));
+            if is_h2h {
+                // === Human-to-Human call ===
+                handle_h2h_offer(
+                    user_id, target_user_id, conversation_id, conv_uuid, sdp,
+                    active_session_id, ws_state, db, redis, tx,
+                ).await;
             } else {
-                // Agent not connected
-                let _ = sqlx::query(
-                    "UPDATE voice_calls SET status = 'ended', end_reason = 'agent_offline', ended_at = NOW() WHERE session_id = $1",
-                )
-                .bind(&session_id)
-                .execute(db)
-                .await;
-
-                *active_session_id = None;
-
-                send_event(tx, &json!({
-                    "type": "voice_error",
-                    "error": "Agent is not available",
-                }));
+                // === Human-to-Agent call (existing flow) ===
+                handle_h2a_offer(
+                    user_id, agent_id_str, conversation_id, conv_uuid, sdp,
+                    active_session_id, ws_state, db, tx,
+                ).await;
             }
         }
 
@@ -270,22 +220,23 @@ async fn handle_voice_message(
                 return;
             }
 
-            // Verify the user is the caller of this call
-            let caller_id = match sqlx::query_scalar::<_, String>(
-                "SELECT caller_id FROM voice_calls WHERE session_id = $1",
+            #[derive(sqlx::FromRow)]
+            struct CallInfo {
+                caller_id: String,
+                callee_id: Option<String>,
+                agent_id: Option<Uuid>,
+            }
+
+            let call = match sqlx::query_as::<_, CallInfo>(
+                "SELECT caller_id, callee_id, agent_id FROM voice_calls WHERE session_id = $1",
             )
             .bind(session_id)
             .fetch_optional(db)
             .await
             {
-                Ok(Some(cid)) => cid,
+                Ok(Some(c)) => c,
                 _ => return,
             };
-
-            if caller_id != user_id {
-                send_event(tx, &json!({"type": "voice_error", "error": "Not authorized for this call"}));
-                return;
-            }
 
             // Update status to connected
             let _ = sqlx::query(
@@ -295,11 +246,27 @@ async fn handle_voice_message(
             .execute(db)
             .await;
 
-            // Forward the answer back to the caller
-            ws_state.send_to_user(&caller_id, &json!({
-                "type": "voice_answer",
-                "sdp": sdp,
-            }));
+            if let Some(ref callee_id) = call.callee_id {
+                // H2H call: callee sends answer → forward to caller
+                if callee_id == user_id {
+                    ws_state.send_to_voice_user(&call.caller_id, &json!({
+                        "type": "voice_answer",
+                        "sdp": sdp,
+                    }));
+                } else if call.caller_id == user_id {
+                    // Caller forwarding (shouldn't happen in H2H but handle gracefully)
+                    ws_state.send_to_voice_user(callee_id, &json!({
+                        "type": "voice_answer",
+                        "sdp": sdp,
+                    }));
+                }
+            } else {
+                // H2A call: forward answer to caller via main WS (existing behavior)
+                ws_state.send_to_user(&call.caller_id, &json!({
+                    "type": "voice_answer",
+                    "sdp": sdp,
+                }));
+            }
         }
 
         "voice_ice_candidate" => {
@@ -329,19 +296,17 @@ async fn handle_voice_message(
                 .or_else(|| active_session_id.clone());
 
             if let Some(sid) = session_id {
-                // Verify the user is the caller before allowing hangup
-                let is_caller = sqlx::query_scalar::<_, String>(
-                    "SELECT caller_id FROM voice_calls WHERE session_id = $1",
+                // Verify the user is a party of this call (caller or callee)
+                let is_party = sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM voice_calls WHERE session_id = $1 AND (caller_id = $2 OR callee_id = $2)",
                 )
                 .bind(&sid)
-                .fetch_optional(db)
+                .bind(user_id)
+                .fetch_one(db)
                 .await
-                .ok()
-                .flatten()
-                .map(|cid| cid == user_id)
-                .unwrap_or(false);
+                .unwrap_or(0);
 
-                if is_caller {
+                if is_party > 0 {
                     end_call(db, ws_state, &sid, user_id, "hangup").await;
                     *active_session_id = None;
                 }
@@ -352,8 +317,194 @@ async fn handle_voice_message(
     }
 }
 
+/// Handle H2H (human-to-human) voice offer
+async fn handle_h2h_offer(
+    caller_id: &str,
+    target_user_id: &str,
+    conversation_id: &str,
+    conv_uuid: Uuid,
+    sdp: &str,
+    active_session_id: &mut Option<String>,
+    ws_state: &WsState,
+    db: &PgPool,
+    redis: &deadpool_redis::Pool,
+    tx: &mpsc::UnboundedSender<String>,
+) {
+    // Verify callee is a member of the conversation
+    let callee_member = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM (
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+            UNION ALL
+            SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+        ) sub"#,
+    )
+    .bind(conv_uuid)
+    .bind(target_user_id)
+    .fetch_one(db)
+    .await
+    .unwrap_or(0);
+
+    if callee_member == 0 {
+        send_event(tx, &json!({"type": "voice_error", "error": "Target user is not in this conversation"}));
+        return;
+    }
+
+    // Create session ID
+    let session_id = Uuid::new_v4().to_string();
+
+    // Insert voice_calls record with callee_id
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO voice_calls (conversation_id, caller_id, callee_id, session_id, status)
+           VALUES ($1, $2, $3, $4, 'pending')"#,
+    )
+    .bind(conv_uuid)
+    .bind(caller_id)
+    .bind(target_user_id)
+    .bind(&session_id)
+    .execute(db)
+    .await
+    {
+        tracing::error!("voice_offer h2h: failed to create call record: {}", e);
+        send_event(tx, &json!({"type": "voice_error", "error": "Failed to create call"}));
+        return;
+    }
+
+    *active_session_id = Some(session_id.clone());
+
+    // Look up caller display name and avatar for the notification
+    #[derive(sqlx::FromRow)]
+    struct UserInfo {
+        name: String,
+        image: Option<String>,
+    }
+
+    let caller_info = sqlx::query_as::<_, UserInfo>(
+        "SELECT name, image FROM \"user\" WHERE id = $1",
+    )
+    .bind(caller_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+
+    let caller_name = caller_info.as_ref().map(|i| i.name.as_str()).unwrap_or("User");
+    let caller_avatar = caller_info.as_ref().and_then(|i| i.image.as_deref());
+
+    // Send incoming call notification to callee via main WS (so they see it even without voice WS)
+    let incoming_event = json!({
+        "type": "voice_incoming_call",
+        "sessionId": &session_id,
+        "callerId": caller_id,
+        "callerName": caller_name,
+        "callerAvatarUrl": caller_avatar,
+        "conversationId": conversation_id,
+        "sdp": sdp,
+    });
+
+    ws_state.send_to_user_or_queue(target_user_id, &incoming_event, redis);
+
+    // Notify caller that the call is ringing
+    send_event(tx, &json!({
+        "type": "voice_call_start",
+        "sessionId": &session_id,
+    }));
+}
+
+/// Handle H2A (human-to-agent) voice offer (existing flow)
+async fn handle_h2a_offer(
+    caller_id: &str,
+    agent_id_str: &str,
+    conversation_id: &str,
+    conv_uuid: Uuid,
+    sdp: &str,
+    active_session_id: &mut Option<String>,
+    ws_state: &WsState,
+    db: &PgPool,
+    tx: &mpsc::UnboundedSender<String>,
+) {
+    let agent_uuid = match Uuid::parse_str(agent_id_str) {
+        Ok(u) => u,
+        Err(_) => {
+            send_event(tx, &json!({"type": "voice_error", "error": "Invalid agentId"}));
+            return;
+        }
+    };
+
+    // Verify agent belongs to the conversation
+    let agent_in_conv = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM (
+            SELECT 1 FROM conversations WHERE id = $1 AND agent_id = $2
+            UNION ALL
+            SELECT 1 FROM conversation_agent_members WHERE conversation_id = $1 AND agent_id = $2
+        ) sub"#,
+    )
+    .bind(conv_uuid)
+    .bind(agent_uuid)
+    .fetch_one(db)
+    .await
+    .unwrap_or(0);
+
+    if agent_in_conv == 0 {
+        send_event(tx, &json!({"type": "voice_error", "error": "Agent is not in this conversation"}));
+        return;
+    }
+
+    // Create session ID
+    let session_id = Uuid::new_v4().to_string();
+
+    // Insert voice_calls record
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO voice_calls (conversation_id, caller_id, agent_id, session_id, status)
+           VALUES ($1, $2, $3, $4, 'pending')"#,
+    )
+    .bind(conv_uuid)
+    .bind(caller_id)
+    .bind(agent_uuid)
+    .bind(&session_id)
+    .execute(db)
+    .await
+    {
+        tracing::error!("voice_offer: failed to create call record: {}", e);
+        send_event(tx, &json!({"type": "voice_error", "error": "Failed to create call"}));
+        return;
+    }
+
+    *active_session_id = Some(session_id.clone());
+
+    // Forward offer to agent
+    let forwarded = ws_state.send_to_agent(agent_id_str, &json!({
+        "type": "voice_offer",
+        "sdp": sdp,
+        "sessionId": &session_id,
+        "callerId": caller_id,
+        "conversationId": conversation_id,
+    }));
+
+    if forwarded {
+        // Notify caller that the call is ringing
+        send_event(tx, &json!({
+            "type": "voice_call_start",
+            "sessionId": &session_id,
+        }));
+    } else {
+        // Agent not connected
+        let _ = sqlx::query(
+            "UPDATE voice_calls SET status = 'ended', end_reason = 'agent_offline', ended_at = NOW() WHERE session_id = $1",
+        )
+        .bind(&session_id)
+        .execute(db)
+        .await;
+
+        *active_session_id = None;
+
+        send_event(tx, &json!({
+            "type": "voice_error",
+            "error": "Agent is not available",
+        }));
+    }
+}
+
 /// Forward an ICE candidate to the other party in the call.
-/// Only the caller (user) is allowed to forward candidates from the user WS.
 async fn forward_ice_candidate(
     db: &PgPool,
     ws_state: &WsState,
@@ -364,11 +515,12 @@ async fn forward_ice_candidate(
     #[derive(sqlx::FromRow)]
     struct CallParties {
         caller_id: String,
+        callee_id: Option<String>,
         agent_id: Option<Uuid>,
     }
 
     let call = match sqlx::query_as::<_, CallParties>(
-        "SELECT caller_id, agent_id FROM voice_calls WHERE session_id = $1",
+        "SELECT caller_id, callee_id, agent_id FROM voice_calls WHERE session_id = $1",
     )
     .bind(session_id)
     .fetch_optional(db)
@@ -378,20 +530,24 @@ async fn forward_ice_candidate(
         _ => return,
     };
 
-    // Verify the sender is the caller
-    if call.caller_id != sender_user_id {
-        return;
-    }
-
     let ice_event = json!({
         "type": "voice_ice_candidate",
         "sessionId": session_id,
         "candidate": candidate,
     });
 
-    // Caller → forward to agent
-    if let Some(agent_id) = call.agent_id {
-        ws_state.send_to_agent(&agent_id.to_string(), &ice_event);
+    if let Some(ref callee_id) = call.callee_id {
+        // H2H call: forward ICE to the other party via voice WS
+        if sender_user_id == call.caller_id {
+            ws_state.send_to_voice_user(callee_id, &ice_event);
+        } else if sender_user_id == callee_id {
+            ws_state.send_to_voice_user(&call.caller_id, &ice_event);
+        }
+    } else if let Some(agent_id) = call.agent_id {
+        // H2A call: caller → agent
+        if sender_user_id == call.caller_id {
+            ws_state.send_to_agent(&agent_id.to_string(), &ice_event);
+        }
     }
 }
 
@@ -424,11 +580,12 @@ async fn end_call(
     #[derive(sqlx::FromRow)]
     struct CallParties {
         caller_id: String,
+        callee_id: Option<String>,
         agent_id: Option<Uuid>,
     }
 
     if let Ok(Some(call)) = sqlx::query_as::<_, CallParties>(
-        "SELECT caller_id, agent_id FROM voice_calls WHERE session_id = $1",
+        "SELECT caller_id, callee_id, agent_id FROM voice_calls WHERE session_id = $1",
     )
     .bind(session_id)
     .fetch_optional(db)
@@ -440,14 +597,26 @@ async fn end_call(
             "reason": reason,
         });
 
-        if call.caller_id == initiator_user_id {
-            // Initiator is the caller → notify agent
-            if let Some(agent_id) = call.agent_id {
-                ws_state.send_to_agent(&agent_id.to_string(), &end_event);
+        if let Some(ref callee_id) = call.callee_id {
+            // H2H call: notify the other user
+            if call.caller_id == initiator_user_id {
+                // Initiator is the caller → notify callee via voice WS and main WS
+                ws_state.send_to_voice_user(callee_id, &end_event);
+                ws_state.send_to_user(callee_id, &end_event);
+            } else {
+                // Initiator is the callee → notify caller via voice WS and main WS
+                ws_state.send_to_voice_user(&call.caller_id, &end_event);
+                ws_state.send_to_user(&call.caller_id, &end_event);
             }
-        } else {
-            // Initiator is the agent → notify caller
-            ws_state.send_to_user(&call.caller_id, &end_event);
+        } else if let Some(agent_id) = call.agent_id {
+            // H2A call
+            if call.caller_id == initiator_user_id {
+                // Initiator is the caller → notify agent
+                ws_state.send_to_agent(&agent_id.to_string(), &end_event);
+            } else {
+                // Initiator is the agent → notify caller
+                ws_state.send_to_user(&call.caller_id, &end_event);
+            }
         }
     }
 }

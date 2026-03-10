@@ -28,8 +28,10 @@ import {
   Headset,
   ArrowRightLeft,
   Brain,
+  Phone,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { useVoiceCallStore } from "@/store/voice-call-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import type { ConversationType } from "@arinova/shared/types";
@@ -318,6 +320,14 @@ export function ChatHeader({
                 <span className="hidden sm:inline">{t("community.cs.transferHuman")}</span>
               </Button>
             )}
+            {peerUserId && type === "direct" && conversationId && (
+              <UserCallButton
+                conversationId={conversationId}
+                peerUserId={peerUserId}
+                peerName={agentName}
+                peerAvatarUrl={agentAvatarUrl ?? null}
+              />
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -464,5 +474,39 @@ export function ChatHeader({
       />
     )}
     </div>
+  );
+}
+
+function UserCallButton({
+  conversationId,
+  peerUserId,
+  peerName,
+  peerAvatarUrl,
+}: {
+  conversationId: string;
+  peerUserId: string;
+  peerName: string;
+  peerAvatarUrl: string | null;
+}) {
+  const { t } = useTranslation();
+  const callState = useVoiceCallStore((s) => s.callState);
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const isInCall = callState !== "idle";
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn("h-8 w-8", isInCall && "text-green-400")}
+      onClick={() => {
+        if (!isInCall) {
+          startCall(conversationId, { targetUserId: peerUserId }, peerName, peerAvatarUrl, "native");
+        }
+      }}
+      disabled={isInCall}
+      title={isInCall ? t("voice.inCall") : t("voice.startCall")}
+    >
+      <Phone className="h-4 w-4" />
+    </Button>
   );
 }

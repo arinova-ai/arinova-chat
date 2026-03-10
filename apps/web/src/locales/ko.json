@@ -772,5 +772,18 @@
   "promo.perUserLimitReached": "이미 이 프로모션을 사용하셨습니다",
   "promo.freeItemNotEligible": "무료 항목은 프로모션 대상이 아닙니다",
   "promo.itemNotEligible": "이 항목은 이 프로모션 대상이 아닙니다",
-  "promo.promotionExhausted": "이 프로모션의 사용 한도에 도달했습니다"
+  "promo.promotionExhausted": "이 프로모션의 사용 한도에 도달했습니다",
+  "voice.startCall": "음성 통화",
+  "voice.inCall": "통화 중",
+  "voice.incomingCall": "수신 중...",
+  "voice.ringing": "발신 중...",
+  "voice.fallbackMode": "폴백 모드",
+  "voice.labelYou": "나: ",
+  "voice.labelAI": "AI: ",
+  "voice.hideTranscript": "자막 숨기기",
+  "voice.showTranscript": "자막 표시",
+  "voice.unmute": "음소거 해제",
+  "voice.mute": "음소거",
+  "voice.cancelCall": "통화 취소",
+  "voice.hangup": "통화 종료"
 }

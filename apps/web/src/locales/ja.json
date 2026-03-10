@@ -772,5 +772,18 @@
   "promo.perUserLimitReached": "このプロモーションは既にご利用済みです",
   "promo.freeItemNotEligible": "無料アイテムはプロモーション対象外です",
   "promo.itemNotEligible": "このアイテムはこのプロモーションの対象外です",
-  "promo.promotionExhausted": "このプロモーションは利用上限に達しました"
+  "promo.promotionExhausted": "このプロモーションは利用上限に達しました",
+  "voice.startCall": "音声通話",
+  "voice.inCall": "通話中",
+  "voice.incomingCall": "着信中...",
+  "voice.ringing": "発信中...",
+  "voice.fallbackMode": "フォールバック",
+  "voice.labelYou": "あなた: ",
+  "voice.labelAI": "AI: ",
+  "voice.hideTranscript": "字幕を非表示",
+  "voice.showTranscript": "字幕を表示",
+  "voice.unmute": "ミュート解除",
+  "voice.mute": "ミュート",
+  "voice.cancelCall": "通話キャンセル",
+  "voice.hangup": "通話終了"
 }

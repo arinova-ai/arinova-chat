@@ -127,7 +127,7 @@ function VoiceCallButton({
       className={cn("gap-2 mt-1", isInCall && "text-green-400")}
       onClick={() => {
         if (!isInCall) {
-          startCall(conversationId, agent.id, agent.name, agent.avatarUrl, "native");
+          startCall(conversationId, { agentId: agent.id }, agent.name, agent.avatarUrl, "native");
         }
       }}
       disabled={isInCall}

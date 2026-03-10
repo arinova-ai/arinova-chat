@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -23,6 +23,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/voice/history/{conversationId}",
             get(get_call_history),
+        )
+        .route(
+            "/api/voice/calls/{sessionId}/reject",
+            post(reject_call),
         )
 }
 
@@ -164,4 +168,67 @@ async fn get_call_history(
         .collect();
 
     (StatusCode::OK, Json(json!({ "calls": calls }))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/voice/calls/:sessionId/reject — Reject an incoming call
+// ---------------------------------------------------------------------------
+
+async fn reject_call(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(session_id): Path<String>,
+) -> Response {
+    // Look up the call and verify the user is the callee
+    #[derive(sqlx::FromRow)]
+    struct CallInfo {
+        caller_id: String,
+        callee_id: Option<String>,
+        status: Option<String>,
+    }
+
+    let call = match sqlx::query_as::<_, CallInfo>(
+        "SELECT caller_id, callee_id, status FROM voice_calls WHERE session_id = $1",
+    )
+    .bind(&session_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Call not found"}))).into_response();
+        }
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
+        }
+    };
+
+    // Only the callee can reject
+    if call.callee_id.as_deref() != Some(&user.id) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the callee"}))).into_response();
+    }
+
+    // Only reject pending calls
+    if call.status.as_deref() != Some("pending") {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Call is not pending"}))).into_response();
+    }
+
+    // End the call
+    let _ = sqlx::query(
+        "UPDATE voice_calls SET status = 'ended', ended_at = NOW(), end_reason = 'rejected' WHERE session_id = $1",
+    )
+    .bind(&session_id)
+    .execute(&state.db)
+    .await;
+
+    // Notify caller via voice WS and main WS
+    let end_event = json!({
+        "type": "voice_call_end",
+        "sessionId": &session_id,
+        "reason": "rejected",
+    });
+    state.ws.send_to_voice_user(&call.caller_id, &end_event);
+    state.ws.send_to_user(&call.caller_id, &end_event);
+
+    (StatusCode::OK, Json(json!({"ok": true}))).into_response()
 }
