@@ -97,7 +97,7 @@ export default function MyNotesPage() {
   const [selectedNote, setSelectedNote] = useState<UserNote | null>(null);
   const [editingContent, setEditingContent] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Debounce search input
   useEffect(() => {
@@ -366,8 +366,9 @@ export default function MyNotesPage() {
                 {editingContent !== null ? (
                   <div className="flex h-full flex-col gap-2">
                     <NotebookEditor
-                      initialContent={editingContent}
+                      content={editingContent}
                       onChange={setEditingContent}
+                      editable
                     />
                     <div className="flex gap-2 pt-2">
                       <button
