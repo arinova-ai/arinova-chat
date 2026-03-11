@@ -263,6 +263,17 @@ export function ChatHeader({
             >
               {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
             </Button>
+            {onAddMemberClick && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={onAddMemberClick}
+                title={t("addMember.title")}
+              >
+                <UserPlus className="h-4 w-4" />
+              </Button>
+            )}
             {onMembersClick && (
               <Button
                 variant="ghost"
