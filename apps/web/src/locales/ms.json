@@ -181,6 +181,8 @@
   "chat.mediaFiles.noMedia": "Tiada foto lagi",
   "chat.mediaFiles.noFiles": "Tiada fail lagi",
   "chat.header.settings": "Tetapan",
+  "chat.header.pinnedButtons": "Butang Tersemat",
+  "chat.header.pinnedButtonsDesc": "Pilih sehingga 5 butang untuk disemat pada pengepala.",
   "chat.header.voiceCall": "Panggilan suara",
   "chat.header.inCall": "Dalam panggilan",
   "chat.header.voiceUnavailable": "Panggilan suara tidak tersedia",

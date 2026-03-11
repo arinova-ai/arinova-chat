@@ -181,6 +181,8 @@
   "chat.mediaFiles.noMedia": "写真はまだありません",
   "chat.mediaFiles.noFiles": "ファイルはまだありません",
   "chat.header.settings": "設定",
+  "chat.header.pinnedButtons": "ピン留めボタン",
+  "chat.header.pinnedButtonsDesc": "ヘッダーにピン留めするボタンを最大5つ選択できます。",
   "chat.header.voiceCall": "音声通話",
   "chat.header.inCall": "通話中",
   "chat.header.voiceUnavailable": "音声通話は利用できません",

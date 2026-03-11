@@ -180,6 +180,8 @@
   "chat.mediaFiles.noMedia": "No photos yet",
   "chat.mediaFiles.noFiles": "No files yet",
   "chat.header.settings": "Settings",
+  "chat.header.pinnedButtons": "Pinned Buttons",
+  "chat.header.pinnedButtonsDesc": "Choose up to 5 buttons to pin in the header. Pinned buttons appear directly in the chat header for quick access.",
   "chat.header.voiceCall": "Voice call",
   "chat.header.inCall": "In call",
   "chat.header.voiceUnavailable": "Voice call unavailable",

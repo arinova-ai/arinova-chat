@@ -183,6 +183,8 @@
   "chat.mediaFiles.noMedia": "尚無照片",
   "chat.mediaFiles.noFiles": "尚無檔案",
   "chat.header.settings": "設定",
+  "chat.header.pinnedButtons": "釘選按鈕",
+  "chat.header.pinnedButtonsDesc": "最多釘選 5 個按鈕到對話標題列，方便快速存取。",
   "chat.header.voiceCall": "語音通話",
   "chat.header.inCall": "通話中",
   "chat.header.voiceUnavailable": "語音通話不可用",

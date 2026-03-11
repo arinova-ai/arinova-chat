@@ -181,6 +181,8 @@
   "chat.mediaFiles.noMedia": "No hay fotos aún",
   "chat.mediaFiles.noFiles": "No hay archivos aún",
   "chat.header.settings": "Configuracion",
+  "chat.header.pinnedButtons": "Botones fijados",
+  "chat.header.pinnedButtonsDesc": "Elige hasta 5 botones para fijar en el encabezado.",
   "chat.header.voiceCall": "Llamada de voz",
   "chat.header.inCall": "En llamada",
   "chat.header.voiceUnavailable": "Llamada de voz no disponible",

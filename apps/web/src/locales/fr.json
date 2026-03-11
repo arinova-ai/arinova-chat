@@ -181,6 +181,8 @@
   "chat.mediaFiles.noMedia": "Pas encore de photos",
   "chat.mediaFiles.noFiles": "Pas encore de fichiers",
   "chat.header.settings": "Paramètres",
+  "chat.header.pinnedButtons": "Boutons épinglés",
+  "chat.header.pinnedButtonsDesc": "Choisissez jusqu'à 5 boutons à épingler dans l'en-tête.",
   "chat.header.voiceCall": "Appel vocal",
   "chat.header.inCall": "En appel",
   "chat.header.voiceUnavailable": "Appel vocal indisponible",
