@@ -14,6 +14,7 @@ import {
   X,
   GitCommitHorizontal,
   Plus,
+  Trash2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
@@ -86,6 +87,7 @@ interface CardDetailSheetProps {
   card: KanbanCardData | null;
   onClose: () => void;
   onUpdate: () => void;
+  onDelete?: (cardId: string) => void;
   cardAgents?: string[];
   cardNotes?: Array<{ noteId: string; noteTitle: string }>;
   cardCommits?: CardCommitData[];
@@ -99,6 +101,7 @@ export function CardDetailSheet({
   card,
   onClose,
   onUpdate,
+  onDelete,
   cardAgents = [],
   cardNotes = [],
   cardCommits = [],
@@ -124,6 +127,8 @@ export function CardDetailSheet({
   const [commitMessage, setCommitMessage] = useState("");
   const [commitSaving, setCommitSaving] = useState(false);
   const [localCommits, setLocalCommits] = useState<CardCommitData[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { t } = useTranslation();
 
   // Fetch commits from the per-card endpoint on mount / card change
@@ -156,6 +161,7 @@ export function CardDetailSheet({
       setPriority(card.priority ?? "medium");
       setEditing(false);
       setLinkCopied(false);
+      setConfirmDelete(false);
     }
   }, [card]);
 
@@ -259,6 +265,22 @@ export function CardDetailSheet({
       cardId: card.id,
     });
     setShareSheetOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!card) return;
+    if (onDelete) {
+      onDelete(card.id);
+      onClose();
+      return;
+    }
+    setDeleting(true);
+    try {
+      await api(`/api/kanban/cards/${card.id}`, { method: "DELETE", silent: true });
+      onClose();
+      onUpdate();
+    } catch { /* api shows toast */ }
+    setDeleting(false);
   };
 
   const handleAddCommit = async () => {
@@ -664,6 +686,26 @@ export function CardDetailSheet({
                   >
                     <Share2 className="h-4 w-4" />
                   </button>
+                  {confirmDelete ? (
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="rounded-lg border border-red-500 px-3 py-2.5 text-sm text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                      title="Confirm delete"
+                    >
+                      {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(true)}
+                      className="rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-red-500/50 hover:text-red-500"
+                      title="Delete card"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </>
             )}

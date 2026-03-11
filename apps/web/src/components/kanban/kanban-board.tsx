@@ -445,6 +445,7 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
           agentNames={agentNames}
           onClose={() => setSelectedCard(null)}
           onUpdate={handleCardUpdate}
+          onDelete={handleDeleteCard}
         />
 
         {board && (
@@ -477,6 +478,7 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
         card={selectedCard}
         onClose={() => setSelectedCard(null)}
         onUpdate={handleCardUpdate}
+        onDelete={handleDeleteCard}
       />
     </>
   );
