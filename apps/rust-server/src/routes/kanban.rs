@@ -179,6 +179,7 @@ struct AgentCreateCardBody {
     priority: Option<String>,
     column_name: Option<String>,
     column_id: Option<Uuid>,
+    board_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -725,9 +726,16 @@ async fn agent_create_card(
         Err(e) => return e,
     };
 
-    let board_id = match ensure_default_board(&state.db, &owner_id).await {
-        Ok(id) => id,
-        Err(e) => return e,
+    let board_id = if let Some(bid) = body.board_id {
+        if let Err(e) = verify_board_owner(&state.db, bid, &owner_id).await {
+            return e;
+        }
+        bid
+    } else {
+        match ensure_default_board(&state.db, &owner_id).await {
+            Ok(id) => id,
+            Err(e) => return e,
+        }
     };
 
     // Resolve column: prefer column_id, then column_name, then first column
