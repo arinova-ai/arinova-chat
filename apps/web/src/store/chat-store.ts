@@ -1609,6 +1609,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         senderUserName: msg.senderUserName,
         senderUserImage: (msg as Record<string, unknown>).senderUserImage as string | undefined,
         senderIsVerified: (msg as Record<string, unknown>).senderIsVerified as boolean | undefined,
+        senderAgentId: (msg as Record<string, unknown>).senderAgentId as string | undefined,
+        senderAgentName: (msg as Record<string, unknown>).senderAgentName as string | undefined,
         replyToId: msg.replyToId ?? undefined,
         threadId: threadId ?? undefined,
         attachments: ((msg as Record<string, unknown>).attachments as Message["attachments"]) ?? [],
@@ -2079,6 +2081,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_end") {
       const { conversationId, messageId, seq } = event;
+      const senderAgentId = (event as Record<string, unknown>).senderAgentId as string | undefined;
+      const senderAgentName = (event as Record<string, unknown>).senderAgentName as string | undefined;
       const { activeConversationId, unreadCounts } = get();
       // Normalize \r\n and \r → \n to prevent GFM table formatting differences
       // between streamed chunks (which use \n) and backend final content
@@ -2174,6 +2178,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
               role: "agent",
               content: finalContent,
               status: "completed",
+              senderAgentId: senderAgentId ?? undefined,
+              senderAgentName: senderAgentName ?? undefined,
               threadId,
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -2220,6 +2226,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
               role: "agent",
               content: finalContent,
               status: "completed",
+              senderAgentId: senderAgentId ?? undefined,
+              senderAgentName: senderAgentName ?? undefined,
               createdAt: new Date(),
               updatedAt: new Date(),
             };

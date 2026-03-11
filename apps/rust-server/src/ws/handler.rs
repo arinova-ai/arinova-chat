@@ -1898,6 +1898,8 @@ async fn do_trigger_agent_response(
                                 "seq": agent_seq,
                                 "threadId": &thread_id,
                                 "content": &full_content,
+                                "senderAgentId": &agent_id,
+                                "senderAgentName": &agent_name,
                                 "reason": "completed"
                             }), &redis);
 
@@ -2026,6 +2028,8 @@ async fn do_trigger_agent_response(
                                     "seq": agent_seq,
                                     "threadId": &thread_id,
                                     "content": &stream_accumulated,
+                                    "senderAgentId": &agent_id,
+                                    "senderAgentName": &agent_name,
                                     "reason": "agent_disconnect"
                                 }), &redis);
                             }
@@ -2068,6 +2072,8 @@ async fn do_trigger_agent_response(
                             "messageId": &agent_msg_id_clone,
                             "seq": agent_seq,
                             "threadId": &thread_id,
+                            "senderAgentId": &agent_id,
+                            "senderAgentName": &agent_name,
                             "reason": "cancelled"
                         }), &redis);
 

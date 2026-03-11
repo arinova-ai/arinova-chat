@@ -93,6 +93,8 @@ struct ConversationListRow {
     last_msg_metadata: Option<serde_json::Value>,
     last_msg_created_at: Option<NaiveDateTime>,
     last_msg_updated_at: Option<NaiveDateTime>,
+    last_msg_sender_agent_id: Option<Uuid>,
+    last_msg_sender_agent_name: Option<String>,
     // Agent owner verified
     agent_owner_is_verified: Option<bool>,
     // Official community link
@@ -319,6 +321,8 @@ async fn list_conversations(
                 lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
+                lm.sender_agent_id AS last_msg_sender_agent_id,
+                lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id
             FROM conversations c
@@ -326,12 +330,13 @@ async fn list_conversations(
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN LATERAL (
-                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
+                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at, m.sender_agent_id
                 FROM messages m
                 WHERE m.conversation_id = c.id
                 ORDER BY m.created_at DESC
                 LIMIT 1
             ) lm ON true
+            LEFT JOIN agents lm_agent ON lm.sender_agent_id = lm_agent.id
             WHERE (c.user_id = $1 OR EXISTS (
                 SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
             ))
@@ -370,6 +375,8 @@ async fn list_conversations(
                 lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
+                lm.sender_agent_id AS last_msg_sender_agent_id,
+                lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id
             FROM conversations c
@@ -377,12 +384,13 @@ async fn list_conversations(
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN LATERAL (
-                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
+                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at, m.sender_agent_id
                 FROM messages m
                 WHERE m.conversation_id = c.id
                 ORDER BY m.created_at DESC
                 LIMIT 1
             ) lm ON true
+            LEFT JOIN agents lm_agent ON lm.sender_agent_id = lm_agent.id
             WHERE (c.user_id = $1 OR EXISTS (
                 SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
             ))
@@ -628,6 +636,8 @@ async fn list_conversations(
                     "status": row.last_msg_status,
                     "metadata": row.last_msg_metadata,
                     "attachments": atts,
+                    "senderAgentId": row.last_msg_sender_agent_id,
+                    "senderAgentName": row.last_msg_sender_agent_name,
                     "createdAt": row.last_msg_created_at.map(|t| t.and_utc().to_rfc3339()),
                     "updatedAt": row.last_msg_updated_at.map(|t| t.and_utc().to_rfc3339()),
                 })
