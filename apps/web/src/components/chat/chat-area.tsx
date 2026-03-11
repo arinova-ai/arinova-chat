@@ -20,6 +20,8 @@ import { MediaFilesPanel, type MediaFilesTab } from "./media-files-panel";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { api } from "@/lib/api";
+import { assetUrl } from "@/lib/config";
 import { useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
 
@@ -52,6 +54,17 @@ export function ChatArea() {
   const [droppedNote, setDroppedNote] = useState<{ id: string; title: string } | null>(null);
   const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
+
+  const [chatBgUrl, setChatBgUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    setChatBgUrl(null);
+    api<{ chatBgUrl: string | null }>(`/api/conversations/${activeConversationId}/settings`, { silent: true })
+      .then((d) => setChatBgUrl(d.chatBgUrl))
+      .catch(() => {});
+  }, [activeConversationId]);
+
   useRenderDiag("ChatArea", () => ({
     activeConversationId,
     searchActive,
@@ -136,11 +149,19 @@ export function ChatArea() {
   return (
     <div
       className="relative flex h-full min-w-0 flex-col"
+      style={chatBgUrl ? {
+        backgroundImage: `url(${assetUrl(chatBgUrl)})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      } : undefined}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {chatBgUrl && (
+        <div className="pointer-events-none absolute inset-0 bg-black/40" />
+      )}
       {isDragging && (
         <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 pointer-events-none">
           <div className="flex flex-col items-center gap-2 text-primary">

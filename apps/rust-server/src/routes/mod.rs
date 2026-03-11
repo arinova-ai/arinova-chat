@@ -46,6 +46,7 @@ pub mod activity;
 pub mod dashboard;
 pub mod voice;
 pub mod user_settings;
+pub mod conversation_settings;
 
 use axum::Router;
 use crate::AppState;

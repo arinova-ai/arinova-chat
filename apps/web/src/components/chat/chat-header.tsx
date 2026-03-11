@@ -445,7 +445,7 @@ export function ChatHeader({
         agentId={agentId}
       />
     )}
-    <ChatHeaderSettings open={settingsOpen} onOpenChange={setSettingsOpen} />
+    <ChatHeaderSettings open={settingsOpen} onOpenChange={setSettingsOpen} conversationId={conversationId} />
     </div>
   );
 }

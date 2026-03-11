@@ -841,3 +841,13 @@ CREATE TABLE note_links (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (source_note_id, target_note_id)
 );
+
+-- Per-user-per-conversation settings
+CREATE TABLE IF NOT EXISTS conversation_user_settings (
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    chat_bg_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, conversation_id)
+);

@@ -308,6 +308,15 @@ async fn main() {
 
         ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
         ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+
+        CREATE TABLE IF NOT EXISTS conversation_user_settings (
+            user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            chat_bg_url TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (user_id, conversation_id)
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
@@ -362,6 +371,21 @@ async fn main() {
             }
         }
         Err(e) => tracing::warn!("Failed to clean up stuck streaming messages: {}", e),
+    }
+
+    // Reset stuck extracting capsules from previous run
+    match sqlx::query(
+        "UPDATE memory_capsules SET status = 'ready' WHERE status = 'extracting'"
+    )
+    .execute(&db)
+    .await
+    {
+        Ok(result) => {
+            if result.rows_affected() > 0 {
+                tracing::info!("Reset {} stuck extracting capsules", result.rows_affected());
+            }
+        }
+        Err(e) => tracing::warn!("Failed to reset stuck extracting capsules: {}", e),
     }
 
     // Initialize Redis pool
@@ -474,6 +498,7 @@ async fn main() {
         .merge(routes::dashboard::router())
         .merge(routes::user_settings::router())
         .merge(routes::voice::router())
+        .merge(routes::conversation_settings::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .merge(ws::voice_handler::router())

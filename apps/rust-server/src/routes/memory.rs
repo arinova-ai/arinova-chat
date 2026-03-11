@@ -494,18 +494,28 @@ async fn refresh_capsule(
     Path(capsule_id): Path<Uuid>,
 ) -> Response {
     // Verify ownership and status
-    let row = sqlx::query_as::<_, (String, String)>(
-        "SELECT owner_id, status FROM memory_capsules WHERE id = $1",
+    let row = sqlx::query_as::<_, (String, String, chrono::DateTime<chrono::Utc>)>(
+        "SELECT owner_id, status, updated_at FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
     .fetch_optional(&state.db)
     .await;
 
     match row {
-        Ok(Some((ref oid, _))) if oid != &user.id => {
+        Ok(Some((ref oid, _, _))) if oid != &user.id => {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
         }
-        Ok(Some((_, ref status))) if status != "ready" && status != "failed" => {
+        Ok(Some((_, ref status, ref updated_at))) if status == "extracting" => {
+            let thirty_min_ago = chrono::Utc::now() - chrono::Duration::minutes(30);
+            if *updated_at > thirty_min_ago {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({"error": "Capsule is currently extracting"})),
+                ).into_response();
+            }
+            // Stuck for >30 min, allow re-extraction
+        }
+        Ok(Some((_, ref status, _))) if status != "ready" && status != "failed" => {
             return (
                 StatusCode::CONFLICT,
                 Json(json!({"error": format!("Capsule is currently {}", status)})),
