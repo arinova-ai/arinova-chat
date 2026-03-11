@@ -108,6 +108,10 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
         state._rtcClient.handleAnswer(event.sdp);
       } else if (event.type === "voice_ice_candidate" && state._rtcClient) {
         state._rtcClient.handleIceCandidate(event.candidate);
+      } else if (event.type === "voice_ringing") {
+        // H2H: got sessionId but callee hasn't answered yet, stay in ringing state
+        state._rtcClient?.setSessionId(event.sessionId);
+        set({ sessionId: event.sessionId });
       } else if (event.type === "voice_call_start") {
         state._rtcClient?.setSessionId(event.sessionId);
         set({

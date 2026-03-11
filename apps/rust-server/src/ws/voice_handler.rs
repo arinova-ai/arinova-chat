@@ -270,6 +270,15 @@ async fn handle_voice_message(
                         "type": "voice_answer",
                         "sdp": sdp,
                     }));
+                    // Callee accepted → notify both sides that the call is now connected
+                    ws_state.send_to_voice_user(&call.caller_id, &json!({
+                        "type": "voice_call_start",
+                        "sessionId": session_id,
+                    }));
+                    send_event(tx, &json!({
+                        "type": "voice_call_start",
+                        "sessionId": session_id,
+                    }));
                 } else if call.caller_id == user_id {
                     // Caller forwarding (shouldn't happen in H2H but handle gracefully)
                     ws_state.send_to_voice_user(callee_id, &json!({
@@ -420,9 +429,9 @@ async fn handle_h2h_offer(
 
     ws_state.send_to_user_or_queue(target_user_id, &incoming_event, redis);
 
-    // Notify caller that the call is ringing
+    // Notify caller that the call is ringing (not yet connected)
     send_event(tx, &json!({
-        "type": "voice_call_start",
+        "type": "voice_ringing",
         "sessionId": &session_id,
     }));
 }
