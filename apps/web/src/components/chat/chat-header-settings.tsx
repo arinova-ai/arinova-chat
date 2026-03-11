@@ -96,7 +96,7 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId }: ChatH
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {/* Top bar */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
