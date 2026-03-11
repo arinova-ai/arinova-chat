@@ -14,6 +14,7 @@ import {
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
+import { CardDetailSheet, type KanbanCardData } from "@/components/kanban/card-detail-sheet";
 
 interface KanbanSidebarProps {
   open: boolean;
@@ -22,7 +23,7 @@ interface KanbanSidebarProps {
 
 interface Board { id: string; name: string; }
 interface Column { id: string; boardId: string; name: string; sortOrder: number; }
-interface Card { id: string; columnId: string; title: string; description: string | null; priority: string | null; sortOrder: number; }
+interface Card { id: string; columnId: string; title: string; description: string | null; priority: string | null; dueDate: string | null; sortOrder: number; createdBy: string | null; createdAt: string | null; updatedAt?: string | null; shareToken?: string | null; isPublic?: boolean; }
 
 // Priority colors
 const PRIORITY_COLORS: Record<string, string> = {
@@ -47,6 +48,7 @@ export function KanbanSidebar({ open, onOpenChange }: KanbanSidebarProps) {
   const [newCardTitle, setNewCardTitle] = useState("");
   const [newCardColumnId, setNewCardColumnId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
 
   const fetchBoards = useCallback(async () => {
     setLoading(true);
@@ -161,8 +163,12 @@ export function KanbanSidebar({ open, onOpenChange }: KanbanSidebarProps) {
                     {colCards.map((card) => (
                       <div
                         key={card.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedCard(card)}
+                        onKeyDown={(e) => { if (e.key === "Enter") setSelectedCard(card); }}
                         className={cn(
-                          "rounded-md border border-border bg-card p-2 text-sm border-l-2",
+                          "rounded-md border border-border bg-card p-2 text-sm border-l-2 cursor-pointer hover:bg-accent/50 transition-colors",
                           PRIORITY_COLORS[card.priority ?? "medium"] ?? "border-l-transparent"
                         )}
                       >
@@ -174,6 +180,7 @@ export function KanbanSidebar({ open, onOpenChange }: KanbanSidebarProps) {
                         <select
                           className="mt-1 w-full text-[10px] bg-transparent border border-border rounded px-1 py-0.5 text-muted-foreground"
                           value={card.columnId}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => handleMoveCard(card.id, e.target.value)}
                         >
                           {columns.map((c) => (
@@ -230,6 +237,11 @@ export function KanbanSidebar({ open, onOpenChange }: KanbanSidebarProps) {
     <>
       {backdrop}
       {panel}
+      <CardDetailSheet
+        card={selectedCard as KanbanCardData | null}
+        onClose={() => setSelectedCard(null)}
+        onUpdate={() => { if (activeBoard) fetchBoard(activeBoard); }}
+      />
     </>,
     document.body
   );
