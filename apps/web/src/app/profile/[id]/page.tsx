@@ -51,7 +51,7 @@ function UserProfileContent() {
   const voiceCallState = useVoiceCallStore((s) => s.callState);
   const startCall = useVoiceCallStore((s) => s.startCall);
   const isInCall = voiceCallState !== "idle";
-  const directConv = conversations.find((c) => c.peerUserId === userId && c.type === "h2h");
+  const directConv = conversations.find((c) => c.peerUserId === userId && (c.type === "h2h" || c.type === "direct"));
 
   const closeLightbox = useCallback(() => setLightboxOpen(false), []);
 

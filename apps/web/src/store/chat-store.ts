@@ -1168,7 +1168,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     lines.push(`**Messages:** ${msgs.length}`);
     lines.push(`**Streaming:** ${streamingMsg ? "Yes" : "No"}`);
 
-    if (conv.type === "h2a" && conv.agentId) {
+    if ((conv.type === "h2a" || conv.type === "direct") && conv.agentId) {
       const agentName = conv.agentName ?? "Unknown";
       const health = agentHealth[conv.agentId];
       const status = health?.status ?? "unknown";

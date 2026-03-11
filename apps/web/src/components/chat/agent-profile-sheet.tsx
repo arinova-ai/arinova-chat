@@ -99,7 +99,8 @@ export function AgentProfileSheet({
   const voiceCallState = useVoiceCallStore((s) => s.callState);
   const startCall = useVoiceCallStore((s) => s.startCall);
   const isInCall = voiceCallState !== "idle";
-  const isDirectChat = conversations.find((c) => c.id === conversationId)?.type === "h2a";
+  const convType = conversations.find((c) => c.id === conversationId)?.type;
+  const isDirectChat = convType === "h2a" || convType === "direct";
 
   // Is agent currently thinking in any conversation?
   const isThinking = Object.values(thinkingAgents).some((arr) =>

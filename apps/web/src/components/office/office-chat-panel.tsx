@@ -39,7 +39,7 @@ export function OfficeChatPanel({ open, onClose, agentId }: OfficeChatPanelProps
     let cancelled = false;
 
     const existing = useChatStore.getState().conversations.find(
-      (c) => c.agentId === agentId && c.type === "h2a"
+      (c) => c.agentId === agentId && (c.type === "h2a" || c.type === "direct")
     );
 
     if (existing) {

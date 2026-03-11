@@ -122,7 +122,7 @@ export function ShareToConversationSheet({
                   onClick={() => handleSelect(conv.id)}
                 >
                   <Avatar className="h-9 w-9 shrink-0">
-                    {(conv.type === "h2h" || conv.type === "h2a") && (
+                    {(conv.type === "h2h" || conv.type === "h2a" || conv.type === "direct") && (
                       <AvatarImage
                         src={conv.agentAvatarUrl ? assetUrl(conv.agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
                         alt={conv.agentName}

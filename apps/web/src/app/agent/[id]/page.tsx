@@ -185,7 +185,7 @@ function AgentProfileContent() {
   const handleChat = useCallback(async () => {
     if (!agent) return;
     const existing = conversations.find(
-      (c) => c.agentId === agentId && c.type === "h2a"
+      (c) => c.agentId === agentId && (c.type === "h2a" || c.type === "direct")
     );
     if (existing) {
       setActiveConversation(existing.id);
@@ -294,7 +294,7 @@ function AgentProfileContent() {
                   {/* Action buttons */}
                   {(() => {
                     const directConv = conversations.find(
-                      (c) => c.agentId === agentId && c.type === "h2a"
+                      (c) => c.agentId === agentId && (c.type === "h2a" || c.type === "direct")
                     );
                     return (
                       <div className="mt-4 flex items-center gap-2">

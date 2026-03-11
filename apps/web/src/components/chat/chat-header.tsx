@@ -106,7 +106,7 @@ export function ChatHeader({
   const startCall = useVoiceCallStore((s) => s.startCall);
   const callState = useVoiceCallStore((s) => s.callState);
   const isInCall = callState !== "idle";
-  const canCall = type === "h2h" && conversationId && peerUserId;
+  const canCall = (type === "h2h" || type === "direct") && conversationId && peerUserId;
 
   const handleStartCall = useCallback(() => {
     if (!conversationId || isInCall) return;

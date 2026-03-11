@@ -276,7 +276,7 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-9 w-9">
-              {(type === "h2h" || type === "h2a") && (
+              {(type === "h2h" || type === "h2a" || type === "direct") && (
                 <AvatarImage
                   src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
                   alt={agentName}
@@ -403,7 +403,7 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-10 w-10">
-              {(type === "h2h" || type === "h2a") && (
+              {(type === "h2h" || type === "h2a" || type === "direct") && (
                 <AvatarImage
                   src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
                   alt={agentName}

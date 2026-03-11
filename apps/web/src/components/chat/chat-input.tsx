@@ -194,7 +194,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
 
   // Get the active conversation's agentId (only for direct conversations)
   const agentId =
-    activeConversation?.type === "h2a" ? activeConversation.agentId : null;
+    (activeConversation?.type === "h2a" || activeConversation?.type === "direct") ? activeConversation.agentId : null;
 
 
   // Load skills when agentId is available
