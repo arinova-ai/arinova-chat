@@ -126,13 +126,6 @@ function OfficeViewInner() {
     bindAll();
   }, [bindings, displayAgents, themeId, maxAgents, fetchBindings]);
 
-  // Find slot index from agentId (including empty-N pattern)
-  const findSlotIndex = useCallback((agentId: string): number => {
-    const emptyMatch = agentId.match(/^empty-(\d+)$/);
-    if (emptyMatch) return parseInt(emptyMatch[1], 10);
-    return slots.findIndex((a) => a.id === agentId);
-  }, [slots]);
-
   const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
 
   // Character modal agent/binding for the selected slot
@@ -143,17 +136,14 @@ function OfficeViewInner() {
 
   const selectAgent = useCallback((id: string | null) => {
     if (!id) return;
-    // For iframe themes, open CharacterModal for the slot
+    // For iframe themes, switch to the agent's chat panel directly
     if (manifest?.renderer === "iframe") {
-      const slotIdx = findSlotIndex(id);
-      if (slotIdx >= 0) {
-        setCharacterModalSlot(slotIdx);
-        return;
-      }
+      setChatAgentId(id);
+      return;
     }
     // Fallback: open AgentModal
     setSelectedAgentId(id);
-  }, [manifest, findSlotIndex]);
+  }, [manifest]);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
