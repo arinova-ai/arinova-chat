@@ -109,6 +109,7 @@
 
   "chat.status.error": "错误",
   "chat.status.stopped": "已停止",
+  "chat.sharedNote": "分享了一篇笔记",
   "chat.status.queued": "排队中",
   "chat.status.thinking": "思考中",
   "chat.status.queuedLabel": "排队中",

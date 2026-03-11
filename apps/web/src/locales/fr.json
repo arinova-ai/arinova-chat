@@ -109,6 +109,7 @@
 
   "chat.status.error": "Erreur",
   "chat.status.stopped": "Arrêté",
+  "chat.sharedNote": "A partagé une note",
   "chat.status.queued": "En file d'attente",
   "chat.status.thinking": "réflexion",
   "chat.status.queuedLabel": "en attente",

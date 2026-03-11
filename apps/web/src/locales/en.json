@@ -108,6 +108,7 @@
 
   "chat.status.error": "Error",
   "chat.status.stopped": "Stopped",
+  "chat.sharedNote": "Shared a note",
   "chat.status.queued": "Queued",
   "chat.status.thinking": "thinking",
   "chat.status.queuedLabel": "queued",

@@ -802,12 +802,16 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
 
             <AttachmentRenderer attachments={message.attachments ?? []} />
 
-            <MessageContent
-              message={message}
-              highlightQuery={highlightQuery}
-              mentionNames={mentionNames}
-              isStreaming={isStreaming}
-            />
+            {message.metadata && typeof (message.metadata as Record<string, unknown>).noteId === "string" ? (
+              <p className="text-sm text-muted-foreground">{t("chat.sharedNote")}</p>
+            ) : (
+              <MessageContent
+                message={message}
+                highlightQuery={highlightQuery}
+                mentionNames={mentionNames}
+                isStreaming={isStreaming}
+              />
+            )}
             {!isStreaming && message.linkPreviews && message.linkPreviews.length > 0 && (
               <LinkPreviewCards linkPreviews={message.linkPreviews} />
             )}

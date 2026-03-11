@@ -109,6 +109,7 @@
 
   "chat.status.error": "Ralat",
   "chat.status.stopped": "Dihentikan",
+  "chat.sharedNote": "Berkongsi nota",
   "chat.status.queued": "Beratur",
   "chat.status.thinking": "berfikir",
   "chat.status.queuedLabel": "beratur",

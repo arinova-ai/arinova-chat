@@ -109,6 +109,7 @@
 
   "chat.status.error": "오류",
   "chat.status.stopped": "중지됨",
+  "chat.sharedNote": "노트를 공유했습니다",
   "chat.status.queued": "대기 중",
   "chat.status.thinking": "생각 중",
   "chat.status.queuedLabel": "대기 중",
