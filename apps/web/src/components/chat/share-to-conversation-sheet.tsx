@@ -20,6 +20,7 @@ interface ShareToConversationSheetProps {
   onOpenChange: (open: boolean) => void;
   content: string;
   noteId?: string;
+  cardId?: string;
 }
 
 export function ShareToConversationSheet({
@@ -27,6 +28,7 @@ export function ShareToConversationSheet({
   onOpenChange,
   content,
   noteId,
+  cardId,
 }: ShareToConversationSheetProps) {
   const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
@@ -39,10 +41,24 @@ export function ShareToConversationSheet({
 
   const handleSelect = async (conversationId: string) => {
     if (noteId) {
-      // Rich Card via API
+      // Rich Card via API — note
       setSending(conversationId);
       try {
         await api(`/api/notes/${noteId}/share-to/${conversationId}`, {
+          method: "POST",
+        });
+        useToastStore.getState().addToast(t("share.sentToConversation"), "success");
+        onOpenChange(false);
+      } catch {
+        // api handles error toast
+      } finally {
+        setSending(null);
+      }
+    } else if (cardId) {
+      // Rich Card via API — kanban card
+      setSending(conversationId);
+      try {
+        await api(`/api/kanban/cards/${cardId}/share-to/${conversationId}`, {
           method: "POST",
         });
         useToastStore.getState().addToast(t("share.sentToConversation"), "success");

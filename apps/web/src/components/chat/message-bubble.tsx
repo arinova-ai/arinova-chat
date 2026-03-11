@@ -46,6 +46,7 @@ import { MessageContextMenu } from "./message-context-menu";
 import { ShareSheet, type ShareContent } from "./share-sheet";
 import { LinkPreviewCards } from "./link-preview-card";
 import { NotePreviewCard } from "./note-preview-card";
+import { TaskPreviewCard } from "./task-preview-card";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -804,6 +805,8 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
 
             {message.metadata && typeof (message.metadata as Record<string, unknown>).noteId === "string" ? (
               <p className="text-sm text-muted-foreground">{t("chat.sharedNote")}</p>
+            ) : message.metadata && typeof (message.metadata as Record<string, unknown>).cardId === "string" ? (
+              <p className="text-sm text-muted-foreground">{t("chat.sharedTask")}</p>
             ) : (
               <MessageContent
                 message={message}
@@ -817,6 +820,9 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
             )}
             {message.metadata && typeof (message.metadata as Record<string, unknown>).noteId === "string" && (
               <NotePreviewCard metadata={message.metadata as { noteId: string; title: string; preview: string; tags: string[] }} />
+            )}
+            {message.metadata && typeof (message.metadata as Record<string, unknown>).cardId === "string" && (
+              <TaskPreviewCard metadata={message.metadata as { cardId: string; title: string; preview?: string; priority?: string; columnName?: string }} />
             )}
           </div>
           )}

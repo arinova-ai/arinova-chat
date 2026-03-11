@@ -11,6 +11,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::middleware::{AuthAgent, AuthUser};
+use crate::ws::handler::trigger_agent_response;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -30,6 +31,10 @@ pub fn router() -> Router<AppState> {
             delete(unassign_agent),
         )
         .route("/api/kanban/cards/{id}/share", post(share_card))
+        .route(
+            "/api/kanban/cards/{cardId}/share-to/{conversationId}",
+            post(share_card_to_conversation),
+        )
         .route(
             "/api/kanban/cards/{id}/public-share",
             post(create_card_public_share).delete(revoke_card_public_share),
@@ -1347,6 +1352,179 @@ async fn share_card(
             Json(json!({
                 "messageId": msg_id,
                 "cardId": card_id,
+                "title": title,
+            }))
+            .into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+// ── Share Card to Conversation (Rich Card + Agent dispatch) ──
+
+/// POST /api/kanban/cards/:cardId/share-to/:conversationId
+async fn share_card_to_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((card_id, target_conv_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    // Verify card ownership
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    // Verify user is a member of the target conversation
+    let is_member = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+    )
+    .bind(target_conv_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if is_member == 0 {
+        let is_owner = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM conversations WHERE id = $1 AND user_id = $2",
+        )
+        .bind(target_conv_id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if is_owner == 0 {
+            return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not a member" }))).into_response();
+        }
+    }
+
+    // Fetch card with column name
+    let card = sqlx::query_as::<_, (String, Option<String>, Option<String>, String)>(
+        r#"SELECT c.title, c.description, c.priority, col.name
+           FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE c.id = $1"#,
+    )
+    .bind(card_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, description, priority, column_name) = match card {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({ "error": "Card not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    let preview = description.as_deref().map(|d| {
+        if d.len() > 120 {
+            format!("{}...", &d[..d.char_indices().nth(120).map(|(i, _)| i).unwrap_or(d.len())])
+        } else {
+            d.to_string()
+        }
+    });
+
+    let metadata = json!({
+        "type": "kanban_card",
+        "cardId": card_id,
+        "title": title,
+        "preview": preview,
+        "priority": priority,
+        "columnName": column_name,
+    });
+
+    // Build full message content for agent consumption
+    let desc_str = description.as_deref().map(|d| format!("\n\n{}", d)).unwrap_or_default();
+    let priority_str = priority.as_deref().map(|p| format!("\nPriority: {}", p)).unwrap_or_default();
+    let msg_content = format!("用戶分享了一個任務：{}{}{}\nColumn: {}", title, priority_str, desc_str, column_name);
+
+    let msg_id = Uuid::new_v4();
+    let result = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
+           VALUES ($1, $2, 0, 'user', $3, 'completed', $4, $5, NOW(), NOW())"#,
+    )
+    .bind(msg_id)
+    .bind(target_conv_id)
+    .bind(&msg_content)
+    .bind(&user.id)
+    .bind(metadata.clone())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            // Get conversation member IDs for broadcast
+            let members: Vec<(String,)> = sqlx::query_as(
+                "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+            )
+            .bind(target_conv_id)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default();
+
+            let member_ids: Vec<String> = if members.is_empty() {
+                sqlx::query_as::<_, (String,)>(
+                    "SELECT user_id FROM conversations WHERE id = $1",
+                )
+                .bind(target_conv_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten()
+                .map(|(id,)| vec![id])
+                .unwrap_or_default()
+            } else {
+                members.into_iter().map(|(id,)| id).collect()
+            };
+
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({
+                    "type": "new_message",
+                    "conversationId": target_conv_id.to_string(),
+                    "message": {
+                        "id": msg_id.to_string(),
+                        "conversationId": target_conv_id.to_string(),
+                        "seq": 0,
+                        "role": "user",
+                        "content": &msg_content,
+                        "status": "completed",
+                        "senderUserId": &user.id,
+                        "metadata": metadata,
+                        "createdAt": Utc::now().to_rfc3339(),
+                        "updatedAt": Utc::now().to_rfc3339(),
+                    },
+                }),
+                &state.redis,
+            );
+
+            // Trigger agent dispatch
+            let conv_id_str = target_conv_id.to_string();
+            let state_clone = state.clone();
+            let user_id = user.id.clone();
+            let msg_content_clone = msg_content.clone();
+            tokio::spawn(async move {
+                trigger_agent_response(
+                    &user_id,
+                    &conv_id_str,
+                    &msg_content_clone,
+                    true,
+                    None,
+                    None,
+                    &[],
+                    None,
+                    &state_clone.ws,
+                    &state_clone.db,
+                    &state_clone.redis,
+                    &state_clone.config,
+                )
+                .await;
+            });
+
+            Json(json!({
+                "messageId": msg_id,
+                "cardId": card_id,
+                "conversationId": target_conv_id,
                 "title": title,
             }))
             .into_response()

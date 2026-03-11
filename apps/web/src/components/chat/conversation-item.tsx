@@ -144,6 +144,14 @@ export function ConversationItem({
     if (fileAtt) {
       return `📎 ${fileAtt.fileName}`;
     }
+    // Rich Card previews
+    const meta = lastMessage.metadata as Record<string, unknown> | undefined;
+    if (meta && typeof meta.noteId === "string") {
+      return t("chat.previewSharedNote", { title: meta.title as string ?? "" });
+    }
+    if (meta && typeof meta.cardId === "string") {
+      return t("chat.previewSharedTask", { title: meta.title as string ?? "" });
+    }
     return truncate(lastMessage.content.replace(/\n/g, " "), 50);
   })();
 

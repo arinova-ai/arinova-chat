@@ -11,13 +11,12 @@ import {
   Link,
   XCircle,
   Check,
-  MessageSquare,
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
-import { ShareToConversationSheet } from "@/components/chat/share-to-conversation-sheet";
+import { ShareSheet, type ShareContent } from "@/components/chat/share-sheet";
 import {
   Sheet,
   SheetContent,
@@ -107,8 +106,8 @@ export function CardDetailSheet({
   const [archiving, setArchiving] = useState(false);
   const [sharingLoading, setSharingLoading] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [showConvPicker, setShowConvPicker] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [shareContent, setShareContent] = useState<ShareContent | null>(null);
   const { t } = useTranslation();
 
   // Sync local state when card changes
@@ -118,7 +117,6 @@ export function CardDetailSheet({
       setDescription(card.description ?? "");
       setPriority(card.priority ?? "medium");
       setEditing(false);
-      setShowShareMenu(false);
       setLinkCopied(false);
     }
   }, [card]);
@@ -192,21 +190,6 @@ export function CardDetailSheet({
     setArchiving(false);
   };
 
-  const handlePublicShare = async () => {
-    if (!card) return;
-    setSharingLoading(true);
-    try {
-      const data = await api<{ shareToken: string; shareUrl: string }>(
-        `/api/kanban/cards/${card.id}/public-share`,
-        { method: "POST" },
-      );
-      onUpdate();
-      card.shareToken = data.shareToken;
-      card.isPublic = true;
-    } catch { /* api shows toast */ }
-    setSharingLoading(false);
-  };
-
   const handleStopSharing = async () => {
     if (!card) return;
     setSharingLoading(true);
@@ -228,14 +211,17 @@ export function CardDetailSheet({
     });
   };
 
-  const handleShareToChat = () => {
-    setShowShareMenu(false);
-    setShowConvPicker(true);
+  const handleShareCard = () => {
+    if (!card) return;
+    const text = `📋 ${card.title}${card.priority ? `\nPriority: ${card.priority}` : ""}${card.description ? `\n${card.description.slice(0, 200)}` : ""}`;
+    setShareContent({
+      type: "task",
+      title: card.title,
+      text,
+      cardId: card.id,
+    });
+    setShareSheetOpen(true);
   };
-
-  const shareContent = card
-    ? `📋 **${card.title}**\n${card.priority ? `Priority: ${card.priority}` : ""}${card.description ? `\n${card.description.slice(0, 200)}` : ""}`
-    : "";
 
   const handleSave = async () => {
     if (!card || !title.trim()) return;
@@ -529,39 +515,14 @@ export function CardDetailSheet({
                   >
                     <Archive className="h-4 w-4" />
                   </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setShowShareMenu(!showShareMenu)}
-                      className="rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
-                      title={t("kanban.share.title")}
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </button>
-                    {showShareMenu && (
-                      <div className="absolute bottom-full right-0 mb-1 w-44 rounded-lg border border-border bg-background shadow-lg z-10">
-                        {!card.shareToken && (
-                          <button
-                            type="button"
-                            onClick={() => { handlePublicShare(); setShowShareMenu(false); }}
-                            disabled={sharingLoading}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 transition-colors disabled:opacity-50"
-                          >
-                            {sharingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link className="h-3.5 w-3.5" />}
-                            {t("kanban.share.publicLink")}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={handleShareToChat}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5" />
-                          {t("kanban.share.toChat")}
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleShareCard}
+                    className="rounded-lg border border-border px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
+                    title={t("kanban.share.title")}
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
                 </div>
               </>
             )}
@@ -570,9 +531,9 @@ export function CardDetailSheet({
       </SheetContent>
     </Sheet>
 
-    <ShareToConversationSheet
-      open={showConvPicker}
-      onOpenChange={setShowConvPicker}
+    <ShareSheet
+      open={shareSheetOpen}
+      onOpenChange={setShareSheetOpen}
       content={shareContent}
     />
     </>
