@@ -3,6 +3,7 @@ import type { CallState, VoiceMode, TranscriptLine, IncomingCallInfo } from "@/l
 import { WebRTCClient } from "@/lib/webrtc-client";
 import { speechRecognition } from "@/lib/speech-recognition";
 import { browserTTS } from "@/lib/speech-synthesis";
+import { startRingtone, stopRingtone } from "@/lib/ringtone";
 import { api } from "@/lib/api";
 import { useToastStore } from "@/store/toast-store";
 
@@ -100,6 +101,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
     }
 
     set({ callState: "ringing", _rtcClient: client });
+    startRingtone();
 
     // Set up signaling handlers
     client.onSignaling((event) => {
@@ -113,6 +115,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
         state._rtcClient?.setSessionId(event.sessionId);
         set({ sessionId: event.sessionId });
       } else if (event.type === "voice_call_start") {
+        stopRingtone();
         state._rtcClient?.setSessionId(event.sessionId);
         set({
           callState: "connected",
@@ -124,11 +127,13 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
           startBrowserSTT();
         }
       } else if (event.type === "voice_call_end") {
+        stopRingtone();
         get().endCall();
         if (event.reason) {
           set({ endReason: event.reason });
         }
       } else if (event.type === "voice_error") {
+        stopRingtone();
         addToast(event.error);
         get().endCall();
       }
@@ -270,6 +275,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
     const { _rtcClient, callState, conversationId, transcriptEnabled, transcript } = get();
 
     if (callState === "idle") return;
+    stopRingtone();
 
     // Send hangup signal (includes sessionId if available)
     _rtcClient?.sendHangup();
