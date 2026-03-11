@@ -1676,7 +1676,7 @@ async fn do_trigger_agent_response(
     }
 
     // Inject memory capsule context for 1:1 agent conversations (hybrid search)
-    if conv_type == "direct" {
+    if conv_type == "h2a" || conv_type == "direct" {
         // Find granted capsule IDs for this agent+user
         let capsule_ids = sqlx::query_as::<_, (uuid::Uuid,)>(
             r#"SELECT mcg.capsule_id
@@ -2193,7 +2193,7 @@ fn process_next_in_queue(
         .ok()
         .flatten()
         .map(|r| r.0)
-        .unwrap_or_else(|| "direct".to_string());
+        .unwrap_or_else(|| "h2a".to_string());
 
         do_trigger_agent_response(
             &next.user_id,

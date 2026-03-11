@@ -29,7 +29,7 @@ export interface Agent {
 }
 
 // ===== Conversation =====
-export type ConversationType = "direct" | "group" | "official" | "club" | "lounge";
+export type ConversationType = "direct" | "h2h" | "h2a" | "group" | "official" | "club" | "lounge";
 
 export interface Conversation {
   id: string;

@@ -68,7 +68,7 @@ export function ChatHeader({
   agentName,
   agentDescription,
   agentAvatarUrl,
-  type = "direct",
+  type = "h2a",
   conversationId,
   agentId,
   peerUserId,
@@ -106,7 +106,7 @@ export function ChatHeader({
   const startCall = useVoiceCallStore((s) => s.startCall);
   const callState = useVoiceCallStore((s) => s.callState);
   const isInCall = callState !== "idle";
-  const canCall = type === "direct" && conversationId && (peerUserId || agentId);
+  const canCall = (type === "h2h" || type === "h2a") && conversationId && (peerUserId || agentId);
 
   const handleStartCall = useCallback(() => {
     if (!conversationId || isInCall) return;
@@ -434,7 +434,7 @@ export function ChatHeader({
                   <FileText className="h-4 w-4" />
                   {t("chat.header.files")}
                 </DropdownMenuItem>
-                {agentId && conversationId && type === "direct" && (
+                {agentId && conversationId && type === "h2a" && (
                   <DropdownMenuItem onClick={() => setMemoryCapsuleOpen(true)}>
                     <Brain className="h-4 w-4" />
                     {t("memoryCapsule.title")}
@@ -508,7 +508,7 @@ export function ChatHeader({
       </div>
     )}
 
-    {agentId && conversationId && type === "direct" && (
+    {agentId && conversationId && type === "h2a" && (
       <MemoryCapsuleSheet
         open={memoryCapsuleOpen}
         onOpenChange={setMemoryCapsuleOpen}

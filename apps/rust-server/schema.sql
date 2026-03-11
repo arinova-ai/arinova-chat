@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ===== Enum Types =====
 
-CREATE TYPE conversation_type AS ENUM ('direct', 'group', 'official', 'club', 'lounge');
+CREATE TYPE conversation_type AS ENUM ('direct', 'h2h', 'h2a', 'group', 'official', 'club', 'lounge');
 CREATE TYPE message_role AS ENUM ('user', 'agent', 'assistant', 'system');
 CREATE TYPE message_status AS ENUM ('pending', 'streaming', 'completed', 'cancelled', 'error');
 CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member', 'creator', 'moderator');
@@ -111,7 +111,7 @@ CREATE TABLE conversations (
     pinned_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    type conversation_type NOT NULL DEFAULT 'direct',
+    type conversation_type NOT NULL DEFAULT 'h2h',
     mention_only BOOLEAN NOT NULL DEFAULT TRUE
 );
 

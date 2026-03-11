@@ -102,7 +102,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                                WHERE m.conversation_id = c.id
                                  AND m.status = 'streaming'
                                  AND m.role = 'agent'
-                                 AND (m.sender_agent_id = $1::uuid OR (c.type = 'direct' AND c.agent_id = $1::uuid))"#,
+                                 AND (m.sender_agent_id = $1::uuid OR (c.type IN ('direct', 'h2a') AND c.agent_id = $1::uuid))"#,
                         )
                         .bind(&agent_id)
                         .execute(&state.db)

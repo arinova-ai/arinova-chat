@@ -50,9 +50,9 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
   const sorted = useMemo(() => {
     let filtered = conversations;
     if (tab === "agents") {
-      filtered = conversations.filter((c) => c.type === "direct" && c.agentId && !c.officialCommunityId);
+      filtered = conversations.filter((c) => c.type === "h2a" && !c.officialCommunityId);
     } else if (tab === "friends") {
-      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId && !c.officialCommunityId);
+      filtered = conversations.filter((c) => c.type === "h2h" && !c.officialCommunityId);
     } else if (tab === "groups") {
       filtered = conversations.filter((c) => c.type === "group");
     } else if (tab === "officials") {

@@ -13,7 +13,7 @@ vi.mock("@/store/chat-store", () => ({
       conversations: [
         {
           id: "conv-1",
-          type: "direct",
+          type: "h2a",
           agentId: "agent-1",
           agentName: "TestBot",
         },

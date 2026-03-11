@@ -67,7 +67,7 @@ export function UserProfileSheet({
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
   const conversations = useChatStore((s) => s.conversations);
-  const isDirectChat = conversations.find((c) => c.id === conversationId)?.type === "direct";
+  const isDirectChat = conversations.find((c) => c.id === conversationId)?.type === "h2h";
   const voiceCallState = useVoiceCallStore((s) => s.callState);
   const startCall = useVoiceCallStore((s) => s.startCall);
   const isInCall = voiceCallState !== "idle";

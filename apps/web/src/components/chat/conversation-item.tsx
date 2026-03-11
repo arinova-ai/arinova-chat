@@ -98,7 +98,7 @@ export function ConversationItem({
   agentName,
   agentDescription,
   agentAvatarUrl,
-  type = "direct",
+  type = "h2a",
   lastMessage,
   pinnedAt,
   updatedAt,
@@ -276,7 +276,7 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-9 w-9">
-              {type === "direct" && (
+              {(type === "h2h" || type === "h2a") && (
                 <AvatarImage
                   src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
                   alt={agentName}
@@ -403,7 +403,7 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-10 w-10">
-              {type === "direct" && (
+              {(type === "h2h" || type === "h2a") && (
                 <AvatarImage
                   src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
                   alt={agentName}
