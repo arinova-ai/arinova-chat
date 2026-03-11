@@ -30,13 +30,12 @@ export function ShareToConversationSheet({
 }: ShareToConversationSheetProps) {
   const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
-  const activeConversationId = useChatStore((s) => s.activeConversationId);
   const setInputDraft = useChatStore((s) => s.setInputDraft);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const [sending, setSending] = useState<string | null>(null);
 
-  // Exclude current conversation — note is already there
-  const filtered = conversations.filter((c) => c.id !== activeConversationId);
+  // Show all conversations including current one
+  const filtered = conversations;
 
   const handleSelect = async (conversationId: string) => {
     if (noteId) {
