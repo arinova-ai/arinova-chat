@@ -1243,7 +1243,7 @@ async fn share_note(
 
     // Build full note message content for agent consumption
     let tags_str = if tags.is_empty() { String::new() } else { format!("\n\nTags: {}", tags.join(", ")) };
-    let msg_content = format!("[分享筆記: {}]\n\n{}{}", title, content, tags_str);
+    let msg_content = format!("用戶分享了一篇筆記：{}\n\n{}{}", title, content, tags_str);
 
     // Insert a user message with note_share metadata
     let msg_id = Uuid::new_v4();
@@ -1389,7 +1389,7 @@ async fn share_note_to_conversation(
 
     // Build full note message content for agent consumption
     let tags_str = if tags.is_empty() { String::new() } else { format!("\n\nTags: {}", tags.join(", ")) };
-    let msg_content = format!("[分享筆記: {}]\n\n{}{}", title, content, tags_str);
+    let msg_content = format!("用戶分享了一篇筆記：{}\n\n{}{}", title, content, tags_str);
 
     // Insert a user message with note_share metadata
     let msg_id = Uuid::new_v4();
