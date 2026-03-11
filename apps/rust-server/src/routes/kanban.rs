@@ -663,11 +663,49 @@ async fn agent_list_boards(State(state): State<AppState>, agent: AuthAgent) -> R
     .fetch_all(&state.db)
     .await;
 
-    match boards {
-        Ok(rows) => Json(json!(rows)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
-            .into_response(),
+    let boards = match boards {
+        Ok(rows) => rows,
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+                .into_response()
+        }
+    };
+
+    let board_ids: Vec<Uuid> = boards.iter().map(|b| b.id).collect();
+    let col_rows = sqlx::query(
+        "SELECT id, board_id, name, sort_order FROM kanban_columns WHERE board_id = ANY($1) ORDER BY sort_order",
+    )
+    .bind(&board_ids)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut col_map: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+    for row in &col_rows {
+        use sqlx::Row;
+        let board_id: Uuid = row.get("board_id");
+        let col = json!({
+            "id": row.get::<Uuid, _>("id"),
+            "name": row.get::<String, _>("name"),
+            "sortOrder": row.get::<i32, _>("sort_order"),
+        });
+        col_map.entry(board_id).or_default().push(col);
     }
+
+    let result: Vec<serde_json::Value> = boards
+        .iter()
+        .map(|b| {
+            json!({
+                "id": b.id,
+                "name": b.name,
+                "createdAt": b.created_at,
+                "columns": col_map.get(&b.id).cloned().unwrap_or_default(),
+            })
+        })
+        .collect();
+
+    Json(json!(result)).into_response()
 }
 
 /// GET /api/agent/kanban/cards — list owner's kanban cards
