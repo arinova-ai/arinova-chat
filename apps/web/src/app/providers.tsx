@@ -6,6 +6,7 @@ import { PipOverlay } from "@/components/pip-overlay";
 import { InAppNotification } from "@/components/chat/in-app-notification";
 import { PushNotificationHandler } from "@/components/push-notification-handler";
 import { GlobalActiveCall } from "@/components/voice/global-active-call";
+import { GlobalIncomingCall } from "@/components/voice/global-incoming-call";
 import type { ReactNode } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -17,6 +18,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <InAppNotification />
         <PushNotificationHandler />
         <GlobalActiveCall />
+        <GlobalIncomingCall />
       </I18nProvider>
     </ThemeProvider>
   );
