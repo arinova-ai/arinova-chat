@@ -107,10 +107,19 @@ export function CompactColumn({
   return (
     <div className="flex flex-col w-64 shrink-0 rounded-lg bg-muted/30 p-2 max-h-full">
       <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          {column.name}
-        </span>
-        <span className="text-xs text-muted-foreground">{cards.length}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            {column.name}
+          </span>
+          <span className="text-[10px] text-muted-foreground">{cards.length}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       <div className="flex-1 space-y-1.5 overflow-y-auto min-h-0 max-h-[calc(100vh-7rem)]">
@@ -125,9 +134,9 @@ export function CompactColumn({
         ))}
       </div>
 
-      {/* Add card */}
-      {adding ? (
-        <div className="mt-2 space-y-1">
+      {/* Inline add card form */}
+      {adding && (
+        <div className="mt-2 space-y-1 shrink-0">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -148,15 +157,6 @@ export function CompactColumn({
             </Button>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-1 py-0.5"
-        >
-          <Plus className="h-3 w-3" />
-          {t("chat.kanban.addCard")}
-        </button>
       )}
     </div>
   );
