@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatStore } from "@/store/chat-store";
-import { useVoiceCallStore } from "@/store/voice-call-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
@@ -10,7 +9,7 @@ import { StickerPanel } from "./sticker-panel";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
-import { ActiveCall } from "@/components/voice/active-call";
+
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
@@ -34,8 +33,6 @@ export function ChatArea() {
 
   const conversationMembers = useChatStore((s) => s.conversationMembers);
 
-  const callState = useVoiceCallStore((s) => s.callState);
-  const callConversationId = useVoiceCallStore((s) => s.conversationId);
 
   const [manageOpen, setManageOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
@@ -131,9 +128,6 @@ export function ChatArea() {
     ? agents.find((a) => a.id === conversation.agentId)
     : undefined;
 
-  const showCallOverlay =
-    callState !== "idle" && callConversationId === activeConversationId;
-
   const openMembersPanel = (tab: PanelTab = "members") => {
     setMembersPanelTab(tab);
     setMembersOpen(true);
@@ -194,8 +188,6 @@ export function ChatArea() {
         />
       </ErrorBoundary>
       <StickerPanel open={stickerOpen} onClose={() => setStickerOpen(false)} />
-
-      {showCallOverlay && <ActiveCall />}
 
       {agent && (
         <BotManageDialog
