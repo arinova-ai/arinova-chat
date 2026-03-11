@@ -44,6 +44,7 @@ export type VoiceWSServerEvent =
   | { type: "voice_offer"; sdp: string }
   | { type: "voice_answer"; sdp: string }
   | { type: "voice_ice_candidate"; candidate: RTCIceCandidateInit }
+  | { type: "voice_ringing"; sessionId: string }
   | { type: "voice_call_start"; sessionId: string }
   | { type: "voice_call_end"; reason?: string }
   | { type: "voice_error"; error: string }
