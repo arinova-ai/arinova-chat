@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -32,9 +32,17 @@ export function ShareToConversationSheet({
 }: ShareToConversationSheetProps) {
   const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
+  const loadConversations = useChatStore((s) => s.loadConversations);
   const setInputDraft = useChatStore((s) => s.setInputDraft);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const [sending, setSending] = useState<string | null>(null);
+
+  // Load conversations if store is empty (e.g. opened from Kanban page)
+  useEffect(() => {
+    if (open && conversations.length === 0) {
+      loadConversations();
+    }
+  }, [open, conversations.length, loadConversations]);
 
   // Show all conversations including current one
   const filtered = conversations;

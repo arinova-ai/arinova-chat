@@ -123,7 +123,30 @@ export function CardDetailSheet({
   const [commitHash, setCommitHash] = useState("");
   const [commitMessage, setCommitMessage] = useState("");
   const [commitSaving, setCommitSaving] = useState(false);
+  const [localCommits, setLocalCommits] = useState<CardCommitData[]>([]);
   const { t } = useTranslation();
+
+  // Fetch commits from the per-card endpoint on mount / card change
+  const fetchCommits = useCallback(async (cardId: string) => {
+    try {
+      const data = await api<CardCommitData[]>(
+        `/api/kanban/cards/${cardId}/commits`,
+        { silent: true },
+      );
+      setLocalCommits(data);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (card) {
+      fetchCommits(card.id);
+    } else {
+      setLocalCommits([]);
+    }
+  }, [card, fetchCommits]);
+
+  // Merge: prefer localCommits (fetched per-card) over board-level prop
+  const mergedCommits = localCommits.length > 0 ? localCommits : cardCommits;
 
   // Sync local state when card changes
   useEffect(() => {
@@ -253,6 +276,7 @@ export function CardDetailSheet({
       setCommitHash("");
       setCommitMessage("");
       setAddingCommit(false);
+      fetchCommits(card.id);
       onUpdate();
     } catch { /* api shows toast */ }
     setCommitSaving(false);
@@ -265,6 +289,7 @@ export function CardDetailSheet({
         method: "DELETE",
         silent: true,
       });
+      fetchCommits(card.id);
       onUpdate();
     } catch { /* api shows toast */ }
   };
@@ -533,9 +558,9 @@ export function CardDetailSheet({
                       </button>
                     </div>
                   )}
-                  {cardCommits.length > 0 ? (
+                  {mergedCommits.length > 0 ? (
                     <div className="mt-1.5 space-y-1">
-                      {cardCommits.map((c) => (
+                      {mergedCommits.map((c) => (
                         <div
                           key={c.commitHash}
                           className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs"
