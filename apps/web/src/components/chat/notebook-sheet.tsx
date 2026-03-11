@@ -866,9 +866,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 <Archive className="h-3.5 w-3.5" />
                 {t("chat.notebook.archive")}
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleShareNoteToChat()} disabled={loading}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => selectedNote && handleShareNote(selectedNote)} disabled={loading}>
                 <Share2 className="h-3.5 w-3.5" />
-                {t("chat.notebook.shareToChat")}
+                {t("share.title")}
               </Button>
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleAutoTag} disabled={autoTagging}>
                 {autoTagging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
