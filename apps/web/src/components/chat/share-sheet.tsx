@@ -9,6 +9,7 @@ import {
 import { VisuallyHidden } from "radix-ui";
 import { MessageCircle, Share2, Copy } from "lucide-react";
 import { shareExternal, copyToClipboard } from "@/lib/share";
+import { api } from "@/lib/api";
 import { ShareToConversationSheet } from "./share-to-conversation-sheet";
 import { useTranslation } from "@/lib/i18n";
 
@@ -42,11 +43,24 @@ export function ShareSheet({ open, onOpenChange, content }: ShareSheetProps) {
   };
 
   const handleShareExternal = async () => {
-    await shareExternal({
-      title: content.title,
-      text: content.text,
-      url: content.url,
-    });
+    if (content.noteId) {
+      try {
+        const res = await api<{ shareToken: string }>(
+          `/api/notes/${content.noteId}/public-share`,
+          { method: "POST" },
+        );
+        const url = `${window.location.origin}/shared/notes/${res.shareToken}`;
+        await shareExternal({ title: content.title, text: content.text, url });
+      } catch {
+        // api handles error toast
+      }
+    } else {
+      await shareExternal({
+        title: content.title,
+        text: content.text,
+        url: content.url,
+      });
+    }
     onOpenChange(false);
   };
 
