@@ -422,6 +422,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       type: "note",
       title: note.title || "Untitled",
       text: note.content || "",
+      noteId: note.id,
     });
     setShareSheetOpen(true);
   }, []);

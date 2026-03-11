@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -7,35 +8,60 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, Users, MessageCircle } from "lucide-react";
+import { Bot, Users, MessageCircle, Loader2 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useToastStore } from "@/store/toast-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
+import { api } from "@/lib/api";
 
 interface ShareToConversationSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   content: string;
+  noteId?: string;
 }
 
 export function ShareToConversationSheet({
   open,
   onOpenChange,
   content,
+  noteId,
 }: ShareToConversationSheetProps) {
   const { t } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
   const setInputDraft = useChatStore((s) => s.setInputDraft);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
+  const [sending, setSending] = useState<string | null>(null);
 
-  const handleSelect = (conversationId: string) => {
-    const existing = useChatStore.getState().inputDrafts[conversationId] ?? "";
-    const prefix = existing ? existing + "\n" : "";
-    setInputDraft(conversationId, prefix + content);
-    setActiveConversation(conversationId);
-    onOpenChange(false);
-    useToastStore.getState().addToast(t("share.sentToConversation"), "success");
+  // Exclude current conversation — note is already there
+  const filtered = conversations.filter((c) => c.id !== activeConversationId);
+
+  const handleSelect = async (conversationId: string) => {
+    if (noteId) {
+      // Rich Card via API
+      setSending(conversationId);
+      try {
+        await api(`/api/notes/${noteId}/share-to/${conversationId}`, {
+          method: "POST",
+        });
+        useToastStore.getState().addToast(t("share.sentToConversation"), "success");
+        onOpenChange(false);
+      } catch {
+        // api handles error toast
+      } finally {
+        setSending(null);
+      }
+    } else {
+      // Plain text fallback
+      const existing = useChatStore.getState().inputDrafts[conversationId] ?? "";
+      const prefix = existing ? existing + "\n" : "";
+      setInputDraft(conversationId, prefix + content);
+      setActiveConversation(conversationId);
+      onOpenChange(false);
+      useToastStore.getState().addToast(t("share.sentToConversation"), "success");
+    }
   };
 
   return (
@@ -57,18 +83,19 @@ export function ShareToConversationSheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
 
         <div className="overflow-y-auto max-h-[55vh] px-1">
-          {conversations.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               <MessageCircle className="h-5 w-5 mr-2" />
               {t("chat.noConversations")}
             </div>
           ) : (
             <div className="flex flex-col gap-0.5">
-              {conversations.map((conv) => (
+              {filtered.map((conv) => (
                 <button
                   key={conv.id}
                   type="button"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/50 transition-colors"
+                  disabled={sending !== null}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/50 transition-colors disabled:opacity-50"
                   onClick={() => handleSelect(conv.id)}
                 >
                   <Avatar className="h-9 w-9 shrink-0">
@@ -90,6 +117,9 @@ export function ShareToConversationSheet({
                   <span className="truncate text-sm font-medium">
                     {conv.title ?? conv.agentName}
                   </span>
+                  {sending === conv.id && (
+                    <Loader2 className="ml-auto h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
                 </button>
               ))}
             </div>

@@ -17,6 +17,7 @@ export interface ShareContent {
   title: string;
   text: string;
   url?: string;
+  noteId?: string;
 }
 
 interface ShareSheetProps {
@@ -97,6 +98,7 @@ export function ShareSheet({ open, onOpenChange, content }: ShareSheetProps) {
         open={conversationSheetOpen}
         onOpenChange={setConversationSheetOpen}
         content={shareText}
+        noteId={content.noteId}
       />
     </>
   );

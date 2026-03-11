@@ -63,6 +63,10 @@ pub fn router() -> Router<AppState> {
             post(create_public_share).delete(revoke_public_share),
         )
         .route("/api/public/notes/{shareToken}", get(get_public_note))
+        .route(
+            "/api/notes/{noteId}/share-to/{conversationId}",
+            post(share_note_to_conversation),
+        )
 }
 
 // ===== Internal types =====
@@ -1278,6 +1282,125 @@ async fn share_note(
             Json(json!({
                 "messageId": msg_id,
                 "noteId": note_id,
+                "title": title,
+                "preview": preview,
+                "tags": tags,
+            }))
+            .into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/notes/:noteId/share-to/:conversationId — share note as Rich Card to another conversation
+async fn share_note_to_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((note_id, target_conv_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    // Verify user owns the note OR is a member of a conversation it's linked to
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &owner {
+        Ok(Some(oid)) if oid == &user.id => {}
+        _ => {
+            // Fallback: check if user is a member of any linked conversation
+            let linked = sqlx::query_scalar::<_, i64>(
+                r#"SELECT COUNT(*) FROM note_conversation_links ncl
+                   JOIN conversation_user_members cum ON cum.conversation_id = ncl.conversation_id AND cum.user_id = $1
+                   WHERE ncl.note_id = $2"#,
+            )
+            .bind(&user.id)
+            .bind(note_id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            if linked == 0 {
+                return (StatusCode::FORBIDDEN, Json(json!({"error": "Not authorized to share this note"}))).into_response();
+            }
+        }
+    }
+
+    // Verify user is a member of the target conversation
+    if !is_member(&state.db, target_conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member of target conversation"}))).into_response();
+    }
+
+    // Fetch the note
+    let note = sqlx::query_as::<_, (String, String, Vec<String>, Option<String>)>(
+        "SELECT title, content, tags, summary FROM conversation_notes WHERE id = $1",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content, tags, summary) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let preview = summary.unwrap_or_else(|| {
+        if content.len() > 100 {
+            format!("{}...", &content[..content.char_indices().nth(100).map(|(i, _)| i).unwrap_or(content.len())])
+        } else {
+            content.clone()
+        }
+    });
+    let metadata = json!({
+        "noteId": note_id,
+        "title": title,
+        "preview": preview,
+        "tags": tags,
+    });
+
+    // Insert a system message with note_share type
+    let msg_id = Uuid::new_v4();
+    let result = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
+           VALUES ($1, $2, 0, 'system', $3, 'completed', $4, $5, NOW(), NOW())"#,
+    )
+    .bind(msg_id)
+    .bind(target_conv_id)
+    .bind(format!("shared a note: {}", title))
+    .bind(&user.id)
+    .bind(metadata.clone())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            let member_ids = get_conv_member_ids(&state.db, target_conv_id).await;
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({
+                    "type": "new_message",
+                    "conversationId": target_conv_id.to_string(),
+                    "message": {
+                        "id": msg_id.to_string(),
+                        "conversationId": target_conv_id.to_string(),
+                        "seq": 0,
+                        "role": "system",
+                        "content": format!("shared a note: {}", title),
+                        "status": "completed",
+                        "senderUserId": &user.id,
+                        "metadata": metadata,
+                        "createdAt": Utc::now().to_rfc3339(),
+                        "updatedAt": Utc::now().to_rfc3339(),
+                    },
+                }),
+                &state.redis,
+            );
+
+            Json(json!({
+                "messageId": msg_id,
+                "noteId": note_id,
+                "conversationId": target_conv_id,
                 "title": title,
                 "preview": preview,
                 "tags": tags,
