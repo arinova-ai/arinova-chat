@@ -52,7 +52,9 @@ export function KanbanSidebar({ open, onOpenChange }: KanbanSidebarProps) {
       </div>
 
       {/* Board — compact mode */}
-      <KanbanBoard mode="compact" />
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <KanbanBoard mode="compact" />
+      </div>
     </div>
   );
 

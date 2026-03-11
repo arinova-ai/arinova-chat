@@ -463,7 +463,7 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
 
   return (
     <>
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden h-full">
         {columns.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
             {t("chat.kanban.empty")}
