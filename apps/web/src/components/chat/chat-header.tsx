@@ -29,8 +29,10 @@ import {
   Headset,
   ArrowRightLeft,
   Brain,
+  Phone,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { useVoiceCallStore } from "@/store/voice-call-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import type { ConversationType } from "@arinova/shared/types";
@@ -99,6 +101,21 @@ export function ChatHeader({
 
   // Memory Capsule sheet
   const [memoryCapsuleOpen, setMemoryCapsuleOpen] = useState(false);
+
+  // Voice call
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const callState = useVoiceCallStore((s) => s.callState);
+  const isInCall = callState !== "idle";
+  const canCall = type === "direct" && conversationId && (peerUserId || agentId);
+
+  const handleStartCall = useCallback(() => {
+    if (!conversationId || isInCall) return;
+    if (peerUserId) {
+      startCall(conversationId, { targetUserId: peerUserId }, agentName, agentAvatarUrl ?? null, "native");
+    } else if (agentId) {
+      startCall(conversationId, { agentId }, agentName, agentAvatarUrl ?? null, "native");
+    }
+  }, [conversationId, peerUserId, agentId, agentName, agentAvatarUrl, isInCall, startCall]);
 
   // Official CS status
   const [csStatus, setCsStatus] = useState<string | null>(null);
@@ -330,6 +347,18 @@ export function ChatHeader({
               >
                 <ArrowRightLeft className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{t("community.cs.transferHuman")}</span>
+              </Button>
+            )}
+            {canCall && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-8 w-8", isInCall && "text-green-400")}
+                onClick={handleStartCall}
+                disabled={isInCall}
+                title={isInCall ? t("voice.inCall") : t("voice.startCall")}
+              >
+                <Phone className="h-4 w-4" />
               </Button>
             )}
             <Button
