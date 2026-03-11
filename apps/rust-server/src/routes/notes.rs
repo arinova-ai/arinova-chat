@@ -12,6 +12,7 @@ use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::ws::handler::trigger_agent_response;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -1240,15 +1241,19 @@ async fn share_note(
         "tags": tags,
     });
 
-    // Insert a system message with note_share type via metadata
+    // Build full note message content for agent consumption
+    let tags_str = if tags.is_empty() { String::new() } else { format!("\n\nTags: {}", tags.join(", ")) };
+    let msg_content = format!("[分享筆記: {}]\n\n{}{}", title, content, tags_str);
+
+    // Insert a user message with note_share metadata
     let msg_id = Uuid::new_v4();
     let result = sqlx::query(
         r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
-           VALUES ($1, $2, 0, 'system', $3, 'completed', $4, $5, NOW(), NOW())"#,
+           VALUES ($1, $2, 0, 'user', $3, 'completed', $4, $5, NOW(), NOW())"#,
     )
     .bind(msg_id)
     .bind(conv_id)
-    .bind(format!("shared a note: {}", title))
+    .bind(&msg_content)
     .bind(&user.id)
     .bind(metadata.clone())
     .execute(&state.db)
@@ -1267,8 +1272,8 @@ async fn share_note(
                         "id": msg_id.to_string(),
                         "conversationId": conv_id.to_string(),
                         "seq": 0,
-                        "role": "system",
-                        "content": format!("shared a note: {}", title),
+                        "role": "user",
+                        "content": &msg_content,
                         "status": "completed",
                         "senderUserId": &user.id,
                         "metadata": metadata,
@@ -1278,6 +1283,29 @@ async fn share_note(
                 }),
                 &state.redis,
             );
+
+            // Trigger agent dispatch so agent can see and respond to the shared note
+            let conv_id_str = conv_id.to_string();
+            let state_clone = state.clone();
+            let user_id = user.id.clone();
+            let msg_content_clone = msg_content.clone();
+            tokio::spawn(async move {
+                trigger_agent_response(
+                    &user_id,
+                    &conv_id_str,
+                    &msg_content_clone,
+                    true, // skip_user_message — already saved above
+                    None,
+                    None,
+                    &[],
+                    None,
+                    &state_clone.ws,
+                    &state_clone.db,
+                    &state_clone.redis,
+                    &state_clone.config,
+                )
+                .await;
+            });
 
             Json(json!({
                 "messageId": msg_id,
@@ -1359,15 +1387,19 @@ async fn share_note_to_conversation(
         "tags": tags,
     });
 
-    // Insert a system message with note_share type
+    // Build full note message content for agent consumption
+    let tags_str = if tags.is_empty() { String::new() } else { format!("\n\nTags: {}", tags.join(", ")) };
+    let msg_content = format!("[分享筆記: {}]\n\n{}{}", title, content, tags_str);
+
+    // Insert a user message with note_share metadata
     let msg_id = Uuid::new_v4();
     let result = sqlx::query(
         r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
-           VALUES ($1, $2, 0, 'system', $3, 'completed', $4, $5, NOW(), NOW())"#,
+           VALUES ($1, $2, 0, 'user', $3, 'completed', $4, $5, NOW(), NOW())"#,
     )
     .bind(msg_id)
     .bind(target_conv_id)
-    .bind(format!("shared a note: {}", title))
+    .bind(&msg_content)
     .bind(&user.id)
     .bind(metadata.clone())
     .execute(&state.db)
@@ -1385,8 +1417,8 @@ async fn share_note_to_conversation(
                         "id": msg_id.to_string(),
                         "conversationId": target_conv_id.to_string(),
                         "seq": 0,
-                        "role": "system",
-                        "content": format!("shared a note: {}", title),
+                        "role": "user",
+                        "content": &msg_content,
                         "status": "completed",
                         "senderUserId": &user.id,
                         "metadata": metadata,
@@ -1396,6 +1428,29 @@ async fn share_note_to_conversation(
                 }),
                 &state.redis,
             );
+
+            // Trigger agent dispatch so agent can see and respond to the shared note
+            let conv_id_str = target_conv_id.to_string();
+            let state_clone = state.clone();
+            let user_id = user.id.clone();
+            let msg_content_clone = msg_content.clone();
+            tokio::spawn(async move {
+                trigger_agent_response(
+                    &user_id,
+                    &conv_id_str,
+                    &msg_content_clone,
+                    true, // skip_user_message — already saved above
+                    None,
+                    None,
+                    &[],
+                    None,
+                    &state_clone.ws,
+                    &state_clone.db,
+                    &state_clone.redis,
+                    &state_clone.config,
+                )
+                .await;
+            });
 
             Json(json!({
                 "messageId": msg_id,
