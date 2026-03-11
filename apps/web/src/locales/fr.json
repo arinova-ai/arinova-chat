@@ -151,6 +151,7 @@
   "chat.notebook.askAiPlaceholder": "Poser une question sur cette note...",
   "chat.notebook.autoTag": "Tag auto",
   "chat.notebook.askAi": "Demander l'IA",
+  "chat.notebook.confirmDelete": "Voulez-vous vraiment supprimer cette note ?",
 
   "chat.kanban.openTask": "Ouvrir la tâche",
 

@@ -403,6 +403,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const handleDelete = useCallback(async (note?: Note) => {
     const target = note || selectedNote;
     if (!target) return;
+    if (!window.confirm(t("chat.notebook.confirmDelete"))) return;
     setLoading(true);
     try {
       await deleteNote(conversationId, target.id);
@@ -415,7 +416,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     } finally {
       setLoading(false);
     }
-  }, [selectedNote, conversationId, deleteNote]);
+  }, [selectedNote, conversationId, deleteNote, t]);
 
   const handleShareNote = useCallback((note: Note) => {
     setShareContent({

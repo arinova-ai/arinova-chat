@@ -153,6 +153,7 @@
   "chat.notebook.askAiPlaceholder": "關於此筆記提問...",
   "chat.notebook.autoTag": "自動標籤",
   "chat.notebook.askAi": "問 AI",
+  "chat.notebook.confirmDelete": "確定要刪除此筆記嗎？",
 
   "chat.kanban.openTask": "開啟任務",
 

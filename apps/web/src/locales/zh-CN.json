@@ -151,6 +151,7 @@
   "chat.notebook.askAiPlaceholder": "关于此笔记提问...",
   "chat.notebook.autoTag": "自动标签",
   "chat.notebook.askAi": "问 AI",
+  "chat.notebook.confirmDelete": "确定要删除此笔记吗？",
 
   "chat.kanban.openTask": "打开任务",
 

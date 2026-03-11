@@ -151,6 +151,7 @@
   "chat.notebook.askAiPlaceholder": "이 노트에 대해 질문...",
   "chat.notebook.autoTag": "자동 태그",
   "chat.notebook.askAi": "AI에게 질문",
+  "chat.notebook.confirmDelete": "이 노트를 삭제하시겠습니까?",
 
   "chat.kanban.openTask": "작업 열기",
 
