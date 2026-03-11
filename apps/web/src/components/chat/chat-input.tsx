@@ -74,6 +74,7 @@ interface ChatInputProps {
   onNoteDropHandled?: () => void;
   stickerOpen?: boolean;
   onStickerToggle?: () => void;
+  threadId?: string | null;
 }
 
 // ---------- File Preview Grid (memoised object URLs) ----------
@@ -144,7 +145,7 @@ function FilePreviewGrid({
 
 // ---------- Component ----------
 
-export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDropHandled, stickerOpen, onStickerToggle }: ChatInputProps = {}) {
+export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDropHandled, stickerOpen, onStickerToggle, threadId }: ChatInputProps = {}) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -160,6 +161,8 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
   const popupRef = useRef<HTMLDivElement>(null);
   const lastTypingSentRef = useRef(0);
   const sendMessage = useChatStore((s) => s.sendMessage);
+  const sendThreadMessage = useChatStore((s) => s.sendThreadMessage);
+  const activeThreadId = useChatStore((s) => s.activeThreadId);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const conversations = useChatStore((s) => s.conversations);
   const agents = useChatStore((s) => s.agents);
@@ -574,6 +577,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     }>;
 
     // Optimistic message so it shows immediately
+    const effectiveThreadId = threadId ?? undefined;
     const tempId = crypto.randomUUID();
     const optimisticMsg: Message = {
       id: tempId,
@@ -583,6 +587,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       content: trimmed,
       status: "completed",
       senderUserId: useChatStore.getState().currentUserId ?? undefined,
+      threadId: effectiveThreadId,
       createdAt: new Date(),
       updatedAt: new Date(),
       ...(validPreviews.length > 0
@@ -596,13 +601,23 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         : {}),
     };
     const store = useChatStore.getState();
-    const current = store.messagesByConversation[activeConversationId] ?? [];
-    useChatStore.setState({
-      messagesByConversation: {
-        ...store.messagesByConversation,
-        [activeConversationId]: [...current, optimisticMsg],
-      },
-    });
+    if (effectiveThreadId) {
+      const currentThread = store.threadMessages[effectiveThreadId] ?? [];
+      useChatStore.setState({
+        threadMessages: {
+          ...store.threadMessages,
+          [effectiveThreadId]: [...currentThread, optimisticMsg],
+        },
+      });
+    } else {
+      const current = store.messagesByConversation[activeConversationId] ?? [];
+      useChatStore.setState({
+        messagesByConversation: {
+          ...store.messagesByConversation,
+          [activeConversationId]: [...current, optimisticMsg],
+        },
+      });
+    }
 
     const prevValue = value;
     setPendingFiles([]);
@@ -623,6 +638,9 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       // Include text as caption so backend combines them into one message
       if (trimmed) {
         formData.append("caption", trimmed);
+      }
+      if (effectiveThreadId) {
+        formData.append("thread_id", effectiveThreadId);
       }
 
       const res = await fetch(
@@ -648,42 +666,48 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       const realMsg = json?.message;
       if (realMsg?.id) {
         const s2 = useChatStore.getState();
-        const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
-        const alreadyHasReal = msgs2.some((m) => m.id === realMsg.id);
-        if (alreadyHasReal) {
-          // WS already delivered the real message — just remove the temp
+        const promoteAttachments = (a: Record<string, unknown>) => ({
+          id: a.id as string,
+          messageId: a.messageId as string,
+          fileName: a.fileName as string,
+          fileType: a.fileType as string,
+          fileSize: a.fileSize as number,
+          url: a.url as string,
+          duration: a.duration as number | undefined,
+          createdAt: new Date(a.createdAt as string),
+        });
+        const promoteMsg = (m: Message) =>
+          m.id === tempId
+            ? {
+                ...m,
+                id: realMsg.id,
+                seq: realMsg.seq,
+                senderUserId: realMsg.senderUserId ?? m.senderUserId,
+                attachments: realMsg.attachments?.map(promoteAttachments) ?? m.attachments,
+                updatedAt: new Date(realMsg.updatedAt),
+              }
+            : m;
+
+        if (effectiveThreadId) {
+          const tmsgs = s2.threadMessages[effectiveThreadId] ?? [];
+          const alreadyHasReal = tmsgs.some((m) => m.id === realMsg.id);
           useChatStore.setState({
-            messagesByConversation: {
-              ...s2.messagesByConversation,
-              [activeConversationId]: msgs2.filter((m) => m.id !== tempId),
+            threadMessages: {
+              ...s2.threadMessages,
+              [effectiveThreadId]: alreadyHasReal
+                ? tmsgs.filter((m) => m.id !== tempId)
+                : tmsgs.map(promoteMsg),
             },
           });
         } else {
-          // Promote temp → real
+          const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
+          const alreadyHasReal = msgs2.some((m) => m.id === realMsg.id);
           useChatStore.setState({
             messagesByConversation: {
               ...s2.messagesByConversation,
-              [activeConversationId]: msgs2.map((m) =>
-                m.id === tempId
-                  ? {
-                      ...m,
-                      id: realMsg.id,
-                      seq: realMsg.seq,
-                      senderUserId: realMsg.senderUserId ?? m.senderUserId,
-                      attachments: realMsg.attachments?.map((a: Record<string, unknown>) => ({
-                        id: a.id as string,
-                        messageId: a.messageId as string,
-                        fileName: a.fileName as string,
-                        fileType: a.fileType as string,
-                        fileSize: a.fileSize as number,
-                        url: a.url as string,
-                        duration: a.duration as number | undefined,
-                        createdAt: new Date(a.createdAt as string),
-                      })) ?? m.attachments,
-                      updatedAt: new Date(realMsg.updatedAt),
-                    }
-                  : m
-              ),
+              [activeConversationId]: alreadyHasReal
+                ? msgs2.filter((m) => m.id !== tempId)
+                : msgs2.map(promoteMsg),
             },
           });
         }
@@ -692,19 +716,29 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       console.error("Upload failed:", err);
       // Remove optimistic message and restore input on failure
       const s = useChatStore.getState();
-      const msgs = s.messagesByConversation[activeConversationId] ?? [];
-      useChatStore.setState({
-        messagesByConversation: {
-          ...s.messagesByConversation,
-          [activeConversationId]: msgs.filter((m) => m.id !== tempId),
-        },
-      });
+      if (effectiveThreadId) {
+        const tmsgs = s.threadMessages[effectiveThreadId] ?? [];
+        useChatStore.setState({
+          threadMessages: {
+            ...s.threadMessages,
+            [effectiveThreadId]: tmsgs.filter((m) => m.id !== tempId),
+          },
+        });
+      } else {
+        const msgs = s.messagesByConversation[activeConversationId] ?? [];
+        useChatStore.setState({
+          messagesByConversation: {
+            ...s.messagesByConversation,
+            [activeConversationId]: msgs.filter((m) => m.id !== tempId),
+          },
+        });
+      }
       setPendingFiles(prevFiles);
       setValue(prevValue);
     } finally {
       setUploading(false);
     }
-  }, [pendingFiles, activeConversationId, value, clearInput]);
+  }, [pendingFiles, activeConversationId, value, clearInput, threadId]);
 
   const handleVoiceUpload = useCallback(
     async (blob: Blob, durationSeconds?: number) => {
@@ -717,6 +751,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       });
 
       // Optimistic message with audio attachment placeholder
+      const voiceThreadId = threadId ?? undefined;
       const tempId = crypto.randomUUID();
       const optimisticMsg: Message = {
         id: tempId,
@@ -726,6 +761,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         content: "",
         status: "completed",
         senderUserId: useChatStore.getState().currentUserId ?? undefined,
+        threadId: voiceThreadId,
         attachments: [
           {
             id: crypto.randomUUID(),
@@ -742,13 +778,23 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         updatedAt: new Date(),
       };
       const store = useChatStore.getState();
-      const current = store.messagesByConversation[activeConversationId] ?? [];
-      useChatStore.setState({
-        messagesByConversation: {
-          ...store.messagesByConversation,
-          [activeConversationId]: [...current, optimisticMsg],
-        },
-      });
+      if (voiceThreadId) {
+        const currentThread = store.threadMessages[voiceThreadId] ?? [];
+        useChatStore.setState({
+          threadMessages: {
+            ...store.threadMessages,
+            [voiceThreadId]: [...currentThread, optimisticMsg],
+          },
+        });
+      } else {
+        const current = store.messagesByConversation[activeConversationId] ?? [];
+        useChatStore.setState({
+          messagesByConversation: {
+            ...store.messagesByConversation,
+            [activeConversationId]: [...current, optimisticMsg],
+          },
+        });
+      }
 
       setUploading(true);
       try {
@@ -756,6 +802,9 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         formData.append("file", file);
         if (durationSeconds != null) {
           formData.append("duration_seconds", String(Math.round(durationSeconds)));
+        }
+        if (voiceThreadId) {
+          formData.append("thread_id", voiceThreadId);
         }
 
         const res = await fetch(
@@ -781,40 +830,48 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         const realMsg = json?.message;
         if (realMsg?.id) {
           const s2 = useChatStore.getState();
-          const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
-          const alreadyHasReal = msgs2.some((m) => m.id === realMsg.id);
-          if (alreadyHasReal) {
+          const promoteAttachments = (a: Record<string, unknown>) => ({
+            id: a.id as string,
+            messageId: a.messageId as string,
+            fileName: a.fileName as string,
+            fileType: a.fileType as string,
+            fileSize: a.fileSize as number,
+            url: a.url as string,
+            duration: a.duration as number | undefined,
+            createdAt: new Date(a.createdAt as string),
+          });
+          const promoteMsg = (m: Message) =>
+            m.id === tempId
+              ? {
+                  ...m,
+                  id: realMsg.id,
+                  seq: realMsg.seq,
+                  senderUserId: realMsg.senderUserId ?? m.senderUserId,
+                  attachments: realMsg.attachments?.map(promoteAttachments) ?? m.attachments,
+                  updatedAt: new Date(realMsg.updatedAt),
+                }
+              : m;
+
+          if (voiceThreadId) {
+            const tmsgs = s2.threadMessages[voiceThreadId] ?? [];
+            const alreadyHasReal = tmsgs.some((m) => m.id === realMsg.id);
             useChatStore.setState({
-              messagesByConversation: {
-                ...s2.messagesByConversation,
-                [activeConversationId]: msgs2.filter((m) => m.id !== tempId),
+              threadMessages: {
+                ...s2.threadMessages,
+                [voiceThreadId]: alreadyHasReal
+                  ? tmsgs.filter((m) => m.id !== tempId)
+                  : tmsgs.map(promoteMsg),
               },
             });
           } else {
+            const msgs2 = s2.messagesByConversation[activeConversationId] ?? [];
+            const alreadyHasReal = msgs2.some((m) => m.id === realMsg.id);
             useChatStore.setState({
               messagesByConversation: {
                 ...s2.messagesByConversation,
-                [activeConversationId]: msgs2.map((m) =>
-                  m.id === tempId
-                    ? {
-                        ...m,
-                        id: realMsg.id,
-                        seq: realMsg.seq,
-                        senderUserId: realMsg.senderUserId ?? m.senderUserId,
-                        attachments: realMsg.attachments?.map((a: Record<string, unknown>) => ({
-                          id: a.id as string,
-                          messageId: a.messageId as string,
-                          fileName: a.fileName as string,
-                          fileType: a.fileType as string,
-                          fileSize: a.fileSize as number,
-                          url: a.url as string,
-                          duration: a.duration as number | undefined,
-                          createdAt: new Date(a.createdAt as string),
-                        })) ?? m.attachments,
-                        updatedAt: new Date(realMsg.updatedAt),
-                      }
-                    : m
-                ),
+                [activeConversationId]: alreadyHasReal
+                  ? msgs2.filter((m) => m.id !== tempId)
+                  : msgs2.map(promoteMsg),
               },
             });
           }
@@ -823,18 +880,28 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         console.error("Voice upload failed:", err);
         // Remove optimistic message on failure
         const s = useChatStore.getState();
-        const msgs = s.messagesByConversation[activeConversationId] ?? [];
-        useChatStore.setState({
-          messagesByConversation: {
-            ...s.messagesByConversation,
-            [activeConversationId]: msgs.filter((m) => m.id !== tempId),
-          },
-        });
+        if (voiceThreadId) {
+          const tmsgs = s.threadMessages[voiceThreadId] ?? [];
+          useChatStore.setState({
+            threadMessages: {
+              ...s.threadMessages,
+              [voiceThreadId]: tmsgs.filter((m) => m.id !== tempId),
+            },
+          });
+        } else {
+          const msgs = s.messagesByConversation[activeConversationId] ?? [];
+          useChatStore.setState({
+            messagesByConversation: {
+              ...s.messagesByConversation,
+              [activeConversationId]: msgs.filter((m) => m.id !== tempId),
+            },
+          });
+        }
       } finally {
         setUploading(false);
       }
     },
-    [activeConversationId]
+    [activeConversationId, threadId]
   );
 
   // Check if user has sticker packs (for showing the sticker button)
@@ -878,10 +945,14 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       if (member?.agentId) mentionIds.add(member.agentId);
     }
 
-    sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
+    if (threadId) {
+      sendThreadMessage(trimmed);
+    } else {
+      sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
+    }
     playSendSound();
     clearInput();
-  }, [value, sendMessage, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
+  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
 
   // ---------- Keyboard handling ----------
 

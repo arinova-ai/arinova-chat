@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { MessageBubble } from "./message-bubble";
 import { TypingIndicator } from "./typing-indicator";
+import { ChatInput } from "./chat-input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { X, Send, Loader2, MessageSquare } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { X, Loader2, MessageSquare } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useRenderDiag } from "@/lib/chat-diagnostics";
 
@@ -20,15 +20,12 @@ export function ThreadPanel() {
   const closeThread = useChatStore((s) => s.closeThread);
   const threadMessages = useChatStore((s) => activeThreadId ? (s.threadMessages[activeThreadId] ?? EMPTY) : EMPTY);
   const threadLoading = useChatStore((s) => s.threadLoading);
-  const sendThreadMessage = useChatStore((s) => s.sendThreadMessage);
   const messagesByConversation = useChatStore((s) => s.messagesByConversation);
   const thinkingAgents = useChatStore((s) =>
     activeConversationId ? (s.thinkingAgents[activeConversationId] ?? EMPTY) : EMPTY
   );
 
-  const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   useRenderDiag("ThreadPanel", () => ({
     activeThreadId,
     activeConversationId,
@@ -57,42 +54,6 @@ export function ThreadPanel() {
       });
     }
   }, [lastMsg?.content, lastMsg?.status, messages.length]);
-
-  // Focus textarea when thread opens
-  useEffect(() => {
-    if (activeThreadId) {
-      setTimeout(() => textareaRef.current?.focus(), 300);
-    }
-  }, [activeThreadId]);
-
-  const handleSend = useCallback(() => {
-    const text = input.trim();
-    if (!text) return;
-    sendThreadMessage(text);
-    setInput("");
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-  }, [input, sendThreadMessage]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend]
-  );
-
-  const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    // Auto-resize
-    const el = e.target;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 120) + "px";
-  }, []);
 
   // Check if any agent is thinking in thread context
   const threadThinking = thinkingAgents.length > 0;
@@ -173,31 +134,9 @@ export function ThreadPanel() {
           )}
         </div>
 
-        {/* Thread Input */}
-        <div className="border-t px-3 py-3 shrink-0" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}>
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              placeholder={t("chat.thread.placeholder")}
-              rows={1}
-              className={cn(
-                "flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm",
-                "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                "max-h-[120px]"
-              )}
-            />
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="h-9 w-9 shrink-0"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+        {/* Thread Input — reuse full ChatInput with thread context */}
+        <div className="border-t shrink-0">
+          <ChatInput threadId={activeThreadId} />
         </div>
       </SheetContent>
     </Sheet>
