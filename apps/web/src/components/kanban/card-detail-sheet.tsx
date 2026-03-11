@@ -12,6 +12,8 @@ import {
   XCircle,
   Check,
   X,
+  GitCommitHorizontal,
+  Plus,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
@@ -73,12 +75,20 @@ function formatTime(iso: string | null | undefined) {
 
 // ── Props ─────────────────────────────────────────────────────
 
+export interface CardCommitData {
+  cardId: string;
+  commitHash: string;
+  message?: string | null;
+  createdAt?: string | null;
+}
+
 interface CardDetailSheetProps {
   card: KanbanCardData | null;
   onClose: () => void;
   onUpdate: () => void;
   cardAgents?: string[];
   cardNotes?: Array<{ noteId: string; noteTitle: string }>;
+  cardCommits?: CardCommitData[];
   agentEmojis?: Map<string, string>;
   agentNames?: Map<string, string>;
 }
@@ -91,6 +101,7 @@ export function CardDetailSheet({
   onUpdate,
   cardAgents = [],
   cardNotes = [],
+  cardCommits = [],
   agentEmojis = new Map(),
   agentNames = new Map(),
 }: CardDetailSheetProps) {
@@ -108,6 +119,10 @@ export function CardDetailSheet({
   const [linkCopied, setLinkCopied] = useState(false);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [shareContent, setShareContent] = useState<ShareContent | null>(null);
+  const [addingCommit, setAddingCommit] = useState(false);
+  const [commitHash, setCommitHash] = useState("");
+  const [commitMessage, setCommitMessage] = useState("");
+  const [commitSaving, setCommitSaving] = useState(false);
   const { t } = useTranslation();
 
   // Sync local state when card changes
@@ -221,6 +236,37 @@ export function CardDetailSheet({
       cardId: card.id,
     });
     setShareSheetOpen(true);
+  };
+
+  const handleAddCommit = async () => {
+    if (!card || !commitHash.trim()) return;
+    setCommitSaving(true);
+    try {
+      await api(`/api/kanban/cards/${card.id}/commits`, {
+        method: "POST",
+        body: JSON.stringify({
+          commitHash: commitHash.trim(),
+          message: commitMessage.trim() || undefined,
+        }),
+        silent: true,
+      });
+      setCommitHash("");
+      setCommitMessage("");
+      setAddingCommit(false);
+      onUpdate();
+    } catch { /* api shows toast */ }
+    setCommitSaving(false);
+  };
+
+  const handleDeleteCommit = async (hash: string) => {
+    if (!card) return;
+    try {
+      await api(`/api/kanban/cards/${card.id}/commits/${encodeURIComponent(hash)}`, {
+        method: "DELETE",
+        silent: true,
+      });
+      onUpdate();
+    } catch { /* api shows toast */ }
   };
 
   const handleSave = async () => {
@@ -442,6 +488,76 @@ export function CardDetailSheet({
                     </div>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground">No linked notes.</p>
+                  )}
+                </div>
+
+                {/* Commits */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">Commits</label>
+                    <button
+                      type="button"
+                      onClick={() => setAddingCommit(!addingCommit)}
+                      className="text-xs text-brand hover:text-brand/80"
+                    >
+                      {addingCommit ? "Cancel" : "+ Add Commit"}
+                    </button>
+                  </div>
+                  {addingCommit && (
+                    <div className="mt-1.5 space-y-1.5">
+                      <input
+                        type="text"
+                        placeholder="Commit hash..."
+                        value={commitHash}
+                        onChange={(e) => setCommitHash(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+                        autoFocus
+                        maxLength={40}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Message (optional)..."
+                        value={commitMessage}
+                        onChange={(e) => setCommitMessage(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAddCommit(); }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCommit}
+                        disabled={!commitHash.trim() || commitSaving}
+                        className="flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-50"
+                      >
+                        {commitSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                        Add
+                      </button>
+                    </div>
+                  )}
+                  {cardCommits.length > 0 ? (
+                    <div className="mt-1.5 space-y-1">
+                      {cardCommits.map((c) => (
+                        <div
+                          key={c.commitHash}
+                          className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs"
+                        >
+                          <GitCommitHorizontal className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <code className="font-mono text-foreground shrink-0">{c.commitHash.slice(0, 7)}</code>
+                          {c.message && (
+                            <span className="flex-1 truncate text-muted-foreground">{c.message}</span>
+                          )}
+                          {!c.message && <span className="flex-1" />}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCommit(c.commitHash)}
+                            className="text-muted-foreground hover:text-red-400 shrink-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">No linked commits.</p>
                   )}
                 </div>
 

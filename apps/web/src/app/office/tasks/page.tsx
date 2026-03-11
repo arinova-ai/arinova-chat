@@ -68,12 +68,20 @@ interface CardNote {
   noteTitle: string;
 }
 
+interface CardCommit {
+  cardId: string;
+  commitHash: string;
+  message?: string | null;
+  createdAt?: string | null;
+}
+
 interface BoardData {
   id: string;
   columns: KanbanColumn[];
   cards: KanbanCard[];
   cardAgents: CardAgent[];
   cardNotes: CardNote[];
+  cardCommits: CardCommit[];
 }
 
 // ── Priority helpers ──────────────────────────────────────────
@@ -646,6 +654,16 @@ export default function OfficeTasksPage() {
     return map;
   }, [board]);
 
+  const cardCommitsMap = useMemo(() => {
+    const map = new Map<string, CardCommit[]>();
+    for (const cc of board?.cardCommits ?? []) {
+      const arr = map.get(cc.cardId) ?? [];
+      arr.push(cc);
+      map.set(cc.cardId, arr);
+    }
+    return map;
+  }, [board]);
+
   // Find card by id across all columns
   const findCard = useCallback(
     (id: string) => board?.cards.find((c) => c.id === id) ?? null,
@@ -912,6 +930,7 @@ export default function OfficeTasksPage() {
         card={selectedCard}
         cardAgents={selectedCard ? (cardAgentsMap.get(selectedCard.id) ?? []) : []}
         cardNotes={selectedCard ? (cardNotesMap.get(selectedCard.id) ?? []) : []}
+        cardCommits={selectedCard ? (cardCommitsMap.get(selectedCard.id) ?? []) : []}
         agentEmojis={agentEmojis}
         agentNames={agentNames}
         onClose={() => setSelectedCard(null)}

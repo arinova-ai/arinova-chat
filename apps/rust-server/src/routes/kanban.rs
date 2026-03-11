@@ -50,6 +50,14 @@ pub fn router() -> Router<AppState> {
             "/api/kanban/cards/{card_id}/notes/{note_id}",
             delete(unlink_note_from_card),
         )
+        .route(
+            "/api/kanban/cards/{cardId}/commits",
+            get(list_card_commits).post(add_card_commit),
+        )
+        .route(
+            "/api/kanban/cards/{cardId}/commits/{commitHash}",
+            delete(delete_card_commit),
+        )
         // Agent API
         .route("/api/agent/kanban/boards", get(agent_list_boards))
         .route("/api/agent/kanban/cards", get(agent_list_cards).post(agent_create_card))
@@ -58,6 +66,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/agent/kanban/boards/{id}/archived-cards",
             get(agent_list_archived_cards),
+        )
+        .route(
+            "/api/agent/kanban/cards/{cardId}/commits",
+            get(agent_list_card_commits).post(agent_add_card_commit),
         )
         // User notes lookup (for note selector in card detail)
         .route("/api/kanban/owner-notes", get(list_owner_notes))
@@ -112,6 +124,15 @@ struct CardNoteRow {
     card_id: Uuid,
     note_id: Uuid,
     note_title: String,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct CardCommitRow {
+    card_id: Uuid,
+    commit_hash: String,
+    message: Option<String>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -388,13 +409,26 @@ async fn get_board(
     .fetch_all(&state.db)
     .await;
 
-    match (columns, cards, card_agents, card_notes) {
-        (Ok(cols), Ok(crds), Ok(agents), Ok(notes)) => Json(json!({
+    let card_commits = sqlx::query_as::<_, CardCommitRow>(
+        r#"SELECT cc.card_id, cc.commit_hash, cc.message, cc.created_at
+           FROM kanban_card_commits cc
+           JOIN kanban_cards c ON c.id = cc.card_id
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1
+           ORDER BY cc.created_at DESC"#,
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match (columns, cards, card_agents, card_notes, card_commits) {
+        (Ok(cols), Ok(crds), Ok(agents), Ok(notes), Ok(commits)) => Json(json!({
             "id": board_id,
             "columns": cols,
             "cards": crds,
             "cardAgents": agents,
             "cardNotes": notes,
+            "cardCommits": commits,
         }))
         .into_response(),
         _ => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Failed to fetch board" })))
@@ -1207,6 +1241,155 @@ async fn list_owner_notes(
 struct OwnerNotesQuery {
     q: Option<String>,
     limit: Option<i64>,
+}
+
+// ── Card Commits ─────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddCommitBody {
+    commit_hash: String,
+    message: Option<String>,
+}
+
+/// POST /api/kanban/cards/:cardId/commits
+async fn add_card_commit(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<AddCommitBody>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let hash = body.commit_hash.trim();
+    if hash.is_empty() || hash.len() > 40 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid commit hash" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_commits (card_id, commit_hash, message) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(hash)
+    .bind(body.message.as_deref())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::CREATED.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// GET /api/kanban/cards/:cardId/commits
+async fn list_card_commits(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let rows = sqlx::query_as::<_, CardCommitRow>(
+        "SELECT card_id, commit_hash, message, created_at FROM kanban_card_commits WHERE card_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(r) => Json(json!(r)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/kanban/cards/:cardId/commits/:commitHash
+async fn delete_card_commit(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((card_id, commit_hash)): Path<(Uuid, String)>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM kanban_card_commits WHERE card_id = $1 AND commit_hash = $2",
+    )
+    .bind(card_id)
+    .bind(&commit_hash)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// GET /api/agent/kanban/cards/:cardId/commits
+async fn agent_list_card_commits(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let rows = sqlx::query_as::<_, CardCommitRow>(
+        "SELECT card_id, commit_hash, message, created_at FROM kanban_card_commits WHERE card_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(r) => Json(json!(r)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/agent/kanban/cards/:cardId/commits
+async fn agent_add_card_commit(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<AddCommitBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let hash = body.commit_hash.trim();
+    if hash.is_empty() || hash.len() > 40 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid commit hash" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_commits (card_id, commit_hash, message) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(hash)
+    .bind(body.message.as_deref())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::CREATED.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
 }
 
 // ── Share Card to Conversation ───────────────────────────────
