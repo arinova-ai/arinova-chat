@@ -113,7 +113,7 @@ export function CompactColumn({
         <span className="text-xs text-muted-foreground">{cards.length}</span>
       </div>
 
-      <div className="flex-1 space-y-1.5 overflow-y-auto min-h-0">
+      <div className="flex-1 space-y-1.5 overflow-y-auto min-h-0 max-h-[calc(100vh-10rem)]">
         {cards.map((card) => (
           <CompactCard
             key={card.id}
