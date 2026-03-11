@@ -1991,7 +1991,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     if (event.type === "stream_chunk") {
-      const { conversationId, messageId, chunk } = event;
+      const { conversationId, messageId, chunk: rawChunk } = event;
+      const chunk = rawChunk.replace(/\r\n?/g, "\n");
       const threadId = event.threadId;
 
       // Check if this is the first chunk (message still in thinkingAgents)

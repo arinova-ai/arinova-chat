@@ -286,7 +286,7 @@ export async function handleArinovaChatInbound(params: {
           if (collapsed.length > lastSentLength) {
             const delta = collapsed.slice(lastSentLength);
             lastSentLength = collapsed.length;
-            sendChunk(delta);
+            sendChunk(delta.replace(/\r\n?/g, "\n"));
           }
         }
       },
