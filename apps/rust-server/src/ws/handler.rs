@@ -29,68 +29,62 @@ use crate::AppState;
 #[derive(Debug, Clone)]
 pub struct AgentFilterConfig {
     pub agent_id: String,
-    /// One of "owner_only", "allowed_users", "all_mentions".
+    /// One of: "all", "all_mentions", "owner_unmention_others_mention",
+    /// "owner_and_allowlist", "owner_only", "muted".
     pub listen_mode: String,
     pub owner_user_id: String,
     pub allowed_user_ids: Vec<String>,
 }
 
-/// Pure function implementing the two-layer filtering logic for agent dispatch.
+/// Pure per-agent filtering based on 6 listen modes.
 ///
-/// Layer 1 (conversation-level): `mention_only`
-///   - `false` -> ALL agents receive ALL messages (listen_mode ignored).
-///   - `true`  -> only agents that are @mentioned (or `__all__`) proceed to Layer 2.
+/// Modes (broad → strict):
+///   - `"all"` — receive every message, no @mention needed
+///   - `"all_mentions"` — only when @mentioned by anyone
+///   - `"owner_unmention_others_mention"` — owner's messages always; others need @mention
+///   - `"owner_and_allowlist"` — owner + allowlist always; others ignored
+///   - `"owner_only"` — only owner's messages
+///   - `"muted"` — never receive
 ///
-/// Layer 2 (per-agent): `listen_mode`
-///   - `"owner_only"`    -> only the agent's owner can trigger it.
-///   - `"allowed_users"` -> owner + whitelisted users can trigger it.
-///   - `"all_mentions"`  -> any @mention triggers it.
-///
-/// For non-group conversations the function always returns all agent IDs
-/// (direct conversations always dispatch).
+/// For non-group (direct/h2a) conversations, always dispatch (agent is the sole recipient).
 pub fn filter_agents_for_dispatch(
-    mention_only: bool,
+    _mention_only: bool,
     conv_type: &str,
     sender_user_id: &str,
     mentions: &[String],
     agents: &[AgentFilterConfig],
 ) -> Vec<String> {
-    let agent_ids: Vec<String> = agents.iter().map(|a| a.agent_id.clone()).collect();
-
-    if !mention_only {
-        // Layer 1: mention_only=false -> ALL agents hear ALL messages
-        return agent_ids;
+    if conv_type != "group" {
+        // Direct / H2A conversations -> always dispatch
+        return agents.iter().map(|a| a.agent_id.clone()).collect();
     }
 
-    if conv_type == "group" {
-        // Layer 1: mention_only=true -> only @mentions trigger agents
-        // Layer 2: filter by listen_mode per agent
-        let mut filtered = Vec::new();
-        for agent in agents {
-            let is_mentioned = mentions.contains(&"__all__".to_string())
-                || mentions.contains(&agent.agent_id);
-            if !is_mentioned {
-                continue;
-            }
+    let mut filtered = Vec::new();
+    for agent in agents {
+        let is_owner = agent.owner_user_id == sender_user_id;
+        let is_mentioned = mentions.contains(&"__all__".to_string())
+            || mentions.contains(&agent.agent_id);
 
-            let is_owner = agent.owner_user_id == sender_user_id;
-            let should_dispatch = match agent.listen_mode.as_str() {
-                "owner_only" => is_owner,
-                "allowed_users" => {
-                    is_owner || agent.allowed_user_ids.contains(&sender_user_id.to_string())
-                }
-                "all_mentions" => true,
-                _ => false,
-            };
-            if should_dispatch {
-                filtered.push(agent.agent_id.clone());
+        let should_dispatch = match agent.listen_mode.as_str() {
+            "all" => true,
+            "all_mentions" => is_mentioned,
+            "owner_unmention_others_mention" => is_owner || is_mentioned,
+            "owner_and_allowlist" => {
+                is_owner || agent.allowed_user_ids.contains(&sender_user_id.to_string())
             }
+            "owner_only" => is_owner,
+            "muted" => false,
+            // Legacy "allowed_users" maps to owner_and_allowlist behavior
+            "allowed_users" => {
+                is_owner || agent.allowed_user_ids.contains(&sender_user_id.to_string())
+            }
+            _ => false,
+        };
+        if should_dispatch {
+            filtered.push(agent.agent_id.clone());
         }
-        filtered
-    } else {
-        // Direct conversation -> always dispatch
-        agent_ids
     }
+    filtered
 }
 
 /// Safely truncate a string at a character boundary.
@@ -1066,7 +1060,7 @@ pub async fn trigger_agent_response(
 
     // Two-layer filtering: mention_only (conversation-level) × listen_mode (per-agent)
     // Build AgentFilterConfig for each agent (requires DB queries for group conversations)
-    let agent_configs: Vec<AgentFilterConfig> = if mention_only && conv_type == "group" {
+    let agent_configs: Vec<AgentFilterConfig> = if conv_type == "group" {
         let mut configs = Vec::new();
         for aid in &agent_ids {
             let agent_perms = sqlx::query_as::<_, (String, Option<String>)>(
@@ -1079,8 +1073,8 @@ pub async fn trigger_agent_response(
             .await;
 
             if let Ok(Some((listen_mode, owner_id))) = agent_perms {
-                // Fetch allowed_user_ids if listen_mode is allowed_users
-                let allowed_user_ids = if listen_mode == "allowed_users" {
+                // Fetch allowed_user_ids if listen_mode needs allowlist
+                let allowed_user_ids = if listen_mode == "owner_and_allowlist" || listen_mode == "allowed_users" {
                     sqlx::query_as::<_, (String,)>(
                         r#"SELECT user_id FROM agent_listen_allowed_users
                            WHERE agent_id = $1::uuid AND conversation_id = $2::uuid"#,
@@ -1107,10 +1101,10 @@ pub async fn trigger_agent_response(
         }
         configs
     } else {
-        // For non-group or mention_only=false, configs are not inspected by the filter
+        // For non-group conversations, configs are not inspected by the filter
         agent_ids.iter().map(|aid| AgentFilterConfig {
             agent_id: aid.clone(),
-            listen_mode: "all_mentions".into(),
+            listen_mode: "all".into(),
             owner_user_id: String::new(),
             allowed_user_ids: vec![],
         }).collect()

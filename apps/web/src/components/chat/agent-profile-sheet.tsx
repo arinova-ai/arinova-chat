@@ -381,7 +381,7 @@ export function AgentProfileSheet({
               {t("agentProfile.listenMode")}
             </p>
             <div className="space-y-1">
-              {(["all_mentions", "owner_only", "allowed_users"] as const).map((mode) => (
+              {(["all", "all_mentions", "owner_unmention_others_mention", "owner_and_allowlist", "owner_only", "muted"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -407,7 +407,7 @@ export function AgentProfileSheet({
         )}
 
         {/* Allowed users whitelist */}
-        {isOwner && isGroupContext && currentListenMode === "allowed_users" && (
+        {isOwner && isGroupContext && (currentListenMode === "owner_and_allowlist" || currentListenMode === "allowed_users") && (
           <div className="mt-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
               {t("agentProfile.allowedUsers")}

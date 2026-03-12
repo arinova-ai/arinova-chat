@@ -565,9 +565,13 @@ function UserMemberRow({
 function useListenModeLabels() {
   const { t } = useTranslation();
   return {
-    owner_only: t("group.ownerOnly"),
-    allowed_users: t("group.allowedUsers"),
+    all: t("group.listenMode.all"),
     all_mentions: t("group.allMentions"),
+    owner_unmention_others_mention: t("group.listenMode.ownerUnmentionOthersMention"),
+    owner_and_allowlist: t("group.listenMode.ownerAndAllowlist"),
+    owner_only: t("group.ownerOnly"),
+    muted: t("group.listenMode.muted"),
+    allowed_users: t("group.allowedUsers"),
   } as Record<string, string>;
 }
 

@@ -12,7 +12,7 @@ CREATE TYPE message_status AS ENUM ('pending', 'streaming', 'completed', 'cancel
 CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member', 'creator', 'moderator');
 CREATE TYPE friendship_status AS ENUM ('pending', 'accepted', 'blocked');
 CREATE TYPE conversation_user_role AS ENUM ('admin', 'vice_admin', 'member');
-CREATE TYPE agent_listen_mode AS ENUM ('owner_only', 'allowed_users', 'all_mentions');
+CREATE TYPE agent_listen_mode AS ENUM ('all', 'all_mentions', 'owner_unmention_others_mention', 'owner_and_allowlist', 'owner_only', 'muted', 'allowed_users');
 
 -- App/Marketplace enums
 CREATE TYPE app_status AS ENUM ('draft', 'submitted', 'scanning', 'in_review', 'published', 'rejected', 'suspended');
@@ -121,7 +121,7 @@ CREATE TABLE conversation_members (
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
     owner_user_id TEXT REFERENCES "user"(id),
-    listen_mode agent_listen_mode NOT NULL DEFAULT 'owner_only',
+    listen_mode agent_listen_mode NOT NULL DEFAULT 'owner_unmention_others_mention',
     added_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
