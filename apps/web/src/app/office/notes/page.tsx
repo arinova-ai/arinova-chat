@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, FileText, ChevronRight, Loader2, X, MessageSquare, Share2, Link, XCircle, Check } from "lucide-react";
+import { Search, FileText, ChevronRight, ChevronDown, Loader2, X, MessageSquare, Share2, Link, XCircle, Check, Tag } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -101,6 +101,7 @@ export default function MyNotesPage() {
   const [saving, setSaving] = useState(false);
   const [sharingLoading, setSharingLoading] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Debounce search input
@@ -263,34 +264,46 @@ export default function MyNotesPage() {
         </div>
 
         {allTags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div>
             <button
               type="button"
-              onClick={() => setSelectedTag(null)}
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
-                !selectedTag
-                  ? "bg-brand/15 text-brand-text"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted",
-              )}
+              onClick={() => setTagsExpanded((p) => !p)}
+              className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1"
             >
-              {t("office.notes.allTags")}
+              <Tag className="h-3 w-3" />
+              Tags ({allTags.length})
+              {selectedTag && <span className="text-brand-text">· #{selectedTag}</span>}
+              <ChevronDown className={cn("h-3 w-3 transition-transform", tagsExpanded && "rotate-180")} />
             </button>
-            {allTags.map((tag) => (
+            <div className={cn("flex flex-wrap gap-1", !tagsExpanded && "max-h-0 overflow-hidden")}>
               <button
-                key={tag}
                 type="button"
-                onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                onClick={() => setSelectedTag(null)}
                 className={cn(
                   "rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
-                  selectedTag === tag
+                  !selectedTag
                     ? "bg-brand/15 text-brand-text"
                     : "bg-muted/50 text-muted-foreground hover:bg-muted",
                 )}
               >
-                #{tag}
+                {t("office.notes.allTags")}
               </button>
-            ))}
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+                    selectedTag === tag
+                      ? "bg-brand/15 text-brand-text"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
