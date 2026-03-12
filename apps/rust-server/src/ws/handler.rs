@@ -1353,7 +1353,7 @@ pub async fn trigger_agent_response(
 }
 
 /// Actually send the task to the agent and set up streaming callbacks.
-async fn do_trigger_agent_response(
+pub(crate) async fn do_trigger_agent_response(
     user_id: &str,
     agent_id: &str,
     conversation_id: &str,

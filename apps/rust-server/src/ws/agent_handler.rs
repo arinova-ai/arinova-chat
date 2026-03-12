@@ -14,7 +14,8 @@ use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
 use crate::services::message_seq::get_next_seq;
-use crate::ws::state::{AgentEvent, AgentSkill, PendingTask, WsState};
+use crate::ws::handler::{filter_agents_for_dispatch, AgentFilterConfig, do_trigger_agent_response, get_conv_member_ids};
+use crate::ws::state::{AgentEvent, AgentSkill, PendingTask, QueuedResponse, WsState};
 use crate::AppState;
 
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
@@ -155,6 +156,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
     let ws_state = state.ws.clone();
     let db = state.db.clone();
     let redis = state.redis.clone();
+    let config = state.config.clone();
     let agent_id_clone = agent_id.clone();
 
     let recv_task = tokio::spawn(async move {
@@ -333,17 +335,15 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
 
                     tracing::info!("agent_send: delivered msgId={} seq={} to user {}", msg_id, seq, user_id);
 
-                    // Deliver to user via stream_start + stream_end
-                    ws_state.send_to_user_or_queue(&user_id, &json!({
+                    let stream_start = json!({
                         "type": "stream_start",
                         "conversationId": conversation_id,
                         "messageId": msg_id,
                         "seq": seq,
                         "senderAgentId": &agent_id_clone,
                         "senderAgentName": agent_name
-                    }), &redis);
-
-                    ws_state.send_to_user_or_queue(&user_id, &json!({
+                    });
+                    let stream_end = json!({
                         "type": "stream_end",
                         "conversationId": conversation_id,
                         "messageId": msg_id,
@@ -352,7 +352,122 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                         "senderAgentId": &agent_id_clone,
                         "senderAgentName": agent_name,
                         "reason": "agent_send"
-                    }), &redis);
+                    });
+
+                    if _conv_type == "group" {
+                        // Broadcast to all user members in the group
+                        let member_ids = get_conv_member_ids(&ws_state, &db, conversation_id, "").await;
+                        ws_state.broadcast_to_members(&member_ids, &stream_start, &redis);
+                        ws_state.broadcast_to_members(&member_ids, &stream_end, &redis);
+                    } else {
+                        // Direct conversation: send to the owner only
+                        ws_state.send_to_user_or_queue(&user_id, &stream_start, &redis);
+                        ws_state.send_to_user_or_queue(&user_id, &stream_end, &redis);
+                    }
+
+                    // Dispatch to other agents in the conversation (excluding sender)
+                    let other_agents: Vec<String> = sqlx::query_as::<_, (String,)>(
+                        r#"SELECT agent_id::text FROM conversation_members
+                           WHERE conversation_id = $1::uuid AND agent_id IS NOT NULL AND agent_id != $2::uuid"#,
+                    )
+                    .bind(conversation_id)
+                    .bind(&agent_id_clone)
+                    .fetch_all(&db)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(id,)| id)
+                    .collect();
+
+                    if !other_agents.is_empty() {
+                        // Build agent filter configs for listen_mode filtering
+                        let mention_only = false;
+                        // Extract mentions from content (e.g. @agentId patterns)
+                        let mentions: Vec<String> = vec![];
+
+                        let mut agent_configs = Vec::new();
+                        for aid in &other_agents {
+                            let agent_perms = sqlx::query_as::<_, (String, Option<String>)>(
+                                r#"SELECT listen_mode::text, owner_user_id FROM conversation_members
+                                   WHERE conversation_id = $1::uuid AND agent_id = $2::uuid"#,
+                            )
+                            .bind(conversation_id)
+                            .bind(aid)
+                            .fetch_optional(&db)
+                            .await;
+
+                            if let Ok(Some((listen_mode, owner_id))) = agent_perms {
+                                let allowed_user_ids = if listen_mode == "owner_and_allowlist" || listen_mode == "allowed_users" {
+                                    sqlx::query_as::<_, (String,)>(
+                                        r#"SELECT user_id FROM agent_listen_allowed_users
+                                           WHERE agent_id = $1::uuid AND conversation_id = $2::uuid"#,
+                                    )
+                                    .bind(aid)
+                                    .bind(conversation_id)
+                                    .fetch_all(&db)
+                                    .await
+                                    .unwrap_or_default()
+                                    .into_iter()
+                                    .map(|(uid,)| uid)
+                                    .collect()
+                                } else {
+                                    vec![]
+                                };
+
+                                agent_configs.push(AgentFilterConfig {
+                                    agent_id: aid.clone(),
+                                    listen_mode,
+                                    owner_user_id: owner_id.unwrap_or_default(),
+                                    allowed_user_ids,
+                                });
+                            }
+                        }
+
+                        // For agent-sent messages in groups, sender is the agent's owner for listen_mode purposes
+                        let dispatch_ids = filter_agents_for_dispatch(
+                            mention_only,
+                            &_conv_type,
+                            &user_id, // use agent owner as "sender" for listen mode checks
+                            &mentions,
+                            &agent_configs,
+                        );
+
+                        let config_clone = config.clone();
+                        for dispatch_agent_id in dispatch_ids {
+                            if ws_state.has_active_stream_for_agent(conversation_id, &dispatch_agent_id) {
+                                let queue_key = format!("{}:{}", conversation_id, dispatch_agent_id);
+                                ws_state
+                                    .agent_response_queues
+                                    .entry(queue_key)
+                                    .or_insert_with(std::collections::VecDeque::new)
+                                    .push_back(QueuedResponse {
+                                        user_id: user_id.clone(),
+                                        conversation_id: conversation_id.to_string(),
+                                        agent_id: dispatch_agent_id.clone(),
+                                        content: content.to_string(),
+                                        reply_to_id: None,
+                                        thread_id: None,
+                                        user_message_id: Some(msg_id.clone()),
+                                    });
+                                continue;
+                            }
+
+                            do_trigger_agent_response(
+                                &user_id,
+                                &dispatch_agent_id,
+                                conversation_id,
+                                content,
+                                None,
+                                None,
+                                &_conv_type,
+                                &ws_state,
+                                &db,
+                                &redis,
+                                &config_clone,
+                            )
+                            .await;
+                        }
+                    }
                 }
                 _ => {}
             }
