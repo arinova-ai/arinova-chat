@@ -115,7 +115,7 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
       const formData = new FormData();
       formData.append("file", file);
       const uploadRes = await fetch(
-        `${BACKEND_URL}/api/conversations/${conversationId}/upload`,
+        `${BACKEND_URL}/api/conversations/${conversationId}/settings/upload`,
         { method: "POST", body: formData, credentials: "include" }
       );
       const uploadData = await uploadRes.json();
@@ -344,7 +344,7 @@ function GroupGeneralTab({
       const formData = new FormData();
       formData.append("file", file);
       const uploadRes = await fetch(
-        `${BACKEND_URL}/api/conversations/${conversationId}/upload`,
+        `${BACKEND_URL}/api/conversations/${conversationId}/settings/upload`,
         { method: "POST", body: formData, credentials: "include" }
       );
       const uploadData = await uploadRes.json();
