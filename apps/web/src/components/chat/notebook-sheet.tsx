@@ -557,6 +557,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
           paddingRight: "env(safe-area-inset-right)",
         }}
       >
+      <div className="flex flex-col h-full w-full max-w-4xl mx-auto">
 
         {/* List View */}
         {viewMode === "list" && (
@@ -987,6 +988,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
           </div>
         )}
 
+      </div>
       <ShareSheet open={shareSheetOpen} onOpenChange={setShareSheetOpen} content={shareContent} />
     </div>
   );
