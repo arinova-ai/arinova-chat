@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  MessageSquare, Building2, Globe, Users, UserPlus, Wallet,
+  MessageSquare, Building2, Globe, Users, UserPlus, Wallet, Mic,
   Palette, Store, Settings, Smile, PenTool, Plus, X, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -74,6 +74,9 @@ export function MobileBottomNav() {
     { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
     { id: "wallet", icon: Wallet, label: t("nav.wallet"), href: "/wallet" },
     { id: "office-theme", icon: Palette, label: t("nav.themeStore"), href: "/office/themes" },
+    { id: "explore-official", icon: Building2, label: t("nav.exploreOfficial"), href: "/explore/official" },
+    { id: "explore-clubs", icon: Users, label: t("nav.exploreClubs"), href: "/explore/clubs" },
+    { id: "explore-lounge", icon: Mic, label: t("nav.exploreLounge"), href: "/explore/lounge" },
   ];
 
   const shortcuts = useShortcutStore((s) => s.shortcuts);

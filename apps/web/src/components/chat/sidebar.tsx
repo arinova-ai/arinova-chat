@@ -6,6 +6,7 @@ import { useChatStore } from "@/store/chat-store";
 import { ConversationList } from "./conversation-list";
 import { PageTitle } from "@/components/ui/page-title";
 import { useTranslation } from "@/lib/i18n";
+import { AccountSwitcher } from "@/components/accounts/account-switcher";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -35,11 +36,17 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
             <MessageCircle className="h-5 w-5 text-brand-text" />
           </div>
         ) : (
-          <PageTitle
-            title={t("nav.chat")}
-            subtitle={t("chat.subtitle")}
-            icon={MessageCircle}
-          />
+          <div className="flex items-center gap-2">
+            {/* Account switcher — mobile only (desktop uses icon-rail) */}
+            <div className="md:hidden">
+              <AccountSwitcher />
+            </div>
+            <PageTitle
+              title={t("nav.chat")}
+              subtitle={t("chat.subtitle")}
+              icon={MessageCircle}
+            />
+          </div>
         )}
         <div className="flex items-center gap-0.5 mt-1 shrink-0">
           {/* Toggle button — desktop only */}
