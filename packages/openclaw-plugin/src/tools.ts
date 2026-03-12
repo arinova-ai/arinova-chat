@@ -1004,4 +1004,152 @@ export function registerTools(api: OpenClawPluginApi) {
     },
     { name: "arinova_kanban_reorder_columns" },
   );
+
+  // Tool 21: arinova_kanban_add_card_commit
+  api.registerTool(
+    {
+      name: "arinova_kanban_add_card_commit",
+      label: "Add Commit to Kanban Card",
+      description:
+        "Link a git commit hash to a Kanban card for traceability.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID" }),
+        commitHash: Type.String({ description: "Git commit hash (1-40 chars)" }),
+        message: Type.Optional(
+          Type.String({ description: "Commit message" }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId, commitHash, message } = params as {
+          cardId: string;
+          commitHash: string;
+          message?: string;
+        };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/commits`,
+            token: account.botToken,
+            body: { commitHash, message },
+          });
+
+          return {
+            content: [{ type: "text", text: `Commit ${commitHash} linked to card ${cardId}.` }],
+            details: { cardId, commitHash, message },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_add_card_commit" },
+  );
+
+  // Tool 22: arinova_kanban_list_card_commits
+  api.registerTool(
+    {
+      name: "arinova_kanban_list_card_commits",
+      label: "List Commits on Kanban Card",
+      description:
+        "List all git commits linked to a Kanban card.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId } = params as { cardId: string };
+        try {
+          const account = resolveAccount();
+          const res = await apiCall({
+            method: "GET",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/commits`,
+            token: account.botToken,
+          });
+
+          const commits = Array.isArray(res) ? res : [];
+          return {
+            content: [{ type: "text", text: JSON.stringify(commits, null, 2) }],
+            details: { cardId, count: commits.length },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_list_card_commits" },
+  );
+
+  // Tool 23: arinova_kanban_complete_card
+  api.registerTool(
+    {
+      name: "arinova_kanban_complete_card",
+      label: "Complete Kanban Card",
+      description:
+        "Mark a Kanban card as complete by moving it to the Done column.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID to complete" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId } = params as { cardId: string };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/complete`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: `Card ${cardId} moved to Done.` }],
+            details: { cardId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_complete_card" },
+  );
+
+  // Tool 24: arinova_kanban_list_archived_cards
+  api.registerTool(
+    {
+      name: "arinova_kanban_list_archived_cards",
+      label: "List Archived Kanban Cards",
+      description:
+        "List archived cards on a Kanban board with pagination.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID" }),
+        page: Type.Optional(Type.Number({ description: "Page number (default 1)" })),
+        limit: Type.Optional(Type.Number({ description: "Items per page (default 20, max 100)" })),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId, page, limit } = params as {
+          boardId: string;
+          page?: number;
+          limit?: number;
+        };
+        try {
+          const account = resolveAccount();
+          const qs = new URLSearchParams();
+          if (page) qs.set("page", String(page));
+          if (limit) qs.set("limit", String(limit));
+          const qsStr = qs.toString() ? `?${qs.toString()}` : "";
+          const res = await apiCall({
+            method: "GET",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}/archived-cards${qsStr}`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: JSON.stringify(res, null, 2) }],
+            details: { boardId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_list_archived_cards" },
+  );
 }
