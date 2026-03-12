@@ -125,6 +125,7 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
         body: JSON.stringify({ chatBgUrl: newUrl }),
       });
       setChatBgUrl(newUrl);
+      window.dispatchEvent(new CustomEvent("chat-bg-changed", { detail: { url: newUrl } }));
     } catch {}
     setUploading(false);
   }, [conversationId]);
@@ -137,6 +138,7 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
         body: JSON.stringify({ chatBgUrl: null }),
       });
       setChatBgUrl(null);
+      window.dispatchEvent(new CustomEvent("chat-bg-changed", { detail: { url: null } }));
     } catch {}
   }, [conversationId]);
 

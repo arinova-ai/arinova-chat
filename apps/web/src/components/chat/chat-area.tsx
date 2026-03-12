@@ -65,6 +65,16 @@ export function ChatArea() {
       .catch(() => {});
   }, [activeConversationId]);
 
+  // Listen for background changes from settings panel
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const url = (e as CustomEvent).detail?.url ?? null;
+      setChatBgUrl(url);
+    };
+    window.addEventListener("chat-bg-changed", handler);
+    return () => window.removeEventListener("chat-bg-changed", handler);
+  }, []);
+
   useRenderDiag("ChatArea", () => ({
     activeConversationId,
     searchActive,
