@@ -135,10 +135,21 @@ export function ChatLayout() {
 
       {/* Desktop: Conversation panel */}
       <div
-        className="hidden h-full shrink-0 overflow-hidden border-r border-border md:block transition-[width] duration-300 ease-in-out"
+        className="hidden h-full shrink-0 overflow-hidden border-r border-border md:block transition-[width] duration-300 ease-in-out relative"
         style={{ width: sidebarCollapsed ? 72 : 288 }}
       >
         <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
+        {/* New Chat FAB — desktop */}
+        {!sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={() => setNewChatOpen(true)}
+            className="absolute right-4 bottom-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-gradient-end shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-transform"
+            aria-label="New chat"
+          >
+            <Plus className="h-5 w-5 text-white" />
+          </button>
+        )}
       </div>
 
       {/* Mobile: sidebar + bottom nav when no conversation/search, chat when selected */}

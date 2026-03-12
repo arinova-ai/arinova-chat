@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Search, MessageCircle, SquarePen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Search, MessageCircle, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { ConversationList } from "./conversation-list";
 import { PageTitle } from "@/components/ui/page-title";
@@ -55,16 +55,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
               ) : (
                 <PanelLeftClose className="h-4 w-4" />
               )}
-            </button>
-          )}
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event("arinova:new-chat"))}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
-              aria-label={t("chat.newChat")}
-            >
-              <SquarePen className="h-5 w-5" />
             </button>
           )}
         </div>

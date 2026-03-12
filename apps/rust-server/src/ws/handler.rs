@@ -1292,8 +1292,32 @@ pub async fn trigger_agent_response(
         }
     }
 
+    // Skip agent dispatch for non-AI stickers (stickers without agent_prompt)
+    let is_non_ai_sticker = {
+        let sticker_check_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+        if let Some(caps) = sticker_check_re.captures(content.trim()) {
+            let filename = caps.get(3).unwrap().as_str();
+            let has_prompt = sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM stickers WHERE filename = $1 AND agent_prompt IS NOT NULL AND agent_prompt != '')",
+            )
+            .bind(filename)
+            .fetch_one(db)
+            .await
+            .unwrap_or(false);
+            !has_prompt
+        } else {
+            false
+        }
+    };
+
     // Dispatch to each agent (may be empty if mention_only and no mentions matched)
+    if is_non_ai_sticker {
+        tracing::info!("Skipping agent dispatch for non-AI sticker in conv={}", conversation_id);
+    }
     for agent_id in &dispatch_ids {
+        if is_non_ai_sticker {
+            continue;
+        }
         // Per-agent queue: if this specific agent has an active stream, queue it
         if ws_state.has_active_stream_for_agent(conversation_id, agent_id) {
             tracing::info!("Agent queued (active stream): conv={} agent={}", conversation_id, agent_id);
