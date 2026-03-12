@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useChatStore } from "@/store/chat-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
@@ -10,6 +9,8 @@ import { StickerPanel } from "./sticker-panel";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
+import { NotebookSheet } from "./notebook-sheet";
+import { KanbanSidebar } from "./kanban-sidebar";
 
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
@@ -26,7 +27,6 @@ import { ErrorBoundary } from "./error-boundary";
 
 export function ChatArea() {
   const { t } = useTranslation();
-  const router = useRouter();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const searchActive = useChatStore((s) => s.searchActive);
   const conversations = useChatStore((s) => s.conversations);
@@ -34,6 +34,12 @@ export function ChatArea() {
   const agents = useChatStore((s) => s.agents);
 
   const conversationMembers = useChatStore((s) => s.conversationMembers);
+  const notebookOpen = useChatStore((s) => s.notebookOpen);
+  const kanbanSidebarOpen = useChatStore((s) => s.kanbanSidebarOpen);
+  const openNotebook = useChatStore((s) => s.openNotebook);
+  const closeNotebook = useChatStore((s) => s.closeNotebook);
+  const openKanbanSidebar = useChatStore((s) => s.openKanbanSidebar);
+  const closeKanbanSidebar = useChatStore((s) => s.closeKanbanSidebar);
 
 
   const [manageOpen, setManageOpen] = useState(false);
@@ -189,8 +195,8 @@ export function ChatArea() {
         onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
-        onKanbanClick={() => router.push("/office/tasks")}
-        onNotebookClick={() => router.push("/office/notes")}
+        onKanbanClick={() => openKanbanSidebar()}
+        onNotebookClick={() => openNotebook()}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
@@ -253,6 +259,17 @@ export function ChatArea() {
         onOpenChange={setMediaFilesOpen}
         conversationId={conversation.id}
         initialTab={mediaFilesTab}
+      />
+
+      <NotebookSheet
+        open={notebookOpen}
+        onOpenChange={(open) => { if (!open) closeNotebook(); }}
+        conversationId={activeConversationId}
+      />
+      <KanbanSidebar
+        open={kanbanSidebarOpen}
+        onOpenChange={(open) => { if (!open) closeKanbanSidebar(); }}
+        conversationId={activeConversationId}
       />
     </div>
   );

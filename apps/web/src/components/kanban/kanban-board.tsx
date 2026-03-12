@@ -65,13 +65,11 @@ export interface KanbanBoardProps {
   streamAgents?: { id: string; name: string; emoji: string }[];
   /** Conversation ID — used for persisting board selection per conversation (compact mode) */
   conversationId?: string;
-  /** Deep-link: auto-open card detail sheet for this card ID */
-  initialCardId?: string;
 }
 
 // ── Component ───────────────────────────────────────────────
 
-export function KanbanBoard({ mode, streamAgents = [], conversationId, initialCardId }: KanbanBoardProps) {
+export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanBoardProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -97,17 +95,6 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId, initialCa
   // Column management state
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
-
-  // Deep-link: auto-open card when initialCardId is provided
-  const deepLinkHandled = useRef(false);
-  useEffect(() => {
-    if (!initialCardId || deepLinkHandled.current || !board) return;
-    const card = board.cards.find((c) => c.id === initialCardId);
-    if (card) {
-      setSelectedCard(card);
-      deepLinkHandled.current = true;
-    }
-  }, [initialCardId, board]);
 
   // Use DnD in full mode on desktop only
   const useDnd = mode === "full" && !isMobile;

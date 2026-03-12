@@ -548,24 +548,15 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   if (!open) return null;
 
   const panel = (
-    <>
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/50 animate-in fade-in-0"
-        onClick={() => onOpenChange(false)}
-      />
-      {/* Panel */}
-      <div
-        className={cn(
-          "fixed z-50 shadow-lg animate-in",
-          isMobile
-            ? "inset-x-0 bottom-0 rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[80vh] slide-in-from-bottom"
-            : "inset-y-0 right-0 w-full sm:w-full sm:max-w-none p-0 flex flex-col bg-secondary border-l border-border slide-in-from-right"
-        )}
+        className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in"
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+        }}
       >
-        {isMobile && (
-          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
-        )}
 
         {/* List View */}
         {viewMode === "list" && (
@@ -597,11 +588,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartCreate} title={t("chat.notebook.create")}>
                     <Plus className="h-4 w-4" />
                   </Button>
-                  {!isMobile && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </div>
@@ -999,10 +988,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
             </div>
           </div>
         )}
-      </div>
 
       <ShareSheet open={shareSheetOpen} onOpenChange={setShareSheetOpen} content={shareContent} />
-    </>
+    </div>
   );
 
   return typeof document !== "undefined" ? createPortal(panel, document.body) : null;
