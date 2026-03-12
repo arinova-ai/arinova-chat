@@ -25,6 +25,8 @@ pub fn router() -> Router<AppState> {
 struct AgentSendBody {
     conversation_id: String,
     content: String,
+    #[serde(default)]
+    mentions: Option<Vec<String>>,
 }
 
 async fn agent_send(
@@ -188,8 +190,8 @@ async fn agent_send(
         .collect();
 
         if !other_agents.is_empty() {
-            let mention_only = false;
-            let mentions: Vec<String> = vec![];
+            let mentions: Vec<String> = body.mentions.clone().unwrap_or_default();
+            let mention_only = !mentions.is_empty();
 
             let mut agent_configs = Vec::new();
             for aid in &other_agents {

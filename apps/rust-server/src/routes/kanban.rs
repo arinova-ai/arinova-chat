@@ -80,6 +80,14 @@ pub fn router() -> Router<AppState> {
             "/api/agent/kanban/cards/{cardId}/commits",
             get(agent_list_card_commits).post(agent_add_card_commit),
         )
+        .route(
+            "/api/agent/kanban/cards/{id}/notes",
+            get(agent_list_card_notes).post(agent_link_note_to_card),
+        )
+        .route(
+            "/api/agent/kanban/cards/{card_id}/notes/{note_id}",
+            delete(agent_unlink_note_from_card),
+        )
         // User notes lookup (for note selector in card detail)
         .route("/api/kanban/owner-notes", get(list_owner_notes))
 }
@@ -2209,6 +2217,111 @@ async fn agent_add_card_commit(
     match result {
         Ok(_) => StatusCode::CREATED.into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+// ── Agent Note Link Endpoints ────────────────────────────────
+
+/// POST /api/agent/kanban/cards/:id/notes — link a note to a card
+async fn agent_link_note_to_card(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<LinkNoteBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let note_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversation_notes WHERE id = $1)",
+    )
+    .bind(body.note_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !note_exists {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "Note not found" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_notes (card_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(body.note_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// DELETE /api/agent/kanban/cards/:card_id/notes/:note_id — unlink a note from a card
+async fn agent_unlink_note_from_card(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path((card_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM kanban_card_notes WHERE card_id = $1 AND note_id = $2",
+    )
+    .bind(card_id)
+    .bind(note_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// GET /api/agent/kanban/cards/:id/notes — list notes linked to a card
+async fn agent_list_card_notes(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let notes = sqlx::query_as::<_, LinkedNoteRow>(
+        r#"SELECT n.id, n.title, n.tags, n.created_at
+           FROM conversation_notes n
+           JOIN kanban_card_notes cn ON cn.note_id = n.id
+           WHERE cn.card_id = $1
+           ORDER BY cn.created_at DESC"#,
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match notes {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
     }
 }
 
