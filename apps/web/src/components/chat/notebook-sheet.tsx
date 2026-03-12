@@ -563,9 +563,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
         {/* List View */}
         {viewMode === "list" && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
+          <div className="flex flex-col h-full">
             <div className={cn(
-              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0"
+              "shrink-0",
+              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b"
             )}>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm flex items-center gap-1.5">
@@ -599,7 +600,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
             </div>
 
             {/* Tabs: Active / Archived */}
-            <div className={cn("flex items-center gap-1 border-b border-border", isMobile ? "px-2 pb-1" : "px-4 pb-1")}>
+            <div className={cn("flex items-center gap-1 border-b border-border shrink-0", isMobile ? "px-2 pb-1" : "px-4 pb-1")}>
               <button
                 type="button"
                 onClick={() => setShowArchived(false)}
@@ -619,7 +620,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
             {/* Tag statistics panel */}
             {allTags.length > 0 && (
-              <div className={cn(isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
+              <div className={cn("shrink-0", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
                 {isMobile && (
                   <button
                     type="button"
@@ -663,7 +664,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
               </div>
             )}
 
-            <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-1" : "flex-1 min-h-0 px-1")}>
+            <div className="flex-1 min-h-0 overflow-y-auto px-1">
               {loading && notes.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -722,8 +723,8 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
         {/* Detail View */}
         {viewMode === "detail" && selectedNote && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
-            <div className={cn("flex items-center gap-2", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0")}>
+          <div className="flex flex-col h-full">
+            <div className={cn("flex items-center gap-2 shrink-0", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b")}>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -744,7 +745,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 </Button>
               </div>
             </div>
-            <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-3" : "flex-1 min-h-0 px-4 py-3")}>
+            <div className={cn("flex-1 min-h-0 overflow-y-auto", isMobile ? "px-3 py-2" : "px-4 py-3")}>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                 <span>{selectedNote.creatorName}</span>
                 <span>&middot;</span>
@@ -916,19 +917,17 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
         {/* Create View */}
         {viewMode === "create" && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
-            <div className={cn("flex items-center gap-2", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0")}>
+          <div className="flex flex-col h-full">
+            <div className={cn("flex items-center gap-2 shrink-0", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b")}>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h3 className="text-sm font-semibold flex-1">{t("chat.notebook.newNote")}</h3>
-              {!isMobile && (
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <div className={cn("flex flex-col gap-3 overflow-y-auto", isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0")}>
+            <div className={cn("flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto", isMobile ? "px-3 py-2" : "px-4 py-3")}>
               <input type="text" placeholder={t("chat.notebook.titlePlaceholder")} value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" autoFocus />
               {/* Tag Input */}
               <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 min-h-[32px]">
@@ -962,19 +961,17 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
         {/* Edit View */}
         {viewMode === "edit" && selectedNote && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
-            <div className={cn("flex items-center gap-2", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0")}>
+          <div className="flex flex-col h-full">
+            <div className={cn("flex items-center gap-2 shrink-0", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b")}>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h3 className="text-sm font-semibold flex-1">{t("chat.notebook.editNote")}</h3>
-              {!isMobile && (
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <div className={cn("flex flex-col gap-3 overflow-y-auto", isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0")}>
+            <div className={cn("flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto", isMobile ? "px-3 py-2" : "px-4 py-3")}>
               <input type="text" placeholder={t("chat.notebook.titlePlaceholder")} value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" autoFocus />
               {/* Tag Input */}
               <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 min-h-[32px]">
