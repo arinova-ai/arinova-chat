@@ -2130,10 +2130,80 @@ pub(crate) async fn do_trigger_agent_response(
             }
         }
 
-        // Dispatch to agents mentioned by the completing agent
+        // Dispatch to agents via listen_mode filter (mirrors user message path)
+        let mut already_dispatched = std::collections::HashSet::new();
+        if conv_type == "group" {
+            // Build agent configs for all agents in the conversation
+            let conv_agents = sqlx::query_as::<_, (String, String, Option<String>)>(
+                r#"SELECT cm.agent_id::text, cm.listen_mode::text, cm.owner_user_id
+                   FROM conversation_members cm
+                   WHERE cm.conversation_id = $1::uuid AND cm.agent_id IS NOT NULL"#,
+            )
+            .bind(&conversation_id)
+            .fetch_all(&db)
+            .await
+            .unwrap_or_default();
+
+            let mut agent_configs = Vec::new();
+            for (aid, listen_mode, owner_id) in &conv_agents {
+                if aid == &agent_id {
+                    continue; // skip self
+                }
+                let allowed_user_ids = if matches!(listen_mode.as_str(), "owner_and_allowlist" | "allowlist_mentions" | "allowed_users") {
+                    sqlx::query_as::<_, (String,)>(
+                        r#"SELECT user_id FROM agent_listen_allowed_users
+                           WHERE agent_id = $1::uuid AND conversation_id = $2::uuid"#,
+                    )
+                    .bind(aid)
+                    .bind(&conversation_id)
+                    .fetch_all(&db)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(uid,)| uid)
+                    .collect()
+                } else {
+                    vec![]
+                };
+
+                agent_configs.push(AgentFilterConfig {
+                    agent_id: aid.clone(),
+                    listen_mode: listen_mode.clone(),
+                    owner_user_id: owner_id.clone().unwrap_or_default(),
+                    allowed_user_ids,
+                });
+            }
+
+            let mention_ids = pending_mentions.as_ref()
+                .map(|(m, _)| m.clone())
+                .unwrap_or_default();
+
+            let dispatch_ids = filter_agents_for_dispatch(
+                false,
+                &conv_type,
+                &user_id,
+                &mention_ids,
+                &agent_configs,
+            );
+
+            let content_for_dispatch = pending_mentions.as_ref()
+                .map(|(_, c)| c.clone())
+                .unwrap_or_default();
+
+            for target_id in &dispatch_ids {
+                already_dispatched.insert(target_id.clone());
+                spawn_mention_dispatch(
+                    &user_id, target_id, &conversation_id, &content_for_dispatch,
+                    &agent_msg_id_clone, &conv_type,
+                    &ws_state, &db, &redis, &config,
+                );
+            }
+        }
+
+        // Dispatch to @mentioned agents not already dispatched by listen_mode filter
         if let Some((mentions, content)) = pending_mentions {
             for mentioned_id in mentions {
-                if mentioned_id == agent_id {
+                if mentioned_id == agent_id || already_dispatched.contains(&mentioned_id) {
                     continue;
                 }
                 spawn_mention_dispatch(
