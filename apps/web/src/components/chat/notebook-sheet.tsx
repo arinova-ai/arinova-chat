@@ -32,6 +32,7 @@ import {
   Sparkles,
   Bot,
   Send,
+  ChevronDown,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
@@ -261,6 +262,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   // Tag suggestions state
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   // Auto tag state
@@ -617,31 +619,47 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
             {/* Tag statistics panel */}
             {allTags.length > 0 && (
-              <div className={cn("flex flex-wrap gap-1", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
-                {allTags.map((tag) => (
+              <div className={cn(isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
+                {isMobile && (
                   <button
-                    key={tag}
                     type="button"
-                    onClick={() => toggleFilterTag(tag)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
-                      filterTags.includes(tag)
-                        ? "bg-brand text-white"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    )}
+                    onClick={() => setTagsExpanded((p) => !p)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1"
                   >
-                    <Tag className="h-2.5 w-2.5" />
-                    {tag}
-                    <span className={cn(
-                      "inline-flex items-center justify-center rounded-full min-w-[16px] h-4 px-1 text-[9px] font-semibold",
-                      filterTags.includes(tag)
-                        ? "bg-white/20 text-white"
-                        : "bg-foreground/10 text-muted-foreground"
-                    )}>
-                      {tagCounts.get(tag) ?? 0}
-                    </span>
+                    <Tag className="h-3 w-3" />
+                    Tags ({allTags.length})
+                    <ChevronDown className={cn("h-3 w-3 transition-transform", tagsExpanded && "rotate-180")} />
                   </button>
-                ))}
+                )}
+                <div className={cn(
+                  "flex flex-wrap gap-1",
+                  isMobile && !tagsExpanded && "max-h-0 overflow-hidden",
+                )}>
+                  {allTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleFilterTag(tag)}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+                        filterTags.includes(tag)
+                          ? "bg-brand text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      )}
+                    >
+                      <Tag className="h-2.5 w-2.5" />
+                      {tag}
+                      <span className={cn(
+                        "inline-flex items-center justify-center rounded-full min-w-[16px] h-4 px-1 text-[9px] font-semibold",
+                        filterTags.includes(tag)
+                          ? "bg-white/20 text-white"
+                          : "bg-foreground/10 text-muted-foreground"
+                      )}>
+                        {tagCounts.get(tag) ?? 0}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
