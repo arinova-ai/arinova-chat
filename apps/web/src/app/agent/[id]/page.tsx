@@ -36,7 +36,7 @@ interface AgentStats {
   lastActive: string | null;
 }
 
-const LISTEN_MODES = ["all_mentions", "owner_only", "allowed_users"] as const;
+const LISTEN_MODES = ["all", "all_mentions", "owner_unmention_others_mention", "owner_and_allowlist", "owner_only", "muted"] as const;
 type ListenMode = (typeof LISTEN_MODES)[number];
 
 function AgentProfileContent() {
@@ -450,11 +450,11 @@ function AgentProfileContent() {
                       ))}
                     </div>
 
-                    {/* Allowed users list (only when allowed_users mode) */}
-                    {listenMode === "allowed_users" && (
+                    {/* Allowed users list (only when owner_and_allowlist mode) */}
+                    {listenMode === "owner_and_allowlist" && (
                       <div className="mt-3 space-y-1.5">
                         <p className="text-xs font-medium text-muted-foreground px-1">
-                          {t("agentProfile.listenMode.allowed_users")}
+                          {t("agentProfile.allowedUsers")}
                         </p>
                         {groupMembers.users
                           .filter((u) => u.userId !== session?.user?.id)
