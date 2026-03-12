@@ -91,7 +91,7 @@ pub async fn extract_capsule(
 
             // Only finalize if not cancelled (abort handler may have changed status)
             let result = sqlx::query(
-                "UPDATE memory_capsules SET status = 'ready', created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5, note_count = $6 WHERE id = $1 AND status = 'extracting'",
+                "UPDATE memory_capsules SET status = 'ready', progress = NULL, created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5, note_count = $6 WHERE id = $1 AND status = 'extracting'",
             )
             .bind(capsule_id)
             .bind(first_msg_time)
@@ -145,7 +145,7 @@ pub async fn extract_capsule(
                 // Cancelled by user — abort handler already handled DB state
                 tracing::info!("Extraction cancelled for capsule {}", capsule_id);
             } else {
-                let _ = sqlx::query("UPDATE memory_capsules SET status = 'failed' WHERE id = $1")
+                let _ = sqlx::query("UPDATE memory_capsules SET status = 'failed', progress = NULL WHERE id = $1")
                     .bind(capsule_id)
                     .execute(&db)
                     .await;
@@ -243,10 +243,26 @@ async fn do_extraction(
         .map(|t| chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc))
         .unwrap_or_else(chrono::Utc::now);
 
+    // Initialize progress tracking
+    let total_notes = notes.len();
+    sqlx::query("UPDATE memory_capsules SET progress = $2 WHERE id = $1")
+        .bind(capsule_id)
+        .bind(serde_json::json!({
+            "totalMessages": msg_count,
+            "processedMessages": 0,
+            "totalNotes": total_notes,
+            "processedNotes": 0,
+            "extractedEntries": 0
+        }))
+        .execute(db)
+        .await?;
+
     // 4. Build chunks from messages (each chunk ≤ CHUNK_CHAR_LIMIT chars)
     let mut chunks: Vec<String> = Vec::new();
     let mut chunk_time_ranges: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> = Vec::new();
+    let mut chunk_msg_counts: Vec<usize> = Vec::new();
     let mut current_chunk = String::new();
+    let mut current_chunk_msgs: usize = 0;
     let mut chunk_start: Option<chrono::NaiveDateTime> = None;
     let mut chunk_end: Option<chrono::NaiveDateTime> = None;
 
@@ -264,6 +280,8 @@ async fn do_extraction(
         let line = format!("[{}] {}: {}\n", role, ts.format("%Y-%m-%d %H:%M"), content);
         if !current_chunk.is_empty() && current_chunk.len() + line.len() > CHUNK_CHAR_LIMIT {
             chunks.push(std::mem::take(&mut current_chunk));
+            chunk_msg_counts.push(current_chunk_msgs);
+            current_chunk_msgs = 0;
             if let (Some(s), Some(e)) = (chunk_start.take(), chunk_end.take()) {
                 chunk_time_ranges.push((s, e));
             }
@@ -273,9 +291,11 @@ async fn do_extraction(
         }
         chunk_end = Some(*ts);
         current_chunk.push_str(&line);
+        current_chunk_msgs += 1;
     }
     if !current_chunk.is_empty() {
         chunks.push(current_chunk);
+        chunk_msg_counts.push(current_chunk_msgs);
         if let (Some(s), Some(e)) = (chunk_start, chunk_end) {
             chunk_time_ranges.push((s, e));
         }
@@ -302,6 +322,7 @@ async fn do_extraction(
 
     let mut parsed_entries: Vec<(String, f64, Vec<String>, usize)> = Vec::new(); // (content, importance, tags, chunk_idx)
     let mut chunks_succeeded = 0usize;
+    let mut processed_messages: usize = 0;
 
     for (chunk_idx, chunk_text) in chunks.iter().enumerate() {
         if cancel.is_cancelled() {
@@ -315,6 +336,9 @@ async fn do_extraction(
         });
 
         let chunk_result = call_gemini_with_retry(&client, &url, &body, chunk_idx).await;
+
+        let chunk_msgs = chunk_msg_counts.get(chunk_idx).copied().unwrap_or(0);
+        processed_messages += chunk_msgs;
 
         match chunk_result {
             Ok(text) => {
@@ -341,6 +365,20 @@ async fn do_extraction(
                 );
             }
         }
+
+        // Update progress after each chunk
+        let notes_done = if chunk_idx == 0 { total_notes } else { total_notes };
+        let _ = sqlx::query("UPDATE memory_capsules SET progress = $2 WHERE id = $1")
+            .bind(capsule_id)
+            .bind(serde_json::json!({
+                "totalMessages": msg_count,
+                "processedMessages": processed_messages,
+                "totalNotes": total_notes,
+                "processedNotes": notes_done,
+                "extractedEntries": parsed_entries.len()
+            }))
+            .execute(db)
+            .await;
     }
 
     if chunks_succeeded == 0 {

@@ -241,11 +241,12 @@ async fn list_capsules(
         extracted_through: Option<chrono::DateTime<chrono::Utc>>,
         entry_count: i32,
         note_count: i32,
+        progress: Option<serde_json::Value>,
     }
 
     let rows = sqlx::query_as::<_, CapsuleRow>(
         r#"SELECT id, name, source_conversation_id, message_count, status, created_at,
-                  extracted_through, entry_count, note_count
+                  extracted_through, entry_count, note_count, progress
            FROM memory_capsules
            WHERE owner_id = $1
            ORDER BY created_at DESC"#,
@@ -268,6 +269,7 @@ async fn list_capsules(
                 "extractedThrough": r.extracted_through.map(|dt| dt.to_rfc3339()),
                 "entryCount": r.entry_count,
                 "noteCount": r.note_count,
+                "progress": r.progress,
             })
         })
         .collect();

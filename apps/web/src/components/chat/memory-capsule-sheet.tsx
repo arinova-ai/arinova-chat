@@ -20,6 +20,14 @@ import {
 import { api, ApiError } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 
+interface CapsuleProgress {
+  totalMessages: number;
+  processedMessages: number;
+  totalNotes: number;
+  processedNotes: number;
+  extractedEntries: number;
+}
+
 interface Capsule {
   id: string;
   name: string;
@@ -30,6 +38,7 @@ interface Capsule {
   extractedThrough: string | null;
   entryCount: number;
   noteCount: number;
+  progress: CapsuleProgress | null;
 }
 
 interface Grant {
@@ -293,13 +302,39 @@ export function MemoryCapsuleSheet({
                         {capsule.name}
                       </p>
                       {capsule.status === "extracting" ? (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span>{t("memoryCapsule.statusExtracting")}</span>
+                        <div className="space-y-1">
+                          {capsule.progress ? (
+                            <>
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-all duration-500"
+                                  style={{
+                                    width: `${capsule.progress.totalMessages > 0
+                                      ? Math.round((capsule.progress.processedMessages / capsule.progress.totalMessages) * 100)
+                                      : 0}%`,
+                                  }}
+                                />
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">
+                                {capsule.progress.processedMessages} / {capsule.progress.totalMessages} messages
+                                {capsule.progress.totalNotes > 0 && `, ${capsule.progress.processedNotes} / ${capsule.progress.totalNotes} notes`}
+                              </p>
+                              {capsule.progress.extractedEntries > 0 && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  {capsule.progress.extractedEntries} entries extracted
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span>{t("memoryCapsule.statusExtracting")}</span>
+                            </div>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleAbort(capsule.id)}
-                            className="ml-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
+                            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
                           >
                             <XCircle className="h-3 w-3" />
                             Cancel
