@@ -184,7 +184,6 @@ export function ChatArea() {
         onClick={agent ? () => setManageOpen(true) : undefined}
         onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
-        onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
         onKanbanClick={openKanbanSidebar}
         onNotebookClick={openNotebook}
@@ -225,6 +224,7 @@ export function ChatArea() {
             onOpenChange={setMembersOpen}
             conversationId={conversation.id}
             initialTab={membersPanelTab}
+            onAddMemberClick={() => setAddMemberOpen(true)}
           />
           <AddMemberSheet
             open={addMemberOpen}

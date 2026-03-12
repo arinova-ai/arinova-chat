@@ -313,10 +313,12 @@ async fn main() {
             user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
             conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
             chat_bg_url TEXT,
+            pinned_buttons TEXT[],
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             PRIMARY KEY (user_id, conversation_id)
         );
+        ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS pinned_buttons TEXT[];
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

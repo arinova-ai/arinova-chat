@@ -47,6 +47,7 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronUp,
+  UserPlus,
 } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import {
@@ -66,6 +67,7 @@ interface GroupMembersPanelProps {
   onOpenChange: (open: boolean) => void;
   conversationId: string;
   initialTab?: PanelTab;
+  onAddMemberClick?: () => void;
 }
 
 export function GroupMembersPanel({
@@ -73,6 +75,7 @@ export function GroupMembersPanel({
   onOpenChange,
   conversationId,
   initialTab,
+  onAddMemberClick,
 }: GroupMembersPanelProps) {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
@@ -239,6 +242,16 @@ export function GroupMembersPanel({
 
         {/* Footer Actions */}
         <div className="border-t border-border p-4 space-y-2">
+          {canManage && onAddMemberClick && (
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => { onAddMemberClick(); onOpenChange(false); }}
+            >
+              <UserPlus className="h-4 w-4" />
+              {t("addMember.title")}
+            </Button>
+          )}
           {isAdmin && (
             <Button
               variant="outline"

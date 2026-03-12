@@ -1,15 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useHeaderPinStore } from "@/store/header-pin-store";
+import { useGroupPinStore } from "@/store/group-pin-store";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { assetUrl, BACKEND_URL } from "@/lib/config";
 import {
   ArrowLeft, Search, Bell, SquareKanban, BookOpen, MessageSquare,
-  Phone, Image as ImageIcon, FileText, Brain, Pin, Upload, X,
+  Phone, Image as ImageIcon, FileText, Brain, Pin, Upload, X, Users, UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,18 +37,64 @@ export const HEADER_BUTTONS: HeaderButton[] = [
   { id: "capsule", labelKey: "memoryCapsule.title", icon: Brain, supportedTypes: ["h2a"] },
 ];
 
+/* ─── Group header buttons ─── */
+
+export interface GroupHeaderButton {
+  id: string;
+  labelKey: string;
+  icon: LucideIcon;
+}
+
+export const GROUP_HEADER_BUTTONS: GroupHeaderButton[] = [
+  { id: "search", labelKey: "chat.search.inConversation", icon: Search },
+  { id: "mute", labelKey: "chat.header.muteConversation", icon: Bell },
+  { id: "members", labelKey: "chat.header.members", icon: UsersRound },
+  { id: "kanban", labelKey: "chat.kanban.title", icon: SquareKanban },
+  { id: "notebook", labelKey: "chat.notebook.title", icon: BookOpen },
+  { id: "threads", labelKey: "chat.thread.title", icon: MessageSquare },
+  { id: "photos", labelKey: "chat.header.photos", icon: ImageIcon },
+  { id: "files", labelKey: "chat.header.files", icon: FileText },
+];
+
+export const GROUP_DEFAULT_PINS = ["members", "kanban"];
+export const GROUP_MAX_PINS = 4;
+
 interface ChatHeaderSettingsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversationId?: string;
+  /** "group" uses per-conversation pins from server; default uses global direct pins */
+  mode?: "direct" | "group";
+  /** For group mode: additional tabs like General settings */
+  groupTitle?: string;
+  groupAvatarUrl?: string | null;
+  onGroupTitleSave?: (title: string) => void;
 }
 
-export function ChatHeaderSettings({ open, onOpenChange, conversationId }: ChatHeaderSettingsProps) {
+export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = "direct", groupTitle, groupAvatarUrl, onGroupTitleSave }: ChatHeaderSettingsProps) {
   const { t } = useTranslation();
-  const pinnedIds = useHeaderPinStore((s) => s.pinnedIds);
-  const togglePin = useHeaderPinStore((s) => s.togglePin);
-  const maxReached = pinnedIds.length >= 5;
-  const [activeTab, setActiveTab] = useState<"pins" | "appearance">("pins");
+  const directPinnedIds = useHeaderPinStore((s) => s.pinnedIds);
+  const directTogglePin = useHeaderPinStore((s) => s.togglePin);
+
+  // Group pins
+  const groupPinnedIds = useGroupPinStore((s) => conversationId ? s.getPins(conversationId) : []);
+  const groupTogglePin = useGroupPinStore((s) => s.togglePin);
+
+  const isGroup = mode === "group";
+  const pinnedIds = isGroup ? groupPinnedIds : directPinnedIds;
+  const maxPins = isGroup ? GROUP_MAX_PINS : 5;
+  const maxReached = pinnedIds.length >= maxPins;
+  const buttons = isGroup ? GROUP_HEADER_BUTTONS : HEADER_BUTTONS;
+
+  const handleTogglePin = (btnId: string) => {
+    if (isGroup && conversationId) {
+      groupTogglePin(conversationId, btnId);
+    } else {
+      directTogglePin(btnId);
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<"general" | "pins" | "appearance">(isGroup ? "general" : "pins");
 
   // Background state
   const [chatBgUrl, setChatBgUrl] = useState<string | null>(null);
@@ -105,6 +154,18 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId }: ChatH
 
       {/* Tabs */}
       <div className="flex border-b border-border">
+        {isGroup && (
+          <button
+            type="button"
+            className={cn(
+              "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
+              activeTab === "general" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={() => setActiveTab("general")}
+          >
+            {t("chat.settings.general")}
+          </button>
+        )}
         <button
           type="button"
           className={cn(
@@ -129,15 +190,29 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId }: ChatH
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
+        {activeTab === "general" && isGroup && (
+          <GroupGeneralTab
+            title={groupTitle ?? ""}
+            avatarUrl={groupAvatarUrl}
+            conversationId={conversationId}
+            onTitleSave={onGroupTitleSave}
+            t={t}
+          />
+        )}
+
         {activeTab === "pins" && (
           <div>
-            <p className="mb-4 text-xs text-muted-foreground">{t("chat.header.pinnedButtonsDesc")}</p>
+            <p className="mb-4 text-xs text-muted-foreground">
+              {t("chat.header.pinnedButtonsDesc")} ({pinnedIds.length}/{maxPins})
+            </p>
             <div className="flex flex-col gap-1">
-              {HEADER_BUTTONS.map((btn) => {
+              {buttons.map((btn) => {
                 const Icon = btn.icon;
                 const isPinned = pinnedIds.includes(btn.id);
                 const disabled = !isPinned && maxReached;
-                const types = btn.supportedTypes.join(" / ").toUpperCase();
+                const types = "supportedTypes" in btn
+                  ? (btn as HeaderButton).supportedTypes.join(" / ").toUpperCase()
+                  : "GROUP";
                 return (
                   <label
                     key={btn.id}
@@ -151,7 +226,7 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId }: ChatH
                     <Switch
                       checked={isPinned}
                       disabled={disabled}
-                      onCheckedChange={() => togglePin(btn.id)}
+                      onCheckedChange={() => handleTogglePin(btn.id)}
                     />
                   </label>
                 );
@@ -230,6 +305,107 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId }: ChatH
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Group General Tab ─── */
+
+function GroupGeneralTab({
+  title,
+  avatarUrl,
+  conversationId,
+  onTitleSave,
+  t,
+}: {
+  title: string;
+  avatarUrl?: string | null;
+  conversationId?: string;
+  onTitleSave?: (title: string) => void;
+  t: (key: string) => string;
+}) {
+  const [editTitle, setEditTitle] = useState(title);
+  const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [localAvatar, setLocalAvatar] = useState(avatarUrl);
+
+  const handleSaveTitle = useCallback(async () => {
+    if (!editTitle.trim() || editTitle === title) return;
+    setSaving(true);
+    onTitleSave?.(editTitle.trim());
+    setSaving(false);
+  }, [editTitle, title, onTitleSave]);
+
+  const handleUploadAvatar = useCallback(async (file: File) => {
+    if (!conversationId) return;
+    setAvatarUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch(
+        `${BACKEND_URL}/api/conversations/${conversationId}/upload`,
+        { method: "POST", body: formData, credentials: "include" }
+      );
+      const uploadData = await uploadRes.json();
+      const newUrl = uploadData.url as string;
+      // Update group avatar via conversation update API
+      await api(`/api/conversations/${conversationId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ avatarUrl: newUrl }),
+      });
+      setLocalAvatar(newUrl);
+    } catch {}
+    setAvatarUploading(false);
+  }, [conversationId]);
+
+  return (
+    <div className="space-y-6">
+      {/* Avatar */}
+      <div className="flex flex-col items-center gap-3">
+        <label className="cursor-pointer">
+          <Avatar className="h-20 w-20">
+            {localAvatar ? (
+              <img src={assetUrl(localAvatar)} alt={title} className="h-full w-full object-cover" />
+            ) : (
+              <AvatarFallback className="bg-accent text-foreground/80">
+                <Users className="h-8 w-8" />
+              </AvatarFallback>
+            )}
+          </Avatar>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUploadAvatar(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <p className="text-xs text-muted-foreground">
+          {avatarUploading ? "..." : t("chat.settings.tapToChangeAvatar")}
+        </p>
+      </div>
+
+      {/* Group name */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium">{t("chat.settings.groupName")}</label>
+        <div className="flex gap-2">
+          <Input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            className="flex-1"
+          />
+          <Button
+            size="sm"
+            disabled={saving || !editTitle.trim() || editTitle === title}
+            onClick={handleSaveTitle}
+          >
+            {t("chat.settings.save")}
+          </Button>
+        </div>
       </div>
     </div>
   );
