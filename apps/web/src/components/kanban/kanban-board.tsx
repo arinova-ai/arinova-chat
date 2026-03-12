@@ -581,18 +581,16 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
     );
   }
 
-  if (!board) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
-        <p className="text-sm text-muted-foreground">
-          {mode === "compact" ? t("chat.kanban.empty") : "Failed to load board."}
-        </p>
-        <button type="button" onClick={() => fetchBoard()} className="text-sm text-brand-text hover:underline">
-          Retry
-        </button>
-      </div>
-    );
-  }
+  const emptyState = !board ? (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+      <p className="text-sm text-muted-foreground">
+        {mode === "compact" ? t("chat.kanban.empty") : "Failed to load board."}
+      </p>
+      <button type="button" onClick={() => fetchBoard()} className="text-sm text-brand-text hover:underline">
+        Retry
+      </button>
+    </div>
+  ) : null;
 
   // ── Render columns ────────────────────────────────────
 
@@ -655,24 +653,26 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
             </button>
           </div>
 
-          <div className="flex flex-1 overflow-x-auto px-3 pb-3 md:px-4 md:pb-4 pt-2 gap-3">
-            {useDnd ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCorners}
-                onDragStart={handleDragStart}
-                onDragOver={handleDragOver}
-                onDragEnd={handleDragEnd}
-              >
-                {columnsContent}
-                <DragOverlay>
-                  {activeCard ? <CardOverlay card={activeCard} /> : null}
-                </DragOverlay>
-              </DndContext>
-            ) : (
-              columnsContent
-            )}
-          </div>
+          {emptyState ?? (
+            <div className="flex flex-1 overflow-x-auto px-3 pb-3 md:px-4 md:pb-4 pt-2 gap-3">
+              {useDnd ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCorners}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnd={handleDragEnd}
+                >
+                  {columnsContent}
+                  <DragOverlay>
+                    {activeCard ? <CardOverlay card={activeCard} /> : null}
+                  </DragOverlay>
+                </DndContext>
+              ) : (
+                columnsContent
+              )}
+            </div>
+          )}
         </div>
 
         <AddCardSheet
@@ -775,15 +775,17 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
         <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 shrink-0">
           {boardSelector}
         </div>
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden h-full">
-          {columns.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-              {t("chat.kanban.empty")}
-            </div>
-          ) : (
-            columnsContent
-          )}
-        </div>
+        {emptyState ?? (
+          <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden h-full">
+            {columns.length === 0 ? (
+              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                {t("chat.kanban.empty")}
+              </div>
+            ) : (
+              columnsContent
+            )}
+          </div>
+        )}
       </div>
 
       <CardDetailSheet
