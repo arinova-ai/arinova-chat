@@ -214,7 +214,7 @@ function CharacterDetail({ agent, agents, themeId, slotIndex, boundAgentId, onBi
       onOpenChat(boundAgentId);
     } else {
       // Fallback: navigate to chat page
-      const existing = conversations.find((c) => c.agentId === boundAgentId && c.type === "direct");
+      const existing = conversations.find((c) => c.agentId === boundAgentId && (c.type === "h2a" || c.type === "direct"));
       if (existing) {
         setActiveConversation(existing.id);
       } else {

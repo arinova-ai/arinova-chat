@@ -9,14 +9,17 @@ import {
 import { VisuallyHidden } from "radix-ui";
 import { MessageCircle, Share2, Copy } from "lucide-react";
 import { shareExternal, copyToClipboard } from "@/lib/share";
+import { api } from "@/lib/api";
 import { ShareToConversationSheet } from "./share-to-conversation-sheet";
 import { useTranslation } from "@/lib/i18n";
 
 export interface ShareContent {
-  type: "note" | "message";
+  type: "note" | "message" | "task";
   title: string;
   text: string;
   url?: string;
+  noteId?: string;
+  cardId?: string;
 }
 
 interface ShareSheetProps {
@@ -41,11 +44,35 @@ export function ShareSheet({ open, onOpenChange, content }: ShareSheetProps) {
   };
 
   const handleShareExternal = async () => {
-    await shareExternal({
-      title: content.title,
-      text: content.text,
-      url: content.url,
-    });
+    if (content.noteId) {
+      try {
+        const res = await api<{ shareToken: string }>(
+          `/api/notes/${content.noteId}/public-share`,
+          { method: "POST" },
+        );
+        const url = `${window.location.origin}/shared/notes/${res.shareToken}`;
+        await shareExternal({ title: content.title, text: content.text, url });
+      } catch {
+        // api handles error toast
+      }
+    } else if (content.cardId) {
+      try {
+        const res = await api<{ shareToken: string }>(
+          `/api/kanban/cards/${content.cardId}/public-share`,
+          { method: "POST" },
+        );
+        const url = `${window.location.origin}/shared/cards/${res.shareToken}`;
+        await shareExternal({ title: content.title, text: content.text, url });
+      } catch {
+        // api handles error toast
+      }
+    } else {
+      await shareExternal({
+        title: content.title,
+        text: content.text,
+        url: content.url,
+      });
+    }
     onOpenChange(false);
   };
 
@@ -54,7 +81,7 @@ export function ShareSheet({ open, onOpenChange, content }: ShareSheetProps) {
     onOpenChange(false);
   };
 
-  const shareText = content.type === "note"
+  const shareText = content.type === "note" || content.type === "task"
     ? `[${content.title}]\n${content.text}`
     : content.text;
 
@@ -97,6 +124,8 @@ export function ShareSheet({ open, onOpenChange, content }: ShareSheetProps) {
         open={conversationSheetOpen}
         onOpenChange={setConversationSheetOpen}
         content={shareText}
+        noteId={content.noteId}
+        cardId={content.cardId}
       />
     </>
   );

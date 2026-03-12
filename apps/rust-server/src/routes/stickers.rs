@@ -1030,7 +1030,7 @@ async fn gift_pack(
         r#"SELECT c.id FROM conversations c
            JOIN conversation_user_members cum1 ON cum1.conversation_id = c.id AND cum1.user_id = $1
            JOIN conversation_user_members cum2 ON cum2.conversation_id = c.id AND cum2.user_id = $2
-           WHERE c.type = 'direct' AND c.agent_id IS NULL
+           WHERE c.type IN ('direct', 'h2h') AND c.agent_id IS NULL
            LIMIT 1"#,
     )
     .bind(&user.id)
@@ -1046,7 +1046,7 @@ async fn gift_pack(
         let new_id = Uuid::new_v4();
         if let Err(e) = sqlx::query(
             r#"INSERT INTO conversations (id, type, user_id, mention_only)
-               VALUES ($1, 'direct', $2, FALSE)"#,
+               VALUES ($1, 'h2h', $2, FALSE)"#,
         )
         .bind(new_id)
         .bind(&user.id)

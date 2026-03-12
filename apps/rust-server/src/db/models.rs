@@ -45,6 +45,8 @@ pub enum AgentListenMode {
 #[serde(rename_all = "lowercase")]
 pub enum ConversationType {
     Direct,
+    H2h,
+    H2a,
     Group,
     Official,
     Club,
@@ -55,6 +57,8 @@ impl std::fmt::Display for ConversationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Direct => write!(f, "direct"),
+            Self::H2h => write!(f, "h2h"),
+            Self::H2a => write!(f, "h2a"),
             Self::Group => write!(f, "group"),
             Self::Official => write!(f, "official"),
             Self::Club => write!(f, "club"),

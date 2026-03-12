@@ -14,6 +14,13 @@ import type {
   ListNotesResult,
   CreateNoteBody,
   UpdateNoteBody,
+  KanbanBoard,
+  KanbanCard,
+  CreateCardBody,
+  UpdateCardBody,
+  QueryMemoryOptions,
+  MemoryEntry,
+  ShareNoteResult,
 } from "./types.js";
 
 const DEFAULT_RECONNECT_INTERVAL = 5_000;
@@ -336,6 +343,8 @@ export class ArinovaAgent {
     const params = new URLSearchParams();
     if (options?.before) params.set("before", options.before);
     if (options?.limit != null) params.set("limit", String(options.limit));
+    if (options?.tags?.length) params.set("tags", options.tags.join(","));
+    if (options?.archived) params.set("archived", "true");
 
     const qs = params.toString();
     const url = `${httpUrl}/api/agent/conversations/${conversationId}/notes${qs ? `?${qs}` : ""}`;
@@ -446,6 +455,160 @@ export class ArinovaAgent {
       const text = await res.text();
       throw new Error(`deleteNote failed (${res.status}): ${text}`);
     }
+  }
+
+  // ── Kanban API ────────────────────────────────────────────────
+
+  /**
+   * List the owner's kanban boards.
+   * Returns an array of boards with id, name, and createdAt.
+   */
+  async listBoards(): Promise<KanbanBoard[]> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`listBoards failed (${res.status}): ${body}`);
+    }
+
+    return res.json() as Promise<KanbanBoard[]>;
+  }
+
+  /**
+   * Create a kanban card on the owner's board.
+   * The card is automatically assigned to the calling agent.
+   * @param body - Card title and optional description, priority, column.
+   */
+  async createCard(body: CreateCardBody): Promise<KanbanCard> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`createCard failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanCard>;
+  }
+
+  /**
+   * Update a kanban card.
+   * @param cardId - The card ID to update.
+   * @param body - Fields to update (title, description, priority, columnId, sortOrder).
+   */
+  async updateCard(cardId: string, body: UpdateCardBody): Promise<KanbanCard> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`updateCard failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanCard>;
+  }
+
+  // ── Memory API ───────────────────────────────────────────────
+
+  /**
+   * Search memories across all memory capsules granted to this agent.
+   * Uses hybrid search (embedding + text) to find relevant memories.
+   * @param options - Query string and optional limit.
+   */
+  async queryMemory(options: QueryMemoryOptions): Promise<MemoryEntry[]> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const params = new URLSearchParams();
+    params.set("query", options.query);
+    if (options.limit != null) params.set("limit", String(options.limit));
+
+    const res = await fetch(`${httpUrl}/api/agent/capsules?${params}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`queryMemory failed (${res.status}): ${body}`);
+    }
+
+    // Server returns snake_case, map to camelCase
+    const raw = (await res.json()) as Array<{
+      content: string;
+      capsule_name: string;
+      capsule_id: string;
+      score: number;
+      importance: number;
+    }>;
+
+    return raw.map((r) => ({
+      content: r.content,
+      capsuleName: r.capsule_name,
+      capsuleId: r.capsule_id,
+      score: r.score,
+      importance: r.importance,
+    }));
+  }
+
+  // ── Note Share API ───────────────────────────────────────────
+
+  /**
+   * Share a note as a message in a conversation.
+   * Creates a rich preview card visible to all conversation members.
+   * @param conversationId - The conversation to share into.
+   * @param noteId - The note ID to share.
+   */
+  async shareNote(
+    conversationId: string,
+    noteId: string,
+  ): Promise<ShareNoteResult> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(
+      `${httpUrl}/api/agent/conversations/${conversationId}/notes/${noteId}/share`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.botToken}` },
+      },
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`shareNote failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<ShareNoteResult>;
   }
 
   private handleTask(data: Record<string, unknown>): void {

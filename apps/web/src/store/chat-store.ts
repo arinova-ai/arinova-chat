@@ -142,6 +142,8 @@ interface ChatState {
   // Notebook state
   notesByConversation: Record<string, Note[]>;
   notebookOpen: boolean;
+  kanbanSidebarOpen: boolean;
+  pendingNoteId: string | null;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
   // Conversation search state (in-conversation search bar)
@@ -243,7 +245,10 @@ interface ChatState {
 
   // Notebook actions
   openNotebook: () => void;
+  openNoteById: (noteId: string) => void;
   closeNotebook: () => void;
+  openKanbanSidebar: () => void;
+  closeKanbanSidebar: () => void;
   loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
   createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
   updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[] }) => Promise<void>;
@@ -300,6 +305,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pinnedMessageIds: {},
   notesByConversation: {},
   notebookOpen: false,
+  kanbanSidebarOpen: false,
+  pendingNoteId: null,
   agentNotesEnabledByConversation: {},
   convSearchOpen: false,
   convSearchQuery: "",
@@ -1161,7 +1168,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     lines.push(`**Messages:** ${msgs.length}`);
     lines.push(`**Streaming:** ${streamingMsg ? "Yes" : "No"}`);
 
-    if (conv.type === "direct" && conv.agentId) {
+    if ((conv.type === "h2a" || conv.type === "direct") && conv.agentId) {
       const agentName = conv.agentName ?? "Unknown";
       const health = agentHealth[conv.agentId];
       const status = health?.status ?? "unknown";
@@ -1412,12 +1419,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
   openNotebook: () => {
     diagCount("action:openNotebook");
     if (get().notebookOpen) return;
-    set({ notebookOpen: true });
+    set({ notebookOpen: true, kanbanSidebarOpen: false });
+  },
+  openNoteById: (noteId: string) => {
+    diagCount("action:openNoteById");
+    set({ notebookOpen: true, kanbanSidebarOpen: false, pendingNoteId: noteId });
   },
   closeNotebook: () => {
     diagCount("action:closeNotebook");
     if (!get().notebookOpen) return;
-    set({ notebookOpen: false });
+    set({ notebookOpen: false, pendingNoteId: null });
+  },
+  openKanbanSidebar: () => {
+    diagCount("action:openKanbanSidebar");
+    if (get().kanbanSidebarOpen) return;
+    set({ kanbanSidebarOpen: true, notebookOpen: false });
+  },
+  closeKanbanSidebar: () => {
+    diagCount("action:closeKanbanSidebar");
+    if (!get().kanbanSidebarOpen) return;
+    set({ kanbanSidebarOpen: false });
   },
 
   loadNotes: async (conversationId, opts) => {
@@ -1588,9 +1609,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         senderUserName: msg.senderUserName,
         senderUserImage: (msg as Record<string, unknown>).senderUserImage as string | undefined,
         senderIsVerified: (msg as Record<string, unknown>).senderIsVerified as boolean | undefined,
+        senderAgentId: (msg as Record<string, unknown>).senderAgentId as string | undefined,
+        senderAgentName: (msg as Record<string, unknown>).senderAgentName as string | undefined,
         replyToId: msg.replyToId ?? undefined,
         threadId: threadId ?? undefined,
         attachments: ((msg as Record<string, unknown>).attachments as Message["attachments"]) ?? [],
+        metadata: (msg as Record<string, unknown>).metadata as Record<string, unknown> | undefined,
+        linkPreviews: (msg as Record<string, unknown>).linkPreviews as Message["linkPreviews"],
         createdAt: new Date(msg.createdAt),
         updatedAt: new Date(msg.updatedAt),
       };
@@ -1968,7 +1993,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     if (event.type === "stream_chunk") {
-      const { conversationId, messageId, chunk } = event;
+      const { conversationId, messageId, chunk: rawChunk } = event;
+      const chunk = rawChunk.replace(/\r\n?/g, "\n");
       const threadId = event.threadId;
 
       // Check if this is the first chunk (message still in thinkingAgents)
@@ -2055,6 +2081,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "stream_end") {
       const { conversationId, messageId, seq } = event;
+      const senderAgentId = (event as Record<string, unknown>).senderAgentId as string | undefined;
+      const senderAgentName = (event as Record<string, unknown>).senderAgentName as string | undefined;
       const { activeConversationId, unreadCounts } = get();
       // Normalize \r\n and \r → \n to prevent GFM table formatting differences
       // between streamed chunks (which use \n) and backend final content
@@ -2150,6 +2178,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
               role: "agent",
               content: finalContent,
               status: "completed",
+              senderAgentId: senderAgentId ?? undefined,
+              senderAgentName: senderAgentName ?? undefined,
               threadId,
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -2196,6 +2226,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
               role: "agent",
               content: finalContent,
               status: "completed",
+              senderAgentId: senderAgentId ?? undefined,
+              senderAgentName: senderAgentName ?? undefined,
               createdAt: new Date(),
               updatedAt: new Date(),
             };

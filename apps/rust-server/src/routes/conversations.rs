@@ -93,6 +93,8 @@ struct ConversationListRow {
     last_msg_metadata: Option<serde_json::Value>,
     last_msg_created_at: Option<NaiveDateTime>,
     last_msg_updated_at: Option<NaiveDateTime>,
+    last_msg_sender_agent_id: Option<Uuid>,
+    last_msg_sender_agent_name: Option<String>,
     // Agent owner verified
     agent_owner_is_verified: Option<bool>,
     // Official community link
@@ -167,7 +169,7 @@ async fn create_conversation(
 
     let result = sqlx::query_as::<_, Conversation>(
         r#"INSERT INTO conversations (title, type, user_id, agent_id, mention_only)
-           VALUES ($1, 'direct', $2, $3, FALSE)
+           VALUES ($1, CASE WHEN $3::uuid IS NOT NULL THEN 'h2a'::conversation_type ELSE 'h2h'::conversation_type END, $2, $3, FALSE)
            RETURNING *"#,
     )
     .bind(&body.title)
@@ -224,7 +226,7 @@ async fn create_human_direct(
         r#"SELECT c.id FROM conversations c
            JOIN conversation_user_members cum1 ON cum1.conversation_id = c.id AND cum1.user_id = $1
            JOIN conversation_user_members cum2 ON cum2.conversation_id = c.id AND cum2.user_id = $2
-           WHERE c.type = 'direct' AND c.agent_id IS NULL
+           WHERE c.type IN ('direct', 'h2h') AND c.agent_id IS NULL
            LIMIT 1"#,
     )
     .bind(&user.id)
@@ -255,7 +257,7 @@ async fn create_human_direct(
     let conv_id = Uuid::new_v4();
     let result = sqlx::query_as::<_, Conversation>(
         r#"INSERT INTO conversations (id, type, user_id, mention_only)
-           VALUES ($1, 'direct', $2, FALSE)
+           VALUES ($1, 'h2h', $2, FALSE)
            RETURNING *"#,
     )
     .bind(conv_id)
@@ -319,6 +321,8 @@ async fn list_conversations(
                 lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
+                lm.sender_agent_id AS last_msg_sender_agent_id,
+                lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id
             FROM conversations c
@@ -326,12 +330,13 @@ async fn list_conversations(
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN LATERAL (
-                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
+                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at, m.sender_agent_id
                 FROM messages m
                 WHERE m.conversation_id = c.id
                 ORDER BY m.created_at DESC
                 LIMIT 1
             ) lm ON true
+            LEFT JOIN agents lm_agent ON lm.sender_agent_id = lm_agent.id
             WHERE (c.user_id = $1 OR EXISTS (
                 SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
             ))
@@ -370,6 +375,8 @@ async fn list_conversations(
                 lm.metadata AS last_msg_metadata,
                 lm.created_at AS last_msg_created_at,
                 lm.updated_at AS last_msg_updated_at,
+                lm.sender_agent_id AS last_msg_sender_agent_id,
+                lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id
             FROM conversations c
@@ -377,12 +384,13 @@ async fn list_conversations(
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN LATERAL (
-                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at
+                SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at, m.sender_agent_id
                 FROM messages m
                 WHERE m.conversation_id = c.id
                 ORDER BY m.created_at DESC
                 LIMIT 1
             ) lm ON true
+            LEFT JOIN agents lm_agent ON lm.sender_agent_id = lm_agent.id
             WHERE (c.user_id = $1 OR EXISTS (
                 SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
             ))
@@ -477,7 +485,7 @@ async fn list_conversations(
     // For human-to-human DMs (no agent), batch-fetch the peer user's name
     let human_dm_ids: Vec<Uuid> = rows
         .iter()
-        .filter(|r| r.conv_type == "direct" && r.agent_id.is_none())
+        .filter(|r| r.conv_type == "h2h")
         .map(|r| r.id)
         .collect();
 
@@ -628,6 +636,8 @@ async fn list_conversations(
                     "status": row.last_msg_status,
                     "metadata": row.last_msg_metadata,
                     "attachments": atts,
+                    "senderAgentId": row.last_msg_sender_agent_id,
+                    "senderAgentName": row.last_msg_sender_agent_name,
                     "createdAt": row.last_msg_created_at.map(|t| t.and_utc().to_rfc3339()),
                     "updatedAt": row.last_msg_updated_at.map(|t| t.and_utc().to_rfc3339()),
                 })
@@ -799,7 +809,7 @@ async fn delete_conversation(
     };
 
     // Human-to-human DM (no agent): soft-hide for this user only
-    if conv_type == "direct" && agent_id.is_none() {
+    if conv_type == "h2h" {
         let result = sqlx::query(
             r#"UPDATE conversation_user_members SET hidden_at = NOW()
                WHERE conversation_id = $1 AND user_id = $2"#,

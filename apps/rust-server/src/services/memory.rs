@@ -7,6 +7,8 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::config::Config;
 use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
 use crate::services::push::{send_push_to_user, PushPayload};
@@ -16,8 +18,9 @@ const GEMINI_MODEL_URL: &str =
 
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
 Extract key facts, preferences, and important information from this conversation. \
-Output each memory as a separate line, prefixed with an importance score from 0.0 to 1.0. \
-Format: [importance:0.8] memory content here \
+Output each memory as a separate line with importance score and 1-3 tags. \
+Format: [importance:0.8][tag1][tag2] memory content here \
+Tags should be short lowercase words describing the category (e.g. preference, decision, fact, action, relationship, technical, workflow, tool, goal). \
 Focus on: user preferences, decisions made, important facts mentioned, action items, and relationship context. \
 Be concise — each line should be one self-contained memory. \
 Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details.";
@@ -27,6 +30,18 @@ const EMBEDDING_BATCH_SIZE: usize = 100;
 
 /// Max characters per chunk sent to Gemini (~7500 tokens)
 const CHUNK_CHAR_LIMIT: usize = 30_000;
+
+/// Truncate a string to at most `max_bytes` without splitting a UTF-8 character.
+fn safe_truncate(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
 
 #[derive(Deserialize)]
 struct GeminiResponse {
@@ -53,6 +68,7 @@ pub async fn extract_capsule(
     db: PgPool,
     config: Config,
     capsule_id: Uuid,
+    cancel: CancellationToken,
 ) -> anyhow::Result<usize> {
     // 1. Fetch capsule metadata
     let (conv_id, owner_id, capsule_name, extracted_through) = sqlx::query_as::<_, (Uuid, String, String, Option<chrono::DateTime<chrono::Utc>>)>(
@@ -72,18 +88,51 @@ pub async fn extract_capsule(
     let extracted_through_naive = extracted_through.map(|dt| dt.naive_utc());
 
     // Run extraction, and on any error mark as 'failed'
-    match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive).await {
+    match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive, &cancel).await {
         Ok((count, msg_count, first_msg_time, new_watermark)) => {
-            sqlx::query(
-                "UPDATE memory_capsules SET status = 'ready', created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5 WHERE id = $1",
+            // Update note_count from linked conversation notes
+            let note_count = sqlx::query_scalar::<_, i64>(
+                r#"SELECT COUNT(*) FROM conversation_notes n
+                   JOIN note_conversation_links ncl ON ncl.note_id = n.id
+                   WHERE ncl.conversation_id = $1 AND n.content != ''"#,
+            )
+            .bind(conv_id)
+            .fetch_one(&db)
+            .await
+            .unwrap_or(0);
+
+            // Only finalize if not cancelled (abort handler may have changed status)
+            let result = sqlx::query(
+                "UPDATE memory_capsules SET status = 'ready', progress = NULL, created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5, note_count = $6 WHERE id = $1 AND status = 'extracting'",
             )
             .bind(capsule_id)
             .bind(first_msg_time)
             .bind(new_watermark)
             .bind(count as i32)
             .bind(msg_count as i32)
+            .bind(note_count as i32)
             .execute(&db)
             .await?;
+
+            if result.rows_affected() == 0 {
+                // Capsule was cancelled/deleted while we were finishing
+                tracing::info!("Extraction for capsule {} completed but capsule was already cancelled", capsule_id);
+                return Ok(count);
+            }
+            // Auto-grant capsule to all agents in the conversation
+            let _ = sqlx::query(
+                r#"INSERT INTO memory_capsule_grants (capsule_id, agent_id, granted_by)
+                   SELECT $1, agent_id, $3
+                   FROM conversation_agent_members
+                   WHERE conversation_id = $2
+                   ON CONFLICT (capsule_id, agent_id) DO NOTHING"#,
+            )
+            .bind(capsule_id)
+            .bind(conv_id)
+            .bind(&owner_id)
+            .execute(&db)
+            .await;
+
             tracing::info!(
                 "Memory extraction complete for capsule {} (owner={}): {} entries from {} messages",
                 capsule_id, owner_id, count, msg_count
@@ -104,23 +153,28 @@ pub async fn extract_capsule(
             Ok(count)
         }
         Err(e) => {
-            let _ = sqlx::query("UPDATE memory_capsules SET status = 'failed' WHERE id = $1")
-                .bind(capsule_id)
-                .execute(&db)
+            if cancel.is_cancelled() {
+                // Cancelled by user — abort handler already handled DB state
+                tracing::info!("Extraction cancelled for capsule {}", capsule_id);
+            } else {
+                let _ = sqlx::query("UPDATE memory_capsules SET status = 'failed', progress = NULL WHERE id = $1")
+                    .bind(capsule_id)
+                    .execute(&db)
+                    .await;
+                let _ = send_push_to_user(
+                    &db,
+                    &config,
+                    &owner_id,
+                    &PushPayload {
+                        notification_type: "memory_capsule".into(),
+                        title: "Memory Capsule Failed".into(),
+                        body: format!("{} extraction failed", capsule_name),
+                        url: None,
+                        message_id: None,
+                    },
+                )
                 .await;
-            let _ = send_push_to_user(
-                &db,
-                &config,
-                &owner_id,
-                &PushPayload {
-                    notification_type: "memory_capsule".into(),
-                    title: "Memory Capsule Failed".into(),
-                    body: format!("{} extraction failed", capsule_name),
-                    url: None,
-                    message_id: None,
-                },
-            )
-            .await;
+            }
             Err(e)
         }
     }
@@ -132,6 +186,7 @@ async fn do_extraction(
     capsule_id: Uuid,
     conversation_id: Uuid,
     extracted_through: Option<chrono::NaiveDateTime>,
+    cancel: &CancellationToken,
 ) -> anyhow::Result<(usize, usize, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> {
     // Returns (entry_count, message_count, first_message_time, new_watermark)
     // 3. Fetch messages (incremental: only after extracted_through if set)
@@ -162,8 +217,21 @@ async fn do_extraction(
 
     let msg_count = messages.len();
 
-    if messages.is_empty() {
-        // No new messages — return 0 entries, 0 messages, keep existing watermark
+    // 3b. Fetch linked notes to include as context (via note_conversation_links)
+    let notes: Vec<(String, String)> = sqlx::query_as(
+        r#"SELECT n.title, n.content
+           FROM conversation_notes n
+           JOIN note_conversation_links ncl ON ncl.note_id = n.id
+           WHERE ncl.conversation_id = $1 AND n.content != ''
+           ORDER BY n.created_at ASC"#,
+    )
+    .bind(conversation_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if messages.is_empty() && notes.is_empty() {
+        // No new messages and no linked notes — return 0 entries
         let now = chrono::Utc::now();
         let wm = extracted_through.map(|w| chrono::DateTime::from_naive_utc_and_offset(w, chrono::Utc)).unwrap_or(now);
         return Ok((0, 0, wm, wm));
@@ -173,31 +241,76 @@ async fn do_extraction(
     let first_msg_time = messages
         .iter()
         .map(|(_, _, ts)| *ts)
-        .min()
-        .unwrap(); // safe: messages is non-empty
-    let first_msg_utc = chrono::DateTime::from_naive_utc_and_offset(first_msg_time, chrono::Utc);
+        .min();
+    let first_msg_utc = first_msg_time
+        .map(|t| chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc))
+        .unwrap_or_else(chrono::Utc::now);
 
-    // New watermark = MAX created_at from fetched messages
+    // New watermark = MAX created_at from fetched messages (or now if notes-only)
     let new_watermark = messages
         .iter()
         .map(|(_, _, ts)| *ts)
-        .max()
-        .unwrap(); // safe: messages is non-empty
-    let new_watermark_utc = chrono::DateTime::from_naive_utc_and_offset(new_watermark, chrono::Utc);
+        .max();
+    let new_watermark_utc = new_watermark
+        .map(|t| chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc))
+        .unwrap_or_else(chrono::Utc::now);
+
+    // Initialize progress tracking
+    let total_notes = notes.len();
+    sqlx::query("UPDATE memory_capsules SET progress = $2 WHERE id = $1")
+        .bind(capsule_id)
+        .bind(serde_json::json!({
+            "totalMessages": msg_count,
+            "processedMessages": 0,
+            "totalNotes": total_notes,
+            "processedNotes": 0,
+            "extractedEntries": 0
+        }))
+        .execute(db)
+        .await?;
 
     // 4. Build chunks from messages (each chunk ≤ CHUNK_CHAR_LIMIT chars)
     let mut chunks: Vec<String> = Vec::new();
+    let mut chunk_time_ranges: Vec<(chrono::NaiveDateTime, chrono::NaiveDateTime)> = Vec::new();
+    let mut chunk_msg_counts: Vec<usize> = Vec::new();
     let mut current_chunk = String::new();
+    let mut current_chunk_msgs: usize = 0;
+    let mut chunk_start: Option<chrono::NaiveDateTime> = None;
+    let mut chunk_end: Option<chrono::NaiveDateTime> = None;
+
+    // Prepend notes as context in the first chunk
+    if !notes.is_empty() {
+        current_chunk.push_str("=== Conversation Notes ===\n");
+        for (title, content) in &notes {
+            let note_line = format!("[note] {}: {}\n", title, safe_truncate(content, 2000));
+            current_chunk.push_str(&note_line);
+        }
+        current_chunk.push_str("=== Messages ===\n");
+    }
 
     for (role, content, ts) in &messages {
         let line = format!("[{}] {}: {}\n", role, ts.format("%Y-%m-%d %H:%M"), content);
         if !current_chunk.is_empty() && current_chunk.len() + line.len() > CHUNK_CHAR_LIMIT {
             chunks.push(std::mem::take(&mut current_chunk));
+            chunk_msg_counts.push(current_chunk_msgs);
+            current_chunk_msgs = 0;
+            if let (Some(s), Some(e)) = (chunk_start.take(), chunk_end.take()) {
+                chunk_time_ranges.push((s, e));
+            }
         }
+        if chunk_start.is_none() {
+            chunk_start = Some(*ts);
+        }
+        chunk_end = Some(*ts);
         current_chunk.push_str(&line);
+        current_chunk_msgs += 1;
     }
     if !current_chunk.is_empty() {
         chunks.push(current_chunk);
+        chunk_msg_counts.push(current_chunk_msgs);
+        if let (Some(s), Some(e)) = (chunk_start, chunk_end) {
+            chunk_time_ranges.push((s, e));
+        }
     }
 
     tracing::info!(
@@ -219,10 +332,15 @@ async fn do_extraction(
 
     let url = format!("{}?key={}", GEMINI_MODEL_URL, gemini_key);
 
-    let mut parsed_entries: Vec<(String, f64)> = Vec::new();
+    let mut parsed_entries: Vec<(String, f64, Vec<String>, usize)> = Vec::new(); // (content, importance, tags, chunk_idx)
     let mut chunks_succeeded = 0usize;
+    let mut processed_messages: usize = 0;
 
     for (chunk_idx, chunk_text) in chunks.iter().enumerate() {
+        if cancel.is_cancelled() {
+            return Err(anyhow!("Extraction cancelled"));
+        }
+
         let body = serde_json::json!({
             "systemInstruction": {"parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]},
             "contents": [{"parts": [{"text": chunk_text}]}],
@@ -231,13 +349,19 @@ async fn do_extraction(
 
         let chunk_result = call_gemini_with_retry(&client, &url, &body, chunk_idx).await;
 
+        let chunk_msgs = chunk_msg_counts.get(chunk_idx).copied().unwrap_or(0);
+        processed_messages += chunk_msgs;
+
         match chunk_result {
             Ok(text) => {
-                let entries: Vec<(String, f64)> = text
+                let entries: Vec<(String, f64, Vec<String>, usize)> = text
                     .lines()
                     .map(|l| l.trim())
                     .filter(|l| !l.is_empty())
-                    .map(|line| parse_importance_line(line))
+                    .map(|line| {
+                        let (content, importance, tags) = parse_tagged_line(line);
+                        (content, importance, tags, chunk_idx)
+                    })
                     .collect();
                 tracing::info!(
                     "Chunk {}/{}: extracted {} entries",
@@ -253,6 +377,20 @@ async fn do_extraction(
                 );
             }
         }
+
+        // Update progress after each chunk
+        let notes_done = if chunk_idx == 0 { total_notes } else { total_notes };
+        let _ = sqlx::query("UPDATE memory_capsules SET progress = $2 WHERE id = $1")
+            .bind(capsule_id)
+            .bind(serde_json::json!({
+                "totalMessages": msg_count,
+                "processedMessages": processed_messages,
+                "totalNotes": total_notes,
+                "processedNotes": notes_done,
+                "extractedEntries": parsed_entries.len()
+            }))
+            .execute(db)
+            .await;
     }
 
     if chunks_succeeded == 0 {
@@ -280,7 +418,7 @@ async fn do_extraction(
         return Ok((0, msg_count, first_msg_utc, effective_watermark));
     }
 
-    let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _)| t.clone()).collect();
+    let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _, _, _)| t.clone()).collect();
 
     // 7. Generate embeddings
     let openai_key = config
@@ -290,6 +428,9 @@ async fn do_extraction(
 
     let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(entry_texts.len());
     for batch in entry_texts.chunks(EMBEDDING_BATCH_SIZE) {
+        if cancel.is_cancelled() {
+            return Err(anyhow!("Extraction cancelled"));
+        }
         let batch_vec: Vec<String> = batch.to_vec();
         let embeddings = generate_embeddings(&client, openai_key, &batch_vec, EMBEDDING_MODEL).await?;
         all_embeddings.extend(embeddings);
@@ -298,16 +439,28 @@ async fn do_extraction(
     // 8. Insert into memory_entries with importance
     let mut tx = db.begin().await.context("Failed to begin transaction")?;
 
-    for ((content, importance), embedding) in parsed_entries.iter().zip(all_embeddings.iter()) {
+    for ((content, importance, tags, chunk_idx), embedding) in parsed_entries.iter().zip(all_embeddings.iter()) {
         let vec = Vector::from(embedding.clone());
+        let (source_start, source_end) = if *chunk_idx < chunk_time_ranges.len() {
+            let (s, e) = chunk_time_ranges[*chunk_idx];
+            (
+                Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(s, chrono::Utc)),
+                Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(e, chrono::Utc)),
+            )
+        } else {
+            (None, None)
+        };
         sqlx::query(
-            r#"INSERT INTO memory_entries (capsule_id, content, embedding, importance)
-               VALUES ($1, $2, $3::vector, $4)"#,
+            r#"INSERT INTO memory_entries (capsule_id, content, embedding, importance, tags, source_start, source_end)
+               VALUES ($1, $2, $3::vector, $4, $5, $6, $7)"#,
         )
         .bind(capsule_id)
         .bind(content)
         .bind(vec)
         .bind(*importance)
+        .bind(tags)
+        .bind(source_start)
+        .bind(source_end)
         .execute(&mut *tx)
         .await
         .context("Failed to insert memory entry")?;
@@ -362,23 +515,42 @@ async fn call_gemini_with_retry(
     unreachable!()
 }
 
-/// Parse a line like "[importance:0.8] memory content" into (content, importance).
-/// Falls back to 0.5 importance if prefix is missing or malformed.
-fn parse_importance_line(line: &str) -> (String, f64) {
-    if let Some(rest) = line.strip_prefix("[importance:") {
+/// Parse a line like "[importance:0.8][tag1][tag2] content" into (content, importance, tags).
+/// Falls back to 0.5 importance and empty tags if prefixes are missing.
+fn parse_tagged_line(line: &str) -> (String, f64, Vec<String>) {
+    let mut remaining = line;
+    let mut importance = 0.5;
+    let mut tags: Vec<String> = Vec::new();
+
+    // Parse [importance:X] prefix
+    if let Some(rest) = remaining.strip_prefix("[importance:") {
         if let Some(bracket_end) = rest.find(']') {
-            let score_str = &rest[..bracket_end];
-            let content = rest[bracket_end + 1..].trim().to_string();
-            if let Ok(score) = score_str.parse::<f64>() {
-                let clamped = score.clamp(0.0, 1.0);
-                if !content.is_empty() {
-                    return (content, clamped);
-                }
+            if let Ok(score) = rest[..bracket_end].parse::<f64>() {
+                importance = score.clamp(0.0, 1.0);
             }
+            remaining = &rest[bracket_end + 1..];
         }
     }
-    // Fallback: no importance prefix
-    (line.to_string(), 0.5)
+
+    // Parse [tag] prefixes (1-3 tags)
+    while remaining.starts_with('[') {
+        if let Some(bracket_end) = remaining.find(']') {
+            let tag = remaining[1..bracket_end].trim().to_lowercase();
+            if !tag.is_empty() && !tag.starts_with("importance:") && tag.len() <= 30 {
+                tags.push(tag);
+            }
+            remaining = &remaining[bracket_end + 1..];
+        } else {
+            break;
+        }
+    }
+
+    let content = remaining.trim().to_string();
+    if content.is_empty() {
+        return (line.to_string(), 0.5, vec![]);
+    }
+
+    (content, importance, tags)
 }
 
 // ---------------------------------------------------------------------------

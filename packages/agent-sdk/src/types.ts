@@ -129,6 +129,7 @@ export interface Note {
   agentName?: string;
   title: string;
   content: string;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -139,6 +140,10 @@ export interface ListNotesOptions {
   before?: string;
   /** Max notes to return (default 20, max 50). */
   limit?: number;
+  /** Filter by tags (AND logic). */
+  tags?: string[];
+  /** If true, list archived notes instead of active. */
+  archived?: boolean;
 }
 
 /** Result from listNotes(). */
@@ -152,12 +157,106 @@ export interface ListNotesResult {
 export interface CreateNoteBody {
   title: string;
   content?: string;
+  tags?: string[];
 }
 
 /** Body for updateNote(). */
 export interface UpdateNoteBody {
   title?: string;
   content?: string;
+  tags?: string[];
+}
+
+// ── Kanban types ──────────────────────────────────────────────
+
+/** A kanban board. */
+export interface KanbanBoard {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+/** A kanban column within a board. */
+export interface KanbanColumn {
+  id: string;
+  boardId: string;
+  name: string;
+  sortOrder: number;
+}
+
+/** A kanban card. */
+export interface KanbanCard {
+  id: string;
+  columnId: string;
+  columnName?: string;
+  title: string;
+  description: string | null;
+  priority: string | null;
+  dueDate: string | null;
+  sortOrder: number;
+  createdBy: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** Body for createCard(). */
+export interface CreateCardBody {
+  /** Title of the card (required). */
+  title: string;
+  /** Card description in markdown. */
+  description?: string;
+  /** Priority: "low", "medium", "high", or "urgent". */
+  priority?: string;
+  /** Column name to place the card in (e.g. "To Do"). If omitted, uses first column. */
+  columnName?: string;
+  /** Column ID to place the card in (takes precedence over columnName). */
+  columnId?: string;
+}
+
+/** Body for updateCard(). */
+export interface UpdateCardBody {
+  title?: string;
+  description?: string;
+  priority?: string;
+  columnId?: string;
+  sortOrder?: number;
+}
+
+/** Result from listBoards(). */
+export interface ListBoardsResult {
+  boards: KanbanBoard[];
+  columns: KanbanColumn[];
+  cards: KanbanCard[];
+}
+
+// ── Memory types ──────────────────────────────────────────────
+
+/** Options for queryMemory(). */
+export interface QueryMemoryOptions {
+  /** Search keywords or semantic query (required). */
+  query: string;
+  /** Max results to return (default 10, max 20). */
+  limit?: number;
+}
+
+/** A memory search result entry. */
+export interface MemoryEntry {
+  content: string;
+  capsuleName: string;
+  capsuleId: string;
+  score: number;
+  importance: number;
+}
+
+// ── Note share types ──────────────────────────────────────────
+
+/** Result from shareNote(). */
+export interface ShareNoteResult {
+  messageId: string;
+  noteId: string;
+  title: string;
+  preview: string;
+  tags: string[];
 }
 
 /** Task handler function. */

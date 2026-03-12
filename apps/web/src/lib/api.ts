@@ -2,11 +2,14 @@ import { BACKEND_URL } from "./config";
 import { useToastStore } from "@/store/toast-store";
 
 export class ApiError extends Error {
+  data: Record<string, unknown>;
   constructor(
     public status: number,
-    message: string
+    message: string,
+    data: Record<string, unknown> = {}
   ) {
     super(message);
+    this.data = data;
   }
 }
 
@@ -31,7 +34,7 @@ export async function api<T>(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const message = body.error ?? `HTTP ${res.status}`;
-    const error = new ApiError(res.status, message);
+    const error = new ApiError(res.status, message, body);
 
     // Handle banned account — redirect to sign-in with banned indicator
     if (res.status === 403 && body.code === "ACCOUNT_BANNED") {

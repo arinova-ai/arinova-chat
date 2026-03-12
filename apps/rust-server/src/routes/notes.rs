@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -12,6 +12,7 @@ use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
 use crate::auth::middleware::AuthUser;
+use crate::ws::handler::trigger_agent_response;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -45,8 +46,31 @@ pub fn router() -> Router<AppState> {
             post(ask_ai),
         )
         .route(
-            "/api/conversations/{id}/notes/{noteId}/extract-capsule",
-            post(extract_capsule_from_note),
+            "/api/conversations/{id}/notes/{noteId}/auto-tag",
+            post(auto_tag_note),
+        )
+        // User-level note endpoints
+        .route("/api/users/me/notes", get(list_user_notes))
+        .route(
+            "/api/notes/{noteId}/links",
+            post(link_note_to_conversation),
+        )
+        .route(
+            "/api/notes/{noteId}/links/{conversationId}",
+            delete(unlink_note_from_conversation),
+        )
+        .route(
+            "/api/notes/{noteId}/public-share",
+            post(create_public_share).delete(revoke_public_share),
+        )
+        .route("/api/public/notes/{shareToken}", get(get_public_note))
+        .route(
+            "/api/notes/{noteId}/share-to/{conversationId}",
+            post(share_note_to_conversation),
+        )
+        .route(
+            "/api/conversations/{id}/notes/upload",
+            post(upload_note_image),
         )
 }
 
@@ -68,6 +92,8 @@ struct NoteRow {
     updated_at: DateTime<Utc>,
     creator_name: String,
     agent_name: Option<String>,
+    share_token: Option<String>,
+    is_public: bool,
 }
 
 // ===== Helpers =====
@@ -142,6 +168,8 @@ fn note_to_json(n: &NoteRow) -> serde_json::Value {
         "archivedAt": n.archived_at.map(|t| t.to_rfc3339()),
         "createdAt": n.created_at.to_rfc3339(),
         "updatedAt": n.updated_at.to_rfc3339(),
+        "shareToken": n.share_token,
+        "isPublic": n.is_public,
     })
 }
 
@@ -400,7 +428,8 @@ const NOTE_QUERY_BASE: &str = r#"
            n.title, n.content, n.tags, n.archived_at, n.summary,
            n.created_at, n.updated_at,
            COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
-           a.name AS agent_name
+           a.name AS agent_name,
+           n.share_token, COALESCE(n.is_public, false) AS is_public
     FROM conversation_notes n
     LEFT JOIN "user" u ON u.id = n.creator_id
     LEFT JOIN agents a ON a.id = n.agent_id
@@ -423,7 +452,7 @@ async fn get_note(
     }
 
     let row = sqlx::query_as::<_, NoteRow>(&format!(
-        "{} WHERE n.id = $1 AND n.conversation_id = $2",
+        "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE n.id = $1 AND ncl.conversation_id = $2",
         NOTE_QUERY_BASE
     ))
     .bind(note_id)
@@ -535,7 +564,7 @@ async fn list_notes(
 
     let rows = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
+            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
@@ -545,7 +574,7 @@ async fn list_notes(
         .await
     } else {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
+            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
@@ -622,8 +651,8 @@ async fn create_note(
     let tags: Vec<String> = body.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
 
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, title, content, tags, created_at, updated_at)
-           VALUES ($1, $2, $3, 'user', $4, $5, $6, $7, $7)"#,
+        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, owner_id, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, $3, 'user', $3, $4, $5, $6, $7, $7)"#,
     )
     .bind(note_id)
     .bind(conv_id)
@@ -637,6 +666,15 @@ async fn create_note(
 
     match result {
         Ok(_) => {
+            // Insert note_conversation_links entry
+            let _ = sqlx::query(
+                "INSERT INTO note_conversation_links (note_id, conversation_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            )
+            .bind(note_id)
+            .bind(conv_id)
+            .execute(&state.db)
+            .await;
+
             // Sync [[Note Title]] backlinks
             if !body.content.is_empty() {
                 sync_note_links(&state.db, note_id, conv_id, &body.content).await;
@@ -1207,15 +1245,19 @@ async fn share_note(
         "tags": tags,
     });
 
-    // Insert a system message with note_share type via metadata
+    // Build full note message content for agent consumption
+    let tags_str = if tags.is_empty() { String::new() } else { format!("\n\nTags: {}", tags.join(", ")) };
+    let msg_content = format!("用戶分享了一篇筆記：{}\n\n{}{}", title, content, tags_str);
+
+    // Insert a user message with note_share metadata
     let msg_id = Uuid::new_v4();
     let result = sqlx::query(
         r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
-           VALUES ($1, $2, 0, 'system', $3, 'completed', $4, $5, NOW(), NOW())"#,
+           VALUES ($1, $2, 0, 'user', $3, 'completed', $4, $5, NOW(), NOW())"#,
     )
     .bind(msg_id)
     .bind(conv_id)
-    .bind(format!("shared a note: {}", title))
+    .bind(&msg_content)
     .bind(&user.id)
     .bind(metadata.clone())
     .execute(&state.db)
@@ -1234,8 +1276,8 @@ async fn share_note(
                         "id": msg_id.to_string(),
                         "conversationId": conv_id.to_string(),
                         "seq": 0,
-                        "role": "system",
-                        "content": format!("shared a note: {}", title),
+                        "role": "user",
+                        "content": &msg_content,
                         "status": "completed",
                         "senderUserId": &user.id,
                         "metadata": metadata,
@@ -1246,9 +1288,178 @@ async fn share_note(
                 &state.redis,
             );
 
+            // Trigger agent dispatch so agent can see and respond to the shared note
+            let conv_id_str = conv_id.to_string();
+            let state_clone = state.clone();
+            let user_id = user.id.clone();
+            let msg_content_clone = msg_content.clone();
+            tokio::spawn(async move {
+                trigger_agent_response(
+                    &user_id,
+                    &conv_id_str,
+                    &msg_content_clone,
+                    true, // skip_user_message — already saved above
+                    None,
+                    None,
+                    &[],
+                    None,
+                    &state_clone.ws,
+                    &state_clone.db,
+                    &state_clone.redis,
+                    &state_clone.config,
+                )
+                .await;
+            });
+
             Json(json!({
                 "messageId": msg_id,
                 "noteId": note_id,
+                "title": title,
+                "preview": preview,
+                "tags": tags,
+            }))
+            .into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/notes/:noteId/share-to/:conversationId — share note as Rich Card to another conversation
+async fn share_note_to_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((note_id, target_conv_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    // Verify user owns the note OR is a member of a conversation it's linked to
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &owner {
+        Ok(Some(oid)) if oid == &user.id => {}
+        _ => {
+            // Fallback: check if user is a member of any linked conversation
+            let linked = sqlx::query_scalar::<_, i64>(
+                r#"SELECT COUNT(*) FROM note_conversation_links ncl
+                   JOIN conversation_user_members cum ON cum.conversation_id = ncl.conversation_id AND cum.user_id = $1
+                   WHERE ncl.note_id = $2"#,
+            )
+            .bind(&user.id)
+            .bind(note_id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(0);
+            if linked == 0 {
+                return (StatusCode::FORBIDDEN, Json(json!({"error": "Not authorized to share this note"}))).into_response();
+            }
+        }
+    }
+
+    // Verify user is a member of the target conversation
+    if !is_member(&state.db, target_conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member of target conversation"}))).into_response();
+    }
+
+    // Fetch the note
+    let note = sqlx::query_as::<_, (String, String, Vec<String>, Option<String>)>(
+        "SELECT title, content, tags, summary FROM conversation_notes WHERE id = $1",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content, tags, summary) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let preview = summary.unwrap_or_else(|| {
+        if content.len() > 100 {
+            format!("{}...", &content[..content.char_indices().nth(100).map(|(i, _)| i).unwrap_or(content.len())])
+        } else {
+            content.clone()
+        }
+    });
+    let metadata = json!({
+        "noteId": note_id,
+        "title": title,
+        "preview": preview,
+        "tags": tags,
+    });
+
+    // Build full note message content for agent consumption
+    let tags_str = if tags.is_empty() { String::new() } else { format!("\n\nTags: {}", tags.join(", ")) };
+    let msg_content = format!("用戶分享了一篇筆記：{}\n\n{}{}", title, content, tags_str);
+
+    // Insert a user message with note_share metadata
+    let msg_id = Uuid::new_v4();
+    let result = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
+           VALUES ($1, $2, 0, 'user', $3, 'completed', $4, $5, NOW(), NOW())"#,
+    )
+    .bind(msg_id)
+    .bind(target_conv_id)
+    .bind(&msg_content)
+    .bind(&user.id)
+    .bind(metadata.clone())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            let member_ids = get_conv_member_ids(&state.db, target_conv_id).await;
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({
+                    "type": "new_message",
+                    "conversationId": target_conv_id.to_string(),
+                    "message": {
+                        "id": msg_id.to_string(),
+                        "conversationId": target_conv_id.to_string(),
+                        "seq": 0,
+                        "role": "user",
+                        "content": &msg_content,
+                        "status": "completed",
+                        "senderUserId": &user.id,
+                        "metadata": metadata,
+                        "createdAt": Utc::now().to_rfc3339(),
+                        "updatedAt": Utc::now().to_rfc3339(),
+                    },
+                }),
+                &state.redis,
+            );
+
+            // Trigger agent dispatch so agent can see and respond to the shared note
+            let conv_id_str = target_conv_id.to_string();
+            let state_clone = state.clone();
+            let user_id = user.id.clone();
+            let msg_content_clone = msg_content.clone();
+            tokio::spawn(async move {
+                trigger_agent_response(
+                    &user_id,
+                    &conv_id_str,
+                    &msg_content_clone,
+                    true, // skip_user_message — already saved above
+                    None,
+                    None,
+                    &[],
+                    None,
+                    &state_clone.ws,
+                    &state_clone.db,
+                    &state_clone.redis,
+                    &state_clone.config,
+                )
+                .await;
+            });
+
+            Json(json!({
+                "messageId": msg_id,
+                "noteId": note_id,
+                "conversationId": target_conv_id,
                 "title": title,
                 "preview": preview,
                 "tags": tags,
@@ -1389,9 +1600,16 @@ async fn ask_ai(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
     }
 
-    let gemini_key = match &state.config.gemini_api_key {
-        Some(k) => k.clone(),
-        None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
+    // Use user's own Gemini API key
+    let gemini_key = match sqlx::query_scalar::<_, Option<String>>(
+        "SELECT gemini_api_key FROM user_settings WHERE user_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(Some(k))) if !k.is_empty() => crate::routes::user_settings::decrypt_api_key(&state.config, &k),
+        _ => return (StatusCode::PAYMENT_REQUIRED, Json(json!({"error": "Please set your Gemini API key in Settings to use Ask AI."}))).into_response(),
     };
 
     if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
@@ -1569,8 +1787,9 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
         return vec![];
     }
 
-    let rows: Vec<(Uuid, String, f64, Uuid, String)> = sqlx::query_as(
-        r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name
+    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name,
+                  me.source_start, me.source_end
            FROM memory_entries me
            JOIN memory_capsules mc ON mc.id = me.capsule_id
            WHERE mc.owner_id = $1
@@ -1585,13 +1804,15 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
     .unwrap_or_default();
 
     rows.iter()
-        .map(|(id, content, importance, capsule_id, capsule_name)| {
+        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end)| {
             json!({
                 "id": id,
                 "content": content,
                 "importance": importance,
                 "capsuleId": capsule_id,
                 "capsuleName": capsule_name,
+                "sourceStart": source_start.map(|t| t.to_rfc3339()),
+                "sourceEnd": source_end.map(|t| t.to_rfc3339()),
             })
         })
         .collect()
@@ -1617,4 +1838,754 @@ pub async fn suggest_tags(gemini_key: &str, title: &str, content: &str) -> Vec<S
             .collect(),
         Err(_) => vec![],
     }
+}
+
+// ===== Auto Tag from Related Memories =====
+
+/// POST /api/conversations/:id/notes/:noteId/auto-tag
+/// Uses note content to find related memory entries, collects their tags, deduplicates,
+/// and updates the note's tags. No API key needed — pure DB query.
+async fn auto_tag_note(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
+        "SELECT title, content, tags FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, content, existing_tags) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if content.trim().len() < 20 && title.trim().len() < 5 {
+        return Json(json!({"tags": existing_tags})).into_response();
+    }
+
+    // Build tsquery from note content
+    let query_text = format!("{} {}", title, &content[..content.len().min(200)]);
+    let tsquery = query_text
+        .split_whitespace()
+        .take(8)
+        .map(|w| w.replace('\'', ""))
+        .filter(|w| w.len() > 2)
+        .collect::<Vec<_>>()
+        .join(" | ");
+
+    if tsquery.is_empty() {
+        return Json(json!({"tags": existing_tags})).into_response();
+    }
+
+    // Find related memory entries and collect their tags
+    let memory_tags: Vec<Vec<String>> = sqlx::query_scalar(
+        r#"SELECT me.tags
+           FROM memory_entries me
+           JOIN memory_capsules mc ON mc.id = me.capsule_id
+           WHERE mc.owner_id = $1
+             AND me.search_vector @@ to_tsquery('english', $2)
+             AND array_length(me.tags, 1) > 0
+           ORDER BY ts_rank(me.search_vector, to_tsquery('english', $2)) DESC
+           LIMIT 10"#,
+    )
+    .bind(&user.id)
+    .bind(&tsquery)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // Collect and deduplicate tags
+    let mut tag_set: std::collections::HashSet<String> = existing_tags.iter().cloned().collect();
+    for tags in &memory_tags {
+        for tag in tags {
+            tag_set.insert(tag.clone());
+        }
+    }
+
+    let mut merged_tags: Vec<String> = tag_set.into_iter().collect();
+    merged_tags.sort_unstable();
+
+    // Update note tags
+    let _ = sqlx::query(
+        "UPDATE conversation_notes SET tags = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(&merged_tags)
+    .bind(note_id)
+    .execute(&state.db)
+    .await;
+
+    Json(json!({"tags": merged_tags})).into_response()
+}
+
+// ===== User-level note endpoints =====
+
+#[derive(Deserialize)]
+struct ListUserNotesQuery {
+    before: Option<String>,
+    limit: Option<String>,
+    archived: Option<String>,
+    tags: Option<String>,
+    search: Option<String>,
+}
+
+/// GET /api/users/me/notes — list all notes owned by the authenticated user (across conversations)
+async fn list_user_notes(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Query(query): Query<ListUserNotesQuery>,
+) -> Response {
+    let limit: i64 = query
+        .limit
+        .as_deref()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(20)
+        .min(50);
+
+    let show_archived = query.archived.as_deref() == Some("true");
+    let tag_filter: Vec<String> = query
+        .tags
+        .as_deref()
+        .map(|t| {
+            t.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let search_term = query.search.as_deref().unwrap_or("").trim().to_string();
+
+    // Resolve cursor
+    let cursor_ts: Option<DateTime<Utc>> = if let Some(ref before_id) = query.before {
+        let before_uuid = match Uuid::parse_str(before_id) {
+            Ok(u) => u,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "Invalid cursor"})),
+                )
+                    .into_response()
+            }
+        };
+        sqlx::query_as::<_, (DateTime<Utc>,)>(
+            "SELECT created_at FROM conversation_notes WHERE id = $1",
+        )
+        .bind(before_uuid)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .map(|(ts,)| ts)
+    } else {
+        None
+    };
+
+    let archive_cond = if show_archived {
+        "n.archived_at IS NOT NULL"
+    } else {
+        "n.archived_at IS NULL"
+    };
+
+    // Build search pattern for ILIKE
+    let search_pattern = if search_term.is_empty() {
+        None
+    } else {
+        Some(format!("%{}%", search_term))
+    };
+
+    // Build query dynamically with correct parameter numbering
+    // $1 = user.id, then optional params follow in order
+    let mut conditions = format!("n.owner_id = $1 AND {}", archive_cond);
+    let mut param_idx = 2u32;
+
+    let tag_param = if !tag_filter.is_empty() {
+        let p = param_idx;
+        param_idx += 1;
+        conditions.push_str(&format!(" AND n.tags @> ${}::text[]", p));
+        Some(p)
+    } else {
+        None
+    };
+
+    let cursor_param = if cursor_ts.is_some() {
+        let p = param_idx;
+        param_idx += 1;
+        Some(p)
+    } else {
+        None
+    };
+
+    let search_param = if search_pattern.is_some() {
+        let p = param_idx;
+        param_idx += 1;
+        Some(p)
+    } else {
+        None
+    };
+
+    let limit_param = param_idx;
+
+    if let Some(p) = cursor_param {
+        conditions.push_str(&format!(" AND n.created_at < ${}", p));
+    }
+    if let Some(p) = search_param {
+        conditions.push_str(&format!(
+            " AND (n.title ILIKE ${p} OR n.content ILIKE ${p})"
+        ));
+    }
+
+    let q = format!(
+        r#"SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
+                  n.title, n.content, n.tags, n.archived_at, n.summary,
+                  n.created_at, n.updated_at,
+                  COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
+                  a.name AS agent_name,
+                  n.share_token, COALESCE(n.is_public, false) AS is_public
+           FROM conversation_notes n
+           LEFT JOIN "user" u ON u.id = n.creator_id
+           LEFT JOIN agents a ON a.id = n.agent_id
+           WHERE {}
+           ORDER BY n.created_at DESC LIMIT ${}"#,
+        conditions, limit_param
+    );
+
+    // Bind all parameters dynamically using sqlx::query + manual row mapping
+    // Since sqlx doesn't support conditional binding easily, use explicit match arms
+    // for the 8 possible combinations of (tags, cursor, search)
+    let rows = match (tag_param.is_some(), cursor_ts, &search_pattern) {
+        (true, Some(ts), Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(ts)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (true, Some(ts), None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(ts)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (true, None, Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (true, None, None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(&tag_filter)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (false, Some(ts), Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(ts)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (false, Some(ts), None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(ts)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (false, None, Some(sp)) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(sp)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+        (false, None, None) => {
+            sqlx::query_as::<_, NoteRow>(&q)
+                .bind(&user.id)
+                .bind(limit + 1)
+                .fetch_all(&state.db)
+                .await
+        }
+    };
+
+    match rows {
+        Ok(rows) => {
+            let has_more = rows.len() as i64 > limit;
+            let items: Vec<serde_json::Value> = rows
+                .iter()
+                .take(limit as usize)
+                .map(note_to_json)
+                .collect();
+
+            let next_cursor = if has_more {
+                items.last().and_then(|n| n.get("id").cloned())
+            } else {
+                None
+            };
+
+            // Fetch linked conversations for these notes
+            let note_ids: Vec<Uuid> = rows.iter().take(limit as usize).map(|n| n.id).collect();
+            let linked_convs = if !note_ids.is_empty() {
+                sqlx::query_as::<_, (Uuid, Uuid, String)>(
+                    r#"SELECT ncl.note_id, ncl.conversation_id,
+                              COALESCE(c.title, 'Untitled') AS conv_title
+                       FROM note_conversation_links ncl
+                       LEFT JOIN conversations c ON c.id = ncl.conversation_id
+                       WHERE ncl.note_id = ANY($1)"#,
+                )
+                .bind(&note_ids)
+                .fetch_all(&state.db)
+                .await
+                .unwrap_or_default()
+            } else {
+                vec![]
+            };
+
+            // Build a map: note_id -> linked conversations
+            let mut conv_map: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
+                std::collections::HashMap::new();
+            for (note_id, conv_id, conv_title) in &linked_convs {
+                conv_map.entry(*note_id).or_default().push(json!({
+                    "conversationId": conv_id,
+                    "title": conv_title,
+                }));
+            }
+
+            // Enrich items with linkedConversations
+            let enriched_items: Vec<serde_json::Value> = items
+                .into_iter()
+                .map(|mut item| {
+                    if let Some(id_str) = item.get("id").and_then(|v| v.as_str()) {
+                        if let Ok(nid) = Uuid::parse_str(id_str) {
+                            item.as_object_mut().unwrap().insert(
+                                "linkedConversations".into(),
+                                json!(conv_map.get(&nid).cloned().unwrap_or_default()),
+                            );
+                        }
+                    }
+                    item
+                })
+                .collect();
+
+            Json(json!({
+                "notes": enriched_items,
+                "hasMore": has_more,
+                "nextCursor": next_cursor,
+            }))
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct LinkNoteBody {
+    #[serde(rename = "conversationId")]
+    conversation_id: Uuid,
+}
+
+/// POST /api/notes/:noteId/links — link a note to a conversation
+async fn link_note_to_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+    Json(body): Json<LinkNoteBody>,
+) -> Response {
+    // Verify the user owns this note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    // Verify user is a member of the target conversation
+    if !is_member(&state.db, body.conversation_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of the target conversation"})),
+        )
+            .into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO note_conversation_links (note_id, conversation_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(note_id)
+    .bind(body.conversation_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"ok": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// DELETE /api/notes/:noteId/links/:conversationId — unlink a note from a conversation
+async fn unlink_note_from_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((note_id, conversation_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    // Verify the user owns this note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    // Don't allow unlinking from the original conversation
+    let original_conv = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM conversation_notes WHERE id = $1",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    if let Ok(Some(orig)) = original_conv {
+        if orig == conversation_id {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Cannot unlink from the original conversation"})),
+            )
+                .into_response();
+        }
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM note_conversation_links WHERE note_id = $1 AND conversation_id = $2",
+    )
+    .bind(note_id)
+    .bind(conversation_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"ok": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+// ===== Public sharing =====
+
+/// POST /api/notes/:noteId/public-share — create a public share link
+async fn create_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    // Verify user owns the note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &owner {
+        Ok(Some(oid)) if oid == &user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    // Generate a 32-char hex token
+    let token = Uuid::new_v4().to_string().replace("-", "");
+
+    let result = sqlx::query(
+        "UPDATE conversation_notes SET share_token = $1, is_public = true WHERE id = $2 AND owner_id = $3",
+    )
+    .bind(&token)
+    .bind(note_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({
+            "shareToken": token,
+            "shareUrl": format!("/shared/notes/{}", token),
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// DELETE /api/notes/:noteId/public-share — revoke public sharing
+async fn revoke_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    // Verify user owns the note
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &owner {
+        Ok(Some(oid)) if oid == &user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "You do not own this note"})),
+            )
+                .into_response()
+        }
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Note not found"})),
+            )
+                .into_response()
+        }
+    }
+
+    let result = sqlx::query(
+        "UPDATE conversation_notes SET share_token = NULL, is_public = false WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(note_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"ok": true})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/public/notes/:shareToken — view a publicly shared note (no auth required)
+async fn get_public_note(
+    State(state): State<AppState>,
+    Path(share_token): Path<String>,
+) -> Response {
+    #[derive(FromRow)]
+    struct PublicNoteRow {
+        title: String,
+        content: String,
+        tags: Vec<String>,
+        creator_type: String,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+        creator_name: String,
+    }
+
+    let row = sqlx::query_as::<_, PublicNoteRow>(
+        r#"SELECT n.title, n.content, n.tags, n.creator_type,
+                  n.created_at, n.updated_at,
+                  COALESCE(u.name, 'Unknown') AS creator_name
+           FROM conversation_notes n
+           LEFT JOIN "user" u ON u.id = n.creator_id
+           WHERE n.share_token = $1 AND n.is_public = true"#,
+    )
+    .bind(&share_token)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(n)) => Json(json!({
+            "title": n.title,
+            "content": n.content,
+            "tags": n.tags,
+            "creatorType": n.creator_type,
+            "creatorName": n.creator_name,
+            "createdAt": n.created_at.to_rfc3339(),
+            "updatedAt": n.updated_at.to_rfc3339(),
+        }))
+        .into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Note not found or not publicly shared"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// Upload an image for use in notes without creating a message.
+async fn upload_note_image(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    if !is_member(&state.db, conversation_id, &user.id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() != Some("file") {
+            continue;
+        }
+
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response();
+            }
+        };
+
+        if data.len() > 5 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Image must be under 5MB"}))).into_response();
+        }
+
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.starts_with(&[0x47, 0x49, 0x46]) {
+            ("gif", "image/gif")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Only PNG, JPEG, GIF, and WebP images are allowed"}))).into_response();
+        };
+
+        let stored = format!(
+            "note_{}_{}.{}",
+            conversation_id,
+            chrono::Utc::now().timestamp_millis(),
+            ext
+        );
+        let r2_key = format!("notes/{}/{}", conversation_id, stored);
+
+        let url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(
+                s3,
+                &state.config.r2_bucket,
+                &r2_key,
+                data.to_vec(),
+                content_type,
+                &state.config.r2_public_url,
+            )
+            .await
+            {
+                Ok(url) => url,
+                Err(e) => {
+                    tracing::warn!("upload_note_image: R2 upload failed, fallback to local: {}", e);
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("notes");
+                    if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("mkdir: {}", e)}))).into_response();
+                    }
+                    if let Err(e) = tokio::fs::write(dir.join(&stored), &data).await {
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("write: {}", e)}))).into_response();
+                    }
+                    format!("/uploads/notes/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("notes");
+            if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("mkdir: {}", e)}))).into_response();
+            }
+            if let Err(e) = tokio::fs::write(dir.join(&stored), &data).await {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("write: {}", e)}))).into_response();
+            }
+            format!("/uploads/notes/{}", stored)
+        };
+
+        return (StatusCode::OK, Json(json!({"url": url}))).into_response();
+    }
+
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response()
 }

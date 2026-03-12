@@ -28,16 +28,18 @@ import {
   ArchiveRestore,
   Tag,
   Link2,
-  Bot,
-  Send,
   Brain,
   Sparkles,
+  Bot,
+  Send,
+  ChevronDown,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 import { ShareSheet, type ShareContent } from "./share-sheet";
+import { Input } from "@/components/ui/input";
 
 interface NotebookSheetProps {
   open: boolean;
@@ -245,6 +247,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     (s) => s.agentNotesEnabledByConversation[conversationId] ?? true
   );
   const toggleAgentNotesEnabled = useChatStore((s) => s.toggleAgentNotesEnabled);
+  const pendingNoteId = useChatStore((s) => s.pendingNoteId);
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
@@ -259,15 +262,16 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  // Tag suggestions state
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  // Auto tag state
+  const [autoTagging, setAutoTagging] = useState(false);
   // Ask AI state
   const [askAiOpen, setAskAiOpen] = useState(false);
   const [askAiQuestion, setAskAiQuestion] = useState("");
   const [askAiAnswer, setAskAiAnswer] = useState("");
   const [askAiLoading, setAskAiLoading] = useState(false);
-  // Tag suggestions state
-  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
-  // Extract capsule state
-  const [extracting, setExtracting] = useState(false);
 
   useEffect(() => {
     if (open && conversationId) {
@@ -290,16 +294,32 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
       setSettingsOpen(false);
       setShowArchived(false);
       setFilterTags([]);
+      setSuggestedTags([]);
       setAskAiOpen(false);
       setAskAiQuestion("");
       setAskAiAnswer("");
-      setSuggestedTags([]);
+      setAskAiLoading(false);
     }
   }, [open]);
 
   useEffect(() => {
     setNotesLoaded(false);
   }, [conversationId]);
+
+  // Navigate to a specific note when pendingNoteId is set
+  useEffect(() => {
+    if (!pendingNoteId || !notesLoaded) return;
+    const note = notes.find((n) => n.id === pendingNoteId);
+    if (note) {
+      setSelectedNote(note);
+      setViewMode("detail");
+      // Fetch full note
+      api(`/api/conversations/${conversationId}/notes/${note.id}`)
+        .then((full) => setSelectedNote(full as Note))
+        .catch(() => {});
+    }
+    useChatStore.setState({ pendingNoteId: null });
+  }, [pendingNoteId, notesLoaded, notes, conversationId]);
 
   const handleOpenNote = useCallback(async (note: Note) => {
     setSelectedNote(note);
@@ -385,6 +405,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const handleDelete = useCallback(async (note?: Note) => {
     const target = note || selectedNote;
     if (!target) return;
+    if (!window.confirm(t("chat.notebook.confirmDelete"))) return;
     setLoading(true);
     try {
       await deleteNote(conversationId, target.id);
@@ -397,13 +418,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     } finally {
       setLoading(false);
     }
-  }, [selectedNote, conversationId, deleteNote]);
+  }, [selectedNote, conversationId, deleteNote, t]);
 
   const handleShareNote = useCallback((note: Note) => {
     setShareContent({
       type: "note",
       title: note.title || "Untitled",
       text: note.content || "",
+      noteId: note.id,
     });
     setShareSheetOpen(true);
   }, []);
@@ -440,36 +462,19 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     setLoading(false);
   }, [selectedNote, conversationId, shareNoteApi]);
 
-  const handleAskAi = useCallback(async () => {
-    if (!selectedNote || !askAiQuestion.trim()) return;
-    setAskAiLoading(true);
-    setAskAiAnswer("");
-    try {
-      const res = await api<{ answer: string }>(
-        `/api/conversations/${conversationId}/notes/${selectedNote.id}/ask-ai`,
-        { method: "POST", body: JSON.stringify({ question: askAiQuestion.trim() }) }
-      );
-      setAskAiAnswer(res.answer);
-    } catch {
-      setAskAiAnswer("Failed to get AI answer.");
-    } finally {
-      setAskAiLoading(false);
-    }
-  }, [selectedNote, askAiQuestion, conversationId]);
-
-  const handleExtractCapsule = useCallback(async () => {
+  const handleAutoTag = useCallback(async () => {
     if (!selectedNote) return;
-    setExtracting(true);
+    setAutoTagging(true);
     try {
-      const res = await api<{ capsuleId: string; entriesCreated: number; entries: string[] }>(
-        `/api/conversations/${conversationId}/notes/${selectedNote.id}/extract-capsule`,
+      const res = await api<{ tags: string[] }>(
+        `/api/conversations/${conversationId}/notes/${selectedNote.id}/auto-tag`,
         { method: "POST" }
       );
-      // Refresh note detail to show related capsules
-      const full = await api(`/api/conversations/${conversationId}/notes/${selectedNote.id}`) as Note;
-      setSelectedNote(full);
+      if (res.tags?.length) {
+        setSelectedNote({ ...selectedNote, tags: res.tags });
+      }
     } catch { /* api shows toast */ }
-    setExtracting(false);
+    setAutoTagging(false);
   }, [selectedNote, conversationId]);
 
   const handleAcceptSuggestedTag = useCallback(async (tag: string) => {
@@ -485,6 +490,23 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   const handleDismissSuggestedTags = useCallback(() => {
     setSuggestedTags([]);
   }, []);
+
+  const handleAskAi = async () => {
+    if (!selectedNote || !askAiQuestion.trim()) return;
+    setAskAiLoading(true);
+    setAskAiAnswer("");
+    try {
+      const res = await api<{ answer: string }>(`/api/conversations/${conversationId}/notes/${selectedNote.id}/ask-ai`, {
+        method: "POST",
+        body: JSON.stringify({ question: askAiQuestion.trim() }),
+      });
+      setAskAiAnswer(res.answer);
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setAskAiAnswer(error?.message || "Failed to get answer");
+    }
+    setAskAiLoading(false);
+  };
 
   const handleAddTag = useCallback((tag: string) => {
     const trimmed = tag.trim();
@@ -528,30 +550,23 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
   if (!open) return null;
 
   const panel = (
-    <>
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/50 animate-in fade-in-0"
-        onClick={() => onOpenChange(false)}
-      />
-      {/* Panel */}
-      <div
-        className={cn(
-          "fixed z-50 shadow-lg animate-in",
-          isMobile
-            ? "inset-x-0 bottom-0 rounded-t-2xl border-border bg-secondary px-2 pb-6 pt-3 max-h-[80vh] slide-in-from-bottom"
-            : "inset-y-0 right-0 w-full sm:w-[380px] sm:max-w-[380px] p-0 flex flex-col bg-secondary border-l border-border slide-in-from-right"
-        )}
+        className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in"
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+        }}
       >
-        {isMobile && (
-          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
-        )}
+      <div className="flex flex-col h-full w-full max-w-4xl mx-auto">
 
         {/* List View */}
         {viewMode === "list" && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
+          <div className="flex flex-col h-full">
             <div className={cn(
-              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0"
+              "shrink-0",
+              isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b"
             )}>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm flex items-center gap-1.5">
@@ -577,17 +592,15 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartCreate} title={t("chat.notebook.create")}>
                     <Plus className="h-4 w-4" />
                   </Button>
-                  {!isMobile && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </div>
 
             {/* Tabs: Active / Archived */}
-            <div className={cn("flex items-center gap-1 border-b border-border", isMobile ? "px-2 pb-1" : "px-4 pb-1")}>
+            <div className={cn("flex items-center gap-1 border-b border-border shrink-0", isMobile ? "px-2 pb-1" : "px-4 pb-1")}>
               <button
                 type="button"
                 onClick={() => setShowArchived(false)}
@@ -607,35 +620,51 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
             {/* Tag statistics panel */}
             {allTags.length > 0 && (
-              <div className={cn("flex flex-wrap gap-1", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
-                {allTags.map((tag) => (
+              <div className={cn("shrink-0", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
+                {isMobile && (
                   <button
-                    key={tag}
                     type="button"
-                    onClick={() => toggleFilterTag(tag)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
-                      filterTags.includes(tag)
-                        ? "bg-brand text-white"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    )}
+                    onClick={() => setTagsExpanded((p) => !p)}
+                    className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1"
                   >
-                    <Tag className="h-2.5 w-2.5" />
-                    {tag}
-                    <span className={cn(
-                      "inline-flex items-center justify-center rounded-full min-w-[16px] h-4 px-1 text-[9px] font-semibold",
-                      filterTags.includes(tag)
-                        ? "bg-white/20 text-white"
-                        : "bg-foreground/10 text-muted-foreground"
-                    )}>
-                      {tagCounts.get(tag) ?? 0}
-                    </span>
+                    <Tag className="h-3 w-3" />
+                    Tags ({allTags.length})
+                    <ChevronDown className={cn("h-3 w-3 transition-transform", tagsExpanded && "rotate-180")} />
                   </button>
-                ))}
+                )}
+                <div className={cn(
+                  "flex flex-wrap gap-1",
+                  isMobile && !tagsExpanded && "max-h-0 overflow-hidden",
+                )}>
+                  {allTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleFilterTag(tag)}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+                        filterTags.includes(tag)
+                          ? "bg-brand text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      )}
+                    >
+                      <Tag className="h-2.5 w-2.5" />
+                      {tag}
+                      <span className={cn(
+                        "inline-flex items-center justify-center rounded-full min-w-[16px] h-4 px-1 text-[9px] font-semibold",
+                        filterTags.includes(tag)
+                          ? "bg-white/20 text-white"
+                          : "bg-foreground/10 text-muted-foreground"
+                      )}>
+                        {tagCounts.get(tag) ?? 0}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-1" : "flex-1 min-h-0 px-1")}>
+            <div className="flex-1 min-h-0 overflow-y-auto px-1">
               {loading && notes.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -694,8 +723,8 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
         {/* Detail View */}
         {viewMode === "detail" && selectedNote && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
-            <div className={cn("flex items-center gap-2", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0")}>
+          <div className="flex flex-col h-full">
+            <div className={cn("flex items-center gap-2 shrink-0", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b")}>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -711,14 +740,12 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                     </Button>
                   </>
                 )}
-                {!isMobile && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-            <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-3" : "flex-1 min-h-0 px-4 py-3")}>
+            <div className={cn("flex-1 min-h-0 overflow-y-auto", isMobile ? "px-3 py-2" : "px-4 py-3")}>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                 <span>{selectedNote.creatorName}</span>
                 <span>&middot;</span>
@@ -736,7 +763,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 </div>
               )}
               {selectedNote.content ? (
-                <NotebookEditor content={selectedNote.content} editable={false} />
+                <NotebookEditor content={selectedNote.content} editable={false} conversationId={conversationId} />
               ) : (
                 <p className="text-sm text-muted-foreground italic">{t("chat.notebook.noContent")}</p>
               )}
@@ -798,7 +825,19 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                     {selectedNote.relatedCapsules.map((cap) => (
                       <div key={cap.id} className="rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs">
                         <p className="text-foreground">{cap.content}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">{cap.capsuleName}</p>
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+                          <span>{cap.capsuleName}</span>
+                          {(cap.sourceStart || cap.sourceEnd) && (
+                            <>
+                              <span>&middot;</span>
+                              <span suppressHydrationWarning>
+                                {cap.sourceStart ? new Date(cap.sourceStart).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "?"}
+                                {" ~ "}
+                                {cap.sourceEnd ? new Date(cap.sourceEnd).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "?"}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -829,35 +868,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   </div>
                 </div>
               )}
-              {/* Ask AI (Task 1) */}
-              {askAiOpen && (
-                <div className="mt-4 pt-3 border-t border-border">
-                  <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
-                    <Bot className="h-3 w-3" />
-                    Ask AI about this note
-                  </h4>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={askAiQuestion}
-                      onChange={(e) => setAskAiQuestion(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAskAi(); }}
-                      placeholder="Ask a question..."
-                      className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                      disabled={askAiLoading}
-                      autoFocus
-                    />
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleAskAi} disabled={askAiLoading || !askAiQuestion.trim()}>
-                      {askAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                    </Button>
-                  </div>
-                  {askAiAnswer && (
-                    <div className="mt-2 rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-foreground whitespace-pre-wrap">
-                      {askAiAnswer}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
             {/* Bottom Toolbar */}
             <div className={cn("border-t border-border flex items-center gap-1 shrink-0", isMobile ? "px-3 py-2" : "px-4 py-2")}>
@@ -865,37 +875,59 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 <Archive className="h-3.5 w-3.5" />
                 {t("chat.notebook.archive")}
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleShareNoteToChat()} disabled={loading}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => selectedNote && handleShareNote(selectedNote)} disabled={loading}>
                 <Share2 className="h-3.5 w-3.5" />
-                {t("chat.notebook.shareToChat")}
+                {t("share.title")}
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setAskAiOpen(!askAiOpen); setAskAiAnswer(""); setAskAiQuestion(""); }}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleAutoTag} disabled={autoTagging}>
+                {autoTagging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {t("chat.notebook.autoTag")}
+              </Button>
+              <Button variant="ghost" size="sm" className={cn("h-7 text-xs gap-1", askAiOpen && "bg-accent")} onClick={() => setAskAiOpen(!askAiOpen)}>
                 <Bot className="h-3.5 w-3.5" />
-                Ask AI
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleExtractCapsule} disabled={extracting}>
-                {extracting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
-                Capsule
+                {t("chat.notebook.askAi")}
               </Button>
             </div>
+            {askAiOpen && (
+              <div className="border-t border-border px-3 py-2 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={askAiQuestion}
+                    onChange={(e) => setAskAiQuestion(e.target.value)}
+                    placeholder={t("chat.notebook.askAiPlaceholder")}
+                    className="flex-1 h-8 text-sm"
+                    onKeyDown={(e) => e.key === "Enter" && handleAskAi()}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8"
+                    onClick={handleAskAi}
+                    disabled={askAiLoading || !askAiQuestion.trim()}
+                  >
+                    {askAiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  </Button>
+                </div>
+                {askAiAnswer && (
+                  <div className="rounded-md bg-muted/50 p-2 text-xs whitespace-pre-wrap">{askAiAnswer}</div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* Create View */}
         {viewMode === "create" && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
-            <div className={cn("flex items-center gap-2", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0")}>
+          <div className="flex flex-col h-full">
+            <div className={cn("flex items-center gap-2 shrink-0", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b")}>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h3 className="text-sm font-semibold flex-1">{t("chat.notebook.newNote")}</h3>
-              {!isMobile && (
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <div className={cn("flex flex-col gap-3 overflow-y-auto", isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0")}>
+            <div className={cn("flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto", isMobile ? "px-3 py-2" : "px-4 py-3")}>
               <input type="text" placeholder={t("chat.notebook.titlePlaceholder")} value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" autoFocus />
               {/* Tag Input */}
               <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 min-h-[32px]">
@@ -915,7 +947,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                 />
               </div>
-              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
+              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={handleCreate} disabled={loading || !titleInput.trim()}>
@@ -929,19 +961,17 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
         {/* Edit View */}
         {viewMode === "edit" && selectedNote && (
-          <div className={cn(!isMobile && "flex flex-col h-full")}>
-            <div className={cn("flex items-center gap-2", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b shrink-0")}>
+          <div className="flex flex-col h-full">
+            <div className={cn("flex items-center gap-2 shrink-0", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b")}>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h3 className="text-sm font-semibold flex-1">{t("chat.notebook.editNote")}</h3>
-              {!isMobile && (
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <div className={cn("flex flex-col gap-3 overflow-y-auto", isMobile ? "px-3 max-h-[65vh]" : "px-4 py-3 flex-1 min-h-0")}>
+            <div className={cn("flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto", isMobile ? "px-3 py-2" : "px-4 py-3")}>
               <input type="text" placeholder={t("chat.notebook.titlePlaceholder")} value={titleInput} onChange={(e) => setTitleInput(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" autoFocus />
               {/* Tag Input */}
               <div className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 min-h-[32px]">
@@ -961,7 +991,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                 />
               </div>
-              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
+              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={handleSave} disabled={loading || !titleInput.trim()}>
@@ -972,10 +1002,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
             </div>
           </div>
         )}
-      </div>
 
+      </div>
       <ShareSheet open={shareSheetOpen} onOpenChange={setShareSheetOpen} content={shareContent} />
-    </>
+    </div>
   );
 
   return typeof document !== "undefined" ? createPortal(panel, document.body) : null;

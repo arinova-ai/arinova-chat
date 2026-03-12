@@ -98,7 +98,7 @@ export function ConversationItem({
   agentName,
   agentDescription,
   agentAvatarUrl,
-  type = "direct",
+  type = "h2a",
   lastMessage,
   pinnedAt,
   updatedAt,
@@ -143,6 +143,14 @@ export function ConversationItem({
     );
     if (fileAtt) {
       return `📎 ${fileAtt.fileName}`;
+    }
+    // Rich Card previews
+    const meta = lastMessage.metadata as Record<string, unknown> | undefined;
+    if (meta && typeof meta.noteId === "string") {
+      return t("chat.previewSharedNote", { title: meta.title as string ?? "" });
+    }
+    if (meta && typeof meta.cardId === "string") {
+      return t("chat.previewSharedTask", { title: meta.title as string ?? "" });
     }
     return truncate(lastMessage.content.replace(/\n/g, " "), 50);
   })();
@@ -268,7 +276,7 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-9 w-9">
-              {type === "direct" && (
+              {(type === "h2h" || type === "h2a" || type === "direct") && (
                 <AvatarImage
                   src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
                   alt={agentName}
@@ -395,7 +403,7 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-10 w-10">
-              {type === "direct" && (
+              {(type === "h2h" || type === "h2a" || type === "direct") && (
                 <AvatarImage
                   src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
                   alt={agentName}

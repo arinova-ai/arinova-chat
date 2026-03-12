@@ -247,7 +247,7 @@ export function MessageContextMenu({
   return createPortal(
     <div
       className={`fixed inset-0 z-[100] transition-opacity duration-150 ${visible ? "opacity-100" : "opacity-0"}`}
-      style={{ touchAction: "manipulation" }}
+      style={{ touchAction: "manipulation", pointerEvents: "auto" }}
       onTouchEnd={(e) => {
         // Block synthetic click from touchend during guard period
         if (Date.now() - openedAtRef.current < INTERACTION_GUARD_MS) {

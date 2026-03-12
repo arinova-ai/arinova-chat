@@ -29,7 +29,7 @@ export interface Agent {
 }
 
 // ===== Conversation =====
-export type ConversationType = "direct" | "group" | "official" | "club" | "lounge";
+export type ConversationType = "direct" | "h2h" | "h2a" | "group" | "official" | "club" | "lounge";
 
 export interface Conversation {
   id: string;
@@ -590,8 +590,11 @@ export interface Note {
     importance: number;
     capsuleId: string;
     capsuleName: string;
+    sourceStart?: string | null;
+    sourceEnd?: string | null;
   }>;
   suggestedTags?: string[];
+  linkedConversations?: Array<{ conversationId: string; title: string }>;
 }
 
 // ===== Push Notifications =====

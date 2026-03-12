@@ -36,7 +36,7 @@ function readLocale(): Locale {
 interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
 const I18nContext = createContext<I18nContextValue>({
@@ -68,7 +68,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t = useCallback(
-    (key: string): string => translations[locale]?.[key] ?? translations.en[key] ?? key,
+    (key: string, vars?: Record<string, string | number>): string => {
+      let str = translations[locale]?.[key] ?? translations.en[key] ?? key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          str = str.replaceAll(`{{${k}}}`, String(v));
+        }
+      }
+      return str;
+    },
     [locale],
   );
 

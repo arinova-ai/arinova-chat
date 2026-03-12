@@ -9,11 +9,8 @@ import { Sidebar } from "./sidebar";
 import { ChatArea } from "./chat-area";
 import { NewChatDialog } from "./new-chat-dialog";
 import { CallIndicator } from "@/components/voice/call-indicator";
-import { IncomingCall } from "@/components/voice/incoming-call";
 import { NotificationBanner } from "@/components/notification-banner";
 import { useChatStore } from "@/store/chat-store";
-import { useVoiceCallStore } from "@/store/voice-call-store";
-import { wsManager } from "@/lib/ws";
 import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 import { initChatDiagnostics, useRenderDiag } from "@/lib/chat-diagnostics";
@@ -77,34 +74,6 @@ export function ChatLayout() {
     };
   }, []);
 
-  // Listen for voice events on main WS (incoming calls, call ends)
-  useEffect(() => {
-    const unsub = wsManager.subscribe((event) => {
-      if (event.type === "voice_incoming_call") {
-        useVoiceCallStore.getState().receiveIncomingCall({
-          sessionId: event.sessionId,
-          callerId: event.callerId,
-          callerName: event.callerName,
-          callerAvatarUrl: event.callerAvatarUrl,
-          conversationId: event.conversationId,
-          sdp: event.sdp,
-        });
-      } else if (event.type === "voice_call_end") {
-        // Dismiss incoming call if it was rejected/ended by caller
-        const incoming = useVoiceCallStore.getState().incomingCall;
-        if (incoming?.sessionId === event.sessionId) {
-          useVoiceCallStore.getState().dismissIncoming();
-        }
-        // Also end active call if session matches
-        const activeSession = useVoiceCallStore.getState().sessionId;
-        if (activeSession === event.sessionId) {
-          useVoiceCallStore.getState().endCall();
-        }
-      }
-    });
-    return unsub;
-  }, []);
-
   // Handle ?c= and ?m= query params from push notification deep links
   useEffect(() => {
     const convId = searchParams.get("c");
@@ -166,10 +135,21 @@ export function ChatLayout() {
 
       {/* Desktop: Conversation panel */}
       <div
-        className="hidden h-full shrink-0 overflow-hidden border-r border-border md:block transition-[width] duration-300 ease-in-out"
+        className="hidden h-full shrink-0 overflow-hidden border-r border-border md:block transition-[width] duration-300 ease-in-out relative"
         style={{ width: sidebarCollapsed ? 72 : 288 }}
       >
         <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
+        {/* New Chat FAB — desktop */}
+        {!sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={() => setNewChatOpen(true)}
+            className="absolute right-4 bottom-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-gradient-end shadow-lg shadow-blue-500/30 hover:scale-105 active:scale-95 transition-transform"
+            aria-label="New chat"
+          >
+            <Plus className="h-5 w-5 text-white" />
+          </button>
+        )}
       </div>
 
       {/* Mobile: sidebar + bottom nav when no conversation/search, chat when selected */}
@@ -203,9 +183,6 @@ export function ChatLayout() {
 
       {/* Floating call indicator (visible when navigating away from active call) */}
       <CallIndicator />
-
-      {/* Incoming call notification */}
-      <IncomingCall />
     </div>
   );
 }

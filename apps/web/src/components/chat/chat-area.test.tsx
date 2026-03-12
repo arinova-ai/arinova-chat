@@ -101,7 +101,7 @@ describe("ChatArea", () => {
         {
           id: "conv-1",
           title: "Test",
-          type: "direct",
+          type: "h2a",
           userId: "u1",
           agentId: "a1",
           agentName: "CodeBot",
@@ -150,7 +150,7 @@ describe("ChatArea", () => {
         {
           id: "conv-1",
           title: "Test",
-          type: "direct",
+          type: "h2a",
           userId: "u1",
           agentId: "a1",
           agentName: "CodeBot",

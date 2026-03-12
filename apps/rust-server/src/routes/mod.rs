@@ -45,6 +45,8 @@ pub mod kanban;
 pub mod activity;
 pub mod dashboard;
 pub mod voice;
+pub mod user_settings;
+pub mod conversation_settings;
 
 use axum::Router;
 use crate::AppState;
@@ -97,5 +99,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(kanban::router())
         .merge(activity::router())
         .merge(dashboard::router())
+        .merge(user_settings::router())
         .with_state(state)
 }

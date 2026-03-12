@@ -5,18 +5,24 @@ use axum::{
     routing::{delete, get, patch, post},
     Router,
 };
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::middleware::{AuthAgent, AuthUser};
+use crate::ws::handler::trigger_agent_response;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         // User API
-        .route("/api/kanban/boards", get(list_boards))
-        .route("/api/kanban/boards/{id}", get(get_board))
+        .route("/api/kanban/boards", get(list_boards).post(create_board))
+        .route("/api/kanban/boards/{id}", get(get_board).patch(update_board))
+        .route("/api/kanban/boards/{id}/archive", post(archive_board))
+        .route("/api/kanban/boards/{id}/columns", get(list_columns).post(create_column))
+        .route("/api/kanban/columns/{id}", patch(update_column).delete(delete_column))
+        .route("/api/kanban/boards/{id}/columns/reorder", post(reorder_columns))
         .route(
             "/api/kanban/boards/{id}/archived-cards",
             get(list_archived_cards),
@@ -28,6 +34,16 @@ pub fn router() -> Router<AppState> {
             "/api/kanban/cards/{card_id}/agents/{agent_id}",
             delete(unassign_agent),
         )
+        .route("/api/kanban/cards/{id}/share", post(share_card))
+        .route(
+            "/api/kanban/cards/{cardId}/share-to/{conversationId}",
+            post(share_card_to_conversation),
+        )
+        .route(
+            "/api/kanban/cards/{id}/public-share",
+            post(create_card_public_share).delete(revoke_card_public_share),
+        )
+        .route("/api/public/cards/{shareToken}", get(get_public_card))
         .route("/api/kanban/cards/{id}/archive", post(archive_card))
         .route("/api/kanban/cards/{id}/unarchive", post(unarchive_card))
         .route(
@@ -38,13 +54,71 @@ pub fn router() -> Router<AppState> {
             "/api/kanban/cards/{card_id}/notes/{note_id}",
             delete(unlink_note_from_card),
         )
+        .route(
+            "/api/kanban/cards/{cardId}/commits",
+            get(list_card_commits).post(add_card_commit),
+        )
+        .route(
+            "/api/kanban/cards/{cardId}/commits/{commitHash}",
+            delete(delete_card_commit),
+        )
+        .route(
+            "/api/kanban/boards/{id}/labels",
+            get(list_board_labels).post(create_label),
+        )
+        .route(
+            "/api/kanban/labels/{id}",
+            patch(update_label).delete(delete_label),
+        )
+        .route(
+            "/api/kanban/cards/{id}/labels",
+            post(add_label_to_card),
+        )
+        .route(
+            "/api/kanban/cards/{cardId}/labels/{labelId}",
+            delete(remove_label_from_card),
+        )
         // Agent API
+        .route("/api/agent/kanban/boards", get(agent_list_boards).post(agent_create_board))
+        .route("/api/agent/kanban/boards/{id}", patch(agent_update_board))
+        .route("/api/agent/kanban/boards/{id}/archive", post(agent_archive_board))
+        .route("/api/agent/kanban/boards/{id}/columns", get(agent_list_columns).post(agent_create_column))
+        .route("/api/agent/kanban/columns/{id}", patch(agent_update_column).delete(agent_delete_column))
+        .route("/api/agent/kanban/boards/{id}/columns/reorder", post(agent_reorder_columns))
         .route("/api/agent/kanban/cards", get(agent_list_cards).post(agent_create_card))
         .route("/api/agent/kanban/cards/{id}", patch(agent_update_card))
         .route("/api/agent/kanban/cards/{id}/complete", post(agent_complete_card))
         .route(
             "/api/agent/kanban/boards/{id}/archived-cards",
             get(agent_list_archived_cards),
+        )
+        .route(
+            "/api/agent/kanban/cards/{cardId}/commits",
+            get(agent_list_card_commits).post(agent_add_card_commit),
+        )
+        .route(
+            "/api/agent/kanban/cards/{id}/notes",
+            get(agent_list_card_notes).post(agent_link_note_to_card),
+        )
+        .route(
+            "/api/agent/kanban/cards/{card_id}/notes/{note_id}",
+            delete(agent_unlink_note_from_card),
+        )
+        .route(
+            "/api/agent/kanban/boards/{id}/labels",
+            get(agent_list_board_labels).post(agent_create_label),
+        )
+        .route(
+            "/api/agent/kanban/labels/{id}",
+            patch(agent_update_label).delete(agent_delete_label),
+        )
+        .route(
+            "/api/agent/kanban/cards/{id}/labels",
+            post(agent_add_label_to_card),
+        )
+        .route(
+            "/api/agent/kanban/cards/{cardId}/labels/{labelId}",
+            delete(agent_remove_label_from_card),
         )
         // User notes lookup (for note selector in card detail)
         .route("/api/kanban/owner-notes", get(list_owner_notes))
@@ -82,6 +156,8 @@ struct CardRow {
     created_by: Option<String>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    share_token: Option<String>,
+    is_public: bool,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -97,6 +173,53 @@ struct CardNoteRow {
     card_id: Uuid,
     note_id: Uuid,
     note_title: String,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct CardCommitRow {
+    card_id: Uuid,
+    commit_hash: String,
+    message: Option<String>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct LabelRow {
+    id: Uuid,
+    board_id: Uuid,
+    name: String,
+    color: String,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct CardLabelRow {
+    card_id: Uuid,
+    label_id: Uuid,
+    label_name: String,
+    label_color: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateLabelBody {
+    name: String,
+    color: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateLabelBody {
+    name: Option<String>,
+    color: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddCardLabelBody {
+    label_id: Uuid,
 }
 
 #[derive(Debug, Deserialize)]
@@ -143,6 +266,7 @@ struct AgentCreateCardBody {
     priority: Option<String>,
     column_name: Option<String>,
     column_id: Option<Uuid>,
+    board_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -162,6 +286,45 @@ struct ArchivedCardRow {
 struct PaginationQuery {
     page: Option<i64>,
     limit: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateBoardBody {
+    name: String,
+    columns: Option<Vec<CreateColumnInput>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateColumnInput {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateBoardBody {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateColumnBody {
+    name: String,
+    sort_order: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateColumnBody {
+    name: Option<String>,
+    sort_order: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReorderColumnsBody {
+    column_ids: Vec<Uuid>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -264,6 +427,34 @@ async fn verify_card_owner(
     Ok(())
 }
 
+/// Check that a column belongs to the given user (through board ownership).
+async fn verify_column_owner(
+    db: &sqlx::PgPool,
+    column_id: Uuid,
+    owner_id: &str,
+) -> Result<(), Response> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_columns col
+            JOIN kanban_boards b ON b.id = col.board_id
+            WHERE col.id = $1 AND b.owner_id = $2
+        )"#,
+    )
+    .bind(column_id)
+    .bind(owner_id)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
+    })?;
+
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, Json(json!({ "error": "Column not found" })))
+            .into_response());
+    }
+    Ok(())
+}
+
 /// Lazy-archive: mark cards in Done columns as archived if updated_at > 3 days ago.
 async fn lazy_archive_done_cards(db: &sqlx::PgPool, board_id: Uuid) {
     let _ = sqlx::query(
@@ -299,15 +490,36 @@ async fn lazy_archive_done_cards_by_owner(db: &sqlx::PgPool, owner_id: &str) {
 // ── User API ──────────────────────────────────────────────────
 
 /// GET /api/kanban/boards — list user's boards (auto-create default if none)
-async fn list_boards(State(state): State<AppState>, user: AuthUser) -> Response {
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ListBoardsQuery {
+    #[serde(default)]
+    include_archived: Option<bool>,
+}
+
+async fn list_boards(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Query(query): Query<ListBoardsQuery>,
+) -> Response {
     let _ = ensure_default_board(&state.db, &user.id).await;
 
-    let boards = sqlx::query_as::<_, BoardRow>(
-        "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
-    )
-    .bind(&user.id)
-    .fetch_all(&state.db)
-    .await;
+    let include_archived = query.include_archived.unwrap_or(false);
+    let boards = if include_archived {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+        )
+        .bind(&user.id)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
+        )
+        .bind(&user.id)
+        .fetch_all(&state.db)
+        .await
+    };
 
     match boards {
         Ok(rows) => Json(json!(rows)).into_response(),
@@ -338,7 +550,8 @@ async fn get_board(
 
     let cards = sqlx::query_as::<_, CardRow>(
         r#"SELECT c.id, c.column_id, c.title, c.description, c.priority,
-                  c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at
+                  c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at,
+                  c.share_token, COALESCE(c.is_public, false) AS is_public
            FROM kanban_cards c
            JOIN kanban_columns col ON col.id = c.column_id
            WHERE col.board_id = $1 AND c.archived = FALSE
@@ -372,18 +585,370 @@ async fn get_board(
     .fetch_all(&state.db)
     .await;
 
-    match (columns, cards, card_agents, card_notes) {
-        (Ok(cols), Ok(crds), Ok(agents), Ok(notes)) => Json(json!({
+    let card_commits = sqlx::query_as::<_, CardCommitRow>(
+        r#"SELECT cc.card_id, cc.commit_hash, cc.message, cc.created_at
+           FROM kanban_card_commits cc
+           JOIN kanban_cards c ON c.id = cc.card_id
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1
+           ORDER BY cc.created_at DESC"#,
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    let labels = sqlx::query_as::<_, LabelRow>(
+        "SELECT id, board_id, name, color FROM kanban_labels WHERE board_id = $1 ORDER BY name",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    let card_labels = sqlx::query_as::<_, CardLabelRow>(
+        r#"SELECT cl.card_id, cl.label_id, l.name AS label_name, l.color AS label_color
+           FROM kanban_card_labels cl
+           JOIN kanban_labels l ON l.id = cl.label_id
+           JOIN kanban_cards c ON c.id = cl.card_id
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE col.board_id = $1
+           ORDER BY l.name"#,
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match (columns, cards, card_agents, card_notes, card_commits, labels, card_labels) {
+        (Ok(cols), Ok(crds), Ok(agents), Ok(notes), Ok(commits), Ok(lbls), Ok(cl)) => Json(json!({
             "id": board_id,
             "columns": cols,
             "cards": crds,
             "cardAgents": agents,
             "cardNotes": notes,
+            "cardCommits": commits,
+            "labels": lbls,
+            "cardLabels": cl,
         }))
         .into_response(),
         _ => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Failed to fetch board" })))
             .into_response(),
     }
+}
+
+/// POST /api/kanban/boards
+async fn create_board(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<CreateBoardBody>,
+) -> Response {
+    let board_id = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(&user.id)
+    .bind(&body.name)
+    .fetch_one(&state.db)
+    .await;
+
+    let board_id = match board_id {
+        Ok(id) => id,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    if let Some(cols) = &body.columns {
+        for (i, col) in cols.iter().enumerate() {
+            let _ = sqlx::query(
+                "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+            )
+            .bind(board_id)
+            .bind(&col.name)
+            .bind(i as i32)
+            .execute(&state.db)
+            .await;
+        }
+    } else {
+        // No columns provided — create default 5 columns (same as ensure_default_board)
+        for (name, order) in [("Backlog", 0), ("To Do", 1), ("In Progress", 2), ("Review", 3), ("Done", 4)] {
+            let _ = sqlx::query(
+                "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+            )
+            .bind(board_id)
+            .bind(name)
+            .bind(order)
+            .execute(&state.db)
+            .await;
+        }
+    }
+
+    let board = sqlx::query_as::<_, BoardRow>(
+        "SELECT id, name, created_at FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await;
+
+    match board {
+        Ok(b) => (StatusCode::CREATED, Json(json!(b))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// PATCH /api/kanban/boards/:id
+async fn update_board(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<UpdateBoardBody>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query("UPDATE kanban_boards SET name = $1 WHERE id = $2")
+        .bind(&body.name)
+        .bind(board_id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/kanban/boards/:id
+/// POST /api/kanban/boards/:id/archive — toggle archived state
+async fn archive_board(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    // Check current archived state
+    let current_archived = sqlx::query_scalar::<_, bool>(
+        "SELECT archived FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    // If archiving (not unarchiving), check that it's not the last non-archived board
+    if !current_archived {
+        let non_archived_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM kanban_boards WHERE owner_id = $1 AND archived = false",
+        )
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if non_archived_count <= 1 {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot archive the last board" }))).into_response();
+        }
+    }
+
+    let new_archived = !current_archived;
+
+    if let Err(e) = sqlx::query("UPDATE kanban_boards SET archived = $1 WHERE id = $2")
+        .bind(new_archived)
+        .bind(board_id)
+        .execute(&state.db)
+        .await
+    {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+    }
+
+    // If archiving, clear kanban_board_id references in conversation settings
+    if new_archived {
+        let _ = sqlx::query(
+            "UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1",
+        )
+        .bind(board_id)
+        .execute(&state.db)
+        .await;
+    }
+
+    Json(json!({ "ok": true, "archived": new_archived })).into_response()
+}
+
+/// GET /api/kanban/boards/:id/columns
+async fn list_columns(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let cols = sqlx::query_as::<_, ColumnRow>(
+        "SELECT id, board_id, name, sort_order FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match cols {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/kanban/boards/:id/columns
+async fn create_column(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<CreateColumnBody>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let sort_order = if let Some(order) = body.sort_order {
+        order
+    } else {
+        sqlx::query_scalar::<_, i32>(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM kanban_columns WHERE board_id = $1",
+        )
+        .bind(board_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0)
+    };
+
+    let col = sqlx::query_as::<_, ColumnRow>(
+        "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3) RETURNING id, board_id, name, sort_order",
+    )
+    .bind(board_id)
+    .bind(&body.name)
+    .bind(sort_order)
+    .fetch_one(&state.db)
+    .await;
+
+    match col {
+        Ok(c) => (StatusCode::CREATED, Json(json!(c))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// PATCH /api/kanban/columns/:id
+async fn update_column(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(column_id): Path<Uuid>,
+    Json(body): Json<UpdateColumnBody>,
+) -> Response {
+    if let Err(e) = verify_column_owner(&state.db, column_id, &user.id).await {
+        return e;
+    }
+
+    if body.name.is_none() && body.sort_order.is_none() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Nothing to update" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        r#"UPDATE kanban_columns SET
+            name = COALESCE($1, name),
+            sort_order = COALESCE($2, sort_order)
+        WHERE id = $3"#,
+    )
+    .bind(&body.name)
+    .bind(body.sort_order)
+    .bind(column_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/kanban/columns/:id
+async fn delete_column(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(column_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_column_owner(&state.db, column_id, &user.id).await {
+        return e;
+    }
+
+    // Reject if column has non-archived cards
+    let card_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM kanban_cards WHERE column_id = $1 AND archived = false",
+    )
+    .bind(column_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if card_count > 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot delete column with cards. Move or archive cards first." }))).into_response();
+    }
+
+    let result = sqlx::query("DELETE FROM kanban_columns WHERE id = $1")
+        .bind(column_id).execute(&state.db).await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/kanban/boards/:id/columns/reorder
+async fn reorder_columns(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<ReorderColumnsBody>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    // Validate: request set must match DB set exactly (no duplicates, no missing)
+    let db_ids = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut req_sorted = body.column_ids.clone();
+    req_sorted.sort();
+    req_sorted.dedup();
+    let mut db_sorted = db_ids.clone();
+    db_sorted.sort();
+    if req_sorted != db_sorted {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "columnIds must contain exactly all columns of this board with no duplicates" }))).into_response();
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+    for (i, col_id) in body.column_ids.iter().enumerate() {
+        if let Err(e) = sqlx::query("UPDATE kanban_columns SET sort_order = $1 WHERE id = $2 AND board_id = $3")
+            .bind(i as i32)
+            .bind(col_id)
+            .bind(board_id)
+            .execute(&mut *tx)
+            .await
+        {
+            let _ = tx.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+    }
+
+    Json(json!({ "ok": true })).into_response()
 }
 
 /// POST /api/kanban/cards — create a new card
@@ -424,7 +989,7 @@ async fn create_card(
     let result = sqlx::query_as::<_, CardRow>(
         r#"INSERT INTO kanban_cards (column_id, title, description, priority, sort_order, created_by)
            VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at"#,
+           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at, share_token, COALESCE(is_public, false) AS is_public"#,
     )
     .bind(body.column_id)
     .bind(&body.title)
@@ -596,6 +1161,427 @@ async fn agent_owner_id(db: &sqlx::PgPool, agent_id: Uuid) -> Result<String, Res
     })
 }
 
+/// GET /api/agent/kanban/boards — list owner's boards (auto-create default if none)
+async fn agent_list_boards(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Query(query): Query<ListBoardsQuery>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+
+    let _ = ensure_default_board(&state.db, &owner_id).await;
+
+    let include_archived = query.include_archived.unwrap_or(false);
+    let boards = if include_archived {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+        )
+        .bind(&owner_id)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
+        )
+        .bind(&owner_id)
+        .fetch_all(&state.db)
+        .await
+    };
+
+    let boards = match boards {
+        Ok(rows) => rows,
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+                .into_response()
+        }
+    };
+
+    let board_ids: Vec<Uuid> = boards.iter().map(|b| b.id).collect();
+    let col_rows = sqlx::query(
+        "SELECT id, board_id, name, sort_order FROM kanban_columns WHERE board_id = ANY($1) ORDER BY sort_order",
+    )
+    .bind(&board_ids)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut col_map: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+    for row in &col_rows {
+        use sqlx::Row;
+        let board_id: Uuid = row.get("board_id");
+        let col = json!({
+            "id": row.get::<Uuid, _>("id"),
+            "name": row.get::<String, _>("name"),
+            "sortOrder": row.get::<i32, _>("sort_order"),
+        });
+        col_map.entry(board_id).or_default().push(col);
+    }
+
+    let result: Vec<serde_json::Value> = boards
+        .iter()
+        .map(|b| {
+            json!({
+                "id": b.id,
+                "name": b.name,
+                "createdAt": b.created_at,
+                "columns": col_map.get(&b.id).cloned().unwrap_or_default(),
+            })
+        })
+        .collect();
+
+    Json(json!(result)).into_response()
+}
+
+/// POST /api/agent/kanban/boards
+async fn agent_create_board(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Json(body): Json<CreateBoardBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+
+    let board_id = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(&owner_id)
+    .bind(&body.name)
+    .fetch_one(&state.db)
+    .await;
+
+    let board_id = match board_id {
+        Ok(id) => id,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    if let Some(cols) = &body.columns {
+        for (i, col) in cols.iter().enumerate() {
+            let _ = sqlx::query(
+                "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+            )
+            .bind(board_id)
+            .bind(&col.name)
+            .bind(i as i32)
+            .execute(&state.db)
+            .await;
+        }
+    } else {
+        // No columns provided — create default 5 columns (same as ensure_default_board)
+        for (name, order) in [("Backlog", 0), ("To Do", 1), ("In Progress", 2), ("Review", 3), ("Done", 4)] {
+            let _ = sqlx::query(
+                "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+            )
+            .bind(board_id)
+            .bind(name)
+            .bind(order)
+            .execute(&state.db)
+            .await;
+        }
+    }
+
+    let board = sqlx::query_as::<_, BoardRow>(
+        "SELECT id, name, created_at FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await;
+
+    match board {
+        Ok(b) => (StatusCode::CREATED, Json(json!(b))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// PATCH /api/agent/kanban/boards/:id
+async fn agent_update_board(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<UpdateBoardBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    let result = sqlx::query("UPDATE kanban_boards SET name = $1 WHERE id = $2")
+        .bind(&body.name)
+        .bind(board_id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/agent/kanban/boards/:id
+/// POST /api/agent/kanban/boards/:id/archive — toggle archived state
+async fn agent_archive_board(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    let current_archived = sqlx::query_scalar::<_, bool>(
+        "SELECT archived FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !current_archived {
+        let non_archived_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM kanban_boards WHERE owner_id = $1 AND archived = false",
+        )
+        .bind(&owner_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if non_archived_count <= 1 {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot archive the last board" }))).into_response();
+        }
+    }
+
+    let new_archived = !current_archived;
+
+    if let Err(e) = sqlx::query("UPDATE kanban_boards SET archived = $1 WHERE id = $2")
+        .bind(new_archived)
+        .bind(board_id)
+        .execute(&state.db)
+        .await
+    {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+    }
+
+    if new_archived {
+        let _ = sqlx::query(
+            "UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1",
+        )
+        .bind(board_id)
+        .execute(&state.db)
+        .await;
+    }
+
+    Json(json!({ "ok": true, "archived": new_archived })).into_response()
+}
+
+/// GET /api/agent/kanban/boards/:id/columns
+async fn agent_list_columns(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    let cols = sqlx::query_as::<_, ColumnRow>(
+        "SELECT id, board_id, name, sort_order FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match cols {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/agent/kanban/boards/:id/columns
+async fn agent_create_column(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<CreateColumnBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    let sort_order = if let Some(order) = body.sort_order {
+        order
+    } else {
+        sqlx::query_scalar::<_, i32>(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM kanban_columns WHERE board_id = $1",
+        )
+        .bind(board_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0)
+    };
+
+    let col = sqlx::query_as::<_, ColumnRow>(
+        "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3) RETURNING id, board_id, name, sort_order",
+    )
+    .bind(board_id)
+    .bind(&body.name)
+    .bind(sort_order)
+    .fetch_one(&state.db)
+    .await;
+
+    match col {
+        Ok(c) => (StatusCode::CREATED, Json(json!(c))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// PATCH /api/agent/kanban/columns/:id
+async fn agent_update_column(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(column_id): Path<Uuid>,
+    Json(body): Json<UpdateColumnBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_column_owner(&state.db, column_id, &owner_id).await {
+        return e;
+    }
+
+    if body.name.is_none() && body.sort_order.is_none() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Nothing to update" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        r#"UPDATE kanban_columns SET
+            name = COALESCE($1, name),
+            sort_order = COALESCE($2, sort_order)
+        WHERE id = $3"#,
+    )
+    .bind(&body.name)
+    .bind(body.sort_order)
+    .bind(column_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/agent/kanban/columns/:id
+async fn agent_delete_column(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(column_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_column_owner(&state.db, column_id, &owner_id).await {
+        return e;
+    }
+
+    let card_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM kanban_cards WHERE column_id = $1 AND archived = false",
+    )
+    .bind(column_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if card_count > 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot delete column with cards. Move or archive cards first." }))).into_response();
+    }
+
+    let result = sqlx::query("DELETE FROM kanban_columns WHERE id = $1")
+        .bind(column_id).execute(&state.db).await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/agent/kanban/boards/:id/columns/reorder
+async fn agent_reorder_columns(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<ReorderColumnsBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    // Validate: request set must match DB set exactly
+    let db_ids = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut req_sorted = body.column_ids.clone();
+    req_sorted.sort();
+    req_sorted.dedup();
+    let mut db_sorted = db_ids.clone();
+    db_sorted.sort();
+    if req_sorted != db_sorted {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "columnIds must contain exactly all columns of this board with no duplicates" }))).into_response();
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+    for (i, col_id) in body.column_ids.iter().enumerate() {
+        if let Err(e) = sqlx::query("UPDATE kanban_columns SET sort_order = $1 WHERE id = $2 AND board_id = $3")
+            .bind(i as i32)
+            .bind(col_id)
+            .bind(board_id)
+            .execute(&mut *tx)
+            .await
+        {
+            let _ = tx.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+    }
+
+    Json(json!({ "ok": true })).into_response()
+}
+
 /// GET /api/agent/kanban/cards — list owner's kanban cards
 async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Response {
     let owner_id = match agent_owner_id(&state.db, agent.id).await {
@@ -652,9 +1638,16 @@ async fn agent_create_card(
         Err(e) => return e,
     };
 
-    let board_id = match ensure_default_board(&state.db, &owner_id).await {
-        Ok(id) => id,
-        Err(e) => return e,
+    let board_id = if let Some(bid) = body.board_id {
+        if let Err(e) = verify_board_owner(&state.db, bid, &owner_id).await {
+            return e;
+        }
+        bid
+    } else {
+        match ensure_default_board(&state.db, &owner_id).await {
+            Ok(id) => id,
+            Err(e) => return e,
+        }
     };
 
     // Resolve column: prefer column_id, then column_name, then first column
@@ -724,7 +1717,7 @@ async fn agent_create_card(
     let result = sqlx::query_as::<_, CardRow>(
         r#"INSERT INTO kanban_cards (column_id, title, description, priority, sort_order, created_by)
            VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at"#,
+           RETURNING id, column_id, title, description, priority, due_date, sort_order, created_by, created_at, updated_at, share_token, COALESCE(is_public, false) AS is_public"#,
     )
     .bind(column_id)
     .bind(&body.title)
@@ -1120,6 +2113,215 @@ async fn list_card_notes(
     }
 }
 
+// ── Label endpoints (User API) ──────────────────────────────
+
+/// Helper: verify that a label belongs to a board owned by the user.
+async fn verify_label_owner(db: &sqlx::PgPool, label_id: Uuid, owner_id: &str) -> Result<(), Response> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_labels l
+            JOIN kanban_boards b ON b.id = l.board_id
+            WHERE l.id = $1 AND b.owner_id = $2
+        )"#,
+    )
+    .bind(label_id)
+    .bind(owner_id)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
+    })?;
+
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, Json(json!({ "error": "Label not found" }))).into_response());
+    }
+    Ok(())
+}
+
+/// POST /api/kanban/boards/:id/labels — create a label on a board
+async fn create_label(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<CreateLabelBody>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let color = body.color.unwrap_or_else(|| "#6366f1".to_string());
+    let label = sqlx::query_as::<_, LabelRow>(
+        "INSERT INTO kanban_labels (board_id, name, color) VALUES ($1, $2, $3) RETURNING id, board_id, name, color",
+    )
+    .bind(board_id)
+    .bind(&body.name)
+    .bind(&color)
+    .fetch_one(&state.db)
+    .await;
+
+    match label {
+        Ok(l) => (StatusCode::CREATED, Json(json!(l))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// GET /api/kanban/boards/:id/labels — list all labels for a board
+async fn list_board_labels(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let labels = sqlx::query_as::<_, LabelRow>(
+        "SELECT id, board_id, name, color FROM kanban_labels WHERE board_id = $1 ORDER BY name",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match labels {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// PATCH /api/kanban/labels/:id — update a label (name/color)
+async fn update_label(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(label_id): Path<Uuid>,
+    Json(body): Json<UpdateLabelBody>,
+) -> Response {
+    if let Err(e) = verify_label_owner(&state.db, label_id, &user.id).await {
+        return e;
+    }
+
+    if let Some(name) = &body.name {
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET name = $1 WHERE id = $2")
+            .bind(name)
+            .bind(label_id)
+            .execute(&state.db)
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+    if let Some(color) = &body.color {
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET color = $1 WHERE id = $2")
+            .bind(color)
+            .bind(label_id)
+            .execute(&state.db)
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+
+    let label = sqlx::query_as::<_, LabelRow>(
+        "SELECT id, board_id, name, color FROM kanban_labels WHERE id = $1",
+    )
+    .bind(label_id)
+    .fetch_one(&state.db)
+    .await;
+
+    match label {
+        Ok(l) => Json(json!(l)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/kanban/labels/:id — delete a label
+async fn delete_label(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(label_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_label_owner(&state.db, label_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query("DELETE FROM kanban_labels WHERE id = $1")
+        .bind(label_id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/kanban/cards/:id/labels — add a label to a card
+async fn add_label_to_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<AddCardLabelBody>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    // Verify label belongs to the same board as the card
+    let same_board = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_labels l
+            JOIN kanban_cards c ON c.id = $1
+            JOIN kanban_columns col ON col.id = c.column_id
+            WHERE l.id = $2 AND l.board_id = col.board_id
+        )"#,
+    )
+    .bind(card_id)
+    .bind(body.label_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !same_board {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Label does not belong to the same board" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_labels (card_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(body.label_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/kanban/cards/:card_id/labels/:label_id — remove a label from a card
+async fn remove_label_from_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((card_id, label_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM kanban_card_labels WHERE card_id = $1 AND label_id = $2",
+    )
+    .bind(card_id)
+    .bind(label_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
 /// GET /api/kanban/owner-notes — list all notes owned by the current user (for note picker)
 async fn list_owner_notes(
     State(state): State<AppState>,
@@ -1168,4 +2370,897 @@ async fn list_owner_notes(
 struct OwnerNotesQuery {
     q: Option<String>,
     limit: Option<i64>,
+}
+
+// ── Card Commits ─────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddCommitBody {
+    commit_hash: String,
+    message: Option<String>,
+}
+
+/// POST /api/kanban/cards/:cardId/commits
+async fn add_card_commit(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<AddCommitBody>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let hash = body.commit_hash.trim();
+    if hash.is_empty() || hash.len() > 40 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid commit hash" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_commits (card_id, commit_hash, message) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(hash)
+    .bind(body.message.as_deref())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::CREATED.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// GET /api/kanban/cards/:cardId/commits
+async fn list_card_commits(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let rows = sqlx::query_as::<_, CardCommitRow>(
+        "SELECT card_id, commit_hash, message, created_at FROM kanban_card_commits WHERE card_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(r) => Json(json!(r)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/kanban/cards/:cardId/commits/:commitHash
+async fn delete_card_commit(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((card_id, commit_hash)): Path<(Uuid, String)>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM kanban_card_commits WHERE card_id = $1 AND commit_hash = $2",
+    )
+    .bind(card_id)
+    .bind(&commit_hash)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// GET /api/agent/kanban/cards/:cardId/commits
+async fn agent_list_card_commits(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let rows = sqlx::query_as::<_, CardCommitRow>(
+        "SELECT card_id, commit_hash, message, created_at FROM kanban_card_commits WHERE card_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(r) => Json(json!(r)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/agent/kanban/cards/:cardId/commits
+async fn agent_add_card_commit(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<AddCommitBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let hash = body.commit_hash.trim();
+    if hash.is_empty() || hash.len() > 40 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid commit hash" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_commits (card_id, commit_hash, message) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(hash)
+    .bind(body.message.as_deref())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::CREATED.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+// ── Agent Note Link Endpoints ────────────────────────────────
+
+/// POST /api/agent/kanban/cards/:id/notes — link a note to a card
+async fn agent_link_note_to_card(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<LinkNoteBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let note_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversation_notes WHERE id = $1)",
+    )
+    .bind(body.note_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !note_exists {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "Note not found" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_notes (card_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(body.note_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// DELETE /api/agent/kanban/cards/:card_id/notes/:note_id — unlink a note from a card
+async fn agent_unlink_note_from_card(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path((card_id, note_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM kanban_card_notes WHERE card_id = $1 AND note_id = $2",
+    )
+    .bind(card_id)
+    .bind(note_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// GET /api/agent/kanban/cards/:id/notes — list notes linked to a card
+async fn agent_list_card_notes(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let notes = sqlx::query_as::<_, LinkedNoteRow>(
+        r#"SELECT n.id, n.title, n.tags, n.created_at
+           FROM conversation_notes n
+           JOIN kanban_card_notes cn ON cn.note_id = n.id
+           WHERE cn.card_id = $1
+           ORDER BY cn.created_at DESC"#,
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match notes {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+// ── Label endpoints (Agent API) ─────────────────────────────
+
+/// POST /api/agent/kanban/boards/:id/labels — create a label on a board (agent)
+async fn agent_create_label(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<CreateLabelBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    let color = body.color.unwrap_or_else(|| "#6366f1".to_string());
+    let label = sqlx::query_as::<_, LabelRow>(
+        "INSERT INTO kanban_labels (board_id, name, color) VALUES ($1, $2, $3) RETURNING id, board_id, name, color",
+    )
+    .bind(board_id)
+    .bind(&body.name)
+    .bind(&color)
+    .fetch_one(&state.db)
+    .await;
+
+    match label {
+        Ok(l) => (StatusCode::CREATED, Json(json!(l))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// GET /api/agent/kanban/boards/:id/labels — list all labels for a board (agent)
+async fn agent_list_board_labels(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    let labels = sqlx::query_as::<_, LabelRow>(
+        "SELECT id, board_id, name, color FROM kanban_labels WHERE board_id = $1 ORDER BY name",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match labels {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// PATCH /api/agent/kanban/labels/:id — update a label (agent)
+async fn agent_update_label(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(label_id): Path<Uuid>,
+    Json(body): Json<UpdateLabelBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_label_owner(&state.db, label_id, &owner_id).await {
+        return e;
+    }
+
+    if let Some(name) = &body.name {
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET name = $1 WHERE id = $2")
+            .bind(name)
+            .bind(label_id)
+            .execute(&state.db)
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+    if let Some(color) = &body.color {
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET color = $1 WHERE id = $2")
+            .bind(color)
+            .bind(label_id)
+            .execute(&state.db)
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+
+    let label = sqlx::query_as::<_, LabelRow>(
+        "SELECT id, board_id, name, color FROM kanban_labels WHERE id = $1",
+    )
+    .bind(label_id)
+    .fetch_one(&state.db)
+    .await;
+
+    match label {
+        Ok(l) => Json(json!(l)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/agent/kanban/labels/:id — delete a label (agent)
+async fn agent_delete_label(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(label_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_label_owner(&state.db, label_id, &owner_id).await {
+        return e;
+    }
+
+    let result = sqlx::query("DELETE FROM kanban_labels WHERE id = $1")
+        .bind(label_id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/agent/kanban/cards/:id/labels — add a label to a card (agent)
+async fn agent_add_label_to_card(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<AddCardLabelBody>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    // Verify label belongs to the same board as the card
+    let same_board = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_labels l
+            JOIN kanban_cards c ON c.id = $1
+            JOIN kanban_columns col ON col.id = c.column_id
+            WHERE l.id = $2 AND l.board_id = col.board_id
+        )"#,
+    )
+    .bind(card_id)
+    .bind(body.label_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !same_board {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Label does not belong to the same board" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO kanban_card_labels (card_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(card_id)
+    .bind(body.label_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/agent/kanban/cards/:card_id/labels/:label_id — remove a label from a card (agent)
+async fn agent_remove_label_from_card(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path((card_id, label_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM kanban_card_labels WHERE card_id = $1 AND label_id = $2",
+    )
+    .bind(card_id)
+    .bind(label_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+// ── Share Card to Conversation ───────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShareCardBody {
+    conversation_id: Uuid,
+}
+
+/// POST /api/kanban/cards/:id/share — share a kanban card to a conversation as a rich system message
+async fn share_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+    Json(body): Json<ShareCardBody>,
+) -> Response {
+    // Verify card ownership
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    // Verify user is conversation member
+    let is_member = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+    )
+    .bind(body.conversation_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if is_member == 0 {
+        // Fallback: direct conversation owner
+        let is_owner = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM conversations WHERE id = $1 AND user_id = $2",
+        )
+        .bind(body.conversation_id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if is_owner == 0 {
+            return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not a member" }))).into_response();
+        }
+    }
+
+    // Fetch card with column name
+    let card = sqlx::query_as::<_, (String, Option<String>, Option<String>, String)>(
+        r#"SELECT c.title, c.description, c.priority, col.name
+           FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE c.id = $1"#,
+    )
+    .bind(card_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, description, priority, column_name) = match card {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({ "error": "Card not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    let preview = description.as_deref().map(|d| {
+        if d.len() > 120 {
+            format!("{}...", &d[..d.char_indices().nth(120).map(|(i, _)| i).unwrap_or(d.len())])
+        } else {
+            d.to_string()
+        }
+    });
+
+    let metadata = json!({
+        "type": "kanban_card",
+        "cardId": card_id,
+        "title": title,
+        "preview": preview,
+        "priority": priority,
+        "columnName": column_name,
+    });
+
+    let msg_id = Uuid::new_v4();
+    let result = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
+           VALUES ($1, $2, 0, 'system', $3, 'completed', $4, $5, NOW(), NOW())"#,
+    )
+    .bind(msg_id)
+    .bind(body.conversation_id)
+    .bind(format!("shared a task: {}", title))
+    .bind(&user.id)
+    .bind(metadata.clone())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            // Get conversation member IDs for broadcast
+            let members: Vec<(String,)> = sqlx::query_as(
+                "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+            )
+            .bind(body.conversation_id)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default();
+
+            let member_ids: Vec<String> = if members.is_empty() {
+                sqlx::query_as::<_, (String,)>(
+                    "SELECT user_id FROM conversations WHERE id = $1",
+                )
+                .bind(body.conversation_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten()
+                .map(|(id,)| vec![id])
+                .unwrap_or_default()
+            } else {
+                members.into_iter().map(|(id,)| id).collect()
+            };
+
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({
+                    "type": "new_message",
+                    "conversationId": body.conversation_id.to_string(),
+                    "message": {
+                        "id": msg_id.to_string(),
+                        "conversationId": body.conversation_id.to_string(),
+                        "seq": 0,
+                        "role": "system",
+                        "content": format!("shared a task: {}", title),
+                        "status": "completed",
+                        "senderUserId": &user.id,
+                        "metadata": metadata,
+                        "createdAt": Utc::now().to_rfc3339(),
+                        "updatedAt": Utc::now().to_rfc3339(),
+                    },
+                }),
+                &state.redis,
+            );
+
+            Json(json!({
+                "messageId": msg_id,
+                "cardId": card_id,
+                "title": title,
+            }))
+            .into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+// ── Share Card to Conversation (Rich Card + Agent dispatch) ──
+
+/// POST /api/kanban/cards/:cardId/share-to/:conversationId
+async fn share_card_to_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((card_id, target_conv_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    // Verify card ownership
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    // Verify user is a member of the target conversation
+    let is_member = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+    )
+    .bind(target_conv_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if is_member == 0 {
+        let is_owner = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM conversations WHERE id = $1 AND user_id = $2",
+        )
+        .bind(target_conv_id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if is_owner == 0 {
+            return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not a member" }))).into_response();
+        }
+    }
+
+    // Fetch card with column name
+    let card = sqlx::query_as::<_, (String, Option<String>, Option<String>, String)>(
+        r#"SELECT c.title, c.description, c.priority, col.name
+           FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE c.id = $1"#,
+    )
+    .bind(card_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (title, description, priority, column_name) = match card {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({ "error": "Card not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    let preview = description.as_deref().map(|d| {
+        if d.len() > 120 {
+            format!("{}...", &d[..d.char_indices().nth(120).map(|(i, _)| i).unwrap_or(d.len())])
+        } else {
+            d.to_string()
+        }
+    });
+
+    let metadata = json!({
+        "type": "kanban_card",
+        "cardId": card_id,
+        "title": title,
+        "preview": preview,
+        "priority": priority,
+        "columnName": column_name,
+    });
+
+    // Build full message content for agent consumption
+    let desc_str = description.as_deref().map(|d| format!("\n\n{}", d)).unwrap_or_default();
+    let priority_str = priority.as_deref().map(|p| format!("\nPriority: {}", p)).unwrap_or_default();
+    let msg_content = format!("用戶分享了一個任務：{}{}{}\nColumn: {}", title, priority_str, desc_str, column_name);
+
+    let msg_id = Uuid::new_v4();
+    let result = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, metadata, created_at, updated_at)
+           VALUES ($1, $2, 0, 'user', $3, 'completed', $4, $5, NOW(), NOW())"#,
+    )
+    .bind(msg_id)
+    .bind(target_conv_id)
+    .bind(&msg_content)
+    .bind(&user.id)
+    .bind(metadata.clone())
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => {
+            // Get conversation member IDs for broadcast
+            let members: Vec<(String,)> = sqlx::query_as(
+                "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+            )
+            .bind(target_conv_id)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default();
+
+            let member_ids: Vec<String> = if members.is_empty() {
+                sqlx::query_as::<_, (String,)>(
+                    "SELECT user_id FROM conversations WHERE id = $1",
+                )
+                .bind(target_conv_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten()
+                .map(|(id,)| vec![id])
+                .unwrap_or_default()
+            } else {
+                members.into_iter().map(|(id,)| id).collect()
+            };
+
+            state.ws.broadcast_to_members(
+                &member_ids,
+                &json!({
+                    "type": "new_message",
+                    "conversationId": target_conv_id.to_string(),
+                    "message": {
+                        "id": msg_id.to_string(),
+                        "conversationId": target_conv_id.to_string(),
+                        "seq": 0,
+                        "role": "user",
+                        "content": &msg_content,
+                        "status": "completed",
+                        "senderUserId": &user.id,
+                        "metadata": metadata,
+                        "createdAt": Utc::now().to_rfc3339(),
+                        "updatedAt": Utc::now().to_rfc3339(),
+                    },
+                }),
+                &state.redis,
+            );
+
+            // Trigger agent dispatch
+            let conv_id_str = target_conv_id.to_string();
+            let state_clone = state.clone();
+            let user_id = user.id.clone();
+            let msg_content_clone = msg_content.clone();
+            tokio::spawn(async move {
+                trigger_agent_response(
+                    &user_id,
+                    &conv_id_str,
+                    &msg_content_clone,
+                    true,
+                    None,
+                    None,
+                    &[],
+                    None,
+                    &state_clone.ws,
+                    &state_clone.db,
+                    &state_clone.redis,
+                    &state_clone.config,
+                )
+                .await;
+            });
+
+            Json(json!({
+                "messageId": msg_id,
+                "cardId": card_id,
+                "conversationId": target_conv_id,
+                "title": title,
+            }))
+            .into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+// ── Public sharing ───────────────────────────────────────────
+
+/// POST /api/kanban/cards/:id/public-share — create a public share link
+async fn create_card_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let token = Uuid::new_v4().to_string().replace("-", "");
+
+    let result = sqlx::query(
+        "UPDATE kanban_cards SET share_token = $1, is_public = true WHERE id = $2",
+    )
+    .bind(&token)
+    .bind(card_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({
+            "shareToken": token,
+            "shareUrl": format!("/shared/cards/{}", token),
+        }))
+        .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// DELETE /api/kanban/cards/:id/public-share — revoke public sharing
+async fn revoke_card_public_share(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let result = sqlx::query(
+        "UPDATE kanban_cards SET share_token = NULL, is_public = false WHERE id = $1",
+    )
+    .bind(card_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// GET /api/public/cards/:shareToken — view a publicly shared card (no auth)
+async fn get_public_card(
+    State(state): State<AppState>,
+    Path(share_token): Path<String>,
+) -> Response {
+    #[derive(sqlx::FromRow)]
+    struct PublicCardRow {
+        title: String,
+        description: Option<String>,
+        priority: Option<String>,
+        created_at: Option<chrono::DateTime<chrono::Utc>>,
+        updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        column_name: String,
+    }
+
+    let row = sqlx::query_as::<_, PublicCardRow>(
+        r#"SELECT c.title, c.description, c.priority,
+                  c.created_at, c.updated_at,
+                  col.name AS column_name
+           FROM kanban_cards c
+           JOIN kanban_columns col ON col.id = c.column_id
+           WHERE c.share_token = $1 AND c.is_public = true"#,
+    )
+    .bind(&share_token)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(c)) => Json(json!({
+            "title": c.title,
+            "description": c.description,
+            "priority": c.priority,
+            "columnName": c.column_name,
+            "createdAt": c.created_at.map(|t| t.to_rfc3339()),
+            "updatedAt": c.updated_at.map(|t| t.to_rfc3339()),
+        }))
+        .into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Card not found or not publicly shared" })),
+        )
+            .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
 }

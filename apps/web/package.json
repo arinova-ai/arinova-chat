@@ -17,6 +17,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@sentry/nextjs": "^10.39.0",
     "@tiptap/core": "^3.20.0",
+    "@tiptap/extension-image": "^3.20.1",
     "@tiptap/extension-link": "^3.20.0",
     "@tiptap/extension-placeholder": "^3.20.0",
     "@tiptap/extension-task-item": "^3.20.0",

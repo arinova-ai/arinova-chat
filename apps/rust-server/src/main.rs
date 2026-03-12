@@ -254,13 +254,87 @@ async fn main() {
 
         ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS summary TEXT DEFAULT NULL;
 
-        -- Update memory_capsules status constraint to include 'aborted'
+        -- Add tags column to memory_entries
+        ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+
+        -- Add note_count column to memory_capsules
+        ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS note_count INTEGER NOT NULL DEFAULT 0;
+
+        -- Migrate any existing 'aborted' capsules to 'failed' (before constraint change)
+        UPDATE memory_capsules SET status = 'failed' WHERE status = 'aborted';
+
+        -- Update memory_capsules status constraint (remove 'aborted', use real cancellation)
+        ALTER TABLE memory_capsules DROP CONSTRAINT IF EXISTS memory_capsules_status_check;
+        ALTER TABLE memory_capsules ADD CONSTRAINT memory_capsules_status_check
+            CHECK (status = ANY (ARRAY['pending', 'extracting', 'ready', 'failed']));
+
+        -- User settings table for API keys
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id TEXT PRIMARY KEY,
+            gemini_api_key TEXT,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
+
+        -- Note user-level ownership
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES "user"(id) ON DELETE SET NULL;
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_owner ON conversation_notes(owner_id, created_at DESC);
+
+        -- Backfill owner_id for user-created notes
+        UPDATE conversation_notes SET owner_id = creator_id WHERE creator_type = 'user' AND owner_id IS NULL;
+        -- Backfill owner_id for agent-created notes
+        UPDATE conversation_notes n SET owner_id = c.user_id FROM conversations c WHERE n.conversation_id = c.id AND n.creator_type = 'agent' AND n.owner_id IS NULL;
+
+        -- Note-conversation linking table
+        CREATE TABLE IF NOT EXISTS note_conversation_links (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            note_id         UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            linked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(note_id, conversation_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_note_conv_links_note ON note_conversation_links(note_id);
+        CREATE INDEX IF NOT EXISTS idx_note_conv_links_conv ON note_conversation_links(conversation_id);
+
+        -- Backfill links for existing notes
+        INSERT INTO note_conversation_links (note_id, conversation_id)
+        SELECT id, conversation_id FROM conversation_notes
+        ON CONFLICT (note_id, conversation_id) DO NOTHING;
+
+        ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_start TIMESTAMPTZ;
+        ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_end TIMESTAMPTZ;
+
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
+        ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+
+        CREATE TABLE IF NOT EXISTS conversation_user_settings (
+            user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            chat_bg_url TEXT,
+            pinned_buttons TEXT[],
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            PRIMARY KEY (user_id, conversation_id)
+        );
+        ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS pinned_buttons TEXT[];
+        ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS kanban_board_id UUID REFERENCES kanban_boards(id) ON DELETE SET NULL;
+        ALTER TABLE kanban_boards ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS progress JSONB;
+
         DO $$ BEGIN
-            ALTER TABLE memory_capsules DROP CONSTRAINT IF EXISTS memory_capsules_status_check;
-            ALTER TABLE memory_capsules ADD CONSTRAINT memory_capsules_status_check
-                CHECK (status = ANY (ARRAY['pending', 'extracting', 'ready', 'failed', 'aborted']));
-        EXCEPTION WHEN others THEN NULL;
+            ALTER TYPE agent_listen_mode ADD VALUE IF NOT EXISTS 'allowlist_mentions';
+        EXCEPTION WHEN duplicate_object THEN NULL;
         END $$;
+
+        CREATE TABLE IF NOT EXISTS agent_capsule_access (
+            agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            capsule_id UUID NOT NULL REFERENCES memory_capsules(id) ON DELETE CASCADE,
+            granted_by TEXT NOT NULL,
+            granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (agent_id, capsule_id)
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
@@ -317,6 +391,21 @@ async fn main() {
         Err(e) => tracing::warn!("Failed to clean up stuck streaming messages: {}", e),
     }
 
+    // Reset stuck extracting capsules from previous run
+    match sqlx::query(
+        "UPDATE memory_capsules SET status = 'ready' WHERE status = 'extracting'"
+    )
+    .execute(&db)
+    .await
+    {
+        Ok(result) => {
+            if result.rows_affected() > 0 {
+                tracing::info!("Reset {} stuck extracting capsules", result.rows_affected());
+            }
+        }
+        Err(e) => tracing::warn!("Failed to reset stuck extracting capsules: {}", e),
+    }
+
     // Initialize Redis pool
     let redis = db::redis::create_redis_pool(&config.redis_url);
     tracing::info!("Redis pool created");
@@ -352,6 +441,7 @@ async fn main() {
         ws: ws_state,
         s3,
         office: office_state,
+        extraction_tokens: std::sync::Arc::new(dashmap::DashMap::new()),
     };
 
     // Build CORS layer
@@ -424,7 +514,9 @@ async fn main() {
         .merge(routes::kanban::router())
         .merge(routes::activity::router())
         .merge(routes::dashboard::router())
+        .merge(routes::user_settings::router())
         .merge(routes::voice::router())
+        .merge(routes::conversation_settings::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .merge(ws::voice_handler::router())

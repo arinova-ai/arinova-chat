@@ -85,7 +85,7 @@ async fn broadcast(
             r#"SELECT c.id FROM conversations c
                JOIN conversation_user_members m1 ON m1.conversation_id = c.id AND m1.user_id = $1
                JOIN conversation_user_members m2 ON m2.conversation_id = c.id AND m2.user_id = $2
-               WHERE c.type = 'direct'"#,
+               WHERE c.type IN ('direct', 'h2h')"#,
         )
         .bind(official_id)
         .bind(user_id)
@@ -98,7 +98,7 @@ async fn broadcast(
         } else {
             // Create new direct conversation
             let (new_id,): (uuid::Uuid,) = match sqlx::query_as(
-                r#"INSERT INTO conversations (user_id, type) VALUES ($1, 'direct') RETURNING id"#,
+                r#"INSERT INTO conversations (user_id, type) VALUES ($1, 'h2h') RETURNING id"#,
             )
             .bind(official_id)
             .fetch_one(&mut *tx)

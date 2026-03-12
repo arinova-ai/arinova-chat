@@ -71,6 +71,7 @@ async fn upload_file(
     // --- Phase 1: Read all multipart fields ---
     let mut caption = String::new();
     let mut duration_seconds: Option<i32> = None;
+    let mut thread_id: Option<Uuid> = None;
     let mut files_data: Vec<(String, String, bytes::Bytes)> = Vec::new(); // Vec<(file_name, content_type, data)>
 
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -101,6 +102,23 @@ async fn upload_file(
                         return (
                             StatusCode::BAD_REQUEST,
                             Json(json!({"error": "Invalid duration_seconds: must be an integer between 0 and 3600"})),
+                        )
+                            .into_response();
+                    }
+                }
+            }
+            continue;
+        }
+
+        if field_name == "thread_id" {
+            let raw = field.text().await.unwrap_or_default();
+            if !raw.is_empty() {
+                match raw.parse::<Uuid>() {
+                    Ok(v) => { thread_id = Some(v); }
+                    _ => {
+                        return (
+                            StatusCode::BAD_REQUEST,
+                            Json(json!({"error": "Invalid thread_id: must be a valid UUID"})),
                         )
                             .into_response();
                     }
@@ -265,8 +283,8 @@ async fn upload_file(
 
     let message_id = Uuid::new_v4();
     let msg_result = sqlx::query_as::<_, crate::db::models::Message>(
-        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, created_at, updated_at)
-           VALUES ($1, $2, $3, 'user', $4, 'completed', $5, NOW(), NOW())
+        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, thread_id, created_at, updated_at)
+           VALUES ($1, $2, $3, 'user', $4, 'completed', $5, $6, NOW(), NOW())
            RETURNING *"#,
     )
     .bind(message_id)
@@ -274,6 +292,7 @@ async fn upload_file(
     .bind(seq)
     .bind(&caption)
     .bind(&user.id)
+    .bind(thread_id)
     .fetch_one(&state.db)
     .await;
 
@@ -383,6 +402,7 @@ async fn upload_file(
                 "senderUsername": sender_username,
                 "senderUserImage": sender_image,
                 "senderIsVerified": sender_is_verified,
+                "threadId": thread_id.map(|t| t.to_string()),
                 "attachments": &attachments_json,
                 "createdAt": message.created_at.and_utc().to_rfc3339(),
                 "updatedAt": message.updated_at.and_utc().to_rfc3339(),
@@ -408,6 +428,7 @@ async fn upload_file(
     let db = state.db.clone();
     let redis = state.redis.clone();
     let config = state.config.clone();
+    let thread_id_str = thread_id.map(|t| t.to_string());
 
     tokio::spawn(async move {
         trigger_agent_response(
@@ -416,7 +437,7 @@ async fn upload_file(
             &agent_content,
             true, // skip_user_message — we already created it above
             None,
-            None, // thread_id
+            thread_id_str, // thread_id
             &[],
             None, // client_msg_id — N/A for uploads
             &ws,
@@ -440,6 +461,7 @@ async fn upload_file(
                 "status": message.status,
                 "senderUserId": message.sender_user_id,
                 "senderAgentId": message.sender_agent_id,
+                "threadId": message.thread_id,
                 "createdAt": message.created_at.and_utc().to_rfc3339(),
                 "updatedAt": message.updated_at.and_utc().to_rfc3339(),
                 "attachments": attachments_json

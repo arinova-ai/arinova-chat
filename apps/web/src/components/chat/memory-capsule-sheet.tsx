@@ -13,11 +13,18 @@ import { Switch } from "@/components/ui/switch";
 import {
   Brain,
   Loader2,
-  Trash2,
-  XCircle,
+  RefreshCw,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
+
+interface CapsuleProgress {
+  totalMessages: number;
+  processedMessages: number;
+  totalNotes: number;
+  processedNotes: number;
+  extractedEntries: number;
+}
 
 interface Capsule {
   id: string;
@@ -28,6 +35,8 @@ interface Capsule {
   createdAt: string;
   extractedThrough: string | null;
   entryCount: number;
+  noteCount: number;
+  progress: CapsuleProgress | null;
 }
 
 interface Grant {
@@ -58,8 +67,6 @@ export function MemoryCapsuleSheet({
   const [grants, setGrants] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -111,14 +118,12 @@ export function MemoryCapsuleSheet({
       setCapsuleName("");
       await fetchData();
     } catch (err: unknown) {
-      // 409 = capsule already exists for this conversation — offer refresh
-      const resp = err as { status?: number; existingCapsuleId?: string };
-      if (resp.status === 409 || (typeof err === "object" && err !== null && "existingCapsuleId" in err)) {
-        // Auto-refresh the existing capsule
-        const body = err as { existingCapsuleId?: string };
-        if (body.existingCapsuleId) {
+      // 409 = capsule already exists for this conversation — auto-refresh it
+      if (err instanceof ApiError && err.status === 409) {
+        const existingId = err.data.existingCapsuleId as string | undefined;
+        if (existingId) {
           try {
-            await api(`/api/memory/capsules/${body.existingCapsuleId}/refresh`, { method: "POST" });
+            await api(`/api/memory/capsules/${existingId}/refresh`, { method: "POST" });
           } catch { /* toast shown by api */ }
         }
         await fetchData();
@@ -152,28 +157,6 @@ export function MemoryCapsuleSheet({
     }
   };
 
-  const handleDelete = async (capsuleId: string) => {
-    setDeletingId(capsuleId);
-    try {
-      await api(`/api/memory/capsules/${capsuleId}`, { method: "DELETE" });
-      setCapsules((prev) => prev.filter((c) => c.id !== capsuleId));
-      setGrants((prev) => {
-        const next = new Set(prev);
-        next.delete(capsuleId);
-        return next;
-      });
-    } finally {
-      setDeletingId(null);
-      setConfirmDeleteId(null);
-    }
-  };
-
-  const handleAbort = async (capsuleId: string) => {
-    try {
-      await api(`/api/memory/capsules/${capsuleId}/abort`, { method: "POST" });
-      await fetchData();
-    } catch { /* api shows toast */ }
-  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -196,31 +179,63 @@ export function MemoryCapsuleSheet({
         </div>
 
         {/* Section 1: Extract Memory */}
-        <div className="mb-6">
-          <h3 className="mb-2 text-sm font-medium text-muted-foreground">
-            {t("memoryCapsule.extractTitle")}
-          </h3>
-          <div className="flex gap-2">
-            <Input
-              value={capsuleName}
-              onChange={(e) => setCapsuleName(e.target.value)}
-              placeholder={t("memoryCapsule.namePlaceholder")}
-              className="flex-1"
-              maxLength={255}
-            />
-            <Button
-              onClick={handleExtract}
-              disabled={extracting || !capsuleName.trim()}
-              size="sm"
-            >
-              {extracting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+        {(() => {
+          const existingCapsule = capsules.find(
+            (c) => c.sourceConversationId === conversationId
+          );
+          const isRefresh = !!existingCapsule;
+          return (
+            <div className="mb-6">
+              <h3 className="mb-2 text-sm font-medium text-muted-foreground">
+                {t("memoryCapsule.extractTitle")}
+              </h3>
+              {isRefresh ? (
+                <Button
+                  onClick={async () => {
+                    setExtracting(true);
+                    try {
+                      await api(`/api/memory/capsules/${existingCapsule.id}/refresh`, { method: "POST" });
+                      await fetchData();
+                    } catch { /* api shows toast */ }
+                    setExtracting(false);
+                  }}
+                  disabled={extracting || existingCapsule.status === "extracting"}
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                >
+                  {extracting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Refresh
+                </Button>
               ) : (
-                t("memoryCapsule.extract")
+                <div className="flex gap-2">
+                  <Input
+                    value={capsuleName}
+                    onChange={(e) => setCapsuleName(e.target.value)}
+                    placeholder={t("memoryCapsule.namePlaceholder")}
+                    className="flex-1"
+                    maxLength={255}
+                  />
+                  <Button
+                    onClick={handleExtract}
+                    disabled={extracting || !capsuleName.trim()}
+                    size="sm"
+                  >
+                    {extracting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      t("memoryCapsule.extract")
+                    )}
+                  </Button>
+                </div>
               )}
-            </Button>
-          </div>
-        </div>
+            </div>
+          );
+        })()}
 
         {/* Section 2: Capsule List with Agent Grants */}
         <div>
@@ -241,8 +256,6 @@ export function MemoryCapsuleSheet({
               {capsules.map((capsule) => {
                 const granted = grants.has(capsule.id);
                 const isToggling = togglingId === capsule.id;
-                const isDeleting = deletingId === capsule.id;
-                const isConfirming = confirmDeleteId === capsule.id;
 
                 return (
                   <div
@@ -251,7 +264,7 @@ export function MemoryCapsuleSheet({
                   >
                     <Switch
                       checked={granted}
-                      disabled={isToggling || (capsule.status !== "ready" && capsule.status !== "aborted")}
+                      disabled={isToggling || capsule.status !== "ready"}
                       onCheckedChange={() =>
                         handleToggleGrant(capsule.id, granted)
                       }
@@ -261,22 +274,36 @@ export function MemoryCapsuleSheet({
                         {capsule.name}
                       </p>
                       {capsule.status === "extracting" ? (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span>{t("memoryCapsule.statusExtracting")}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleAbort(capsule.id)}
-                            className="ml-1 inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
-                          >
-                            <XCircle className="h-3 w-3" />
-                            Abort
-                          </button>
+                        <div className="space-y-1">
+                          {capsule.progress ? (
+                            <>
+                              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-all duration-500"
+                                  style={{
+                                    width: `${capsule.progress.totalMessages > 0
+                                      ? Math.round((capsule.progress.processedMessages / capsule.progress.totalMessages) * 100)
+                                      : 0}%`,
+                                  }}
+                                />
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">
+                                {capsule.progress.processedMessages} / {capsule.progress.totalMessages} messages
+                                {capsule.progress.totalNotes > 0 && `, ${capsule.progress.processedNotes} / ${capsule.progress.totalNotes} notes`}
+                              </p>
+                              {capsule.progress.extractedEntries > 0 && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  {capsule.progress.extractedEntries} entries extracted
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span>{t("memoryCapsule.statusExtracting")}</span>
+                            </div>
+                          )}
                         </div>
-                      ) : capsule.status === "aborted" ? (
-                        <p className="text-xs text-amber-500">
-                          Aborted
-                        </p>
                       ) : capsule.status === "failed" ? (
                         <p className="text-xs text-destructive">
                           {t("memoryCapsule.statusFailed")}
@@ -285,8 +312,8 @@ export function MemoryCapsuleSheet({
                         <div className="space-y-0.5">
                           <p className="text-xs text-muted-foreground">
                             {capsule.entryCount > 0
-                              ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}`
-                              : `${capsule.messageCount} ${t("memoryCapsule.messages")}`}
+                              ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} notes` : ""}`
+                              : `${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} notes` : ""}`}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(capsule.createdAt).toLocaleDateString()}
@@ -297,41 +324,6 @@ export function MemoryCapsuleSheet({
                         </div>
                       )}
                     </div>
-                    {isConfirming ? (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={isDeleting}
-                          onClick={() => handleDelete(capsule.id)}
-                        >
-                          {isDeleting ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            t("common.confirm")
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => setConfirmDeleteId(null)}
-                        >
-                          {t("common.cancel")}
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                        disabled={capsule.status === "extracting"}
-                        onClick={() => setConfirmDeleteId(capsule.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
                   </div>
                 );
               })}

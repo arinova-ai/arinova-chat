@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatStore } from "@/store/chat-store";
-import { useVoiceCallStore } from "@/store/voice-call-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
@@ -10,16 +9,19 @@ import { StickerPanel } from "./sticker-panel";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
-import { ActiveCall } from "@/components/voice/active-call";
+import { NotebookSheet } from "./notebook-sheet";
+import { KanbanSidebar } from "./kanban-sidebar";
+
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
-import { NotebookSheet } from "./notebook-sheet";
 import { MediaFilesPanel, type MediaFilesTab } from "./media-files-panel";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { api } from "@/lib/api";
+import { assetUrl } from "@/lib/config";
 import { useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
 
@@ -32,16 +34,19 @@ export function ChatArea() {
   const agents = useChatStore((s) => s.agents);
 
   const conversationMembers = useChatStore((s) => s.conversationMembers);
+  const notebookOpen = useChatStore((s) => s.notebookOpen);
+  const kanbanSidebarOpen = useChatStore((s) => s.kanbanSidebarOpen);
+  const openNotebook = useChatStore((s) => s.openNotebook);
+  const closeNotebook = useChatStore((s) => s.closeNotebook);
+  const openKanbanSidebar = useChatStore((s) => s.openKanbanSidebar);
+  const closeKanbanSidebar = useChatStore((s) => s.closeKanbanSidebar);
 
-  const callState = useVoiceCallStore((s) => s.callState);
-  const callConversationId = useVoiceCallStore((s) => s.conversationId);
 
   const [manageOpen, setManageOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
-  const [notebookOpen, setNotebookOpen] = useState(false);
   const [mediaFilesOpen, setMediaFilesOpen] = useState(false);
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
@@ -49,6 +54,27 @@ export function ChatArea() {
   const [droppedNote, setDroppedNote] = useState<{ id: string; title: string } | null>(null);
   const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
+
+  const [chatBgUrl, setChatBgUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    setChatBgUrl(null);
+    api<{ chatBgUrl: string | null }>(`/api/conversations/${activeConversationId}/settings`, { silent: true })
+      .then((d) => setChatBgUrl(d.chatBgUrl))
+      .catch(() => {});
+  }, [activeConversationId]);
+
+  // Listen for background changes from settings panel
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const url = (e as CustomEvent).detail?.url ?? null;
+      setChatBgUrl(url);
+    };
+    window.addEventListener("chat-bg-changed", handler);
+    return () => window.removeEventListener("chat-bg-changed", handler);
+  }, []);
+
   useRenderDiag("ChatArea", () => ({
     activeConversationId,
     searchActive,
@@ -125,9 +151,6 @@ export function ChatArea() {
     ? agents.find((a) => a.id === conversation.agentId)
     : undefined;
 
-  const showCallOverlay =
-    callState !== "idle" && callConversationId === activeConversationId;
-
   const openMembersPanel = (tab: PanelTab = "members") => {
     setMembersPanelTab(tab);
     setMembersOpen(true);
@@ -136,11 +159,19 @@ export function ChatArea() {
   return (
     <div
       className="relative flex h-full min-w-0 flex-col"
+      style={chatBgUrl ? {
+        backgroundImage: `url(${assetUrl(chatBgUrl)})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      } : undefined}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {chatBgUrl && (
+        <div className="pointer-events-none absolute inset-0 bg-black/40" />
+      )}
       {isDragging && (
         <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary bg-primary/10 pointer-events-none">
           <div className="flex flex-col items-center gap-2 text-primary">
@@ -163,9 +194,9 @@ export function ChatArea() {
         onClick={agent ? () => setManageOpen(true) : undefined}
         onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
-        onAddMemberClick={conversation.type === "group" ? () => setAddMemberOpen(true) : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
-        onNotebookClick={() => setNotebookOpen(true)}
+        onKanbanClick={() => openKanbanSidebar()}
+        onNotebookClick={() => openNotebook()}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
@@ -188,8 +219,6 @@ export function ChatArea() {
       </ErrorBoundary>
       <StickerPanel open={stickerOpen} onClose={() => setStickerOpen(false)} />
 
-      {showCallOverlay && <ActiveCall />}
-
       {agent && (
         <BotManageDialog
           agent={agent}
@@ -205,6 +234,7 @@ export function ChatArea() {
             onOpenChange={setMembersOpen}
             conversationId={conversation.id}
             initialTab={membersPanelTab}
+            onAddMemberClick={() => setAddMemberOpen(true)}
           />
           <AddMemberSheet
             open={addMemberOpen}
@@ -224,20 +254,22 @@ export function ChatArea() {
           conversationId={activeConversationId}
         />
       </ErrorBoundary>
-      {notebookOpen && (
-        <ErrorBoundary scope="NotebookSheet">
-          <NotebookSheet
-            open={notebookOpen}
-            onOpenChange={setNotebookOpen}
-            conversationId={activeConversationId}
-          />
-        </ErrorBoundary>
-      )}
       <MediaFilesPanel
         open={mediaFilesOpen}
         onOpenChange={setMediaFilesOpen}
         conversationId={conversation.id}
         initialTab={mediaFilesTab}
+      />
+
+      <NotebookSheet
+        open={notebookOpen}
+        onOpenChange={(open) => { if (!open) closeNotebook(); }}
+        conversationId={activeConversationId}
+      />
+      <KanbanSidebar
+        open={kanbanSidebarOpen}
+        onOpenChange={(open) => { if (!open) closeKanbanSidebar(); }}
+        conversationId={activeConversationId}
       />
     </div>
   );

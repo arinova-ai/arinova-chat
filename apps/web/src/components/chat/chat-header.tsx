@@ -17,19 +17,18 @@ import {
   Bell,
   BellOff,
   Menu,
-  UserPlus,
-  UsersRound,
-  Image,
-  FileText,
   Settings,
-  MessageSquare,
-  BookOpen,
   Search,
   Headset,
   ArrowRightLeft,
   Brain,
+  Phone,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { useVoiceCallStore } from "@/store/voice-call-store";
+import { useHeaderPinStore } from "@/store/header-pin-store";
+import { useGroupPinStore } from "@/store/group-pin-store";
+import { HEADER_BUTTONS, GROUP_HEADER_BUTTONS, GROUP_MAX_PINS, ChatHeaderSettings } from "./chat-header-settings";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import type { ConversationType } from "@arinova/shared/types";
@@ -37,6 +36,8 @@ import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Pin } from "lucide-react";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -52,8 +53,8 @@ interface ChatHeaderProps {
   onClick?: () => void;
   onMembersClick?: () => void;
   onSettingsClick?: () => void;
-  onAddMemberClick?: () => void;
   onThreadsClick?: () => void;
+  onKanbanClick?: () => void;
   onNotebookClick?: () => void;
   onPhotosClick?: () => void;
   onFilesClick?: () => void;
@@ -64,7 +65,7 @@ export function ChatHeader({
   agentName,
   agentDescription,
   agentAvatarUrl,
-  type = "direct",
+  type = "h2a",
   conversationId,
   agentId,
   peerUserId,
@@ -73,8 +74,8 @@ export function ChatHeader({
   onClick,
   onMembersClick,
   onSettingsClick,
-  onAddMemberClick,
   onThreadsClick,
+  onKanbanClick,
   onNotebookClick,
   onPhotosClick,
   onFilesClick,
@@ -96,6 +97,33 @@ export function ChatHeader({
 
   // Memory Capsule sheet
   const [memoryCapsuleOpen, setMemoryCapsuleOpen] = useState(false);
+  // Header pin settings
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const pinnedIds = useHeaderPinStore((s) => s.pinnedIds);
+
+  // Group per-conversation pinned buttons
+  const groupPins = useGroupPinStore((s) => conversationId ? s.getPins(conversationId) : []);
+  const loadGroupPins = useGroupPinStore((s) => s.loadPins);
+  useEffect(() => {
+    if (type === "group" && conversationId) {
+      loadGroupPins(conversationId);
+    }
+  }, [type, conversationId, loadGroupPins]);
+
+  // Voice call
+  const startCall = useVoiceCallStore((s) => s.startCall);
+  const callState = useVoiceCallStore((s) => s.callState);
+  const isInCall = callState !== "idle";
+  const canCall = (type === "h2h" || type === "direct") && conversationId && peerUserId;
+
+  const handleStartCall = useCallback(() => {
+    if (!conversationId || isInCall) return;
+    if (peerUserId) {
+      startCall(conversationId, { targetUserId: peerUserId }, agentName, agentAvatarUrl ?? null, "native");
+    } else if (agentId) {
+      startCall(conversationId, { agentId }, agentName, agentAvatarUrl ?? null, "native");
+    }
+  }, [conversationId, peerUserId, agentId, agentName, agentAvatarUrl, isInCall, startCall]);
 
   // Official CS status
   const [csStatus, setCsStatus] = useState<string | null>(null);
@@ -217,178 +245,55 @@ export function ChatHeader({
 
       <div className="ml-auto flex items-center gap-1">
         {type === "group" && conversationId ? (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", convSearchOpen && "text-blue-400")}
-              onClick={convSearchOpen ? closeConvSearch : openConvSearch}
-              title={t("chat.search.inConversation")}
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", isMuted && "text-red-400")}
-              onClick={handleMuteToggle}
-              title={isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
-            >
-              {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-            </Button>
-            {onMembersClick && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onMembersClick}
-                title={t("chat.header.members")}
-              >
-                <UsersRound className="h-4 w-4" />
-              </Button>
-            )}
-            {onNotebookClick && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onNotebookClick}
-                title={t("chat.notebook.title")}
-              >
-                <BookOpen className="h-4 w-4" />
-              </Button>
-            )}
-            {onThreadsClick && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onThreadsClick}
-                title={t("chat.thread.title")}
-              >
-                <MessageSquare className="h-4 w-4" />
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  title={t("chat.header.moreOptions")}
-                >
-                  <Menu className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {onMembersClick && (
-                  <DropdownMenuItem onClick={onMembersClick}>
-                    <UsersRound className="h-4 w-4" />
-                    {t("chat.header.members")}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={onPhotosClick}>
-                  <Image className="h-4 w-4" />
-                  {t("chat.header.photos")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onFilesClick}>
-                  <FileText className="h-4 w-4" />
-                  {t("chat.header.files")}
-                </DropdownMenuItem>
-                {onSettingsClick && (
-                  <DropdownMenuItem onClick={onSettingsClick}>
-                    <Settings className="h-4 w-4" />
-                    {t("chat.header.settings")}
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+          <GroupHeaderButtons
+            conversationId={conversationId}
+            groupPins={groupPins}
+            convSearchOpen={convSearchOpen}
+            isMuted={isMuted}
+            onAction={(actionId) => {
+              switch (actionId) {
+                case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
+                case "mute": handleMuteToggle(); break;
+                case "members": onMembersClick?.(); break;
+                case "kanban": onKanbanClick?.(); break;
+                case "notebook": onNotebookClick?.(); break;
+                case "threads": onThreadsClick?.(); break;
+                case "photos": onPhotosClick?.(); break;
+                case "files": onFilesClick?.(); break;
+              }
+            }}
+            onSettingsOpen={() => setSettingsOpen(true)}
+            t={t}
+          />
         ) : (
-          <>
-            {officialCommunityId && csStatus === "ai_active" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1 text-xs text-yellow-500 hover:text-yellow-400"
-                onClick={handleTransferHuman}
-                title={t("community.cs.transferHuman")}
-              >
-                <ArrowRightLeft className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t("community.cs.transferHuman")}</span>
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-8 w-8", convSearchOpen && "text-blue-400")}
-              onClick={convSearchOpen ? closeConvSearch : openConvSearch}
-              title={t("chat.search.inConversation")}
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-            {conversationId && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn("h-8 w-8", isMuted && "text-red-400")}
-                onClick={handleMuteToggle}
-                title={isMuted ? t("chat.header.unmuteConversation") : t("chat.header.muteConversation")}
-              >
-                {isMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-              </Button>
-            )}
-            {onNotebookClick && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onNotebookClick}
-                title={t("chat.notebook.title")}
-              >
-                <BookOpen className="h-4 w-4" />
-              </Button>
-            )}
-            {onThreadsClick && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onThreadsClick}
-                title={t("chat.thread.title")}
-              >
-                <MessageSquare className="h-4 w-4" />
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  title={t("chat.header.moreOptions")}
-                >
-                  <Menu className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onPhotosClick}>
-                  <Image className="h-4 w-4" />
-                  {t("chat.header.photos")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onFilesClick}>
-                  <FileText className="h-4 w-4" />
-                  {t("chat.header.files")}
-                </DropdownMenuItem>
-                {agentId && conversationId && type === "direct" && (
-                  <DropdownMenuItem onClick={() => setMemoryCapsuleOpen(true)}>
-                    <Brain className="h-4 w-4" />
-                    {t("memoryCapsule.title")}
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+          <DirectHeaderButtons
+            type={type}
+            pinnedIds={pinnedIds}
+            convSearchOpen={convSearchOpen}
+            isMuted={isMuted}
+            isInCall={isInCall}
+            canCall={!!canCall}
+            conversationId={conversationId}
+            agentId={agentId}
+            officialCommunityId={officialCommunityId}
+            csStatus={csStatus}
+            onAction={(actionId) => {
+              switch (actionId) {
+                case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
+                case "mute": handleMuteToggle(); break;
+                case "kanban": onKanbanClick?.(); break;
+                case "notebook": onNotebookClick?.(); break;
+                case "threads": onThreadsClick?.(); break;
+                case "call": handleStartCall(); break;
+                case "photos": onPhotosClick?.(); break;
+                case "files": onFilesClick?.(); break;
+                case "capsule": setMemoryCapsuleOpen(true); break;
+              }
+            }}
+            onTransferHuman={handleTransferHuman}
+            onSettingsOpen={() => setSettingsOpen(true)}
+            t={t}
+          />
         )}
       </div>
     </div>
@@ -454,7 +359,7 @@ export function ChatHeader({
       </div>
     )}
 
-    {agentId && conversationId && type === "direct" && (
+    {agentId && conversationId && type === "h2a" && (
       <MemoryCapsuleSheet
         open={memoryCapsuleOpen}
         onOpenChange={setMemoryCapsuleOpen}
@@ -463,7 +368,244 @@ export function ChatHeader({
         agentId={agentId}
       />
     )}
+    <ChatHeaderSettings
+      open={settingsOpen}
+      onOpenChange={setSettingsOpen}
+      conversationId={conversationId}
+      mode={type === "group" ? "group" : "direct"}
+      groupTitle={title ?? undefined}
+      groupAvatarUrl={agentAvatarUrl}
+      onGroupTitleSave={type === "group" ? (newTitle) => {
+        if (conversationId) {
+          useChatStore.getState().updateGroupSettings(conversationId, { title: newTitle });
+        }
+      } : undefined}
+    />
     </div>
+  );
+}
+
+/* ─── H2H / H2A pinned buttons + hamburger ─── */
+
+interface DirectHeaderButtonsProps {
+  type: ConversationType;
+  pinnedIds: string[];
+  convSearchOpen: boolean;
+  isMuted: boolean;
+  isInCall: boolean;
+  canCall: boolean;
+  conversationId?: string;
+  agentId?: string;
+  officialCommunityId?: string | null;
+  csStatus: string | null;
+  onAction: (id: string) => void;
+  onTransferHuman: () => void;
+  onSettingsOpen: () => void;
+  t: (key: string) => string;
+}
+
+function DirectHeaderButtons({
+  type,
+  pinnedIds,
+  convSearchOpen,
+  isMuted,
+  isInCall,
+  canCall,
+  conversationId,
+  agentId,
+  officialCommunityId,
+  csStatus,
+  onAction,
+  onTransferHuman,
+  onSettingsOpen,
+  t,
+}: DirectHeaderButtonsProps) {
+  const convType = type === "direct" ? "h2a" : type;
+
+  // Filter buttons for this conversation type
+  const available = HEADER_BUTTONS.filter((btn) => {
+    if (!btn.supportedTypes.includes(convType as "h2h" | "h2a")) return false;
+    if (btn.id === "call" && !canCall) return false;
+    if (btn.id === "capsule" && !(agentId && conversationId)) return false;
+    return true;
+  });
+
+  const pinned = available.filter((btn) => pinnedIds.includes(btn.id));
+
+  const getActiveState = (id: string): boolean => {
+    if (id === "search") return convSearchOpen;
+    if (id === "mute") return isMuted;
+    if (id === "call") return isInCall;
+    return false;
+  };
+
+  const getActiveColor = (id: string): string => {
+    if (id === "search" && convSearchOpen) return "text-blue-400";
+    if (id === "mute" && isMuted) return "text-red-400";
+    if (id === "call" && isInCall) return "text-green-400";
+    return "";
+  };
+
+  const getMuteIcon = () => isMuted ? BellOff : Bell;
+
+  return (
+    <>
+      {officialCommunityId && csStatus === "ai_active" && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1 text-xs text-yellow-500 hover:text-yellow-400"
+          onClick={onTransferHuman}
+          title={t("community.cs.transferHuman")}
+        >
+          <ArrowRightLeft className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{t("community.cs.transferHuman")}</span>
+        </Button>
+      )}
+
+      {/* Pinned buttons */}
+      {pinned.map((btn) => {
+        const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
+        const activeColor = getActiveColor(btn.id);
+        return (
+          <Button
+            key={btn.id}
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", activeColor)}
+            onClick={() => onAction(btn.id)}
+            disabled={btn.id === "call" && isInCall}
+            title={t(btn.labelKey)}
+          >
+            <Icon className="h-4 w-4" />
+          </Button>
+        );
+      })}
+
+      {/* Hamburger menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={t("chat.header.moreOptions")}
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {available.map((btn) => {
+            const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
+            const isPinned = pinnedIds.includes(btn.id);
+            return (
+              <DropdownMenuItem
+                key={btn.id}
+                onClick={() => onAction(btn.id)}
+                disabled={btn.id === "call" && isInCall}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="flex-1">{t(btn.labelKey)}</span>
+                {isPinned && <Pin className="ml-2 h-3 w-3 text-muted-foreground" />}
+              </DropdownMenuItem>
+            );
+          })}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onSettingsOpen}>
+            <Settings className="h-4 w-4" />
+            {t("chat.header.settings")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}
+
+/* ─── Group pinned buttons + hamburger ─── */
+
+interface GroupHeaderButtonsProps {
+  conversationId: string;
+  groupPins: string[];
+  convSearchOpen: boolean;
+  isMuted: boolean;
+  onAction: (id: string) => void;
+  onSettingsOpen: () => void;
+  t: (key: string) => string;
+}
+
+function GroupHeaderButtons({
+  conversationId,
+  groupPins,
+  convSearchOpen,
+  isMuted,
+  onAction,
+  onSettingsOpen,
+  t,
+}: GroupHeaderButtonsProps) {
+  const togglePin = useGroupPinStore((s) => s.togglePin);
+  const pinned = GROUP_HEADER_BUTTONS.filter((btn) => groupPins.includes(btn.id));
+
+  const getActiveColor = (id: string): string => {
+    if (id === "search" && convSearchOpen) return "text-blue-400";
+    if (id === "mute" && isMuted) return "text-red-400";
+    return "";
+  };
+
+  const getMuteIcon = () => (isMuted ? BellOff : Bell);
+
+  return (
+    <>
+      {pinned.map((btn) => {
+        const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
+        const activeColor = getActiveColor(btn.id);
+        return (
+          <Button
+            key={btn.id}
+            variant="ghost"
+            size="icon"
+            className={cn("h-8 w-8", activeColor)}
+            onClick={() => onAction(btn.id)}
+            title={t(btn.labelKey)}
+          >
+            <Icon className="h-4 w-4" />
+          </Button>
+        );
+      })}
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={t("chat.header.moreOptions")}
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {GROUP_HEADER_BUTTONS.map((btn) => {
+            const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
+            const isPinned = groupPins.includes(btn.id);
+            return (
+              <DropdownMenuItem
+                key={btn.id}
+                onClick={() => onAction(btn.id)}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="flex-1">{t(btn.labelKey)}</span>
+                {isPinned && <Pin className="ml-2 h-3 w-3 text-muted-foreground" />}
+              </DropdownMenuItem>
+            );
+          })}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onSettingsOpen}>
+            <Settings className="h-4 w-4" />
+            {t("chat.header.settings")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 

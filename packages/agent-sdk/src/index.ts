@@ -15,4 +15,12 @@ export type {
   ListNotesResult,
   CreateNoteBody,
   UpdateNoteBody,
+  KanbanBoard,
+  KanbanColumn,
+  KanbanCard,
+  CreateCardBody,
+  UpdateCardBody,
+  QueryMemoryOptions,
+  MemoryEntry,
+  ShareNoteResult,
 } from "./types.js";

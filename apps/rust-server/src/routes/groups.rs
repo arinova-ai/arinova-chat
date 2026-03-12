@@ -160,7 +160,7 @@ async fn create_group(
     for agent_id in &body.agent_ids {
         let _ = sqlx::query(
             r#"INSERT INTO conversation_members (conversation_id, agent_id, owner_user_id, listen_mode)
-               VALUES ($1, $2, $3, 'owner_only')"#,
+               VALUES ($1, $2, $3, 'all_mentions')"#,
         )
         .bind(conv_id)
         .bind(agent_id)
@@ -439,7 +439,7 @@ async fn add_member(
 
     let result = sqlx::query(
         r#"INSERT INTO conversation_members (conversation_id, agent_id, owner_user_id, listen_mode)
-           VALUES ($1, $2, $3, 'owner_only')"#,
+           VALUES ($1, $2, $3, 'all_mentions')"#,
     )
     .bind(id)
     .bind(body.agent_id)
@@ -1144,7 +1144,7 @@ async fn update_listen_mode(
     Json(body): Json<UpdateListenModeBody>,
 ) -> Response {
     // Validate listen_mode
-    if !["owner_only", "allowed_users", "all_mentions"].contains(&body.listen_mode.as_str()) {
+    if !["all", "all_mentions", "owner_unmention_others_mention", "owner_and_allowlist", "allowlist_mentions", "owner_only", "muted"].contains(&body.listen_mode.as_str()) {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Invalid listen mode"})),

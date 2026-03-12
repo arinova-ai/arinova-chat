@@ -6,13 +6,13 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ===== Enum Types =====
 
-CREATE TYPE conversation_type AS ENUM ('direct', 'group', 'official', 'club', 'lounge');
+CREATE TYPE conversation_type AS ENUM ('direct', 'h2h', 'h2a', 'group', 'official', 'club', 'lounge');
 CREATE TYPE message_role AS ENUM ('user', 'agent', 'assistant', 'system');
 CREATE TYPE message_status AS ENUM ('pending', 'streaming', 'completed', 'cancelled', 'error');
 CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member', 'creator', 'moderator');
 CREATE TYPE friendship_status AS ENUM ('pending', 'accepted', 'blocked');
 CREATE TYPE conversation_user_role AS ENUM ('admin', 'vice_admin', 'member');
-CREATE TYPE agent_listen_mode AS ENUM ('owner_only', 'allowed_users', 'all_mentions');
+CREATE TYPE agent_listen_mode AS ENUM ('all', 'all_mentions', 'owner_unmention_others_mention', 'owner_and_allowlist', 'owner_only', 'muted', 'allowed_users');
 
 -- App/Marketplace enums
 CREATE TYPE app_status AS ENUM ('draft', 'submitted', 'scanning', 'in_review', 'published', 'rejected', 'suspended');
@@ -111,7 +111,7 @@ CREATE TABLE conversations (
     pinned_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    type conversation_type NOT NULL DEFAULT 'direct',
+    type conversation_type NOT NULL DEFAULT 'h2h',
     mention_only BOOLEAN NOT NULL DEFAULT TRUE
 );
 
@@ -121,7 +121,7 @@ CREATE TABLE conversation_members (
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
     owner_user_id TEXT REFERENCES "user"(id),
-    listen_mode agent_listen_mode NOT NULL DEFAULT 'owner_only',
+    listen_mode agent_listen_mode NOT NULL DEFAULT 'owner_unmention_others_mention',
     added_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -797,6 +797,8 @@ CREATE TABLE kanban_cards (
   created_by TEXT,
   archived BOOLEAN NOT NULL DEFAULT FALSE,
   archived_at TIMESTAMPTZ,
+  share_token TEXT UNIQUE,
+  is_public BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -838,4 +840,14 @@ CREATE TABLE note_links (
   target_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (source_note_id, target_note_id)
+);
+
+-- Per-user-per-conversation settings
+CREATE TABLE IF NOT EXISTS conversation_user_settings (
+    user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    chat_bg_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, conversation_id)
 );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -8,6 +8,7 @@ import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import Image from "@tiptap/extension-image";
 import { Mark } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -26,14 +27,29 @@ import {
   Code,
   Quote,
   Link as LinkIcon,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BACKEND_URL } from "@/lib/config";
+import { useTranslation } from "@/lib/i18n";
+import { useToastStore } from "@/store/toast-store";
 import { SlashCommand } from "./slash-command";
 import { DragHandle } from "./drag-handle";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
   codeBlockStyle: "fenced",
+});
+
+// Turndown rule for images
+turndown.addRule("image", {
+  filter: "img",
+  replacement: (_content, node) => {
+    const el = node as HTMLElement;
+    const src = el.getAttribute("src") || "";
+    const alt = el.getAttribute("alt") || "";
+    return `![${alt}](${src})`;
+  },
 });
 
 // Turndown rule for task list items
@@ -90,7 +106,10 @@ interface NotebookEditorProps {
   editable?: boolean;
   placeholder?: string;
   className?: string;
+  conversationId?: string;
 }
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 function markdownToHtml(md: string): string {
   if (!md) return "";
@@ -108,7 +127,42 @@ export function NotebookEditor({
   editable = true,
   placeholder = "Write something...",
   className,
+  conversationId,
 }: NotebookEditorProps) {
+  const { t } = useTranslation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadImage = useCallback(async (file: File): Promise<string | null> => {
+    if (!conversationId) return null;
+    if (!file.type.startsWith("image/")) {
+      useToastStore.getState().addToast(t("chat.unsupportedFileType"), "error");
+      return null;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      useToastStore.getState().addToast("Image must be under 5MB", "error");
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/conversations/${conversationId}/notes/upload`,
+        { method: "POST", body: formData, credentials: "include" }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        useToastStore.getState().addToast(body?.error ?? t("chat.uploadFailed"), "error");
+        return null;
+      }
+      const data = await res.json();
+      return data.url as string;
+    } catch {
+      useToastStore.getState().addToast(t("chat.uploadFailed"), "error");
+      return null;
+    }
+  }, [conversationId, t]);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -123,6 +177,7 @@ export function NotebookEditor({
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      Image.configure({ inline: false, allowBase64: false }),
       WikiLinkHighlight,
       ...(editable ? [SlashCommand, DragHandle] : []),
     ],
@@ -131,6 +186,46 @@ export function NotebookEditor({
     editorProps: {
       attributes: {
         class: `notebook-tiptap-content outline-none min-h-[200px] py-2 text-sm ${editable ? "pl-7 pr-3" : "px-3"}`,
+      },
+      handlePaste: (view, event) => {
+        if (!editable || !conversationId) return false;
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of items) {
+          if (item.type.startsWith("image/")) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+              uploadImage(file).then((url) => {
+                if (url && view.state) {
+                  const node = view.state.schema.nodes.image.create({ src: url });
+                  const tr = view.state.tr.replaceSelectionWith(node);
+                  view.dispatch(tr);
+                }
+              });
+            }
+            return true;
+          }
+        }
+        return false;
+      },
+      handleDrop: (view, event) => {
+        if (!editable || !conversationId) return false;
+        const files = event.dataTransfer?.files;
+        if (!files || files.length === 0) return false;
+        const file = files[0];
+        if (!file.type.startsWith("image/")) return false;
+        event.preventDefault();
+        const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        uploadImage(file).then((url) => {
+          if (url && view.state) {
+            const node = view.state.schema.nodes.image.create({ src: url });
+            const insertPos = pos?.pos ?? view.state.selection.from;
+            const tr = view.state.tr.insert(insertPos, node);
+            view.dispatch(tr);
+          }
+        });
+        return true;
       },
     },
     onUpdate: ({ editor: e }) => {
@@ -249,6 +344,32 @@ export function NotebookEditor({
           >
             <LinkIcon className="h-3.5 w-3.5" />
           </ToolbarButton>
+          {conversationId && (
+            <ToolbarButton
+              active={false}
+              onClick={() => fileInputRef.current?.click()}
+              title="Image"
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && editor) {
+                uploadImage(file).then((url) => {
+                  if (url) {
+                    editor.chain().focus().setImage({ src: url }).run();
+                  }
+                });
+              }
+              e.target.value = "";
+            }}
+          />
         </div>
       )}
       <div className="flex-1 overflow-y-auto">

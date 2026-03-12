@@ -50,9 +50,9 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
   const sorted = useMemo(() => {
     let filtered = conversations;
     if (tab === "agents") {
-      filtered = conversations.filter((c) => c.type === "direct" && c.agentId && !c.officialCommunityId);
+      filtered = conversations.filter((c) => (c.type === "h2a" || (c.type === "direct" && c.agentId)) && !c.officialCommunityId);
     } else if (tab === "friends") {
-      filtered = conversations.filter((c) => c.type === "direct" && !c.agentId && !c.officialCommunityId);
+      filtered = conversations.filter((c) => (c.type === "h2h" || (c.type === "direct" && !c.agentId)) && !c.officialCommunityId);
     } else if (tab === "groups") {
       filtered = conversations.filter((c) => c.type === "group");
     } else if (tab === "officials") {
@@ -131,14 +131,14 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
     <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
       {/* Tab bar — hidden when collapsed */}
       {!collapsed && (
-        <div className="shrink-0 flex gap-0.5 px-2 pb-2 overflow-x-auto scrollbar-none">
+        <div className="shrink-0 grid grid-cols-4 gap-1 px-2 pb-2">
           {TABS.map((tb) => (
             <button
               key={tb}
               type="button"
               onClick={() => setTab(tb)}
               className={cn(
-                "shrink-0 whitespace-nowrap rounded-lg px-2 py-1 text-[11px] font-medium transition-colors",
+                "truncate rounded-md px-1 py-0.5 text-[10px] font-medium text-center transition-colors",
                 tab === tb
                   ? "bg-blue-600 text-white"
                   : "bg-secondary text-muted-foreground hover:text-foreground"

@@ -20,7 +20,7 @@ const defaultProps = {
   title: "Test Conversation",
   agentName: "TestBot",
   agentAvatarUrl: null,
-  type: "direct" as const,
+  type: "h2a" as const,
   lastMessage: null,
   pinnedAt: null,
   updatedAt: new Date(),

@@ -47,6 +47,7 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronUp,
+  UserPlus,
 } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import {
@@ -66,6 +67,7 @@ interface GroupMembersPanelProps {
   onOpenChange: (open: boolean) => void;
   conversationId: string;
   initialTab?: PanelTab;
+  onAddMemberClick?: () => void;
 }
 
 export function GroupMembersPanel({
@@ -73,6 +75,7 @@ export function GroupMembersPanel({
   onOpenChange,
   conversationId,
   initialTab,
+  onAddMemberClick,
 }: GroupMembersPanelProps) {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
@@ -239,6 +242,16 @@ export function GroupMembersPanel({
 
         {/* Footer Actions */}
         <div className="border-t border-border p-4 space-y-2">
+          {canManage && onAddMemberClick && (
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => { onAddMemberClick(); onOpenChange(false); }}
+            >
+              <UserPlus className="h-4 w-4" />
+              {t("addMember.title")}
+            </Button>
+          )}
           {isAdmin && (
             <Button
               variant="outline"
@@ -565,9 +578,14 @@ function UserMemberRow({
 function useListenModeLabels() {
   const { t } = useTranslation();
   return {
-    owner_only: t("group.ownerOnly"),
-    allowed_users: t("group.allowedUsers"),
+    all: t("group.listenMode.all"),
     all_mentions: t("group.allMentions"),
+    owner_unmention_others_mention: t("group.listenMode.ownerUnmentionOthersMention"),
+    owner_and_allowlist: t("group.listenMode.ownerAndAllowlist"),
+    allowlist_mentions: t("group.listenMode.allowlistMentions"),
+    owner_only: t("group.ownerOnly"),
+    muted: t("group.listenMode.muted"),
+    allowed_users: t("group.allowedUsers"),
   } as Record<string, string>;
 }
 
@@ -650,6 +668,7 @@ function AgentMemberRow({
                   <SelectContent>
                     <SelectItem value="owner_only">{t("group.ownerOnly")}</SelectItem>
                     <SelectItem value="allowed_users">{t("group.allowedUsers")}</SelectItem>
+                    <SelectItem value="allowlist_mentions">{t("group.listenMode.allowlistMentions")}</SelectItem>
                     <SelectItem value="all_mentions">{t("group.allMentions")}</SelectItem>
                   </SelectContent>
                 </Select>
