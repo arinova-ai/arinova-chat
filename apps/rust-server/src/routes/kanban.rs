@@ -2200,18 +2200,24 @@ async fn update_label(
     }
 
     if let Some(name) = &body.name {
-        let _ = sqlx::query("UPDATE kanban_labels SET name = $1 WHERE id = $2")
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET name = $1 WHERE id = $2")
             .bind(name)
             .bind(label_id)
             .execute(&state.db)
-            .await;
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
     }
     if let Some(color) = &body.color {
-        let _ = sqlx::query("UPDATE kanban_labels SET color = $1 WHERE id = $2")
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET color = $1 WHERE id = $2")
             .bind(color)
             .bind(label_id)
             .execute(&state.db)
-            .await;
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
     }
 
     let label = sqlx::query_as::<_, LabelRow>(
@@ -2257,6 +2263,25 @@ async fn add_label_to_card(
 ) -> Response {
     if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
         return e;
+    }
+
+    // Verify label belongs to the same board as the card
+    let same_board = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_labels l
+            JOIN kanban_cards c ON c.id = $1
+            JOIN kanban_columns col ON col.id = c.column_id
+            WHERE l.id = $2 AND l.board_id = col.board_id
+        )"#,
+    )
+    .bind(card_id)
+    .bind(body.label_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !same_board {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Label does not belong to the same board" }))).into_response();
     }
 
     let result = sqlx::query(
@@ -2677,18 +2702,24 @@ async fn agent_update_label(
     }
 
     if let Some(name) = &body.name {
-        let _ = sqlx::query("UPDATE kanban_labels SET name = $1 WHERE id = $2")
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET name = $1 WHERE id = $2")
             .bind(name)
             .bind(label_id)
             .execute(&state.db)
-            .await;
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
     }
     if let Some(color) = &body.color {
-        let _ = sqlx::query("UPDATE kanban_labels SET color = $1 WHERE id = $2")
+        if let Err(e) = sqlx::query("UPDATE kanban_labels SET color = $1 WHERE id = $2")
             .bind(color)
             .bind(label_id)
             .execute(&state.db)
-            .await;
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
     }
 
     let label = sqlx::query_as::<_, LabelRow>(
@@ -2742,6 +2773,25 @@ async fn agent_add_label_to_card(
     };
     if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
         return e;
+    }
+
+    // Verify label belongs to the same board as the card
+    let same_board = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_labels l
+            JOIN kanban_cards c ON c.id = $1
+            JOIN kanban_columns col ON col.id = c.column_id
+            WHERE l.id = $2 AND l.board_id = col.board_id
+        )"#,
+    )
+    .bind(card_id)
+    .bind(body.label_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !same_board {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Label does not belong to the same board" }))).into_response();
     }
 
     let result = sqlx::query(
