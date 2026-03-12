@@ -720,11 +720,9 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                     </Button>
                   </>
                 )}
-                {!isMobile && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
             </div>
             <div className={cn("overflow-y-auto", isMobile ? "max-h-[65vh] px-3" : "flex-1 min-h-0 px-4 py-3")}>
