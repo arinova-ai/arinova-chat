@@ -12,6 +12,8 @@ use crate::auth::middleware::AuthAgent;
 use crate::services::message_seq::get_next_seq;
 use crate::services::push::send_push_to_user;
 use crate::services::push_trigger::{is_conversation_muted, should_send_push};
+use crate::ws::handler::{filter_agents_for_dispatch, get_conv_member_ids, do_trigger_agent_response, AgentFilterConfig};
+use crate::ws::state::QueuedResponse;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -61,7 +63,7 @@ async fn agent_send(
     .fetch_optional(&state.db)
     .await;
 
-    let (user_id, _conv_type) = match membership {
+    let (user_id, conv_type) = match membership {
         Ok(Some(m)) => m,
         Ok(None) => {
             tracing::warn!("agent_send REST: agent {} not a member of conversation {}", agent_id, conversation_id);
@@ -137,26 +139,141 @@ async fn agent_send(
     .execute(&state.db)
     .await;
 
-    // Deliver to user via stream_start + stream_end
-    state.ws.send_to_user_or_queue(&user_id, &json!({
+    // Deliver stream_start + stream_end to all relevant users
+    let stream_start = json!({
         "type": "stream_start",
         "conversationId": conversation_id,
         "messageId": &msg_id,
         "seq": seq,
         "senderAgentId": &agent_id,
         "senderAgentName": &agent.name
-    }), &state.redis);
-
-    state.ws.send_to_user_or_queue(&user_id, &json!({
+    });
+    let stream_end = json!({
         "type": "stream_end",
         "conversationId": conversation_id,
         "messageId": &msg_id,
         "seq": seq,
         "content": content,
+        "senderAgentId": &agent_id,
+        "senderAgentName": &agent.name,
         "reason": "agent_send"
-    }), &state.redis);
+    });
+
+    if conv_type == "group" {
+        // Broadcast to all user members in the group
+        let member_ids = get_conv_member_ids(&state.ws, &state.db, conversation_id, "").await;
+        state.ws.broadcast_to_members(&member_ids, &stream_start, &state.redis);
+        state.ws.broadcast_to_members(&member_ids, &stream_end, &state.redis);
+    } else {
+        // Direct conversation: send to the owner only
+        state.ws.send_to_user_or_queue(&user_id, &stream_start, &state.redis);
+        state.ws.send_to_user_or_queue(&user_id, &stream_end, &state.redis);
+    }
 
     tracing::info!("stream_end reason=agent_send conv={} agent={} msgId={} seq={}", conversation_id, agent_id, msg_id, seq);
+
+    // --- Agent-to-agent dispatch (groups only) ---
+    {
+        let other_agents: Vec<String> = sqlx::query_as::<_, (String,)>(
+            r#"SELECT agent_id::text FROM conversation_members
+               WHERE conversation_id = $1::uuid AND agent_id IS NOT NULL AND agent_id != $2::uuid"#,
+        )
+        .bind(conversation_id)
+        .bind(&agent_id)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id,)| id)
+        .collect();
+
+        if !other_agents.is_empty() {
+            let mention_only = false;
+            let mentions: Vec<String> = vec![];
+
+            let mut agent_configs = Vec::new();
+            for aid in &other_agents {
+                let agent_perms = sqlx::query_as::<_, (String, Option<String>)>(
+                    r#"SELECT listen_mode::text, owner_user_id FROM conversation_members
+                       WHERE conversation_id = $1::uuid AND agent_id = $2::uuid"#,
+                )
+                .bind(conversation_id)
+                .bind(aid)
+                .fetch_optional(&state.db)
+                .await;
+
+                if let Ok(Some((listen_mode, owner_id))) = agent_perms {
+                    let allowed_user_ids = if matches!(listen_mode.as_str(), "owner_and_allowlist" | "allowlist_mentions" | "allowed_users") {
+                        sqlx::query_as::<_, (String,)>(
+                            r#"SELECT user_id FROM agent_listen_allowed_users
+                               WHERE agent_id = $1::uuid AND conversation_id = $2::uuid"#,
+                        )
+                        .bind(aid)
+                        .bind(conversation_id)
+                        .fetch_all(&state.db)
+                        .await
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|(uid,)| uid)
+                        .collect()
+                    } else {
+                        vec![]
+                    };
+
+                    agent_configs.push(AgentFilterConfig {
+                        agent_id: aid.clone(),
+                        listen_mode,
+                        owner_user_id: owner_id.unwrap_or_default(),
+                        allowed_user_ids,
+                    });
+                }
+            }
+
+            // Use agent owner as "sender" for listen mode checks
+            let dispatch_ids = filter_agents_for_dispatch(
+                mention_only,
+                &conv_type,
+                &user_id,
+                &mentions,
+                &agent_configs,
+            );
+
+            for dispatch_agent_id in dispatch_ids {
+                if state.ws.has_active_stream_for_agent(conversation_id, &dispatch_agent_id) {
+                    let queue_key = format!("{}:{}", conversation_id, dispatch_agent_id);
+                    state.ws
+                        .agent_response_queues
+                        .entry(queue_key)
+                        .or_insert_with(std::collections::VecDeque::new)
+                        .push_back(QueuedResponse {
+                            user_id: user_id.clone(),
+                            conversation_id: conversation_id.to_string(),
+                            agent_id: dispatch_agent_id.clone(),
+                            content: content.to_string(),
+                            reply_to_id: None,
+                            thread_id: None,
+                            user_message_id: Some(msg_id.clone()),
+                        });
+                    continue;
+                }
+
+                do_trigger_agent_response(
+                    &user_id,
+                    &dispatch_agent_id,
+                    conversation_id,
+                    content,
+                    None,
+                    None,
+                    &conv_type,
+                    &state.ws,
+                    &state.db,
+                    &state.redis,
+                    &state.config,
+                )
+                .await;
+            }
+        }
+    }
 
     // Push notification to all conversation members
     {
