@@ -634,6 +634,72 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
     </div>
   );
 
+  // ── Board dialogs (shared between full & compact) ────
+
+  const boardDialogs = (
+    <>
+      {/* Create Board Dialog */}
+      <Dialog open={creatingBoard} onOpenChange={setCreatingBoard}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Board</DialogTitle>
+            <DialogDescription>
+              Enter a name for the new board.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newBoardName}
+            onChange={(e) => setNewBoardName(e.target.value)}
+            placeholder="Board name"
+            autoFocus
+            onKeyDown={(e) => { if (e.key === "Enter") handleCreateBoard(); }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCreatingBoard(false); setNewBoardName(""); }}>Cancel</Button>
+            <Button onClick={handleCreateBoard} disabled={!newBoardName.trim()}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Board Dialog */}
+      <Dialog open={renamingBoard} onOpenChange={setRenamingBoard}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Board</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameBoardName}
+            onChange={(e) => setRenameBoardName(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => { if (e.key === "Enter") handleRenameBoard(); }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingBoard(false)}>Cancel</Button>
+            <Button onClick={handleRenameBoard} disabled={!renameBoardName.trim()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Board Dialog */}
+      <Dialog open={deleteBoardConfirm} onOpenChange={setDeleteBoardConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Board</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the board and all its columns and cards. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteBoardConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteBoard}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+
   // ── Full mode layout ──────────────────────────────────
 
   if (mode === "full") {
@@ -703,65 +769,7 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
           />
         )}
 
-        {/* Create Board Dialog */}
-        <Dialog open={creatingBoard} onOpenChange={setCreatingBoard}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Board</DialogTitle>
-              <DialogDescription>
-                Enter a name for the new board.
-              </DialogDescription>
-            </DialogHeader>
-            <Input
-              value={newBoardName}
-              onChange={(e) => setNewBoardName(e.target.value)}
-              placeholder="Board name"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") handleCreateBoard(); }}
-            />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setCreatingBoard(false); setNewBoardName(""); }}>Cancel</Button>
-              <Button onClick={handleCreateBoard} disabled={!newBoardName.trim()}>Create</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Rename Board Dialog */}
-        <Dialog open={renamingBoard} onOpenChange={setRenamingBoard}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Rename Board</DialogTitle>
-            </DialogHeader>
-            <Input
-              value={renameBoardName}
-              onChange={(e) => setRenameBoardName(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") handleRenameBoard(); }}
-            />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setRenamingBoard(false)}>Cancel</Button>
-              <Button onClick={handleRenameBoard} disabled={!renameBoardName.trim()}>Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Board Dialog */}
-        <Dialog open={deleteBoardConfirm} onOpenChange={setDeleteBoardConfirm}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Board</DialogTitle>
-              <DialogDescription>
-                This will permanently delete the board and all its columns and cards. This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteBoardConfirm(false)}>Cancel</Button>
-              <Button variant="destructive" onClick={handleDeleteBoard}>
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {boardDialogs}
       </>
     );
   }
@@ -794,6 +802,8 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
         onUpdate={handleCardUpdate}
         onDelete={handleDeleteCard}
       />
+
+      {boardDialogs}
     </>
   );
 }
