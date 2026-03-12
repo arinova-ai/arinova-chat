@@ -162,6 +162,15 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reset board selection when conversationId changes
+  useEffect(() => {
+    setSelectedBoardId(null);
+    setBoard(null);
+    setLoading(true);
+    fetchBoard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
   // ── Board CRUD ────────────────────────────────────────
 
   const handleCreateBoard = useCallback(async () => {
