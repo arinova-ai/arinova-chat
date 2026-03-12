@@ -11,9 +11,10 @@ import { KanbanBoard } from "@/components/kanban/kanban-board";
 interface KanbanSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  conversationId?: string;
 }
 
-export function KanbanSidebar({ open, onOpenChange }: KanbanSidebarProps) {
+export function KanbanSidebar({ open, onOpenChange, conversationId }: KanbanSidebarProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -53,7 +54,7 @@ export function KanbanSidebar({ open, onOpenChange }: KanbanSidebarProps) {
 
       {/* Board — compact mode */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <KanbanBoard mode="compact" />
+        <KanbanBoard mode="compact" conversationId={conversationId} />
       </div>
     </div>
   );

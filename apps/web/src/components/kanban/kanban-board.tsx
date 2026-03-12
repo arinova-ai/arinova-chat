@@ -63,11 +63,13 @@ export interface KanbanBoardProps {
   mode: "full" | "compact";
   /** Agent data from office stream — only needed for full mode */
   streamAgents?: { id: string; name: string; emoji: string }[];
+  /** Conversation ID — used for persisting board selection per conversation (compact mode) */
+  conversationId?: string;
 }
 
 // ── Component ───────────────────────────────────────────────
 
-export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
+export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanBoardProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -131,14 +133,29 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
     try {
       const allBoards = await fetchBoards();
       if (allBoards.length === 0) { setLoading(false); return; }
-      const targetId = boardId || selectedBoardId || allBoards[0].id;
+
+      // If no explicit boardId, try loading persisted preference
+      let targetId = boardId || selectedBoardId;
+      if (!targetId && conversationId) {
+        try {
+          const settings = await api<{ kanbanBoardId?: string | null }>(
+            `/api/conversations/${conversationId}/settings`,
+            { silent: true },
+          );
+          if (settings.kanbanBoardId && allBoards.some((b) => b.id === settings.kanbanBoardId)) {
+            targetId = settings.kanbanBoardId;
+          }
+        } catch { /* ignore */ }
+      }
+      targetId = targetId || allBoards[0].id;
+
       if (!selectedBoardId) setSelectedBoardId(targetId);
       const data = await api<BoardData>(`/api/kanban/boards/${targetId}`, { silent: true });
       setBoard(data);
       setSelectedBoardId(targetId);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [fetchBoards, selectedBoardId]);
+  }, [fetchBoards, selectedBoardId, conversationId]);
 
   useEffect(() => {
     fetchBoard();
@@ -190,7 +207,15 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
     setSelectedBoardId(boardId);
     setLoading(true);
     await fetchBoard(boardId);
-  }, [fetchBoard]);
+    // Persist board selection per conversation
+    if (conversationId) {
+      api(`/api/conversations/${conversationId}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ kanbanBoardId: boardId }),
+        silent: true,
+      }).catch(() => {});
+    }
+  }, [fetchBoard, conversationId]);
 
   // ── Column CRUD ───────────────────────────────────────
 
@@ -785,13 +810,7 @@ export function KanbanBoard({ mode, streamAgents = [] }: KanbanBoardProps) {
         </div>
         {emptyState ?? (
           <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden h-full">
-            {columns.length === 0 ? (
-              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                {t("chat.kanban.empty")}
-              </div>
-            ) : (
-              columnsContent
-            )}
+            {columnsContent}
           </div>
         )}
       </div>

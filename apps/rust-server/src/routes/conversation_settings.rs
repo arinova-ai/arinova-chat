@@ -29,6 +29,7 @@ pub fn router() -> Router<AppState> {
 struct ConversationSettings {
     chat_bg_url: Option<String>,
     pinned_buttons: Option<Vec<String>>,
+    kanban_board_id: Option<Uuid>,
 }
 
 /// Use a wrapper so we can distinguish "field absent" from "field = null".
@@ -40,6 +41,8 @@ struct UpdateSettingsBody {
     chat_bg_url: Option<Option<String>>,
     #[serde(deserialize_with = "deserialize_optional_field", default)]
     pinned_buttons: Option<Option<Vec<String>>>,
+    #[serde(deserialize_with = "deserialize_optional_field", default)]
+    kanban_board_id: Option<Option<Uuid>>,
 }
 
 /// Deserialise a field that may be absent, null, or present.
@@ -56,8 +59,8 @@ async fn get_settings(
     user: AuthUser,
     Path(conversation_id): Path<Uuid>,
 ) -> Response {
-    let row = sqlx::query_as::<_, (Option<String>, Option<Vec<String>>)>(
-        "SELECT chat_bg_url, pinned_buttons FROM conversation_user_settings WHERE user_id = $1 AND conversation_id = $2",
+    let row = sqlx::query_as::<_, (Option<String>, Option<Vec<String>>, Option<Uuid>)>(
+        "SELECT chat_bg_url, pinned_buttons, kanban_board_id FROM conversation_user_settings WHERE user_id = $1 AND conversation_id = $2",
     )
     .bind(&user.id)
     .bind(conversation_id)
@@ -65,11 +68,11 @@ async fn get_settings(
     .await;
 
     match row {
-        Ok(Some((chat_bg_url, pinned_buttons))) => {
-            (StatusCode::OK, Json(json!(ConversationSettings { chat_bg_url, pinned_buttons }))).into_response()
+        Ok(Some((chat_bg_url, pinned_buttons, kanban_board_id))) => {
+            (StatusCode::OK, Json(json!(ConversationSettings { chat_bg_url, pinned_buttons, kanban_board_id }))).into_response()
         }
         Ok(None) => {
-            (StatusCode::OK, Json(json!(ConversationSettings { chat_bg_url: None, pinned_buttons: None }))).into_response()
+            (StatusCode::OK, Json(json!(ConversationSettings { chat_bg_url: None, pinned_buttons: None, kanban_board_id: None }))).into_response()
         }
         Err(e) => {
             tracing::error!("get_conversation_settings: {}", e);
@@ -86,10 +89,11 @@ async fn update_settings(
 ) -> Response {
     let bg_val = body.chat_bg_url;
     let pins_val = body.pinned_buttons;
+    let kanban_val = body.kanban_board_id;
 
     // Fetch current values, merge with provided fields, then upsert
-    let current = sqlx::query_as::<_, (Option<String>, Option<Vec<String>>)>(
-        "SELECT chat_bg_url, pinned_buttons FROM conversation_user_settings WHERE user_id = $1 AND conversation_id = $2",
+    let current = sqlx::query_as::<_, (Option<String>, Option<Vec<String>>, Option<Uuid>)>(
+        "SELECT chat_bg_url, pinned_buttons, kanban_board_id FROM conversation_user_settings WHERE user_id = $1 AND conversation_id = $2",
     )
     .bind(&user.id)
     .bind(conversation_id)
@@ -97,23 +101,26 @@ async fn update_settings(
     .await
     .unwrap_or(None);
 
-    let (cur_bg, cur_pins) = current.unwrap_or((None, None));
+    let (cur_bg, cur_pins, cur_kanban) = current.unwrap_or((None, None, None));
 
     let final_bg = if let Some(v) = bg_val { v } else { cur_bg };
     let final_pins = if let Some(v) = pins_val { v } else { cur_pins };
+    let final_kanban = if let Some(v) = kanban_val { v } else { cur_kanban };
 
     let result = sqlx::query(
-        r#"INSERT INTO conversation_user_settings (user_id, conversation_id, chat_bg_url, pinned_buttons, updated_at)
-           VALUES ($1, $2, $3, $4, NOW())
+        r#"INSERT INTO conversation_user_settings (user_id, conversation_id, chat_bg_url, pinned_buttons, kanban_board_id, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())
            ON CONFLICT (user_id, conversation_id) DO UPDATE SET
              chat_bg_url = $3,
              pinned_buttons = $4,
+             kanban_board_id = $5,
              updated_at = NOW()"#,
     )
     .bind(&user.id)
     .bind(conversation_id)
     .bind(&final_bg)
     .bind(&final_pins)
+    .bind(&final_kanban)
     .execute(&state.db)
     .await;
 
@@ -121,6 +128,7 @@ async fn update_settings(
         Ok(_) => (StatusCode::OK, Json(json!({
             "chatBgUrl": final_bg,
             "pinnedButtons": final_pins,
+            "kanbanBoardId": final_kanban,
         }))).into_response(),
         Err(e) => {
             tracing::error!("update_conversation_settings: {}", e);

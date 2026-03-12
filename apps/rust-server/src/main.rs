@@ -319,6 +319,7 @@ async fn main() {
             PRIMARY KEY (user_id, conversation_id)
         );
         ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS pinned_buttons TEXT[];
+        ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS kanban_board_id UUID REFERENCES kanban_boards(id) ON DELETE SET NULL;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

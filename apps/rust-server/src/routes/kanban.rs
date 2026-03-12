@@ -547,6 +547,18 @@ async fn create_board(
             .execute(&state.db)
             .await;
         }
+    } else {
+        // No columns provided — create default 5 columns (same as ensure_default_board)
+        for (name, order) in [("Backlog", 0), ("To Do", 1), ("In Progress", 2), ("Review", 3), ("Done", 4)] {
+            let _ = sqlx::query(
+                "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+            )
+            .bind(board_id)
+            .bind(name)
+            .bind(order)
+            .execute(&state.db)
+            .await;
+        }
     }
 
     let board = sqlx::query_as::<_, BoardRow>(
@@ -1152,6 +1164,18 @@ async fn agent_create_board(
             .bind(board_id)
             .bind(&col.name)
             .bind(i as i32)
+            .execute(&state.db)
+            .await;
+        }
+    } else {
+        // No columns provided — create default 5 columns (same as ensure_default_board)
+        for (name, order) in [("Backlog", 0), ("To Do", 1), ("In Progress", 2), ("Review", 3), ("Done", 4)] {
+            let _ = sqlx::query(
+                "INSERT INTO kanban_columns (board_id, name, sort_order) VALUES ($1, $2, $3)",
+            )
+            .bind(board_id)
+            .bind(name)
+            .bind(order)
             .execute(&state.db)
             .await;
         }

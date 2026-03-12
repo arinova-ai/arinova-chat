@@ -258,6 +258,7 @@ export function ChatArea() {
           <KanbanSidebar
             open={kanbanSidebarOpen}
             onOpenChange={(v) => { if (!v) closeKanbanSidebar(); }}
+            conversationId={conversation.id}
           />
         </ErrorBoundary>
       )}
