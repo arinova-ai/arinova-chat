@@ -1152,4 +1152,110 @@ export function registerTools(api: OpenClawPluginApi) {
     },
     { name: "arinova_kanban_list_archived_cards" },
   );
+
+  // Tool 25: arinova_kanban_link_note
+  api.registerTool(
+    {
+      name: "arinova_kanban_link_note",
+      label: "Link Note to Kanban Card",
+      description:
+        "Link an existing note to a Kanban card for reference.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID" }),
+        noteId: Type.String({ description: "Note ID to link" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId, noteId } = params as {
+          cardId: string;
+          noteId: string;
+        };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/notes`,
+            token: account.botToken,
+            body: { noteId },
+          });
+
+          return {
+            content: [{ type: "text", text: `Note ${noteId} linked to card ${cardId}.` }],
+            details: { cardId, noteId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_link_note" },
+  );
+
+  // Tool 26: arinova_kanban_unlink_note
+  api.registerTool(
+    {
+      name: "arinova_kanban_unlink_note",
+      label: "Unlink Note from Kanban Card",
+      description:
+        "Remove a note link from a Kanban card.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID" }),
+        noteId: Type.String({ description: "Note ID to unlink" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId, noteId } = params as {
+          cardId: string;
+          noteId: string;
+        };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "DELETE",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/notes/${encodeURIComponent(noteId)}`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: `Note ${noteId} unlinked from card ${cardId}.` }],
+            details: { cardId, noteId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_unlink_note" },
+  );
+
+  // Tool 27: arinova_kanban_list_card_notes
+  api.registerTool(
+    {
+      name: "arinova_kanban_list_card_notes",
+      label: "List Notes on Kanban Card",
+      description:
+        "List all notes linked to a Kanban card.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId } = params as { cardId: string };
+        try {
+          const account = resolveAccount();
+          const res = await apiCall({
+            method: "GET",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/notes`,
+            token: account.botToken,
+          });
+
+          const notes = Array.isArray(res) ? res : [];
+          return {
+            content: [{ type: "text", text: JSON.stringify(notes, null, 2) }],
+            details: { cardId, count: notes.length },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_list_card_notes" },
+  );
 }

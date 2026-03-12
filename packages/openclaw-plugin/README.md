@@ -201,6 +201,9 @@ No parameters required. Returns all non-archived boards with columns and cards.
 | `arinova_kanban_add_card_commit` | Link a git commit to a card |
 | `arinova_kanban_list_card_commits` | List commits linked to a card |
 | `arinova_kanban_list_archived_cards` | List archived cards on a board |
+| `arinova_kanban_link_note` | Link a note to a card |
+| `arinova_kanban_unlink_note` | Unlink a note from a card |
+| `arinova_kanban_list_card_notes` | List notes linked to a card |
 
 #### arinova_kanban_list_cards
 
@@ -262,6 +265,28 @@ Returns array of `{ cardId, commitHash, message, createdAt }`.
 | `limit` | number | No | Items per page (default 20, max 100) |
 
 Returns `{ cards, total, page, limit }`.
+
+#### arinova_kanban_link_note
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cardId` | string | Yes | Card ID |
+| `noteId` | string | Yes | Note ID to link |
+
+#### arinova_kanban_unlink_note
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cardId` | string | Yes | Card ID |
+| `noteId` | string | Yes | Note ID to unlink |
+
+#### arinova_kanban_list_card_notes
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cardId` | string | Yes | Card ID |
+
+Returns array of linked notes.
 
 ---
 
@@ -382,6 +407,15 @@ curl -s "$BASE_URL/api/agent/kanban/cards/<CARD_ID>/commits" \
 
 # Archived cards
 curl -s "$BASE_URL/api/agent/kanban/boards/<BOARD_ID>/archived-cards?page=1&limit=20" \
+  -H "Authorization: Bearer <TOKEN>"
+
+# Card-note links
+curl -s -X POST "$BASE_URL/api/agent/kanban/cards/<CARD_ID>/notes" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN>" \
+  -d '{ "noteId": "<NOTE_ID>" }'
+curl -s "$BASE_URL/api/agent/kanban/cards/<CARD_ID>/notes" \
+  -H "Authorization: Bearer <TOKEN>"
+curl -s -X DELETE "$BASE_URL/api/agent/kanban/cards/<CARD_ID>/notes/<NOTE_ID>" \
   -H "Authorization: Bearer <TOKEN>"
 
 # Columns
