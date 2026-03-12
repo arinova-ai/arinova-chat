@@ -91,6 +91,8 @@ interface CardDetailSheetProps {
   cardAgents?: string[];
   cardNotes?: Array<{ noteId: string; noteTitle: string }>;
   cardCommits?: CardCommitData[];
+  cardLabels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
+  boardLabels?: Array<{ id: string; name: string; color: string }>;
   agentEmojis?: Map<string, string>;
   agentNames?: Map<string, string>;
 }
@@ -105,6 +107,8 @@ export function CardDetailSheet({
   cardAgents = [],
   cardNotes = [],
   cardCommits = [],
+  cardLabels = [],
+  boardLabels = [],
   agentEmojis = new Map(),
   agentNames = new Map(),
 }: CardDetailSheetProps) {
@@ -129,6 +133,7 @@ export function CardDetailSheet({
   const [localCommits, setLocalCommits] = useState<CardCommitData[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const { t } = useTranslation();
 
   // Fetch commits from the per-card endpoint on mount / card change
@@ -316,6 +321,30 @@ export function CardDetailSheet({
     } catch { /* api shows toast */ }
   };
 
+  const handleAddLabel = async (labelId: string) => {
+    if (!card) return;
+    try {
+      await api(`/api/kanban/cards/${card.id}/labels`, {
+        method: "POST",
+        body: JSON.stringify({ labelId }),
+        silent: true,
+      });
+      setLabelPickerOpen(false);
+      onUpdate();
+    } catch { /* api shows toast */ }
+  };
+
+  const handleRemoveLabel = async (labelId: string) => {
+    if (!card) return;
+    try {
+      await api(`/api/kanban/cards/${card.id}/labels/${labelId}`, {
+        method: "DELETE",
+        silent: true,
+      });
+      onUpdate();
+    } catch { /* api shows toast */ }
+  };
+
   const handleSave = async () => {
     if (!card || !title.trim()) return;
     setSaving(true);
@@ -432,6 +461,65 @@ export function CardDetailSheet({
                   <div className="mt-1">
                     <PriorityBadge priority={card.priority} />
                   </div>
+                </div>
+
+                {/* Labels */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-muted-foreground">Labels</label>
+                    <button
+                      type="button"
+                      onClick={() => setLabelPickerOpen(!labelPickerOpen)}
+                      className="text-xs text-brand hover:text-brand/80"
+                    >
+                      {labelPickerOpen ? "Cancel" : "+ Add Label"}
+                    </button>
+                  </div>
+                  {labelPickerOpen && boardLabels.length > 0 && (
+                    <div className="mt-1.5 max-h-32 overflow-y-auto rounded-lg border border-border bg-muted/30">
+                      {boardLabels
+                        .filter((bl) => !cardLabels.some((cl) => cl.labelId === bl.id))
+                        .map((label) => (
+                          <button
+                            key={label.id}
+                            type="button"
+                            onClick={() => handleAddLabel(label.id)}
+                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+                          >
+                            <span
+                              className="h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: label.color }}
+                            />
+                            <span className="flex-1 truncate text-foreground">{label.name}</span>
+                          </button>
+                        ))}
+                      {boardLabels.filter((bl) => !cardLabels.some((cl) => cl.labelId === bl.id)).length === 0 && (
+                        <p className="py-2 text-center text-[11px] text-muted-foreground">All labels assigned</p>
+                      )}
+                    </div>
+                  )}
+                  {cardLabels.length > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {cardLabels.map((cl) => (
+                        <span
+                          key={cl.labelId}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-white"
+                          style={{ backgroundColor: cl.labelColor }}
+                        >
+                          {cl.labelName}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLabel(cl.labelId)}
+                            className="hover:opacity-70"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">No labels.</p>
+                  )}
                 </div>
 
                 {/* Description */}

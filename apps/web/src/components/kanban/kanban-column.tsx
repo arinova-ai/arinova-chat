@@ -31,6 +31,7 @@ export function FullColumn({
   cards,
   allColumns,
   cardAgentsMap,
+  cardLabelsMap,
   agentEmojis,
   agentNames,
   onAddCard,
@@ -43,6 +44,7 @@ export function FullColumn({
   cards: KanbanCard[];
   allColumns: KanbanColumn[];
   cardAgentsMap: Map<string, string[]>;
+  cardLabelsMap?: Map<string, Array<{ labelId: string; labelName: string; labelColor: string }>>;
   agentEmojis: Map<string, string>;
   agentNames: Map<string, string>;
   onAddCard: (columnId: string) => void;
@@ -142,6 +144,7 @@ export function FullColumn({
               key={card.id}
               card={card}
               agents={cardAgentsMap.get(card.id) ?? []}
+              labels={cardLabelsMap?.get(card.id)}
               agentEmojis={agentEmojis}
               agentNames={agentNames}
               onDelete={onDeleteCard}

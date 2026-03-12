@@ -40,6 +40,20 @@ export interface CardCommit {
   createdAt?: string | null;
 }
 
+export interface BoardLabel {
+  id: string;
+  boardId: string;
+  name: string;
+  color: string;
+}
+
+export interface CardLabel {
+  cardId: string;
+  labelId: string;
+  labelName: string;
+  labelColor: string;
+}
+
 export interface BoardData {
   id: string;
   columns: KanbanColumn[];
@@ -47,6 +61,8 @@ export interface BoardData {
   cardAgents: CardAgent[];
   cardNotes: CardNote[];
   cardCommits: CardCommit[];
+  labels: BoardLabel[];
+  cardLabels: CardLabel[];
 }
 
 // ── Priority helpers ────────────────────────────────────────

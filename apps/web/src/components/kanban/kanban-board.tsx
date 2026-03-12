@@ -46,7 +46,7 @@ import { AddCardSheet } from "./add-card-sheet";
 import { ArchivedCardsSheet } from "./archived-cards-sheet";
 import { FullColumn, CompactColumn } from "./kanban-column";
 import { CardOverlay } from "./kanban-card";
-import type { KanbanCard, KanbanColumn, BoardData, CardCommit } from "./types";
+import type { KanbanCard, KanbanColumn, BoardData, CardCommit, CardLabel } from "./types";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -317,6 +317,18 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     }
     return map;
   }, [board]);
+
+  const cardLabelsMap = useMemo(() => {
+    const map = new Map<string, Array<{ labelId: string; labelName: string; labelColor: string }>>();
+    for (const cl of board?.cardLabels ?? []) {
+      const arr = map.get(cl.cardId) ?? [];
+      arr.push({ labelId: cl.labelId, labelName: cl.labelName, labelColor: cl.labelColor });
+      map.set(cl.cardId, arr);
+    }
+    return map;
+  }, [board]);
+
+  const boardLabels = useMemo(() => board?.labels ?? [], [board]);
 
   // ── DnD handlers (full mode only) ──────────────────────
 
@@ -670,6 +682,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
             cards={colCards}
             allColumns={columns}
             cardAgentsMap={cardAgentsMap}
+            cardLabelsMap={cardLabelsMap}
             agentEmojis={agentEmojis}
             agentNames={agentNames}
             onAddCard={setAddColumnId}
@@ -803,6 +816,8 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           cardAgents={selectedCard ? (cardAgentsMap.get(selectedCard.id) ?? []) : []}
           cardNotes={selectedCard ? (cardNotesMap.get(selectedCard.id) ?? []) : []}
           cardCommits={selectedCard ? (cardCommitsMap.get(selectedCard.id) ?? []) : []}
+          cardLabels={selectedCard ? (cardLabelsMap.get(selectedCard.id) ?? []) : []}
+          boardLabels={boardLabels}
           agentEmojis={agentEmojis}
           agentNames={agentNames}
           onClose={() => setSelectedCard(null)}

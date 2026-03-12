@@ -25,6 +25,7 @@ export function SortableCard({
   agents,
   agentEmojis,
   agentNames,
+  labels,
   onDelete,
   onSelect,
 }: {
@@ -32,6 +33,7 @@ export function SortableCard({
   agents: string[];
   agentEmojis: Map<string, string>;
   agentNames: Map<string, string>;
+  labels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
   onDelete: (id: string) => void;
   onSelect: (card: KanbanCard) => void;
 }) {
@@ -67,6 +69,19 @@ export function SortableCard({
           <div className="text-sm font-medium text-foreground leading-snug">{card.title}</div>
           {card.description && (
             <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{card.description}</p>
+          )}
+          {labels && labels.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {labels.map((l) => (
+                <span
+                  key={l.labelId}
+                  className="inline-block rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
+                  style={{ backgroundColor: l.labelColor }}
+                >
+                  {l.labelName}
+                </span>
+              ))}
+            </div>
           )}
           <div className="mt-2 flex items-center gap-2">
             <PriorityBadge priority={card.priority} />
