@@ -20,13 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useTranslation } from "@/lib/i18n";
 import { SortableCard, CompactCard } from "./kanban-card";
 import type { KanbanCard, KanbanColumn } from "./types";
@@ -56,19 +49,17 @@ export function FullColumn({
   onDeleteCard: (id: string) => void;
   onSelectCard: (card: KanbanCard) => void;
   onRenameColumn?: (columnId: string, name: string) => void;
-  onDeleteColumn?: (columnId: string, moveToColumnId?: string) => void;
+  onDeleteColumn?: (columnId: string) => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(column.name);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [moveTarget, setMoveTarget] = useState<string>("");
   const renameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (renaming) renameRef.current?.focus();
   }, [renaming]);
 
-  const otherColumns = allColumns.filter((c) => c.id !== column.id);
   const hasCards = cards.length > 0;
 
   const handleRenameSubmit = () => {
@@ -79,9 +70,8 @@ export function FullColumn({
   };
 
   const handleDeleteConfirm = () => {
-    onDeleteColumn?.(column.id, moveTarget || undefined);
+    onDeleteColumn?.(column.id);
     setDeleteOpen(false);
-    setMoveTarget("");
   };
 
   return (
@@ -171,28 +161,14 @@ export function FullColumn({
             <DialogTitle>Delete column &quot;{column.name}&quot;</DialogTitle>
             <DialogDescription>
               {hasCards
-                ? `This column has ${cards.length} card(s). Choose what to do with them:`
+                ? "This column has cards. Move or archive all cards before deleting."
                 : "This column has no cards and will be deleted."}
             </DialogDescription>
           </DialogHeader>
-          {hasCards && otherColumns.length > 0 && (
-            <div className="space-y-2">
-              <Select value={moveTarget} onValueChange={setMoveTarget}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Move cards to... (or delete all)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {otherColumns.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setDeleteOpen(false); setMoveTarget(""); }}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>
-              {hasCards && !moveTarget ? "Delete column & cards" : "Delete column"}
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={hasCards}>
+              Delete column
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -210,6 +186,8 @@ export function CompactColumn({
   onMoveCard,
   onSelectCard,
   onCreateCard,
+  onRenameColumn,
+  onDeleteColumn,
 }: {
   column: KanbanColumn;
   cards: KanbanCard[];
@@ -217,11 +195,20 @@ export function CompactColumn({
   onMoveCard: (cardId: string, targetColumnId: string) => void;
   onSelectCard: (card: KanbanCard) => void;
   onCreateCard: (columnId: string, title: string) => Promise<void>;
+  onRenameColumn?: (columnId: string, name: string) => void;
+  onDeleteColumn?: (columnId: string) => void;
 }) {
   const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(column.name);
+  const renameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renaming) renameRef.current?.focus();
+  }, [renaming]);
 
   const handleCreate = async () => {
     if (!title.trim()) return;
@@ -232,22 +219,74 @@ export function CompactColumn({
     setSaving(false);
   };
 
+  const handleRenameSubmit = () => {
+    if (renameValue.trim() && renameValue.trim() !== column.name) {
+      onRenameColumn?.(column.id, renameValue.trim());
+    }
+    setRenaming(false);
+  };
+
+  const hasCards = cards.length > 0;
+
   return (
     <div className="flex flex-col w-64 shrink-0 rounded-lg bg-muted/30 p-2 max-h-full">
       <div className="flex items-center justify-between mb-2 px-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            {column.name}
-          </span>
-          <span className="text-[10px] text-muted-foreground">{cards.length}</span>
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          {renaming ? (
+            <Input
+              ref={renameRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              className="h-5 text-xs font-semibold px-1"
+              onBlur={handleRenameSubmit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleRenameSubmit();
+                if (e.key === "Escape") { setRenaming(false); setRenameValue(column.name); }
+              }}
+            />
+          ) : (
+            <span
+              className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate cursor-default"
+              onDoubleClick={() => { setRenameValue(column.name); setRenaming(true); }}
+            >
+              {column.name}
+            </span>
+          )}
+          <span className="text-[10px] text-muted-foreground shrink-0">{cards.length}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <MoreHorizontal className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => { setRenameValue(column.name); setRenaming(true); }}>
+                <Pencil className="h-3 w-3 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDeleteColumn?.(column.id)}
+                disabled={hasCards}
+                className="text-destructive"
+              >
+                <Trash2 className="h-3 w-3 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-1.5 overflow-y-auto min-h-0 max-h-[calc(100vh-7rem)]">

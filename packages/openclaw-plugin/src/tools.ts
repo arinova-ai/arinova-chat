@@ -940,30 +940,23 @@ export function registerTools(api: OpenClawPluginApi) {
       name: "arinova_kanban_delete_column",
       label: "Delete Kanban Column",
       description:
-        "Delete a Kanban column. Optionally move its cards to another column; otherwise cards are deleted too.",
+        "Delete a Kanban column. Column must be empty (no non-archived cards).",
       parameters: Type.Object({
         columnId: Type.String({ description: "Column ID to delete" }),
-        moveToColumnId: Type.Optional(
-          Type.String({ description: "Move cards to this column before deleting. If omitted, cards are deleted." }),
-        ),
       }),
       async execute(_toolCallId, params) {
-        const { columnId, moveToColumnId } = params as {
-          columnId: string;
-          moveToColumnId?: string;
-        };
+        const { columnId } = params as { columnId: string };
         try {
           const account = resolveAccount();
-          const qs = moveToColumnId ? `?moveToColumnId=${encodeURIComponent(moveToColumnId)}` : "";
           await apiCall({
             method: "DELETE",
-            url: `${account.apiUrl}/api/agent/kanban/columns/${encodeURIComponent(columnId)}${qs}`,
+            url: `${account.apiUrl}/api/agent/kanban/columns/${encodeURIComponent(columnId)}`,
             token: account.botToken,
           });
 
           return {
             content: [{ type: "text", text: `Column ${columnId} deleted.` }],
-            details: { columnId, moveToColumnId },
+            details: { columnId },
           };
         } catch (err) {
           return errResult(String(err));

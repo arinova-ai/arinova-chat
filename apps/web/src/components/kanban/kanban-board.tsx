@@ -263,10 +263,9 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     } catch { /* api shows toast */ }
   }, [board, fetchBoard]);
 
-  const handleDeleteColumn = useCallback(async (columnId: string, moveToColumnId?: string) => {
+  const handleDeleteColumn = useCallback(async (columnId: string) => {
     try {
-      const qs = moveToColumnId ? `?moveToColumnId=${moveToColumnId}` : "";
-      await api(`/api/kanban/columns/${columnId}${qs}`, { method: "DELETE" });
+      await api(`/api/kanban/columns/${columnId}`, { method: "DELETE" });
       await fetchBoard(board?.id);
     } catch { /* api shows toast */ }
   }, [board, fetchBoard]);
@@ -658,6 +657,8 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
               onMoveCard={handleMoveCard}
               onSelectCard={handleSelectCard}
               onCreateCard={handleCreateCardCompact}
+              onRenameColumn={handleRenameColumn}
+              onDeleteColumn={handleDeleteColumn}
             />
           );
         }

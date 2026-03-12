@@ -245,12 +245,6 @@ struct UpdateColumnBody {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct DeleteColumnQuery {
-    move_to_column_id: Option<Uuid>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct ReorderColumnsBody {
     column_ids: Vec<Uuid>,
 }
@@ -778,55 +772,22 @@ async fn delete_column(
     State(state): State<AppState>,
     user: AuthUser,
     Path(column_id): Path<Uuid>,
-    Query(query): Query<DeleteColumnQuery>,
 ) -> Response {
     if let Err(e) = verify_column_owner(&state.db, column_id, &user.id).await {
         return e;
     }
 
-    if let Some(target_id) = query.move_to_column_id {
-        if target_id == column_id {
-            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot move cards to the same column" }))).into_response();
-        }
-        // Verify target column belongs to same board and same owner
-        let same_board = sqlx::query_scalar::<_, bool>(
-            r#"SELECT EXISTS(
-                SELECT 1 FROM kanban_columns t
-                JOIN kanban_columns s ON s.id = $1
-                JOIN kanban_boards b ON b.id = t.board_id
-                WHERE t.id = $2 AND t.board_id = s.board_id AND b.owner_id = $3
-            )"#,
-        )
-        .bind(column_id)
-        .bind(target_id)
-        .bind(&user.id)
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or(false);
-        if !same_board {
-            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Target column not found on same board" }))).into_response();
-        }
-        if let Err(e) = sqlx::query("UPDATE kanban_cards SET column_id = $1 WHERE column_id = $2")
-            .bind(target_id)
-            .bind(column_id)
-            .execute(&state.db)
-            .await
-        {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
-        }
-    } else {
-        // Delete cards (and their relations) in this column
-        let _ = sqlx::query(
-            "DELETE FROM kanban_card_agents WHERE card_id IN (SELECT id FROM kanban_cards WHERE column_id = $1)",
-        ).bind(column_id).execute(&state.db).await;
-        let _ = sqlx::query(
-            "DELETE FROM kanban_card_notes WHERE card_id IN (SELECT id FROM kanban_cards WHERE column_id = $1)",
-        ).bind(column_id).execute(&state.db).await;
-        let _ = sqlx::query(
-            "DELETE FROM kanban_card_commits WHERE card_id IN (SELECT id FROM kanban_cards WHERE column_id = $1)",
-        ).bind(column_id).execute(&state.db).await;
-        let _ = sqlx::query("DELETE FROM kanban_cards WHERE column_id = $1")
-            .bind(column_id).execute(&state.db).await;
+    // Reject if column has non-archived cards
+    let card_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM kanban_cards WHERE column_id = $1 AND archived = false",
+    )
+    .bind(column_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if card_count > 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot delete column with cards. Move or archive cards first." }))).into_response();
     }
 
     let result = sqlx::query("DELETE FROM kanban_columns WHERE id = $1")
@@ -1435,7 +1396,6 @@ async fn agent_delete_column(
     State(state): State<AppState>,
     agent: AuthAgent,
     Path(column_id): Path<Uuid>,
-    Query(query): Query<DeleteColumnQuery>,
 ) -> Response {
     let owner_id = match agent_owner_id(&state.db, agent.id).await {
         Ok(id) => id,
@@ -1445,47 +1405,16 @@ async fn agent_delete_column(
         return e;
     }
 
-    if let Some(target_id) = query.move_to_column_id {
-        if target_id == column_id {
-            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot move cards to the same column" }))).into_response();
-        }
-        let same_board = sqlx::query_scalar::<_, bool>(
-            r#"SELECT EXISTS(
-                SELECT 1 FROM kanban_columns t
-                JOIN kanban_columns s ON s.id = $1
-                JOIN kanban_boards b ON b.id = t.board_id
-                WHERE t.id = $2 AND t.board_id = s.board_id AND b.owner_id = $3
-            )"#,
-        )
-        .bind(column_id)
-        .bind(target_id)
-        .bind(&owner_id)
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or(false);
-        if !same_board {
-            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Target column not found on same board" }))).into_response();
-        }
-        if let Err(e) = sqlx::query("UPDATE kanban_cards SET column_id = $1 WHERE column_id = $2")
-            .bind(target_id)
-            .bind(column_id)
-            .execute(&state.db)
-            .await
-        {
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
-        }
-    } else {
-        let _ = sqlx::query(
-            "DELETE FROM kanban_card_agents WHERE card_id IN (SELECT id FROM kanban_cards WHERE column_id = $1)",
-        ).bind(column_id).execute(&state.db).await;
-        let _ = sqlx::query(
-            "DELETE FROM kanban_card_notes WHERE card_id IN (SELECT id FROM kanban_cards WHERE column_id = $1)",
-        ).bind(column_id).execute(&state.db).await;
-        let _ = sqlx::query(
-            "DELETE FROM kanban_card_commits WHERE card_id IN (SELECT id FROM kanban_cards WHERE column_id = $1)",
-        ).bind(column_id).execute(&state.db).await;
-        let _ = sqlx::query("DELETE FROM kanban_cards WHERE column_id = $1")
-            .bind(column_id).execute(&state.db).await;
+    let card_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM kanban_cards WHERE column_id = $1 AND archived = false",
+    )
+    .bind(column_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if card_count > 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot delete column with cards. Move or archive cards first." }))).into_response();
     }
 
     let result = sqlx::query("DELETE FROM kanban_columns WHERE id = $1")
