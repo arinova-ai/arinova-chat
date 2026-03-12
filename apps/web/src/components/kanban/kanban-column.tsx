@@ -1,53 +1,147 @@
 "use client";
 
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Plus } from "lucide-react";
-import { useState } from "react";
+import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { X, Loader2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTranslation } from "@/lib/i18n";
 import { SortableCard, CompactCard } from "./kanban-card";
 import type { KanbanCard, KanbanColumn } from "./types";
 
-// ── Full Column (with DnD) ──────────────────────────────────
+// ── Full Column (with DnD + column menu) ──────────────────────
 
 export function FullColumn({
   column,
   cards,
+  allColumns,
   cardAgentsMap,
   agentEmojis,
   agentNames,
   onAddCard,
   onDeleteCard,
   onSelectCard,
+  onRenameColumn,
+  onDeleteColumn,
 }: {
   column: KanbanColumn;
   cards: KanbanCard[];
+  allColumns: KanbanColumn[];
   cardAgentsMap: Map<string, string[]>;
   agentEmojis: Map<string, string>;
   agentNames: Map<string, string>;
   onAddCard: (columnId: string) => void;
   onDeleteCard: (id: string) => void;
   onSelectCard: (card: KanbanCard) => void;
+  onRenameColumn?: (columnId: string, name: string) => void;
+  onDeleteColumn?: (columnId: string, moveToColumnId?: string) => void;
 }) {
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(column.name);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<string>("");
+  const renameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renaming) renameRef.current?.focus();
+  }, [renaming]);
+
+  const otherColumns = allColumns.filter((c) => c.id !== column.id);
+  const hasCards = cards.length > 0;
+
+  const handleRenameSubmit = () => {
+    if (renameValue.trim() && renameValue.trim() !== column.name) {
+      onRenameColumn?.(column.id, renameValue.trim());
+    }
+    setRenaming(false);
+  };
+
+  const handleDeleteConfirm = () => {
+    onDeleteColumn?.(column.id, moveTarget || undefined);
+    setDeleteOpen(false);
+    setMoveTarget("");
+  };
+
   return (
     <div className="flex w-72 shrink-0 flex-col rounded-xl border border-border bg-muted/30 md:w-80">
       {/* Column header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">{column.name}</h3>
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {renaming ? (
+            <Input
+              ref={renameRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              className="h-6 text-sm font-semibold px-1"
+              onBlur={handleRenameSubmit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleRenameSubmit();
+                if (e.key === "Escape") { setRenaming(false); setRenameValue(column.name); }
+              }}
+            />
+          ) : (
+            <h3
+              className="text-sm font-semibold text-foreground truncate cursor-default"
+              onDoubleClick={() => { setRenameValue(column.name); setRenaming(true); }}
+            >
+              {column.name}
+            </h3>
+          )}
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground shrink-0">
             {cards.length}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => onAddCard(column.id)}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => { setRenameValue(column.name); setRenaming(true); }}>
+                <Pencil className="h-3.5 w-3.5 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
+                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => onAddCard(column.id)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Cards */}
@@ -69,6 +163,40 @@ export function FullColumn({
           <p className="py-6 text-center text-xs text-muted-foreground/60">No cards</p>
         )}
       </div>
+
+      {/* Delete Column Dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete column &quot;{column.name}&quot;</DialogTitle>
+            <DialogDescription>
+              {hasCards
+                ? `This column has ${cards.length} card(s). Choose what to do with them:`
+                : "This column has no cards and will be deleted."}
+            </DialogDescription>
+          </DialogHeader>
+          {hasCards && otherColumns.length > 0 && (
+            <div className="space-y-2">
+              <Select value={moveTarget} onValueChange={setMoveTarget}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Move cards to... (or delete all)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {otherColumns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteOpen(false); setMoveTarget(""); }}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>
+              {hasCards && !moveTarget ? "Delete column & cards" : "Delete column"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

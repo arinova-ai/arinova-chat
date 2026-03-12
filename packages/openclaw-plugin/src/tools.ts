@@ -477,7 +477,36 @@ export function registerTools(api: OpenClawPluginApi) {
     { name: "arinova_kanban_list_boards" },
   );
 
-  // Tool 9: arinova_kanban_create_card
+  // Tool 9: arinova_kanban_list_cards
+  api.registerTool(
+    {
+      name: "arinova_kanban_list_cards",
+      label: "List Kanban Cards",
+      description:
+        "List all Kanban cards with their column names, priorities, and descriptions.",
+      parameters: Type.Object({}),
+      async execute(_toolCallId, _params) {
+        try {
+          const account = resolveAccount();
+          const data = await apiCall({
+            method: "GET",
+            url: `${account.apiUrl}/api/agent/kanban/cards`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+            details: { result: data },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_list_cards" },
+  );
+
+  // Tool 10: arinova_kanban_create_card
   api.registerTool(
     {
       name: "arinova_kanban_create_card",
@@ -677,5 +706,308 @@ export function registerTools(api: OpenClawPluginApi) {
       },
     },
     { name: "arinova_share_note" },
+  );
+
+  // Tool 13: arinova_kanban_create_board
+  api.registerTool(
+    {
+      name: "arinova_kanban_create_board",
+      label: "Create Kanban Board",
+      description:
+        "Create a new Kanban board, optionally with initial columns.",
+      parameters: Type.Object({
+        name: Type.String({ description: "Board name" }),
+        columns: Type.Optional(
+          Type.Array(Type.Object({ name: Type.String() }), {
+            description: "Initial columns (in order). If omitted, board is created empty.",
+          }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const { name, columns } = params as {
+          name: string;
+          columns?: { name: string }[];
+        };
+        try {
+          const account = resolveAccount();
+          const body: Record<string, unknown> = { name };
+          if (columns) body.columns = columns;
+
+          const result = await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/boards`,
+            token: account.botToken,
+            body,
+          });
+
+          return {
+            content: [{ type: "text", text: `Board created: "${name}"` }],
+            details: { result },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_create_board" },
+  );
+
+  // Tool 14: arinova_kanban_update_board
+  api.registerTool(
+    {
+      name: "arinova_kanban_update_board",
+      label: "Update Kanban Board",
+      description: "Rename an existing Kanban board.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID" }),
+        name: Type.String({ description: "New board name" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId, name } = params as { boardId: string; name: string };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "PATCH",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}`,
+            token: account.botToken,
+            body: { name },
+          });
+
+          return {
+            content: [{ type: "text", text: `Board ${boardId} renamed to "${name}".` }],
+            details: { boardId, name },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_update_board" },
+  );
+
+  // Tool 15: arinova_kanban_delete_board
+  api.registerTool(
+    {
+      name: "arinova_kanban_delete_board",
+      label: "Delete Kanban Board",
+      description:
+        "Delete a Kanban board and all its columns and cards. This action is irreversible.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID to delete" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId } = params as { boardId: string };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "DELETE",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: `Board ${boardId} deleted.` }],
+            details: { boardId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_delete_board" },
+  );
+
+  // Tool 16: arinova_kanban_list_columns
+  api.registerTool(
+    {
+      name: "arinova_kanban_list_columns",
+      label: "List Kanban Columns",
+      description: "List all columns in a Kanban board.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId } = params as { boardId: string };
+        try {
+          const account = resolveAccount();
+          const data = await apiCall({
+            method: "GET",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}/columns`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+            details: { result: data },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_list_columns" },
+  );
+
+  // Tool 17: arinova_kanban_create_column
+  api.registerTool(
+    {
+      name: "arinova_kanban_create_column",
+      label: "Create Kanban Column",
+      description: "Add a new column to a Kanban board.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID" }),
+        name: Type.String({ description: "Column name" }),
+        sortOrder: Type.Optional(
+          Type.Number({ description: "Position (0-based). If omitted, appended at end." }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId, name, sortOrder } = params as {
+          boardId: string;
+          name: string;
+          sortOrder?: number;
+        };
+        try {
+          const account = resolveAccount();
+          const body: Record<string, unknown> = { name };
+          if (sortOrder !== undefined) body.sortOrder = sortOrder;
+
+          const result = await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}/columns`,
+            token: account.botToken,
+            body,
+          });
+
+          return {
+            content: [{ type: "text", text: `Column "${name}" created.` }],
+            details: { result },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_create_column" },
+  );
+
+  // Tool 18: arinova_kanban_update_column
+  api.registerTool(
+    {
+      name: "arinova_kanban_update_column",
+      label: "Update Kanban Column",
+      description: "Rename a Kanban column or change its position.",
+      parameters: Type.Object({
+        columnId: Type.String({ description: "Column ID" }),
+        name: Type.Optional(Type.String({ description: "New column name" })),
+        sortOrder: Type.Optional(Type.Number({ description: "New sort order" })),
+      }),
+      async execute(_toolCallId, params) {
+        const { columnId, name, sortOrder } = params as {
+          columnId: string;
+          name?: string;
+          sortOrder?: number;
+        };
+        try {
+          const account = resolveAccount();
+          const body: Record<string, unknown> = {};
+          if (name !== undefined) body.name = name;
+          if (sortOrder !== undefined) body.sortOrder = sortOrder;
+
+          await apiCall({
+            method: "PATCH",
+            url: `${account.apiUrl}/api/agent/kanban/columns/${encodeURIComponent(columnId)}`,
+            token: account.botToken,
+            body,
+          });
+
+          return {
+            content: [{ type: "text", text: `Column ${columnId} updated.` }],
+            details: { columnId, name, sortOrder },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_update_column" },
+  );
+
+  // Tool 19: arinova_kanban_delete_column
+  api.registerTool(
+    {
+      name: "arinova_kanban_delete_column",
+      label: "Delete Kanban Column",
+      description:
+        "Delete a Kanban column. Optionally move its cards to another column; otherwise cards are deleted too.",
+      parameters: Type.Object({
+        columnId: Type.String({ description: "Column ID to delete" }),
+        moveToColumnId: Type.Optional(
+          Type.String({ description: "Move cards to this column before deleting. If omitted, cards are deleted." }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const { columnId, moveToColumnId } = params as {
+          columnId: string;
+          moveToColumnId?: string;
+        };
+        try {
+          const account = resolveAccount();
+          const qs = moveToColumnId ? `?moveToColumnId=${encodeURIComponent(moveToColumnId)}` : "";
+          await apiCall({
+            method: "DELETE",
+            url: `${account.apiUrl}/api/agent/kanban/columns/${encodeURIComponent(columnId)}${qs}`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: `Column ${columnId} deleted.` }],
+            details: { columnId, moveToColumnId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_delete_column" },
+  );
+
+  // Tool 20: arinova_kanban_reorder_columns
+  api.registerTool(
+    {
+      name: "arinova_kanban_reorder_columns",
+      label: "Reorder Kanban Columns",
+      description:
+        "Reorder columns in a Kanban board. Provide column IDs in desired order.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID" }),
+        columnIds: Type.Array(Type.String(), {
+          description: "Column IDs in desired display order",
+        }),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId, columnIds } = params as {
+          boardId: string;
+          columnIds: string[];
+        };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}/columns/reorder`,
+            token: account.botToken,
+            body: { columnIds },
+          });
+
+          return {
+            content: [{ type: "text", text: `Columns reordered (${columnIds.length} columns).` }],
+            details: { boardId, columnIds },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_reorder_columns" },
   );
 }
