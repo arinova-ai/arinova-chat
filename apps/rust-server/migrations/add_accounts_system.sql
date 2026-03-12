@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS account_subscribers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
   subscribed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, user_id)
 );

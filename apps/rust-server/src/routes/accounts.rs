@@ -192,6 +192,7 @@ async fn list_accounts(
         proxy_user_id: Option<String>,
         ai_mode: Option<String>,
         system_prompt: Option<String>,
+        api_key: Option<String>,
         model: Option<String>,
         context_window: Option<i32>,
         voice_sample_url: Option<String>,
@@ -202,7 +203,7 @@ async fn list_accounts(
 
     let rows = sqlx::query_as::<_, AccountRow>(
         r#"SELECT id, name, type, avatar, bio, agent_id, proxy_user_id,
-                  ai_mode, system_prompt, model, context_window,
+                  ai_mode, system_prompt, api_key, model, context_window,
                   voice_sample_url, voice_clone_id, created_at, updated_at
            FROM accounts
            WHERE owner_id = $1
@@ -217,6 +218,14 @@ async fn list_accounts(
             let accounts: Vec<Value> = rows
                 .iter()
                 .map(|r| {
+                    // Mask API key: show only last 4 chars
+                    let masked_key = r.api_key.as_ref().map(|k| {
+                        if k.len() > 4 {
+                            format!("****{}", &k[k.len() - 4..])
+                        } else {
+                            "****".to_string()
+                        }
+                    });
                     json!({
                         "id": r.id,
                         "name": r.name,
@@ -227,6 +236,7 @@ async fn list_accounts(
                         "proxyUserId": r.proxy_user_id,
                         "aiMode": r.ai_mode,
                         "systemPrompt": r.system_prompt,
+                        "apiKey": masked_key,
                         "model": r.model,
                         "contextWindow": r.context_window,
                         "voiceSampleUrl": r.voice_sample_url,
@@ -683,11 +693,11 @@ async fn list_subscribers(
 
     let rows = sqlx::query_as::<_, SubscriberRow>(
         r#"SELECT s.user_id, u.name AS user_name, u.image AS user_image,
-                  s.conversation_id, s.created_at AS subscribed_at
+                  s.conversation_id, s.subscribed_at
            FROM account_subscribers s
            JOIN "user" u ON u.id = s.user_id
            WHERE s.account_id = $1
-           ORDER BY s.created_at DESC"#,
+           ORDER BY s.subscribed_at DESC"#,
     )
     .bind(id)
     .fetch_all(&state.db)
@@ -994,7 +1004,7 @@ async fn send_gift(
     }
 
     let result = sqlx::query_scalar::<_, Uuid>(
-        r#"INSERT INTO account_gifts (account_id, sender_id, gift_type, amount, message)
+        r#"INSERT INTO gifts (to_account_id, from_user_id, gift_type, amount, message)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING id"#,
     )
@@ -1067,8 +1077,8 @@ async fn get_gift_report(
 
     let rows = sqlx::query_as::<_, GiftSummaryRow>(
         r#"SELECT gift_type, COUNT(*) AS total_count, COALESCE(SUM(amount), 0) AS total_amount
-           FROM account_gifts
-           WHERE account_id = $1
+           FROM gifts
+           WHERE to_account_id = $1
            GROUP BY gift_type
            ORDER BY total_amount DESC"#,
     )
@@ -1159,7 +1169,7 @@ async fn get_analytics(
 
     let gift_totals = sqlx::query_as::<_, GiftTotals>(
         r#"SELECT COUNT(*) AS total_gifts, COALESCE(SUM(amount), 0) AS total_gift_amount
-           FROM account_gifts WHERE account_id = $1"#,
+           FROM gifts WHERE to_account_id = $1"#,
     )
     .bind(id)
     .fetch_one(&state.db)
@@ -1199,16 +1209,16 @@ async fn get_analytics(
                '1 day'::interval
            ) AS d(day)
            LEFT JOIN (
-               SELECT DATE(created_at) AS day, COUNT(*) AS cnt
+               SELECT DATE(subscribed_at) AS day, COUNT(*) AS cnt
                FROM account_subscribers
                WHERE account_id = $1
-                 AND created_at >= CURRENT_DATE - INTERVAL '29 days'
-               GROUP BY DATE(created_at)
+                 AND subscribed_at >= CURRENT_DATE - INTERVAL '29 days'
+               GROUP BY DATE(subscribed_at)
            ) s ON s.day = d.day
            LEFT JOIN (
                SELECT DATE(created_at) AS day, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS amt
-               FROM account_gifts
-               WHERE account_id = $1
+               FROM gifts
+               WHERE to_account_id = $1
                  AND created_at >= CURRENT_DATE - INTERVAL '29 days'
                GROUP BY DATE(created_at)
            ) g ON g.day = d.day
@@ -1268,7 +1278,6 @@ struct ExploreAccountRow {
 /// GET /api/explore/official — List all official accounts (public)
 async fn explore_official(
     State(state): State<AppState>,
-    _user: AuthUser,
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, ExploreAccountRow>(
         r#"SELECT a.id, a.name, a.avatar, a.bio, a.owner_id,
@@ -1316,7 +1325,6 @@ async fn explore_official(
 /// GET /api/explore/lounge — List all lounge accounts (public)
 async fn explore_lounge(
     State(state): State<AppState>,
-    _user: AuthUser,
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, ExploreAccountRow>(
         r#"SELECT a.id, a.name, a.avatar, a.bio, a.owner_id,
