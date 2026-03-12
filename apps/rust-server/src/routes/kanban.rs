@@ -744,12 +744,35 @@ async fn delete_column(
     }
 
     if let Some(target_id) = query.move_to_column_id {
-        // Move cards to target column before deleting
-        let _ = sqlx::query("UPDATE kanban_cards SET column_id = $1 WHERE column_id = $2")
+        if target_id == column_id {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot move cards to the same column" }))).into_response();
+        }
+        // Verify target column belongs to same board and same owner
+        let same_board = sqlx::query_scalar::<_, bool>(
+            r#"SELECT EXISTS(
+                SELECT 1 FROM kanban_columns t
+                JOIN kanban_columns s ON s.id = $1
+                JOIN kanban_boards b ON b.id = t.board_id
+                WHERE t.id = $2 AND t.board_id = s.board_id AND b.owner_id = $3
+            )"#,
+        )
+        .bind(column_id)
+        .bind(target_id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
+        if !same_board {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Target column not found on same board" }))).into_response();
+        }
+        if let Err(e) = sqlx::query("UPDATE kanban_cards SET column_id = $1 WHERE column_id = $2")
             .bind(target_id)
             .bind(column_id)
             .execute(&state.db)
-            .await;
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
     } else {
         // Delete cards (and their relations) in this column
         let _ = sqlx::query(
@@ -785,13 +808,42 @@ async fn reorder_columns(
         return e;
     }
 
+    // Validate: request set must match DB set exactly (no duplicates, no missing)
+    let db_ids = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut req_sorted = body.column_ids.clone();
+    req_sorted.sort();
+    req_sorted.dedup();
+    let mut db_sorted = db_ids.clone();
+    db_sorted.sort();
+    if req_sorted != db_sorted {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "columnIds must contain exactly all columns of this board with no duplicates" }))).into_response();
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
     for (i, col_id) in body.column_ids.iter().enumerate() {
-        let _ = sqlx::query("UPDATE kanban_columns SET sort_order = $1 WHERE id = $2 AND board_id = $3")
+        if let Err(e) = sqlx::query("UPDATE kanban_columns SET sort_order = $1 WHERE id = $2 AND board_id = $3")
             .bind(i as i32)
             .bind(col_id)
             .bind(board_id)
-            .execute(&state.db)
-            .await;
+            .execute(&mut *tx)
+            .await
+        {
+            let _ = tx.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
     }
 
     Json(json!({ "ok": true })).into_response()
@@ -1311,11 +1363,34 @@ async fn agent_delete_column(
     }
 
     if let Some(target_id) = query.move_to_column_id {
-        let _ = sqlx::query("UPDATE kanban_cards SET column_id = $1 WHERE column_id = $2")
+        if target_id == column_id {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot move cards to the same column" }))).into_response();
+        }
+        let same_board = sqlx::query_scalar::<_, bool>(
+            r#"SELECT EXISTS(
+                SELECT 1 FROM kanban_columns t
+                JOIN kanban_columns s ON s.id = $1
+                JOIN kanban_boards b ON b.id = t.board_id
+                WHERE t.id = $2 AND t.board_id = s.board_id AND b.owner_id = $3
+            )"#,
+        )
+        .bind(column_id)
+        .bind(target_id)
+        .bind(&owner_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
+        if !same_board {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Target column not found on same board" }))).into_response();
+        }
+        if let Err(e) = sqlx::query("UPDATE kanban_cards SET column_id = $1 WHERE column_id = $2")
             .bind(target_id)
             .bind(column_id)
             .execute(&state.db)
-            .await;
+            .await
+        {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
     } else {
         let _ = sqlx::query(
             "DELETE FROM kanban_card_agents WHERE card_id IN (SELECT id FROM kanban_cards WHERE column_id = $1)",
@@ -1354,13 +1429,42 @@ async fn agent_reorder_columns(
         return e;
     }
 
+    // Validate: request set must match DB set exactly
+    let db_ids = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut req_sorted = body.column_ids.clone();
+    req_sorted.sort();
+    req_sorted.dedup();
+    let mut db_sorted = db_ids.clone();
+    db_sorted.sort();
+    if req_sorted != db_sorted {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "columnIds must contain exactly all columns of this board with no duplicates" }))).into_response();
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
     for (i, col_id) in body.column_ids.iter().enumerate() {
-        let _ = sqlx::query("UPDATE kanban_columns SET sort_order = $1 WHERE id = $2 AND board_id = $3")
+        if let Err(e) = sqlx::query("UPDATE kanban_columns SET sort_order = $1 WHERE id = $2 AND board_id = $3")
             .bind(i as i32)
             .bind(col_id)
             .bind(board_id)
-            .execute(&state.db)
-            .await;
+            .execute(&mut *tx)
+            .await
+        {
+            let _ = tx.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+        }
+    }
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
     }
 
     Json(json!({ "ok": true })).into_response()
