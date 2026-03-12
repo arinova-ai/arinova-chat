@@ -139,11 +139,10 @@ async fn upload_settings_image(
     // Verify user is a member of the conversation
     let is_member = sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS(
-            SELECT 1 FROM conversation_members cm
-            JOIN conversations c ON c.id = cm.conversation_id
-            WHERE cm.conversation_id = $1 AND cm.user_id = $2
+            SELECT 1 FROM conversation_user_members
+            WHERE conversation_id = $1 AND user_id = $2
             UNION
-            SELECT 1 FROM conversations WHERE id = $1 AND owner_id = $2
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
         )"#,
     )
     .bind(conversation_id)
