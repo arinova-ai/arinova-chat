@@ -160,7 +160,7 @@ async fn create_group(
     for agent_id in &body.agent_ids {
         let _ = sqlx::query(
             r#"INSERT INTO conversation_members (conversation_id, agent_id, owner_user_id, listen_mode)
-               VALUES ($1, $2, $3, 'owner_unmention_others_mention')"#,
+               VALUES ($1, $2, $3, 'all_mentions')"#,
         )
         .bind(conv_id)
         .bind(agent_id)
@@ -439,7 +439,7 @@ async fn add_member(
 
     let result = sqlx::query(
         r#"INSERT INTO conversation_members (conversation_id, agent_id, owner_user_id, listen_mode)
-           VALUES ($1, $2, $3, 'owner_unmention_others_mention')"#,
+           VALUES ($1, $2, $3, 'all_mentions')"#,
     )
     .bind(id)
     .bind(body.agent_id)
