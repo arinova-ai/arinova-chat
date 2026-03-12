@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Search, FileText, ChevronRight, Loader2, X, MessageSquare, Share2, Link, XCircle, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
@@ -87,6 +88,7 @@ function excerpt(content: string, maxLen = 120): string {
 
 export default function MyNotesPage() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const formatTime = useRelativeTime();
   const [notes, setNotes] = useState<UserNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +154,18 @@ export default function MyNotesPage() {
   useEffect(() => {
     fetchNotes();
   }, [fetchNotes]);
+
+  // Deep-link: open note from ?note= query param
+  const deepLinkNoteId = searchParams.get("note");
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (!deepLinkNoteId || deepLinkHandled.current || loading) return;
+    const match = notes.find((n) => n.id === deepLinkNoteId);
+    if (match) {
+      setSelectedNote(match);
+      deepLinkHandled.current = true;
+    }
+  }, [deepLinkNoteId, notes, loading]);
 
   // Collect all unique tags
   const allTags = useMemo(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Tag, FileText, ChevronRight } from "lucide-react";
-import { useChatStore } from "@/store/chat-store";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
 
 interface NoteShareMetadata {
@@ -13,12 +13,12 @@ interface NoteShareMetadata {
 
 export function NotePreviewCard({ metadata }: { metadata: NoteShareMetadata }) {
   const { t } = useTranslation();
-  const openNoteById = useChatStore((s) => s.openNoteById);
+  const router = useRouter();
 
   return (
     <button
       type="button"
-      onClick={() => openNoteById(metadata.noteId)}
+      onClick={() => router.push(`/office/notes?note=${metadata.noteId}`)}
       className="mt-2 w-full max-w-[320px] rounded-lg border border-border bg-card p-3 text-left hover:bg-accent/50 transition-colors"
     >
       <div className="flex items-start gap-2">

@@ -1,6 +1,7 @@
 "use client";
 
 import { SquareKanban, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
 
 interface TaskShareMetadata {
@@ -20,10 +21,15 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export function TaskPreviewCard({ metadata }: { metadata: TaskShareMetadata }) {
   const { t } = useTranslation();
+  const router = useRouter();
   const priorityCfg = PRIORITY_COLORS[metadata.priority ?? "medium"] ?? PRIORITY_COLORS.medium;
 
   return (
-    <div className="mt-2 w-full max-w-[320px] rounded-lg border border-border bg-card p-3 text-left">
+    <button
+      type="button"
+      onClick={() => router.push(`/office/tasks?card=${metadata.cardId}`)}
+      className="mt-2 w-full max-w-[320px] rounded-lg border border-border bg-card p-3 text-left hover:bg-accent/50 transition-colors"
+    >
       <div className="flex items-start gap-2">
         <SquareKanban className="h-4 w-4 mt-0.5 text-brand shrink-0" />
         <div className="flex-1 min-w-0">
@@ -49,6 +55,6 @@ export function TaskPreviewCard({ metadata }: { metadata: TaskShareMetadata }) {
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }

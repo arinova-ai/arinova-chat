@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useChatStore } from "@/store/chat-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
@@ -14,8 +15,6 @@ import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
-import { NotebookSheet } from "./notebook-sheet";
-import { KanbanSidebar } from "./kanban-sidebar";
 import { MediaFilesPanel, type MediaFilesTab } from "./media-files-panel";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
@@ -27,6 +26,7 @@ import { ErrorBoundary } from "./error-boundary";
 
 export function ChatArea() {
   const { t } = useTranslation();
+  const router = useRouter();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const searchActive = useChatStore((s) => s.searchActive);
   const conversations = useChatStore((s) => s.conversations);
@@ -41,12 +41,6 @@ export function ChatArea() {
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
-  const notebookOpen = useChatStore((s) => s.notebookOpen);
-  const kanbanSidebarOpen = useChatStore((s) => s.kanbanSidebarOpen);
-  const openNotebook = useChatStore((s) => s.openNotebook);
-  const closeNotebook = useChatStore((s) => s.closeNotebook);
-  const openKanbanSidebar = useChatStore((s) => s.openKanbanSidebar);
-  const closeKanbanSidebar = useChatStore((s) => s.closeKanbanSidebar);
   const [mediaFilesOpen, setMediaFilesOpen] = useState(false);
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
@@ -195,8 +189,8 @@ export function ChatArea() {
         onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
         onThreadsClick={() => setThreadListOpen(true)}
-        onKanbanClick={openKanbanSidebar}
-        onNotebookClick={openNotebook}
+        onKanbanClick={() => router.push("/office/tasks")}
+        onNotebookClick={() => router.push("/office/notes")}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
@@ -254,24 +248,6 @@ export function ChatArea() {
           conversationId={activeConversationId}
         />
       </ErrorBoundary>
-      {notebookOpen && (
-        <ErrorBoundary scope="NotebookSheet">
-          <NotebookSheet
-            open={notebookOpen}
-            onOpenChange={(v) => { if (!v) closeNotebook(); }}
-            conversationId={activeConversationId}
-          />
-        </ErrorBoundary>
-      )}
-      {kanbanSidebarOpen && (
-        <ErrorBoundary scope="KanbanSidebar">
-          <KanbanSidebar
-            open={kanbanSidebarOpen}
-            onOpenChange={(v) => { if (!v) closeKanbanSidebar(); }}
-            conversationId={conversation.id}
-          />
-        </ErrorBoundary>
-      )}
       <MediaFilesPanel
         open={mediaFilesOpen}
         onOpenChange={setMediaFilesOpen}
