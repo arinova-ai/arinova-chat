@@ -15,12 +15,12 @@ import {
 } from "@dnd-kit/core";
 import {
   Archive,
+  ArchiveRestore,
   ChevronDown,
   Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
-  Trash2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -90,7 +90,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const [newBoardName, setNewBoardName] = useState("");
   const [renamingBoard, setRenamingBoard] = useState(false);
   const [renameBoardName, setRenameBoardName] = useState("");
-  const [deleteBoardConfirm, setDeleteBoardConfirm] = useState(false);
+  const [archiveBoardConfirm, setArchiveBoardConfirm] = useState(false);
 
   // Column management state
   const [addingColumn, setAddingColumn] = useState(false);
@@ -137,6 +137,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
       // If no explicit boardId, try loading persisted preference
       let targetId = boardId || selectedBoardId;
       if (!targetId && conversationId) {
+        // Compact mode: load from conversation settings
         try {
           const settings = await api<{ kanbanBoardId?: string | null }>(
             `/api/conversations/${conversationId}/settings`,
@@ -144,6 +145,15 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           );
           if (settings.kanbanBoardId && allBoards.some((b) => b.id === settings.kanbanBoardId)) {
             targetId = settings.kanbanBoardId;
+          }
+        } catch { /* ignore */ }
+      }
+      if (!targetId && !conversationId) {
+        // Full mode: load from localStorage
+        try {
+          const stored = localStorage.getItem("kanban_selected_board");
+          if (stored && allBoards.some((b) => b.id === stored)) {
+            targetId = stored;
           }
         } catch { /* ignore */ }
       }
@@ -200,11 +210,11 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     } catch { /* api shows toast */ }
   }, [renameBoardName, selectedBoardId, fetchBoard]);
 
-  const handleDeleteBoard = useCallback(async () => {
+  const handleArchiveBoard = useCallback(async () => {
     if (!selectedBoardId) return;
     try {
-      await api(`/api/kanban/boards/${selectedBoardId}`, { method: "DELETE" });
-      setDeleteBoardConfirm(false);
+      await api(`/api/kanban/boards/${selectedBoardId}/archive`, { method: "POST" });
+      setArchiveBoardConfirm(false);
       setSelectedBoardId(null);
       setBoard(null);
       setLoading(true);
@@ -216,13 +226,15 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     setSelectedBoardId(boardId);
     setLoading(true);
     await fetchBoard(boardId);
-    // Persist board selection per conversation
+    // Persist board selection
     if (conversationId) {
       api(`/api/conversations/${conversationId}/settings`, {
         method: "PATCH",
         body: JSON.stringify({ kanbanBoardId: boardId }),
         silent: true,
       }).catch(() => {});
+    } else {
+      try { localStorage.setItem("kanban_selected_board", boardId); } catch { /* ignore */ }
     }
   }, [fetchBoard, conversationId]);
 
@@ -556,9 +568,12 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
               <Pencil className="h-3.5 w-3.5 mr-2" />
               Rename
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDeleteBoardConfirm(true)} className="text-destructive">
-              <Trash2 className="h-3.5 w-3.5 mr-2" />
-              Delete
+            <DropdownMenuItem
+              onClick={() => setArchiveBoardConfirm(true)}
+              disabled={boards.length <= 1}
+            >
+              <Archive className="h-3.5 w-3.5 mr-2" />
+              Archive
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -714,19 +729,19 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
         </DialogContent>
       </Dialog>
 
-      {/* Delete Board Dialog */}
-      <Dialog open={deleteBoardConfirm} onOpenChange={setDeleteBoardConfirm}>
+      {/* Archive Board Dialog */}
+      <Dialog open={archiveBoardConfirm} onOpenChange={setArchiveBoardConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Board</DialogTitle>
+            <DialogTitle>Archive Board</DialogTitle>
             <DialogDescription>
-              This will permanently delete the board and all its columns and cards. This action cannot be undone.
+              This will archive the board. It can be restored later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteBoardConfirm(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteBoard}>
-              Delete
+            <Button variant="outline" onClick={() => setArchiveBoardConfirm(false)}>Cancel</Button>
+            <Button onClick={handleArchiveBoard}>
+              Archive
             </Button>
           </DialogFooter>
         </DialogContent>

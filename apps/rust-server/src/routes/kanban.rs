@@ -18,7 +18,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         // User API
         .route("/api/kanban/boards", get(list_boards).post(create_board))
-        .route("/api/kanban/boards/{id}", get(get_board).patch(update_board).delete(delete_board))
+        .route("/api/kanban/boards/{id}", get(get_board).patch(update_board))
+        .route("/api/kanban/boards/{id}/archive", post(archive_board))
         .route("/api/kanban/boards/{id}/columns", get(list_columns).post(create_column))
         .route("/api/kanban/columns/{id}", patch(update_column).delete(delete_column))
         .route("/api/kanban/boards/{id}/columns/reorder", post(reorder_columns))
@@ -63,7 +64,8 @@ pub fn router() -> Router<AppState> {
         )
         // Agent API
         .route("/api/agent/kanban/boards", get(agent_list_boards).post(agent_create_board))
-        .route("/api/agent/kanban/boards/{id}", patch(agent_update_board).delete(agent_delete_board))
+        .route("/api/agent/kanban/boards/{id}", patch(agent_update_board))
+        .route("/api/agent/kanban/boards/{id}/archive", post(agent_archive_board))
         .route("/api/agent/kanban/boards/{id}/columns", get(agent_list_columns).post(agent_create_column))
         .route("/api/agent/kanban/columns/{id}", patch(agent_update_column).delete(agent_delete_column))
         .route("/api/agent/kanban/boards/{id}/columns/reorder", post(agent_reorder_columns))
@@ -416,15 +418,36 @@ async fn lazy_archive_done_cards_by_owner(db: &sqlx::PgPool, owner_id: &str) {
 // ── User API ──────────────────────────────────────────────────
 
 /// GET /api/kanban/boards — list user's boards (auto-create default if none)
-async fn list_boards(State(state): State<AppState>, user: AuthUser) -> Response {
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ListBoardsQuery {
+    #[serde(default)]
+    include_archived: Option<bool>,
+}
+
+async fn list_boards(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Query(query): Query<ListBoardsQuery>,
+) -> Response {
     let _ = ensure_default_board(&state.db, &user.id).await;
 
-    let boards = sqlx::query_as::<_, BoardRow>(
-        "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
-    )
-    .bind(&user.id)
-    .fetch_all(&state.db)
-    .await;
+    let include_archived = query.include_archived.unwrap_or(false);
+    let boards = if include_archived {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+        )
+        .bind(&user.id)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
+        )
+        .bind(&user.id)
+        .fetch_all(&state.db)
+        .await
+    };
 
     match boards {
         Ok(rows) => Json(json!(rows)).into_response(),
@@ -598,7 +621,8 @@ async fn update_board(
 }
 
 /// DELETE /api/kanban/boards/:id
-async fn delete_board(
+/// POST /api/kanban/boards/:id/archive — toggle archived state
+async fn archive_board(
     State(state): State<AppState>,
     user: AuthUser,
     Path(board_id): Path<Uuid>,
@@ -607,47 +631,52 @@ async fn delete_board(
         return e;
     }
 
-    // Delete in order: card relations → cards → columns → board
-    let _ = sqlx::query(
-        r#"DELETE FROM kanban_card_agents WHERE card_id IN (
-            SELECT c.id FROM kanban_cards c
-            JOIN kanban_columns col ON col.id = c.column_id
-            WHERE col.board_id = $1
-        )"#,
-    ).bind(board_id).execute(&state.db).await;
+    // Check current archived state
+    let current_archived = sqlx::query_scalar::<_, bool>(
+        "SELECT archived FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
 
-    let _ = sqlx::query(
-        r#"DELETE FROM kanban_card_notes WHERE card_id IN (
-            SELECT c.id FROM kanban_cards c
-            JOIN kanban_columns col ON col.id = c.column_id
-            WHERE col.board_id = $1
-        )"#,
-    ).bind(board_id).execute(&state.db).await;
+    // If archiving (not unarchiving), check that it's not the last non-archived board
+    if !current_archived {
+        let non_archived_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM kanban_boards WHERE owner_id = $1 AND archived = false",
+        )
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
 
-    let _ = sqlx::query(
-        r#"DELETE FROM kanban_card_commits WHERE card_id IN (
-            SELECT c.id FROM kanban_cards c
-            JOIN kanban_columns col ON col.id = c.column_id
-            WHERE col.board_id = $1
-        )"#,
-    ).bind(board_id).execute(&state.db).await;
-
-    let _ = sqlx::query(
-        r#"DELETE FROM kanban_cards WHERE column_id IN (
-            SELECT id FROM kanban_columns WHERE board_id = $1
-        )"#,
-    ).bind(board_id).execute(&state.db).await;
-
-    let _ = sqlx::query("DELETE FROM kanban_columns WHERE board_id = $1")
-        .bind(board_id).execute(&state.db).await;
-
-    let result = sqlx::query("DELETE FROM kanban_boards WHERE id = $1")
-        .bind(board_id).execute(&state.db).await;
-
-    match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+        if non_archived_count <= 1 {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot archive the last board" }))).into_response();
+        }
     }
+
+    let new_archived = !current_archived;
+
+    if let Err(e) = sqlx::query("UPDATE kanban_boards SET archived = $1 WHERE id = $2")
+        .bind(new_archived)
+        .bind(board_id)
+        .execute(&state.db)
+        .await
+    {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+    }
+
+    // If archiving, clear kanban_board_id references in conversation settings
+    if new_archived {
+        let _ = sqlx::query(
+            "UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1",
+        )
+        .bind(board_id)
+        .execute(&state.db)
+        .await;
+    }
+
+    Json(json!({ "ok": true, "archived": new_archived })).into_response()
 }
 
 /// GET /api/kanban/boards/:id/columns
@@ -1072,7 +1101,11 @@ async fn agent_owner_id(db: &sqlx::PgPool, agent_id: Uuid) -> Result<String, Res
 }
 
 /// GET /api/agent/kanban/boards — list owner's boards (auto-create default if none)
-async fn agent_list_boards(State(state): State<AppState>, agent: AuthAgent) -> Response {
+async fn agent_list_boards(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Query(query): Query<ListBoardsQuery>,
+) -> Response {
     let owner_id = match agent_owner_id(&state.db, agent.id).await {
         Ok(id) => id,
         Err(e) => return e,
@@ -1080,12 +1113,22 @@ async fn agent_list_boards(State(state): State<AppState>, agent: AuthAgent) -> R
 
     let _ = ensure_default_board(&state.db, &owner_id).await;
 
-    let boards = sqlx::query_as::<_, BoardRow>(
-        "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
-    )
-    .bind(&owner_id)
-    .fetch_all(&state.db)
-    .await;
+    let include_archived = query.include_archived.unwrap_or(false);
+    let boards = if include_archived {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+        )
+        .bind(&owner_id)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, BoardRow>(
+            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
+        )
+        .bind(&owner_id)
+        .fetch_all(&state.db)
+        .await
+    };
 
     let boards = match boards {
         Ok(rows) => rows,
@@ -1222,7 +1265,8 @@ async fn agent_update_board(
 }
 
 /// DELETE /api/agent/kanban/boards/:id
-async fn agent_delete_board(
+/// POST /api/agent/kanban/boards/:id/archive — toggle archived state
+async fn agent_archive_board(
     State(state): State<AppState>,
     agent: AuthAgent,
     Path(board_id): Path<Uuid>,
@@ -1235,34 +1279,49 @@ async fn agent_delete_board(
         return e;
     }
 
-    let _ = sqlx::query(
-        r#"DELETE FROM kanban_card_agents WHERE card_id IN (
-            SELECT c.id FROM kanban_cards c JOIN kanban_columns col ON col.id = c.column_id WHERE col.board_id = $1
-        )"#,
-    ).bind(board_id).execute(&state.db).await;
-    let _ = sqlx::query(
-        r#"DELETE FROM kanban_card_notes WHERE card_id IN (
-            SELECT c.id FROM kanban_cards c JOIN kanban_columns col ON col.id = c.column_id WHERE col.board_id = $1
-        )"#,
-    ).bind(board_id).execute(&state.db).await;
-    let _ = sqlx::query(
-        r#"DELETE FROM kanban_card_commits WHERE card_id IN (
-            SELECT c.id FROM kanban_cards c JOIN kanban_columns col ON col.id = c.column_id WHERE col.board_id = $1
-        )"#,
-    ).bind(board_id).execute(&state.db).await;
-    let _ = sqlx::query(
-        "DELETE FROM kanban_cards WHERE column_id IN (SELECT id FROM kanban_columns WHERE board_id = $1)",
-    ).bind(board_id).execute(&state.db).await;
-    let _ = sqlx::query("DELETE FROM kanban_columns WHERE board_id = $1")
-        .bind(board_id).execute(&state.db).await;
+    let current_archived = sqlx::query_scalar::<_, bool>(
+        "SELECT archived FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
 
-    let result = sqlx::query("DELETE FROM kanban_boards WHERE id = $1")
-        .bind(board_id).execute(&state.db).await;
+    if !current_archived {
+        let non_archived_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM kanban_boards WHERE owner_id = $1 AND archived = false",
+        )
+        .bind(&owner_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
 
-    match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+        if non_archived_count <= 1 {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot archive the last board" }))).into_response();
+        }
     }
+
+    let new_archived = !current_archived;
+
+    if let Err(e) = sqlx::query("UPDATE kanban_boards SET archived = $1 WHERE id = $2")
+        .bind(new_archived)
+        .bind(board_id)
+        .execute(&state.db)
+        .await
+    {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+    }
+
+    if new_archived {
+        let _ = sqlx::query(
+            "UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1",
+        )
+        .bind(board_id)
+        .execute(&state.db)
+        .await;
+    }
+
+    Json(json!({ "ok": true, "archived": new_archived })).into_response()
 }
 
 /// GET /api/agent/kanban/boards/:id/columns

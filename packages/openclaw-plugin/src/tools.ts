@@ -785,36 +785,37 @@ export function registerTools(api: OpenClawPluginApi) {
     { name: "arinova_kanban_update_board" },
   );
 
-  // Tool 15: arinova_kanban_delete_board
+  // Tool 15: arinova_kanban_archive_board
   api.registerTool(
     {
-      name: "arinova_kanban_delete_board",
-      label: "Delete Kanban Board",
+      name: "arinova_kanban_archive_board",
+      label: "Archive/Unarchive Kanban Board",
       description:
-        "Delete a Kanban board and all its columns and cards. This action is irreversible.",
+        "Toggle the archived state of a Kanban board. Cannot archive the last non-archived board.",
       parameters: Type.Object({
-        boardId: Type.String({ description: "Board ID to delete" }),
+        boardId: Type.String({ description: "Board ID to archive/unarchive" }),
       }),
       async execute(_toolCallId, params) {
         const { boardId } = params as { boardId: string };
         try {
           const account = resolveAccount();
-          await apiCall({
-            method: "DELETE",
-            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}`,
+          const res = await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}/archive`,
             token: account.botToken,
           });
 
+          const archived = (res as { archived?: boolean }).archived;
           return {
-            content: [{ type: "text", text: `Board ${boardId} deleted.` }],
-            details: { boardId },
+            content: [{ type: "text", text: `Board ${boardId} ${archived ? "archived" : "unarchived"}.` }],
+            details: { boardId, archived },
           };
         } catch (err) {
           return errResult(String(err));
         }
       },
     },
-    { name: "arinova_kanban_delete_board" },
+    { name: "arinova_kanban_archive_board" },
   );
 
   // Tool 16: arinova_kanban_list_columns
