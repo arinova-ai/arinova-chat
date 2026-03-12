@@ -17,7 +17,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 
 interface Capsule {
@@ -113,14 +113,12 @@ export function MemoryCapsuleSheet({
       setCapsuleName("");
       await fetchData();
     } catch (err: unknown) {
-      // 409 = capsule already exists for this conversation — offer refresh
-      const resp = err as { status?: number; existingCapsuleId?: string };
-      if (resp.status === 409 || (typeof err === "object" && err !== null && "existingCapsuleId" in err)) {
-        // Auto-refresh the existing capsule
-        const body = err as { existingCapsuleId?: string };
-        if (body.existingCapsuleId) {
+      // 409 = capsule already exists for this conversation — auto-refresh it
+      if (err instanceof ApiError && err.status === 409) {
+        const existingId = err.data.existingCapsuleId as string | undefined;
+        if (existingId) {
           try {
-            await api(`/api/memory/capsules/${body.existingCapsuleId}/refresh`, { method: "POST" });
+            await api(`/api/memory/capsules/${existingId}/refresh`, { method: "POST" });
           } catch { /* toast shown by api */ }
         }
         await fetchData();
