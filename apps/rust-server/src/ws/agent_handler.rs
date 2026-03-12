@@ -397,7 +397,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                             .await;
 
                             if let Ok(Some((listen_mode, owner_id))) = agent_perms {
-                                let allowed_user_ids = if listen_mode == "owner_and_allowlist" || listen_mode == "allowed_users" {
+                                let allowed_user_ids = if matches!(listen_mode.as_str(), "owner_and_allowlist" | "allowlist_mentions" | "allowed_users") {
                                     sqlx::query_as::<_, (String,)>(
                                         r#"SELECT user_id FROM agent_listen_allowed_users
                                            WHERE agent_id = $1::uuid AND conversation_id = $2::uuid"#,

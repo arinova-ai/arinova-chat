@@ -10,7 +10,8 @@ import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import { ArrowLeft, MessageSquare, Phone, Radio } from "lucide-react";
+import { ArrowLeft, Brain, MessageSquare, Phone, Radio } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
 import { useVoiceCallStore } from "@/store/voice-call-store";
@@ -36,7 +37,7 @@ interface AgentStats {
   lastActive: string | null;
 }
 
-const LISTEN_MODES = ["all", "all_mentions", "owner_unmention_others_mention", "owner_and_allowlist", "owner_only", "muted"] as const;
+const LISTEN_MODES = ["all", "all_mentions", "owner_unmention_others_mention", "owner_and_allowlist", "allowlist_mentions", "owner_only", "muted"] as const;
 type ListenMode = (typeof LISTEN_MODES)[number];
 
 function AgentProfileContent() {
@@ -66,6 +67,12 @@ function AgentProfileContent() {
   const [stats, setStats] = useState<AgentStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [ownerName, setOwnerName] = useState<string | null>(null);
+
+  // Memory capsule state (owner only)
+  interface CapsuleInfo { id: string; name: string; messageCount: number; entryCount: number; status: string }
+  const [capsules, setCapsules] = useState<CapsuleInfo[]>([]);
+  const [capsuleGrants, setCapsuleGrants] = useState<Set<string>>(new Set());
+  const [capsuleTogglingId, setCapsuleTogglingId] = useState<string | null>(null);
 
   // Listen mode state (group context only)
   const [groupMembers, setGroupMembers] = useState<GroupMembers | null>(null);
@@ -127,6 +134,41 @@ function AgentProfileContent() {
       cancelled = true;
     };
   }, [agent?.ownerId, session?.user?.id, session?.user?.name]);
+
+  // Load capsules + grants for this agent (owner only)
+  useEffect(() => {
+    if (!agent || !session?.user?.id || session.user.id !== agent.ownerId) return;
+    let cancelled = false;
+    Promise.all([
+      api<{ capsules: CapsuleInfo[] }>("/api/memory/capsules", { silent: true }),
+      api<{ grants: { capsuleId: string }[] }>(`/api/memory/capsules/grants?agent_id=${agentId}`, { silent: true }),
+    ])
+      .then(([capsuleRes, grantRes]) => {
+        if (cancelled) return;
+        setCapsules(capsuleRes.capsules.filter((c) => c.status === "ready"));
+        setCapsuleGrants(new Set(grantRes.grants.map((g) => g.capsuleId)));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [agent, agentId, session?.user?.id, agent?.ownerId]);
+
+  const handleToggleCapsuleGrant = useCallback(async (capsuleId: string, granted: boolean) => {
+    setCapsuleTogglingId(capsuleId);
+    try {
+      if (granted) {
+        await api(`/api/memory/capsules/${capsuleId}/grants/${agentId}`, { method: "DELETE" });
+        setCapsuleGrants((prev) => { const n = new Set(prev); n.delete(capsuleId); return n; });
+      } else {
+        await api(`/api/memory/capsules/${capsuleId}/grants`, {
+          method: "POST",
+          body: JSON.stringify({ agent_id: agentId }),
+        });
+        setCapsuleGrants((prev) => new Set(prev).add(capsuleId));
+      }
+    } finally {
+      setCapsuleTogglingId(null);
+    }
+  }, [agentId]);
 
   // Load group members for listen mode (when navigated from group)
   useEffect(() => {
@@ -450,8 +492,8 @@ function AgentProfileContent() {
                       ))}
                     </div>
 
-                    {/* Allowed users list (only when owner_and_allowlist mode) */}
-                    {listenMode === "owner_and_allowlist" && (
+                    {/* Allowed users list (when allowlist-based modes) */}
+                    {(listenMode === "owner_and_allowlist" || listenMode === "allowlist_mentions") && (
                       <div className="mt-3 space-y-1.5">
                         <p className="text-xs font-medium text-muted-foreground px-1">
                           {t("agentProfile.allowedUsers")}
@@ -511,6 +553,47 @@ function AgentProfileContent() {
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Memory Capsules (owner only) */}
+                {isOwner && capsules.length > 0 && (
+                  <div className="mt-6 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Brain className="h-4 w-4 text-brand-text" />
+                      <h3 className="text-sm font-semibold">
+                        {t("agentProfile.memoryCapsules")}
+                      </h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t("agentProfile.memoryCapsules.desc")}
+                    </p>
+                    <div className="space-y-1.5">
+                      {capsules.map((capsule) => {
+                        const granted = capsuleGrants.has(capsule.id);
+                        const isToggling = capsuleTogglingId === capsule.id;
+                        return (
+                          <div
+                            key={capsule.id}
+                            className="flex items-center gap-3 rounded-lg bg-secondary/60 px-4 py-3"
+                          >
+                            <Switch
+                              checked={granted}
+                              disabled={isToggling}
+                              onCheckedChange={() => handleToggleCapsuleGrant(capsule.id, granted)}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{capsule.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {capsule.entryCount > 0
+                                  ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}`
+                                  : `${capsule.messageCount} ${t("memoryCapsule.messages")}`}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </>

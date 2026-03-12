@@ -299,6 +299,7 @@
   "group.listenMode.all": "Dengar semua",
   "group.listenMode.ownerUnmentionOthersMention": "Owner + @Sebutan",
   "group.listenMode.ownerAndAllowlist": "Owner + Senarai dibenarkan",
+  "group.listenMode.allowlistMentions": "Senarai dibenarkan (@sebutan)",
   "group.listenMode.muted": "Senyap",
   "group.ownerOnly": "Pemilik Sahaja",
   "group.allowedUsers": "Pengguna Dibenarkan",

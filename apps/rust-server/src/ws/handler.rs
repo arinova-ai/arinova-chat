@@ -30,7 +30,7 @@ use crate::AppState;
 pub struct AgentFilterConfig {
     pub agent_id: String,
     /// One of: "all", "all_mentions", "owner_unmention_others_mention",
-    /// "owner_and_allowlist", "owner_only", "muted".
+    /// "owner_and_allowlist", "allowlist_mentions", "owner_only", "muted".
     pub listen_mode: String,
     pub owner_user_id: String,
     pub allowed_user_ids: Vec<String>,
@@ -43,6 +43,7 @@ pub struct AgentFilterConfig {
 ///   - `"all_mentions"` — only when @mentioned by anyone
 ///   - `"owner_unmention_others_mention"` — owner's messages always; others need @mention
 ///   - `"owner_and_allowlist"` — owner + allowlist always; others ignored
+///   - `"allowlist_mentions"` — must @mention, and only owner + allowlist mentions are heard
 ///   - `"owner_only"` — only owner's messages
 ///   - `"muted"` — never receive
 ///
@@ -71,6 +72,9 @@ pub fn filter_agents_for_dispatch(
             "owner_unmention_others_mention" => is_owner || is_mentioned,
             "owner_and_allowlist" => {
                 is_owner || agent.allowed_user_ids.contains(&sender_user_id.to_string())
+            }
+            "allowlist_mentions" => {
+                is_mentioned && (is_owner || agent.allowed_user_ids.contains(&sender_user_id.to_string()))
             }
             "owner_only" => is_owner,
             "muted" => false,
@@ -1074,7 +1078,7 @@ pub async fn trigger_agent_response(
 
             if let Ok(Some((listen_mode, owner_id))) = agent_perms {
                 // Fetch allowed_user_ids if listen_mode needs allowlist
-                let allowed_user_ids = if listen_mode == "owner_and_allowlist" || listen_mode == "allowed_users" {
+                let allowed_user_ids = if matches!(listen_mode.as_str(), "owner_and_allowlist" | "allowlist_mentions" | "allowed_users") {
                     sqlx::query_as::<_, (String,)>(
                         r#"SELECT user_id FROM agent_listen_allowed_users
                            WHERE agent_id = $1::uuid AND conversation_id = $2::uuid"#,

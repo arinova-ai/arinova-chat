@@ -582,6 +582,7 @@ function useListenModeLabels() {
     all_mentions: t("group.allMentions"),
     owner_unmention_others_mention: t("group.listenMode.ownerUnmentionOthersMention"),
     owner_and_allowlist: t("group.listenMode.ownerAndAllowlist"),
+    allowlist_mentions: t("group.listenMode.allowlistMentions"),
     owner_only: t("group.ownerOnly"),
     muted: t("group.listenMode.muted"),
     allowed_users: t("group.allowedUsers"),
@@ -667,6 +668,7 @@ function AgentMemberRow({
                   <SelectContent>
                     <SelectItem value="owner_only">{t("group.ownerOnly")}</SelectItem>
                     <SelectItem value="allowed_users">{t("group.allowedUsers")}</SelectItem>
+                    <SelectItem value="allowlist_mentions">{t("group.listenMode.allowlistMentions")}</SelectItem>
                     <SelectItem value="all_mentions">{t("group.allMentions")}</SelectItem>
                   </SelectContent>
                 </Select>

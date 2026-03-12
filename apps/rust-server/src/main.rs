@@ -322,6 +322,19 @@ async fn main() {
         ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS kanban_board_id UUID REFERENCES kanban_boards(id) ON DELETE SET NULL;
         ALTER TABLE kanban_boards ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS progress JSONB;
+
+        DO $$ BEGIN
+            ALTER TYPE agent_listen_mode ADD VALUE IF NOT EXISTS 'allowlist_mentions';
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+
+        CREATE TABLE IF NOT EXISTS agent_capsule_access (
+            agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            capsule_id UUID NOT NULL REFERENCES memory_capsules(id) ON DELETE CASCADE,
+            granted_by TEXT NOT NULL,
+            granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (agent_id, capsule_id)
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

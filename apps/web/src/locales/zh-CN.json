@@ -299,6 +299,7 @@
   "group.listenMode.all": "全面监听",
   "group.listenMode.ownerUnmentionOthersMention": "Owner + @提及",
   "group.listenMode.ownerAndAllowlist": "Owner + 白名单",
+  "group.listenMode.allowlistMentions": "白名单（需 @mention）",
   "group.listenMode.muted": "静音",
   "group.ownerOnly": "仅限拥有者",
   "group.allowedUsers": "允许的用户",

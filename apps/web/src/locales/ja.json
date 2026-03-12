@@ -299,6 +299,7 @@
   "group.listenMode.all": "すべて監視",
   "group.listenMode.ownerUnmentionOthersMention": "Owner + @メンション",
   "group.listenMode.ownerAndAllowlist": "Owner + 許可リスト",
+  "group.listenMode.allowlistMentions": "許可リスト（@メンション必須）",
   "group.listenMode.muted": "ミュート",
   "group.ownerOnly": "オーナーのみ",
   "group.allowedUsers": "許可されたユーザー",

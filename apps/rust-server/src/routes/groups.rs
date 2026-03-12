@@ -1144,7 +1144,7 @@ async fn update_listen_mode(
     Json(body): Json<UpdateListenModeBody>,
 ) -> Response {
     // Validate listen_mode
-    if !["all", "all_mentions", "owner_unmention_others_mention", "owner_and_allowlist", "owner_only", "muted"].contains(&body.listen_mode.as_str()) {
+    if !["all", "all_mentions", "owner_unmention_others_mention", "owner_and_allowlist", "allowlist_mentions", "owner_only", "muted"].contains(&body.listen_mode.as_str()) {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Invalid listen mode"})),

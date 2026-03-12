@@ -14,8 +14,6 @@ import {
   Brain,
   Loader2,
   RefreshCw,
-  Trash2,
-  XCircle,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -69,8 +67,6 @@ export function MemoryCapsuleSheet({
   const [grants, setGrants] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -161,28 +157,6 @@ export function MemoryCapsuleSheet({
     }
   };
 
-  const handleDelete = async (capsuleId: string) => {
-    setDeletingId(capsuleId);
-    try {
-      await api(`/api/memory/capsules/${capsuleId}`, { method: "DELETE" });
-      setCapsules((prev) => prev.filter((c) => c.id !== capsuleId));
-      setGrants((prev) => {
-        const next = new Set(prev);
-        next.delete(capsuleId);
-        return next;
-      });
-    } finally {
-      setDeletingId(null);
-      setConfirmDeleteId(null);
-    }
-  };
-
-  const handleAbort = async (capsuleId: string) => {
-    try {
-      await api(`/api/memory/capsules/${capsuleId}/abort`, { method: "POST" });
-      await fetchData();
-    } catch { /* api shows toast */ }
-  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -282,8 +256,6 @@ export function MemoryCapsuleSheet({
               {capsules.map((capsule) => {
                 const granted = grants.has(capsule.id);
                 const isToggling = togglingId === capsule.id;
-                const isDeleting = deletingId === capsule.id;
-                const isConfirming = confirmDeleteId === capsule.id;
 
                 return (
                   <div
@@ -331,14 +303,6 @@ export function MemoryCapsuleSheet({
                               <span>{t("memoryCapsule.statusExtracting")}</span>
                             </div>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => handleAbort(capsule.id)}
-                            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/10"
-                          >
-                            <XCircle className="h-3 w-3" />
-                            Cancel
-                          </button>
                         </div>
                       ) : capsule.status === "failed" ? (
                         <p className="text-xs text-destructive">
@@ -360,41 +324,6 @@ export function MemoryCapsuleSheet({
                         </div>
                       )}
                     </div>
-                    {isConfirming ? (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={isDeleting}
-                          onClick={() => handleDelete(capsule.id)}
-                        >
-                          {isDeleting ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            t("common.confirm")
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => setConfirmDeleteId(null)}
-                        >
-                          {t("common.cancel")}
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                        disabled={capsule.status === "extracting"}
-                        onClick={() => setConfirmDeleteId(capsule.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
                   </div>
                 );
               })}

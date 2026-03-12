@@ -299,6 +299,7 @@
   "group.listenMode.all": "Écouter tout",
   "group.listenMode.ownerUnmentionOthersMention": "Owner + @Mentions",
   "group.listenMode.ownerAndAllowlist": "Owner + Liste autorisée",
+  "group.listenMode.allowlistMentions": "Liste autorisée (@mention)",
   "group.listenMode.muted": "Muet",
   "group.ownerOnly": "Propriétaire uniquement",
   "group.allowedUsers": "Utilisateurs autorisés",

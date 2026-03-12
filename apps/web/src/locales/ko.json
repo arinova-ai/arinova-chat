@@ -299,6 +299,7 @@
   "group.listenMode.all": "전체 수신",
   "group.listenMode.ownerUnmentionOthersMention": "Owner + @멘션",
   "group.listenMode.ownerAndAllowlist": "Owner + 허용 목록",
+  "group.listenMode.allowlistMentions": "허용 목록 (@멘션 필요)",
   "group.listenMode.muted": "음소거",
   "group.ownerOnly": "소유자만",
   "group.allowedUsers": "허용된 사용자",

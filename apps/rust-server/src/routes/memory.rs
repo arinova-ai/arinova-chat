@@ -282,42 +282,10 @@ async fn list_capsules(
 // ---------------------------------------------------------------------------
 
 async fn delete_capsule(
-    State(state): State<AppState>,
-    user: AuthUser,
-    Path(capsule_id): Path<Uuid>,
+    _user: AuthUser,
+    Path(_capsule_id): Path<Uuid>,
 ) -> Response {
-    // Verify ownership (owner_id is TEXT)
-    let owner = sqlx::query_scalar::<_, String>(
-        "SELECT owner_id FROM memory_capsules WHERE id = $1",
-    )
-    .bind(capsule_id)
-    .fetch_optional(&state.db)
-    .await;
-
-    match owner {
-        Ok(Some(ref oid)) if oid == &user.id => {}
-        Ok(Some(_)) => {
-            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
-        }
-        Ok(None) => {
-            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
-        }
-        Err(e) => {
-            tracing::error!("delete_capsule: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
-        }
-    }
-
-    if let Err(e) = sqlx::query("DELETE FROM memory_capsules WHERE id = $1")
-        .bind(capsule_id)
-        .execute(&state.db)
-        .await
-    {
-        tracing::error!("delete_capsule: {}", e);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to delete capsule"}))).into_response();
-    }
-
-    StatusCode::NO_CONTENT.into_response()
+    (StatusCode::METHOD_NOT_ALLOWED, Json(json!({"error": "Capsule deletion is disabled"}))).into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -325,58 +293,10 @@ async fn delete_capsule(
 // ---------------------------------------------------------------------------
 
 async fn abort_capsule(
-    State(state): State<AppState>,
-    user: AuthUser,
-    Path(capsule_id): Path<Uuid>,
+    _user: AuthUser,
+    Path(_capsule_id): Path<Uuid>,
 ) -> Response {
-    let row = sqlx::query_as::<_, (String, String, i32)>(
-        "SELECT owner_id, status, entry_count FROM memory_capsules WHERE id = $1",
-    )
-    .bind(capsule_id)
-    .fetch_optional(&state.db)
-    .await;
-
-    let entry_count = match row {
-        Ok(Some((ref oid, _, _))) if oid != &user.id => {
-            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your capsule"}))).into_response();
-        }
-        Ok(Some((_, ref status, _))) if status != "extracting" => {
-            return (
-                StatusCode::CONFLICT,
-                Json(json!({"error": format!("Cannot abort capsule with status '{}'", status)})),
-            )
-                .into_response();
-        }
-        Ok(Some((_, _, count))) => count,
-        Ok(None) => {
-            return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
-        }
-        Err(e) => {
-            tracing::error!("abort_capsule: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response();
-        }
-    };
-
-    // Cancel the running extraction task
-    if let Some((_, token)) = state.extraction_tokens.remove(&capsule_id) {
-        token.cancel();
-    }
-
-    if entry_count == 0 {
-        // First-time extraction: delete the entire capsule
-        let _ = sqlx::query("DELETE FROM memory_capsules WHERE id = $1")
-            .bind(capsule_id)
-            .execute(&state.db)
-            .await;
-        (StatusCode::OK, Json(json!({"action": "deleted"}))).into_response()
-    } else {
-        // Refresh extraction: revert to ready, keep existing entries
-        let _ = sqlx::query("UPDATE memory_capsules SET status = 'ready' WHERE id = $1")
-            .bind(capsule_id)
-            .execute(&state.db)
-            .await;
-        (StatusCode::OK, Json(json!({"action": "reverted", "status": "ready"}))).into_response()
-    }
+    (StatusCode::METHOD_NOT_ALLOWED, Json(json!({"error": "Capsule abort is disabled"}))).into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -670,9 +590,13 @@ async fn agent_query_capsules(
         }
     };
 
-    // Get capsule IDs granted to this agent
+    // Get capsule IDs granted to this agent (from both grant tables)
     let capsule_ids = sqlx::query_scalar::<_, Uuid>(
-        "SELECT capsule_id FROM memory_capsule_grants WHERE agent_id = $1",
+        r#"SELECT DISTINCT capsule_id FROM (
+            SELECT capsule_id FROM memory_capsule_grants WHERE agent_id = $1
+            UNION
+            SELECT capsule_id FROM agent_capsule_access WHERE agent_id = $1
+        ) sub"#,
     )
     .bind(agent.id)
     .fetch_all(&state.db)
