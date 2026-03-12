@@ -933,7 +933,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     }
 
     // Extract @mentions and resolve to agent IDs
-    const mentionPattern = /@(\w+)/g;
+    const mentionPattern = /@([\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]+)/g;
     const mentionIds = new Set<string>();
     let match;
     while ((match = mentionPattern.exec(trimmed)) !== null) {
@@ -1053,7 +1053,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     // Detect @mention trigger
     const cursorPos = e.target.selectionStart ?? newValue.length;
     const textBeforeCursor = newValue.slice(0, cursorPos);
-    const atMatch = textBeforeCursor.match(/(^|\s)@(\w*)$/);
+    const atMatch = textBeforeCursor.match(/(^|\s)@([\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]*)$/);
     if (atMatch && activeMembers.length > 0) {
       setMentionQuery(atMatch[2]);
       setMentionStart(cursorPos - atMatch[2].length - 1); // position of @
