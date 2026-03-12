@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BACKEND_URL } from "@/lib/config";
+import { useTranslation } from "@/lib/i18n";
+import { useToastStore } from "@/store/toast-store";
 import { SlashCommand } from "./slash-command";
 import { DragHandle } from "./drag-handle";
 
@@ -107,6 +109,8 @@ interface NotebookEditorProps {
   conversationId?: string;
 }
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+
 function markdownToHtml(md: string): string {
   if (!md) return "";
   return DOMPurify.sanitize(marked.parse(md, { async: false }) as string);
@@ -125,10 +129,20 @@ export function NotebookEditor({
   className,
   conversationId,
 }: NotebookEditorProps) {
+  const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadImage = useCallback(async (file: File): Promise<string | null> => {
     if (!conversationId) return null;
+    if (!file.type.startsWith("image/")) {
+      useToastStore.getState().addToast(t("chat.unsupportedFileType"), "error");
+      return null;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      useToastStore.getState().addToast("Image must be under 5MB", "error");
+      return null;
+    }
+
     const formData = new FormData();
     formData.append("file", file);
     try {
@@ -136,13 +150,18 @@ export function NotebookEditor({
         `${BACKEND_URL}/api/conversations/${conversationId}/notes/upload`,
         { method: "POST", body: formData, credentials: "include" }
       );
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        useToastStore.getState().addToast(body?.error ?? t("chat.uploadFailed"), "error");
+        return null;
+      }
       const data = await res.json();
       return data.url as string;
     } catch {
+      useToastStore.getState().addToast(t("chat.uploadFailed"), "error");
       return null;
     }
-  }, [conversationId]);
+  }, [conversationId, t]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -169,6 +188,7 @@ export function NotebookEditor({
         class: `notebook-tiptap-content outline-none min-h-[200px] py-2 text-sm ${editable ? "pl-7 pr-3" : "px-3"}`,
       },
       handlePaste: (view, event) => {
+        if (!editable || !conversationId) return false;
         const items = event.clipboardData?.items;
         if (!items) return false;
         for (const item of items) {
@@ -190,6 +210,7 @@ export function NotebookEditor({
         return false;
       },
       handleDrop: (view, event) => {
+        if (!editable || !conversationId) return false;
         const files = event.dataTransfer?.files;
         if (!files || files.length === 0) return false;
         const file = files[0];

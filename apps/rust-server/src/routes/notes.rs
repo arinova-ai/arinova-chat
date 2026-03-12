@@ -2509,25 +2509,15 @@ async fn upload_note_image(
     Path(conversation_id): Path<Uuid>,
     mut multipart: Multipart,
 ) -> Response {
-    let is_member = sqlx::query_scalar::<_, bool>(
-        r#"SELECT EXISTS(
-            SELECT 1 FROM conversation_user_members
-            WHERE conversation_id = $1 AND user_id = $2
-            UNION
-            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
-        )"#,
-    )
-    .bind(conversation_id)
-    .bind(&user.id)
-    .fetch_one(&state.db)
-    .await
-    .unwrap_or(false);
-
-    if !is_member {
+    if !is_member(&state.db, conversation_id, &user.id).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
     }
 
     while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() != Some("file") {
+            continue;
+        }
+
         let data = match field.bytes().await {
             Ok(d) => d,
             Err(_) => {
@@ -2571,7 +2561,8 @@ async fn upload_note_image(
             .await
             {
                 Ok(url) => url,
-                Err(_) => {
+                Err(e) => {
+                    tracing::warn!("upload_note_image: R2 upload failed, fallback to local: {}", e);
                     let dir = std::path::Path::new(&state.config.upload_dir).join("notes");
                     if let Err(e) = tokio::fs::create_dir_all(&dir).await {
                         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("mkdir: {}", e)}))).into_response();
