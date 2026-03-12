@@ -25,8 +25,6 @@ pub fn router() -> Router<AppState> {
 struct AgentSendBody {
     conversation_id: String,
     content: String,
-    #[serde(default)]
-    mentions: Option<Vec<String>>,
 }
 
 async fn agent_send(
@@ -190,7 +188,9 @@ async fn agent_send(
         .collect();
 
         if !other_agents.is_empty() {
-            let mentions: Vec<String> = body.mentions.clone().unwrap_or_default();
+            let mentions = crate::services::mention::resolve_mentions_from_content(
+                &state.db, conversation_id, content, Some(&agent_id),
+            ).await;
             let mention_only = !mentions.is_empty();
 
             let mut agent_configs = Vec::new();

@@ -405,7 +405,7 @@ async fn handle_message(
             let content = event.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let reply_to_id = event.get("replyToId").and_then(|v| v.as_str()).map(|s| s.to_string());
             let thread_id = event.get("threadId").and_then(|v| v.as_str()).map(|s| s.to_string());
-            let mentions: Vec<String> = event
+            let mut mentions: Vec<String> = event
                 .get("mentions")
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
@@ -413,6 +413,16 @@ async fn handle_message(
 
             if conversation_id.is_empty() || content.is_empty() {
                 return;
+            }
+
+            // Auto-resolve @name patterns from content and merge with client mentions
+            let resolved = crate::services::mention::resolve_mentions_from_content(
+                db, conversation_id, content, None,
+            ).await;
+            for id in resolved {
+                if !mentions.contains(&id) {
+                    mentions.push(id);
+                }
             }
 
             // Rate limit check
