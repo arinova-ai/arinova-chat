@@ -31,6 +31,18 @@ const EMBEDDING_BATCH_SIZE: usize = 100;
 /// Max characters per chunk sent to Gemini (~7500 tokens)
 const CHUNK_CHAR_LIMIT: usize = 30_000;
 
+/// Truncate a string to at most `max_bytes` without splitting a UTF-8 character.
+fn safe_truncate(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 #[derive(Deserialize)]
 struct GeminiResponse {
     candidates: Option<Vec<GeminiCandidate>>,
@@ -270,7 +282,7 @@ async fn do_extraction(
     if !notes.is_empty() {
         current_chunk.push_str("=== Conversation Notes ===\n");
         for (title, content) in &notes {
-            let note_line = format!("[note] {}: {}\n", title, &content[..content.len().min(2000)]);
+            let note_line = format!("[note] {}: {}\n", title, safe_truncate(content, 2000));
             current_chunk.push_str(&note_line);
         }
         current_chunk.push_str("=== Messages ===\n");
