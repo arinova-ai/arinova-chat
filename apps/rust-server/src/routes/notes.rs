@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{delete, get, patch, post},
@@ -67,6 +67,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/notes/{noteId}/share-to/{conversationId}",
             post(share_note_to_conversation),
+        )
+        .route(
+            "/api/conversations/{id}/notes/upload",
+            post(upload_note_image),
         )
 }
 
@@ -2496,4 +2500,101 @@ async fn get_public_note(
         )
             .into_response(),
     }
+}
+
+/// Upload an image for use in notes without creating a message.
+async fn upload_note_image(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    let is_member = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM conversation_user_members
+            WHERE conversation_id = $1 AND user_id = $2
+            UNION
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+        )"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_member {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response();
+            }
+        };
+
+        if data.len() > 5 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Image must be under 5MB"}))).into_response();
+        }
+
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.starts_with(&[0x47, 0x49, 0x46]) {
+            ("gif", "image/gif")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Only PNG, JPEG, GIF, and WebP images are allowed"}))).into_response();
+        };
+
+        let stored = format!(
+            "note_{}_{}.{}",
+            conversation_id,
+            chrono::Utc::now().timestamp_millis(),
+            ext
+        );
+        let r2_key = format!("notes/{}/{}", conversation_id, stored);
+
+        let url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(
+                s3,
+                &state.config.r2_bucket,
+                &r2_key,
+                data.to_vec(),
+                content_type,
+                &state.config.r2_public_url,
+            )
+            .await
+            {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("notes");
+                    if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("mkdir: {}", e)}))).into_response();
+                    }
+                    if let Err(e) = tokio::fs::write(dir.join(&stored), &data).await {
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("write: {}", e)}))).into_response();
+                    }
+                    format!("/uploads/notes/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("notes");
+            if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("mkdir: {}", e)}))).into_response();
+            }
+            if let Err(e) = tokio::fs::write(dir.join(&stored), &data).await {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("write: {}", e)}))).into_response();
+            }
+            format!("/uploads/notes/{}", stored)
+        };
+
+        return (StatusCode::OK, Json(json!({"url": url}))).into_response();
+    }
+
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response()
 }

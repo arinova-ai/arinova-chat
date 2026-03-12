@@ -756,7 +756,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                 </div>
               )}
               {selectedNote.content ? (
-                <NotebookEditor content={selectedNote.content} editable={false} />
+                <NotebookEditor content={selectedNote.content} editable={false} conversationId={conversationId} />
               ) : (
                 <p className="text-sm text-muted-foreground italic">{t("chat.notebook.noContent")}</p>
               )}
@@ -942,7 +942,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                 />
               </div>
-              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
+              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={handleCreate} disabled={loading || !titleInput.trim()}>
@@ -988,7 +988,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
                   className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                 />
               </div>
-              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
+              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={handleSave} disabled={loading || !titleInput.trim()}>
