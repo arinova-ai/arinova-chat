@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic, Reply } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { VoiceRecorder } from "./voice-recorder";
+import { ImageLightbox } from "./image-lightbox";
 import { useChatStore } from "@/store/chat-store";
 import {
   PLATFORM_COMMANDS,
@@ -101,6 +102,20 @@ function FilePreviewGrid({
     };
   }, [previewUrls]);
 
+  // Build gallery list for lightbox (only image files)
+  const galleryImages = useMemo(
+    () => previewUrls
+      .map((url, idx) => url ? { src: url, alt: files[idx].name } : null)
+      .filter(Boolean) as { src: string; alt: string }[],
+    [previewUrls, files],
+  );
+
+  // Map file index → gallery index for initialIndex
+  const fileIdxToGalleryIdx = useMemo(() => {
+    let gi = 0;
+    return previewUrls.map((url) => url ? gi++ : -1);
+  }, [previewUrls]);
+
   return (
     <div className="mb-2 space-y-1">
       <div className="flex items-center justify-between px-1">
@@ -118,11 +133,12 @@ function FilePreviewGrid({
         {files.map((file, idx) => (
           <div key={`${file.name}-${idx}`} className="relative group/thumb">
             {previewUrls[idx] ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
+              <ImageLightbox
                 src={previewUrls[idx]}
                 alt={file.name}
-                className="h-16 w-full rounded-md object-cover"
+                className="h-16 w-full rounded-md object-cover cursor-zoom-in"
+                images={galleryImages.length > 1 ? galleryImages : undefined}
+                initialIndex={fileIdxToGalleryIdx[idx]}
               />
             ) : (
               <div className="flex h-16 w-full items-center justify-center rounded-md bg-secondary">
