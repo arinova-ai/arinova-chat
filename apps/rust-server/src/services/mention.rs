@@ -18,8 +18,8 @@ pub async fn resolve_mentions_from_content(
     content: &str,
     exclude_agent_id: Option<&str>,
 ) -> Vec<String> {
-    // Extract all @word patterns (supports unicode word chars for CJK names)
-    let re = regex_lite::Regex::new(r"@([\w\p{L}\p{N}]+)").unwrap();
+    // Extract all @word patterns (\w covers [a-zA-Z0-9_])
+    let re = regex_lite::Regex::new(r"@(\w+)").unwrap();
     let at_words: Vec<String> = re
         .captures_iter(content)
         .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
