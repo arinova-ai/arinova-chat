@@ -23,7 +23,7 @@ Tags should be short lowercase words describing the category (e.g. preference, d
 Focus on: user preferences, decisions made, important facts mentioned, action items, and relationship context. \
 Be concise — each line should be one self-contained memory. \
 Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details. \
-Do NOT use chain-of-thought or reasoning tags. Output the JSON directly. \
+Do NOT use chain-of-thought or reasoning tags. Output strictly in the line-based tagged format above. \
 IMPORTANT: Extract memories in the SAME LANGUAGE as the original conversation. If the user speaks Chinese, write Chinese. If English, write English. Never translate.";
 
 /// Max texts per OpenAI embedding batch call
