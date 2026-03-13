@@ -376,5 +376,22 @@ function NotebookNotes({
     </div>
   );
 
-  return content;
+  // Inline mode (right panel)
+  if (inline) return content;
+
+  // Mobile portal overlay
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 bg-background flex flex-col"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
+    >
+      {content}
+    </div>,
+    document.body,
+  );
 }
