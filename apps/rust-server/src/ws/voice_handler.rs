@@ -43,19 +43,27 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
     // Authenticate via session cookie
     let token = match extract_session_token(&cookie_header) {
         Some(t) => t,
-        None => return,
+        None => {
+            tracing::warn!("voice_ws: no session token in cookie header");
+            return;
+        }
     };
 
     let session = match validate_session(&state.db, &token).await {
         Ok(Some(s)) => s,
-        _ => return,
+        _ => {
+            tracing::warn!("voice_ws: session validation failed");
+            return;
+        }
     };
 
     if session.banned {
+        tracing::warn!("voice_ws: user is banned, user_id={}", session.user_id);
         return;
     }
 
     let user_id = session.user_id.clone();
+    tracing::info!("voice_ws: connected user_id={}", user_id);
 
     // Split socket
     let (mut ws_sender, mut ws_receiver) = socket.split();
@@ -120,6 +128,7 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
     }
 
     // Remove voice connection on disconnect
+    tracing::info!("voice_ws: disconnected user_id={}", user_id);
     state.ws.voice_connections.remove(&user_id);
 }
 
@@ -199,6 +208,7 @@ async fn handle_voice_message(
 
             if is_h2h {
                 // === Human-to-Human call ===
+                tracing::info!("voice_ws: voice_offer h2h from={} to={} conv={}", user_id, target_user_id, conversation_id);
                 handle_h2h_offer(
                     user_id, target_user_id, conversation_id, conv_uuid, sdp,
                     active_session_id, ws_state, db, redis, tx,
@@ -427,6 +437,7 @@ async fn handle_h2h_offer(
         "sdp": sdp,
     });
 
+    tracing::info!("voice_ws: sending voice_incoming_call to callee={}", target_user_id);
     ws_state.send_to_user_or_queue(target_user_id, &incoming_event, redis);
 
     // Notify caller that the call is ringing (not yet connected)

@@ -68,11 +68,13 @@ export class WebRTCClient {
       }
     };
 
-    this.ws.onerror = () => {
+    this.ws.onerror = (event) => {
+      console.error("[WebRTC] Voice signaling error:", event);
       this.ws?.close();
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
+      console.warn("[WebRTC] Voice signaling closed:", event.code, event.reason);
       if (this.pingInterval) {
         clearInterval(this.pingInterval);
         this.pingInterval = null;
