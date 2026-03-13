@@ -1836,7 +1836,8 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
     if content.trim().len() < 20 {
         return vec![];
     }
-    let query_text = &content[..content.len().min(200)];
+    let end = content.char_indices().nth(200).map(|(i, _)| i).unwrap_or(content.len());
+    let query_text = &content[..end];
     let tsquery = query_text
         .split_whitespace()
         .take(8)
