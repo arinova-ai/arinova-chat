@@ -868,5 +868,13 @@
   "voice.unmute": "음소거 해제",
   "voice.mute": "음소거",
   "voice.cancelCall": "통화 취소",
-  "voice.hangup": "통화 종료"
+  "voice.hangup": "통화 종료",
+
+  "rightPanel.notes": "노트",
+  "rightPanel.kanban": "칸반",
+  "rightPanel.threads": "스레드",
+  "rightPanel.members": "멤버",
+  "rightPanel.chat": "채팅",
+  "rightPanel.close": "패널 닫기",
+  "rightPanel.comingSoon": "곧 출시"
 }

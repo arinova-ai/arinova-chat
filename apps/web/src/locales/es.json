@@ -868,5 +868,13 @@
   "voice.unmute": "Activar micrófono",
   "voice.mute": "Silenciar",
   "voice.cancelCall": "Cancelar llamada",
-  "voice.hangup": "Colgar"
+  "voice.hangup": "Colgar",
+
+  "rightPanel.notes": "Notas",
+  "rightPanel.kanban": "Kanban",
+  "rightPanel.threads": "Hilos",
+  "rightPanel.members": "Miembros",
+  "rightPanel.chat": "Chat",
+  "rightPanel.close": "Cerrar panel",
+  "rightPanel.comingSoon": "próximamente"
 }

@@ -868,5 +868,13 @@
   "voice.unmute": "Réactiver le micro",
   "voice.mute": "Couper le micro",
   "voice.cancelCall": "Annuler l'appel",
-  "voice.hangup": "Raccrocher"
+  "voice.hangup": "Raccrocher",
+
+  "rightPanel.notes": "Notes",
+  "rightPanel.kanban": "Kanban",
+  "rightPanel.threads": "Fils",
+  "rightPanel.members": "Membres",
+  "rightPanel.chat": "Chat",
+  "rightPanel.close": "Fermer le panneau",
+  "rightPanel.comingSoon": "bientôt disponible"
 }

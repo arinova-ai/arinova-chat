@@ -959,5 +959,13 @@
   "explore.subscribe": "Subscribe",
   "explore.join": "Join",
   "explore.noAccounts": "No accounts found",
-  "explore.noCommunities": "No communities found"
+  "explore.noCommunities": "No communities found",
+
+  "rightPanel.notes": "Notes",
+  "rightPanel.kanban": "Kanban",
+  "rightPanel.threads": "Threads",
+  "rightPanel.members": "Members",
+  "rightPanel.chat": "Chat",
+  "rightPanel.close": "Close panel",
+  "rightPanel.comingSoon": "coming soon"
 }

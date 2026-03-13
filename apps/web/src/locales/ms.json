@@ -868,5 +868,13 @@
   "voice.unmute": "Nyahbisukan",
   "voice.mute": "Bisukan",
   "voice.cancelCall": "Batal panggilan",
-  "voice.hangup": "Tamatkan panggilan"
+  "voice.hangup": "Tamatkan panggilan",
+
+  "rightPanel.notes": "Nota",
+  "rightPanel.kanban": "Kanban",
+  "rightPanel.threads": "Thread",
+  "rightPanel.members": "Ahli",
+  "rightPanel.chat": "Sembang",
+  "rightPanel.close": "Tutup panel",
+  "rightPanel.comingSoon": "akan datang"
 }

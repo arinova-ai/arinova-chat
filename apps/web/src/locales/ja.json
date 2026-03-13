@@ -868,5 +868,13 @@
   "voice.unmute": "ミュート解除",
   "voice.mute": "ミュート",
   "voice.cancelCall": "通話キャンセル",
-  "voice.hangup": "通話終了"
+  "voice.hangup": "通話終了",
+
+  "rightPanel.notes": "ノート",
+  "rightPanel.kanban": "カンバン",
+  "rightPanel.threads": "スレッド",
+  "rightPanel.members": "メンバー",
+  "rightPanel.chat": "チャット",
+  "rightPanel.close": "パネルを閉じる",
+  "rightPanel.comingSoon": "近日公開"
 }

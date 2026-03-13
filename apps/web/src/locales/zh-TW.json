@@ -957,5 +957,13 @@
   "explore.subscribe": "訂閱",
   "explore.join": "加入",
   "explore.noAccounts": "尚無帳號",
-  "explore.noCommunities": "尚無社群"
+  "explore.noCommunities": "尚無社群",
+
+  "rightPanel.notes": "筆記",
+  "rightPanel.kanban": "看板",
+  "rightPanel.threads": "討論串",
+  "rightPanel.members": "成員",
+  "rightPanel.chat": "對話",
+  "rightPanel.close": "收合面板",
+  "rightPanel.comingSoon": "即將推出"
 }

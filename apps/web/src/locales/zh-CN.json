@@ -872,5 +872,13 @@
   "voice.unmute": "取消静音",
   "voice.mute": "静音",
   "voice.cancelCall": "取消通话",
-  "voice.hangup": "挂断"
+  "voice.hangup": "挂断",
+
+  "rightPanel.notes": "笔记",
+  "rightPanel.kanban": "看板",
+  "rightPanel.threads": "讨论串",
+  "rightPanel.members": "成员",
+  "rightPanel.chat": "对话",
+  "rightPanel.close": "收合面板",
+  "rightPanel.comingSoon": "即将推出"
 }

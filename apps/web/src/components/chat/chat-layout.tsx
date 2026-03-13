@@ -15,6 +15,7 @@ import { authClient } from "@/lib/auth-client";
 import { initVoiceTTSIntegration } from "@/lib/voice-tts-integration";
 import { initChatDiagnostics, useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
+import { RightPanel } from "./right-panel";
 
 const SIDEBAR_COLLAPSED_KEY = "arinova:sidebar-collapsed";
 
@@ -180,6 +181,9 @@ export function ChatLayout() {
           </div>
         </ErrorBoundary>
       </div>
+
+      {/* Right panel: desktop only, >= 1280px */}
+      <RightPanel />
 
       {/* Floating call indicator (visible when navigating away from active call) */}
       <CallIndicator />
