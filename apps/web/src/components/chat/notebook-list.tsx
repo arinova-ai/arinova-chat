@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
-import { cn } from "@/lib/utils";
 import { NotebookSheet } from "./notebook-sheet";
 import { Input } from "@/components/ui/input";
 import {

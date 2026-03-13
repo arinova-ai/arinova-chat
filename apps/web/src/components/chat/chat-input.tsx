@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic, Reply } from "lucide-react";
+import { SendHorizontal, Paperclip, Smile, X, FileText, Mic, Reply } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { VoiceRecorder } from "./voice-recorder";
 import { ImageLightbox } from "./image-lightbox";

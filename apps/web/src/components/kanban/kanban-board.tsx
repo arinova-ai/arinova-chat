@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -48,7 +48,7 @@ import { AddCardSheet } from "./add-card-sheet";
 import { ArchivedCardsSheet } from "./archived-cards-sheet";
 import { FullColumn, CompactColumn } from "./kanban-column";
 import { CardOverlay } from "./kanban-card";
-import type { KanbanCard, KanbanColumn, BoardData, CardCommit, CardLabel } from "./types";
+import type { KanbanCard, BoardData, CardCommit } from "./types";
 
 // ── Types ────────────────────────────────────────────────────
 

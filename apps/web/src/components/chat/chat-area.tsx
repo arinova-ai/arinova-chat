@@ -9,7 +9,6 @@ import { StickerPanel } from "./sticker-panel";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
-import { NotebookSheet } from "./notebook-sheet";
 import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
 import { WikiPanel } from "./wiki-panel";

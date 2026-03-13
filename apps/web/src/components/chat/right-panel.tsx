@@ -15,7 +15,6 @@ import { useRightPanelStore } from "@/store/right-panel-store";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { NotebookSheet } from "./notebook-sheet";
 import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
 import { ThreadListContent } from "./thread-list-sheet";

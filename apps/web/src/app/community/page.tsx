@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
 import { Loader2, Search, Plus, Users, Coins, BadgeCheck } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
-import { cn } from "@/lib/utils";
 
 interface CommunityItem {
   id: string;

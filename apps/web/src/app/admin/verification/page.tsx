@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, XCircle, Clock, ExternalLink, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
