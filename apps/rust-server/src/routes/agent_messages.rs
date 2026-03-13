@@ -31,6 +31,7 @@ struct AgentMessagesQuery {
 }
 
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 struct ConvMemberCheck {
     id: Uuid,
 }

@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, patch, post},
+    routing::{get, patch},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -386,6 +386,7 @@ async fn list_notebook_notes(
         title: String,
         tags: Vec<String>,
         is_pinned: bool,
+        #[allow(dead_code)]
         archived_at: Option<DateTime<Utc>>,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,

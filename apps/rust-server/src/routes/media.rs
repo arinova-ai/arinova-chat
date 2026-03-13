@@ -44,6 +44,7 @@ struct MediaRow {
 }
 
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 struct ConvCheck {
     id: Uuid,
 }

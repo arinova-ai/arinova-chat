@@ -836,7 +836,7 @@ async fn update_note(
     }
 
     // Dynamic UPDATE — build SET clauses
-    let now = Utc::now();
+    let _now = Utc::now();
     let mut set_clauses = vec!["updated_at = NOW()".to_string()];
     let mut param_idx = 1u32;
 
@@ -1729,6 +1729,7 @@ pub fn spawn_summary_if_needed(db: PgPool, gemini_key: String, note_id: Uuid, co
 // ===== Task 3: Extract capsule from note =====
 
 /// POST /api/conversations/:id/notes/:noteId/extract-capsule
+#[allow(dead_code)]
 async fn extract_capsule_from_note(
     State(state): State<AppState>,
     user: AuthUser,
