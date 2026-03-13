@@ -68,6 +68,7 @@ interface GroupMembersPanelProps {
   conversationId: string;
   initialTab?: PanelTab;
   onAddMemberClick?: () => void;
+  inline?: boolean;
 }
 
 export function GroupMembersPanel({
@@ -76,6 +77,7 @@ export function GroupMembersPanel({
   conversationId,
   initialTab,
   onAddMemberClick,
+  inline,
 }: GroupMembersPanelProps) {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
@@ -183,6 +185,99 @@ export function GroupMembersPanel({
     }
   };
 
+  const content = (
+    <>
+      {error && (
+        <div className="mx-4 mt-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        {loading && !members ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : tab === "members" ? (
+          <MembersTab
+            members={members}
+            currentUserId={currentUserId}
+            myRole={myRole}
+            isAdmin={isAdmin}
+            isViceAdmin={isViceAdmin}
+            canManage={canManage}
+            conversationId={conversationId}
+            actionLoading={actionLoading}
+            showAgents={showAgents}
+            setShowAgents={setShowAgents}
+            onClosePanel={() => onOpenChange(false)}
+            onKick={(userId) => handleAction(() => kickUser(conversationId, userId), `kick-${userId}`)}
+            onPromote={(userId) => handleAction(() => promoteUser(conversationId, userId), `promote-${userId}`)}
+            onDemote={(userId) => handleAction(() => demoteUser(conversationId, userId), `demote-${userId}`)}
+            onTransferAdmin={(userId) => handleAction(() => transferAdmin(conversationId, userId), `transfer-${userId}`)}
+            onBlock={(userId) => handleAction(async () => { await blockUser(userId); await loadGroupMembersV2(conversationId); }, `block-${userId}`)}
+            onUpdateListenMode={(agentId, mode) => handleAction(() => updateAgentListenMode(conversationId, agentId, mode), `listen-${agentId}`)}
+            onWithdrawAgent={(agentId) => handleAction(() => withdrawAgent(conversationId, agentId), `withdraw-${agentId}`)}
+          />
+        ) : (
+          <SettingsTab
+            editTitle={editTitle}
+            setEditTitle={setEditTitle}
+            conversation={conversation}
+            saving={settingsSaving}
+            isAdmin={isAdmin}
+            conversationId={conversationId}
+            onSave={handleSaveSettings}
+            onUpdateSettings={updateGroupSettings}
+          />
+        )}
+      </div>
+
+      {/* Footer Actions */}
+      <div className="border-t border-border p-4 space-y-2">
+        {canManage && onAddMemberClick && (
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={() => { onAddMemberClick(); onOpenChange(false); }}
+          >
+            <UserPlus className="h-4 w-4" />
+            {t("addMember.title")}
+          </Button>
+        )}
+        {isAdmin && (
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            onClick={handleCopyInvite}
+          >
+            {inviteCopied ? (
+              <Check className="h-4 w-4 text-green-400" />
+            ) : (
+              <Link2 className="h-4 w-4" />
+            )}
+            {inviteCopied ? t("group.copied") : t("group.copyInvite")}
+          </Button>
+        )}
+        {/* Leave group: not shown to admin unless they transfer first */}
+        {!isAdmin && myRole && (
+          <Button
+            variant="outline"
+            className="w-full gap-2 text-red-400 hover:text-red-300 hover:border-red-600"
+            onClick={handleLeave}
+          >
+            <LogOut className="h-4 w-4" />
+            {t("group.leaveGroup")}
+          </Button>
+        )}
+      </div>
+    </>
+  );
+
+  if (inline) {
+    return <div className="flex flex-col h-full">{content}</div>;
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-80 sm:max-w-sm p-0 flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
@@ -194,90 +289,7 @@ export function GroupMembersPanel({
 
         <div className="border-b border-border" />
 
-        {error && (
-          <div className="mx-4 mt-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto">
-          {loading && !members ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : tab === "members" ? (
-            <MembersTab
-              members={members}
-              currentUserId={currentUserId}
-              myRole={myRole}
-              isAdmin={isAdmin}
-              isViceAdmin={isViceAdmin}
-              canManage={canManage}
-              conversationId={conversationId}
-              actionLoading={actionLoading}
-              showAgents={showAgents}
-              setShowAgents={setShowAgents}
-              onClosePanel={() => onOpenChange(false)}
-              onKick={(userId) => handleAction(() => kickUser(conversationId, userId), `kick-${userId}`)}
-              onPromote={(userId) => handleAction(() => promoteUser(conversationId, userId), `promote-${userId}`)}
-              onDemote={(userId) => handleAction(() => demoteUser(conversationId, userId), `demote-${userId}`)}
-              onTransferAdmin={(userId) => handleAction(() => transferAdmin(conversationId, userId), `transfer-${userId}`)}
-              onBlock={(userId) => handleAction(async () => { await blockUser(userId); await loadGroupMembersV2(conversationId); }, `block-${userId}`)}
-              onUpdateListenMode={(agentId, mode) => handleAction(() => updateAgentListenMode(conversationId, agentId, mode), `listen-${agentId}`)}
-              onWithdrawAgent={(agentId) => handleAction(() => withdrawAgent(conversationId, agentId), `withdraw-${agentId}`)}
-            />
-          ) : (
-            <SettingsTab
-              editTitle={editTitle}
-              setEditTitle={setEditTitle}
-              conversation={conversation}
-              saving={settingsSaving}
-              isAdmin={isAdmin}
-              conversationId={conversationId}
-              onSave={handleSaveSettings}
-              onUpdateSettings={updateGroupSettings}
-            />
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="border-t border-border p-4 space-y-2">
-          {canManage && onAddMemberClick && (
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => { onAddMemberClick(); onOpenChange(false); }}
-            >
-              <UserPlus className="h-4 w-4" />
-              {t("addMember.title")}
-            </Button>
-          )}
-          {isAdmin && (
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={handleCopyInvite}
-            >
-              {inviteCopied ? (
-                <Check className="h-4 w-4 text-green-400" />
-              ) : (
-                <Link2 className="h-4 w-4" />
-              )}
-              {inviteCopied ? t("group.copied") : t("group.copyInvite")}
-            </Button>
-          )}
-          {/* Leave group: not shown to admin unless they transfer first */}
-          {!isAdmin && myRole && (
-            <Button
-              variant="outline"
-              className="w-full gap-2 text-red-400 hover:text-red-300 hover:border-red-600"
-              onClick={handleLeave}
-            >
-              <LogOut className="h-4 w-4" />
-              {t("group.leaveGroup")}
-            </Button>
-          )}
-        </div>
+        {content}
       </SheetContent>
     </Sheet>
   );

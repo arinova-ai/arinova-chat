@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "clubs" | "lounges";
-const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "clubs", "lounges"];
+type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "communities" | "lounges";
+const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "communities", "lounges"];
 
 const PINNED_ORDER_KEY = "arinova-chat-pinned-order";
 
@@ -57,7 +57,7 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
       filtered = conversations.filter((c) => c.type === "group");
     } else if (tab === "officials") {
       filtered = conversations.filter((c) => c.type === "official" || !!c.officialCommunityId);
-    } else if (tab === "clubs") {
+    } else if (tab === "communities") {
       filtered = conversations.filter((c) => c.type === "club");
     } else if (tab === "lounges") {
       filtered = conversations.filter((c) => c.type === "lounge");

@@ -45,6 +45,7 @@ interface NotebookSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversationId: string;
+  inline?: boolean;
 }
 
 const EMPTY_NOTES: Note[] = [];
@@ -228,7 +229,7 @@ function SwipeableNoteItem({
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, conversationId, inline }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -551,8 +552,8 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
 
   const panel = (
       <div
-        className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in"
-        style={{
+        className={inline ? "flex flex-col h-full bg-background" : "fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in"}
+        style={inline ? undefined : {
           paddingTop: "env(safe-area-inset-top)",
           paddingBottom: "env(safe-area-inset-bottom)",
           paddingLeft: "env(safe-area-inset-left)",
@@ -1008,5 +1009,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId }: NotebookSh
     </div>
   );
 
+  if (inline) return panel;
   return typeof document !== "undefined" ? createPortal(panel, document.body) : null;
 }

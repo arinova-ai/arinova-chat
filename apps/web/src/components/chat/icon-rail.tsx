@@ -5,13 +5,14 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, UserPlus,
   Palette, Users, Store, Wallet, Settings, Smile,
-  LayoutDashboard, Plus, type LucideIcon,
+  LayoutDashboard, Plus, Mic, Compass, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { useShortcutStore } from "@/store/shortcut-store";
 import { AddShortcutPopover } from "./add-shortcut-sheet";
+import { AccountSwitcher } from "@/components/accounts/account-switcher";
 
 /** Lucide icon per nav id — active/inactive styling via parent text color */
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -26,6 +27,8 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   market: Store,
   wallet: Wallet,
   settings: Settings,
+  "explore-official": Building2,
+  "explore-lounge": Mic,
 };
 
 const SHORTCUT_ICONS: Record<string, LucideIcon> = {
@@ -71,6 +74,8 @@ export function IconRail() {
     if (pathname.startsWith("/stickers")) return "stickers";
     if (pathname.startsWith("/creator")) return "creator";
     if (pathname.startsWith("/friends")) return "friends";
+    if (pathname.startsWith("/explore/official")) return "explore-official";
+    if (pathname.startsWith("/explore/lounge")) return "explore-lounge";
     if (pathname.startsWith("/community")) return "community";
     if (pathname.startsWith("/agent-hub")) return "market";
     if (pathname.startsWith("/wallet")) return "wallet";
@@ -96,6 +101,12 @@ export function IconRail() {
 
   const socialItems: NavEntry[] = [
     { id: "community", label: t("nav.community"), href: "/community" },
+  ];
+
+  // ── Explore ──
+  const exploreItems: NavEntry[] = [
+    { id: "explore-official", label: t("nav.exploreOfficial"), href: "/explore/official" },
+    { id: "explore-lounge", label: t("nav.exploreLounge"), href: "/explore/lounge" },
   ];
 
   // ── Market ──
@@ -155,6 +166,11 @@ export function IconRail() {
 
   return (
     <div className="flex h-full w-16 shrink-0 flex-col items-center border-r border-border bg-sidebar py-4">
+      {/* Account switcher */}
+      <div className="mb-2">
+        <AccountSwitcher />
+      </div>
+
       {/* Logo */}
       <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-gradient-end">
         <img src="/assets/nav/logo-arinova-white.svg" alt="Arinova" width={28} height={28} className="h-7 w-7" />
@@ -178,6 +194,12 @@ export function IconRail() {
           )}
         </div>
         {socialItems.map((item) => renderButton(item))}
+
+        {/* ── divider ── */}
+        <div className="my-1 h-px w-8 bg-border" />
+
+        {/* Explore: Official, Clubs, Lounge */}
+        {exploreItems.map((item) => renderButton(item))}
 
         {/* ── divider ── */}
         <div className="my-1 h-px w-8 bg-border" />

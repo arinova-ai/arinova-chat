@@ -976,15 +976,13 @@ async fn create_card(
             .into_response();
     }
 
-    // Get max sort_order in the target column
-    let max_order = sqlx::query_scalar::<_, Option<i32>>(
-        "SELECT MAX(sort_order) FROM kanban_cards WHERE column_id = $1",
-    )
-    .bind(body.column_id)
-    .fetch_one(&state.db)
-    .await
-    .unwrap_or(None)
-    .unwrap_or(-1);
+    // Push existing cards down, new card goes to top
+    sqlx::query("UPDATE kanban_cards SET sort_order = sort_order + 1 WHERE column_id = $1")
+        .bind(body.column_id)
+        .execute(&state.db)
+        .await
+        .ok();
+    let max_order = -1;
 
     let result = sqlx::query_as::<_, CardRow>(
         r#"INSERT INTO kanban_cards (column_id, title, description, priority, sort_order, created_by)
@@ -1705,14 +1703,13 @@ async fn agent_create_card(
         }
     };
 
-    let max_order = sqlx::query_scalar::<_, Option<i32>>(
-        "SELECT MAX(sort_order) FROM kanban_cards WHERE column_id = $1",
-    )
-    .bind(column_id)
-    .fetch_one(&state.db)
-    .await
-    .unwrap_or(None)
-    .unwrap_or(-1);
+    // Push existing cards down, new card goes to top
+    sqlx::query("UPDATE kanban_cards SET sort_order = sort_order + 1 WHERE column_id = $1")
+        .bind(column_id)
+        .execute(&state.db)
+        .await
+        .ok();
+    let max_order = -1;
 
     let result = sqlx::query_as::<_, CardRow>(
         r#"INSERT INTO kanban_cards (column_id, title, description, priority, sort_order, created_by)

@@ -54,37 +54,42 @@ export class WebRTCClient {
     }
   }
 
-  /** Connect to voice signaling WebSocket */
-  connectSignaling() {
-    const voiceWsUrl = WS_URL.replace(/\/ws$/, "/ws/voice");
-    this.ws = new WebSocket(voiceWsUrl);
+  /** Connect to voice signaling WebSocket. Resolves when the connection is open. */
+  connectSignaling(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const voiceWsUrl = WS_URL.replace(/\/ws$/, "/ws/voice");
+      this.ws = new WebSocket(voiceWsUrl);
 
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as VoiceWSServerEvent;
-        this._onSignaling?.(data);
-      } catch {
-        // ignore parse errors
-      }
-    };
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as VoiceWSServerEvent;
+          this._onSignaling?.(data);
+        } catch {
+          // ignore parse errors
+        }
+      };
 
-    this.ws.onerror = () => {
-      this.ws?.close();
-    };
+      this.ws.onerror = (event) => {
+        console.error("[WebRTC] Voice signaling error:", event);
+        reject(new Error("Voice signaling connection failed"));
+      };
 
-    this.ws.onclose = () => {
-      if (this.pingInterval) {
-        clearInterval(this.pingInterval);
-        this.pingInterval = null;
-      }
-    };
+      this.ws.onclose = (event) => {
+        console.warn("[WebRTC] Voice signaling closed:", event.code, event.reason);
+        if (this.pingInterval) {
+          clearInterval(this.pingInterval);
+          this.pingInterval = null;
+        }
+      };
 
-    this.ws.onopen = () => {
-      // Ping to keep alive
-      this.pingInterval = setInterval(() => {
-        this.sendSignaling({ type: "voice_ping" });
-      }, 30000);
-    };
+      this.ws.onopen = () => {
+        // Ping to keep alive
+        this.pingInterval = setInterval(() => {
+          this.sendSignaling({ type: "voice_ping" });
+        }, 30000);
+        resolve();
+      };
+    });
   }
 
   /** Send a signaling event via WebSocket */

@@ -153,7 +153,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
 
     // Connect signaling and create peer connection
     try {
-      client.connectSignaling();
+      await client.connectSignaling();
       await client.createPeerConnection();
       await client.createOffer(conversationId, target);
     } catch {
@@ -243,7 +243,7 @@ export const useVoiceCallStore = create<VoiceCallState>((set, get) => ({
 
     // Connect signaling, create peer connection, handle offer and send answer
     try {
-      client.connectSignaling();
+      await client.connectSignaling();
       await client.createPeerConnection();
       await client.handleOffer(incoming.sdp, incoming.sessionId);
 

@@ -1258,4 +1258,233 @@ export function registerTools(api: OpenClawPluginApi) {
     },
     { name: "arinova_kanban_list_card_notes" },
   );
+
+  // Tool 28: arinova_kanban_list_labels
+  api.registerTool(
+    {
+      name: "arinova_kanban_list_labels",
+      label: "List Kanban Labels",
+      description:
+        "List all labels for a Kanban board.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId } = params as { boardId: string };
+        try {
+          const account = resolveAccount();
+          const res = await apiCall({
+            method: "GET",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}/labels`,
+            token: account.botToken,
+          });
+
+          const labels = Array.isArray(res) ? res : [];
+          return {
+            content: [{ type: "text", text: JSON.stringify(labels, null, 2) }],
+            details: { boardId, count: labels.length },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_list_labels" },
+  );
+
+  // Tool 29: arinova_kanban_create_label
+  api.registerTool(
+    {
+      name: "arinova_kanban_create_label",
+      label: "Create Kanban Label",
+      description:
+        "Create a new label on a Kanban board.",
+      parameters: Type.Object({
+        boardId: Type.String({ description: "Board ID" }),
+        name: Type.String({ description: "Label name" }),
+        color: Type.Optional(
+          Type.String({ description: "Label color (hex, e.g. '#ff0000')" }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const { boardId, name, color } = params as {
+          boardId: string;
+          name: string;
+          color?: string;
+        };
+        try {
+          const account = resolveAccount();
+          const body: Record<string, string> = { name };
+          if (color) body.color = color;
+
+          const result = await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(boardId)}/labels`,
+            token: account.botToken,
+            body,
+          });
+
+          return {
+            content: [{ type: "text", text: `Label "${name}" created on board ${boardId}.` }],
+            details: { result },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_create_label" },
+  );
+
+  // Tool 30: arinova_kanban_update_label
+  api.registerTool(
+    {
+      name: "arinova_kanban_update_label",
+      label: "Update Kanban Label",
+      description:
+        "Update a Kanban label's name or color.",
+      parameters: Type.Object({
+        labelId: Type.String({ description: "Label ID" }),
+        name: Type.Optional(
+          Type.String({ description: "New label name" }),
+        ),
+        color: Type.Optional(
+          Type.String({ description: "New label color (hex)" }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const { labelId, name, color } = params as {
+          labelId: string;
+          name?: string;
+          color?: string;
+        };
+        try {
+          const account = resolveAccount();
+          const body: Record<string, string> = {};
+          if (name) body.name = name;
+          if (color) body.color = color;
+
+          const result = await apiCall({
+            method: "PATCH",
+            url: `${account.apiUrl}/api/agent/kanban/labels/${encodeURIComponent(labelId)}`,
+            token: account.botToken,
+            body,
+          });
+
+          return {
+            content: [{ type: "text", text: `Label ${labelId} updated.` }],
+            details: { result },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_update_label" },
+  );
+
+  // Tool 31: arinova_kanban_delete_label
+  api.registerTool(
+    {
+      name: "arinova_kanban_delete_label",
+      label: "Delete Kanban Label",
+      description:
+        "Delete a label from a Kanban board.",
+      parameters: Type.Object({
+        labelId: Type.String({ description: "Label ID" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { labelId } = params as { labelId: string };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "DELETE",
+            url: `${account.apiUrl}/api/agent/kanban/labels/${encodeURIComponent(labelId)}`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: `Label ${labelId} deleted.` }],
+            details: { labelId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_delete_label" },
+  );
+
+  // Tool 32: arinova_kanban_add_card_label
+  api.registerTool(
+    {
+      name: "arinova_kanban_add_card_label",
+      label: "Add Label to Kanban Card",
+      description:
+        "Add a label to a Kanban card.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID" }),
+        labelId: Type.String({ description: "Label ID to add" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId, labelId } = params as {
+          cardId: string;
+          labelId: string;
+        };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "POST",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/labels`,
+            token: account.botToken,
+            body: { labelId },
+          });
+
+          return {
+            content: [{ type: "text", text: `Label ${labelId} added to card ${cardId}.` }],
+            details: { cardId, labelId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_add_card_label" },
+  );
+
+  // Tool 33: arinova_kanban_remove_card_label
+  api.registerTool(
+    {
+      name: "arinova_kanban_remove_card_label",
+      label: "Remove Label from Kanban Card",
+      description:
+        "Remove a label from a Kanban card.",
+      parameters: Type.Object({
+        cardId: Type.String({ description: "Card ID" }),
+        labelId: Type.String({ description: "Label ID to remove" }),
+      }),
+      async execute(_toolCallId, params) {
+        const { cardId, labelId } = params as {
+          cardId: string;
+          labelId: string;
+        };
+        try {
+          const account = resolveAccount();
+          await apiCall({
+            method: "DELETE",
+            url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(cardId)}/labels/${encodeURIComponent(labelId)}`,
+            token: account.botToken,
+          });
+
+          return {
+            content: [{ type: "text", text: `Label ${labelId} removed from card ${cardId}.` }],
+            details: { cardId, labelId },
+          };
+        } catch (err) {
+          return errResult(String(err));
+        }
+      },
+    },
+    { name: "arinova_kanban_remove_card_label" },
+  );
 }

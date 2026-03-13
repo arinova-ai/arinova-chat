@@ -9,7 +9,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
-import { Loader2, Search, Plus, Users, Coins, BadgeCheck, Headset, Mic } from "lucide-react";
+import { Loader2, Search, Plus, Users, Coins, BadgeCheck } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ interface CommunityItem {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "official" | "club" | "lounge";
+  type: string;
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -37,13 +37,9 @@ interface BrowseResponse {
   total: number;
 }
 
-const TABS = ["official", "club", "lounge"] as const;
-type Tab = (typeof TABS)[number];
-
 function CommunityBrowseContent() {
   const router = useRouter();
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>("official");
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -57,7 +53,7 @@ function CommunityBrowseContent() {
       setLoading(true);
       try {
         const params = new URLSearchParams();
-        params.set("type", tab);
+        params.set("type", "club");
         if (search.trim()) params.set("search", search.trim());
         params.set("page", String(Math.floor(currentOffset / limit) + 1));
         params.set("limit", String(limit));
@@ -77,7 +73,7 @@ function CommunityBrowseContent() {
         setLoading(false);
       }
     },
-    [tab, search, limit]
+    [search, limit]
   );
 
   useEffect(() => {
@@ -87,7 +83,7 @@ function CommunityBrowseContent() {
       fetchCommunities(0);
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [tab, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (offset > 0) {
@@ -114,25 +110,6 @@ function CommunityBrowseContent() {
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">{t("community.create")}</span>
             </Button>
-          </div>
-
-          {/* Tabs: Official | Club */}
-          <div className="mt-3 flex gap-1">
-            {TABS.map((tb) => (
-              <button
-                key={tb}
-                type="button"
-                onClick={() => setTab(tb)}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                  tab === tb
-                    ? "bg-brand text-white"
-                    : "bg-secondary text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {t(`community.type.${tb}`)}
-              </button>
-            ))}
           </div>
 
           {/* Search */}
@@ -209,15 +186,6 @@ function CommunityCard({
 }) {
   const { t } = useTranslation();
 
-  const csModeLabel =
-    c.csMode === "hybrid"
-      ? t("community.csMode.hybrid")
-      : c.csMode === "human_only"
-      ? t("community.csMode.humanOnly")
-      : c.csMode === "ai_only"
-      ? t("community.csMode.aiOnly")
-      : null;
-
   return (
     <button
       type="button"
@@ -242,18 +210,6 @@ function CommunityCard({
             {c.verified && (
               <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" />
             )}
-            <span
-              className={cn(
-                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                c.type === "official"
-                  ? "bg-blue-500/15 text-blue-400"
-                  : c.type === "lounge"
-                  ? "bg-amber-500/15 text-amber-400"
-                  : "bg-purple-500/15 text-purple-400"
-              )}
-            >
-              {t(`community.type.${c.type}`)}
-            </span>
           </div>
           {c.description && (
             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
@@ -268,26 +224,12 @@ function CommunityCard({
           <Users className="h-3 w-3" />
           {c.memberCount.toLocaleString()}
         </span>
-        {c.type === "official" && csModeLabel && (
-          <span className="flex items-center gap-1">
-            <Headset className="h-3 w-3" />
-            {csModeLabel}
-          </span>
-        )}
-        {c.type === "club" && (
+        {(c.monthlyFee > 0 || c.joinFee > 0) && (
           <span className="flex items-center gap-1">
             <Coins className="h-3 w-3 text-yellow-500" />
             {c.monthlyFee > 0
               ? `${c.monthlyFee}${t("community.perMonth")}`
-              : c.joinFee > 0
-              ? `${c.joinFee} ${t("community.joinFee")}`
-              : t("common.free")}
-          </span>
-        )}
-        {c.type === "lounge" && (
-          <span className="flex items-center gap-1">
-            <Mic className="h-3 w-3 text-amber-400" />
-            {t("community.lounge.voiceAgent")}
+              : `${c.joinFee} ${t("community.joinFee")}`}
           </span>
         )}
         {c.creatorName && (

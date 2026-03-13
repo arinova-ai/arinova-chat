@@ -24,6 +24,7 @@ import { useToastStore } from "@/store/toast-store";
 import { MentionPopup, type MentionItem } from "./mention-popup";
 import { wsManager } from "@/lib/ws";
 import { playSendSound } from "@/lib/sounds";
+import { useInputHistory } from "@/hooks/use-input-history";
 
 // ---------- Popup item types ----------
 
@@ -196,6 +197,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
   const clearInputDraft = useChatStore((s) => s.clearInputDraft);
   const replyingTo = useChatStore((s) => s.replyingTo);
   const setReplyingTo = useChatStore((s) => s.setReplyingTo);
+  const { addToHistory, navigateUp, navigateDown, resetNavigation, isNavigating } = useInputHistory();
 
   // Get the active conversation
   const activeConversation = conversations.find(
@@ -966,9 +968,10 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     } else {
       sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
     }
+    addToHistory(trimmed);
     playSendSound();
     clearInput();
-  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers]);
+  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers, addToHistory]);
 
   // ---------- Keyboard handling ----------
 
@@ -1045,6 +1048,24 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       }
     }
 
+    // History navigation: ArrowUp/Down when input is empty or already navigating
+    if (e.key === "ArrowUp" && (value === "" || isNavigating())) {
+      const prev = navigateUp(value);
+      if (prev !== null) {
+        e.preventDefault();
+        setValue(prev);
+      }
+      return;
+    }
+    if (e.key === "ArrowDown" && isNavigating()) {
+      const next = navigateDown();
+      if (next !== null) {
+        e.preventDefault();
+        setValue(next);
+      }
+      return;
+    }
+
     // Desktop: Enter sends, Shift+Enter new line
     // Mobile: Enter always new line, send via button only
     const isMobile = window.innerWidth < 768;
@@ -1057,6 +1078,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setValue(newValue);
+    resetNavigation();
     if (activeConversationId) setInputDraft(activeConversationId, newValue);
 
     // Send typing indicator (debounced to every 3 seconds)
