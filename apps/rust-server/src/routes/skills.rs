@@ -841,11 +841,11 @@ async fn list_agent_commands(
                 .iter()
                 .map(|c| {
                     json!({
-                        "skillId": c.skill_id.to_string(),
+                        "id": c.skill_id.to_string(),
                         "name": &c.name,
                         "slug": &c.slug,
                         "description": &c.description,
-                        "command": &c.slash_command,
+                        "slashCommand": &c.slash_command,
                         "iconUrl": &c.icon_url,
                         "parameters": &c.parameters,
                     })
