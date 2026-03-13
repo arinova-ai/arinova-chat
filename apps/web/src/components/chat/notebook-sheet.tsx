@@ -356,10 +356,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     setViewMode("detail");
     // Fetch full note to get backlinks and linkedCards
     try {
-      const full = await api(`/api/conversations/${conversationId}/notes/${note.id}`) as Note;
+      const full = await api(`/api/conversations/${note.conversationId}/notes/${note.id}`) as Note;
       setSelectedNote(full);
     } catch { /* keep list data if fetch fails */ }
-  }, [conversationId]);
+  }, []);
 
   const handleStartCreate = useCallback(() => {
     setTitleInput("");
