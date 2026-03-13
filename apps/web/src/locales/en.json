@@ -962,6 +962,7 @@
   "skills.enable": "Enable",
   "skills.disable": "Disable",
   "skills.uninstall": "Uninstall",
+  "skills.sourceCode": "Source Code",
   "wiki.title": "Wiki",
   "wiki.create": "Create page",
   "wiki.empty": "No wiki pages yet",

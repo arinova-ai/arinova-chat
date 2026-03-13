@@ -48,6 +48,7 @@ struct SkillListRow {
     is_public: bool,
     created_by: Option<String>,
     install_count: i32,
+    source_url: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     is_favorited: bool,
@@ -71,6 +72,7 @@ struct SkillDetailRow {
     is_public: bool,
     created_by: Option<String>,
     install_count: i32,
+    source_url: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -122,6 +124,7 @@ fn skill_list_to_json(row: &SkillListRow) -> serde_json::Value {
         "isPublic": row.is_public,
         "createdBy": &row.created_by,
         "installCount": row.install_count,
+        "sourceUrl": &row.source_url,
         "isFavorited": row.is_favorited,
         "installedAgentIds": agent_ids,
         "createdAt": row.created_at.to_rfc3339(),
@@ -146,6 +149,7 @@ fn skill_detail_to_json(row: &SkillDetailRow) -> serde_json::Value {
         "isPublic": row.is_public,
         "createdBy": &row.created_by,
         "installCount": row.install_count,
+        "sourceUrl": &row.source_url,
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
     })
@@ -225,7 +229,7 @@ async fn list_skills(
     let list_sql = format!(
         r#"SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version,
                s.slash_command, s.prompt_template, s.is_official, s.is_public,
-               s.created_by, s.install_count, s.created_at, s.updated_at,
+               s.created_by, s.install_count, s.source_url, s.created_at, s.updated_at,
                EXISTS(SELECT 1 FROM user_favorite_skills uf WHERE uf.skill_id = s.id AND uf.user_id = $1) AS is_favorited,
                COALESCE(ARRAY(
                    SELECT ask.agent_id FROM agent_skills ask
@@ -327,7 +331,7 @@ async fn get_skill(
     Path(id): Path<Uuid>,
 ) -> Response {
     let row = sqlx::query_as::<_, SkillDetailRow>(
-        "SELECT id, name, slug, description, category, icon_url, version, slash_command, prompt_template, prompt_content, parameters, is_official, is_public, created_by, install_count, created_at, updated_at FROM skills WHERE id = $1 AND (is_public = true OR created_by = $2)",
+        "SELECT id, name, slug, description, category, icon_url, version, slash_command, prompt_template, prompt_content, parameters, is_official, is_public, created_by, install_count, source_url, created_at, updated_at FROM skills WHERE id = $1 AND (is_public = true OR created_by = $2)",
     )
     .bind(id)
     .bind(&user.id)
@@ -770,7 +774,7 @@ async fn list_favorites(State(state): State<AppState>, user: AuthUser) -> Respon
         r#"
         SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version,
                s.slash_command, s.prompt_template, s.is_official, s.is_public,
-               s.created_by, s.install_count, s.created_at, s.updated_at,
+               s.created_by, s.install_count, s.source_url, s.created_at, s.updated_at,
                true AS is_favorited,
                COALESCE(ARRAY(
                    SELECT ask.agent_id FROM agent_skills ask

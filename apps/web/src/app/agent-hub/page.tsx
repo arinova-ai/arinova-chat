@@ -20,6 +20,7 @@ import {
   ToggleRight,
   Trash2,
   Terminal,
+  ExternalLink,
 } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { PageTitle } from "@/components/ui/page-title";
@@ -42,6 +43,7 @@ interface Skill {
   isPublic: boolean;
   createdBy: string | null;
   installCount: number;
+  sourceUrl?: string | null;
   isFavorited?: boolean;
   installedAgentIds?: string[];
   createdAt: string;
@@ -291,6 +293,18 @@ function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
               <div className="text-xs font-medium text-muted-foreground mb-1">{t("skills.slashCommand")}</div>
               <code className="text-sm font-mono text-brand-text">/{selectedSkill.slashCommand}</code>
             </div>
+          )}
+
+          {selectedSkill.sourceUrl && (
+            <a
+              href={selectedSkill.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm text-brand-text hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t("skills.sourceCode")}
+            </a>
           )}
 
           {/* Install button */}
@@ -727,6 +741,18 @@ function FavoritesTab({ agents }: { agents: { id: string; name: string }[] }) {
             <div className="mt-4 rounded-lg border border-border bg-secondary/50 p-3">
               <code className="text-sm font-mono text-brand-text">/{selectedSkill.slashCommand}</code>
             </div>
+          )}
+
+          {selectedSkill.sourceUrl && (
+            <a
+              href={selectedSkill.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm text-brand-text hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t("skills.sourceCode")}
+            </a>
           )}
 
           <div className="mt-6">
