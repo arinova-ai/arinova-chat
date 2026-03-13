@@ -11,7 +11,7 @@ import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { assetUrl, BACKEND_URL } from "@/lib/config";
 import {
-  ArrowLeft, Search, Bell, SquareKanban, BookOpen, MessageSquare,
+  ArrowLeft, Search, Bell, SquareKanban, BookOpen, BookText, MessageSquare,
   Phone, Image as ImageIcon, FileText, Brain, Pin, Upload, X, Users, UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -49,6 +49,7 @@ export const GROUP_HEADER_BUTTONS: GroupHeaderButton[] = [
   { id: "search", labelKey: "chat.search.inConversation", icon: Search },
   { id: "mute", labelKey: "chat.header.muteConversation", icon: Bell },
   { id: "members", labelKey: "chat.header.members", icon: UsersRound },
+  { id: "wiki", labelKey: "wiki.title", icon: BookText },
   { id: "kanban", labelKey: "chat.kanban.title", icon: SquareKanban },
   { id: "notebook", labelKey: "chat.notebook.title", icon: BookOpen },
   { id: "threads", labelKey: "chat.thread.title", icon: MessageSquare },

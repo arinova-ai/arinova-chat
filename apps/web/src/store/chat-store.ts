@@ -67,6 +67,7 @@ interface AgentSkill {
   id: string;
   name: string;
   description: string;
+  slashCommand?: string;
 }
 
 interface SearchResult {
@@ -251,7 +252,7 @@ interface ChatState {
   closeKanbanSidebar: () => void;
   loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
   createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
-  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[] }) => Promise<void>;
+  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[]; isPinned?: boolean }) => Promise<void>;
   deleteNote: (conversationId: string, noteId: string) => Promise<void>;
   archiveNote: (conversationId: string, noteId: string) => Promise<void>;
   unarchiveNote: (conversationId: string, noteId: string) => Promise<void>;
@@ -1068,11 +1069,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadAgentSkills: async (agentId) => {
     if (get().agentSkills[agentId]) return;
     try {
-      const data = await api<{ skills: AgentSkill[] }>(
-        `/api/agents/${agentId}/skills`
+      const data = await api<{ commands: AgentSkill[] }>(
+        `/api/agents/${agentId}/commands`
       );
       set({
-        agentSkills: { ...get().agentSkills, [agentId]: data.skills },
+        agentSkills: { ...get().agentSkills, [agentId]: data.commands },
       });
     } catch {
       set({

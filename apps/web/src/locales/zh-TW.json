@@ -961,5 +961,13 @@
   "skills.noFavorites": "尚無收藏的 Skill",
   "skills.enable": "啟用",
   "skills.disable": "停用",
-  "skills.uninstall": "解除安裝"
+  "skills.uninstall": "解除安裝",
+  "wiki.title": "維基",
+  "wiki.create": "建立頁面",
+  "wiki.empty": "尚無維基頁面",
+  "wiki.pin": "釘選",
+  "wiki.unpin": "取消釘選",
+  "wiki.titlePlaceholder": "頁面標題...",
+  "wiki.add": "新增",
+  "rightPanel.wiki": "維基"
 }

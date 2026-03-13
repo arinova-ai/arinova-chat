@@ -875,5 +875,13 @@
   "skills.noFavorites": "Aucun skill favori",
   "skills.enable": "Activer",
   "skills.disable": "Désactiver",
-  "skills.uninstall": "Désinstaller"
+  "skills.uninstall": "Désinstaller",
+  "wiki.title": "Wiki",
+  "wiki.create": "Créer une page",
+  "wiki.empty": "Aucune page wiki",
+  "wiki.pin": "Épingler",
+  "wiki.unpin": "Désépingler",
+  "wiki.titlePlaceholder": "Titre de la page...",
+  "wiki.add": "Ajouter",
+  "rightPanel.wiki": "Wiki"
 }

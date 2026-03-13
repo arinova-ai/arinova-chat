@@ -12,6 +12,7 @@ import { SearchResults } from "./search-results";
 import { NotebookSheet } from "./notebook-sheet";
 import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
+import { WikiPanel } from "./wiki-panel";
 
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
@@ -54,6 +55,7 @@ export function ChatArea() {
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const [droppedNote, setDroppedNote] = useState<{ id: string; title: string } | null>(null);
+  const [wikiOpen, setWikiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
 
@@ -223,6 +225,13 @@ export function ChatArea() {
             openNotebook();
           }
         }}
+        onWikiClick={conversation.type === "group" ? () => {
+          if (window.matchMedia("(min-width: 1280px)").matches) {
+            useRightPanelStore.getState().setActiveTab("wiki");
+          } else {
+            setWikiOpen(true);
+          }
+        } : undefined}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
@@ -297,6 +306,13 @@ export function ChatArea() {
         onOpenChange={(open) => { if (!open) closeKanbanSidebar(); }}
         conversationId={activeConversationId}
       />
+      {conversation.type === "group" && (
+        <WikiPanel
+          open={wikiOpen}
+          onOpenChange={setWikiOpen}
+          conversationId={activeConversationId}
+        />
+      )}
     </div>
   );
 }

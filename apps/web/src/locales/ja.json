@@ -875,5 +875,13 @@
   "skills.noFavorites": "お気に入りのスキルはありません",
   "skills.enable": "有効化",
   "skills.disable": "無効化",
-  "skills.uninstall": "アンインストール"
+  "skills.uninstall": "アンインストール",
+  "wiki.title": "ウィキ",
+  "wiki.create": "ページ作成",
+  "wiki.empty": "ウィキページなし",
+  "wiki.pin": "ピン留め",
+  "wiki.unpin": "ピン解除",
+  "wiki.titlePlaceholder": "ページタイトル...",
+  "wiki.add": "追加",
+  "rightPanel.wiki": "ウィキ"
 }

@@ -57,6 +57,7 @@ interface ChatHeaderProps {
   onThreadsClick?: () => void;
   onKanbanClick?: () => void;
   onNotebookClick?: () => void;
+  onWikiClick?: () => void;
   onPhotosClick?: () => void;
   onFilesClick?: () => void;
   officialCommunityId?: string | null;
@@ -78,6 +79,7 @@ export function ChatHeader({
   onThreadsClick,
   onKanbanClick,
   onNotebookClick,
+  onWikiClick,
   onPhotosClick,
   onFilesClick,
   officialCommunityId,
@@ -256,6 +258,7 @@ export function ChatHeader({
                 case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
                 case "mute": handleMuteToggle(); break;
                 case "members": onMembersClick?.(); break;
+                case "wiki": onWikiClick?.(); break;
                 case "kanban": onKanbanClick?.(); break;
                 case "notebook": onNotebookClick?.(); break;
                 case "threads": onThreadsClick?.(); break;

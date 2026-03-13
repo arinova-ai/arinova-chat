@@ -875,5 +875,13 @@
   "skills.noFavorites": "Tiada skills kegemaran",
   "skills.enable": "Dayakan",
   "skills.disable": "Lumpuhkan",
-  "skills.uninstall": "Nyahpasang"
+  "skills.uninstall": "Nyahpasang",
+  "wiki.title": "Wiki",
+  "wiki.create": "Cipta halaman",
+  "wiki.empty": "Tiada halaman wiki",
+  "wiki.pin": "Semat",
+  "wiki.unpin": "Nyahsemat",
+  "wiki.titlePlaceholder": "Tajuk halaman...",
+  "wiki.add": "Tambah",
+  "rightPanel.wiki": "Wiki"
 }

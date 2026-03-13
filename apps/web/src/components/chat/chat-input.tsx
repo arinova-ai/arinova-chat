@@ -325,7 +325,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       const filteredSkills = q
         ? skills.filter(
             (s) =>
-              s.id.toLowerCase().includes(q) ||
+              (s.slashCommand ?? s.id).toLowerCase().includes(q) ||
               s.name.toLowerCase().includes(q) ||
               s.description.toLowerCase().includes(q)
           )
@@ -339,10 +339,11 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         });
 
         for (const skill of filteredSkills) {
+          const cmd = skill.slashCommand ?? skill.id;
           items.push({
             type: "agent-skill",
             id: `skill-${skill.id}`,
-            label: `/${skill.id}`,
+            label: `/${cmd}`,
             description: skill.description,
           });
         }

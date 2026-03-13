@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  BookText,
   Brain,
   SquareKanban,
   MessageSquare,
@@ -20,9 +21,11 @@ import { KanbanSidebar } from "./kanban-sidebar";
 import { ThreadListContent } from "./thread-list-sheet";
 import { GroupMembersPanel } from "./group-members-panel";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
+import { WikiPanel } from "./wiki-panel";
 
 const TABS = [
   { id: "notes" as const, icon: BookOpen },
+  { id: "wiki" as const, icon: BookText },
   { id: "kanban" as const, icon: SquareKanban },
   { id: "threads" as const, icon: MessageSquare },
   { id: "memory" as const, icon: Brain },
@@ -32,6 +35,7 @@ const TABS = [
 
 const TAB_LABELS: Record<string, string> = {
   notes: "rightPanel.notes",
+  wiki: "rightPanel.wiki",
   kanban: "rightPanel.kanban",
   threads: "rightPanel.threads",
   memory: "rightPanel.memory",
@@ -108,6 +112,7 @@ export function RightPanel() {
   const hasAgent = !!activeConversation?.agentId;
 
   const visibleTabs = TABS.filter((tab) => {
+    if (tab.id === "wiki" && !isGroup) return false;
     if (tab.id === "members" && !isGroup) return false;
     if (tab.id === "memory" && !hasAgent) return false;
     if (tab.id === "chat" && !sideChatConversationId) return false;
@@ -182,6 +187,8 @@ function TabContent({ tab }: { tab: string }) {
   switch (tab) {
     case "notes":
       return <NotebookList inline conversationId={activeConversationId} open />;
+    case "wiki":
+      return <WikiPanel inline conversationId={activeConversationId} open />;
     case "kanban":
       return <KanbanSidebar inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
     case "threads":
