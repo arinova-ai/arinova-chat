@@ -154,7 +154,7 @@ export function RightPanel() {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
         <TabContent tab={activeTab} />
       </div>
     </div>
