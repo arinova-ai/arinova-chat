@@ -24,6 +24,7 @@ import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import { useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
+import { useRightPanelStore } from "@/store/right-panel-store";
 
 export function ChatArea() {
   const { t } = useTranslation();
@@ -192,11 +193,35 @@ export function ChatArea() {
         title={conversation.title}
         memberCount={conversation.type === "group" ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
         onClick={agent ? () => setManageOpen(true) : undefined}
-        onMembersClick={conversation.type === "group" ? () => openMembersPanel("members") : undefined}
+        onMembersClick={conversation.type === "group" ? () => {
+          if (window.matchMedia("(min-width: 1280px)").matches) {
+            useRightPanelStore.getState().setActiveTab("members");
+          } else {
+            openMembersPanel("members");
+          }
+        } : undefined}
         onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
-        onThreadsClick={() => setThreadListOpen(true)}
-        onKanbanClick={() => openKanbanSidebar()}
-        onNotebookClick={() => openNotebook()}
+        onThreadsClick={() => {
+          if (window.matchMedia("(min-width: 1280px)").matches) {
+            useRightPanelStore.getState().setActiveTab("threads");
+          } else {
+            setThreadListOpen(true);
+          }
+        }}
+        onKanbanClick={() => {
+          if (window.matchMedia("(min-width: 1280px)").matches) {
+            useRightPanelStore.getState().setActiveTab("kanban");
+          } else {
+            openKanbanSidebar();
+          }
+        }}
+        onNotebookClick={() => {
+          if (window.matchMedia("(min-width: 1280px)").matches) {
+            useRightPanelStore.getState().setActiveTab("notes");
+          } else {
+            openNotebook();
+          }
+        }}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
