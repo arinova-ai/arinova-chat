@@ -622,20 +622,18 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline }: No
             {/* Tag statistics panel */}
             {allTags.length > 0 && (
               <div className={cn("shrink-0", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
-                {isMobile && (
-                  <button
-                    type="button"
-                    onClick={() => setTagsExpanded((p) => !p)}
-                    className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1"
-                  >
-                    <Tag className="h-3 w-3" />
-                    Tags ({allTags.length})
-                    <ChevronDown className={cn("h-3 w-3 transition-transform", tagsExpanded && "rotate-180")} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setTagsExpanded((p) => !p)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1"
+                >
+                  <Tag className="h-3 w-3" />
+                  Tags ({allTags.length})
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", tagsExpanded && "rotate-180")} />
+                </button>
                 <div className={cn(
                   "flex flex-wrap gap-1",
-                  isMobile && !tagsExpanded && "max-h-0 overflow-hidden",
+                  !tagsExpanded && "max-h-0 overflow-hidden",
                 )}>
                   {allTags.map((tag) => (
                     <button
