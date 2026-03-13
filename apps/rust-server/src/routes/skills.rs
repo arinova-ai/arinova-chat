@@ -1,0 +1,810 @@
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Json, Response},
+    routing::{delete, get, post, patch},
+    Router,
+};
+use chrono::{DateTime, Utc};
+use serde::Deserialize;
+use serde_json::json;
+use sqlx::FromRow;
+use uuid::Uuid;
+
+use crate::auth::middleware::AuthUser;
+use crate::AppState;
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/api/skills", get(list_skills))
+        .route("/api/skills/categories", get(list_categories))
+        .route("/api/skills/installed", get(list_installed))
+        .route("/api/skills/favorites", get(list_favorites))
+        .route("/api/skills/{id}", get(get_skill))
+        .route("/api/skills/{id}/install", post(install_skill))
+        .route("/api/skills/{id}/uninstall", delete(uninstall_skill))
+        .route("/api/skills/{id}/favorite", post(add_favorite).delete(remove_favorite))
+        .route(
+            "/api/agents/{agent_id}/skills/{skill_id}",
+            patch(update_agent_skill),
+        )
+        .route("/api/agents/{id}/commands", get(list_agent_commands))
+}
+
+// ===== Types =====
+
+#[derive(Debug, FromRow)]
+struct SkillRow {
+    id: Uuid,
+    name: String,
+    slug: String,
+    description: String,
+    category: String,
+    icon_url: Option<String>,
+    version: String,
+    slash_command: Option<String>,
+    prompt_template: String,
+    is_official: bool,
+    is_public: bool,
+    created_by: Option<String>,
+    install_count: i32,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, FromRow)]
+struct SkillDetailRow {
+    id: Uuid,
+    name: String,
+    slug: String,
+    description: String,
+    category: String,
+    icon_url: Option<String>,
+    version: String,
+    slash_command: Option<String>,
+    prompt_template: String,
+    prompt_content: String,
+    parameters: serde_json::Value,
+    is_official: bool,
+    is_public: bool,
+    created_by: Option<String>,
+    install_count: i32,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListSkillsQuery {
+    category: Option<String>,
+    search: Option<String>,
+    sort: Option<String>,
+    page: Option<i64>,
+    limit: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstallSkillBody {
+    agent_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UninstallSkillQuery {
+    agent_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateAgentSkillBody {
+    is_enabled: Option<bool>,
+    config: Option<serde_json::Value>,
+}
+
+// ===== Helpers =====
+
+fn skill_to_json(row: &SkillRow) -> serde_json::Value {
+    json!({
+        "id": row.id.to_string(),
+        "name": &row.name,
+        "slug": &row.slug,
+        "description": &row.description,
+        "category": &row.category,
+        "iconUrl": &row.icon_url,
+        "version": &row.version,
+        "slashCommand": &row.slash_command,
+        "promptTemplate": &row.prompt_template,
+        "isOfficial": row.is_official,
+        "isPublic": row.is_public,
+        "createdBy": &row.created_by,
+        "installCount": row.install_count,
+        "createdAt": row.created_at.to_rfc3339(),
+        "updatedAt": row.updated_at.to_rfc3339(),
+    })
+}
+
+fn skill_detail_to_json(row: &SkillDetailRow) -> serde_json::Value {
+    json!({
+        "id": row.id.to_string(),
+        "name": &row.name,
+        "slug": &row.slug,
+        "description": &row.description,
+        "category": &row.category,
+        "iconUrl": &row.icon_url,
+        "version": &row.version,
+        "slashCommand": &row.slash_command,
+        "promptTemplate": &row.prompt_template,
+        "promptContent": &row.prompt_content,
+        "parameters": &row.parameters,
+        "isOfficial": row.is_official,
+        "isPublic": row.is_public,
+        "createdBy": &row.created_by,
+        "installCount": row.install_count,
+        "createdAt": row.created_at.to_rfc3339(),
+        "updatedAt": row.updated_at.to_rfc3339(),
+    })
+}
+
+// ===== Handlers =====
+
+/// GET /api/skills — browse skills with pagination, search, category, sort
+async fn list_skills(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Query(params): Query<ListSkillsQuery>,
+) -> Response {
+    let limit = params.limit.unwrap_or(20).min(100);
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * limit;
+
+    let sort_clause = match params.sort.as_deref() {
+        Some("popular") => "s.install_count DESC, s.created_at DESC",
+        Some("name") => "s.name ASC",
+        Some("oldest") => "s.created_at ASC",
+        _ => "s.created_at DESC",
+    };
+
+    let mut conditions = vec!["s.is_public = true".to_string()];
+    let mut bind_idx = 1u32;
+
+    if let Some(ref cat) = params.category {
+        if !cat.is_empty() {
+            conditions.push(format!("s.category = ${bind_idx}"));
+            bind_idx += 1;
+        }
+    }
+
+    if let Some(ref search) = params.search {
+        if !search.trim().is_empty() {
+            conditions.push(format!(
+                "(s.name ILIKE ${bind_idx} OR s.description ILIKE ${bind_idx} OR s.slug ILIKE ${bind_idx})"
+            ));
+            bind_idx += 1;
+        }
+    }
+
+    let where_clause = conditions.join(" AND ");
+
+    let count_sql = format!("SELECT COUNT(*) FROM skills s WHERE {where_clause}");
+    let list_sql = format!(
+        "SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version, s.slash_command, s.prompt_template, s.is_official, s.is_public, s.created_by, s.install_count, s.created_at, s.updated_at FROM skills s WHERE {where_clause} ORDER BY {sort_clause} LIMIT ${bind_idx} OFFSET ${}",
+        bind_idx + 1
+    );
+
+    // Build count query
+    let mut count_q = sqlx::query_as::<_, (i64,)>(&count_sql);
+    if let Some(ref cat) = params.category {
+        if !cat.is_empty() {
+            count_q = count_q.bind(cat);
+        }
+    }
+    if let Some(ref search) = params.search {
+        if !search.trim().is_empty() {
+            count_q = count_q.bind(format!("%{}%", search.trim()));
+        }
+    }
+
+    let total = match count_q.fetch_one(&state.db).await {
+        Ok((c,)) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    };
+
+    // Build list query
+    let mut list_q = sqlx::query_as::<_, SkillRow>(&list_sql);
+    if let Some(ref cat) = params.category {
+        if !cat.is_empty() {
+            list_q = list_q.bind(cat);
+        }
+    }
+    if let Some(ref search) = params.search {
+        if !search.trim().is_empty() {
+            list_q = list_q.bind(format!("%{}%", search.trim()));
+        }
+    }
+    list_q = list_q.bind(limit).bind(offset);
+
+    match list_q.fetch_all(&state.db).await {
+        Ok(rows) => {
+            let items: Vec<_> = rows.iter().map(skill_to_json).collect();
+            Json(json!({
+                "skills": items,
+                "total": total,
+                "page": page,
+                "limit": limit,
+            }))
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/skills/categories — list distinct categories
+async fn list_categories(State(state): State<AppState>, _user: AuthUser) -> Response {
+    let rows = sqlx::query_as::<_, (String, i64)>(
+        "SELECT category, COUNT(*) as count FROM skills WHERE is_public = true GROUP BY category ORDER BY count DESC",
+    )
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(cats) => {
+            let items: Vec<_> = cats
+                .iter()
+                .map(|(cat, count)| json!({"category": cat, "count": count}))
+                .collect();
+            Json(json!({ "categories": items })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/skills/:id — get skill detail
+async fn get_skill(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let row = sqlx::query_as::<_, SkillDetailRow>(
+        "SELECT id, name, slug, description, category, icon_url, version, slash_command, prompt_template, prompt_content, parameters, is_official, is_public, created_by, install_count, created_at, updated_at FROM skills WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(skill)) => Json(skill_detail_to_json(&skill)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Skill not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /api/skills/:id/install — install a skill to an agent
+async fn install_skill(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(skill_id): Path<Uuid>,
+    Json(body): Json<InstallSkillBody>,
+) -> Response {
+    let agent_id = match Uuid::parse_str(&body.agent_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Invalid agentId"})),
+            )
+                .into_response()
+        }
+    };
+
+    // Verify user owns the agent
+    let owner: Option<(String,)> =
+        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
+            .bind(agent_id)
+            .fetch_optional(&state.db)
+            .await
+            .unwrap_or(None);
+
+    match owner {
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Agent not found"})),
+            )
+                .into_response()
+        }
+        Some((oid,)) if oid != user.id => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not authorized"})),
+            )
+                .into_response()
+        }
+        _ => {}
+    }
+
+    // Verify skill exists and is public
+    let skill_exists: Option<(bool,)> =
+        sqlx::query_as("SELECT is_public FROM skills WHERE id = $1")
+            .bind(skill_id)
+            .fetch_optional(&state.db)
+            .await
+            .unwrap_or(None);
+
+    match skill_exists {
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Skill not found"})),
+            )
+                .into_response()
+        }
+        Some((false,)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Skill is not public"})),
+            )
+                .into_response()
+        }
+        _ => {}
+    }
+
+    // Install (upsert)
+    let result = sqlx::query(
+        "INSERT INTO agent_skills (agent_id, skill_id, installed_by) VALUES ($1, $2, $3) ON CONFLICT (agent_id, skill_id) DO NOTHING",
+    )
+    .bind(agent_id)
+    .bind(skill_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) => {
+            if r.rows_affected() > 0 {
+                // Increment install count
+                let _ = sqlx::query(
+                    "UPDATE skills SET install_count = install_count + 1 WHERE id = $1",
+                )
+                .bind(skill_id)
+                .execute(&state.db)
+                .await;
+            }
+            Json(json!({"ok": true})).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// DELETE /api/skills/:id/uninstall?agentId=...
+async fn uninstall_skill(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(skill_id): Path<Uuid>,
+    Query(params): Query<UninstallSkillQuery>,
+) -> Response {
+    let agent_id = match Uuid::parse_str(&params.agent_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Invalid agentId"})),
+            )
+                .into_response()
+        }
+    };
+
+    // Verify user owns the agent
+    let owner: Option<(String,)> =
+        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
+            .bind(agent_id)
+            .fetch_optional(&state.db)
+            .await
+            .unwrap_or(None);
+
+    match owner {
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Agent not found"})),
+            )
+                .into_response()
+        }
+        Some((oid,)) if oid != user.id => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not authorized"})),
+            )
+                .into_response()
+        }
+        _ => {}
+    }
+
+    let result = sqlx::query("DELETE FROM agent_skills WHERE agent_id = $1 AND skill_id = $2")
+        .bind(agent_id)
+        .bind(skill_id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(r) => {
+            if r.rows_affected() > 0 {
+                let _ = sqlx::query(
+                    "UPDATE skills SET install_count = GREATEST(install_count - 1, 0) WHERE id = $1",
+                )
+                .bind(skill_id)
+                .execute(&state.db)
+                .await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/skills/installed?agentId=...
+async fn list_installed(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let agent_id_str = match params.get("agentId").or(params.get("agent_id")) {
+        Some(id) => id.clone(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "agentId query parameter is required"})),
+            )
+                .into_response()
+        }
+    };
+
+    let agent_id = match Uuid::parse_str(&agent_id_str) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Invalid agentId"})),
+            )
+                .into_response()
+        }
+    };
+
+    // Verify user owns the agent
+    let owner: Option<(String,)> =
+        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
+            .bind(agent_id)
+            .fetch_optional(&state.db)
+            .await
+            .unwrap_or(None);
+
+    match owner {
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Agent not found"})),
+            )
+                .into_response()
+        }
+        Some((oid,)) if oid != user.id => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not authorized"})),
+            )
+                .into_response()
+        }
+        _ => {}
+    }
+
+    #[derive(FromRow)]
+    struct InstalledSkillRow {
+        // skill fields
+        id: Uuid,
+        name: String,
+        slug: String,
+        description: String,
+        category: String,
+        icon_url: Option<String>,
+        version: String,
+        slash_command: Option<String>,
+        is_official: bool,
+        // agent_skills fields
+        is_enabled: bool,
+        config: serde_json::Value,
+        installed_at: DateTime<Utc>,
+    }
+
+    let rows = sqlx::query_as::<_, InstalledSkillRow>(
+        r#"
+        SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version,
+               s.slash_command, s.is_official,
+               ask.is_enabled, ask.config, ask.installed_at
+        FROM agent_skills ask
+        JOIN skills s ON s.id = ask.skill_id
+        WHERE ask.agent_id = $1
+        ORDER BY ask.installed_at DESC
+        "#,
+    )
+    .bind(agent_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(skills) => {
+            let items: Vec<_> = skills
+                .iter()
+                .map(|s| {
+                    json!({
+                        "id": s.id.to_string(),
+                        "name": &s.name,
+                        "slug": &s.slug,
+                        "description": &s.description,
+                        "category": &s.category,
+                        "iconUrl": &s.icon_url,
+                        "version": &s.version,
+                        "slashCommand": &s.slash_command,
+                        "isOfficial": s.is_official,
+                        "isEnabled": s.is_enabled,
+                        "config": &s.config,
+                        "installedAt": s.installed_at.to_rfc3339(),
+                    })
+                })
+                .collect();
+            Json(json!({ "skills": items })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// PATCH /api/agents/:agentId/skills/:skillId — update enabled/config
+async fn update_agent_skill(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((agent_id, skill_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<UpdateAgentSkillBody>,
+) -> Response {
+    if body.is_enabled.is_none() && body.config.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Nothing to update"})),
+        )
+            .into_response();
+    }
+
+    // Verify user owns the agent
+    let owner: Option<(String,)> =
+        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
+            .bind(agent_id)
+            .fetch_optional(&state.db)
+            .await
+            .unwrap_or(None);
+
+    match owner {
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Agent not found"})),
+            )
+                .into_response()
+        }
+        Some((oid,)) if oid != user.id => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not authorized"})),
+            )
+                .into_response()
+        }
+        _ => {}
+    }
+
+    // Build dynamic update
+    let mut sets = Vec::new();
+    let mut idx = 1u32;
+
+    if body.is_enabled.is_some() {
+        sets.push(format!("is_enabled = ${idx}"));
+        idx += 1;
+    }
+    if body.config.is_some() {
+        sets.push(format!("config = ${idx}"));
+        idx += 1;
+    }
+
+    let sql = format!(
+        "UPDATE agent_skills SET {} WHERE agent_id = ${} AND skill_id = ${} RETURNING id",
+        sets.join(", "),
+        idx,
+        idx + 1
+    );
+
+    let mut q = sqlx::query_as::<_, (Uuid,)>(&sql);
+    if let Some(is_enabled) = body.is_enabled {
+        q = q.bind(is_enabled);
+    }
+    if let Some(ref config) = body.config {
+        q = q.bind(config);
+    }
+    q = q.bind(agent_id).bind(skill_id);
+
+    match q.fetch_optional(&state.db).await {
+        Ok(Some(_)) => Json(json!({"ok": true})).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Skill not installed on this agent"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// POST /api/skills/:id/favorite
+async fn add_favorite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(skill_id): Path<Uuid>,
+) -> Response {
+    let exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM skills WHERE id = $1")
+        .bind(skill_id)
+        .fetch_optional(&state.db)
+        .await
+        .unwrap_or(None);
+
+    if exists.is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Skill not found"})),
+        )
+            .into_response();
+    }
+
+    let _ = sqlx::query(
+        "INSERT INTO user_favorite_skills (user_id, skill_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(&user.id)
+    .bind(skill_id)
+    .execute(&state.db)
+    .await;
+
+    Json(json!({"ok": true})).into_response()
+}
+
+/// DELETE /api/skills/:id/favorite
+async fn remove_favorite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(skill_id): Path<Uuid>,
+) -> Response {
+    let _ =
+        sqlx::query("DELETE FROM user_favorite_skills WHERE user_id = $1 AND skill_id = $2")
+            .bind(&user.id)
+            .bind(skill_id)
+            .execute(&state.db)
+            .await;
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// GET /api/skills/favorites
+async fn list_favorites(State(state): State<AppState>, user: AuthUser) -> Response {
+    let rows = sqlx::query_as::<_, SkillRow>(
+        r#"
+        SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version,
+               s.slash_command, s.prompt_template, s.is_official, s.is_public,
+               s.created_by, s.install_count, s.created_at, s.updated_at
+        FROM user_favorite_skills uf
+        JOIN skills s ON s.id = uf.skill_id
+        WHERE uf.user_id = $1
+        ORDER BY uf.created_at DESC
+        "#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(skills) => {
+            let items: Vec<_> = skills.iter().map(skill_to_json).collect();
+            Json(json!({ "skills": items })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/agents/:id/commands — list slash commands from installed skills
+async fn list_agent_commands(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(agent_id): Path<Uuid>,
+) -> Response {
+    #[derive(FromRow)]
+    struct CommandRow {
+        skill_id: Uuid,
+        name: String,
+        slug: String,
+        description: String,
+        slash_command: Option<String>,
+        icon_url: Option<String>,
+        parameters: serde_json::Value,
+    }
+
+    let rows = sqlx::query_as::<_, CommandRow>(
+        r#"
+        SELECT s.id AS skill_id, s.name, s.slug, s.description, s.slash_command,
+               s.icon_url, s.parameters
+        FROM agent_skills ask
+        JOIN skills s ON s.id = ask.skill_id
+        WHERE ask.agent_id = $1 AND ask.is_enabled = true AND s.slash_command IS NOT NULL
+        ORDER BY s.name
+        "#,
+    )
+    .bind(agent_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(cmds) => {
+            let items: Vec<_> = cmds
+                .iter()
+                .map(|c| {
+                    json!({
+                        "skillId": c.skill_id.to_string(),
+                        "name": &c.name,
+                        "slug": &c.slug,
+                        "description": &c.description,
+                        "command": &c.slash_command,
+                        "iconUrl": &c.icon_url,
+                        "parameters": &c.parameters,
+                    })
+                })
+                .collect();
+            Json(json!({ "commands": items })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}

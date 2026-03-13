@@ -50,6 +50,8 @@ pub mod voice;
 pub mod user_settings;
 pub mod conversation_settings;
 pub mod accounts;
+pub mod skills;
+pub mod agent_skills;
 
 use axum::Router;
 use crate::AppState;
@@ -106,5 +108,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(dashboard::router())
         .merge(user_settings::router())
         .merge(accounts::router())
+        .merge(skills::router())
+        .merge(agent_skills::router())
         .with_state(state)
 }
