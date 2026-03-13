@@ -104,11 +104,11 @@ export function RightPanel() {
 
   if (!isWide || !isOpen) return null;
 
-  const isH2a = activeConversation?.type === "h2a";
+  const hasAgent = !!activeConversation?.agentId;
 
   const visibleTabs = TABS.filter((tab) => {
     if (tab.id === "members" && !isGroup) return false;
-    if (tab.id === "memory" && !isH2a) return false;
+    if (tab.id === "memory" && !hasAgent) return false;
     if (tab.id === "chat" && !sideChatConversationId) return false;
     return true;
   });

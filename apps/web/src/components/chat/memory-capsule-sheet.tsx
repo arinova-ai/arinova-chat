@@ -1,12 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { VisuallyHidden } from "radix-ui";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -559,22 +554,32 @@ export function MemoryCapsuleSheet({
     return <div className="p-4">{content}</div>;
   }
 
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        showCloseButton={false}
-        className="rounded-t-2xl border-border bg-secondary px-4 pb-6 pt-3 max-h-[80vh] overflow-y-auto"
-      >
-        <VisuallyHidden.Root>
-          <SheetTitle>{t("memoryCapsule.title")}</SheetTitle>
-        </VisuallyHidden.Root>
+  if (!open) return null;
 
-        {/* Drag handle */}
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
-
+  // Mobile: full-screen overlay like kanban-sidebar
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+        <div className="flex items-center gap-2">
+          <Brain className="h-5 w-5 text-brand" />
+          <h2 className="text-base font-semibold">{t("memoryCapsule.title")}</h2>
+        </div>
+        <button type="button" onClick={() => onOpenChange(false)} className="rounded-lg p-1 hover:bg-accent">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {content}
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>,
+    document.body,
   );
 }
