@@ -586,6 +586,7 @@ async fn main() {
         .merge(routes::agent_notebooks::router())
         .merge(routes::skills::router())
         .merge(routes::agent_skills::router())
+        .merge(routes::wiki::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .merge(ws::voice_handler::router())

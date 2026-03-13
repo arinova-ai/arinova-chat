@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import type { Note } from "@arinova/shared/types";
 import { api } from "@/lib/api";
-import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
@@ -23,6 +21,18 @@ import {
   Save,
 } from "lucide-react";
 
+interface WikiPage {
+  id: string;
+  conversationId: string;
+  title: string;
+  content: string;
+  tags: string[];
+  isPinned: boolean;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface WikiPanelProps {
   conversationId: string;
   inline?: boolean;
@@ -30,24 +40,19 @@ interface WikiPanelProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-const EMPTY_NOTES: Note[] = [];
-
 type ViewMode = "list" | "detail" | "create";
 
 export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPanelProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
-  const notes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
-  const loadNotes = useChatStore((s) => s.loadNotes);
-  const createNote = useChatStore((s) => s.createNote);
-  const updateNote = useChatStore((s) => s.updateNote);
 
+  const [pages, setPages] = useState<WikiPage[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [selectedPage, setSelectedPage] = useState<WikiPage | null>(null);
 
   // Edit fields
   const [editTitle, setEditTitle] = useState("");
@@ -64,7 +69,7 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
       if (e.key === "Escape") {
         if (viewMode !== "list") {
           setViewMode("list");
-          setSelectedNote(null);
+          setSelectedPage(null);
         } else {
           onOpenChange(false);
         }
@@ -74,21 +79,29 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [inline, open, onOpenChange, viewMode]);
 
-  useEffect(() => {
-    if (conversationId) {
-      setLoading(true);
-      loadNotes(conversationId, { tags: filterTags.length ? filterTags : undefined }).finally(() =>
-        setLoading(false),
+  const fetchPages = useCallback(async () => {
+    if (!conversationId) return;
+    setLoading(true);
+    try {
+      const res = await api<{ pages: WikiPage[] }>(
+        `/api/conversations/${conversationId}/wiki`,
+        { silent: true },
       );
-    }
-  }, [conversationId, loadNotes, filterTags]);
+      setPages(res.pages);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [conversationId]);
+
+  useEffect(() => {
+    fetchPages();
+  }, [fetchPages]);
 
   // Collect all tags
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
-    notes.forEach((n) => n.tags?.forEach((tag) => tagSet.add(tag)));
+    pages.forEach((p) => p.tags?.forEach((tag) => tagSet.add(tag)));
     return Array.from(tagSet).sort();
-  }, [notes]);
+  }, [pages]);
 
   const toggleFilterTag = useCallback((tag: string) => {
     setFilterTags((prev) =>
@@ -96,65 +109,76 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
     );
   }, []);
 
-  // Sort: pinned first, then by updatedAt
-  const sortedNotes = useMemo(() => {
-    const active = notes.filter((n) => !n.archivedAt);
-    return [...active].sort((a, b) => {
-      const aPinned = (a as Note & { isPinned?: boolean }).isPinned ? 1 : 0;
-      const bPinned = (b as Note & { isPinned?: boolean }).isPinned ? 1 : 0;
-      if (bPinned !== aPinned) return bPinned - aPinned;
+  // Sort: pinned first, then by updatedAt; filter by tags
+  const sortedPages = useMemo(() => {
+    let filtered = pages;
+    if (filterTags.length > 0) {
+      filtered = pages.filter((p) => filterTags.every((ft) => p.tags?.includes(ft)));
+    }
+    return [...filtered].sort((a, b) => {
+      if (b.isPinned !== a.isPinned) return b.isPinned ? 1 : -1;
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [notes]);
+  }, [pages, filterTags]);
 
-  const handleOpenNote = useCallback(async (note: Note) => {
-    setSelectedNote(note);
-    setEditTitle(note.title);
-    setEditContent(note.content || "");
+  const handleOpenPage = useCallback(async (page: WikiPage) => {
+    setSelectedPage(page);
+    setEditTitle(page.title);
+    setEditContent(page.content || "");
     setViewMode("detail");
-    // Fetch full note content
+    // Fetch full page content
     try {
-      const full = await api<Note>(`/api/conversations/${note.conversationId || conversationId}/notes/${note.id}`);
-      setSelectedNote(full);
+      const full = await api<WikiPage>(`/api/conversations/${conversationId}/wiki/${page.id}`);
+      setSelectedPage(full);
       setEditTitle(full.title);
       setEditContent(full.content || "");
     } catch { /* keep list data */ }
   }, [conversationId]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedNote || !editTitle.trim()) return;
+    if (!selectedPage || !editTitle.trim()) return;
     setSaving(true);
     try {
-      await updateNote(conversationId, selectedNote.id, {
-        title: editTitle.trim(),
-        content: editContent,
-      });
-      setSelectedNote({ ...selectedNote, title: editTitle.trim(), content: editContent, updatedAt: new Date().toISOString() });
+      const updated = await api<WikiPage>(
+        `/api/conversations/${conversationId}/wiki/${selectedPage.id}`,
+        { method: "PATCH", body: JSON.stringify({ title: editTitle.trim(), content: editContent }) },
+      );
+      setSelectedPage(updated);
+      setPages((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     } catch { /* api shows toast */ }
     setSaving(false);
-  }, [selectedNote, conversationId, editTitle, editContent, updateNote]);
+  }, [selectedPage, conversationId, editTitle, editContent]);
 
   const handleCreate = async () => {
     const title = newTitle.trim();
     if (!title) return;
     setSaving(true);
-    await createNote(conversationId, title, newContent);
-    setNewTitle("");
-    setNewContent("");
-    setViewMode("list");
+    try {
+      const created = await api<WikiPage>(
+        `/api/conversations/${conversationId}/wiki`,
+        { method: "POST", body: JSON.stringify({ title, content: newContent }) },
+      );
+      setPages((prev) => [created, ...prev]);
+      setNewTitle("");
+      setNewContent("");
+      setViewMode("list");
+    } catch { /* api shows toast */ }
     setSaving(false);
   };
 
   const handleBackToList = useCallback(() => {
     setViewMode("list");
-    setSelectedNote(null);
-    loadNotes(conversationId, { tags: filterTags.length ? filterTags : undefined });
-  }, [conversationId, loadNotes, filterTags]);
+    setSelectedPage(null);
+  }, []);
 
-  const handleTogglePin = async (note: Note) => {
-    const isPinned = (note as Note & { isPinned?: boolean }).isPinned ?? false;
-    await updateNote(conversationId, note.id, { isPinned: !isPinned });
-    loadNotes(conversationId, { tags: filterTags.length ? filterTags : undefined });
+  const handleTogglePin = async (page: WikiPage) => {
+    try {
+      const updated = await api<WikiPage>(
+        `/api/conversations/${conversationId}/wiki/${page.id}`,
+        { method: "PATCH", body: JSON.stringify({ isPinned: !page.isPinned }) },
+      );
+      setPages((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } catch { /* ignore */ }
   };
 
   function formatTime(date: string): string {
@@ -183,7 +207,7 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-semibold flex-1 truncate">{selectedNote?.title || ""}</span>
+        <span className="text-sm font-semibold flex-1 truncate">{selectedPage?.title || ""}</span>
         <button
           type="button"
           onClick={handleSave}
@@ -322,74 +346,68 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
         </div>
       )}
 
-      {/* Notes list */}
+      {/* Pages list */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : sortedNotes.length === 0 ? (
+        ) : sortedPages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
             <BookText className="h-8 w-8 mb-2 opacity-50" />
             {t("wiki.empty")}
           </div>
         ) : (
-          sortedNotes.map((note) => {
-            const isPinned = (note as Note & { isPinned?: boolean }).isPinned ?? false;
-            return (
-              <div
-                key={note.id}
-                className="group relative flex items-start px-3 py-2.5 hover:bg-muted/50 transition-colors border-b border-border/50 cursor-pointer"
-                onClick={() => handleOpenNote(note)}
-              >
-                {isPinned && <Pin className="h-3 w-3 text-brand-text mr-2 mt-0.5 shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{note.title}</div>
-                  {note.content && (
-                    <div className="text-xs text-muted-foreground truncate mt-0.5">
-                      {note.content.slice(0, 80)}
+          sortedPages.map((page) => (
+            <div
+              key={page.id}
+              className="group relative flex items-start px-3 py-2.5 hover:bg-muted/50 transition-colors border-b border-border/50 cursor-pointer"
+              onClick={() => handleOpenPage(page)}
+            >
+              {page.isPinned && <Pin className="h-3 w-3 text-brand-text mr-2 mt-0.5 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{page.title}</div>
+                {page.content && (
+                  <div className="text-xs text-muted-foreground truncate mt-0.5">
+                    {page.content.slice(0, 80)}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-muted-foreground">{formatTime(page.updatedAt)}</span>
+                  {page.tags && page.tags.length > 0 && (
+                    <div className="flex gap-0.5">
+                      {page.tags.slice(0, 2).map((tag) => (
+                        <span key={tag} className="rounded-full bg-secondary px-1.5 py-0 text-[9px] text-muted-foreground">
+                          {tag}
+                        </span>
+                      ))}
+                      {page.tags.length > 2 && (
+                        <span className="text-[9px] text-muted-foreground">+{page.tags.length - 2}</span>
+                      )}
                     </div>
                   )}
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-muted-foreground">{formatTime(note.updatedAt)}</span>
-                    {note.creatorName && (
-                      <span className="text-[10px] text-muted-foreground">by {note.creatorName}</span>
-                    )}
-                    {note.tags && note.tags.length > 0 && (
-                      <div className="flex gap-0.5">
-                        {note.tags.slice(0, 2).map((tag) => (
-                          <span key={tag} className="rounded-full bg-secondary px-1.5 py-0 text-[9px] text-muted-foreground">
-                            {tag}
-                          </span>
-                        ))}
-                        {note.tags.length > 2 && (
-                          <span className="text-[9px] text-muted-foreground">+{note.tags.length - 2}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
-
-                {/* Pin/Unpin button */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleTogglePin(note);
-                  }}
-                  className={cn(
-                    "rounded-md p-1 transition-colors shrink-0",
-                    isPinned
-                      ? "text-brand-text hover:text-brand-text/70"
-                      : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground",
-                  )}
-                  title={isPinned ? t("wiki.unpin") : t("wiki.pin")}
-                >
-                  {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                </button>
               </div>
-            );
-          })
+
+              {/* Pin/Unpin button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTogglePin(page);
+                }}
+                className={cn(
+                  "rounded-md p-1 transition-colors shrink-0",
+                  page.isPinned
+                    ? "text-brand-text hover:text-brand-text/70"
+                    : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground",
+                )}
+                title={page.isPinned ? t("wiki.unpin") : t("wiki.pin")}
+              >
+                {page.isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          ))
         )}
       </div>
     </div>
