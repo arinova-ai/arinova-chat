@@ -197,6 +197,7 @@ export interface KanbanCard {
   createdBy: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  archivedAt?: string | null;
 }
 
 /** Body for createCard(). */
@@ -211,6 +212,8 @@ export interface CreateCardBody {
   columnName?: string;
   /** Column ID to place the card in (takes precedence over columnName). */
   columnId?: string;
+  /** Board ID to create the card on (if the owner has multiple boards). */
+  boardId?: string;
 }
 
 /** Body for updateCard(). */
@@ -227,6 +230,59 @@ export interface ListBoardsResult {
   boards: KanbanBoard[];
   columns: KanbanColumn[];
   cards: KanbanCard[];
+}
+
+/** Body for createBoard(). */
+export interface CreateBoardBody {
+  name: string;
+  columns?: { name: string }[];
+}
+
+/** Body for updateBoard(). */
+export interface UpdateBoardBody {
+  name: string;
+}
+
+/** Body for createColumn(). */
+export interface CreateColumnBody {
+  name: string;
+  sortOrder?: number;
+}
+
+/** Body for updateColumn(). */
+export interface UpdateColumnBody {
+  name?: string;
+  sortOrder?: number;
+}
+
+/** Body for addCardCommit(). */
+export interface AddCommitBody {
+  commitHash: string;
+  message?: string;
+}
+
+/** A commit linked to a kanban card. */
+export interface CardCommit {
+  cardId: string;
+  commitHash: string;
+  message: string;
+  createdAt: string;
+}
+
+/** A note linked to a kanban card. */
+export interface CardNote {
+  id: string;
+  title: string;
+  tags: string[];
+  createdAt: string;
+}
+
+/** Paginated result from listArchivedCards(). */
+export interface ArchivedCardsResult {
+  cards: KanbanCard[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 // ── Memory types ──────────────────────────────────────────────

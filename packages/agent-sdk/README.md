@@ -115,6 +115,241 @@ The object passed to your `onTask` handler.
 
 If your `onTask` handler throws, the SDK automatically calls `sendError` with the error message.
 
+### `agent.sendMessage(conversationId, content)`
+
+Send a proactive message to a conversation. Uses WebSocket if connected, otherwise falls back to HTTP POST.
+
+```ts
+await agent.sendMessage("conv-id", "Hello from the agent!");
+```
+
+### `agent.uploadFile(conversationId, file, fileName, fileType?)`
+
+Upload a file to R2 storage. Returns an `UploadResult` with the public URL.
+
+```ts
+const result = await agent.uploadFile("conv-id", buffer, "image.png");
+console.log(result.url);
+```
+
+### `agent.fetchHistory(conversationId, options?)`
+
+Fetch conversation message history with pagination.
+
+| Option | Type | Description |
+|---|---|---|
+| `before` | `string` | Fetch messages before this message ID |
+| `after` | `string` | Fetch messages after this message ID |
+| `around` | `string` | Fetch messages around this message ID |
+| `limit` | `number` | Max messages to return (default 50, max 100) |
+
+---
+
+### Notes API
+
+#### `agent.listNotes(conversationId, options?)`
+
+List notes in a conversation. Supports pagination, tag filtering, and archived notes.
+
+```ts
+const { notes, hasMore } = await agent.listNotes("conv-id", { tags: ["sprint-1"], limit: 10 });
+```
+
+#### `agent.createNote(conversationId, body)`
+
+Create a note. Body: `{ title: string, content?: string, tags?: string[] }`.
+
+```ts
+const note = await agent.createNote("conv-id", { title: "Meeting Notes", content: "...", tags: ["meeting"] });
+```
+
+#### `agent.updateNote(conversationId, noteId, body)`
+
+Update a note. Body: `{ title?: string, content?: string, tags?: string[] }`.
+
+#### `agent.deleteNote(conversationId, noteId)`
+
+Delete a note.
+
+#### `agent.shareNote(conversationId, noteId)`
+
+Share a note as a rich preview card in a conversation.
+
+```ts
+const result = await agent.shareNote("conv-id", "note-id");
+```
+
+---
+
+### Kanban API
+
+#### Board CRUD
+
+##### `agent.listBoards()`
+
+List the owner's kanban boards. Returns `KanbanBoard[]`.
+
+```ts
+const boards = await agent.listBoards();
+```
+
+##### `agent.createBoard(body)`
+
+Create a new board. If `columns` is omitted, the server creates 5 default columns.
+
+```ts
+const board = await agent.createBoard({ name: "Sprint Board" });
+// Or with custom columns:
+const board2 = await agent.createBoard({ name: "Custom", columns: [{ name: "Backlog" }, { name: "Done" }] });
+```
+
+##### `agent.updateBoard(boardId, body)`
+
+Update a board's name.
+
+```ts
+await agent.updateBoard("board-id", { name: "New Name" });
+```
+
+##### `agent.archiveBoard(boardId)`
+
+Archive a board.
+
+```ts
+await agent.archiveBoard("board-id");
+```
+
+#### Column Management
+
+##### `agent.listColumns(boardId)`
+
+List columns for a board. Returns `KanbanColumn[]`.
+
+##### `agent.createColumn(boardId, body)`
+
+Create a column. Body: `{ name: string, sortOrder?: number }`.
+
+```ts
+const col = await agent.createColumn("board-id", { name: "In Review" });
+```
+
+##### `agent.updateColumn(columnId, body)`
+
+Update a column. Body: `{ name?: string, sortOrder?: number }`.
+
+##### `agent.deleteColumn(columnId)`
+
+Delete a column.
+
+##### `agent.reorderColumns(boardId, columnIds)`
+
+Reorder columns by providing an ordered array of column IDs.
+
+```ts
+await agent.reorderColumns("board-id", ["col-3", "col-1", "col-2"]);
+```
+
+#### Card Operations
+
+##### `agent.listCards()`
+
+List all kanban cards for the agent's owner.
+
+##### `agent.createCard(body)`
+
+Create a card. Body: `{ title, description?, priority?, columnName?, columnId?, boardId? }`.
+
+```ts
+const card = await agent.createCard({ title: "Fix login bug", priority: "high", columnName: "To Do" });
+```
+
+##### `agent.updateCard(cardId, body)`
+
+Update a card. Body: `{ title?, description?, priority?, columnId?, sortOrder? }`.
+
+##### `agent.completeCard(cardId)`
+
+Mark a card as complete (moves it to the Done column).
+
+```ts
+const card = await agent.completeCard("card-id");
+```
+
+##### `agent.listArchivedCards(boardId, options?)`
+
+List archived cards with pagination. Options: `{ page?: number, limit?: number }`.
+
+```ts
+const { cards, total } = await agent.listArchivedCards("board-id", { page: 1, limit: 20 });
+```
+
+#### Card-Commit Links
+
+##### `agent.addCardCommit(cardId, body)`
+
+Link a git commit to a card. Body: `{ commitHash: string, message?: string }`.
+
+```ts
+await agent.addCardCommit("card-id", { commitHash: "abc1234", message: "fix: resolve login issue" });
+```
+
+##### `agent.listCardCommits(cardId)`
+
+List commits linked to a card. Returns `CardCommit[]`.
+
+#### Card-Note Links
+
+##### `agent.linkCardNote(cardId, noteId)`
+
+Link a note to a card.
+
+```ts
+await agent.linkCardNote("card-id", "note-id");
+```
+
+##### `agent.unlinkCardNote(cardId, noteId)`
+
+Unlink a note from a card.
+
+##### `agent.listCardNotes(cardId)`
+
+List notes linked to a card. Returns `CardNote[]`.
+
+---
+
+### Memory API
+
+#### `agent.queryMemory(options)`
+
+Search memories across all memory capsules granted to this agent. Uses hybrid search (embedding + text).
+
+```ts
+const memories = await agent.queryMemory({ query: "deployment process", limit: 5 });
+memories.forEach((m) => console.log(m.capsuleName, m.content));
+```
+
+---
+
+### Types
+
+```ts
+interface KanbanBoard { id: string; name: string; createdAt: string }
+interface KanbanColumn { id: string; boardId: string; name: string; sortOrder: number }
+interface KanbanCard { id: string; columnId: string; columnName?: string; title: string; description: string | null; priority: string | null; dueDate: string | null; sortOrder: number; createdBy: string | null; createdAt: string | null; updatedAt: string | null; archivedAt?: string | null }
+interface CreateBoardBody { name: string; columns?: { name: string }[] }
+interface UpdateBoardBody { name: string }
+interface CreateCardBody { title: string; description?: string; priority?: string; columnName?: string; columnId?: string; boardId?: string }
+interface UpdateCardBody { title?: string; description?: string; priority?: string; columnId?: string; sortOrder?: number }
+interface CreateColumnBody { name: string; sortOrder?: number }
+interface UpdateColumnBody { name?: string; sortOrder?: number }
+interface AddCommitBody { commitHash: string; message?: string }
+interface CardCommit { cardId: string; commitHash: string; message: string; createdAt: string }
+interface CardNote { id: string; title: string; tags: string[]; createdAt: string }
+interface ArchivedCardsResult { cards: KanbanCard[]; total: number; page: number; limit: number }
+interface Note { id: string; conversationId: string; title: string; content: string; tags?: string[]; createdAt: string; updatedAt: string }
+interface MemoryEntry { content: string; capsuleName: string; capsuleId: string; score: number; importance: number }
+```
+
 ## Getting a Bot Token
 
 1. Open the [Arinova Chat](https://chat.arinova.ai) dashboard.

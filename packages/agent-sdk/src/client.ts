@@ -15,9 +15,18 @@ import type {
   CreateNoteBody,
   UpdateNoteBody,
   KanbanBoard,
+  KanbanColumn,
   KanbanCard,
+  CreateBoardBody,
+  UpdateBoardBody,
   CreateCardBody,
   UpdateCardBody,
+  CreateColumnBody,
+  UpdateColumnBody,
+  AddCommitBody,
+  CardCommit,
+  CardNote,
+  ArchivedCardsResult,
   QueryMemoryOptions,
   MemoryEntry,
   ShareNoteResult,
@@ -533,6 +542,393 @@ export class ArinovaAgent {
     }
 
     return res.json() as Promise<KanbanCard>;
+  }
+
+  /**
+   * Create a new kanban board.
+   * @param body - Board name and optional initial columns.
+   */
+  async createBoard(body: CreateBoardBody): Promise<KanbanBoard> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`createBoard failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanBoard>;
+  }
+
+  /**
+   * Update a kanban board.
+   * @param boardId - The board ID to update.
+   * @param body - Fields to update.
+   */
+  async updateBoard(boardId: string, body: UpdateBoardBody): Promise<KanbanBoard> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards/${boardId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`updateBoard failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanBoard>;
+  }
+
+  /**
+   * Archive a kanban board.
+   * @param boardId - The board ID to archive.
+   */
+  async archiveBoard(boardId: string): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards/${boardId}/archive`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`archiveBoard failed (${res.status}): ${text}`);
+    }
+  }
+
+  /**
+   * List columns for a board.
+   * @param boardId - The board ID.
+   */
+  async listColumns(boardId: string): Promise<KanbanColumn[]> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards/${boardId}/columns`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`listColumns failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanColumn[]>;
+  }
+
+  /**
+   * Create a column in a board.
+   * @param boardId - The board ID.
+   * @param body - Column name and optional sort order.
+   */
+  async createColumn(boardId: string, body: CreateColumnBody): Promise<KanbanColumn> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards/${boardId}/columns`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`createColumn failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanColumn>;
+  }
+
+  /**
+   * Update a column.
+   * @param columnId - The column ID to update.
+   * @param body - Fields to update (name, sortOrder).
+   */
+  async updateColumn(columnId: string, body: UpdateColumnBody): Promise<KanbanColumn> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/columns/${columnId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`updateColumn failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanColumn>;
+  }
+
+  /**
+   * Delete a column.
+   * @param columnId - The column ID to delete.
+   */
+  async deleteColumn(columnId: string): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/columns/${columnId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`deleteColumn failed (${res.status}): ${text}`);
+    }
+  }
+
+  /**
+   * Reorder columns in a board.
+   * @param boardId - The board ID.
+   * @param columnIds - Ordered array of column IDs.
+   */
+  async reorderColumns(boardId: string, columnIds: string[]): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards/${boardId}/columns/reorder`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ columnIds }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`reorderColumns failed (${res.status}): ${text}`);
+    }
+  }
+
+  /**
+   * List all kanban cards for the agent's owner.
+   */
+  async listCards(): Promise<KanbanCard[]> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`listCards failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanCard[]>;
+  }
+
+  /**
+   * Mark a card as complete (moves it to the Done column).
+   * @param cardId - The card ID to complete.
+   */
+  async completeCard(cardId: string): Promise<KanbanCard> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/complete`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`completeCard failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanCard>;
+  }
+
+  /**
+   * List archived cards for a board.
+   * @param boardId - The board ID.
+   * @param options - Pagination options (page, limit).
+   */
+  async listArchivedCards(
+    boardId: string,
+    options?: { page?: number; limit?: number },
+  ): Promise<ArchivedCardsResult> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const params = new URLSearchParams();
+    if (options?.page != null) params.set("page", String(options.page));
+    if (options?.limit != null) params.set("limit", String(options.limit));
+
+    const qs = params.toString();
+    const url = `${httpUrl}/api/agent/kanban/boards/${boardId}/archived-cards${qs ? `?${qs}` : ""}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`listArchivedCards failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<ArchivedCardsResult>;
+  }
+
+  /**
+   * Add a commit link to a card.
+   * @param cardId - The card ID.
+   * @param body - Commit hash and optional message.
+   */
+  async addCardCommit(cardId: string, body: AddCommitBody): Promise<CardCommit> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/commits`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`addCardCommit failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<CardCommit>;
+  }
+
+  /**
+   * List commits linked to a card.
+   * @param cardId - The card ID.
+   */
+  async listCardCommits(cardId: string): Promise<CardCommit[]> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/commits`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`listCardCommits failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<CardCommit[]>;
+  }
+
+  /**
+   * Link a note to a card.
+   * @param cardId - The card ID.
+   * @param noteId - The note ID to link.
+   */
+  async linkCardNote(cardId: string, noteId: string): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/notes`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ noteId }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`linkCardNote failed (${res.status}): ${text}`);
+    }
+  }
+
+  /**
+   * Unlink a note from a card.
+   * @param cardId - The card ID.
+   * @param noteId - The note ID to unlink.
+   */
+  async unlinkCardNote(cardId: string, noteId: string): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/notes/${noteId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`unlinkCardNote failed (${res.status}): ${text}`);
+    }
+  }
+
+  /**
+   * List notes linked to a card.
+   * @param cardId - The card ID.
+   */
+  async listCardNotes(cardId: string): Promise<CardNote[]> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/notes`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`listCardNotes failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<CardNote[]>;
   }
 
   // ── Memory API ───────────────────────────────────────────────
