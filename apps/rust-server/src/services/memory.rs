@@ -13,8 +13,7 @@ use crate::config::Config;
 use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
 use crate::services::push::{send_push_to_user, PushPayload};
 
-const GEMINI_MODEL_URL: &str =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
 Extract key facts, preferences, and important information from this conversation. \
@@ -23,7 +22,9 @@ Format: [importance:0.8][tag1][tag2] memory content here \
 Tags should be short lowercase words describing the category (e.g. preference, decision, fact, action, relationship, technical, workflow, tool, goal). \
 Focus on: user preferences, decisions made, important facts mentioned, action items, and relationship context. \
 Be concise — each line should be one self-contained memory. \
-Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details.";
+Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details. \
+Do NOT use chain-of-thought or reasoning tags. Output the JSON directly. \
+IMPORTANT: Extract memories in the SAME LANGUAGE as the original conversation. If the user speaks Chinese, write Chinese. If English, write English. Never translate.";
 
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;
@@ -44,20 +45,16 @@ fn safe_truncate(s: &str, max_bytes: usize) -> &str {
 }
 
 #[derive(Deserialize)]
-struct GeminiResponse {
-    candidates: Option<Vec<GeminiCandidate>>,
+struct OpenRouterResponse {
+    choices: Option<Vec<OpenRouterChoice>>,
 }
 #[derive(Deserialize)]
-struct GeminiCandidate {
-    content: Option<GeminiContent>,
+struct OpenRouterChoice {
+    message: Option<OpenRouterMessage>,
 }
 #[derive(Deserialize)]
-struct GeminiContent {
-    parts: Option<Vec<GeminiPart>>,
-}
-#[derive(Deserialize)]
-struct GeminiPart {
-    text: Option<String>,
+struct OpenRouterMessage {
+    content: Option<String>,
 }
 
 /// Extract memories from a capsule's source conversation using Gemini,
@@ -318,19 +315,17 @@ async fn do_extraction(
         messages.len(), chunks.len(), capsule_id
     );
 
-    // 5. Call Gemini per chunk to extract key memories (with 1 retry on failure)
-    let gemini_key = config
-        .gemini_api_key
+    // 5. Call OpenRouter per chunk to extract key memories (with 1 retry on failure)
+    let openrouter_key = config
+        .openrouter_api_key
         .as_deref()
-        .ok_or_else(|| anyhow!("GEMINI_API_KEY not configured"))?;
+        .ok_or_else(|| anyhow!("OPENROUTER_API_KEY not configured"))?;
 
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .context("Failed to build HTTP client")?;
-
-    let url = format!("{}?key={}", GEMINI_MODEL_URL, gemini_key);
 
     let mut parsed_entries: Vec<(String, f64, Vec<String>, usize)> = Vec::new(); // (content, importance, tags, chunk_idx)
     let mut chunks_succeeded = 0usize;
@@ -342,12 +337,15 @@ async fn do_extraction(
         }
 
         let body = serde_json::json!({
-            "systemInstruction": {"parts": [{"text": EXTRACTION_SYSTEM_PROMPT}]},
-            "contents": [{"parts": [{"text": chunk_text}]}],
-            "generationConfig": {"maxOutputTokens": 8192}
+            "model": "openrouter/auto",
+            "messages": [
+                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                {"role": "user", "content": chunk_text}
+            ],
+            "max_tokens": 1500
         });
 
-        let chunk_result = call_gemini_with_retry(&client, &url, &body, chunk_idx).await;
+        let chunk_result = call_openrouter_with_retry(&client, openrouter_key, &body, chunk_idx).await;
 
         let chunk_msgs = chunk_msg_counts.get(chunk_idx).copied().unwrap_or(0);
         processed_messages += chunk_msgs;
@@ -394,7 +392,7 @@ async fn do_extraction(
     }
 
     if chunks_succeeded == 0 {
-        return Err(anyhow!("All {} chunk(s) failed during Gemini extraction", chunks.len()));
+        return Err(anyhow!("All {} chunk(s) failed during OpenRouter extraction", chunks.len()));
     }
 
     // Only advance watermark if ALL chunks succeeded to avoid permanently skipping failed chunks
@@ -471,26 +469,40 @@ async fn do_extraction(
     Ok((parsed_entries.len(), msg_count, first_msg_utc, effective_watermark))
 }
 
-/// Send a single chunk to Gemini, retry once on failure, return extracted text.
-async fn call_gemini_with_retry(
+/// Send a single chunk to OpenRouter, retry once on failure (or on null content from thinking models).
+async fn call_openrouter_with_retry(
     client: &Client,
-    url: &str,
+    api_key: &str,
     body: &serde_json::Value,
     chunk_idx: usize,
 ) -> anyhow::Result<String> {
     for attempt in 0..2u8 {
-        let resp = client.post(url).json(body).send().await;
+        let resp = client
+            .post(OPENROUTER_URL)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(body)
+            .send()
+            .await;
         match resp {
             Ok(r) if r.status().is_success() => {
-                let parsed: GeminiResponse = r.json().await.context("Failed to parse Gemini response")?;
+                let parsed: OpenRouterResponse = r.json().await.context("Failed to parse OpenRouter response")?;
                 let text = parsed
-                    .candidates
+                    .choices
                     .and_then(|c| c.into_iter().next())
-                    .and_then(|c| c.content)
-                    .and_then(|c| c.parts)
-                    .map(|parts| parts.into_iter().filter_map(|p| p.text).collect::<Vec<_>>().join("\n"))
-                    .unwrap_or_default();
-                return Ok(text);
+                    .and_then(|c| c.message)
+                    .and_then(|m| m.content);
+                match text {
+                    Some(t) if !t.trim().is_empty() => return Ok(t),
+                    _ => {
+                        // content is null/empty — thinking model issue, retry once
+                        if attempt == 0 {
+                            tracing::warn!("Chunk {} attempt 1: null/empty content (thinking model?), retrying...", chunk_idx);
+                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                            continue;
+                        }
+                        return Err(anyhow!("OpenRouter returned null content after retry (chunk {})", chunk_idx));
+                    }
+                }
             }
             Ok(r) => {
                 let status = r.status();
@@ -500,7 +512,7 @@ async fn call_gemini_with_retry(
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                     continue;
                 }
-                return Err(anyhow!("Gemini API returned {}: {}", status, body_text));
+                return Err(anyhow!("OpenRouter API returned {}: {}", status, body_text));
             }
             Err(e) => {
                 if attempt == 0 {
@@ -508,7 +520,7 @@ async fn call_gemini_with_retry(
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                     continue;
                 }
-                return Err(anyhow!("Gemini request failed: {}", e));
+                return Err(anyhow!("OpenRouter request failed: {}", e));
             }
         }
     }
