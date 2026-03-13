@@ -147,6 +147,9 @@ interface ChatState {
   pendingNoteId: string | null;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
+  // Attached card (note or kanban card queued for sending)
+  attachedCard: { type: "note"; id: string; title: string; preview?: string } | { type: "kanban"; id: string; title: string; preview?: string } | null;
+
   // Conversation search state (in-conversation search bar)
   convSearchOpen: boolean;
   convSearchQuery: string;
@@ -258,6 +261,8 @@ interface ChatState {
   unarchiveNote: (conversationId: string, noteId: string) => Promise<void>;
   shareNote: (conversationId: string, noteId: string) => Promise<void>;
   shareKanbanCard: (cardId: string, conversationId: string) => Promise<void>;
+  setAttachedCard: (card: ChatState["attachedCard"]) => void;
+  clearAttachedCard: () => void;
   toggleAgentNotesEnabled: (conversationId: string, enabled: boolean) => Promise<void>;
 
   handleWSEvent: (event: WSServerEvent) => void;
@@ -310,6 +315,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   kanbanSidebarOpen: false,
   pendingNoteId: null,
   agentNotesEnabledByConversation: {},
+  attachedCard: null,
   convSearchOpen: false,
   convSearchQuery: "",
   convSearchResults: [],
@@ -1442,6 +1448,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!get().kanbanSidebarOpen) return;
     set({ kanbanSidebarOpen: false });
   },
+  setAttachedCard: (card) => set({ attachedCard: card }),
+  clearAttachedCard: () => set({ attachedCard: null }),
 
   loadNotes: async (conversationId, opts) => {
     try {

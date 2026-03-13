@@ -33,6 +33,7 @@ import {
   Bot,
   Send,
   ChevronDown,
+  Paperclip,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
@@ -85,6 +86,7 @@ function SwipeableNoteItem({
   onOpen,
   onDelete,
   onShare,
+  onAttach,
   t,
 }: {
   note: Note;
@@ -92,6 +94,7 @@ function SwipeableNoteItem({
   onOpen: (note: Note) => void;
   onDelete: (note: Note) => void;
   onShare: (note: Note) => void;
+  onAttach: (note: Note) => void;
   t: (key: string) => string;
 }) {
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -195,6 +198,7 @@ function SwipeableNoteItem({
       )}
 
       {/* Content */}
+      <div className="group/note relative">
       <button
         type="button"
         draggable
@@ -227,6 +231,18 @@ function SwipeableNoteItem({
           <span suppressHydrationWarning>{formatTime(note.updatedAt)}</span>
         </div>
       </button>
+      {/* Desktop attach button (hover) */}
+      {!isMobile && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onAttach(note); }}
+          className="absolute right-2 top-2 hidden rounded p-1 text-muted-foreground hover:text-brand transition-colors group-hover/note:block"
+          title="Attach to chat"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
+      )}
+      </div>
     </div>
   );
 }
@@ -727,6 +743,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                           onOpen={handleOpenNote}
                           onDelete={handleDelete}
                           onShare={handleShareNote}
+                          onAttach={(n) => {
+                            useChatStore.getState().setAttachedCard({
+                              type: "note",
+                              id: n.id,
+                              title: n.title || t("common.untitled"),
+                              preview: (n.summary || n.content)?.slice(0, 80) || undefined,
+                            });
+                          }}
                           t={t}
                         />
                       )}

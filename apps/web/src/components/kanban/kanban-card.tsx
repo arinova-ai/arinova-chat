@@ -2,9 +2,10 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2 } from "lucide-react";
+import { GripVertical, Trash2, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PRIORITY_CONFIG, PRIORITY_BORDER, type KanbanCard, type KanbanColumn } from "./types";
+import { useChatStore } from "@/store/chat-store";
 
 // ── Priority Badge ──────────────────────────────────────────
 
@@ -113,13 +114,31 @@ export function SortableCard({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
-          className="shrink-0 rounded p-1 text-muted-foreground/0 group-hover:text-muted-foreground hover:text-red-400 transition-colors"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex shrink-0 flex-col gap-0.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              useChatStore.getState().setAttachedCard({
+                type: "kanban",
+                id: card.id,
+                title: card.title,
+                preview: card.description?.slice(0, 80) || undefined,
+              });
+            }}
+            className="rounded p-1 text-muted-foreground/0 group-hover:text-muted-foreground hover:text-brand transition-colors"
+            title="Attach to chat"
+          >
+            <Paperclip className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
+            className="rounded p-1 text-muted-foreground/0 group-hover:text-muted-foreground hover:text-red-400 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Paperclip, Smile, X, FileText, Mic, Reply } from "lucide-react";
+import { SendHorizontal, Paperclip, Smile, X, FileText, Mic, Reply, StickyNote, SquareKanban } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { VoiceRecorder } from "./voice-recorder";
 import { ImageLightbox } from "./image-lightbox";
@@ -179,6 +179,10 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   const sendThreadMessage = useChatStore((s) => s.sendThreadMessage);
   const activeThreadId = useChatStore((s) => s.activeThreadId);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const attachedCard = useChatStore((s) => s.attachedCard);
+  const clearAttachedCard = useChatStore((s) => s.clearAttachedCard);
+  const shareNote = useChatStore((s) => s.shareNote);
+  const shareKanbanCard = useChatStore((s) => s.shareKanbanCard);
   const conversations = useChatStore((s) => s.conversations);
   const agents = useChatStore((s) => s.agents);
   const agentSkills = useChatStore((s) => s.agentSkills);
@@ -930,12 +934,38 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     }
 
     const trimmed = value.trim();
+    const hasCard = !!attachedCard;
+
+    // If only attached card with no text, share the card and clear
+    if (hasCard && !trimmed) {
+      if (activeConversationId) {
+        if (attachedCard.type === "note") {
+          shareNote(activeConversationId, attachedCard.id).catch(() => {});
+        } else {
+          shareKanbanCard(attachedCard.id, activeConversationId).catch(() => {});
+        }
+      }
+      clearAttachedCard();
+      playSendSound();
+      return;
+    }
+
     if (!trimmed) return;
 
     // Intercept platform commands
     if (tryExecuteSlashCommand(trimmed)) {
       clearInput();
       return;
+    }
+
+    // Share attached card first (as Rich Card), then send text
+    if (hasCard && activeConversationId) {
+      if (attachedCard.type === "note") {
+        shareNote(activeConversationId, attachedCard.id).catch(() => {});
+      } else {
+        shareKanbanCard(attachedCard.id, activeConversationId).catch(() => {});
+      }
+      clearAttachedCard();
     }
 
     // Extract @mentions and resolve to agent IDs
@@ -959,7 +989,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     addToHistory(trimmed);
     playSendSound();
     clearInput();
-  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers, addToHistory]);
+  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers, addToHistory, attachedCard, activeConversationId, shareNote, shareKanbanCard, clearAttachedCard]);
 
   // ---------- Keyboard handling ----------
 
@@ -1260,6 +1290,31 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
           />
         )}
 
+        {/* Attached card preview */}
+        {attachedCard && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2">
+            {attachedCard.type === "note" ? (
+              <StickyNote className="h-4 w-4 shrink-0 text-brand" />
+            ) : (
+              <SquareKanban className="h-4 w-4 shrink-0 text-brand" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">{attachedCard.title}</p>
+              {attachedCard.preview && (
+                <p className="text-xs text-muted-foreground truncate">{attachedCard.preview}</p>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={clearAttachedCard}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
         {isRecording ? (
           <div className="flex items-end gap-2">
             <VoiceRecorder
@@ -1311,7 +1366,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
               className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
 
-            {value.trim() || pendingFiles.length > 0 ? (
+            {value.trim() || pendingFiles.length > 0 || attachedCard ? (
               <Button
                 size="icon"
                 onClick={handleSend}
