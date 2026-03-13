@@ -88,6 +88,7 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
     let ws_state = state.ws.clone();
     let db = state.db.clone();
     let redis = state.redis.clone();
+    let config = state.config.clone();
     let tx_clone = tx.clone();
     let user_id_clone = user_id.clone();
 
@@ -102,6 +103,7 @@ async fn handle_voice_ws(socket: WebSocket, state: AppState, cookie_header: Stri
                         &ws_state,
                         &db,
                         &redis,
+                        &config,
                         &tx_clone,
                     )
                     .await;
@@ -139,6 +141,7 @@ async fn handle_voice_message(
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
+    config: &crate::config::Config,
     tx: &mpsc::UnboundedSender<String>,
 ) {
     if text.len() > 65536 {
@@ -211,7 +214,7 @@ async fn handle_voice_message(
                 tracing::info!("voice_ws: voice_offer h2h from={} to={} conv={}", user_id, target_user_id, conversation_id);
                 handle_h2h_offer(
                     user_id, target_user_id, conversation_id, conv_uuid, sdp,
-                    active_session_id, ws_state, db, redis, tx,
+                    active_session_id, ws_state, db, redis, config, tx,
                 ).await;
             } else {
                 // === Human-to-Agent call (existing flow) ===
@@ -364,6 +367,7 @@ async fn handle_h2h_offer(
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
+    config: &crate::config::Config,
     tx: &mpsc::UnboundedSender<String>,
 ) {
     // Verify callee is a member of the conversation
@@ -439,6 +443,29 @@ async fn handle_h2h_offer(
 
     tracing::info!("voice_ws: sending voice_incoming_call to callee={}", target_user_id);
     ws_state.send_to_user_or_queue(target_user_id, &incoming_event, redis);
+
+    // Send push notification to callee
+    if config.is_push_enabled() {
+        let push_config = config.clone();
+        let push_db = db.clone();
+        let callee_id = target_user_id.to_string();
+        let push_title = caller_name.to_string();
+        let push_conv_id = conversation_id.to_string();
+        tokio::spawn(async move {
+            let _ = crate::services::push::send_push_to_user(
+                &push_db,
+                &push_config,
+                &callee_id,
+                &crate::services::push::PushPayload {
+                    notification_type: "voice_call".to_string(),
+                    title: push_title,
+                    body: "來電中...".to_string(),
+                    url: Some(format!("/?c={}", push_conv_id)),
+                    message_id: None,
+                },
+            ).await;
+        });
+    }
 
     // Notify caller that the call is ringing (not yet connected)
     send_event(tx, &json!({

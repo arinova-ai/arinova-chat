@@ -41,15 +41,21 @@ self.addEventListener("push", (event) => {
 
   const { title = "Arinova Chat", body = "", url, type, message_id, data } = payload;
 
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      tag: type || "default",
-      data: { url, type, message_id, ...data },
-    })
-  );
+  const options = {
+    body,
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    tag: type || "default",
+    data: { url, type, message_id, ...data },
+  };
+
+  if (type === "voice_call") {
+    options.tag = "voice_call";
+    options.requireInteraction = true;
+    options.vibrate = [200, 100, 200, 100, 200];
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
