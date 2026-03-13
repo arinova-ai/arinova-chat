@@ -114,14 +114,32 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                             }
                         }
 
+                        // Auto-install official platform skills
+                        let platform_skills = sqlx::query_as::<_, (String,)>(
+                            "SELECT id::text FROM skills WHERE is_official = true AND category = 'platform'"
+                        )
+                        .fetch_all(&state.db)
+                        .await
+                        .unwrap_or_default();
+
+                        for (skill_id,) in &platform_skills {
+                            let _ = sqlx::query(
+                                "INSERT INTO agent_skills (agent_id, skill_id, is_enabled) VALUES ($1::uuid, $2::uuid, true) ON CONFLICT DO NOTHING"
+                            )
+                            .bind(&agent_id)
+                            .bind(skill_id)
+                            .execute(&state.db)
+                            .await;
+                        }
+
                         let _ = tx.send(serde_json::to_string(&json!({
                             "type": "auth_ok",
                             "agentName": agent_name
                         })).unwrap());
 
                         tracing::info!(
-                            "Agent WS connected: agentId={} name=\"{}\" skills={}",
-                            agent_id, agent_name, skills.len()
+                            "Agent WS connected: agentId={} name=\"{}\" skills={} platform_skills={}",
+                            agent_id, agent_name, skills.len(), platform_skills.len()
                         );
 
                         return Some(agent_id);
