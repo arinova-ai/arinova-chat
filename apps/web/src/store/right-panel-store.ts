@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type TabType = "chat" | "notes" | "kanban" | "threads" | "members";
+type TabType = "chat" | "notes" | "kanban" | "threads" | "members" | "memory";
 
 interface RightPanelState {
   isOpen: boolean;

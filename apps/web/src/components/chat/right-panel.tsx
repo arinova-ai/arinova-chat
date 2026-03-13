@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  Brain,
   SquareKanban,
   MessageSquare,
   UsersRound,
@@ -17,11 +18,13 @@ import { NotebookSheet } from "./notebook-sheet";
 import { KanbanSidebar } from "./kanban-sidebar";
 import { ThreadListContent } from "./thread-list-sheet";
 import { GroupMembersPanel } from "./group-members-panel";
+import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
 
 const TABS = [
   { id: "notes" as const, icon: BookOpen },
   { id: "kanban" as const, icon: SquareKanban },
   { id: "threads" as const, icon: MessageSquare },
+  { id: "memory" as const, icon: Brain },
   { id: "members" as const, icon: UsersRound },
   { id: "chat" as const, icon: MessagesSquare },
 ] as const;
@@ -30,6 +33,7 @@ const TAB_LABELS: Record<string, string> = {
   notes: "rightPanel.notes",
   kanban: "rightPanel.kanban",
   threads: "rightPanel.threads",
+  memory: "rightPanel.memory",
   members: "rightPanel.members",
   chat: "rightPanel.chat",
 };
@@ -100,8 +104,11 @@ export function RightPanel() {
 
   if (!isWide || !isOpen) return null;
 
+  const isH2a = activeConversation?.type === "h2a";
+
   const visibleTabs = TABS.filter((tab) => {
     if (tab.id === "members" && !isGroup) return false;
+    if (tab.id === "memory" && !isH2a) return false;
     if (tab.id === "chat" && !sideChatConversationId) return false;
     return true;
   });
@@ -163,6 +170,10 @@ export function RightPanel() {
 
 function TabContent({ tab }: { tab: string }) {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const activeConversation = useChatStore((s) => {
+    const id = s.activeConversationId;
+    return id ? s.conversations.find((c) => c.id === id) : undefined;
+  });
   const sideChatConversationId = useRightPanelStore((s) => s.sideChatConversationId);
 
   if (!activeConversationId) return null;
@@ -174,6 +185,17 @@ function TabContent({ tab }: { tab: string }) {
       return <KanbanSidebar inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
     case "threads":
       return <ThreadListContent conversationId={activeConversationId} />;
+    case "memory":
+      return activeConversation?.agentId ? (
+        <MemoryCapsuleSheet
+          inline
+          open
+          onOpenChange={() => {}}
+          conversationId={activeConversationId}
+          conversationName={activeConversation.agentName ?? ""}
+          agentId={activeConversation.agentId}
+        />
+      ) : null;
     case "members":
       return <GroupMembersPanel inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
     case "chat":

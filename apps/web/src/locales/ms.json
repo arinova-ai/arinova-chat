@@ -887,6 +887,7 @@
   "rightPanel.threads": "Thread",
   "rightPanel.members": "Ahli",
   "rightPanel.chat": "Sembang",
+  "rightPanel.memory": "Memori",
   "rightPanel.close": "Tutup panel",
   "rightPanel.comingSoon": "akan datang"
 }

@@ -36,6 +36,7 @@ import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
+import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Pin } from "lucide-react";
 
@@ -287,7 +288,13 @@ export function ChatHeader({
                 case "call": handleStartCall(); break;
                 case "photos": onPhotosClick?.(); break;
                 case "files": onFilesClick?.(); break;
-                case "capsule": setMemoryCapsuleOpen(true); break;
+                case "capsule":
+                  if (window.matchMedia("(min-width: 1280px)").matches) {
+                    useRightPanelStore.getState().setActiveTab("memory");
+                  } else {
+                    setMemoryCapsuleOpen(true);
+                  }
+                  break;
               }
             }}
             onTransferHuman={handleTransferHuman}
@@ -359,7 +366,7 @@ export function ChatHeader({
       </div>
     )}
 
-    {agentId && conversationId && type === "h2a" && (
+    {agentId && conversationId && (type === "h2a" || type === "direct") && (
       <MemoryCapsuleSheet
         open={memoryCapsuleOpen}
         onOpenChange={setMemoryCapsuleOpen}

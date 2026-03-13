@@ -887,6 +887,7 @@
   "rightPanel.threads": "Fils",
   "rightPanel.members": "Membres",
   "rightPanel.chat": "Chat",
+  "rightPanel.memory": "Mémoire",
   "rightPanel.close": "Fermer le panneau",
   "rightPanel.comingSoon": "bientôt disponible"
 }

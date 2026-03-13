@@ -887,6 +887,7 @@
   "rightPanel.threads": "스레드",
   "rightPanel.members": "멤버",
   "rightPanel.chat": "채팅",
+  "rightPanel.memory": "메모리",
   "rightPanel.close": "패널 닫기",
   "rightPanel.comingSoon": "곧 출시"
 }
