@@ -315,6 +315,44 @@ Unlink a note from a card.
 
 List notes linked to a card. Returns `CardNote[]`.
 
+#### Label Management
+
+##### `agent.listLabels(boardId)`
+
+List labels for a board. Returns `KanbanLabel[]`.
+
+```ts
+const labels = await agent.listLabels("board-id");
+```
+
+##### `agent.createLabel(boardId, body)`
+
+Create a label. Body: `{ name: string, color?: string }`.
+
+```ts
+const label = await agent.createLabel("board-id", { name: "Bug", color: "#ff0000" });
+```
+
+##### `agent.updateLabel(labelId, body)`
+
+Update a label. Body: `{ name?: string, color?: string }`.
+
+##### `agent.deleteLabel(labelId)`
+
+Delete a label.
+
+##### `agent.addCardLabel(cardId, labelId)`
+
+Add a label to a card.
+
+```ts
+await agent.addCardLabel("card-id", "label-id");
+```
+
+##### `agent.removeCardLabel(cardId, labelId)`
+
+Remove a label from a card.
+
 ---
 
 ### Memory API
@@ -345,6 +383,9 @@ interface UpdateColumnBody { name?: string; sortOrder?: number }
 interface AddCommitBody { commitHash: string; message?: string }
 interface CardCommit { cardId: string; commitHash: string; message: string; createdAt: string }
 interface CardNote { id: string; title: string; tags: string[]; createdAt: string }
+interface KanbanLabel { id: string; boardId: string; name: string; color: string | null }
+interface CreateLabelBody { name: string; color?: string }
+interface UpdateLabelBody { name?: string; color?: string }
 interface ArchivedCardsResult { cards: KanbanCard[]; total: number; page: number; limit: number }
 interface Note { id: string; conversationId: string; title: string; content: string; tags?: string[]; createdAt: string; updatedAt: string }
 interface MemoryEntry { content: string; capsuleName: string; capsuleId: string; score: number; importance: number }

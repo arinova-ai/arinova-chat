@@ -27,6 +27,9 @@ import type {
   CardCommit,
   CardNote,
   ArchivedCardsResult,
+  KanbanLabel,
+  CreateLabelBody,
+  UpdateLabelBody,
   QueryMemoryOptions,
   MemoryEntry,
   ShareNoteResult,
@@ -929,6 +932,150 @@ export class ArinovaAgent {
     }
 
     return res.json() as Promise<CardNote[]>;
+  }
+
+  // ── Label API ────────────────────────────────────────────────
+
+  /**
+   * List labels for a board.
+   * @param boardId - The board ID.
+   */
+  async listLabels(boardId: string): Promise<KanbanLabel[]> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards/${boardId}/labels`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`listLabels failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanLabel[]>;
+  }
+
+  /**
+   * Create a label on a board.
+   * @param boardId - The board ID.
+   * @param body - Label name and optional color.
+   */
+  async createLabel(boardId: string, body: CreateLabelBody): Promise<KanbanLabel> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/boards/${boardId}/labels`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`createLabel failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanLabel>;
+  }
+
+  /**
+   * Update a label.
+   * @param labelId - The label ID to update.
+   * @param body - Fields to update (name, color).
+   */
+  async updateLabel(labelId: string, body: UpdateLabelBody): Promise<KanbanLabel> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/labels/${labelId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`updateLabel failed (${res.status}): ${text}`);
+    }
+
+    return res.json() as Promise<KanbanLabel>;
+  }
+
+  /**
+   * Delete a label.
+   * @param labelId - The label ID to delete.
+   */
+  async deleteLabel(labelId: string): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/labels/${labelId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`deleteLabel failed (${res.status}): ${text}`);
+    }
+  }
+
+  /**
+   * Add a label to a card.
+   * @param cardId - The card ID.
+   * @param labelId - The label ID to add.
+   */
+  async addCardLabel(cardId: string, labelId: string): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/labels`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ labelId }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`addCardLabel failed (${res.status}): ${text}`);
+    }
+  }
+
+  /**
+   * Remove a label from a card.
+   * @param cardId - The card ID.
+   * @param labelId - The label ID to remove.
+   */
+  async removeCardLabel(cardId: string, labelId: string): Promise<void> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(`${httpUrl}/api/agent/kanban/cards/${cardId}/labels/${labelId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${this.botToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`removeCardLabel failed (${res.status}): ${text}`);
+    }
   }
 
   // ── Memory API ───────────────────────────────────────────────

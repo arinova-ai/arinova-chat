@@ -285,6 +285,28 @@ export interface ArchivedCardsResult {
   limit: number;
 }
 
+// ── Label types ──────────────────────────────────────────────
+
+/** A kanban label. */
+export interface KanbanLabel {
+  id: string;
+  boardId: string;
+  name: string;
+  color: string | null;
+}
+
+/** Body for createLabel(). */
+export interface CreateLabelBody {
+  name: string;
+  color?: string;
+}
+
+/** Body for updateLabel(). */
+export interface UpdateLabelBody {
+  name?: string;
+  color?: string;
+}
+
 // ── Memory types ──────────────────────────────────────────────
 
 /** Options for queryMemory(). */
