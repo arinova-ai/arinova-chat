@@ -15,6 +15,7 @@ import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { NotebookSheet } from "./notebook-sheet";
+import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
 import { ThreadListContent } from "./thread-list-sheet";
 import { GroupMembersPanel } from "./group-members-panel";
@@ -180,7 +181,7 @@ function TabContent({ tab }: { tab: string }) {
 
   switch (tab) {
     case "notes":
-      return <NotebookSheet inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
+      return <NotebookList inline conversationId={activeConversationId} open />;
     case "kanban":
       return <KanbanSidebar inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
     case "threads":

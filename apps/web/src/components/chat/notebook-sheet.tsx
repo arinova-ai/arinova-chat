@@ -46,6 +46,8 @@ interface NotebookSheetProps {
   onOpenChange: (open: boolean) => void;
   conversationId: string;
   inline?: boolean;
+  /** When provided, load notes from /api/notebooks/:id/notes instead of conversation notes */
+  notebookId?: string;
 }
 
 const EMPTY_NOTES: Note[] = [];
@@ -229,14 +231,41 @@ function SwipeableNoteItem({
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId, inline }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const isMobileRaw = useIsMobile();
   const isMobile = mounted ? isMobileRaw : false;
-  const notes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
-  const loadNotes = useChatStore((s) => s.loadNotes);
+  const storeNotes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
+  const loadStoreNotes = useChatStore((s) => s.loadNotes);
+  const [notebookNotes, setNotebookNotes] = useState<Note[]>([]);
+  const notes = notebookId ? notebookNotes : storeNotes;
+  const loadNotes = useCallback(async (cid: string, opts?: { archived?: boolean; tags?: string[] }) => {
+    if (notebookId) {
+      // Load from notebook API
+      const data = await api<{ notes: Array<{ id: string; conversationId: string; title: string; tags: string[]; isPinned: boolean; createdAt: string; updatedAt: string }> }>(
+        `/api/notebooks/${notebookId}/notes`
+      );
+      setNotebookNotes(data.notes.map((n) => ({
+        id: n.id,
+        conversationId: n.conversationId,
+        title: n.title,
+        content: "",
+        tags: n.tags,
+        createdAt: n.createdAt,
+        updatedAt: n.updatedAt,
+        creatorId: "",
+        creatorType: "user" as const,
+        creatorName: "",
+        agentId: null,
+        agentName: null,
+        archivedAt: null,
+      } satisfies Note)));
+    } else {
+      await loadStoreNotes(cid, opts);
+    }
+  }, [notebookId, loadStoreNotes]);
   const createNote = useChatStore((s) => s.createNote);
   const updateNote = useChatStore((s) => s.updateNote);
   const deleteNote = useChatStore((s) => s.deleteNote);

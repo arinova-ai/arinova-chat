@@ -10,6 +10,7 @@ import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
 import { NotebookSheet } from "./notebook-sheet";
+import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
 
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
@@ -286,7 +287,7 @@ export function ChatArea() {
         initialTab={mediaFilesTab}
       />
 
-      <NotebookSheet
+      <NotebookList
         open={notebookOpen}
         onOpenChange={(open) => { if (!open) closeNotebook(); }}
         conversationId={activeConversationId}

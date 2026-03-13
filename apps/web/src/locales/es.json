@@ -15,7 +15,6 @@
   "nav.addShortcut": "Agregar",
   "nav.allShortcutsAdded": "Todos los atajos agregados",
   "nav.creator": "Consola de Creador",
-
   "common.save": "Guardar Cambios",
   "common.cancel": "Cancelar",
   "common.confirm": "Confirmar",
@@ -49,15 +48,11 @@
   "common.description": "Descripcion",
   "common.category": "Categoria",
   "common.export": "Exportar",
-
   "errors.somethingWentWrong": "Algo salio mal",
   "errors.unexpectedError": "Ocurrio un error inesperado. Intenta de nuevo o recarga la pagina.",
-
   "connection.syncing": "Sincronizando...",
   "connection.reconnecting": "Reconectando...",
-
   "time.yesterday": "Ayer",
-
   "chat.subtitle": "Conecta con tu equipo al instante",
   "chat.collapseSidebar": "Contraer barra lateral",
   "chat.expandSidebar": "Expandir barra lateral",
@@ -84,7 +79,6 @@
   "chat.uploadFailed": "Error al subir, inténtalo de nuevo",
   "chat.imagesSelected": "{count} imágenes seleccionadas",
   "chat.imageCount": "{n}/{max}",
-
   "chat.actions.copy": "Copiar mensaje",
   "chat.actions.reply": "Responder",
   "chat.actions.startThread": "Iniciar hilo",
@@ -97,16 +91,13 @@
   "chat.actions.unpin": "Desfijar",
   "chat.actions.report": "Reportar",
   "chat.actions.share": "Compartir",
-
   "share.title": "Compartir",
   "share.sendToConversation": "Enviar a conversación",
   "share.shareExternal": "Compartir externamente",
   "share.copyContent": "Copiar contenido",
   "share.sentToConversation": "Enviado a la conversación",
-
   "chat.selection.count": "{count} seleccionados",
   "chat.selection.copied": "Copiado al portapapeles",
-
   "chat.status.error": "Error",
   "chat.status.stopped": "Detenido",
   "chat.sharedNote": "Compartió una nota",
@@ -116,20 +107,16 @@
   "chat.status.queued": "En cola",
   "chat.status.thinking": "pensando",
   "chat.status.queuedLabel": "en cola",
-
   "chat.replies.one": "respuesta",
   "chat.replies.other": "respuestas",
-
   "chat.thread.title": "Hilo",
   "chat.thread.noReplies": "Aun no hay respuestas",
   "chat.thread.startDiscussion": "Inicia la discusion a continuacion",
   "chat.thread.placeholder": "Responder en el hilo...",
-
   "chat.kanban.title": "Tareas",
   "chat.kanban.empty": "Sin tareas aún",
   "chat.kanban.addCard": "Añadir tarjeta",
   "chat.kanban.newCardPlaceholder": "Título de la tarjeta...",
-
   "chat.notebook.title": "Notas",
   "chat.notebook.empty": "Aun no hay notas",
   "chat.notebook.create": "Crear",
@@ -152,9 +139,7 @@
   "chat.notebook.autoTag": "Etiquetar auto",
   "chat.notebook.askAi": "Preguntar IA",
   "chat.notebook.confirmDelete": "¿Estás seguro de que quieres eliminar esta nota?",
-
   "chat.kanban.openTask": "Abrir tarea",
-
   "chat.search.title": "Buscar",
   "chat.search.results": "resultados",
   "chat.search.result": "resultado",
@@ -162,9 +147,7 @@
   "chat.search.inConversation": "Buscar en la conversación",
   "chat.search.nOfTotal": "{n} de {total}",
   "chat.unreadDivider": "Mensajes no leídos",
-
   "chat.messageActions": "Acciones del mensaje",
-
   "chat.header.members": "Miembros",
   "chat.header.memberCount": "{count} miembros",
   "chat.header.group": "Grupo",
@@ -197,14 +180,12 @@
   "chat.header.voiceCall": "Llamada de voz",
   "chat.header.inCall": "En llamada",
   "chat.header.voiceUnavailable": "Llamada de voz no disponible",
-
   "conversation.rename": "Renombrar",
   "conversation.pin": "Fijar",
   "conversation.unpin": "Desfijar",
   "conversation.delete": "Eliminar",
   "conversation.deleteTitle": "Eliminar conversacion",
   "conversation.deleteDesc": "¿Estas seguro de que deseas eliminar esta conversacion? Esta accion no se puede deshacer y todos los mensajes se eliminaran permanentemente.",
-
   "newChat.title": "Nueva Conversacion",
   "newChat.noAgents": "Aun no hay agentes. Agrega uno para comenzar a chatear.",
   "newChat.createBot": "Crear Bot",
@@ -236,7 +217,6 @@
   "newChat.a2aHint": "Deja vacio para crear un bot primero y conectar un agente despues.",
   "newChat.chatWithFriend": "Chatear con Amigo",
   "newChat.noFriendsHint": "Aun no tienes amigos. Agrega amigos primero para iniciar una conversacion.",
-
   "botManage.title": "Administrar Bot",
   "botManage.clickChangeAvatar": "Haz clic para cambiar el avatar",
   "botManage.name": "Nombre",
@@ -273,7 +253,6 @@
   "botManage.confirmDelete": "Confirmar Eliminacion",
   "botManage.deleteBot": "Eliminar Bot",
   "botManage.deleteBotConfirm": "¿Estas seguro? Esto eliminara todas las conversaciones con este bot.",
-
   "group.title": "Info del Grupo",
   "group.members": "Miembros",
   "group.settings": "Configuracion",
@@ -309,14 +288,12 @@
   "group.groupNamePlaceholder": "Nombre del grupo",
   "group.mentionOnly": "Solo Menciones",
   "group.mentionOnlyDesc": "Solo los agentes @mencionados responden",
-
   "addMember.title": "Agregar Miembro",
   "addMember.searchPlaceholder": "Buscar amigos o agentes...",
   "addMember.friends": "Amigos",
   "addMember.myAgents": "Mis Agentes",
   "addMember.noMatches": "No se encontraron coincidencias",
   "addMember.allAdded": "Todos los amigos y agentes ya son miembros",
-
   "agentSheet.title": "Perfil del agente",
   "agentSheet.working": "Trabajando",
   "agentSheet.online": "En linea",
@@ -326,7 +303,6 @@
   "agentSheet.save": "Guardar",
   "agentSheet.conversations": "Conversaciones",
   "agentSheet.owner": "Propietario",
-
   "agentProfile.listenMode": "Modo de escucha",
   "agentProfile.listenMode.all": "Escuchar todo",
   "agentProfile.listenMode.all.desc": "Recibe todos los mensajes — sin @mención necesaria",
@@ -343,7 +319,6 @@
   "agentProfile.allowedUsers": "Usuarios Permitidos",
   "agentProfile.allowedUsers.selected": "{count} seleccionados",
   "agentProfile.noOtherUsers": "No hay otros usuarios en este grupo",
-
   "office.title": "Oficina",
   "office.subtitle": "Espacio de Trabajo Virtual",
   "office.tab.scene": "Escena",
@@ -371,7 +346,6 @@
   "office.notes.stopSharing": "Dejar de compartir",
   "office.notes.linkCopied": "Enlace copiado!",
   "office.notes.publicNote": "Nota compartida",
-
   "kanban.share.title": "Compartir",
   "kanban.share.publicLink": "Crear enlace público",
   "kanban.share.toChat": "Compartir en chat",
@@ -387,15 +361,12 @@
   "kanban.sort.priorityDesc": "Prioridad: Alta → Baja",
   "kanban.sort.priorityAsc": "Prioridad: Baja → Alta",
   "kanban.search.placeholder": "Buscar tarjetas…",
-
   "settings.title": "Configuracion",
   "settings.subtitle": "Personaliza tu experiencia",
-
   "settings.nav.profile": "Perfil",
   "settings.nav.language": "Idioma",
   "settings.nav.notifications": "Notificaciones",
   "settings.nav.privacy": "Privacidad",
-
   "settings.profile.title": "Perfil",
   "settings.profile.subtitle": "Administra tu informacion personal y preferencias.",
   "settings.profile.changeAvatar": "Cambiar Avatar",
@@ -424,7 +395,6 @@
   "settings.profile.passwordMismatch": "Las contrasenas no coinciden",
   "settings.profile.passwordChanged": "Contrasena cambiada exitosamente",
   "settings.profile.passwordChangeFailed": "Error al cambiar la contrasena",
-
   "settings.language.title": "Idioma",
   "settings.language.subtitle": "Elige tu idioma preferido.",
   "settings.appearance.title": "Apariencia",
@@ -439,7 +409,6 @@
   "settings.appearance.performance": "Rendimiento",
   "settings.appearance.performanceDesc": "Calidad reducida, mas rapido",
   "settings.appearance.language": "Idioma",
-
   "settings.notifications.title": "Notificaciones",
   "settings.notifications.subtitle": "Administra como recibes las notificaciones.",
   "settings.notifications.push": "Notificaciones Push",
@@ -458,7 +427,6 @@
   "settings.notifications.to": "Hasta",
   "settings.notifications.chatSounds": "Sonidos de chat",
   "settings.notifications.chatSoundsDesc": "Reproducir sonidos al enviar y recibir mensajes",
-
   "settings.privacy.title": "Privacidad",
   "settings.privacy.subtitle": "Administra usuarios bloqueados y configuracion de privacidad.",
   "settings.privacy.blockedUsers": "Usuarios Bloqueados",
@@ -474,7 +442,6 @@
   "settings.ai.keyHint": "Obtén tu clave API en Google AI Studio (aistudio.google.com). Requerida para Ask AI en notas.",
   "settings.ai.keyReplace": "Ingresa nueva clave para reemplazar...",
   "settings.ai.needKey": "Configura tu clave API de Gemini en Ajustes para usar Ask AI.",
-
   "userProfile.title": "Perfil de Usuario",
   "userProfile.joined": "Se unio",
   "userProfile.editProfile": "Editar Perfil",
@@ -483,7 +450,6 @@
   "userProfile.pendingRequest": "Pendiente",
   "userProfile.acceptRequest": "Aceptar",
   "userProfile.agentsInGroup": "Agentes en este grupo",
-
   "profilePage.userNotFound": "Usuario no encontrado",
   "profilePage.ownedAgents": "Agentes",
   "profilePage.agentProfile": "Perfil del Agente",
@@ -497,10 +463,8 @@
   "profilePage.totalConversations": "Conversaciones",
   "profilePage.lastActive": "Ultima Actividad",
   "profilePage.voiceCapable": "Voz",
-
   "officeChat.startConversation": "Iniciar una conversacion",
   "officeChat.placeholder": "Escribe un mensaje...",
-
   "stickerShop.title": "Tienda de Stickers",
   "stickerShop.subtitle": "Descubre y colecciona paquetes de stickers",
   "stickerShop.searchPlaceholder": "Buscar paquetes de stickers...",
@@ -539,7 +503,6 @@
   "stickerShop.agentCompatibleDesc": "Este pack de stickers funciona con agentes IA — pueden entender y responder a estos stickers!",
   "stickerShop.tryItDemo": "Pruébalo — mira cómo responde la IA",
   "stickerShop.tryItResponse": "¡Hola! 😊 ¡Parece que hoy estás de buen humor!",
-
   "creator.title": "Consola de Creador",
   "creator.subtitle": "Administra tus creaciones",
   "creator.tab.overview": "Resumen",
@@ -664,7 +627,6 @@
   "creator.communityDialog.descPlaceholder": "¿De qué trata esta comunidad?",
   "creator.communityDialog.create": "Crear",
   "creator.dialog.cancel": "Cancelar",
-
   "agentHub.title": "Agent Hub",
   "agentHub.subtitle": "Descubre y chatea con agentes de IA",
   "agentHub.createAgent": "Crear Agente",
@@ -684,10 +646,8 @@
   "agentHub.sort.newest": "Mas Reciente",
   "agentHub.sort.rating": "Calificacion",
   "agentHub.sort.price": "Precio",
-
   "apps.title": "Tus aplicaciones",
   "apps.subtitle": "Gestiona las aplicaciones instaladas",
-
   "friends.title": "Amigos",
   "friends.subtitle": "Conecta y socializa",
   "friends.tabFriends": "Amigos",
@@ -700,7 +660,6 @@
   "friends.search.addFriend": "Agregar amigo",
   "friends.search.error": "Error al buscar usuarios",
   "friends.search.requestFailed": "Error al enviar solicitud de amistad",
-
   "community.title": "Comunidad",
   "community.subtitle": "Conecta con creadores y comunidades",
   "community.create": "Crear",
@@ -733,7 +692,6 @@
   "community.by": "por",
   "community.type.lounge": "Lounge",
   "community.lounge.voiceAgent": "Agente de Voz",
-
   "official.dashboard.title": "Panel de CS",
   "official.dashboard.queue": "Cola",
   "official.dashboard.team": "Equipo",
@@ -748,10 +706,8 @@
   "official.dashboard.totalConversations": "Total de conversaciones",
   "official.dashboard.activeNow": "Activas ahora",
   "official.dashboard.resolved": "Resueltas",
-
   "admin.verification.title": "Solicitudes de verificación",
   "admin.verification.empty": "Sin solicitudes de verificación",
-
   "wallet.title": "Billetera",
   "wallet.subtitle": "Administra tus creditos",
   "wallet.currentBalance": "Saldo Actual",
@@ -765,7 +721,6 @@
   "wallet.plan.advanced": "Avanzado",
   "wallet.plan.pro": "Pro",
   "wallet.bonus": "bonus",
-
   "spaces.title": "Spaces",
   "spaces.subtitle": "Juegos y experiencias sociales",
   "spaces.searchPlaceholder": "Buscar juegos...",
@@ -794,7 +749,6 @@
   "spaces.owner": "Propietario",
   "spaces.activeSessions": "Sesiones Activas",
   "spaces.tags": "Etiquetas",
-
   "theme.title": "Temas de Oficina",
   "theme.subtitle": "Explora y aplica temas a tu oficina virtual",
   "theme.searchPlaceholder": "Buscar temas...",
@@ -853,7 +807,6 @@
   "memoryCapsule.searchEntries": "Buscar recuerdos…",
   "memoryCapsule.noEntries": "No se encontraron recuerdos",
   "memoryCapsule.relevance": "Relevancia",
-
   "promo.free": "Gratis",
   "promo.coins": "monedas",
   "promo.limitedTime": "Tiempo Limitado",
@@ -881,7 +834,6 @@
   "voice.mute": "Silenciar",
   "voice.cancelCall": "Cancelar llamada",
   "voice.hangup": "Colgar",
-
   "rightPanel.notes": "Notas",
   "rightPanel.kanban": "Kanban",
   "rightPanel.threads": "Hilos",
@@ -889,5 +841,39 @@
   "rightPanel.chat": "Chat",
   "rightPanel.memory": "Memoria",
   "rightPanel.close": "Cerrar panel",
-  "rightPanel.comingSoon": "próximamente"
+  "rightPanel.comingSoon": "próximamente",
+  "notebooks.title": "Cuadernos",
+  "notebooks.create": "Nuevo cuaderno",
+  "notebooks.namePlaceholder": "Nombre del cuaderno",
+  "notebooks.add": "Agregar",
+  "notebooks.empty": "Sin cuadernos",
+  "notebooks.default": "predeterminado",
+  "notebooks.noteCount": "notas",
+  "notebooks.rename": "Renombrar",
+  "notebooks.delete": "Eliminar",
+  "notebooks.save": "Guardar",
+  "skills.title": "Skills",
+  "skills.subtitle": "Descubre e instala skills para tus agentes",
+  "skills.tab.explore": "Explorar",
+  "skills.tab.installed": "Instalados",
+  "skills.tab.favorites": "Favoritos",
+  "skills.searchPlaceholder": "Buscar skills...",
+  "skills.allCategories": "Todos",
+  "skills.sort.popular": "Popular",
+  "skills.sort.newest": "Más reciente",
+  "skills.sort.name": "Nombre",
+  "skills.empty": "No se encontraron skills",
+  "skills.official": "Oficial",
+  "skills.slashCommand": "Comando Slash",
+  "skills.install": "Instalar",
+  "skills.confirmInstall": "Instalar en",
+  "skills.selectAgents": "Seleccionar agentes para instalar",
+  "skills.noAgents": "No hay agentes disponibles",
+  "skills.backToList": "Volver a la lista",
+  "skills.backToFavorites": "Volver a favoritos",
+  "skills.noInstalled": "No hay skills instalados",
+  "skills.noFavorites": "No hay skills favoritos",
+  "skills.enable": "Habilitar",
+  "skills.disable": "Deshabilitar",
+  "skills.uninstall": "Desinstalar"
 }
