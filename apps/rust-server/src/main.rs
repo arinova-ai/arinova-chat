@@ -517,6 +517,7 @@ async fn main() {
         .merge(routes::user_settings::router())
         .merge(routes::voice::router())
         .merge(routes::conversation_settings::router())
+        .merge(routes::accounts::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .merge(ws::voice_handler::router())
