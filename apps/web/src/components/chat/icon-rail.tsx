@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, UserPlus,
-  Palette, Users, Store, Wallet, Settings, Smile,
+  Palette, Users, Sparkles, Store, Wallet, Settings, Smile,
   LayoutDashboard, Plus, Mic, Check, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -30,7 +30,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   friends: UserPlus,
   theme: Palette,
   community: Users,
-  market: Store,
+  market: Sparkles,
   wallet: Wallet,
   settings: Settings,
   "explore-official": Building2,

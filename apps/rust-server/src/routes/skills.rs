@@ -34,7 +34,7 @@ pub fn router() -> Router<AppState> {
 // ===== Types =====
 
 #[derive(Debug, FromRow)]
-struct SkillRow {
+struct SkillListRow {
     id: Uuid,
     name: String,
     slug: String,
@@ -50,6 +50,8 @@ struct SkillRow {
     install_count: i32,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    is_favorited: bool,
+    installed_agent_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, FromRow)]
@@ -86,7 +88,7 @@ struct ListSkillsQuery {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct InstallSkillBody {
-    agent_id: String,
+    agent_ids: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -104,7 +106,8 @@ struct UpdateAgentSkillBody {
 
 // ===== Helpers =====
 
-fn skill_to_json(row: &SkillRow) -> serde_json::Value {
+fn skill_list_to_json(row: &SkillListRow) -> serde_json::Value {
+    let agent_ids: Vec<String> = row.installed_agent_ids.iter().map(|id| id.to_string()).collect();
     json!({
         "id": row.id.to_string(),
         "name": &row.name,
@@ -119,6 +122,8 @@ fn skill_to_json(row: &SkillRow) -> serde_json::Value {
         "isPublic": row.is_public,
         "createdBy": &row.created_by,
         "installCount": row.install_count,
+        "isFavorited": row.is_favorited,
+        "installedAgentIds": agent_ids,
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
     })
@@ -146,12 +151,41 @@ fn skill_detail_to_json(row: &SkillDetailRow) -> serde_json::Value {
     })
 }
 
+/// Verify user owns agent, return owner_id or error response
+async fn verify_agent_ownership(
+    db: &sqlx::PgPool,
+    agent_id: Uuid,
+    user_id: &str,
+) -> Result<(), Response> {
+    let owner: Option<(String,)> =
+        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
+            .bind(agent_id)
+            .fetch_optional(db)
+            .await
+            .unwrap_or(None);
+
+    match owner {
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Agent not found"})),
+        )
+            .into_response()),
+        Some((oid,)) if oid != user_id => Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not authorized"})),
+        )
+            .into_response()),
+        _ => Ok(()),
+    }
+}
+
 // ===== Handlers =====
 
 /// GET /api/skills — browse skills with pagination, search, category, sort
+/// Returns isFavorited and installedAgentIds per skill for the current user
 async fn list_skills(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Query(params): Query<ListSkillsQuery>,
 ) -> Response {
     let limit = params.limit.unwrap_or(20).min(100);
@@ -165,8 +199,9 @@ async fn list_skills(
         _ => "s.created_at DESC",
     };
 
+    // user_id is always $1
     let mut conditions = vec!["s.is_public = true".to_string()];
-    let mut bind_idx = 1u32;
+    let mut bind_idx = 2u32; // $1 = user_id
 
     if let Some(ref cat) = params.category {
         if !cat.is_empty() {
@@ -188,11 +223,22 @@ async fn list_skills(
 
     let count_sql = format!("SELECT COUNT(*) FROM skills s WHERE {where_clause}");
     let list_sql = format!(
-        "SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version, s.slash_command, s.prompt_template, s.is_official, s.is_public, s.created_by, s.install_count, s.created_at, s.updated_at FROM skills s WHERE {where_clause} ORDER BY {sort_clause} LIMIT ${bind_idx} OFFSET ${}",
+        r#"SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version,
+               s.slash_command, s.prompt_template, s.is_official, s.is_public,
+               s.created_by, s.install_count, s.created_at, s.updated_at,
+               EXISTS(SELECT 1 FROM user_favorite_skills uf WHERE uf.skill_id = s.id AND uf.user_id = $1) AS is_favorited,
+               COALESCE(ARRAY(
+                   SELECT ask.agent_id FROM agent_skills ask
+                   WHERE ask.skill_id = s.id AND ask.installed_by = $1
+               ), ARRAY[]::uuid[]) AS installed_agent_ids
+        FROM skills s
+        WHERE {where_clause}
+        ORDER BY {sort_clause}
+        LIMIT ${bind_idx} OFFSET ${}"#,
         bind_idx + 1
     );
 
-    // Build count query
+    // Build count query (doesn't need user_id)
     let mut count_q = sqlx::query_as::<_, (i64,)>(&count_sql);
     if let Some(ref cat) = params.category {
         if !cat.is_empty() {
@@ -216,8 +262,9 @@ async fn list_skills(
         }
     };
 
-    // Build list query
-    let mut list_q = sqlx::query_as::<_, SkillRow>(&list_sql);
+    // Build list query ($1 = user_id)
+    let mut list_q = sqlx::query_as::<_, SkillListRow>(&list_sql);
+    list_q = list_q.bind(&user.id); // $1
     if let Some(ref cat) = params.category {
         if !cat.is_empty() {
             list_q = list_q.bind(cat);
@@ -232,7 +279,7 @@ async fn list_skills(
 
     match list_q.fetch_all(&state.db).await {
         Ok(rows) => {
-            let items: Vec<_> = rows.iter().map(skill_to_json).collect();
+            let items: Vec<_> = rows.iter().map(skill_list_to_json).collect();
             Json(json!({
                 "skills": items,
                 "total": total,
@@ -273,16 +320,17 @@ async fn list_categories(State(state): State<AppState>, _user: AuthUser) -> Resp
     }
 }
 
-/// GET /api/skills/:id — get skill detail
+/// GET /api/skills/:id — get skill detail (public only, or author can see own)
 async fn get_skill(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Response {
     let row = sqlx::query_as::<_, SkillDetailRow>(
-        "SELECT id, name, slug, description, category, icon_url, version, slash_command, prompt_template, prompt_content, parameters, is_official, is_public, created_by, install_count, created_at, updated_at FROM skills WHERE id = $1",
+        "SELECT id, name, slug, description, category, icon_url, version, slash_command, prompt_template, prompt_content, parameters, is_official, is_public, created_by, install_count, created_at, updated_at FROM skills WHERE id = $1 AND (is_public = true OR created_by = $2)",
     )
     .bind(id)
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
 
@@ -301,48 +349,34 @@ async fn get_skill(
     }
 }
 
-/// POST /api/skills/:id/install — install a skill to an agent
+/// POST /api/skills/:id/install — install a skill to one or more agents (batch)
 async fn install_skill(
     State(state): State<AppState>,
     user: AuthUser,
     Path(skill_id): Path<Uuid>,
     Json(body): Json<InstallSkillBody>,
 ) -> Response {
-    let agent_id = match Uuid::parse_str(&body.agent_id) {
-        Ok(id) => id,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Invalid agentId"})),
-            )
-                .into_response()
-        }
-    };
+    if body.agent_ids.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "agentIds must not be empty"})),
+        )
+            .into_response();
+    }
 
-    // Verify user owns the agent
-    let owner: Option<(String,)> =
-        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
-            .bind(agent_id)
-            .fetch_optional(&state.db)
-            .await
-            .unwrap_or(None);
-
-    match owner {
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Agent not found"})),
-            )
-                .into_response()
+    // Parse all agent IDs upfront
+    let mut agent_ids = Vec::new();
+    for id_str in &body.agent_ids {
+        match Uuid::parse_str(id_str) {
+            Ok(id) => agent_ids.push(id),
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": format!("Invalid agentId: {}", id_str)})),
+                )
+                    .into_response()
+            }
         }
-        Some((oid,)) if oid != user.id => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "Not authorized"})),
-            )
-                .into_response()
-        }
-        _ => {}
     }
 
     // Verify skill exists and is public
@@ -371,35 +405,81 @@ async fn install_skill(
         _ => {}
     }
 
-    // Install (upsert)
-    let result = sqlx::query(
-        "INSERT INTO agent_skills (agent_id, skill_id, installed_by) VALUES ($1, $2, $3) ON CONFLICT (agent_id, skill_id) DO NOTHING",
-    )
-    .bind(agent_id)
-    .bind(skill_id)
-    .bind(&user.id)
-    .execute(&state.db)
-    .await;
-
-    match result {
-        Ok(r) => {
-            if r.rows_affected() > 0 {
-                // Increment install count
-                let _ = sqlx::query(
-                    "UPDATE skills SET install_count = install_count + 1 WHERE id = $1",
-                )
-                .bind(skill_id)
-                .execute(&state.db)
-                .await;
-            }
-            Json(json!({"ok": true})).into_response()
+    // Verify ownership for all agents
+    for &agent_id in &agent_ids {
+        if let Err(resp) = verify_agent_ownership(&state.db, agent_id, &user.id).await {
+            return resp;
         }
-        Err(e) => (
+    }
+
+    // Install in a transaction
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    };
+
+    let mut new_installs = 0i32;
+    for &agent_id in &agent_ids {
+        let result = sqlx::query(
+            "INSERT INTO agent_skills (agent_id, skill_id, installed_by) VALUES ($1, $2, $3) ON CONFLICT (agent_id, skill_id) DO NOTHING",
+        )
+        .bind(agent_id)
+        .bind(skill_id)
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await;
+
+        match result {
+            Ok(r) => {
+                if r.rows_affected() > 0 {
+                    new_installs += 1;
+                }
+            }
+            Err(e) => {
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": e.to_string()})),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    // Update install_count atomically in the same transaction
+    if new_installs > 0 {
+        if let Err(e) = sqlx::query(
+            "UPDATE skills SET install_count = install_count + $1 WHERE id = $2",
+        )
+        .bind(new_installs)
+        .bind(skill_id)
+        .execute(&mut *tx)
+        .await
+        {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),
         )
-            .into_response(),
+            .into_response();
     }
+
+    Json(json!({"ok": true, "installed": new_installs})).into_response()
 }
 
 /// DELETE /api/skills/:id/uninstall?agentId=...
@@ -420,36 +500,26 @@ async fn uninstall_skill(
         }
     };
 
-    // Verify user owns the agent
-    let owner: Option<(String,)> =
-        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
-            .bind(agent_id)
-            .fetch_optional(&state.db)
-            .await
-            .unwrap_or(None);
-
-    match owner {
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Agent not found"})),
-            )
-                .into_response()
-        }
-        Some((oid,)) if oid != user.id => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "Not authorized"})),
-            )
-                .into_response()
-        }
-        _ => {}
+    if let Err(resp) = verify_agent_ownership(&state.db, agent_id, &user.id).await {
+        return resp;
     }
+
+    // Uninstall in transaction
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
+    };
 
     let result = sqlx::query("DELETE FROM agent_skills WHERE agent_id = $1 AND skill_id = $2")
         .bind(agent_id)
         .bind(skill_id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await;
 
     match result {
@@ -459,16 +529,26 @@ async fn uninstall_skill(
                     "UPDATE skills SET install_count = GREATEST(install_count - 1, 0) WHERE id = $1",
                 )
                 .bind(skill_id)
-                .execute(&state.db)
+                .execute(&mut *tx)
                 .await;
+            }
+            if let Err(e) = tx.commit().await {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": e.to_string()})),
+                )
+                    .into_response();
             }
             StatusCode::NO_CONTENT.into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e.to_string()})),
-        )
-            .into_response(),
+        Err(e) => {
+            let _ = tx.rollback().await;
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -500,35 +580,12 @@ async fn list_installed(
         }
     };
 
-    // Verify user owns the agent
-    let owner: Option<(String,)> =
-        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
-            .bind(agent_id)
-            .fetch_optional(&state.db)
-            .await
-            .unwrap_or(None);
-
-    match owner {
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Agent not found"})),
-            )
-                .into_response()
-        }
-        Some((oid,)) if oid != user.id => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "Not authorized"})),
-            )
-                .into_response()
-        }
-        _ => {}
+    if let Err(resp) = verify_agent_ownership(&state.db, agent_id, &user.id).await {
+        return resp;
     }
 
     #[derive(FromRow)]
     struct InstalledSkillRow {
-        // skill fields
         id: Uuid,
         name: String,
         slug: String,
@@ -538,7 +595,6 @@ async fn list_installed(
         version: String,
         slash_command: Option<String>,
         is_official: bool,
-        // agent_skills fields
         is_enabled: bool,
         config: serde_json::Value,
         installed_at: DateTime<Utc>,
@@ -605,30 +661,8 @@ async fn update_agent_skill(
             .into_response();
     }
 
-    // Verify user owns the agent
-    let owner: Option<(String,)> =
-        sqlx::query_as("SELECT owner_id FROM agents WHERE id = $1")
-            .bind(agent_id)
-            .fetch_optional(&state.db)
-            .await
-            .unwrap_or(None);
-
-    match owner {
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Agent not found"})),
-            )
-                .into_response()
-        }
-        Some((oid,)) if oid != user.id => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "Not authorized"})),
-            )
-                .into_response()
-        }
-        _ => {}
+    if let Err(resp) = verify_agent_ownership(&state.db, agent_id, &user.id).await {
+        return resp;
     }
 
     // Build dynamic update
@@ -681,7 +715,7 @@ async fn add_favorite(
     user: AuthUser,
     Path(skill_id): Path<Uuid>,
 ) -> Response {
-    let exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM skills WHERE id = $1")
+    let exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM skills WHERE id = $1 AND is_public = true")
         .bind(skill_id)
         .fetch_optional(&state.db)
         .await
@@ -724,11 +758,16 @@ async fn remove_favorite(
 
 /// GET /api/skills/favorites
 async fn list_favorites(State(state): State<AppState>, user: AuthUser) -> Response {
-    let rows = sqlx::query_as::<_, SkillRow>(
+    let rows = sqlx::query_as::<_, SkillListRow>(
         r#"
         SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version,
                s.slash_command, s.prompt_template, s.is_official, s.is_public,
-               s.created_by, s.install_count, s.created_at, s.updated_at
+               s.created_by, s.install_count, s.created_at, s.updated_at,
+               true AS is_favorited,
+               COALESCE(ARRAY(
+                   SELECT ask.agent_id FROM agent_skills ask
+                   WHERE ask.skill_id = s.id AND ask.installed_by = $1
+               ), ARRAY[]::uuid[]) AS installed_agent_ids
         FROM user_favorite_skills uf
         JOIN skills s ON s.id = uf.skill_id
         WHERE uf.user_id = $1
@@ -741,7 +780,7 @@ async fn list_favorites(State(state): State<AppState>, user: AuthUser) -> Respon
 
     match rows {
         Ok(skills) => {
-            let items: Vec<_> = skills.iter().map(skill_to_json).collect();
+            let items: Vec<_> = skills.iter().map(skill_list_to_json).collect();
             Json(json!({ "skills": items })).into_response()
         }
         Err(e) => (
@@ -755,9 +794,14 @@ async fn list_favorites(State(state): State<AppState>, user: AuthUser) -> Respon
 /// GET /api/agents/:id/commands — list slash commands from installed skills
 async fn list_agent_commands(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(agent_id): Path<Uuid>,
 ) -> Response {
+    // Verify user owns the agent
+    if let Err(resp) = verify_agent_ownership(&state.db, agent_id, &user.id).await {
+        return resp;
+    }
+
     #[derive(FromRow)]
     struct CommandRow {
         skill_id: Uuid,
