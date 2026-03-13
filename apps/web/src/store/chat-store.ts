@@ -257,6 +257,7 @@ interface ChatState {
   archiveNote: (conversationId: string, noteId: string) => Promise<void>;
   unarchiveNote: (conversationId: string, noteId: string) => Promise<void>;
   shareNote: (conversationId: string, noteId: string) => Promise<void>;
+  shareKanbanCard: (cardId: string, conversationId: string) => Promise<void>;
   toggleAgentNotesEnabled: (conversationId: string, enabled: boolean) => Promise<void>;
 
   handleWSEvent: (event: WSServerEvent) => void;
@@ -1549,6 +1550,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   shareNote: async (conversationId, noteId) => {
     await api(
       `/api/conversations/${conversationId}/notes/${noteId}/share`,
+      { method: "POST" }
+    );
+  },
+
+  shareKanbanCard: async (cardId, conversationId) => {
+    await api(
+      `/api/kanban/cards/${cardId}/share-to/${conversationId}`,
       { method: "POST" }
     );
   },

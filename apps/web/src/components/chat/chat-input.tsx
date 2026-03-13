@@ -72,8 +72,6 @@ function isFileTooLarge(file: File): boolean {
 interface ChatInputProps {
   droppedFiles?: File[] | null;
   onDropHandled?: () => void;
-  droppedNote?: { id: string; title: string } | null;
-  onNoteDropHandled?: () => void;
   stickerOpen?: boolean;
   onStickerToggle?: () => void;
   threadId?: string | null;
@@ -162,7 +160,7 @@ function FilePreviewGrid({
 
 // ---------- Component ----------
 
-export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDropHandled, stickerOpen, onStickerToggle, threadId }: ChatInputProps = {}) {
+export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerToggle, threadId }: ChatInputProps = {}) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -249,16 +247,6 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     }
     onDropHandled?.();
   }, [droppedFiles, onDropHandled, t]);
-
-  // Handle note dropped from notebook
-  useEffect(() => {
-    if (!droppedNote) return;
-    const prefix = `[Note: ${droppedNote.title}] `;
-    setValue((prev) => prefix + prev);
-    onNoteDropHandled?.();
-    // Focus the textarea after inserting
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [droppedNote, onNoteDropHandled]);
 
   // Restore draft when switching conversations
   useEffect(() => {

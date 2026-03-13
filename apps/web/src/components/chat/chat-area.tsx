@@ -53,7 +53,8 @@ export function ChatArea() {
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
-  const [droppedNote, setDroppedNote] = useState<{ id: string; title: string } | null>(null);
+  const shareNote = useChatStore((s) => s.shareNote);
+  const shareKanbanCard = useChatStore((s) => s.shareKanbanCard);
   const [wikiOpen, setWikiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
@@ -93,7 +94,7 @@ export function ChatArea() {
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current++;
-    if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes("application/x-arinova-note")) {
+    if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes("application/x-arinova-note") || e.dataTransfer.types.includes("application/x-arinova-kanban-card")) {
       setIsDragging(true);
     }
   }, []);
@@ -118,21 +119,31 @@ export function ChatArea() {
     setIsDragging(false);
     dragCounterRef.current = 0;
 
-    // Check for note drop first
+    // Check for note drop — share as rich card
     const noteData = e.dataTransfer.getData("application/x-arinova-note");
-    if (noteData) {
+    if (noteData && activeConversationId) {
       try {
         const note = JSON.parse(noteData) as { id: string; title: string };
-        setDroppedNote(note);
+        shareNote(activeConversationId, note.id).catch(() => {});
         return;
-      } catch { /* fall through to file handling */ }
+      } catch { /* fall through */ }
+    }
+
+    // Check for kanban card drop — share as rich card
+    const kanbanData = e.dataTransfer.getData("application/x-arinova-kanban-card");
+    if (kanbanData && activeConversationId) {
+      try {
+        const card = JSON.parse(kanbanData) as { id: string; title: string };
+        shareKanbanCard(card.id, activeConversationId).catch(() => {});
+        return;
+      } catch { /* fall through */ }
     }
 
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       setDroppedFiles(Array.from(files));
     }
-  }, []);
+  }, [activeConversationId, shareNote, shareKanbanCard]);
 
   if (searchActive) {
     return <SearchResults />;
@@ -245,8 +256,6 @@ export function ChatArea() {
         <ChatInput
           droppedFiles={droppedFiles}
           onDropHandled={() => setDroppedFiles(null)}
-          droppedNote={droppedNote}
-          onNoteDropHandled={() => setDroppedNote(null)}
           stickerOpen={stickerOpen}
           onStickerToggle={() => setStickerOpen((prev) => !prev)}
         />

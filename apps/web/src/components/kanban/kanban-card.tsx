@@ -56,6 +56,14 @@ export function SortableCard({
       ref={setNodeRef}
       style={style}
       className="group relative rounded-lg border border-border bg-card p-3 shadow-sm hover:border-border/80 transition-colors cursor-pointer"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(
+          "application/x-arinova-kanban-card",
+          JSON.stringify({ id: card.id, title: card.title, columnName: card.columnId })
+        );
+        e.dataTransfer.effectAllowed = "copy";
+      }}
       onClick={() => onSelect(card)}
     >
       <div className="flex items-start gap-2">
@@ -134,6 +142,14 @@ export function CompactCard({
     <div
       role="button"
       tabIndex={0}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(
+          "application/x-arinova-kanban-card",
+          JSON.stringify({ id: card.id, title: card.title, columnName: card.columnId })
+        );
+        e.dataTransfer.effectAllowed = "copy";
+      }}
       onClick={() => onSelect(card)}
       onKeyDown={(e) => { if (e.key === "Enter") onSelect(card); }}
       className={cn(
