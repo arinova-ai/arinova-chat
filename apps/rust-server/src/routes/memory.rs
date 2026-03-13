@@ -693,14 +693,17 @@ async fn list_capsule_entries(
     Query(params): Query<ListEntriesQuery>,
 ) -> Response {
     // Verify ownership
-    let owner_check = sqlx::query_scalar::<_, i64>(
+    let owner_check = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM memory_capsules WHERE id = $1 AND owner_id = $2",
     )
     .bind(id)
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
 
     if owner_check == 0 {
         return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
@@ -710,13 +713,16 @@ async fn list_capsule_entries(
     let per_page = params.per_page.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let total = sqlx::query_scalar::<_, i64>(
+    let total = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM memory_entries WHERE capsule_id = $1",
     )
     .bind(id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
 
     #[derive(sqlx::FromRow)]
     struct EntryRow {
@@ -729,7 +735,7 @@ async fn list_capsule_entries(
         created_at: chrono::DateTime<chrono::Utc>,
     }
 
-    let rows = sqlx::query_as::<_, EntryRow>(
+    let rows = match sqlx::query_as::<_, EntryRow>(
         r#"SELECT id, content, importance, tags, source_start, source_end, created_at
            FROM memory_entries
            WHERE capsule_id = $1
@@ -741,7 +747,10 @@ async fn list_capsule_entries(
     .bind(offset)
     .fetch_all(&state.db)
     .await
-    .unwrap_or_default();
+    {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
 
     let entries: Vec<Value> = rows
         .into_iter()
@@ -787,14 +796,17 @@ async fn search_capsule_entries(
     Query(params): Query<SearchEntriesQuery>,
 ) -> Response {
     // Verify ownership
-    let owner_check = sqlx::query_scalar::<_, i64>(
+    let owner_check = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM memory_capsules WHERE id = $1 AND owner_id = $2",
     )
     .bind(id)
     .bind(&user.id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
 
     if owner_check == 0 {
         return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
@@ -814,7 +826,7 @@ async fn search_capsule_entries(
         score: f32,
     }
 
-    let rows = sqlx::query_as::<_, SearchRow>(
+    let rows = match sqlx::query_as::<_, SearchRow>(
         r#"SELECT id, content, importance, tags, source_start, source_end, created_at,
                   ts_rank(search_vector, plainto_tsquery('english', $2)) AS score
            FROM memory_entries
@@ -828,7 +840,10 @@ async fn search_capsule_entries(
     .bind(limit)
     .fetch_all(&state.db)
     .await
-    .unwrap_or_default();
+    {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
 
     let total = rows.len() as i64;
     let entries: Vec<Value> = rows

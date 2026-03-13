@@ -136,7 +136,7 @@ function CapsuleDetailView({
           <h3 className="text-sm font-semibold truncate">{capsule.name}</h3>
           <p className="text-xs text-muted-foreground">
             {capsule.entryCount} {t("memoryCapsule.entries")} · {capsule.messageCount} {t("memoryCapsule.messages")}
-            {capsule.noteCount > 0 && ` · ${capsule.noteCount} notes`}
+            {capsule.noteCount > 0 && ` · ${capsule.noteCount} ${t("memoryCapsule.notes")}`}
           </p>
         </div>
       </div>
@@ -305,6 +305,8 @@ export function MemoryCapsuleSheet({
     if (open) {
       setCapsuleName(conversationName);
       fetchData();
+    } else {
+      setSelectedCapsule(null);
     }
   }, [open, conversationName, fetchData]);
 
@@ -517,7 +519,7 @@ export function MemoryCapsuleSheet({
                               </div>
                               <p className="text-[10px] text-muted-foreground">
                                 {capsule.progress.processedMessages} / {capsule.progress.totalMessages} messages
-                                {capsule.progress.totalNotes > 0 && `, ${capsule.progress.processedNotes} / ${capsule.progress.totalNotes} notes`}
+                                {capsule.progress.totalNotes > 0 && `, ${capsule.progress.processedNotes} / ${capsule.progress.totalNotes} ${t("memoryCapsule.notes")}`}
                               </p>
                               {capsule.progress.extractedEntries > 0 && (
                                 <p className="text-[10px] text-muted-foreground">
@@ -540,8 +542,8 @@ export function MemoryCapsuleSheet({
                         <div className="space-y-0.5">
                           <p className="text-xs text-muted-foreground">
                             {capsule.entryCount > 0
-                              ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} notes` : ""}`
-                              : `${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} notes` : ""}`}
+                              ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} ${t("memoryCapsule.notes")}` : ""}`
+                              : `${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} ${t("memoryCapsule.notes")}` : ""}`}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(capsule.createdAt).toLocaleDateString()}
