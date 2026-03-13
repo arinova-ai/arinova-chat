@@ -1890,7 +1890,8 @@ pub async fn suggest_tags(gemini_key: &str, title: &str, content: &str) -> Vec<S
     }
     let system = "Based on the note title and content, suggest 2-3 short tags (single words, lowercase, no #). \
                   Output only the tags separated by commas. Example: feature, urgent, design";
-    let prompt = format!("Title: {}\n\nContent: {}", title, &content[..content.len().min(1000)]);
+    let content_end = content.char_indices().nth(1000).map(|(i, _)| i).unwrap_or(content.len());
+    let prompt = format!("Title: {}\n\nContent: {}", title, &content[..content_end]);
 
     match call_gemini(gemini_key, system, &prompt, 64).await {
         Ok(text) => text
@@ -1936,7 +1937,8 @@ async fn auto_tag_note(
     }
 
     // Build tsquery from note content
-    let query_text = format!("{} {}", title, &content[..content.len().min(200)]);
+    let content_end = content.char_indices().nth(200).map(|(i, _)| i).unwrap_or(content.len());
+    let query_text = format!("{} {}", title, &content[..content_end]);
     let tsquery = query_text
         .split_whitespace()
         .take(8)
