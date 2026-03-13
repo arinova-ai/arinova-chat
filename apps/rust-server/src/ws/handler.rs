@@ -1568,6 +1568,32 @@ pub(crate) async fn do_trigger_agent_response(
         content.to_string()
     };
 
+    // --- Skill slash command injection ---
+    let effective_content = if effective_content.starts_with("//") {
+        let cmd = effective_content.trim_start_matches('/');
+        let skill_prompt = sqlx::query_as::<_, (String,)>(
+            r#"SELECT s.prompt_content
+               FROM skills s
+               JOIN agent_skills ask ON ask.skill_id = s.id
+               WHERE (s.slash_command = $1 OR s.slash_command = $2)
+               AND ask.agent_id = $3::uuid
+               AND ask.is_enabled = true
+               LIMIT 1"#,
+        )
+        .bind(format!("/{}", cmd))
+        .bind(cmd)
+        .bind(agent_id)
+        .fetch_optional(db)
+        .await;
+
+        match skill_prompt {
+            Ok(Some((prompt,))) if !prompt.is_empty() => prompt,
+            _ => effective_content,
+        }
+    } else {
+        effective_content
+    };
+
     // Prepend system prompt if configured
     let task_content = match &system_prompt {
         Some(prompt) if !prompt.is_empty() => {
