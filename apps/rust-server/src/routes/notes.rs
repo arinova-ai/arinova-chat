@@ -753,7 +753,7 @@ async fn create_note(
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct UpdateNoteBody {
     title: Option<String>,
     content: Option<String>,

@@ -43,6 +43,16 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
   const [newTitle, setNewTitle] = useState("");
   const [contextMenuNoteId, setContextMenuNoteId] = useState<string | null>(null);
 
+  // Escape key closes mobile overlay
+  useEffect(() => {
+    if (inline || !open || !onOpenChange) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onOpenChange(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [inline, open, onOpenChange]);
+
   useEffect(() => {
     if (conversationId) {
       setLoading(true);
