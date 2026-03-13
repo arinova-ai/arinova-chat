@@ -883,5 +883,7 @@
   "wiki.unpin": "ピン解除",
   "wiki.titlePlaceholder": "ページタイトル...",
   "wiki.add": "追加",
+  "wiki.save": "保存",
+  "wiki.contentPlaceholder": "内容を入力...",
   "rightPanel.wiki": "ウィキ"
 }

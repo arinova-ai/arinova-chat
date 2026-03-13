@@ -887,5 +887,7 @@
   "wiki.unpin": "取消置顶",
   "wiki.titlePlaceholder": "页面标题...",
   "wiki.add": "添加",
+  "wiki.save": "保存",
+  "wiki.contentPlaceholder": "撰写内容...",
   "rightPanel.wiki": "维基"
 }

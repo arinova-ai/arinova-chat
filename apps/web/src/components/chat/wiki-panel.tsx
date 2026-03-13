@@ -17,6 +17,8 @@ import {
   Tag,
   ChevronDown,
   X,
+  ArrowLeft,
+  Save,
 } from "lucide-react";
 
 interface WikiPanelProps {
@@ -28,6 +30,8 @@ interface WikiPanelProps {
 
 const EMPTY_NOTES: Note[] = [];
 
+type ViewMode = "list" | "detail" | "create";
+
 export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPanelProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
@@ -37,21 +41,36 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
   const updateNote = useChatStore((s) => s.updateNote);
 
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [tagsExpanded, setTagsExpanded] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+
+  // Edit fields
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+
+  // Create fields
   const [newTitle, setNewTitle] = useState("");
-  const [contextMenuNoteId, setContextMenuNoteId] = useState<string | null>(null);
+  const [newContent, setNewContent] = useState("");
 
   // Escape key closes mobile overlay
   useEffect(() => {
     if (inline || !open || !onOpenChange) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
+      if (e.key === "Escape") {
+        if (viewMode !== "list") {
+          setViewMode("list");
+          setSelectedNote(null);
+        } else {
+          onOpenChange(false);
+        }
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [inline, open, onOpenChange]);
+  }, [inline, open, onOpenChange, viewMode]);
 
   useEffect(() => {
     if (conversationId) {
@@ -86,13 +105,49 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
     });
   }, [notes]);
 
+  const handleOpenNote = useCallback(async (note: Note) => {
+    setSelectedNote(note);
+    setEditTitle(note.title);
+    setEditContent(note.content || "");
+    setViewMode("detail");
+    // Fetch full note content
+    try {
+      const full = await api<Note>(`/api/conversations/${note.conversationId || conversationId}/notes/${note.id}`);
+      setSelectedNote(full);
+      setEditTitle(full.title);
+      setEditContent(full.content || "");
+    } catch { /* keep list data */ }
+  }, [conversationId]);
+
+  const handleSave = useCallback(async () => {
+    if (!selectedNote || !editTitle.trim()) return;
+    setSaving(true);
+    try {
+      await updateNote(conversationId, selectedNote.id, {
+        title: editTitle.trim(),
+        content: editContent,
+      });
+      setSelectedNote({ ...selectedNote, title: editTitle.trim(), content: editContent, updatedAt: new Date().toISOString() });
+    } catch { /* api shows toast */ }
+    setSaving(false);
+  }, [selectedNote, conversationId, editTitle, editContent, updateNote]);
+
   const handleCreate = async () => {
     const title = newTitle.trim();
     if (!title) return;
-    await createNote(conversationId, title, "");
+    setSaving(true);
+    await createNote(conversationId, title, newContent);
     setNewTitle("");
-    setCreating(false);
+    setNewContent("");
+    setViewMode("list");
+    setSaving(false);
   };
+
+  const handleBackToList = useCallback(() => {
+    setViewMode("list");
+    setSelectedNote(null);
+    loadNotes(conversationId, { tags: filterTags.length ? filterTags : undefined });
+  }, [conversationId, loadNotes, filterTags]);
 
   const handleTogglePin = async (note: Note) => {
     const isPinned = (note as Note & { isPinned?: boolean }).isPinned ?? false;
@@ -114,7 +169,111 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
     return d.toLocaleDateString([], { month: "short", day: "numeric" });
   }
 
-  const content = (
+  // Detail/Edit view
+  const detailView = (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border shrink-0">
+        <button
+          type="button"
+          onClick={handleBackToList}
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-semibold flex-1 truncate">{selectedNote?.title || ""}</span>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+        >
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+          {t("wiki.save")}
+        </button>
+        {!inline && onOpenChange && (
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+        <input
+          value={editTitle}
+          onChange={(e) => setEditTitle(e.target.value)}
+          placeholder={t("wiki.titlePlaceholder")}
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        <textarea
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          placeholder={t("wiki.contentPlaceholder")}
+          className="w-full flex-1 min-h-[200px] rounded-md border border-border bg-background px-2 py-1.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      </div>
+    </div>
+  );
+
+  // Create view
+  const createView = (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border shrink-0">
+        <button
+          type="button"
+          onClick={() => { setViewMode("list"); setNewTitle(""); setNewContent(""); }}
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-semibold flex-1">{t("wiki.create")}</span>
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={saving || !newTitle.trim()}
+          className="rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : t("wiki.add")}
+        </button>
+        {!inline && onOpenChange && (
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+        <input
+          autoFocus
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { setViewMode("list"); setNewTitle(""); setNewContent(""); }
+          }}
+          placeholder={t("wiki.titlePlaceholder")}
+          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        <textarea
+          value={newContent}
+          onChange={(e) => setNewContent(e.target.value)}
+          placeholder={t("wiki.contentPlaceholder")}
+          className="w-full flex-1 min-h-[200px] rounded-md border border-border bg-background px-2 py-1.5 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      </div>
+    </div>
+  );
+
+  // List view
+  const listView = (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border shrink-0">
@@ -122,7 +281,7 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
         <span className="text-sm font-semibold flex-1">{t("wiki.title")}</span>
         <button
           type="button"
-          onClick={() => setCreating(true)}
+          onClick={() => setViewMode("create")}
           className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
           title={t("wiki.create")}
         >
@@ -138,30 +297,6 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
           </button>
         )}
       </div>
-
-      {/* Create input */}
-      {creating && (
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-          <input
-            autoFocus
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreate();
-              if (e.key === "Escape") { setCreating(false); setNewTitle(""); }
-            }}
-            placeholder={t("wiki.titlePlaceholder")}
-            className="h-7 flex-1 rounded-md border border-border bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors"
-          >
-            {t("wiki.add")}
-          </button>
-        </div>
-      )}
 
       {/* Tag filter */}
       {allTags.length > 0 && (
@@ -212,15 +347,17 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
             return (
               <div
                 key={note.id}
-                className="group relative flex items-start px-3 py-2.5 hover:bg-muted/50 transition-colors border-b border-border/50"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setContextMenuNoteId(contextMenuNoteId === note.id ? null : note.id);
-                }}
+                className="group relative flex items-start px-3 py-2.5 hover:bg-muted/50 transition-colors border-b border-border/50 cursor-pointer"
+                onClick={() => handleOpenNote(note)}
               >
                 {isPinned && <Pin className="h-3 w-3 text-brand-text mr-2 mt-0.5 shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{note.title}</div>
+                  {note.content && (
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {note.content.slice(0, 80)}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-muted-foreground">{formatTime(note.updatedAt)}</span>
                     {note.creatorName && (
@@ -265,6 +402,8 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
       </div>
     </div>
   );
+
+  const content = viewMode === "detail" ? detailView : viewMode === "create" ? createView : listView;
 
   // Inline mode (right panel)
   if (inline) return content;

@@ -883,5 +883,7 @@
   "wiki.unpin": "고정 해제",
   "wiki.titlePlaceholder": "페이지 제목...",
   "wiki.add": "추가",
+  "wiki.save": "저장",
+  "wiki.contentPlaceholder": "내용을 입력...",
   "rightPanel.wiki": "위키"
 }

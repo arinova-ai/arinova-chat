@@ -883,5 +883,7 @@
   "wiki.unpin": "Nyahsemat",
   "wiki.titlePlaceholder": "Tajuk halaman...",
   "wiki.add": "Tambah",
+  "wiki.save": "Simpan",
+  "wiki.contentPlaceholder": "Tulis kandungan...",
   "rightPanel.wiki": "Wiki"
 }

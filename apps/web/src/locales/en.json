@@ -969,5 +969,7 @@
   "wiki.unpin": "Unpin",
   "wiki.titlePlaceholder": "Page title...",
   "wiki.add": "Add",
+  "wiki.save": "Save",
+  "wiki.contentPlaceholder": "Write content...",
   "rightPanel.wiki": "Wiki"
 }

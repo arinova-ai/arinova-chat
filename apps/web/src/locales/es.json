@@ -883,5 +883,7 @@
   "wiki.unpin": "Desfijar",
   "wiki.titlePlaceholder": "Título de página...",
   "wiki.add": "Añadir",
+  "wiki.save": "Guardar",
+  "wiki.contentPlaceholder": "Escribir contenido...",
   "rightPanel.wiki": "Wiki"
 }

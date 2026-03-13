@@ -969,5 +969,7 @@
   "wiki.unpin": "取消釘選",
   "wiki.titlePlaceholder": "頁面標題...",
   "wiki.add": "新增",
+  "wiki.save": "儲存",
+  "wiki.contentPlaceholder": "撰寫內容...",
   "rightPanel.wiki": "維基"
 }
