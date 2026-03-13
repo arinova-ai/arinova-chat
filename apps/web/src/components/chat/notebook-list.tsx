@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import {
@@ -59,6 +59,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const userDismissedRef = useRef(false);
 
   const fetchNotebooks = useCallback(async () => {
     setLoading(true);
@@ -87,7 +88,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
 
   // Auto-enter default notebook if only one exists
   useEffect(() => {
-    if (!loading && notebooks.length === 1 && !selectedNotebook) {
+    if (!loading && notebooks.length === 1 && !selectedNotebook && !userDismissedRef.current) {
       setSelectedNotebook(notebooks[0]);
     }
   }, [loading, notebooks, selectedNotebook]);
@@ -142,6 +143,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
         conversationId={conversationId}
         inline={inline}
         onBack={() => {
+          userDismissedRef.current = true;
           setSelectedNotebook(null);
           fetchNotebooks(); // refresh counts
         }}
@@ -236,7 +238,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
               ) : (
                 <button
                   type="button"
-                  onClick={() => setSelectedNotebook(nb)}
+                  onClick={() => { userDismissedRef.current = false; setSelectedNotebook(nb); }}
                   className="flex items-center w-full px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
                 >
                   <BookOpen className="h-4 w-4 text-muted-foreground mr-2.5 shrink-0" />
