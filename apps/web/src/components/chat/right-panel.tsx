@@ -107,8 +107,6 @@ export function RightPanel() {
     [panelWidth, setPanelWidth],
   );
 
-  if (!isWide || !isOpen) return null;
-
   const hasAgent = !!activeConversation?.agentId;
 
   const visibleTabs = TABS.filter((tab) => {
@@ -118,6 +116,16 @@ export function RightPanel() {
     if (tab.id === "chat" && !sideChatConversationId) return false;
     return true;
   });
+
+  // Auto-reset tab when current tab is not visible (e.g. switching from group to direct)
+  useEffect(() => {
+    if (!isOpen || visibleTabs.length === 0) return;
+    if (!visibleTabs.some((t) => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id);
+    }
+  }, [isOpen, activeTab, visibleTabs, setActiveTab]);
+
+  if (!isWide || !isOpen) return null;
 
   return (
     <div

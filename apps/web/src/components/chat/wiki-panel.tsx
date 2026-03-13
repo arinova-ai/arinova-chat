@@ -262,7 +262,15 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
   // Mobile portal overlay
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div
+      className="fixed inset-0 z-50 bg-background flex flex-col"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
+    >
       {content}
     </div>,
     document.body,

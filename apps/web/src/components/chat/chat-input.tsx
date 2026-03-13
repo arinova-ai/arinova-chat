@@ -535,9 +535,8 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       }
 
       if (item.type === "agent-skill") {
-        // Agent skill: strip the "skill-" prefix we added
-        const skillId = item.id.replace(/^skill-/, "");
-        sendMessage(`/${skillId}`);
+        // Send using the slash command label (e.g. /commandName)
+        sendMessage(item.label);
         clearInput();
       }
     },

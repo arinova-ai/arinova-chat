@@ -525,12 +525,20 @@ async fn uninstall_skill(
     match result {
         Ok(r) => {
             if r.rows_affected() > 0 {
-                let _ = sqlx::query(
+                if let Err(e) = sqlx::query(
                     "UPDATE skills SET install_count = GREATEST(install_count - 1, 0) WHERE id = $1",
                 )
                 .bind(skill_id)
                 .execute(&mut *tx)
-                .await;
+                .await
+                {
+                    let _ = tx.rollback().await;
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": e.to_string()})),
+                    )
+                        .into_response();
+                }
             }
             if let Err(e) = tx.commit().await {
                 return (
