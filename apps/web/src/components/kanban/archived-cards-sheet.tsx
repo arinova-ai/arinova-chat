@@ -75,7 +75,7 @@ export function ArchivedCardsSheet({ open, boardId, onClose, onUnarchived }: Arc
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background">
+      <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background flex flex-col overflow-hidden">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Archive className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function ArchivedCardsSheet({ open, boardId, onClose, onUnarchived }: Arc
           <SheetDescription className="sr-only">View and restore archived kanban cards</SheetDescription>
         </SheetHeader>
 
-        <div className="mt-4 space-y-2 px-1">
+        <div className="mt-4 flex-1 min-h-0 overflow-y-auto space-y-2 px-1">
           {loading && !data ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
