@@ -135,6 +135,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
 
   // If a notebook is selected, show notes for that notebook
   if (selectedNotebook) {
+    if (!inline && !open) return null;
     return (
       <NotebookNotes
         notebook={selectedNotebook}
