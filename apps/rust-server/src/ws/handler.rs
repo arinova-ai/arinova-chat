@@ -1570,7 +1570,12 @@ pub(crate) async fn do_trigger_agent_response(
 
     // --- Skill slash command injection ---
     let effective_content = if effective_content.starts_with("//") {
-        let cmd = effective_content.trim_start_matches('/');
+        let without_slashes = effective_content.trim_start_matches('/');
+        let (cmd, user_args) = match without_slashes.split_once(' ') {
+            Some((c, a)) => (c.trim(), a.trim()),
+            None => (without_slashes.trim(), ""),
+        };
+
         let skill_prompt = sqlx::query_as::<_, (String,)>(
             r#"SELECT s.prompt_content
                FROM skills s
@@ -1587,7 +1592,13 @@ pub(crate) async fn do_trigger_agent_response(
         .await;
 
         match skill_prompt {
-            Ok(Some((prompt,))) if !prompt.is_empty() => prompt,
+            Ok(Some((prompt,))) if !prompt.is_empty() => {
+                if user_args.is_empty() {
+                    prompt
+                } else {
+                    format!("{}\n\n[User Input]\n{}", prompt, user_args)
+                }
+            }
             _ => effective_content,
         }
     } else {
