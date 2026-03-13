@@ -160,7 +160,7 @@ function CreateCommunityContent() {
                           : "border-border bg-background hover:border-border/80"
                       )}
                     >
-                      {t(`community.csMode.${mode === "ai_only" ? "aiOnly" : mode === "human_only" ? "humanOnly" : "hybrid"}`)}
+                      {t(`community.csMode.${mode}`)}
                     </button>
                   ))}
                 </div>

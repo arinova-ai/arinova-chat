@@ -986,6 +986,7 @@ function CreateSpaceDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("other");
@@ -1022,7 +1023,7 @@ function CreateSpaceDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="mx-4 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Create App</h3>
+          <h3 className="text-lg font-semibold">{t("creator.spaceDialog.title")}</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="h-5 w-5" />
           </button>
@@ -1030,29 +1031,29 @@ function CreateSpaceDialog({
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Name</label>
+            <label className="text-sm font-medium">{t("creator.spaceDialog.name")}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My App"
+              placeholder={t("creator.spaceDialog.namePlaceholder")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Description</label>
+            <label className="text-sm font-medium">{t("creator.spaceDialog.description")}</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does your app do?"
+              placeholder={t("creator.spaceDialog.descPlaceholder")}
               rows={2}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Category</label>
+            <label className="text-sm font-medium">{t("creator.spaceDialog.category")}</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -1067,28 +1068,28 @@ function CreateSpaceDialog({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Iframe URL</label>
+            <label className="text-sm font-medium">{t("creator.spaceDialog.iframeUrl")}</label>
             <input
               type="url"
               value={iframeUrl}
               onChange={(e) => setIframeUrl(e.target.value)}
-              placeholder="https://example.com/app"
+              placeholder={t("creator.spaceDialog.iframeUrlPlaceholder")}
               className={`w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring ${
                 iframeUrl.trim() && !urlValid ? "border-red-500" : "border-border"
               }`}
             />
             {iframeUrl.trim() && !urlValid && (
-              <p className="text-xs text-red-500">URL must start with https://</p>
+              <p className="text-xs text-red-500">{t("creator.spaceDialog.iframeUrlError")}</p>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Tags (comma-separated)</label>
+            <label className="text-sm font-medium">{t("creator.spaceDialog.tags")}</label>
             <input
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
-              placeholder="fun, multiplayer, casual"
+              placeholder={t("creator.spaceDialog.tagsPlaceholder")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -1096,14 +1097,14 @@ function CreateSpaceDialog({
 
         <div className="flex gap-3 pt-1">
           <Button variant="secondary" className="flex-1" onClick={onClose}>
-            Cancel
+            {t("creator.dialog.cancel")}
           </Button>
           <Button
             className="brand-gradient-btn flex-1"
             disabled={saving || !canSave}
             onClick={handleCreate}
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t("creator.spaceDialog.create")}
           </Button>
         </div>
       </div>
