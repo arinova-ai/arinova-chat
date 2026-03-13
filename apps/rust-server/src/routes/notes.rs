@@ -849,15 +849,59 @@ async fn update_note(
         is_pinned: Option<bool>,
         notebook_id: Option<Option<Uuid>>,
     }
-    let dyn_params = DynParam {
+    let mut dyn_params = DynParam {
         title: body.title.as_ref().map(|t| t.trim().to_string()),
         content: body.content.clone(),
         tags: body.tags.as_ref().map(|t| t.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()),
         is_pinned: body.is_pinned,
-        notebook_id: body.notebook_id.as_ref().map(|s| {
-            if s.is_empty() { None } else { Uuid::parse_str(s).ok() }
-        }),
+        notebook_id: None,
     };
+
+    // Validate notebook_id: empty string → clear (None), valid UUID → Some, invalid → 400
+    if let Some(ref nb_str) = body.notebook_id {
+        if nb_str.is_empty() {
+            dyn_params.notebook_id = Some(None);
+        } else {
+            match Uuid::parse_str(nb_str) {
+                Ok(nb_id) => {
+                    // Verify notebook ownership
+                    let nb_owner: Option<(String,)> = sqlx::query_as(
+                        "SELECT owner_id FROM notebooks WHERE id = $1",
+                    )
+                    .bind(nb_id)
+                    .fetch_optional(&state.db)
+                    .await
+                    .unwrap_or(None);
+                    match nb_owner {
+                        Some((oid,)) if oid == user.id => {
+                            dyn_params.notebook_id = Some(Some(nb_id));
+                        }
+                        Some(_) => {
+                            return (
+                                StatusCode::FORBIDDEN,
+                                Json(json!({"error": "Notebook does not belong to you"})),
+                            )
+                                .into_response();
+                        }
+                        None => {
+                            return (
+                                StatusCode::NOT_FOUND,
+                                Json(json!({"error": "Notebook not found"})),
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+                Err(_) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": "Invalid notebookId"})),
+                    )
+                        .into_response();
+                }
+            }
+        }
+    }
 
     if dyn_params.title.is_some() {
         set_clauses.push(format!("title = ${param_idx}"));

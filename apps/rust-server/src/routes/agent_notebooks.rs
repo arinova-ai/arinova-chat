@@ -72,29 +72,27 @@ fn notebook_to_json(row: &NotebookRow) -> serde_json::Value {
 
 /// Ensure the user has a default notebook
 async fn ensure_default_notebook(db: &sqlx::PgPool, user_id: &str) -> Result<(), sqlx::Error> {
-    let exists: Option<(Uuid,)> = sqlx::query_as(
+    sqlx::query(
+        "INSERT INTO notebooks (owner_id, name, is_default, sort_order) VALUES ($1, 'My Notes', true, 0) ON CONFLICT DO NOTHING",
+    )
+    .bind(user_id)
+    .execute(db)
+    .await?;
+
+    let default_id: (Uuid,) = sqlx::query_as(
         "SELECT id FROM notebooks WHERE owner_id = $1 AND is_default = true LIMIT 1",
     )
     .bind(user_id)
-    .fetch_optional(db)
+    .fetch_one(db)
     .await?;
 
-    if exists.is_none() {
-        let row: (Uuid,) = sqlx::query_as(
-            "INSERT INTO notebooks (owner_id, name, is_default, sort_order) VALUES ($1, 'My Notes', true, 0) RETURNING id",
-        )
-        .bind(user_id)
-        .fetch_one(db)
-        .await?;
-
-        sqlx::query(
-            "UPDATE conversation_notes SET notebook_id = $1 WHERE owner_id = $2 AND notebook_id IS NULL",
-        )
-        .bind(row.0)
-        .bind(user_id)
-        .execute(db)
-        .await?;
-    }
+    sqlx::query(
+        "UPDATE conversation_notes SET notebook_id = $1 WHERE owner_id = $2 AND notebook_id IS NULL",
+    )
+    .bind(default_id.0)
+    .bind(user_id)
+    .execute(db)
+    .await?;
 
     Ok(())
 }

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS notebooks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notebooks_owner ON notebooks(owner_id, sort_order);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notebooks_owner_default ON notebooks (owner_id) WHERE is_default = true;
 
 -- Add notebook_id, parent_id, is_pinned to conversation_notes
 ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS notebook_id UUID REFERENCES notebooks(id) ON DELETE SET NULL;

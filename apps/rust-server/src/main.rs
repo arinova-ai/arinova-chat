@@ -347,6 +347,7 @@ async fn main() {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         CREATE INDEX IF NOT EXISTS idx_notebooks_owner ON notebooks(owner_id, sort_order);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notebooks_owner_default ON notebooks (owner_id) WHERE is_default = true;
 
         ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS notebook_id UUID REFERENCES notebooks(id) ON DELETE SET NULL;
         ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES conversation_notes(id) ON DELETE SET NULL;
