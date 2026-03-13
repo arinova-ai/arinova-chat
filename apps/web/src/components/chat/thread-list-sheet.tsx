@@ -45,6 +45,96 @@ function formatTime(date: Date | string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
+/** Inline thread list content (used in right panel) */
+export function ThreadListContent({ conversationId }: { conversationId: string }) {
+  const { t } = useTranslation();
+  const openThread = useChatStore((s) => s.openThread);
+  const [threads, setThreads] = useState<ThreadItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchThreads = useCallback(async () => {
+    if (!conversationId) return;
+    setLoading(true);
+    try {
+      const data = await api<ThreadsResponse>(
+        `/api/conversations/${conversationId}/threads?limit=50`
+      );
+      setThreads(data.threads);
+    } catch (err) {
+      console.error("[ThreadList] Failed to fetch threads:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId]);
+
+  useEffect(() => {
+    fetchThreads();
+  }, [fetchThreads]);
+
+  return (
+    <ThreadListInner
+      threads={threads}
+      loading={loading}
+      openThread={openThread}
+      t={t}
+    />
+  );
+}
+
+function ThreadListInner({
+  threads,
+  loading,
+  openThread,
+  onClose,
+  t,
+}: {
+  threads: ThreadItem[];
+  loading: boolean;
+  openThread: (id: string) => void;
+  onClose?: () => void;
+  t: (key: string) => string;
+}) {
+  return loading ? (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  ) : threads.length === 0 ? (
+    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+      <MessageSquare className="h-8 w-8 mb-2 opacity-40" />
+      <p className="text-sm">{t("chat.thread.noReplies")}</p>
+    </div>
+  ) : (
+    <div className="flex flex-col gap-1 px-1">
+      {threads.map((thread) => (
+        <button
+          key={thread.threadId}
+          type="button"
+          className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/60 transition-colors"
+          onClick={() => {
+            openThread(thread.threadId);
+            onClose?.();
+          }}
+        >
+          <MessageSquare className="h-4 w-4 mt-0.5 shrink-0 text-blue-400" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm line-clamp-2 break-words">
+              {thread.originalMessage.content || "..."}
+            </p>
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {thread.replyCount}{" "}
+                {thread.replyCount === 1 ? t("chat.replies.one") : t("chat.replies.other")}
+              </span>
+              <span>·</span>
+              <span suppressHydrationWarning>{formatTime(thread.lastReplyAt)}</span>
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadListSheetProps) {
   const { t } = useTranslation();
   const openThread = useChatStore((s) => s.openThread);
@@ -89,46 +179,14 @@ export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadLi
           </SheetTitle>
         </SheetHeader>
 
-        <div className="overflow-y-auto max-h-[55vh] px-1">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : threads.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <MessageSquare className="h-8 w-8 mb-2 opacity-40" />
-              <p className="text-sm">{t("chat.thread.noReplies")}</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {threads.map((thread) => (
-                <button
-                  key={thread.threadId}
-                  type="button"
-                  className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/60 transition-colors"
-                  onClick={() => {
-                    openThread(thread.threadId);
-                    onOpenChange(false);
-                  }}
-                >
-                  <MessageSquare className="h-4 w-4 mt-0.5 shrink-0 text-blue-400" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm line-clamp-2 break-words">
-                      {thread.originalMessage.content || "..."}
-                    </p>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>
-                        {thread.replyCount}{" "}
-                        {thread.replyCount === 1 ? t("chat.replies.one") : t("chat.replies.other")}
-                      </span>
-                      <span>·</span>
-                      <span suppressHydrationWarning>{formatTime(thread.lastReplyAt)}</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="overflow-y-auto max-h-[55vh]">
+          <ThreadListInner
+            threads={threads}
+            loading={loading}
+            openThread={openThread}
+            onClose={() => onOpenChange(false)}
+            t={t}
+          />
         </div>
       </SheetContent>
     </Sheet>
