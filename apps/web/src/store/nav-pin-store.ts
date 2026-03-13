@@ -8,6 +8,7 @@ export const DEFAULT_NAV_IDS = [
   "office",
   "friends",
   "community",
+  "market",
   "stickers",
 ] as const;
 
@@ -18,7 +19,6 @@ export const PINNABLE_NAV_IDS = [
   "spaces",
   "explore-official",
   "explore-lounge",
-  "market",
   "theme",
   "creator",
   "wallet",

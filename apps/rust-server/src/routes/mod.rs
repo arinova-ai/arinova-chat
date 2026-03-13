@@ -32,6 +32,8 @@ pub mod reports;
 pub mod pins;
 pub mod notes;
 pub mod agent_notes;
+pub mod notebooks;
+pub mod agent_notebooks;
 pub mod link_preview;
 pub mod spaces;
 pub mod media;
@@ -88,6 +90,8 @@ pub fn create_router(state: AppState) -> Router {
         .merge(pins::router())
         .merge(notes::router())
         .merge(agent_notes::router())
+        .merge(notebooks::router())
+        .merge(agent_notebooks::router())
         .merge(link_preview::router())
         .merge(spaces::router())
         .merge(media::router())

@@ -758,6 +758,8 @@ struct UpdateNoteBody {
     title: Option<String>,
     content: Option<String>,
     tags: Option<Vec<String>>,
+    is_pinned: Option<bool>,
+    notebook_id: Option<String>,
 }
 
 /// PATCH /api/conversations/:id/notes/:noteId
@@ -767,7 +769,7 @@ async fn update_note(
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<UpdateNoteBody>,
 ) -> Response {
-    if body.title.is_none() && body.content.is_none() && body.tags.is_none() {
+    if body.title.is_none() && body.content.is_none() && body.tags.is_none() && body.is_pinned.is_none() && body.notebook_id.is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Nothing to update"})),
@@ -844,11 +846,17 @@ async fn update_note(
         title: Option<String>,
         content: Option<String>,
         tags: Option<Vec<String>>,
+        is_pinned: Option<bool>,
+        notebook_id: Option<Option<Uuid>>,
     }
     let dyn_params = DynParam {
         title: body.title.as_ref().map(|t| t.trim().to_string()),
         content: body.content.clone(),
         tags: body.tags.as_ref().map(|t| t.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()),
+        is_pinned: body.is_pinned,
+        notebook_id: body.notebook_id.as_ref().map(|s| {
+            if s.is_empty() { None } else { Uuid::parse_str(s).ok() }
+        }),
     };
 
     if dyn_params.title.is_some() {
@@ -863,6 +871,14 @@ async fn update_note(
         set_clauses.push(format!("tags = ${param_idx}"));
         param_idx += 1;
     }
+    if dyn_params.is_pinned.is_some() {
+        set_clauses.push(format!("is_pinned = ${param_idx}"));
+        param_idx += 1;
+    }
+    if dyn_params.notebook_id.is_some() {
+        set_clauses.push(format!("notebook_id = ${param_idx}"));
+        param_idx += 1;
+    }
 
     let sql = format!(
         "UPDATE conversation_notes SET {} WHERE id = ${} AND conversation_id = ${}",
@@ -875,6 +891,8 @@ async fn update_note(
     if let Some(ref title) = dyn_params.title { q = q.bind(title); }
     if let Some(ref content) = dyn_params.content { q = q.bind(content); }
     if let Some(ref tags) = dyn_params.tags { q = q.bind(tags); }
+    if let Some(is_pinned) = dyn_params.is_pinned { q = q.bind(is_pinned); }
+    if let Some(ref notebook_id) = dyn_params.notebook_id { q = q.bind(*notebook_id); }
     q = q.bind(note_id).bind(conv_id);
 
     let updated = q.execute(&state.db).await;
