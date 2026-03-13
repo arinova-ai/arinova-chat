@@ -13,6 +13,10 @@ import { useRightPanelStore } from "@/store/right-panel-store";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { NotebookSheet } from "./notebook-sheet";
+import { KanbanSidebar } from "./kanban-sidebar";
+import { ThreadListContent } from "./thread-list-sheet";
+import { GroupMembersPanel } from "./group-members-panel";
 
 const TABS = [
   { id: "notes" as const, icon: BookOpen },
@@ -158,19 +162,25 @@ export function RightPanel() {
 }
 
 function TabContent({ tab }: { tab: string }) {
-  const { t } = useTranslation();
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const sideChatConversationId = useRightPanelStore((s) => s.sideChatConversationId);
 
-  const labels: Record<string, string> = {
-    notes: "Notes",
-    kanban: "Kanban",
-    threads: "Threads",
-    members: "Members",
-    chat: "Side Chat",
-  };
+  if (!activeConversationId) return null;
 
-  return (
-    <div className="flex h-full items-center justify-center text-muted-foreground">
-      <p className="text-sm">{labels[tab] ?? tab} — {t("rightPanel.comingSoon")}</p>
-    </div>
-  );
+  switch (tab) {
+    case "notes":
+      return <NotebookSheet inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
+    case "kanban":
+      return <KanbanSidebar inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
+    case "threads":
+      return <ThreadListContent conversationId={activeConversationId} />;
+    case "members":
+      return <GroupMembersPanel inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
+    case "chat":
+      return sideChatConversationId ? (
+        <div className="flex h-full items-center justify-center text-muted-foreground text-sm">Side chat: {sideChatConversationId}</div>
+      ) : null;
+    default:
+      return null;
+  }
 }
