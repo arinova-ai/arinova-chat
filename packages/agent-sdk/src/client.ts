@@ -33,6 +33,7 @@ import type {
   QueryMemoryOptions,
   MemoryEntry,
   ShareNoteResult,
+  SkillPrompt,
 } from "./types.js";
 
 const DEFAULT_RECONNECT_INTERVAL = 5_000;
@@ -1120,6 +1121,34 @@ export class ArinovaAgent {
       score: r.score,
       importance: r.importance,
     }));
+  }
+
+  // ── Skill Prompt API ─────────────────────────────────────────
+
+  /**
+   * Fetch the full prompt content for an installed skill by slug.
+   * Use this when the agent decides to trigger a skill from availableSkills.
+   * @param skillSlug - The skill slug (e.g. "draw", "proactive-agent").
+   */
+  async fetchSkillPrompt(skillSlug: string): Promise<SkillPrompt> {
+    const httpUrl = this.serverUrl
+      .replace(/^ws:/, "http:")
+      .replace(/^wss:/, "https:");
+
+    const res = await fetch(
+      `${httpUrl}/api/agent/skills/${encodeURIComponent(skillSlug)}/prompt`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${this.botToken}` },
+      },
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`fetchSkillPrompt failed (${res.status}): ${body}`);
+    }
+
+    return (await res.json()) as SkillPrompt;
   }
 
   // ── Note Share API ───────────────────────────────────────────

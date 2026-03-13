@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::get,
@@ -14,7 +14,9 @@ use crate::auth::middleware::AuthAgent;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/api/agent/skills/installed", get(list_installed_skills))
+    Router::new()
+        .route("/api/agent/skills/installed", get(list_installed_skills))
+        .route("/api/agent/skills/{slug}/prompt", get(get_skill_prompt))
 }
 
 /// GET /api/agent/skills/installed — list skills installed on this agent (with prompt_content)
@@ -76,6 +78,53 @@ async fn list_installed_skills(
                 .collect();
             Json(json!({ "skills": items })).into_response()
         }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/agent/skills/:slug/prompt — fetch a skill's prompt content by slug
+async fn get_skill_prompt(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(slug): Path<String>,
+) -> Response {
+    #[derive(FromRow)]
+    struct SkillPromptRow {
+        prompt_content: String,
+        prompt_template: String,
+        parameters: serde_json::Value,
+    }
+
+    let row = sqlx::query_as::<_, SkillPromptRow>(
+        r#"
+        SELECT s.prompt_content, s.prompt_template, s.parameters
+        FROM agent_skills ask
+        JOIN skills s ON s.id = ask.skill_id
+        WHERE ask.agent_id = $1 AND s.slug = $2 AND ask.is_enabled = true
+        LIMIT 1
+        "#,
+    )
+    .bind(agent.id)
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(s)) => Json(json!({
+            "promptContent": &s.prompt_content,
+            "promptTemplate": &s.prompt_template,
+            "parameters": &s.parameters,
+        }))
+        .into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Skill not found or not installed"})),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),

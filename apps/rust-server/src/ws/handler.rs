@@ -1802,6 +1802,34 @@ pub(crate) async fn do_trigger_agent_response(
         }
     }
 
+    // Inject available skills for semantic triggering
+    let installed_skills = sqlx::query_as::<_, (String, String, Option<String>, String)>(
+        r#"SELECT s.slug, s.name, s.slash_command, s.description
+           FROM agent_skills ask
+           JOIN skills s ON s.id = ask.skill_id
+           WHERE ask.agent_id = $1::uuid AND ask.is_enabled = true
+           ORDER BY s.name"#,
+    )
+    .bind(agent_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if !installed_skills.is_empty() {
+        let skills_json: Vec<serde_json::Value> = installed_skills
+            .iter()
+            .map(|(slug, name, slash_cmd, desc)| {
+                json!({
+                    "slug": slug,
+                    "name": name,
+                    "slashCommand": slash_cmd,
+                    "description": desc
+                })
+            })
+            .collect();
+        task_payload["availableSkills"] = json!(skills_json);
+    }
+
     // Send full task payload to agent
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     ws_state

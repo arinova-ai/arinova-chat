@@ -26,4 +26,5 @@ export type {
   QueryMemoryOptions,
   MemoryEntry,
   ShareNoteResult,
+  SkillPrompt,
 } from "./types.js";

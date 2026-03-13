@@ -44,6 +44,8 @@ export interface TaskContext {
   history?: { role: string; content: string; senderAgentName?: string; senderUsername?: string; createdAt: string }[];
   /** Attachments from the user's message (images, files). Use the url to download. */
   attachments?: TaskAttachment[];
+  /** Skills installed on this agent — use fetchSkillPrompt() to get the full prompt content. */
+  availableSkills?: { slug: string; name: string; slashCommand: string | null; description: string }[];
   /** Send a streaming delta (new characters only) to the user. */
   sendChunk: (delta: string) => void;
   /** Mark the task as complete with the full response content. */
@@ -335,6 +337,13 @@ export interface ShareNoteResult {
   title: string;
   preview: string;
   tags: string[];
+}
+
+/** Skill prompt content returned by fetchSkillPrompt(). */
+export interface SkillPrompt {
+  promptContent: string;
+  promptTemplate: string;
+  parameters: unknown[];
 }
 
 /** Task handler function. */
