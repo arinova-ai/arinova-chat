@@ -207,6 +207,7 @@ export function FullColumn({
               agentNames={agentNames}
               onDelete={onDeleteCard}
               onSelect={onSelectCard}
+              dragDisabled={sortBy !== "manual"}
             />
           ))}
         </SortableContext>

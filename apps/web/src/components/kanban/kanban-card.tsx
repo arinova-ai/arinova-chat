@@ -28,6 +28,7 @@ export function SortableCard({
   labels,
   onDelete,
   onSelect,
+  dragDisabled,
 }: {
   card: KanbanCard;
   agents: string[];
@@ -36,10 +37,12 @@ export function SortableCard({
   labels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
   onDelete: (id: string) => void;
   onSelect: (card: KanbanCard) => void;
+  dragDisabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: "card", card },
+    disabled: dragDisabled,
   });
 
   const style = {
@@ -56,15 +59,17 @@ export function SortableCard({
       onClick={() => onSelect(card)}
     >
       <div className="flex items-start gap-2">
-        <button
-          type="button"
-          className="mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        {!dragDisabled && (
+          <button
+            type="button"
+            className="mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-foreground leading-snug">{card.title}</div>
           {card.description && (
