@@ -199,9 +199,9 @@ function CapsuleDetailView({
                     {/* Time range */}
                     {(entry.sourceStart || entry.sourceEnd) && (
                       <p className="mt-1 text-[10px] text-muted-foreground">
-                        {entry.sourceStart ? new Date(entry.sourceStart).toLocaleDateString() : ""}
+                        {entry.sourceStart ? new Date(entry.sourceStart).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                         {entry.sourceStart && entry.sourceEnd ? " ~ " : ""}
-                        {entry.sourceEnd ? new Date(entry.sourceEnd).toLocaleDateString() : ""}
+                        {entry.sourceEnd ? new Date(entry.sourceEnd).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                       </p>
                     )}
                     {/* Score for search results */}
@@ -531,9 +531,9 @@ export function MemoryCapsuleSheet({
                             : `${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} ${t("memoryCapsule.notes")}` : ""}`}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(capsule.createdAt).toLocaleDateString()}
+                          {new Date(capsule.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                           {capsule.extractedThrough
-                            ? ` ~ ${new Date(capsule.extractedThrough).toLocaleDateString()}`
+                            ? ` ~ ${new Date(capsule.extractedThrough).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
                             : ` · ${t("memoryCapsule.notExtracted")}`}
                         </p>
                       </div>
