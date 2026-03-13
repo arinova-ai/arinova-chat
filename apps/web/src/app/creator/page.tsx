@@ -794,7 +794,7 @@ function CreateCommunityDialog({
 
   const canSave = name.trim().length > 0;
   const isLounge = communityType === "lounge";
-  const title = isLounge ? t("creator.communityDialog.createLounge") : t("creator.communityDialog.createClub");
+  const title = isLounge ? t("creator.communityDialog.createLounge") : t("creator.communityDialog.createCommunity");
 
   const handleCreate = async () => {
     if (!canSave) return;
@@ -843,7 +843,7 @@ function CreateCommunityDialog({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={isLounge ? t("creator.communityDialog.loungePlaceholder") : t("creator.communityDialog.clubPlaceholder")}
+              placeholder={isLounge ? t("creator.communityDialog.loungePlaceholder") : t("creator.communityDialog.communityPlaceholder")}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -907,7 +907,7 @@ function CommunityTab({ t }: { t: (k: string) => string }) {
           </Button>
           <Button size="sm" variant="secondary" className="gap-1" onClick={() => setCreateType("club")}>
             <Users className="h-3.5 w-3.5" />
-            {t("creator.createClub")}
+            {t("creator.createCommunity")}
           </Button>
         </div>
       </div>

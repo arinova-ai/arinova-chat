@@ -75,7 +75,6 @@ export function MobileBottomNav() {
     { id: "wallet", icon: Wallet, label: t("nav.wallet"), href: "/wallet" },
     { id: "office-theme", icon: Palette, label: t("nav.themeStore"), href: "/office/themes" },
     { id: "explore-official", icon: Building2, label: t("nav.exploreOfficial"), href: "/explore/official" },
-    { id: "explore-clubs", icon: Users, label: t("nav.exploreClubs"), href: "/explore/clubs" },
     { id: "explore-lounge", icon: Mic, label: t("nav.exploreLounge"), href: "/explore/lounge" },
   ];
 

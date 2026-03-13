@@ -34,14 +34,14 @@ export default function ExploreClubsPage() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <Users className="h-5 w-5 text-green-500" />
-        <h1 className="text-lg font-semibold">{t("explore.clubs")}</h1>
+        <h1 className="text-lg font-semibold">{t("explore.communities")}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
           <p className="text-center text-sm text-muted-foreground py-12">{t("common.loading")}</p>
         ) : clubs.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground py-12">{t("explore.noClubs")}</p>
+          <p className="text-center text-sm text-muted-foreground py-12">{t("explore.noCommunities")}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
             {clubs.map((club) => (

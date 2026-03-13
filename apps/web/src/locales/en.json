@@ -595,7 +595,7 @@
   "creator.noSpaces": "No spaces yet",
   "creator.members": "members",
   "creator.createLounge": "Create Lounge",
-  "creator.createClub": "Create Club",
+  "creator.createCommunity": "Create Community",
   "creator.createApp": "Create App",
   "creator.createNewAgent": "Create New Agent",
   "creator.editAgent": "Edit Agent",
@@ -651,10 +651,10 @@
   "creator.themeDialog.chooseFile": "Choose .zip file...",
   "creator.themeDialog.upload": "Upload",
   "creator.communityDialog.createLounge": "Create Lounge",
-  "creator.communityDialog.createClub": "Create Club",
+  "creator.communityDialog.createCommunity": "Create Community",
   "creator.communityDialog.name": "Name",
   "creator.communityDialog.loungePlaceholder": "My Lounge",
-  "creator.communityDialog.clubPlaceholder": "My Club",
+  "creator.communityDialog.communityPlaceholder": "My Community",
   "creator.communityDialog.description": "Description",
   "creator.communityDialog.descPlaceholder": "What is this community about?",
   "creator.communityDialog.create": "Create",
@@ -721,15 +721,15 @@
   "community.noJoined": "You haven't joined any communities yet",
   "community.type.all": "all",
   "community.type.official": "Official",
-  "community.type.club": "Club",
+  "community.type.club": "Community",
   "community.tabOfficial": "Official",
-  "community.tabClub": "Club",
+  "community.tabClub": "Community",
   "community.form.name": "Name",
   "community.form.namePlaceholder": "Community name",
   "community.form.description": "Description",
   "community.form.descriptionPlaceholder": "Describe your community...",
   "community.form.officialDesc": "Managed by your organization with AI/human CS",
-  "community.form.clubDesc": "Open community for fans and members",
+  "community.form.communityDesc": "Open community for fans and members",
   "community.form.type": "Type",
   "community.form.csMode": "CS Mode",
   "community.csMode.ai_only": "AI Only",
@@ -748,7 +748,7 @@
   "community.lounge.voiceAgent": "Voice Agent",
 
   "chat.tab.officials": "Officials",
-  "chat.tab.clubs": "Clubs",
+  "chat.tab.communities": "Communities",
   "chat.tab.lounges": "Lounges",
 
   "official.dashboard.title": "CS Dashboard",
@@ -901,7 +901,7 @@
   "voice.hangup": "Hang up",
 
   "nav.exploreOfficial": "Official",
-  "nav.exploreClubs": "Clubs",
+  "nav.exploreCommunities": "Communities",
   "nav.exploreLounge": "Lounge",
 
   "accounts.personal": "Personal",
@@ -952,12 +952,12 @@
   "accounts.releaseToAI": "Release to AI",
 
   "explore.official": "Official Accounts",
-  "explore.clubs": "Clubs",
+  "explore.communities": "Communities",
   "explore.lounge": "Lounge",
   "explore.subscribers": "subscribers",
   "explore.members": "members",
   "explore.subscribe": "Subscribe",
   "explore.join": "Join",
   "explore.noAccounts": "No accounts found",
-  "explore.noClubs": "No clubs found"
+  "explore.noCommunities": "No communities found"
 }

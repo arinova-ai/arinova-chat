@@ -28,7 +28,6 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
   settings: Settings,
   "explore-official": Building2,
-  "explore-clubs": Users,
   "explore-lounge": Mic,
 };
 
@@ -76,7 +75,6 @@ export function IconRail() {
     if (pathname.startsWith("/creator")) return "creator";
     if (pathname.startsWith("/friends")) return "friends";
     if (pathname.startsWith("/explore/official")) return "explore-official";
-    if (pathname.startsWith("/explore/clubs")) return "explore-clubs";
     if (pathname.startsWith("/explore/lounge")) return "explore-lounge";
     if (pathname.startsWith("/community")) return "community";
     if (pathname.startsWith("/agent-hub")) return "market";
@@ -108,7 +106,6 @@ export function IconRail() {
   // ── Explore ──
   const exploreItems: NavEntry[] = [
     { id: "explore-official", label: t("nav.exploreOfficial"), href: "/explore/official" },
-    { id: "explore-clubs", label: t("nav.exploreClubs"), href: "/explore/clubs" },
     { id: "explore-lounge", label: t("nav.exploreLounge"), href: "/explore/lounge" },
   ];
 
