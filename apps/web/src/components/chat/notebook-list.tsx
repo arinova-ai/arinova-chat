@@ -12,6 +12,7 @@ import {
   Trash2,
   Loader2,
   FolderOpen,
+  X,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
@@ -47,7 +48,12 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const isMobile = useIsMobile();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(null);
+  const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(() => {
+    try {
+      const saved = localStorage.getItem("arinova-last-notebook");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -69,6 +75,22 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   useEffect(() => {
     fetchNotebooks();
   }, [fetchNotebooks]);
+
+  // Persist selectedNotebook to localStorage
+  useEffect(() => {
+    if (selectedNotebook) {
+      localStorage.setItem("arinova-last-notebook", JSON.stringify(selectedNotebook));
+    } else {
+      localStorage.removeItem("arinova-last-notebook");
+    }
+  }, [selectedNotebook]);
+
+  // Auto-enter default notebook if only one exists
+  useEffect(() => {
+    if (!loading && notebooks.length === 1 && !selectedNotebook) {
+      setSelectedNotebook(notebooks[0]);
+    }
+  }, [loading, notebooks, selectedNotebook]);
 
   const handleCreate = async () => {
     const name = newName.trim();
@@ -122,6 +144,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
           setSelectedNotebook(null);
           fetchNotebooks(); // refresh counts
         }}
+        onClose={!inline && onOpenChange ? () => onOpenChange(false) : undefined}
       />
     );
   }
@@ -305,11 +328,13 @@ function NotebookNotes({
   conversationId,
   inline,
   onBack,
+  onClose,
 }: {
   notebook: Notebook;
   conversationId: string;
   inline?: boolean;
   onBack: () => void;
+  onClose?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -327,6 +352,15 @@ function NotebookNotes({
         <span className="text-xs text-muted-foreground">{t("notebooks.title")}</span>
         <span className="text-xs text-muted-foreground">/</span>
         <span className="text-sm font-semibold truncate flex-1">{notebook.name}</span>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors ml-auto"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Reuse existing NotebookSheet for note list rendering */}
@@ -334,7 +368,7 @@ function NotebookNotes({
         <NotebookSheet
           inline
           open
-          onOpenChange={() => {}}
+          onOpenChange={onClose ? () => onClose() : () => {}}
           conversationId={conversationId}
           notebookId={notebook.id}
         />
