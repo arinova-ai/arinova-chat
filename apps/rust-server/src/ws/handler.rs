@@ -1594,7 +1594,9 @@ pub(crate) async fn do_trigger_agent_response(
         match skill_prompt {
             Ok(Some((prompt,))) if !prompt.is_empty() => {
                 if user_args.is_empty() {
-                    prompt
+                    prompt.replace("$ARGUMENTS", "")
+                } else if prompt.contains("$ARGUMENTS") {
+                    prompt.replace("$ARGUMENTS", user_args)
                 } else {
                     format!("{}\n\n[User Input]\n{}", prompt, user_args)
                 }
