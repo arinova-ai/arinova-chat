@@ -16,7 +16,7 @@ export function IncomingCall() {
   if (!incomingCall) return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 z-50 flex justify-center p-4 pointer-events-none">
+    <div className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] pointer-events-none">
       <div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-border bg-neutral-900/95 px-5 py-4 shadow-2xl backdrop-blur-sm animate-in slide-in-from-top-4 duration-300">
         {/* Caller avatar */}
         <div className="animate-pulse">
