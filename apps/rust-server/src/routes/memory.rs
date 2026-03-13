@@ -26,6 +26,14 @@ pub fn router() -> Router<AppState> {
         .route("/api/memory/capsules/{id}/abort", post(abort_capsule))
         .route("/api/memory/capsules/{id}/refresh", post(refresh_capsule))
         .route(
+            "/api/memory/capsules/{id}/entries",
+            get(list_capsule_entries),
+        )
+        .route(
+            "/api/memory/capsules/{id}/entries/search",
+            get(search_capsule_entries),
+        )
+        .route(
             "/api/memory/capsules/{id}/grants",
             post(grant_agent_access),
         )
@@ -666,4 +674,185 @@ async fn agent_query_capsules(
                 .into_response()
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/memory/capsules/{id}/entries — List entries in a capsule (paginated)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ListEntriesQuery {
+    page: Option<i64>,
+    per_page: Option<i64>,
+}
+
+async fn list_capsule_entries(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Query(params): Query<ListEntriesQuery>,
+) -> Response {
+    // Verify ownership
+    let owner_check = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM memory_capsules WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if owner_check == 0 {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+    }
+
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = params.per_page.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM memory_entries WHERE capsule_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    #[derive(sqlx::FromRow)]
+    struct EntryRow {
+        id: Uuid,
+        content: String,
+        importance: f64,
+        tags: Vec<String>,
+        source_start: Option<chrono::DateTime<chrono::Utc>>,
+        source_end: Option<chrono::DateTime<chrono::Utc>>,
+        created_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    let rows = sqlx::query_as::<_, EntryRow>(
+        r#"SELECT id, content, importance, tags, source_start, source_end, created_at
+           FROM memory_entries
+           WHERE capsule_id = $1
+           ORDER BY source_end DESC NULLS LAST, created_at DESC
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(id)
+    .bind(per_page)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let entries: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "content": r.content,
+                "importance": r.importance,
+                "tags": r.tags,
+                "sourceStart": r.source_start.map(|dt| dt.to_rfc3339()),
+                "sourceEnd": r.source_end.map(|dt| dt.to_rfc3339()),
+                "createdAt": r.created_at.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "entries": entries,
+            "total": total,
+            "page": page,
+            "perPage": per_page,
+        })),
+    )
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/memory/capsules/{id}/entries/search — Full-text search entries
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct SearchEntriesQuery {
+    query: String,
+    limit: Option<i64>,
+}
+
+async fn search_capsule_entries(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Query(params): Query<SearchEntriesQuery>,
+) -> Response {
+    // Verify ownership
+    let owner_check = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM memory_capsules WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if owner_check == 0 {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Capsule not found"}))).into_response();
+    }
+
+    let limit = params.limit.unwrap_or(20).clamp(1, 100);
+
+    #[derive(sqlx::FromRow)]
+    struct SearchRow {
+        id: Uuid,
+        content: String,
+        importance: f64,
+        tags: Vec<String>,
+        source_start: Option<chrono::DateTime<chrono::Utc>>,
+        source_end: Option<chrono::DateTime<chrono::Utc>>,
+        created_at: chrono::DateTime<chrono::Utc>,
+        score: f32,
+    }
+
+    let rows = sqlx::query_as::<_, SearchRow>(
+        r#"SELECT id, content, importance, tags, source_start, source_end, created_at,
+                  ts_rank(search_vector, plainto_tsquery('english', $2)) AS score
+           FROM memory_entries
+           WHERE capsule_id = $1
+             AND search_vector @@ plainto_tsquery('english', $2)
+           ORDER BY score DESC
+           LIMIT $3"#,
+    )
+    .bind(id)
+    .bind(&params.query)
+    .bind(limit)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let total = rows.len() as i64;
+    let entries: Vec<Value> = rows
+        .into_iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "content": r.content,
+                "importance": r.importance,
+                "tags": r.tags,
+                "sourceStart": r.source_start.map(|dt| dt.to_rfc3339()),
+                "sourceEnd": r.source_end.map(|dt| dt.to_rfc3339()),
+                "createdAt": r.created_at.to_rfc3339(),
+                "score": r.score,
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "entries": entries,
+            "total": total,
+        })),
+    )
+        .into_response()
 }

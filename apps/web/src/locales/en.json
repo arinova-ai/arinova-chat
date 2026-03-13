@@ -879,6 +879,9 @@
   "memoryCapsule.entries": "entries",
   "memoryCapsule.messages": "messages",
   "memoryCapsule.notExtracted": "Not yet extracted",
+  "memoryCapsule.searchEntries": "Search entries...",
+  "memoryCapsule.noEntries": "No entries found",
+  "memoryCapsule.relevance": "Relevance",
 
   "promo.free": "Free",
   "promo.coins": "coins",

@@ -877,6 +877,9 @@
   "memoryCapsule.entries": "則記憶",
   "memoryCapsule.messages": "則訊息",
   "memoryCapsule.notExtracted": "尚未提取",
+  "memoryCapsule.searchEntries": "搜尋記憶…",
+  "memoryCapsule.noEntries": "沒有找到記憶",
+  "memoryCapsule.relevance": "相關度",
 
   "promo.free": "免費",
   "promo.coins": "金幣",
