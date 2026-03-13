@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use serde::Deserialize;
@@ -40,6 +40,19 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/memory/capsules/{id}/grants/{agentId}",
             delete(revoke_agent_access),
+        )
+        // Group capsule API
+        .route(
+            "/api/conversations/{id}/capsule/extract",
+            post(extract_group_capsule),
+        )
+        .route(
+            "/api/conversations/{id}/capsule/visibility",
+            patch(update_capsule_visibility),
+        )
+        .route(
+            "/api/conversations/{id}/capsule",
+            get(get_group_capsule),
         )
         // Agent API
         .route("/api/agent/capsules", get(agent_query_capsules))
@@ -870,4 +883,263 @@ async fn search_capsule_entries(
         })),
     )
         .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Group capsule endpoints
+// ---------------------------------------------------------------------------
+
+/// POST /api/conversations/:id/capsule/extract — group owner triggers extraction
+async fn extract_group_capsule(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conv_id): Path<Uuid>,
+) -> Response {
+    // Verify this is a group conversation and user is the owner
+    let conv = sqlx::query_as::<_, (String, String)>(
+        r#"SELECT type, user_id FROM conversations WHERE id = $1"#,
+    )
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (conv_type, conv_owner_id) = match conv {
+        Ok(Some(row)) => row,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Conversation not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if conv_type != "group" {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Only group conversations support capsule extraction"}))).into_response();
+    }
+
+    if conv_owner_id != user.id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the group owner can trigger extraction"}))).into_response();
+    }
+
+    // Check if capsule already exists for this group
+    let existing = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT id, status FROM memory_capsules WHERE group_conversation_id = $1 LIMIT 1",
+    )
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some((existing_id, existing_status)) = existing {
+        if existing_status == "extracting" {
+            return (StatusCode::CONFLICT, Json(json!({
+                "error": "Extraction already in progress",
+                "capsuleId": existing_id,
+                "status": existing_status,
+            }))).into_response();
+        }
+
+        // Refresh existing capsule
+        let cancel = tokio_util::sync::CancellationToken::new();
+        state.extraction_tokens.insert(existing_id, cancel.clone());
+        let tokens_ref = state.extraction_tokens.clone();
+        let db_clone = state.db.clone();
+        let config_clone = state.config.clone();
+        tokio::spawn(async move {
+            let result = crate::services::memory::extract_capsule(db_clone, config_clone, existing_id, cancel).await;
+            tokens_ref.remove(&existing_id);
+            if let Err(e) = result {
+                tracing::error!("Group capsule extraction failed for {}: {}", existing_id, e);
+            }
+        });
+
+        return Json(json!({
+            "capsuleId": existing_id,
+            "status": "extracting",
+            "action": "refresh",
+        })).into_response();
+    }
+
+    // Get group name for capsule name
+    let group_name = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT title FROM conversations WHERE id = $1",
+    )
+    .bind(conv_id)
+    .fetch_one(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| "Group".to_string());
+
+    // Count messages
+    let message_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM messages WHERE conversation_id = $1",
+    )
+    .bind(conv_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0) as i32;
+
+    // Create new capsule
+    let capsule_id = match sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO memory_capsules (owner_id, name, source_conversation_id, group_conversation_id, message_count, status, visibility)
+           VALUES ($1, $2, $3, $3, $4, 'extracting', 'owner_only')
+           RETURNING id"#,
+    )
+    .bind(&user.id)
+    .bind(format!("{} Memory", group_name))
+    .bind(conv_id)
+    .bind(message_count)
+    .fetch_one(&state.db)
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("Failed to create group capsule: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to create capsule"}))).into_response();
+        }
+    };
+
+    // Spawn extraction
+    let cancel = tokio_util::sync::CancellationToken::new();
+    state.extraction_tokens.insert(capsule_id, cancel.clone());
+    let tokens_ref = state.extraction_tokens.clone();
+    let db_clone = state.db.clone();
+    let config_clone = state.config.clone();
+    tokio::spawn(async move {
+        let result = crate::services::memory::extract_capsule(db_clone, config_clone, capsule_id, cancel).await;
+        tokens_ref.remove(&capsule_id);
+        if let Err(e) = result {
+            tracing::error!("Group capsule extraction failed for {}: {}", capsule_id, e);
+        }
+    });
+
+    // Increment daily usage
+    let _ = sqlx::query(
+        r#"INSERT INTO memory_usage_daily (user_id, date, extract_count)
+           VALUES ($1, CURRENT_DATE, 1)
+           ON CONFLICT (user_id, date) DO UPDATE SET extract_count = memory_usage_daily.extract_count + 1"#,
+    )
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    (StatusCode::CREATED, Json(json!({
+        "capsuleId": capsule_id,
+        "status": "extracting",
+        "action": "created",
+        "messageCount": message_count,
+    }))).into_response()
+}
+
+/// PATCH /api/conversations/:id/capsule/visibility
+#[derive(Deserialize)]
+struct UpdateVisibilityBody {
+    visibility: String,
+}
+
+async fn update_capsule_visibility(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conv_id): Path<Uuid>,
+    Json(body): Json<UpdateVisibilityBody>,
+) -> Response {
+    if !["owner_only", "admins", "all_members"].contains(&body.visibility.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Visibility must be owner_only, admins, or all_members"}))).into_response();
+    }
+
+    // Verify user is the group owner
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2 AND type = 'group')",
+    )
+    .bind(conv_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the group owner can change visibility"}))).into_response();
+    }
+
+    let result = sqlx::query(
+        "UPDATE memory_capsules SET visibility = $1 WHERE group_conversation_id = $2",
+    )
+    .bind(&body.visibility)
+    .bind(conv_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => Json(json!({"ok": true, "visibility": body.visibility})).into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "No capsule found for this group"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// GET /api/conversations/:id/capsule — get group capsule info
+async fn get_group_capsule(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conv_id): Path<Uuid>,
+) -> Response {
+    // Check membership
+    let is_member = sqlx::query_scalar::<_, i64>(
+        r#"SELECT COUNT(*) FROM (
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+            UNION ALL
+            SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+        ) sub"#,
+    )
+    .bind(conv_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if is_member == 0 {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    // Get capsule
+    let capsule = sqlx::query_as::<_, (Uuid, String, String, i32, i32, String, Option<serde_json::Value>)>(
+        r#"SELECT id, name, status, message_count, entry_count, visibility, progress
+           FROM memory_capsules
+           WHERE group_conversation_id = $1
+           LIMIT 1"#,
+    )
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match capsule {
+        Ok(Some((id, name, status, msg_count, entry_count, visibility, progress))) => {
+            // Check visibility permission
+            let conv_owner = sqlx::query_scalar::<_, String>(
+                "SELECT user_id FROM conversations WHERE id = $1",
+            )
+            .bind(conv_id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or_default();
+
+            let can_view = conv_owner == user.id
+                || visibility == "all_members"
+                || (visibility == "admins" && {
+                    // Check if user is admin (for now, just owner)
+                    conv_owner == user.id
+                });
+
+            Json(json!({
+                "capsuleId": id,
+                "name": name,
+                "status": status,
+                "messageCount": msg_count,
+                "entryCount": entry_count,
+                "visibility": visibility,
+                "progress": progress,
+                "canView": can_view,
+                "isOwner": conv_owner == user.id,
+            })).into_response()
+        }
+        Ok(None) => Json(json!({ "capsuleId": null })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
 }

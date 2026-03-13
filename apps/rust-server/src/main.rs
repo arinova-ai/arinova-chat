@@ -332,6 +332,10 @@ async fn main() {
         ALTER TABLE kanban_boards ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS progress JSONB;
 
+        -- Group memory capsule columns
+        ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'owner_only';
+        ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS group_conversation_id UUID;
+
         DO $$ BEGIN
             ALTER TYPE agent_listen_mode ADD VALUE IF NOT EXISTS 'allowlist_mentions';
         EXCEPTION WHEN duplicate_object THEN NULL;

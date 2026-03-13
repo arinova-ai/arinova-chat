@@ -32,6 +32,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Bot,
+  Brain,
   Copy,
   Check,
   Crown,
@@ -39,6 +40,7 @@ import {
   Loader2,
   LogOut,
   MoreHorizontal,
+  RefreshCw,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -769,6 +771,219 @@ function SettingsTab({
           onCheckedChange={handleMentionOnlyToggle}
         />
       </div>
+
+      <Separator />
+
+      {isAdmin && (
+        <MemoryCapsuleSection conversationId={conversationId} />
+      )}
+    </div>
+  );
+}
+
+// ===== Memory Capsule Section =====
+
+interface CapsuleInfo {
+  capsuleId: string | null;
+  name?: string;
+  status?: string;
+  messageCount?: number;
+  entryCount?: number;
+  visibility?: string;
+  progress?: { processed?: number; total?: number } | null;
+  canView?: boolean;
+  isOwner?: boolean;
+}
+
+function MemoryCapsuleSection({ conversationId }: { conversationId: string }) {
+  const { t } = useTranslation();
+  const [capsule, setCapsule] = useState<CapsuleInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [extracting, setExtracting] = useState(false);
+  const [error, setError] = useState("");
+
+  const fetchCapsule = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/capsule`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCapsule(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId]);
+
+  useEffect(() => {
+    fetchCapsule();
+  }, [fetchCapsule]);
+
+  // Poll while extracting
+  useEffect(() => {
+    if (capsule?.status !== "extracting") return;
+    const interval = setInterval(fetchCapsule, 5000);
+    return () => clearInterval(interval);
+  }, [capsule?.status, fetchCapsule]);
+
+  const handleExtract = async () => {
+    setExtracting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/capsule/extract`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to extract");
+      }
+      await fetchCapsule();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to extract");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleVisibilityChange = async (visibility: string) => {
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/capsule/visibility`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility }),
+      });
+      if (res.ok) {
+        setCapsule((prev) => prev ? { ...prev, visibility } : prev);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-2">
+        <Brain className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">{t("common.loading")}...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Brain className="h-4 w-4 text-brand" />
+        <p className="text-sm font-medium">{t("group.memoryCapsule")}</p>
+      </div>
+
+      {error && (
+        <p className="text-xs text-destructive">{error}</p>
+      )}
+
+      {!capsule?.capsuleId ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            {t("group.memoryCapsuleDesc")}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-2"
+            onClick={handleExtract}
+            disabled={extracting}
+          >
+            {extracting ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Brain className="h-3 w-3" />
+            )}
+            {t("group.extractMemory")}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Status */}
+          <div className="rounded-lg bg-accent/50 px-3 py-2 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{t("common.status")}</span>
+              <span className={`text-xs font-medium ${
+                capsule.status === "ready" ? "text-green-400" :
+                capsule.status === "extracting" ? "text-amber-400" :
+                capsule.status === "failed" ? "text-red-400" : "text-muted-foreground"
+              }`}>
+                {capsule.status === "ready" ? t("group.capsuleReady") :
+                 capsule.status === "extracting" ? t("group.capsuleExtracting") :
+                 capsule.status === "failed" ? t("group.capsuleFailed") :
+                 capsule.status}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{t("group.messages")}</span>
+              <span className="text-xs">{capsule.messageCount ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{t("group.memories")}</span>
+              <span className="text-xs">{capsule.entryCount ?? 0}</span>
+            </div>
+            {capsule.status === "extracting" && capsule.progress && (
+              <div className="pt-1">
+                <div className="h-1.5 rounded-full bg-accent overflow-hidden">
+                  <div
+                    className="h-full bg-brand rounded-full transition-all"
+                    style={{
+                      width: `${capsule.progress.total ? Math.round(((capsule.progress.processed ?? 0) / capsule.progress.total) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {capsule.progress.processed ?? 0} / {capsule.progress.total ?? 0}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Refresh button */}
+          {capsule.status !== "extracting" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={handleExtract}
+              disabled={extracting}
+            >
+              {extracting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              {t("group.refreshMemory")}
+            </Button>
+          )}
+
+          {/* Visibility */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium">{t("group.capsuleVisibility")}</p>
+            <Select
+              value={capsule.visibility ?? "owner_only"}
+              onValueChange={handleVisibilityChange}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="owner_only">{t("group.visibilityOwnerOnly")}</SelectItem>
+                <SelectItem value="admins">{t("group.visibilityAdmins")}</SelectItem>
+                <SelectItem value="all_members">{t("group.visibilityAllMembers")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
