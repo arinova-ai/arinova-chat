@@ -22,6 +22,8 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -98,6 +100,14 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   // Column management state
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
+
+  // Board members state
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [boardMembers, setBoardMembers] = useState<{ userId: string; username: string; permission: string }[]>([]);
+  const [boardOwner, setBoardOwner] = useState<{ userId: string; username: string } | null>(null);
+  const [inviteUsername, setInviteUsername] = useState("");
+  const [invitePermission, setInvitePermission] = useState("view");
+  const [membersLoading, setMembersLoading] = useState(false);
 
   // Use DnD in full mode on desktop only
   const useDnd = mode === "full" && !isMobile;
@@ -240,6 +250,52 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
       try { localStorage.setItem("kanban_selected_board", boardId); } catch { /* ignore */ }
     }
   }, [fetchBoard, conversationId]);
+
+  // ── Board Members ──────────────────────────────────────
+
+  const fetchBoardMembers = useCallback(async () => {
+    if (!selectedBoardId) return;
+    setMembersLoading(true);
+    try {
+      const data = await api<{ owner: { userId: string; username: string } | null; members: { userId: string; username: string; permission: string }[] }>(
+        `/api/kanban/boards/${selectedBoardId}/members`
+      );
+      setBoardOwner(data.owner);
+      setBoardMembers(data.members);
+    } catch { /* */ }
+    setMembersLoading(false);
+  }, [selectedBoardId]);
+
+  const handleInviteMember = useCallback(async () => {
+    if (!inviteUsername.trim() || !selectedBoardId) return;
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}/members`, {
+        method: "POST",
+        body: JSON.stringify({ username: inviteUsername.trim(), permission: invitePermission }),
+      });
+      setInviteUsername("");
+      await fetchBoardMembers();
+    } catch { /* api shows toast */ }
+  }, [inviteUsername, invitePermission, selectedBoardId, fetchBoardMembers]);
+
+  const handleRemoveMember = useCallback(async (userId: string) => {
+    if (!selectedBoardId) return;
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}/members/${userId}`, { method: "DELETE" });
+      await fetchBoardMembers();
+    } catch { /* */ }
+  }, [selectedBoardId, fetchBoardMembers]);
+
+  const handleUpdateMemberPermission = useCallback(async (userId: string, perm: string) => {
+    if (!selectedBoardId) return;
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}/members/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permission: perm }),
+      });
+      await fetchBoardMembers();
+    } catch { /* */ }
+  }, [selectedBoardId, fetchBoardMembers]);
 
   // ── Column CRUD ───────────────────────────────────────
 
@@ -765,6 +821,79 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Board Members Dialog */}
+      <Dialog open={membersOpen} onOpenChange={setMembersOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Board Members</DialogTitle>
+            <DialogDescription>Share this board with other users.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Invite form */}
+            <div className="flex gap-2">
+              <Input
+                value={inviteUsername}
+                onChange={(e) => setInviteUsername(e.target.value)}
+                placeholder="Username"
+                className="flex-1"
+                onKeyDown={(e) => { if (e.key === "Enter") handleInviteMember(); }}
+              />
+              <select
+                value={invitePermission}
+                onChange={(e) => setInvitePermission(e.target.value)}
+                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+              >
+                <option value="view">View</option>
+                <option value="edit">Edit</option>
+              </select>
+              <Button size="sm" onClick={handleInviteMember} disabled={!inviteUsername.trim()}>Invite</Button>
+            </div>
+
+            {/* Owner */}
+            {boardOwner && (
+              <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
+                <div>
+                  <span className="text-sm font-medium">{boardOwner.username}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">Owner</span>
+                </div>
+              </div>
+            )}
+
+            {/* Members list */}
+            {membersLoading ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : boardMembers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-2">No members yet</p>
+            ) : (
+              <div className="space-y-1">
+                {boardMembers.map((m) => (
+                  <div key={m.userId} className="flex items-center justify-between rounded-md px-3 py-2 hover:bg-muted/50">
+                    <span className="text-sm font-medium">{m.username}</span>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={m.permission}
+                        onChange={(e) => handleUpdateMemberPermission(m.userId, e.target.value)}
+                        className="rounded border border-input bg-background px-1.5 py-0.5 text-xs"
+                      >
+                        <option value="view">View</option>
+                        <option value="edit">Edit</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(m.userId)}
+                        className="rounded p-1 text-muted-foreground hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
@@ -796,6 +925,14 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
                   </button>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => { setMembersOpen(true); fetchBoardMembers(); }}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Users className="h-3.5 w-3.5" />
+                Members
+              </button>
               <button
                 type="button"
                 onClick={() => setArchivedOpen(true)}

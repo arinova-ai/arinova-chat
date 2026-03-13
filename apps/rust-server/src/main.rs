@@ -238,6 +238,15 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_voice_calls_caller ON voice_calls(caller_id);
         CREATE INDEX IF NOT EXISTS idx_voice_calls_callee ON voice_calls(callee_id);
 
+        CREATE TABLE IF NOT EXISTS board_members (
+            board_id UUID NOT NULL REFERENCES kanban_boards(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            permission TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view', 'edit')),
+            invited_by TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (board_id, user_id)
+        );
+
         CREATE TABLE IF NOT EXISTS kanban_card_notes (
             card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
             note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
