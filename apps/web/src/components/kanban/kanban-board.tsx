@@ -21,6 +21,8 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Search,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -84,6 +86,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const [activeCard, setActiveCard] = useState<KanbanCard | null>(null);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Board management state
   const [creatingBoard, setCreatingBoard] = useState(false);
@@ -278,15 +281,17 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   );
 
   const cardsByColumn = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     const map = new Map<string, KanbanCard[]>();
     for (const col of columns) map.set(col.id, []);
     for (const card of board?.cards ?? []) {
+      if (q && !card.title.toLowerCase().includes(q) && !(card.description ?? "").toLowerCase().includes(q)) continue;
       const list = map.get(card.columnId);
       if (list) list.push(card);
     }
     for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
     return map;
-  }, [board, columns]);
+  }, [board, columns, searchQuery]);
 
   const cardAgentsMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -772,14 +777,34 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 pt-3 md:px-4 md:pt-4 pb-0">
             {boardSelector}
-            <button
-              type="button"
-              onClick={() => setArchivedOpen(true)}
-              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              Archived
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t("kanban.search.placeholder")}
+                  className="h-7 w-48 pl-7 pr-7 text-xs"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setArchivedOpen(true)}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                Archived
+              </button>
+            </div>
           </div>
 
           {emptyState ?? (
@@ -844,9 +869,27 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   return (
     <>
       <div className="flex flex-col flex-1 min-h-0 h-full">
-        {/* Board selector for compact mode */}
+        {/* Board selector + search for compact mode */}
         <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 shrink-0">
           {boardSelector}
+          <div className="relative ml-auto">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t("kanban.search.placeholder")}
+              className="h-6 w-36 pl-6 pr-6 text-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </div>
         {emptyState ?? (
           <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden h-full">
