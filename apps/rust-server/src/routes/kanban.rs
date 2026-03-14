@@ -28,7 +28,7 @@ pub fn router() -> Router<AppState> {
             get(list_archived_cards),
         )
         .route("/api/kanban/cards", post(create_card))
-        .route("/api/kanban/cards/{id}", patch(update_card).delete(delete_card))
+        .route("/api/kanban/cards/{id}", get(get_card).patch(update_card).delete(delete_card))
         .route("/api/kanban/cards/{id}/agents", post(assign_agent))
         .route(
             "/api/kanban/cards/{card_id}/agents/{agent_id}",
@@ -1174,6 +1174,92 @@ async fn create_card(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
+}
+
+/// GET /api/kanban/cards/:id — get a single card with notes, commits, labels
+async fn get_card(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+        return e;
+    }
+
+    let card = sqlx::query_as::<_, CardRow>(
+        r#"SELECT c.id, c.column_id, c.title, c.description, c.priority,
+                  c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at,
+                  c.share_token, COALESCE(c.is_public, false) AS is_public
+           FROM kanban_cards c
+           WHERE c.id = $1"#,
+    )
+    .bind(card_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let card = match card {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({ "error": "Card not found" })))
+                .into_response()
+        }
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+                .into_response()
+        }
+    };
+
+    let notes = sqlx::query_as::<_, CardNoteRow>(
+        r#"SELECT cn.card_id, n.id AS note_id, n.title AS note_title
+           FROM kanban_card_notes cn
+           JOIN conversation_notes n ON n.id = cn.note_id
+           WHERE cn.card_id = $1
+           ORDER BY cn.created_at"#,
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let commits = sqlx::query_as::<_, CardCommitRow>(
+        r#"SELECT cc.card_id, cc.commit_hash, cc.message, cc.created_at
+           FROM kanban_card_commits cc
+           WHERE cc.card_id = $1
+           ORDER BY cc.created_at DESC"#,
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let labels = sqlx::query_as::<_, CardLabelRow>(
+        r#"SELECT cl.card_id, cl.label_id, l.name AS label_name, l.color AS label_color
+           FROM kanban_card_labels cl
+           JOIN kanban_labels l ON l.id = cl.label_id
+           WHERE cl.card_id = $1
+           ORDER BY l.name"#,
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let agents = sqlx::query_as::<_, CardAgentRow>(
+        "SELECT card_id, agent_id FROM kanban_card_agents WHERE card_id = $1",
+    )
+    .bind(card_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    Json(json!({
+        "card": card,
+        "cardNotes": notes,
+        "cardCommits": commits,
+        "cardLabels": labels,
+        "cardAgents": agents,
+    }))
+    .into_response()
 }
 
 /// PATCH /api/kanban/cards/:id — update a card

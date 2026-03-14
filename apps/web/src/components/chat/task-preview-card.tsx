@@ -27,8 +27,8 @@ export function TaskPreviewCard({ metadata }: { metadata: TaskShareMetadata }) {
     <button
       type="button"
       onClick={() => {
-        // Open kanban sidebar and signal which card to select
-        useChatStore.setState({ kanbanSidebarOpen: true, notebookOpen: false, pendingKanbanCardId: metadata.cardId });
+        // Open standalone card detail sheet
+        useChatStore.setState({ chatCardDetailId: metadata.cardId });
       }}
       className="mt-2 w-full max-w-[320px] rounded-lg border border-border bg-card p-3 text-left hover:bg-accent/50 transition-colors"
     >

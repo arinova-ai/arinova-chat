@@ -26,6 +26,8 @@ import { assetUrl } from "@/lib/config";
 import { useRenderDiag } from "@/lib/chat-diagnostics";
 import { ErrorBoundary } from "./error-boundary";
 import { useRightPanelStore } from "@/store/right-panel-store";
+import { ChatCardDetailSheet } from "./chat-card-detail-sheet";
+import { ChatNoteDetailSheet } from "./chat-note-detail-sheet";
 
 export function ChatArea() {
   const { t } = useTranslation();
@@ -329,6 +331,8 @@ export function ChatArea() {
           conversationId={activeConversationId}
         />
       )}
+      <ChatCardDetailSheet />
+      <ChatNoteDetailSheet />
     </div>
   );
 }
