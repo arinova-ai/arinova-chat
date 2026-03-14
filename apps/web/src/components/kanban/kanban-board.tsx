@@ -672,48 +672,50 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
             <DropdownMenuItem
               key={b.id}
               onClick={() => handleSwitchBoard(b.id)}
-              className={b.id === selectedBoardId ? "bg-accent" : ""}
+              className={`flex items-center justify-between gap-2 ${b.id === selectedBoardId ? "bg-accent" : ""}`}
             >
-              {b.name}
+              <span className="truncate">{b.name}</span>
+              <span className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const board = boards.find((x) => x.id === b.id);
+                    if (!board) return;
+                    if (b.id !== selectedBoardId) handleSwitchBoard(b.id);
+                    setRenameBoardName(board.name);
+                    setRenamingBoard(true);
+                  }}
+                  title="Rename"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-red-400 disabled:opacity-30"
+                  disabled={boards.length <= 1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (b.id !== selectedBoardId) handleSwitchBoard(b.id);
+                    setArchiveBoardConfirm(true);
+                  }}
+                  title="Archive"
+                >
+                  <Archive className="h-3 w-3" />
+                </button>
+              </span>
             </DropdownMenuItem>
           ))}
+          <DropdownMenuItem
+            onClick={() => setCreatingBoard(true)}
+            className="gap-2"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Board
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <button
-        type="button"
-        onClick={() => setCreatingBoard(true)}
-        className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        title="New board"
-      >
-        <Plus className="h-3.5 w-3.5" />
-      </button>
-
-      {currentBoard && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => { setRenameBoardName(currentBoard.name); setRenamingBoard(true); }}>
-              <Pencil className="h-3.5 w-3.5 mr-2" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setArchiveBoardConfirm(true)}
-              disabled={boards.length <= 1}
-            >
-              <Archive className="h-3.5 w-3.5 mr-2" />
-              Archive
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
     </div>
   );
 
@@ -1118,6 +1120,13 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
 
       <CardDetailSheet
         card={selectedCard}
+        cardAgents={selectedCard ? (cardAgentsMap.get(selectedCard.id) ?? []) : []}
+        cardNotes={selectedCard ? (cardNotesMap.get(selectedCard.id) ?? []) : []}
+        cardCommits={selectedCard ? (cardCommitsMap.get(selectedCard.id) ?? []) : []}
+        cardLabels={selectedCard ? (cardLabelsMap.get(selectedCard.id) ?? []) : []}
+        boardLabels={boardLabels}
+        agentEmojis={agentEmojis}
+        agentNames={agentNames}
         onClose={() => setSelectedCard(null)}
         onUpdate={handleCardUpdate}
         onDelete={handleDeleteCard}
