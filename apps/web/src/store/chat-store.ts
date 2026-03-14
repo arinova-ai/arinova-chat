@@ -145,6 +145,7 @@ interface ChatState {
   notebookOpen: boolean;
   kanbanSidebarOpen: boolean;
   pendingNoteId: string | null;
+  pendingKanbanCardId: string | null;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
   // Attached card (note or kanban card queued for sending)
@@ -314,6 +315,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   notebookOpen: false,
   kanbanSidebarOpen: false,
   pendingNoteId: null,
+  pendingKanbanCardId: null,
   agentNotesEnabledByConversation: {},
   attachedCard: null,
   convSearchOpen: false,

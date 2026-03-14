@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { wsManager } from "@/lib/ws";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useChatStore } from "@/store/chat-store";
 import { CardDetailSheet } from "./card-detail-sheet";
 import { AddCardSheet } from "./add-card-sheet";
 import { ArchivedCardsSheet } from "./archived-cards-sheet";
@@ -576,6 +578,29 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const handleCardUpdate = useCallback(async () => {
     await fetchBoard(board?.id);
   }, [fetchBoard, board]);
+
+  // Auto-select card when navigating from a task preview card in chat
+  useEffect(() => {
+    const pendingId = useChatStore.getState().pendingKanbanCardId;
+    if (pendingId && board) {
+      const card = board.cards.find((c) => c.id === pendingId);
+      if (card) {
+        setSelectedCard(card);
+        useChatStore.setState({ pendingKanbanCardId: null });
+      }
+    }
+  }, [board]);
+
+  // Listen for kanban WS broadcasts and refresh board
+  useEffect(() => {
+    if (!board?.id) return;
+    const unsub = wsManager.subscribe((event: Record<string, unknown>) => {
+      if (event.type === "kanban_update" && event.boardId === board.id) {
+        fetchBoard(board.id);
+      }
+    });
+    return unsub;
+  }, [board?.id, fetchBoard]);
 
   // Keep selectedCard in sync after refresh
   useEffect(() => {
