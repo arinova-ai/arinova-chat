@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ===== Enum Types =====
 
-CREATE TYPE conversation_type AS ENUM ('direct', 'h2h', 'h2a', 'group', 'official', 'club', 'lounge');
+CREATE TYPE conversation_type AS ENUM ('direct', 'h2h', 'h2a', 'group', 'official', 'community', 'lounge');
 CREATE TYPE message_role AS ENUM ('user', 'agent', 'assistant', 'system');
 CREATE TYPE message_status AS ENUM ('pending', 'streaming', 'completed', 'cancelled', 'error');
 CREATE TYPE community_role AS ENUM ('owner', 'admin', 'member', 'creator', 'moderator');
@@ -278,7 +278,7 @@ CREATE TABLE communities (
     creator_id TEXT NOT NULL REFERENCES "user"(id),
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    type TEXT NOT NULL DEFAULT 'club' CHECK (type IN ('official', 'club', 'lounge')),
+    type TEXT NOT NULL DEFAULT 'community' CHECK (type IN ('official', 'community', 'lounge')),
     -- Pricing (credits)
     join_fee INTEGER NOT NULL DEFAULT 0,
     monthly_fee INTEGER NOT NULL DEFAULT 0,
@@ -289,6 +289,9 @@ CREATE TABLE communities (
     -- Metadata
     avatar_url TEXT,
     cover_image_url TEXT,
+    require_approval BOOLEAN NOT NULL DEFAULT FALSE,
+    approval_questions TEXT[] DEFAULT '{}',
+    agent_join_policy TEXT NOT NULL DEFAULT 'owner_only' CHECK (agent_join_policy IN ('owner_only', 'admin_agents', 'member_agents')),
     category TEXT,
     tags TEXT[],
     tts_voice TEXT DEFAULT 'alloy',
@@ -320,6 +323,20 @@ CREATE TABLE community_members (
     subscription_expires_at TIMESTAMPTZ,
     UNIQUE(community_id, user_id)
 );
+
+CREATE TABLE community_join_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES "user"(id),
+    answers JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    reviewed_by TEXT REFERENCES "user"(id),
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_join_applications_community_status
+    ON community_join_applications(community_id, status);
 
 CREATE TABLE community_agents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

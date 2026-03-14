@@ -40,7 +40,7 @@ interface Community {
   creatorId: string;
   name: string;
   description: string | null;
-  type: "official" | "club" | "lounge";
+  type: "official" | "community" | "lounge";
   joinFee: number;
   monthlyFee: number;
   agentCallFee: number;
@@ -51,6 +51,9 @@ interface Community {
   category: string | null;
   verified: boolean;
   csMode: string | null;
+  requireApproval?: boolean;
+  approvalQuestions?: string[];
+  agentJoinPolicy?: string;
   createdAt: string;
 }
 
@@ -85,6 +88,69 @@ interface Message {
   userImage: string | null;
   agentName: string | null;
   ttsAudioUrl?: string;
+}
+
+// ---------------------------------------------------------------------------
+// ApprovalForm (shown to non-members when community requires approval)
+// ---------------------------------------------------------------------------
+
+function ApprovalForm({ communityId, questions }: { communityId: string; questions: string[] }) {
+  const [answers, setAnswers] = useState<string[]>(questions.map(() => ""));
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleApply = async () => {
+    setSubmitting(true);
+    try {
+      const answersPayload = questions.map((q, i) => ({ question: q, answer: answers[i]?.trim() || "" }));
+      await api(`/api/communities/${communityId}/apply`, {
+        method: "POST",
+        body: JSON.stringify({ answers: answersPayload }),
+      });
+      setSubmitted(true);
+    } catch { /* handled */ }
+    setSubmitting(false);
+  };
+
+  if (submitted) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-6 text-center space-y-2">
+        <p className="text-sm font-semibold">Application Submitted</p>
+        <p className="text-xs text-muted-foreground">You&apos;ll be notified when the admin reviews your application.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold">Application Required</h3>
+        <p className="text-xs text-muted-foreground mt-1">Answer the following questions to apply for membership.</p>
+      </div>
+      {questions.map((question, i) => (
+        <div key={i} className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">{question}</label>
+          <textarea
+            value={answers[i] || ""}
+            onChange={(e) => {
+              const next = [...answers];
+              next[i] = e.target.value;
+              setAnswers(next);
+            }}
+            rows={2}
+            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+      ))}
+      <Button
+        className="brand-gradient-btn w-full"
+        onClick={handleApply}
+        disabled={submitting}
+      >
+        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Application"}
+      </Button>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -546,7 +612,7 @@ function CommunityDetailContent() {
                       : "bg-purple-500/15 text-purple-400"
                   )}
                 >
-                  {community.type === "official" ? "Official" : community.type === "lounge" ? "Lounge" : "Club"}
+                  {community.type === "official" ? "Official" : community.type === "lounge" ? "Lounge" : "Community"}
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground flex items-center gap-2">
@@ -637,285 +703,335 @@ function CommunityDetailContent() {
             </div>
           )}
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-            {hasMore && messages.length > 0 && (
-              <div className="flex justify-center">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    "Load earlier messages"
-                  )}
-                </Button>
-              </div>
-            )}
-
-            {messages.length === 0 && isMember && (
-              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-2">
-                <Users className="h-12 w-12 opacity-40" />
-                <p className="text-sm font-medium">No messages yet</p>
-                <p className="text-xs">Be the first to say something!</p>
-              </div>
-            )}
-
-            {messages.map((msg) => {
-              const isOwn = msg.userId === currentUserId;
-              const isAgent = !!msg.agentListingId;
-
-              return (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "flex",
-                    isOwn ? "justify-end" : "justify-start"
-                  )}
-                >
-                  <div className={cn("max-w-[80%]", isOwn ? "" : "flex gap-2")}>
-                    {!isOwn && (
-                      <div className="shrink-0 mt-1">
-                        {isAgent ? (
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500/15">
-                            <Bot className="h-3.5 w-3.5 text-purple-400" />
-                          </div>
-                        ) : msg.userImage ? (
-                          <img
-                            src={msg.userImage}
-                            alt=""
-                            className="h-7 w-7 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/15 text-[10px] font-bold text-brand-text">
-                            {(msg.userName ?? "?")[0]}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div>
-                      {!isOwn && (
-                        <p className="mb-0.5 text-[10px] font-medium text-muted-foreground">
-                          {isAgent ? msg.agentName : msg.userName}
-                        </p>
-                      )}
-                      <div
-                        className={cn(
-                          "rounded-2xl px-3 py-2 text-sm",
-                          isOwn
-                            ? "bg-brand text-white rounded-br-md"
-                            : isAgent
-                            ? "bg-purple-500/10 border border-purple-500/20 rounded-bl-md"
-                            : "bg-card border border-border rounded-bl-md"
-                        )}
+          {/* Non-member: community detail view / Member: chat view */}
+          {!membershipChecked || !currentUserId ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : !isMember ? (
+            /* ---------- Non-member detail card ---------- */
+            (() => {
+              // Official and lounge types keep their special join flows
+              if (community.type === "official") {
+                return (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-center p-4">
+                      <p className="text-sm font-medium">Start a conversation with {community.name}</p>
+                      <Button
+                        className="brand-gradient-btn gap-2"
+                        onClick={async () => {
+                          try {
+                            const res = await api<{ conversationId: string }>(`/api/communities/${community.id}/start-chat`, { method: "POST" });
+                            useChatStore.getState().setActiveConversation(res.conversationId);
+                            router.push(`/?c=${res.conversationId}`);
+                          } catch { /* handled by api */ }
+                        }}
                       >
-                        <p className="whitespace-pre-wrap break-words">
-                          {msg.content}
-                        </p>
-                        {msg.ttsAudioUrl && (
-                          <div className="mt-1.5">
-                            <AudioPlayer src={msg.ttsAudioUrl} />
-                          </div>
-                        )}
-                        {isAgent && !msg.content && streaming && (
-                          <span className="inline-flex gap-0.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse" />
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse [animation-delay:150ms]" />
-                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse [animation-delay:300ms]" />
-                          </span>
-                        )}
+                        <MessageSquare className="h-4 w-4" />
+                        Start Chat
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              if (community.type === "lounge") {
+                return (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-center p-4">
+                      <p className="text-sm font-medium">Chat with {community.name}&apos;s Voice Agent</p>
+                      <p className="text-xs text-muted-foreground">Free tier available</p>
+                      <Button
+                        className="brand-gradient-btn gap-2"
+                        onClick={async () => {
+                          try {
+                            const res = await api<{ conversationId: string }>(`/api/lounge/${community.id}/start-chat`, { method: "POST" });
+                            useChatStore.getState().setActiveConversation(res.conversationId);
+                            router.push(`/?c=${res.conversationId}`);
+                          } catch { /* handled by api */ }
+                        }}
+                      >
+                        <Mic className="h-4 w-4" />
+                        Start Voice Chat
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              // Community type: full detail card
+              return (
+                <div className="flex-1 overflow-y-auto pb-24 md:pb-6">
+                  {/* Cover image */}
+                  {community.coverImageUrl && (
+                    <div className="relative h-48 w-full">
+                      <img src={community.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+                    </div>
+                  )}
+
+                  {/* Community info card */}
+                  <div className="px-4 py-6 space-y-6 max-w-2xl mx-auto">
+                    <div className="flex items-start gap-4">
+                      {/* Avatar */}
+                      {community.avatarUrl ? (
+                        <img src={community.avatarUrl} alt={community.name} className="h-16 w-16 rounded-xl object-cover shrink-0" />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-brand/15 text-2xl font-bold text-brand-text shrink-0">
+                          {community.name[0]}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-xl font-bold">{community.name}</h2>
+                          {community.verified && <BadgeCheck className="h-5 w-5 text-blue-500" />}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1"><Users className="h-4 w-4" />{community.memberCount} members</span>
+                          {community.category && <span className="capitalize">{community.category}</span>}
+                        </div>
                       </div>
                     </div>
+
+                    {community.description && (
+                      <p className="text-sm text-foreground/80 whitespace-pre-wrap">{community.description}</p>
+                    )}
+
+                    {/* Fee info */}
+                    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Join fee</span>
+                        <span>{community.joinFee > 0 ? `${community.joinFee} coins` : "Free"}</span>
+                      </div>
+                      {community.monthlyFee > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Monthly fee</span>
+                          <span>{community.monthlyFee} coins/month</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Join / Apply section */}
+                    {community.requireApproval ? (
+                      <ApprovalForm communityId={community.id} questions={community.approvalQuestions || []} />
+                    ) : (
+                      <Button
+                        className="brand-gradient-btn w-full"
+                        size="lg"
+                        onClick={handleJoin}
+                        disabled={joining}
+                      >
+                        {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : "Join Community"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
-            })}
-
-            {error && (
-              <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                {error}
-                {error.includes("Insufficient") && (
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    className="ml-auto"
-                    onClick={() => router.push("/wallet")}
-                  >
-                    Top Up
-                  </Button>
-                )}
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input / Join gate */}
-          {!membershipChecked || !currentUserId ? (
-            <div className="shrink-0 border-t border-border p-4 pb-24 md:pb-4">
-              <div className="flex justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            </div>
-          ) : !isMember ? (
-            <div className="shrink-0 border-t border-border p-4 pb-24 md:pb-4">
-              <div className="flex flex-col items-center gap-2 text-center">
-                {community.type === "official" ? (
-                  <>
-                    <p className="text-sm font-medium">Start a conversation with {community.name}</p>
-                    <Button
-                      className="brand-gradient-btn gap-2"
-                      onClick={async () => {
-                        try {
-                          const res = await api<{ conversationId: string }>(`/api/communities/${community.id}/start-chat`, { method: "POST" });
-                          useChatStore.getState().setActiveConversation(res.conversationId);
-                          router.push(`/?c=${res.conversationId}`);
-                        } catch { /* handled by api */ }
-                      }}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                      Start Chat
-                    </Button>
-                  </>
-                ) : community.type === "lounge" ? (
-                  <>
-                    <p className="text-sm font-medium">Chat with {community.name}&apos;s Voice Agent</p>
-                    <p className="text-xs text-muted-foreground">Free tier available</p>
-                    <Button
-                      className="brand-gradient-btn gap-2"
-                      onClick={async () => {
-                        try {
-                          const res = await api<{ conversationId: string }>(`/api/lounge/${community.id}/start-chat`, { method: "POST" });
-                          useChatStore.getState().setActiveConversation(res.conversationId);
-                          router.push(`/?c=${res.conversationId}`);
-                        } catch { /* handled by api */ }
-                      }}
-                    >
-                      <Mic className="h-4 w-4" />
-                      Start Voice Chat
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium">
-                      Join to participate in this community
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {community.joinFee > 0 && (
-                        <span>Join fee: {community.joinFee} coins</span>
-                      )}
-                      {community.joinFee > 0 && community.monthlyFee > 0 && " · "}
-                      {community.monthlyFee > 0 && (
-                        <span>{community.monthlyFee} coins/month</span>
-                      )}
-                      {community.joinFee === 0 && community.monthlyFee === 0 && (
-                        <span>Free to join</span>
-                      )}
-                    </p>
-                    <Button
-                      className="brand-gradient-btn"
-                      onClick={handleJoin}
-                      disabled={joining}
-                    >
-                      {joining ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "Join Community"
-                      )}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
+            })()
           ) : (
-            <div className="shrink-0 border-t border-border p-3 pb-24 md:pb-3">
-              {/* Agent picker dropdown */}
-              {agentPickerOpen && agents.length > 0 && (
-                <div className="mb-2 rounded-lg border border-border bg-card p-2 max-h-40 overflow-y-auto">
-                  {agents.map((a) => (
-                    <button
-                      key={a.listingId}
-                      type="button"
-                      onClick={() => {
-                        setSelectedAgent(a);
-                        setAgentPickerOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
+            /* ---------- Member: chat messages + input ---------- */
+            <>
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+                {hasMore && messages.length > 0 && (
+                  <div className="flex justify-center">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={loadMore}
+                      disabled={loadingMore}
                     >
-                      <Bot className="h-4 w-4 text-purple-400 shrink-0" />
-                      <span className="truncate">{a.agentName}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Selected agent indicator */}
-              {selectedAgent && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-purple-500/10 px-3 py-1.5 text-xs">
-                  <Bot className="h-3.5 w-3.5 text-purple-400" />
-                  <span className="text-purple-300">
-                    Messaging @{selectedAgent.agentName}
-                  </span>
-                  {community.agentCallFee > 0 && (
-                    <span className="flex items-center gap-0.5 text-yellow-500">
-                      <Coins className="h-3 w-3" />
-                      {community.agentCallFee}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => setSelectedAgent(null)}
-                    className="ml-auto text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-end gap-2">
-                {agents.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setAgentPickerOpen((v) => !v)}
-                    className={cn(
-                      agentPickerOpen && "bg-accent"
-                    )}
-                  >
-                    <AtSign className="h-4 w-4" />
-                  </Button>
+                      {loadingMore ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        "Load earlier messages"
+                      )}
+                    </Button>
+                  </div>
                 )}
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={
-                    selectedAgent
-                      ? `Message @${selectedAgent.agentName}...`
-                      : "Type a message..."
-                  }
-                  rows={1}
-                  className="flex-1 resize-none rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  style={{ maxHeight: 120 }}
-                />
-                <Button
-                  size="sm"
-                  className="brand-gradient-btn h-10 w-10 shrink-0 rounded-xl p-0"
-                  disabled={!input.trim() || streaming}
-                  onClick={handleSend}
-                >
-                  {streaming ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
+
+                {messages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-2">
+                    <Users className="h-12 w-12 opacity-40" />
+                    <p className="text-sm font-medium">No messages yet</p>
+                    <p className="text-xs">Be the first to say something!</p>
+                  </div>
+                )}
+
+                {messages.map((msg) => {
+                  const isOwn = msg.userId === currentUserId;
+                  const isAgent = !!msg.agentListingId;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        "flex",
+                        isOwn ? "justify-end" : "justify-start"
+                      )}
+                    >
+                      <div className={cn("max-w-[80%]", isOwn ? "" : "flex gap-2")}>
+                        {!isOwn && (
+                          <div className="shrink-0 mt-1">
+                            {isAgent ? (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500/15">
+                                <Bot className="h-3.5 w-3.5 text-purple-400" />
+                              </div>
+                            ) : msg.userImage ? (
+                              <img
+                                src={msg.userImage}
+                                alt=""
+                                className="h-7 w-7 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/15 text-[10px] font-bold text-brand-text">
+                                {(msg.userName ?? "?")[0]}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div>
+                          {!isOwn && (
+                            <p className="mb-0.5 text-[10px] font-medium text-muted-foreground">
+                              {isAgent ? msg.agentName : msg.userName}
+                            </p>
+                          )}
+                          <div
+                            className={cn(
+                              "rounded-2xl px-3 py-2 text-sm",
+                              isOwn
+                                ? "bg-brand text-white rounded-br-md"
+                                : isAgent
+                                ? "bg-purple-500/10 border border-purple-500/20 rounded-bl-md"
+                                : "bg-card border border-border rounded-bl-md"
+                            )}
+                          >
+                            <p className="whitespace-pre-wrap break-words">
+                              {msg.content}
+                            </p>
+                            {msg.ttsAudioUrl && (
+                              <div className="mt-1.5">
+                                <AudioPlayer src={msg.ttsAudioUrl} />
+                              </div>
+                            )}
+                            {isAgent && !msg.content && streaming && (
+                              <span className="inline-flex gap-0.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse" />
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse [animation-delay:150ms]" />
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse [animation-delay:300ms]" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {error && (
+                  <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {error}
+                    {error.includes("Insufficient") && (
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        className="ml-auto"
+                        onClick={() => router.push("/wallet")}
+                      >
+                        Top Up
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
               </div>
-            </div>
+
+              {/* Input area */}
+              <div className="shrink-0 border-t border-border p-3 pb-24 md:pb-3">
+                {/* Agent picker dropdown */}
+                {agentPickerOpen && agents.length > 0 && (
+                  <div className="mb-2 rounded-lg border border-border bg-card p-2 max-h-40 overflow-y-auto">
+                    {agents.map((a) => (
+                      <button
+                        key={a.listingId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAgent(a);
+                          setAgentPickerOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
+                      >
+                        <Bot className="h-4 w-4 text-purple-400 shrink-0" />
+                        <span className="truncate">{a.agentName}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Selected agent indicator */}
+                {selectedAgent && (
+                  <div className="mb-2 flex items-center gap-2 rounded-lg bg-purple-500/10 px-3 py-1.5 text-xs">
+                    <Bot className="h-3.5 w-3.5 text-purple-400" />
+                    <span className="text-purple-300">
+                      Messaging @{selectedAgent.agentName}
+                    </span>
+                    {community.agentCallFee > 0 && (
+                      <span className="flex items-center gap-0.5 text-yellow-500">
+                        <Coins className="h-3 w-3" />
+                        {community.agentCallFee}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setSelectedAgent(null)}
+                      className="ml-auto text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-end gap-2">
+                  {agents.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setAgentPickerOpen((v) => !v)}
+                      className={cn(
+                        agentPickerOpen && "bg-accent"
+                      )}
+                    >
+                      <AtSign className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      selectedAgent
+                        ? `Message @${selectedAgent.agentName}...`
+                        : "Type a message..."
+                    }
+                    rows={1}
+                    className="flex-1 resize-none rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    style={{ maxHeight: 120 }}
+                  />
+                  <Button
+                    size="sm"
+                    className="brand-gradient-btn h-10 w-10 shrink-0 rounded-xl p-0"
+                    disabled={!input.trim() || streaming}
+                    onClick={handleSend}
+                  >
+                    {streaming ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
 
           <MobileBottomNav />

@@ -54,6 +54,13 @@ pub fn router() -> Router<AppState> {
             "/api/communities/{id}/agent-chat",
             post(agent_chat),
         )
+        // Applications
+        .route("/api/communities/{id}/apply", post(apply_to_join))
+        .route("/api/communities/{id}/applications", get(list_applications))
+        .route(
+            "/api/communities/{id}/applications/{app_id}/review",
+            post(review_application),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +87,9 @@ struct CommunityRow {
     verified: Option<bool>,
     cs_mode: Option<String>,
     default_agent_listing_id: Option<Uuid>,
+    require_approval: bool,
+    approval_questions: Option<Vec<String>>,
+    agent_join_policy: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -181,6 +191,9 @@ fn community_json(r: &CommunityRow) -> Value {
         "verified": r.verified.unwrap_or(false),
         "csMode": r.cs_mode,
         "defaultAgentListingId": r.default_agent_listing_id,
+        "requireApproval": r.require_approval,
+        "approvalQuestions": r.approval_questions,
+        "agentJoinPolicy": r.agent_join_policy,
         "createdAt": r.created_at.to_rfc3339(),
         "updatedAt": r.updated_at.to_rfc3339(),
     })
@@ -307,10 +320,18 @@ struct CreateBody {
     category: Option<String>,
     #[serde(rename = "avatarUrl")]
     avatar_url: Option<String>,
+    #[serde(rename = "coverImageUrl")]
+    cover_image_url: Option<String>,
     #[serde(rename = "csMode")]
     cs_mode: Option<String>,
     #[serde(rename = "defaultAgentListingId")]
     default_agent_listing_id: Option<String>,
+    #[serde(rename = "requireApproval")]
+    require_approval: Option<bool>,
+    #[serde(rename = "approvalQuestions")]
+    approval_questions: Option<Vec<String>>,
+    #[serde(rename = "agentJoinPolicy")]
+    agent_join_policy: Option<String>,
 }
 
 async fn create(
@@ -326,11 +347,11 @@ async fn create(
         );
     }
 
-    let community_type = body.community_type.as_deref().unwrap_or("club");
-    if community_type != "official" && community_type != "club" {
+    let community_type = body.community_type.as_deref().unwrap_or("community");
+    if community_type != "official" && community_type != "community" {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Type must be 'official' or 'club'" })),
+            Json(json!({ "error": "Type must be 'official' or 'community'" })),
         );
     }
 
@@ -339,6 +360,14 @@ async fn create(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": "cs_mode must be 'ai_only', 'human_only', or 'hybrid'" })),
+        );
+    }
+
+    let agent_join_policy = body.agent_join_policy.as_deref().unwrap_or("owner_only");
+    if !["owner_only", "admin_agents", "member_agents"].contains(&agent_join_policy) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "agent_join_policy must be 'owner_only', 'admin_agents', or 'member_agents'" })),
         );
     }
 
@@ -361,9 +390,10 @@ async fn create(
     // Insert community
     let community_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO communities (creator_id, name, description, type, join_fee, monthly_fee,
-                                     agent_call_fee, category, avatar_url, member_count,
-                                     cs_mode, default_agent_listing_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $11)
+                                     agent_call_fee, category, avatar_url, cover_image_url,
+                                     member_count, cs_mode, default_agent_listing_id,
+                                     require_approval, approval_questions, agent_join_policy)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11, $12, $13, $14, $15)
            RETURNING id"#,
     )
     .bind(&user.id)
@@ -375,8 +405,12 @@ async fn create(
     .bind(body.agent_call_fee.unwrap_or(0).max(0))
     .bind(body.category.as_deref())
     .bind(body.avatar_url.as_deref())
+    .bind(body.cover_image_url.as_deref())
     .bind(cs_mode)
     .bind(default_agent_listing_id)
+    .bind(body.require_approval.unwrap_or(false))
+    .bind(body.approval_questions.as_deref().unwrap_or(&[]))
+    .bind(agent_join_policy)
     .fetch_one(&mut *tx)
     .await
     {
@@ -485,6 +519,7 @@ async fn get_community(
         r#"SELECT id, creator_id, name, description, type, join_fee, monthly_fee,
                   agent_call_fee, status, member_count, avatar_url, cover_image_url,
                   category, tags, verified, cs_mode, default_agent_listing_id,
+                  require_approval, approval_questions, agent_join_policy,
                   created_at, updated_at
            FROM communities WHERE id = $1"#,
     )
@@ -695,14 +730,14 @@ async fn join(
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
     // Fetch community
-    let community = sqlx::query_as::<_, (i32, i32, String, Option<Uuid>)>(
-        "SELECT join_fee, monthly_fee, status, conversation_id FROM communities WHERE id = $1",
+    let community = sqlx::query_as::<_, (i32, i32, String, Option<Uuid>, bool)>(
+        "SELECT join_fee, monthly_fee, status, conversation_id, require_approval FROM communities WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.db)
     .await;
 
-    let (join_fee, monthly_fee, status, conversation_id) = match community {
+    let (join_fee, monthly_fee, status, conversation_id, require_approval) = match community {
         Ok(Some(c)) => c,
         Ok(None) => {
             return (
@@ -723,6 +758,13 @@ async fn join(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": "Community is not active" })),
+        );
+    }
+
+    if require_approval {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "This community requires approval to join. Please submit an application." })),
         );
     }
 
@@ -1992,6 +2034,7 @@ async fn my_communities(
         r#"SELECT id, creator_id, name, description, type, join_fee, monthly_fee,
                   agent_call_fee, status, member_count, avatar_url, cover_image_url,
                   category, tags, verified, cs_mode, default_agent_listing_id,
+                  require_approval, approval_questions, agent_join_policy,
                   created_at, updated_at
            FROM communities
            WHERE creator_id = $1
@@ -2028,6 +2071,7 @@ async fn joined_communities(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.type, c.join_fee, c.monthly_fee,
                   c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
                   c.category, c.tags, c.verified, c.cs_mode, c.default_agent_listing_id,
+                  c.require_approval, c.approval_questions, c.agent_join_policy,
                   c.created_at, c.updated_at
            FROM communities c
            JOIN community_members cm ON c.id = cm.community_id
@@ -2048,6 +2092,303 @@ async fn joined_communities(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/:id/apply — Apply to join community
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ApplyBody {
+    answers: Option<Vec<serde_json::Value>>,
+}
+
+async fn apply_to_join(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<ApplyBody>,
+) -> (StatusCode, Json<Value>) {
+    // Check community exists and requires approval
+    let community = sqlx::query_as::<_, (bool, String)>(
+        "SELECT require_approval, status FROM communities WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match community {
+        Ok(Some((require_approval, status))) => {
+            if status != "active" {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "Community is not active" })),
+                );
+            }
+            if !require_approval {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "This community does not require applications" })),
+                );
+            }
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Community not found" })),
+            )
+        }
+        Err(e) => {
+            tracing::error!("Apply: fetch community failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    }
+
+    // Check not already member
+    match is_member_or_creator(&state.db, id, &user.id).await {
+        Ok(true) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "Already a member" })),
+            )
+        }
+        Err(e) => {
+            tracing::error!("Apply: membership check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+        _ => {}
+    }
+
+    // Check no pending application
+    let pending = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM community_join_applications WHERE community_id = $1 AND user_id = $2 AND status = 'pending'",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if pending > 0 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Application already pending" })),
+        );
+    }
+
+    let answers_json =
+        serde_json::to_value(body.answers.unwrap_or_default()).unwrap_or(json!([]));
+
+    match sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO community_join_applications (community_id, user_id, answers)
+           VALUES ($1, $2, $3)
+           RETURNING id"#,
+    )
+    .bind(id)
+    .bind(&user.id)
+    .bind(&answers_json)
+    .fetch_one(&state.db)
+    .await
+    {
+        Ok(app_id) => (StatusCode::CREATED, Json(json!({ "id": app_id }))),
+        Err(e) => {
+            tracing::error!("Apply: insert application failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/communities/:id/applications — List pending applications
+// ---------------------------------------------------------------------------
+
+async fn list_applications(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    // Must be creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match role {
+        Ok(Some(r)) if r == "creator" || r == "moderator" => {}
+        _ => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Not authorized" })),
+            )
+        }
+    }
+
+    let apps = sqlx::query_as::<_, (Uuid, String, serde_json::Value, String, DateTime<Utc>)>(
+        r#"SELECT a.id, a.user_id, a.answers, a.status, a.created_at
+           FROM community_join_applications a
+           WHERE a.community_id = $1 AND a.status = 'pending'
+           ORDER BY a.created_at"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match apps {
+        Ok(rows) => {
+            let applications: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    json!({
+                        "id": r.0,
+                        "userId": r.1,
+                        "answers": r.2,
+                        "status": r.3,
+                        "createdAt": r.4.to_rfc3339(),
+                    })
+                })
+                .collect();
+            (
+                StatusCode::OK,
+                Json(json!({ "applications": applications })),
+            )
+        }
+        Err(e) => {
+            tracing::error!("List applications failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/:id/applications/:app_id/review — Approve/reject
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ReviewBody {
+    approved: bool,
+}
+
+async fn review_application(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((community_id, app_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<ReviewBody>,
+) -> (StatusCode, Json<Value>) {
+    // Must be creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match role {
+        Ok(Some(r)) if r == "creator" || r == "moderator" => {}
+        _ => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Not authorized" })),
+            )
+        }
+    }
+
+    let new_status = if body.approved {
+        "approved"
+    } else {
+        "rejected"
+    };
+
+    // Update application
+    let app = sqlx::query_as::<_, (String,)>(
+        r#"UPDATE community_join_applications
+           SET status = $1, reviewed_by = $2, reviewed_at = NOW()
+           WHERE id = $3 AND community_id = $4 AND status = 'pending'
+           RETURNING user_id"#,
+    )
+    .bind(new_status)
+    .bind(&user.id)
+    .bind(app_id)
+    .bind(community_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match app {
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Application not found or already reviewed" })),
+        ),
+        Err(e) => {
+            tracing::error!("Review application: update failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+        Ok(Some((applicant_id,))) => {
+            if body.approved {
+                // Add as member
+                let _ = sqlx::query(
+                    r#"INSERT INTO community_members (community_id, user_id, role)
+                       VALUES ($1, $2, 'member')
+                       ON CONFLICT DO NOTHING"#,
+                )
+                .bind(community_id)
+                .bind(&applicant_id)
+                .execute(&state.db)
+                .await;
+
+                // Increment member_count
+                let _ = sqlx::query(
+                    "UPDATE communities SET member_count = member_count + 1, updated_at = NOW() WHERE id = $1",
+                )
+                .bind(community_id)
+                .execute(&state.db)
+                .await;
+
+                // Add to conversation
+                let conv_id = sqlx::query_scalar::<_, Uuid>(
+                    "SELECT conversation_id FROM communities WHERE id = $1",
+                )
+                .bind(community_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(cid) = conv_id {
+                    let _ = sqlx::query(
+                        r#"INSERT INTO conversation_user_members (conversation_id, user_id, role)
+                           VALUES ($1, $2, 'member')
+                           ON CONFLICT DO NOTHING"#,
+                    )
+                    .bind(cid)
+                    .bind(&applicant_id)
+                    .execute(&state.db)
+                    .await;
+                }
+            }
+            (
+                StatusCode::OK,
+                Json(json!({ "ok": true, "status": new_status })),
             )
         }
     }
