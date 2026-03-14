@@ -243,9 +243,14 @@ function CommunityDetailContent() {
   const handleJoin = useCallback(async () => {
     setJoining(true);
     try {
-      await api(`/api/communities/${id}/join`, { method: "POST" });
+      const joinRes = await api<{ conversationId?: string }>(`/api/communities/${id}/join`, { method: "POST" });
+      if (joinRes.conversationId) {
+        useChatStore.getState().setActiveConversation(joinRes.conversationId);
+        router.push(`/?c=${joinRes.conversationId}`);
+        return;
+      }
+      // Fallback: stay on community page as member
       setIsMember(true);
-      // Refresh members + messages
       const [membersData, msgData] = await Promise.all([
         api<{ members: Member[] }>(`/api/communities/${id}/members`),
         api<{ messages: Message[] }>(`/api/communities/${id}/messages?limit=50`),
@@ -260,7 +265,7 @@ function CommunityDetailContent() {
     } finally {
       setJoining(false);
     }
-  }, [id, community]);
+  }, [id, community, router]);
 
   // ------ Send text message ------
 

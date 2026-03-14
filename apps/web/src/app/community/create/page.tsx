@@ -33,11 +33,15 @@ function CreateCommunityContent() {
         monthlyFee: 0,
         agentCallFee: 0,
       };
-      const created = await api<{ id: string }>("/api/communities", {
+      const created = await api<{ id: string; conversationId?: string }>("/api/communities", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      router.push(`/community/${created.id}`);
+      if (created.conversationId) {
+        router.push(`/?c=${created.conversationId}`);
+      } else {
+        router.push(`/community/${created.id}`);
+      }
     } catch {
       // auto-handled
     } finally {
