@@ -126,7 +126,7 @@ export function SortableCard({
                 preview: card.description?.slice(0, 80) || undefined,
               });
             }}
-            className="rounded p-1 text-muted-foreground/0 group-hover:text-muted-foreground hover:text-brand transition-colors"
+            className="rounded p-1 text-muted-foreground hover:text-brand transition-colors md:hidden"
             title="Attach to chat"
           >
             <Paperclip className="h-3.5 w-3.5" />

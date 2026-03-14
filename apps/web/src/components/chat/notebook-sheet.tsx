@@ -231,12 +231,12 @@ function SwipeableNoteItem({
           <span suppressHydrationWarning>{formatTime(note.updatedAt)}</span>
         </div>
       </button>
-      {/* Desktop attach button (hover) */}
-      {!isMobile && (
+      {/* Mobile-only attach button (always visible, no hover on mobile) */}
+      {isMobile && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onAttach(note); }}
-          className="absolute right-2 top-2 hidden rounded p-1 text-muted-foreground hover:text-brand transition-colors group-hover/note:block"
+          className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:text-brand transition-colors"
           title="Attach to chat"
         >
           <Paperclip className="h-3.5 w-3.5" />
