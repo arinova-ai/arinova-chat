@@ -33,6 +33,7 @@ import {
   Bot,
   Send,
   ChevronDown,
+  Paperclip,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
@@ -46,6 +47,8 @@ interface NotebookSheetProps {
   onOpenChange: (open: boolean) => void;
   conversationId: string;
   inline?: boolean;
+  /** When provided, load notes from /api/notebooks/:id/notes instead of conversation notes */
+  notebookId?: string;
 }
 
 const EMPTY_NOTES: Note[] = [];
@@ -83,6 +86,7 @@ function SwipeableNoteItem({
   onOpen,
   onDelete,
   onShare,
+  onAttach,
   t,
 }: {
   note: Note;
@@ -90,6 +94,7 @@ function SwipeableNoteItem({
   onOpen: (note: Note) => void;
   onDelete: (note: Note) => void;
   onShare: (note: Note) => void;
+  onAttach: (note: Note) => void;
   t: (key: string) => string;
 }) {
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -193,6 +198,7 @@ function SwipeableNoteItem({
       )}
 
       {/* Content */}
+      <div className="group/note relative">
       <button
         type="button"
         draggable
@@ -225,18 +231,57 @@ function SwipeableNoteItem({
           <span suppressHydrationWarning>{formatTime(note.updatedAt)}</span>
         </div>
       </button>
+      {/* Mobile-only attach button (always visible, no hover on mobile) */}
+      {isMobile && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onAttach(note); }}
+          className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:text-brand transition-colors"
+          title="Attach to chat"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
+      )}
+      </div>
     </div>
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId, inline }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const isMobileRaw = useIsMobile();
   const isMobile = mounted ? isMobileRaw : false;
-  const notes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
-  const loadNotes = useChatStore((s) => s.loadNotes);
+  const storeNotes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
+  const loadStoreNotes = useChatStore((s) => s.loadNotes);
+  const [notebookNotes, setNotebookNotes] = useState<Note[]>([]);
+  const notes = notebookId ? notebookNotes : storeNotes;
+  const loadNotes = useCallback(async (cid: string, opts?: { archived?: boolean; tags?: string[] }) => {
+    if (notebookId) {
+      // Load from notebook API
+      const data = await api<{ notes: Array<{ id: string; conversationId: string; title: string; tags: string[]; isPinned: boolean; createdAt: string; updatedAt: string }> }>(
+        `/api/notebooks/${notebookId}/notes`
+      );
+      setNotebookNotes(data.notes.map((n) => ({
+        id: n.id,
+        conversationId: n.conversationId,
+        title: n.title,
+        content: "",
+        tags: n.tags,
+        createdAt: n.createdAt,
+        updatedAt: n.updatedAt,
+        creatorId: "",
+        creatorType: "user" as const,
+        creatorName: "",
+        agentId: null,
+        agentName: null,
+        archivedAt: null,
+      } satisfies Note)));
+    } else {
+      await loadStoreNotes(cid, opts);
+    }
+  }, [notebookId, loadStoreNotes]);
   const createNote = useChatStore((s) => s.createNote);
   const updateNote = useChatStore((s) => s.updateNote);
   const deleteNote = useChatStore((s) => s.deleteNote);
@@ -327,10 +372,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline }: No
     setViewMode("detail");
     // Fetch full note to get backlinks and linkedCards
     try {
-      const full = await api(`/api/conversations/${conversationId}/notes/${note.id}`) as Note;
+      const full = await api(`/api/conversations/${note.conversationId}/notes/${note.id}`) as Note;
       setSelectedNote(full);
     } catch { /* keep list data if fetch fails */ }
-  }, [conversationId]);
+  }, []);
 
   const handleStartCreate = useCallback(() => {
     setTitleInput("");
@@ -366,7 +411,15 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline }: No
     if (!titleInput.trim()) return;
     setLoading(true);
     try {
-      const note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput);
+      let note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput);
+      if (notebookId) {
+        // Move note into the correct notebook via PATCH notebook_id
+        await api(`/api/conversations/${conversationId}/notes/${note.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ notebookId }),
+        });
+        setNotebookNotes((prev) => [note, ...prev]);
+      }
       if (note.suggestedTags?.length) {
         setSuggestedTags(note.suggestedTags.filter((t) => !tagsInput.includes(t)));
       }
@@ -377,7 +430,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline }: No
     } finally {
       setLoading(false);
     }
-  }, [conversationId, titleInput, contentInput, tagsInput, createNote]);
+  }, [conversationId, notebookId, titleInput, contentInput, tagsInput, createNote]);
 
   const handleSave = useCallback(async () => {
     if (!selectedNote || !titleInput.trim()) return;
@@ -622,20 +675,18 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline }: No
             {/* Tag statistics panel */}
             {allTags.length > 0 && (
               <div className={cn("shrink-0", isMobile ? "px-2 py-1.5" : "px-4 py-1.5")}>
-                {isMobile && (
-                  <button
-                    type="button"
-                    onClick={() => setTagsExpanded((p) => !p)}
-                    className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1"
-                  >
-                    <Tag className="h-3 w-3" />
-                    Tags ({allTags.length})
-                    <ChevronDown className={cn("h-3 w-3 transition-transform", tagsExpanded && "rotate-180")} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setTagsExpanded((p) => !p)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1"
+                >
+                  <Tag className="h-3 w-3" />
+                  Tags ({allTags.length})
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", tagsExpanded && "rotate-180")} />
+                </button>
                 <div className={cn(
                   "flex flex-wrap gap-1",
-                  isMobile && !tagsExpanded && "max-h-0 overflow-hidden",
+                  !tagsExpanded && "max-h-0 overflow-hidden",
                 )}>
                   {allTags.map((tag) => (
                     <button
@@ -700,6 +751,15 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline }: No
                           onOpen={handleOpenNote}
                           onDelete={handleDelete}
                           onShare={handleShareNote}
+                          onAttach={(n) => {
+                            useChatStore.getState().setAttachedCard({
+                              type: "note",
+                              id: n.id,
+                              title: n.title || t("common.untitled"),
+                              preview: (n.summary || n.content)?.slice(0, 80) || undefined,
+                            });
+                            onOpenChange(false);
+                          }}
                           t={t}
                         />
                       )}

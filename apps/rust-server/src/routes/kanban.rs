@@ -120,6 +120,15 @@ pub fn router() -> Router<AppState> {
             "/api/agent/kanban/cards/{cardId}/labels/{labelId}",
             delete(agent_remove_label_from_card),
         )
+        // Board members (sharing)
+        .route(
+            "/api/kanban/boards/{id}/members",
+            get(list_board_members).post(add_board_member),
+        )
+        .route(
+            "/api/kanban/boards/{boardId}/members/{userId}",
+            patch(update_board_member).delete(remove_board_member),
+        )
         // User notes lookup (for note selector in card detail)
         .route("/api/kanban/owner-notes", get(list_owner_notes))
 }
@@ -375,13 +384,18 @@ async fn ensure_default_board(db: &sqlx::PgPool, owner_id: &str) -> Result<Uuid,
 }
 
 /// Check that a board belongs to the given user. Returns board_id if valid.
+/// Verify user is board owner OR an edit member. Used for write operations.
 async fn verify_board_owner(
     db: &sqlx::PgPool,
     board_id: Uuid,
     owner_id: &str,
 ) -> Result<(), Response> {
     let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2)",
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2 AND permission = 'edit'
+        )"#,
     )
     .bind(board_id)
     .bind(owner_id)
@@ -398,7 +412,7 @@ async fn verify_board_owner(
     Ok(())
 }
 
-/// Check that a card belongs to the given user (through board ownership).
+/// Check that a card belongs to the given user (through board ownership or edit membership).
 async fn verify_card_owner(
     db: &sqlx::PgPool,
     card_id: Uuid,
@@ -409,7 +423,7 @@ async fn verify_card_owner(
             SELECT 1 FROM kanban_cards c
             JOIN kanban_columns col ON col.id = c.column_id
             JOIN kanban_boards b ON b.id = col.board_id
-            WHERE c.id = $1 AND b.owner_id = $2
+            WHERE c.id = $1 AND (b.owner_id = $2 OR EXISTS(SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.user_id = $2 AND bm.permission = 'edit'))
         )"#,
     )
     .bind(card_id)
@@ -427,7 +441,7 @@ async fn verify_card_owner(
     Ok(())
 }
 
-/// Check that a column belongs to the given user (through board ownership).
+/// Check that a column belongs to the given user (through board ownership or edit membership).
 async fn verify_column_owner(
     db: &sqlx::PgPool,
     column_id: Uuid,
@@ -437,7 +451,7 @@ async fn verify_column_owner(
         r#"SELECT EXISTS(
             SELECT 1 FROM kanban_columns col
             JOIN kanban_boards b ON b.id = col.board_id
-            WHERE col.id = $1 AND b.owner_id = $2
+            WHERE col.id = $1 AND (b.owner_id = $2 OR EXISTS(SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.user_id = $2 AND bm.permission = 'edit'))
         )"#,
     )
     .bind(column_id)
@@ -451,6 +465,112 @@ async fn verify_column_owner(
     if !exists {
         return Err((StatusCode::NOT_FOUND, Json(json!({ "error": "Column not found" })))
             .into_response());
+    }
+    Ok(())
+}
+
+/// Check that user is owner OR a board member (any permission).
+async fn verify_board_access(
+    db: &sqlx::PgPool,
+    board_id: Uuid,
+    user_id: &str,
+) -> Result<(), Response> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2
+        )"#,
+    )
+    .bind(board_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
+    })?;
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, Json(json!({ "error": "Board not found" }))).into_response());
+    }
+    Ok(())
+}
+
+/// Check that user is owner OR a board member with 'edit' permission.
+async fn verify_board_edit_access(
+    db: &sqlx::PgPool,
+    board_id: Uuid,
+    user_id: &str,
+) -> Result<(), Response> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2 AND permission = 'edit'
+        )"#,
+    )
+    .bind(board_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
+    })?;
+    if !exists {
+        return Err((StatusCode::FORBIDDEN, Json(json!({ "error": "No edit access" }))).into_response());
+    }
+    Ok(())
+}
+
+/// Check that a card is accessible by user (through board ownership or membership).
+async fn verify_card_access(
+    db: &sqlx::PgPool,
+    card_id: Uuid,
+    user_id: &str,
+) -> Result<(), Response> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_cards c
+            JOIN kanban_columns col ON col.id = c.column_id
+            JOIN kanban_boards b ON b.id = col.board_id
+            WHERE c.id = $1 AND (b.owner_id = $2 OR EXISTS(SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.user_id = $2))
+        )"#,
+    )
+    .bind(card_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
+    })?;
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, Json(json!({ "error": "Card not found" }))).into_response());
+    }
+    Ok(())
+}
+
+/// Check that a card is editable by user (owner or edit member).
+async fn verify_card_edit_access(
+    db: &sqlx::PgPool,
+    card_id: Uuid,
+    user_id: &str,
+) -> Result<(), Response> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_cards c
+            JOIN kanban_columns col ON col.id = c.column_id
+            JOIN kanban_boards b ON b.id = col.board_id
+            WHERE c.id = $1 AND (b.owner_id = $2 OR EXISTS(SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.user_id = $2 AND bm.permission = 'edit'))
+        )"#,
+    )
+    .bind(card_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response()
+    })?;
+    if !exists {
+        return Err((StatusCode::FORBIDDEN, Json(json!({ "error": "No edit access" }))).into_response());
     }
     Ok(())
 }
@@ -507,14 +627,20 @@ async fn list_boards(
     let include_archived = query.include_archived.unwrap_or(false);
     let boards = if include_archived {
         sqlx::query_as::<_, BoardRow>(
-            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+            r#"SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1
+               UNION
+               SELECT b.id, b.name, b.created_at FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1
+               ORDER BY created_at"#,
         )
         .bind(&user.id)
         .fetch_all(&state.db)
         .await
     } else {
         sqlx::query_as::<_, BoardRow>(
-            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
+            r#"SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false
+               UNION
+               SELECT b.id, b.name, b.created_at FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1 AND b.archived = false
+               ORDER BY created_at"#,
         )
         .bind(&user.id)
         .fetch_all(&state.db)
@@ -534,7 +660,7 @@ async fn get_board(
     user: AuthUser,
     Path(board_id): Path<Uuid>,
 ) -> Response {
-    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+    if let Err(e) = verify_board_access(&state.db, board_id, &user.id).await {
         return e;
     }
 
@@ -779,7 +905,7 @@ async fn list_columns(
     user: AuthUser,
     Path(board_id): Path<Uuid>,
 ) -> Response {
-    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+    if let Err(e) = verify_board_access(&state.db, board_id, &user.id).await {
         return e;
     }
 
@@ -1137,6 +1263,209 @@ async fn unassign_agent(
         Ok(_) => Json(json!({ "ok": true })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
+    }
+}
+
+// ── Board Members API ────────────────────────────────────────
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddBoardMemberBody {
+    username: String,
+    #[serde(default = "default_view")]
+    permission: String,
+}
+fn default_view() -> String { "view".to_string() }
+
+/// GET /api/kanban/boards/:id/members
+async fn list_board_members(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_board_access(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let members = sqlx::query_as::<_, (String, String, String, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT bm.user_id, u.username, bm.permission, bm.created_at
+           FROM board_members bm
+           JOIN "user" u ON u.id = bm.user_id
+           WHERE bm.board_id = $1
+           ORDER BY bm.created_at"#,
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match members {
+        Ok(rows) => {
+            let items: Vec<_> = rows.iter().map(|(uid, username, perm, created)| json!({
+                "userId": uid,
+                "username": username,
+                "permission": perm,
+                "createdAt": created.to_rfc3339(),
+            })).collect();
+
+            // Also include the owner
+            let owner = sqlx::query_as::<_, (String, String)>(
+                r#"SELECT b.owner_id, u.username FROM kanban_boards b JOIN "user" u ON u.id = b.owner_id WHERE b.id = $1"#,
+            )
+            .bind(board_id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten();
+
+            Json(json!({
+                "owner": owner.map(|(uid, uname)| json!({"userId": uid, "username": uname})),
+                "members": items,
+            })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// POST /api/kanban/boards/:id/members — only board owner can invite
+async fn add_board_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+    Json(body): Json<AddBoardMemberBody>,
+) -> Response {
+    // Only board owner can invite members
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(board_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Only the board owner can invite members" }))).into_response();
+    }
+
+    if body.permission != "view" && body.permission != "edit" {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Permission must be 'view' or 'edit'" }))).into_response();
+    }
+
+    // Look up user by username
+    let target_user = sqlx::query_scalar::<_, String>(
+        r#"SELECT id FROM "user" WHERE username = $1"#,
+    )
+    .bind(&body.username)
+    .fetch_optional(&state.db)
+    .await;
+
+    let target_user_id = match target_user {
+        Ok(Some(id)) => id,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({ "error": "User not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    if target_user_id == user.id {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot add yourself as a member" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO board_members (board_id, user_id, permission, invited_by) VALUES ($1, $2, $3, $4) ON CONFLICT (board_id, user_id) DO UPDATE SET permission = $3",
+    )
+    .bind(board_id)
+    .bind(&target_user_id)
+    .bind(&body.permission)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::CREATED, Json(json!({
+            "userId": target_user_id,
+            "username": body.username,
+            "permission": body.permission,
+        }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateBoardMemberBody {
+    permission: String,
+}
+
+/// PATCH /api/kanban/boards/:boardId/members/:userId
+async fn update_board_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((board_id, target_user_id)): Path<(Uuid, String)>,
+    Json(body): Json<UpdateBoardMemberBody>,
+) -> Response {
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(board_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Only the board owner can change permissions" }))).into_response();
+    }
+
+    if body.permission != "view" && body.permission != "edit" {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Permission must be 'view' or 'edit'" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "UPDATE board_members SET permission = $1 WHERE board_id = $2 AND user_id = $3",
+    )
+    .bind(&body.permission)
+    .bind(board_id)
+    .bind(&target_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({ "error": "Member not found" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// DELETE /api/kanban/boards/:boardId/members/:userId
+async fn remove_board_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((board_id, target_user_id)): Path<(Uuid, String)>,
+) -> Response {
+    // Owner can remove anyone; members can remove themselves
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(board_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner && user.id != target_user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Only the board owner can remove members" }))).into_response();
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM board_members WHERE board_id = $1 AND user_id = $2",
+    )
+    .bind(board_id)
+    .bind(&target_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({ "error": "Member not found" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
 
@@ -1845,7 +2174,7 @@ async fn list_archived_cards(
     Path(board_id): Path<Uuid>,
     Query(params): Query<PaginationQuery>,
 ) -> Response {
-    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+    if let Err(e) = verify_board_access(&state.db, board_id, &user.id).await {
         return e;
     }
 
@@ -3136,6 +3465,7 @@ async fn share_card_to_conversation(
                     None,
                     None,
                     &[],
+                    None,
                     None,
                     &state_clone.ws,
                     &state_clone.db,

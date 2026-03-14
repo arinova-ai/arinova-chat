@@ -234,6 +234,7 @@ async fn handle_voice_message(
             }
 
             #[derive(sqlx::FromRow)]
+            #[allow(dead_code)]
             struct CallInfo {
                 caller_id: String,
                 callee_id: Option<String>,

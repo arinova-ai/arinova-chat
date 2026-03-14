@@ -6,16 +6,15 @@
   "nav.friends": "Friends",
   "nav.community": "Community",
   "nav.theme": "Theme",
-  "nav.market": "Agent Hub",
+  "nav.market": "Skills",
   "nav.wallet": "Wallet",
   "nav.settings": "Settings",
-  "nav.agentHub": "Agent Hub",
+  "nav.agentHub": "Skills",
   "nav.themeStore": "Theme Store",
   "nav.stickers": "Sticker Shop",
   "nav.addShortcut": "Add",
   "nav.allShortcutsAdded": "All shortcuts added",
   "nav.creator": "Creator Console",
-
   "common.save": "Save Changes",
   "common.cancel": "Cancel",
   "common.confirm": "Confirm",
@@ -49,15 +48,11 @@
   "common.description": "Description",
   "common.category": "Category",
   "common.export": "Export",
-
   "errors.somethingWentWrong": "Something went wrong",
   "errors.unexpectedError": "An unexpected error occurred. Try again or refresh the page.",
-
   "connection.syncing": "Syncing...",
   "connection.reconnecting": "Reconnecting...",
-
   "time.yesterday": "Yesterday",
-
   "chat.subtitle": "Connect with your team instantly",
   "chat.collapseSidebar": "Collapse sidebar",
   "chat.expandSidebar": "Expand sidebar",
@@ -83,7 +78,6 @@
   "chat.uploadFailed": "Upload failed, please try again",
   "chat.imagesSelected": "{count} images selected",
   "chat.imageCount": "{n}/{max}",
-
   "chat.actions.copy": "Copy message",
   "chat.actions.reply": "Reply",
   "chat.actions.startThread": "Start thread",
@@ -96,16 +90,13 @@
   "chat.actions.unpin": "Unpin",
   "chat.actions.report": "Report",
   "chat.actions.share": "Share",
-
   "share.title": "Share",
   "share.sendToConversation": "Send to Conversation",
   "share.shareExternal": "Share External",
   "share.copyContent": "Copy Content",
   "share.sentToConversation": "Sent to conversation",
-
   "chat.selection.count": "{count} selected",
   "chat.selection.copied": "Copied to clipboard",
-
   "chat.status.error": "Error",
   "chat.status.stopped": "Stopped",
   "chat.sharedNote": "Shared a note",
@@ -115,20 +106,16 @@
   "chat.status.queued": "Queued",
   "chat.status.thinking": "thinking",
   "chat.status.queuedLabel": "queued",
-
   "chat.replies.one": "reply",
   "chat.replies.other": "replies",
-
   "chat.thread.title": "Thread",
   "chat.thread.noReplies": "No replies yet",
   "chat.thread.startDiscussion": "Start the discussion below",
   "chat.thread.placeholder": "Reply in thread...",
-
   "chat.kanban.title": "Tasks",
   "chat.kanban.empty": "No tasks yet",
   "chat.kanban.addCard": "Add card",
   "chat.kanban.newCardPlaceholder": "Card title...",
-
   "chat.notebook.title": "Notes",
   "chat.notebook.empty": "No notes yet",
   "chat.notebook.create": "Create",
@@ -151,9 +138,7 @@
   "chat.notebook.autoTag": "Auto Tag",
   "chat.notebook.askAi": "Ask AI",
   "chat.notebook.confirmDelete": "Are you sure you want to delete this note?",
-
   "chat.kanban.openTask": "Open task",
-
   "chat.search.title": "Search",
   "chat.search.results": "results",
   "chat.search.result": "result",
@@ -161,9 +146,7 @@
   "chat.search.inConversation": "Search in conversation",
   "chat.search.nOfTotal": "{n} of {total}",
   "chat.unreadDivider": "Unread messages",
-
   "chat.messageActions": "Message actions",
-
   "chat.header.members": "Members",
   "chat.header.memberCount": "{count} members",
   "chat.header.group": "Group",
@@ -196,14 +179,12 @@
   "chat.header.voiceCall": "Voice call",
   "chat.header.inCall": "In call",
   "chat.header.voiceUnavailable": "Voice call unavailable",
-
   "conversation.rename": "Rename",
   "conversation.pin": "Pin",
   "conversation.unpin": "Unpin",
   "conversation.delete": "Delete",
   "conversation.deleteTitle": "Delete conversation",
   "conversation.deleteDesc": "Are you sure you want to delete this conversation? This action cannot be undone and all messages will be permanently removed.",
-
   "newChat.title": "New Conversation",
   "newChat.noAgents": "No agents yet. Add one to start chatting.",
   "newChat.createBot": "Create Bot",
@@ -235,7 +216,6 @@
   "newChat.a2aHint": "Leave empty to create a bot first, then connect an agent later.",
   "newChat.chatWithFriend": "Chat with Friend",
   "newChat.noFriendsHint": "No friends yet. Add friends first to start a conversation.",
-
   "botManage.title": "Manage Bot",
   "botManage.clickChangeAvatar": "Click to change avatar",
   "botManage.name": "Name",
@@ -272,7 +252,6 @@
   "botManage.confirmDelete": "Confirm Delete",
   "botManage.deleteBot": "Delete Bot",
   "botManage.deleteBotConfirm": "Are you sure? This will delete all conversations with this bot.",
-
   "group.title": "Group Info",
   "group.members": "Members",
   "group.settings": "Settings",
@@ -308,14 +287,25 @@
   "group.groupNamePlaceholder": "Group name",
   "group.mentionOnly": "Mention Only",
   "group.mentionOnlyDesc": "Only @mentioned agents respond",
-
+  "group.memoryCapsule": "Memory Capsule",
+  "group.memoryCapsuleDesc": "Extract key memories from group chat history using AI. Useful for onboarding new members or reviewing past decisions.",
+  "group.extractMemory": "Extract Memory",
+  "group.refreshMemory": "Refresh Memory",
+  "group.capsuleReady": "Ready",
+  "group.capsuleExtracting": "Extracting...",
+  "group.capsuleFailed": "Failed",
+  "group.messages": "Messages",
+  "group.memories": "Memories",
+  "group.capsuleVisibility": "Who can view",
+  "group.visibilityOwnerOnly": "Owner only",
+  "group.visibilityAdmins": "Admins",
+  "group.visibilityAllMembers": "All members",
   "addMember.title": "Add Member",
   "addMember.searchPlaceholder": "Search friends or agents...",
   "addMember.friends": "Friends",
   "addMember.myAgents": "My Agents",
   "addMember.noMatches": "No matches found",
   "addMember.allAdded": "All friends and agents are already members",
-
   "agentSheet.title": "Agent profile",
   "agentSheet.working": "Working",
   "agentSheet.online": "Online",
@@ -325,7 +315,6 @@
   "agentSheet.save": "Save",
   "agentSheet.conversations": "Conversations",
   "agentSheet.owner": "Owner",
-
   "agentProfile.listenMode": "Listen Mode",
   "agentProfile.listenMode.all": "Listen All",
   "agentProfile.listenMode.all.desc": "Receives every message — no @mention needed",
@@ -346,7 +335,6 @@
   "agentProfile.memoryCapsules": "Memory Capsules",
   "agentProfile.memoryCapsules.desc": "Toggle which memory capsules this agent can access for context",
   "agentProfile.noOtherUsers": "No other users in this group",
-
   "office.title": "Office",
   "office.subtitle": "Virtual Workspace",
   "office.tab.scene": "Scene",
@@ -374,7 +362,6 @@
   "office.notes.stopSharing": "Stop Sharing",
   "office.notes.linkCopied": "Link copied!",
   "office.notes.publicNote": "Shared Note",
-
   "kanban.share.title": "Share",
   "kanban.share.publicLink": "Create Public Link",
   "kanban.share.toChat": "Share to Chat",
@@ -382,15 +369,20 @@
   "kanban.share.stopSharing": "Stop Sharing",
   "kanban.share.linkCopied": "Link copied!",
   "kanban.share.publicCard": "Shared Card",
-
+  "kanban.sort.manual": "Manual",
+  "kanban.sort.createdDesc": "Newest first",
+  "kanban.sort.createdAsc": "Oldest first",
+  "kanban.sort.updatedDesc": "Recently updated",
+  "kanban.sort.updatedAsc": "Least recently updated",
+  "kanban.sort.priorityDesc": "Priority: High → Low",
+  "kanban.sort.priorityAsc": "Priority: Low → High",
+  "kanban.search.placeholder": "Search cards...",
   "settings.title": "Settings",
   "settings.subtitle": "Customize your experience",
-
   "settings.nav.profile": "Profile",
   "settings.nav.language": "Language",
   "settings.nav.notifications": "Notifications",
   "settings.nav.privacy": "Privacy",
-
   "settings.profile.title": "Profile",
   "settings.profile.subtitle": "Manage your personal information and preferences.",
   "settings.profile.changeAvatar": "Change Avatar",
@@ -419,7 +411,6 @@
   "settings.profile.passwordMismatch": "Passwords do not match",
   "settings.profile.passwordChanged": "Password changed successfully",
   "settings.profile.passwordChangeFailed": "Failed to change password",
-
   "settings.language.title": "Language",
   "settings.language.subtitle": "Choose your preferred language.",
   "settings.appearance.title": "Appearance",
@@ -434,7 +425,6 @@
   "settings.appearance.performance": "Performance",
   "settings.appearance.performanceDesc": "Reduced quality, faster",
   "settings.appearance.language": "Language",
-
   "settings.notifications.title": "Notifications",
   "settings.notifications.subtitle": "Manage how you receive notifications.",
   "settings.notifications.push": "Push Notifications",
@@ -453,7 +443,6 @@
   "settings.notifications.to": "To",
   "settings.notifications.chatSounds": "Chat sounds",
   "settings.notifications.chatSoundsDesc": "Play sounds when sending and receiving messages",
-
   "settings.privacy.title": "Privacy",
   "settings.privacy.subtitle": "Manage blocked users and privacy settings.",
   "settings.privacy.blockedUsers": "Blocked Users",
@@ -469,7 +458,6 @@
   "settings.ai.keyHint": "Get your API key from Google AI Studio (aistudio.google.com). Required for Ask AI in notes.",
   "settings.ai.keyReplace": "Enter new key to replace...",
   "settings.ai.needKey": "Set your Gemini API key in Settings to use Ask AI.",
-
   "userProfile.title": "User Profile",
   "userProfile.joined": "Joined",
   "userProfile.editProfile": "Edit Profile",
@@ -478,7 +466,6 @@
   "userProfile.pendingRequest": "Pending",
   "userProfile.acceptRequest": "Accept",
   "userProfile.agentsInGroup": "Agents in this group",
-
   "profilePage.userNotFound": "User not found",
   "profilePage.ownedAgents": "Agents",
   "profilePage.agentProfile": "Agent Profile",
@@ -492,10 +479,8 @@
   "profilePage.totalConversations": "Conversations",
   "profilePage.lastActive": "Last Active",
   "profilePage.voiceCapable": "Voice",
-
   "officeChat.startConversation": "Start a conversation",
   "officeChat.placeholder": "Type a message...",
-
   "stickerShop.title": "Sticker Shop",
   "stickerShop.subtitle": "Discover & collect sticker packs",
   "stickerShop.searchPlaceholder": "Search sticker packs...",
@@ -534,7 +519,6 @@
   "stickerShop.agentCompatibleDesc": "This sticker pack works with AI agents — they can understand and respond to these stickers!",
   "stickerShop.tryItDemo": "Try it — see how agents respond",
   "stickerShop.tryItResponse": "Hey there! 😊 You seem to be in a good mood today!",
-
   "creator.title": "Creator Console",
   "creator.subtitle": "Manage your creations",
   "creator.tab.overview": "Overview",
@@ -671,7 +655,6 @@
   "creator.spaceDialog.tags": "Tags (comma-separated)",
   "creator.spaceDialog.tagsPlaceholder": "fun, multiplayer, casual",
   "creator.spaceDialog.create": "Create",
-
   "agentHub.title": "Agent Hub",
   "agentHub.subtitle": "Discover & chat with AI agents",
   "agentHub.createAgent": "Create Agent",
@@ -691,10 +674,8 @@
   "agentHub.sort.newest": "Newest",
   "agentHub.sort.rating": "Rating",
   "agentHub.sort.price": "Price",
-
   "apps.title": "Your Apps",
   "apps.subtitle": "Manage installed apps",
-
   "friends.title": "Friends",
   "friends.subtitle": "Connect and socialize",
   "friends.tabFriends": "Friends",
@@ -707,7 +688,6 @@
   "friends.search.addFriend": "Add Friend",
   "friends.search.error": "Failed to search users",
   "friends.search.requestFailed": "Failed to send friend request",
-
   "community.title": "Community",
   "community.subtitle": "Connect with creators and communities",
   "community.create": "Create",
@@ -746,11 +726,9 @@
   "community.by": "by",
   "community.type.lounge": "Lounge",
   "community.lounge.voiceAgent": "Voice Agent",
-
   "chat.tab.officials": "Officials",
   "chat.tab.communities": "Communities",
   "chat.tab.lounges": "Lounges",
-
   "official.dashboard.title": "CS Dashboard",
   "official.dashboard.queue": "Queue",
   "official.dashboard.team": "Team",
@@ -765,10 +743,8 @@
   "official.dashboard.totalConversations": "Total Conversations",
   "official.dashboard.activeNow": "Active Now",
   "official.dashboard.resolved": "Resolved",
-
   "admin.verification.title": "Verification Requests",
   "admin.verification.empty": "No verification requests",
-
   "wallet.title": "Wallet",
   "wallet.subtitle": "Manage your credits",
   "wallet.currentBalance": "Current Balance",
@@ -782,7 +758,6 @@
   "wallet.plan.advanced": "Advanced",
   "wallet.plan.pro": "Pro",
   "wallet.bonus": "bonus",
-
   "spaces.title": "Spaces",
   "spaces.subtitle": "Games & social experiences",
   "spaces.searchPlaceholder": "Search games...",
@@ -815,7 +790,6 @@
   "spaces.owner": "Owner",
   "spaces.activeSessions": "Active Sessions",
   "spaces.tags": "Tags",
-
   "theme.title": "Office Themes",
   "theme.subtitle": "Browse and apply themes to your virtual office",
   "theme.searchPlaceholder": "Search themes...",
@@ -859,7 +833,6 @@
   "theme.resetDefault": "Reset to Default",
   "theme.resetConfirm": "Reset to default theme and clear all downloaded themes?",
   "theme.resetYes": "Reset",
-
   "memoryCapsule.title": "Memory Capsule",
   "memoryCapsule.extractTitle": "Extract Memory",
   "memoryCapsule.namePlaceholder": "Capsule name",
@@ -871,7 +844,10 @@
   "memoryCapsule.entries": "entries",
   "memoryCapsule.messages": "messages",
   "memoryCapsule.notExtracted": "Not yet extracted",
-
+  "memoryCapsule.notes": "notes",
+  "memoryCapsule.searchEntries": "Search entries...",
+  "memoryCapsule.noEntries": "No entries found",
+  "memoryCapsule.relevance": "Relevance",
   "promo.free": "Free",
   "promo.coins": "coins",
   "promo.limitedTime": "Limited Time",
@@ -899,11 +875,9 @@
   "voice.mute": "Mute",
   "voice.cancelCall": "Cancel call",
   "voice.hangup": "Hang up",
-
   "nav.exploreOfficial": "Official",
   "nav.exploreCommunities": "Communities",
   "nav.exploreLounge": "Lounge",
-
   "accounts.personal": "Personal",
   "accounts.create": "Create Account",
   "accounts.createTitle": "Create New Account",
@@ -950,7 +924,6 @@
   "accounts.takeover": "Take Over",
   "accounts.takeoverDesc": "Take over this conversation from AI",
   "accounts.releaseToAI": "Release to AI",
-
   "explore.official": "Official Accounts",
   "explore.communities": "Communities",
   "explore.lounge": "Lounge",
@@ -960,12 +933,57 @@
   "explore.join": "Join",
   "explore.noAccounts": "No accounts found",
   "explore.noCommunities": "No communities found",
-
   "rightPanel.notes": "Notes",
   "rightPanel.kanban": "Kanban",
   "rightPanel.threads": "Threads",
   "rightPanel.members": "Members",
   "rightPanel.chat": "Chat",
+  "rightPanel.memory": "Memory",
   "rightPanel.close": "Close panel",
-  "rightPanel.comingSoon": "coming soon"
+  "rightPanel.comingSoon": "coming soon",
+  "notebooks.title": "Notebooks",
+  "notebooks.create": "New Notebook",
+  "notebooks.namePlaceholder": "Notebook name",
+  "notebooks.add": "Add",
+  "notebooks.empty": "No notebooks yet",
+  "notebooks.default": "default",
+  "notebooks.noteCount": "notes",
+  "notebooks.rename": "Rename",
+  "notebooks.delete": "Delete",
+  "notebooks.save": "Save",
+  "skills.title": "Skills",
+  "skills.subtitle": "Discover and install skills for your agents",
+  "skills.tab.explore": "Explore",
+  "skills.tab.installed": "Installed",
+  "skills.tab.favorites": "Favorites",
+  "skills.searchPlaceholder": "Search skills...",
+  "skills.allCategories": "All",
+  "skills.sort.popular": "Popular",
+  "skills.sort.newest": "Newest",
+  "skills.sort.name": "Name",
+  "skills.empty": "No skills found",
+  "skills.official": "Official",
+  "skills.slashCommand": "Slash Command",
+  "skills.install": "Install",
+  "skills.confirmInstall": "Install to",
+  "skills.selectAgents": "Select agents to install",
+  "skills.noAgents": "No agents available",
+  "skills.backToList": "Back to list",
+  "skills.backToFavorites": "Back to favorites",
+  "skills.noInstalled": "No skills installed yet",
+  "skills.noFavorites": "No favorite skills yet",
+  "skills.enable": "Enable",
+  "skills.disable": "Disable",
+  "skills.uninstall": "Uninstall",
+  "skills.sourceCode": "Source Code",
+  "wiki.title": "Wiki",
+  "wiki.create": "Create page",
+  "wiki.empty": "No wiki pages yet",
+  "wiki.pin": "Pin",
+  "wiki.unpin": "Unpin",
+  "wiki.titlePlaceholder": "Page title...",
+  "wiki.add": "Add",
+  "wiki.save": "Save",
+  "wiki.contentPlaceholder": "Write content...",
+  "rightPanel.wiki": "Wiki"
 }

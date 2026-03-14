@@ -32,6 +32,8 @@ pub mod reports;
 pub mod pins;
 pub mod notes;
 pub mod agent_notes;
+pub mod notebooks;
+pub mod agent_notebooks;
 pub mod link_preview;
 pub mod spaces;
 pub mod media;
@@ -48,6 +50,10 @@ pub mod voice;
 pub mod user_settings;
 pub mod conversation_settings;
 pub mod accounts;
+pub mod skills;
+pub mod agent_skills;
+pub mod wiki;
+pub mod docs;
 
 use axum::Router;
 use crate::AppState;
@@ -88,6 +94,8 @@ pub fn create_router(state: AppState) -> Router {
         .merge(pins::router())
         .merge(notes::router())
         .merge(agent_notes::router())
+        .merge(notebooks::router())
+        .merge(agent_notebooks::router())
         .merge(link_preview::router())
         .merge(spaces::router())
         .merge(media::router())
@@ -102,5 +110,9 @@ pub fn create_router(state: AppState) -> Router {
         .merge(dashboard::router())
         .merge(user_settings::router())
         .merge(accounts::router())
+        .merge(skills::router())
+        .merge(agent_skills::router())
+        .merge(wiki::router())
+        .merge(docs::router())
         .with_state(state)
 }

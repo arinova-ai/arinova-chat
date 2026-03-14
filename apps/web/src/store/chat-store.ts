@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, Conversation, Message, ThreadSummary, Note } from "@arinova/shared/types";
+import type { Agent, Conversation, Message, Note } from "@arinova/shared/types";
 import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
@@ -67,6 +67,7 @@ interface AgentSkill {
   id: string;
   name: string;
   description: string;
+  slashCommand?: string;
 }
 
 interface SearchResult {
@@ -146,6 +147,9 @@ interface ChatState {
   pendingNoteId: string | null;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
+  // Attached card (note or kanban card queued for sending)
+  attachedCard: { type: "note"; id: string; title: string; preview?: string } | { type: "kanban"; id: string; title: string; preview?: string } | null;
+
   // Conversation search state (in-conversation search bar)
   convSearchOpen: boolean;
   convSearchQuery: string;
@@ -177,7 +181,7 @@ interface ChatState {
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string, unreadCountForDivider?: number) => Promise<void>;
-  sendMessage: (content: string, mentions?: string[]) => void;
+  sendMessage: (content: string, mentions?: string[], metadata?: Record<string, unknown>) => void;
   cancelStream: (messageId?: string) => void;
   cancelAgentStream: (conversationId: string, messageId: string) => void;
   cancelQueuedMessage: (conversationId: string, messageId: string) => void;
@@ -251,11 +255,14 @@ interface ChatState {
   closeKanbanSidebar: () => void;
   loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
   createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
-  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[] }) => Promise<void>;
+  updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[]; isPinned?: boolean }) => Promise<void>;
   deleteNote: (conversationId: string, noteId: string) => Promise<void>;
   archiveNote: (conversationId: string, noteId: string) => Promise<void>;
   unarchiveNote: (conversationId: string, noteId: string) => Promise<void>;
   shareNote: (conversationId: string, noteId: string) => Promise<void>;
+  shareKanbanCard: (cardId: string, conversationId: string) => Promise<void>;
+  setAttachedCard: (card: ChatState["attachedCard"]) => void;
+  clearAttachedCard: () => void;
   toggleAgentNotesEnabled: (conversationId: string, enabled: boolean) => Promise<void>;
 
   handleWSEvent: (event: WSServerEvent) => void;
@@ -308,6 +315,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   kanbanSidebarOpen: false,
   pendingNoteId: null,
   agentNotesEnabledByConversation: {},
+  attachedCard: null,
   convSearchOpen: false,
   convSearchQuery: "",
   convSearchResults: [],
@@ -695,7 +703,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: (content, mentions) => {
+  sendMessage: (content, mentions, metadata) => {
     const { activeConversationId, replyingTo } = get();
     if (!activeConversationId) return;
 
@@ -720,6 +728,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             senderAgentName: replyingTo.senderAgentName,
           }
         : undefined,
+      metadata: metadata as any,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -748,6 +757,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content,
       ...(replyingTo ? { replyToId: replyingTo.id } : {}),
       ...(mentions && mentions.length > 0 ? { mentions } : {}),
+      ...(metadata ? { metadata } : {}),
     });
   },
 
@@ -1068,11 +1078,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadAgentSkills: async (agentId) => {
     if (get().agentSkills[agentId]) return;
     try {
-      const data = await api<{ skills: AgentSkill[] }>(
-        `/api/agents/${agentId}/skills`
+      const data = await api<{ commands: AgentSkill[] }>(
+        `/api/agents/${agentId}/commands`
       );
       set({
-        agentSkills: { ...get().agentSkills, [agentId]: data.skills },
+        agentSkills: { ...get().agentSkills, [agentId]: data.commands },
       });
     } catch {
       set({
@@ -1440,6 +1450,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!get().kanbanSidebarOpen) return;
     set({ kanbanSidebarOpen: false });
   },
+  setAttachedCard: (card) => set({ attachedCard: card }),
+  clearAttachedCard: () => set({ attachedCard: null }),
 
   loadNotes: async (conversationId, opts) => {
     try {
@@ -1548,6 +1560,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   shareNote: async (conversationId, noteId) => {
     await api(
       `/api/conversations/${conversationId}/notes/${noteId}/share`,
+      { method: "POST" }
+    );
+  },
+
+  shareKanbanCard: async (cardId, conversationId) => {
+    await api(
+      `/api/kanban/cards/${cardId}/share-to/${conversationId}`,
       { method: "POST" }
     );
   },

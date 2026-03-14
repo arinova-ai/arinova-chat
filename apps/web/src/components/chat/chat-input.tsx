@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { SendHorizontal, Paperclip, Smile, X, FileText, ImageIcon, Mic, Reply } from "lucide-react";
+import { SendHorizontal, Paperclip, Smile, X, FileText, Mic, Reply, StickyNote, SquareKanban } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { VoiceRecorder } from "./voice-recorder";
 import { ImageLightbox } from "./image-lightbox";
@@ -72,8 +72,6 @@ function isFileTooLarge(file: File): boolean {
 interface ChatInputProps {
   droppedFiles?: File[] | null;
   onDropHandled?: () => void;
-  droppedNote?: { id: string; title: string } | null;
-  onNoteDropHandled?: () => void;
   stickerOpen?: boolean;
   onStickerToggle?: () => void;
   threadId?: string | null;
@@ -162,7 +160,7 @@ function FilePreviewGrid({
 
 // ---------- Component ----------
 
-export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDropHandled, stickerOpen, onStickerToggle, threadId }: ChatInputProps = {}) {
+export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerToggle, threadId }: ChatInputProps = {}) {
   const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -181,6 +179,8 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
   const sendThreadMessage = useChatStore((s) => s.sendThreadMessage);
   const activeThreadId = useChatStore((s) => s.activeThreadId);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const attachedCard = useChatStore((s) => s.attachedCard);
+  const clearAttachedCard = useChatStore((s) => s.clearAttachedCard);
   const conversations = useChatStore((s) => s.conversations);
   const agents = useChatStore((s) => s.agents);
   const agentSkills = useChatStore((s) => s.agentSkills);
@@ -250,16 +250,6 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     onDropHandled?.();
   }, [droppedFiles, onDropHandled, t]);
 
-  // Handle note dropped from notebook
-  useEffect(() => {
-    if (!droppedNote) return;
-    const prefix = `[Note: ${droppedNote.title}] `;
-    setValue((prev) => prefix + prev);
-    onNoteDropHandled?.();
-    // Focus the textarea after inserting
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [droppedNote, onNoteDropHandled]);
-
   // Restore draft when switching conversations
   useEffect(() => {
     if (!activeConversationId) return;
@@ -325,9 +315,9 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       const filteredSkills = q
         ? skills.filter(
             (s) =>
-              s.id.toLowerCase().includes(q) ||
-              s.name.toLowerCase().includes(q) ||
-              s.description.toLowerCase().includes(q)
+              (s.slashCommand ?? s.id ?? "").toLowerCase().includes(q) ||
+              (s.name ?? "").toLowerCase().includes(q) ||
+              (s.description ?? "").toLowerCase().includes(q)
           )
         : skills;
 
@@ -339,10 +329,11 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
         });
 
         for (const skill of filteredSkills) {
+          const cmd = skill.slashCommand ?? skill.id;
           items.push({
             type: "agent-skill",
             id: `skill-${skill.id}`,
-            label: `/${skill.id}`,
+            label: `/${cmd}`,
             description: skill.description,
           });
         }
@@ -534,9 +525,8 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
       }
 
       if (item.type === "agent-skill") {
-        // Agent skill: strip the "skill-" prefix we added
-        const skillId = item.id.replace(/^skill-/, "");
-        sendMessage(`/${skillId}`);
+        // Send using the slash command label (e.g. /commandName)
+        sendMessage(item.label);
         clearInput();
       }
     },
@@ -942,13 +932,47 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     }
 
     const trimmed = value.trim();
-    if (!trimmed) return;
+    const hasCard = !!attachedCard;
 
-    // Intercept platform commands
-    if (tryExecuteSlashCommand(trimmed)) {
+    // Nothing to send
+    if (!trimmed && !hasCard) return;
+
+    // Intercept platform commands (only when no card attached)
+    if (!hasCard && trimmed && tryExecuteSlashCommand(trimmed)) {
       clearInput();
       return;
     }
+
+    // Build card metadata for single-message send
+    let cardMetadata: Record<string, unknown> | undefined;
+    if (hasCard) {
+      if (attachedCard.type === "note") {
+        cardMetadata = {
+          type: "note_share",
+          noteId: attachedCard.id,
+          title: attachedCard.title,
+          preview: attachedCard.preview || "",
+          tags: [],
+        };
+      } else {
+        cardMetadata = {
+          type: "kanban_card",
+          cardId: attachedCard.id,
+          title: attachedCard.title,
+          preview: attachedCard.preview || "",
+        };
+      }
+      clearAttachedCard();
+    }
+
+    // Build content: card description + user text combined
+    const content = trimmed || (hasCard
+      ? (attachedCard.type === "note"
+        ? `用戶分享了一篇筆記：${attachedCard.title}`
+        : `用戶分享了一個任務：${attachedCard.title}`)
+      : "");
+
+    if (!content) return;
 
     // Extract @mentions and resolve to agent IDs
     const mentionPattern = /@([\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]+)/g;
@@ -964,14 +988,14 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
     }
 
     if (threadId) {
-      sendThreadMessage(trimmed);
+      sendThreadMessage(content);
     } else {
-      sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
+      sendMessage(content, mentionIds.size > 0 ? [...mentionIds] : undefined, cardMetadata);
     }
-    addToHistory(trimmed);
+    addToHistory(trimmed || content);
     playSendSound();
     clearInput();
-  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers, addToHistory]);
+  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers, addToHistory, attachedCard, clearAttachedCard]);
 
   // ---------- Keyboard handling ----------
 
@@ -1272,6 +1296,31 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
           />
         )}
 
+        {/* Attached card preview */}
+        {attachedCard && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2">
+            {attachedCard.type === "note" ? (
+              <StickyNote className="h-4 w-4 shrink-0 text-brand" />
+            ) : (
+              <SquareKanban className="h-4 w-4 shrink-0 text-brand" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">{attachedCard.title}</p>
+              {attachedCard.preview && (
+                <p className="text-xs text-muted-foreground truncate">{attachedCard.preview}</p>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={clearAttachedCard}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
         {isRecording ? (
           <div className="flex items-end gap-2">
             <VoiceRecorder
@@ -1323,7 +1372,7 @@ export function ChatInput({ droppedFiles, onDropHandled, droppedNote, onNoteDrop
               className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
 
-            {value.trim() || pendingFiles.length > 0 ? (
+            {value.trim() || pendingFiles.length > 0 || attachedCard ? (
               <Button
                 size="icon"
                 onClick={handleSend}

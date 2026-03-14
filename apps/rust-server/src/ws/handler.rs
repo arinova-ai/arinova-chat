@@ -411,6 +411,8 @@ async fn handle_message(
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                 .unwrap_or_default();
 
+            let client_metadata = event.get("metadata").cloned();
+
             if conversation_id.is_empty() || content.is_empty() {
                 return;
             }
@@ -447,6 +449,7 @@ async fn handle_message(
                 thread_id,
                 &mentions,
                 client_msg_id,
+                client_metadata,
                 ws_state,
                 db,
                 redis,
@@ -894,6 +897,7 @@ pub async fn trigger_agent_response(
     thread_id: Option<String>,
     mentions: &[String],
     client_msg_id: Option<String>,
+    client_metadata: Option<serde_json::Value>,
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
@@ -1177,7 +1181,7 @@ pub async fn trigger_agent_response(
                 }
             }
         } else {
-            None
+            client_metadata.clone()
         };
 
         let _ = sqlx::query(
@@ -1266,6 +1270,7 @@ pub async fn trigger_agent_response(
                     "senderIsVerified": sender_is_verified,
                     "replyToId": reply_to_id,
                     "threadId": thread_id,
+                    "metadata": msg_metadata,
                     "createdAt": now.to_rfc3339(),
                     "updatedAt": now.to_rfc3339(),
                 }
@@ -1568,6 +1573,45 @@ pub(crate) async fn do_trigger_agent_response(
         content.to_string()
     };
 
+    // --- Skill slash command injection ---
+    let effective_content = if effective_content.starts_with("//") {
+        let without_slashes = effective_content.trim_start_matches('/');
+        let (cmd, user_args) = match without_slashes.split_once(' ') {
+            Some((c, a)) => (c.trim(), a.trim()),
+            None => (without_slashes.trim(), ""),
+        };
+
+        let skill_prompt = sqlx::query_as::<_, (String,)>(
+            r#"SELECT s.prompt_content
+               FROM skills s
+               JOIN agent_skills ask ON ask.skill_id = s.id
+               WHERE (s.slash_command = $1 OR s.slash_command = $2)
+               AND ask.agent_id = $3::uuid
+               AND ask.is_enabled = true
+               LIMIT 1"#,
+        )
+        .bind(format!("/{}", cmd))
+        .bind(cmd)
+        .bind(agent_id)
+        .fetch_optional(db)
+        .await;
+
+        match skill_prompt {
+            Ok(Some((prompt,))) if !prompt.is_empty() => {
+                if user_args.is_empty() {
+                    prompt.replace("$ARGUMENTS", "")
+                } else if prompt.contains("$ARGUMENTS") {
+                    prompt.replace("$ARGUMENTS", user_args)
+                } else {
+                    format!("{}\n\n[User Input]\n{}", prompt, user_args)
+                }
+            }
+            _ => effective_content,
+        }
+    } else {
+        effective_content
+    };
+
     // Prepend system prompt if configured
     let task_content = match &system_prompt {
         Some(prompt) if !prompt.is_empty() => {
@@ -1761,6 +1805,34 @@ pub(crate) async fn do_trigger_agent_response(
                 }
             }
         }
+    }
+
+    // Inject available skills for semantic triggering
+    let installed_skills = sqlx::query_as::<_, (String, String, Option<String>, String)>(
+        r#"SELECT s.slug, s.name, s.slash_command, s.description
+           FROM agent_skills ask
+           JOIN skills s ON s.id = ask.skill_id
+           WHERE ask.agent_id = $1::uuid AND ask.is_enabled = true
+           ORDER BY s.name"#,
+    )
+    .bind(agent_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    if !installed_skills.is_empty() {
+        let skills_json: Vec<serde_json::Value> = installed_skills
+            .iter()
+            .map(|(slug, name, slash_cmd, desc)| {
+                json!({
+                    "slug": slug,
+                    "name": name,
+                    "slashCommand": slash_cmd,
+                    "description": desc
+                })
+            })
+            .collect();
+        task_payload["availableSkills"] = json!(skills_json);
     }
 
     // Send full task payload to agent

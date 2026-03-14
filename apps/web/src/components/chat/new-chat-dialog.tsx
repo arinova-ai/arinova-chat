@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bot, Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp, Settings, UserPlus, Loader2, ArrowLeft, User } from "lucide-react";
+import { Plus, Circle, Users, Check, Copy, ChevronDown, ChevronUp, Settings, UserPlus, Loader2, User } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";

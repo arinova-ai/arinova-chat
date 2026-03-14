@@ -9,7 +9,6 @@ import { useToastStore } from "@/store/toast-store";
 import { api } from "@/lib/api";
 import Link from "next/link";
 import { ArrowDown, Check, Copy, Gift, Loader2, X } from "lucide-react";
-import { assetUrl } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
 import { NotePreviewCard } from "./note-preview-card";

@@ -36,6 +36,7 @@ import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
+import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Pin } from "lucide-react";
 
@@ -56,6 +57,7 @@ interface ChatHeaderProps {
   onThreadsClick?: () => void;
   onKanbanClick?: () => void;
   onNotebookClick?: () => void;
+  onWikiClick?: () => void;
   onPhotosClick?: () => void;
   onFilesClick?: () => void;
   officialCommunityId?: string | null;
@@ -77,6 +79,7 @@ export function ChatHeader({
   onThreadsClick,
   onKanbanClick,
   onNotebookClick,
+  onWikiClick,
   onPhotosClick,
   onFilesClick,
   officialCommunityId,
@@ -255,6 +258,7 @@ export function ChatHeader({
                 case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
                 case "mute": handleMuteToggle(); break;
                 case "members": onMembersClick?.(); break;
+                case "wiki": onWikiClick?.(); break;
                 case "kanban": onKanbanClick?.(); break;
                 case "notebook": onNotebookClick?.(); break;
                 case "threads": onThreadsClick?.(); break;
@@ -287,7 +291,13 @@ export function ChatHeader({
                 case "call": handleStartCall(); break;
                 case "photos": onPhotosClick?.(); break;
                 case "files": onFilesClick?.(); break;
-                case "capsule": setMemoryCapsuleOpen(true); break;
+                case "capsule":
+                  if (window.matchMedia("(min-width: 1280px)").matches) {
+                    useRightPanelStore.getState().setActiveTab("memory");
+                  } else {
+                    setMemoryCapsuleOpen(true);
+                  }
+                  break;
               }
             }}
             onTransferHuman={handleTransferHuman}
@@ -359,7 +369,7 @@ export function ChatHeader({
       </div>
     )}
 
-    {agentId && conversationId && type === "h2a" && (
+    {agentId && conversationId && (type === "h2a" || type === "direct") && (
       <MemoryCapsuleSheet
         open={memoryCapsuleOpen}
         onOpenChange={setMemoryCapsuleOpen}

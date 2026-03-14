@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  BookText,
+  Brain,
   SquareKanban,
   MessageSquare,
   UsersRound,
@@ -13,23 +15,29 @@ import { useRightPanelStore } from "@/store/right-panel-store";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { NotebookSheet } from "./notebook-sheet";
+import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
 import { ThreadListContent } from "./thread-list-sheet";
 import { GroupMembersPanel } from "./group-members-panel";
+import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
+import { WikiPanel } from "./wiki-panel";
 
 const TABS = [
   { id: "notes" as const, icon: BookOpen },
+  { id: "wiki" as const, icon: BookText },
   { id: "kanban" as const, icon: SquareKanban },
   { id: "threads" as const, icon: MessageSquare },
+  { id: "memory" as const, icon: Brain },
   { id: "members" as const, icon: UsersRound },
   { id: "chat" as const, icon: MessagesSquare },
 ] as const;
 
 const TAB_LABELS: Record<string, string> = {
   notes: "rightPanel.notes",
+  wiki: "rightPanel.wiki",
   kanban: "rightPanel.kanban",
   threads: "rightPanel.threads",
+  memory: "rightPanel.memory",
   members: "rightPanel.members",
   chat: "rightPanel.chat",
 };
@@ -98,13 +106,25 @@ export function RightPanel() {
     [panelWidth, setPanelWidth],
   );
 
-  if (!isWide || !isOpen) return null;
+  const hasAgent = !!activeConversation?.agentId;
 
   const visibleTabs = TABS.filter((tab) => {
+    if (tab.id === "wiki" && !isGroup) return false;
     if (tab.id === "members" && !isGroup) return false;
+    if (tab.id === "memory" && !hasAgent) return false;
     if (tab.id === "chat" && !sideChatConversationId) return false;
     return true;
   });
+
+  // Auto-reset tab when current tab is not visible (e.g. switching from group to direct)
+  useEffect(() => {
+    if (!isOpen || visibleTabs.length === 0) return;
+    if (!visibleTabs.some((t) => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id);
+    }
+  }, [isOpen, activeTab, visibleTabs, setActiveTab]);
+
+  if (!isWide || !isOpen) return null;
 
   return (
     <div
@@ -163,17 +183,34 @@ export function RightPanel() {
 
 function TabContent({ tab }: { tab: string }) {
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const activeConversation = useChatStore((s) => {
+    const id = s.activeConversationId;
+    return id ? s.conversations.find((c) => c.id === id) : undefined;
+  });
   const sideChatConversationId = useRightPanelStore((s) => s.sideChatConversationId);
 
   if (!activeConversationId) return null;
 
   switch (tab) {
     case "notes":
-      return <NotebookSheet inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
+      return <NotebookList inline conversationId={activeConversationId} open />;
+    case "wiki":
+      return <WikiPanel inline conversationId={activeConversationId} open />;
     case "kanban":
       return <KanbanSidebar inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
     case "threads":
       return <ThreadListContent conversationId={activeConversationId} />;
+    case "memory":
+      return activeConversation?.agentId ? (
+        <MemoryCapsuleSheet
+          inline
+          open
+          onOpenChange={() => {}}
+          conversationId={activeConversationId}
+          conversationName={activeConversation.agentName ?? ""}
+          agentId={activeConversation.agentId}
+        />
+      ) : null;
     case "members":
       return <GroupMembersPanel inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
     case "chat":

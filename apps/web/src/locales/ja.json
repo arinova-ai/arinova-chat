@@ -6,16 +6,15 @@
   "nav.friends": "フレンド",
   "nav.community": "コミュニティ",
   "nav.theme": "テーマ",
-  "nav.market": "Agent Hub",
+  "nav.market": "Skills",
   "nav.wallet": "ウォレット",
   "nav.settings": "設定",
-  "nav.agentHub": "Agent Hub",
+  "nav.agentHub": "Skills",
   "nav.themeStore": "テーマストア",
   "nav.stickers": "スタンプショップ",
   "nav.addShortcut": "追加",
   "nav.allShortcutsAdded": "すべてのショートカットが追加済み",
   "nav.creator": "クリエイターコンソール",
-
   "common.save": "変更を保存",
   "common.cancel": "キャンセル",
   "common.confirm": "確認",
@@ -49,15 +48,11 @@
   "common.description": "説明",
   "common.category": "カテゴリ",
   "common.export": "エクスポート",
-
   "errors.somethingWentWrong": "問題が発生しました",
   "errors.unexpectedError": "予期しないエラーが発生しました。もう一度お試しいただくか、ページを更新してください。",
-
   "connection.syncing": "同期中...",
   "connection.reconnecting": "再接続中...",
-
   "time.yesterday": "昨日",
-
   "chat.subtitle": "チームとリアルタイムでつながる",
   "chat.collapseSidebar": "サイドバーを折りたたむ",
   "chat.expandSidebar": "サイドバーを展開",
@@ -84,7 +79,6 @@
   "chat.uploadFailed": "アップロードに失敗しました。もう一度お試しください",
   "chat.imagesSelected": "{count}枚の画像を選択中",
   "chat.imageCount": "{n}/{max}",
-
   "chat.actions.copy": "メッセージをコピー",
   "chat.actions.reply": "返信",
   "chat.actions.startThread": "スレッドを開始",
@@ -97,16 +91,13 @@
   "chat.actions.unpin": "ピン留め解除",
   "chat.actions.report": "報告",
   "chat.actions.share": "共有",
-
   "share.title": "共有",
   "share.sendToConversation": "会話に送信",
   "share.shareExternal": "外部に共有",
   "share.copyContent": "内容をコピー",
   "share.sentToConversation": "会話に送信しました",
-
   "chat.selection.count": "{count}件選択中",
   "chat.selection.copied": "クリップボードにコピーしました",
-
   "chat.status.error": "エラー",
   "chat.status.stopped": "停止済み",
   "chat.sharedNote": "ノートを共有しました",
@@ -116,20 +107,16 @@
   "chat.status.queued": "キュー中",
   "chat.status.thinking": "考え中",
   "chat.status.queuedLabel": "キュー中",
-
   "chat.replies.one": "件の返信",
   "chat.replies.other": "件の返信",
-
   "chat.thread.title": "スレッド",
   "chat.thread.noReplies": "まだ返信はありません",
   "chat.thread.startDiscussion": "以下からディスカッションを始めましょう",
   "chat.thread.placeholder": "スレッドに返信...",
-
   "chat.kanban.title": "タスク",
   "chat.kanban.empty": "タスクはまだありません",
   "chat.kanban.addCard": "カードを追加",
   "chat.kanban.newCardPlaceholder": "カードタイトル...",
-
   "chat.notebook.title": "ノート",
   "chat.notebook.empty": "ノートはまだありません",
   "chat.notebook.create": "作成",
@@ -152,9 +139,7 @@
   "chat.notebook.autoTag": "自動タグ",
   "chat.notebook.askAi": "AIに質問",
   "chat.notebook.confirmDelete": "このノートを削除しますか？",
-
   "chat.kanban.openTask": "タスクを開く",
-
   "chat.search.title": "検索",
   "chat.search.results": "件の結果",
   "chat.search.result": "件の結果",
@@ -162,9 +147,7 @@
   "chat.search.inConversation": "会話内を検索",
   "chat.search.nOfTotal": "{n} / {total}",
   "chat.unreadDivider": "未読メッセージ",
-
   "chat.messageActions": "メッセージ操作",
-
   "chat.header.members": "メンバー",
   "chat.header.memberCount": "{count} 人のメンバー",
   "chat.header.group": "グループ",
@@ -197,14 +180,12 @@
   "chat.header.voiceCall": "音声通話",
   "chat.header.inCall": "通話中",
   "chat.header.voiceUnavailable": "音声通話は利用できません",
-
   "conversation.rename": "名前を変更",
   "conversation.pin": "ピン留め",
   "conversation.unpin": "ピン留め解除",
   "conversation.delete": "削除",
   "conversation.deleteTitle": "会話を削除",
   "conversation.deleteDesc": "この会話を削除してもよろしいですか？この操作は元に戻せず、すべてのメッセージが完全に削除されます。",
-
   "newChat.title": "新しい会話",
   "newChat.noAgents": "エージェントがまだいません。チャットを始めるには追加してください。",
   "newChat.createBot": "ボットを作成",
@@ -236,7 +217,6 @@
   "newChat.a2aHint": "空欄にするとボットが先に作成され、後からエージェントを接続できます。",
   "newChat.chatWithFriend": "フレンドとチャット",
   "newChat.noFriendsHint": "フレンドがまだいません。会話を始めるには、まずフレンドを追加してください。",
-
   "botManage.title": "ボット管理",
   "botManage.clickChangeAvatar": "クリックしてアバターを変更",
   "botManage.name": "名前",
@@ -273,7 +253,6 @@
   "botManage.confirmDelete": "削除を確認",
   "botManage.deleteBot": "ボットを削除",
   "botManage.deleteBotConfirm": "本当によろしいですか？このボットとのすべての会話が削除されます。",
-
   "group.title": "グループ情報",
   "group.members": "メンバー",
   "group.settings": "設定",
@@ -309,14 +288,25 @@
   "group.groupNamePlaceholder": "グループ名",
   "group.mentionOnly": "メンションのみ",
   "group.mentionOnlyDesc": "@メンションされたエージェントのみ応答",
-
+  "group.memoryCapsule": "メモリーカプセル",
+  "group.memoryCapsuleDesc": "AIを使ってグループチャット履歴から重要な記憶を抽出します。新メンバーのオンボーディングや過去の決定の振り返りに便利です。",
+  "group.extractMemory": "メモリーを抽出",
+  "group.refreshMemory": "再抽出",
+  "group.capsuleReady": "完了",
+  "group.capsuleExtracting": "抽出中...",
+  "group.capsuleFailed": "失敗",
+  "group.messages": "メッセージ数",
+  "group.memories": "メモリー数",
+  "group.capsuleVisibility": "閲覧権限",
+  "group.visibilityOwnerOnly": "オーナーのみ",
+  "group.visibilityAdmins": "管理者",
+  "group.visibilityAllMembers": "全メンバー",
   "addMember.title": "メンバーを追加",
   "addMember.searchPlaceholder": "フレンドやエージェントを検索...",
   "addMember.friends": "フレンド",
   "addMember.myAgents": "マイエージェント",
   "addMember.noMatches": "一致する結果がありません",
   "addMember.allAdded": "すべてのフレンドとエージェントは既にメンバーです",
-
   "agentSheet.title": "エージェント情報",
   "agentSheet.working": "作業中",
   "agentSheet.online": "オンライン",
@@ -326,7 +316,6 @@
   "agentSheet.save": "保存",
   "agentSheet.conversations": "会話",
   "agentSheet.owner": "オーナー",
-
   "agentProfile.listenMode": "リスンモード",
   "agentProfile.listenMode.all": "すべて監視",
   "agentProfile.listenMode.all.desc": "すべてのメッセージを受信 — @メンション不要",
@@ -343,7 +332,6 @@
   "agentProfile.allowedUsers": "許可されたユーザー",
   "agentProfile.allowedUsers.selected": "{count} 人選択済み",
   "agentProfile.noOtherUsers": "このグループに他のユーザーはいません",
-
   "office.title": "オフィス",
   "office.subtitle": "バーチャルワークスペース",
   "office.tab.scene": "シーン",
@@ -371,7 +359,6 @@
   "office.notes.stopSharing": "共有を停止",
   "office.notes.linkCopied": "リンクをコピーしました！",
   "office.notes.publicNote": "共有ノート",
-
   "kanban.share.title": "共有",
   "kanban.share.publicLink": "公開リンクを作成",
   "kanban.share.toChat": "チャットに共有",
@@ -379,15 +366,20 @@
   "kanban.share.stopSharing": "共有を停止",
   "kanban.share.linkCopied": "リンクをコピーしました！",
   "kanban.share.publicCard": "共有カード",
-
+  "kanban.sort.manual": "手動",
+  "kanban.sort.createdDesc": "新しい順",
+  "kanban.sort.createdAsc": "古い順",
+  "kanban.sort.updatedDesc": "最近更新",
+  "kanban.sort.updatedAsc": "更新が古い順",
+  "kanban.sort.priorityDesc": "優先度：高→低",
+  "kanban.sort.priorityAsc": "優先度：低→高",
+  "kanban.search.placeholder": "カードを検索…",
   "settings.title": "設定",
   "settings.subtitle": "使用体験をカスタマイズ",
-
   "settings.nav.profile": "プロフィール",
   "settings.nav.language": "言語",
   "settings.nav.notifications": "通知",
   "settings.nav.privacy": "プライバシー",
-
   "settings.profile.title": "プロフィール",
   "settings.profile.subtitle": "個人情報と設定を管理します。",
   "settings.profile.changeAvatar": "アバターを変更",
@@ -416,7 +408,6 @@
   "settings.profile.passwordMismatch": "パスワードが一致しません",
   "settings.profile.passwordChanged": "パスワードを変更しました",
   "settings.profile.passwordChangeFailed": "パスワードの変更に失敗しました",
-
   "settings.language.title": "言語",
   "settings.language.subtitle": "お好みの言語を選択してください。",
   "settings.appearance.title": "外観",
@@ -431,7 +422,6 @@
   "settings.appearance.performance": "パフォーマンス",
   "settings.appearance.performanceDesc": "品質を抑えて高速化",
   "settings.appearance.language": "言語",
-
   "settings.notifications.title": "通知",
   "settings.notifications.subtitle": "通知の受信方法を管理します。",
   "settings.notifications.push": "プッシュ通知",
@@ -450,7 +440,6 @@
   "settings.notifications.to": "終了",
   "settings.notifications.chatSounds": "チャット音",
   "settings.notifications.chatSoundsDesc": "メッセージの送受信時にサウンドを再生",
-
   "settings.privacy.title": "プライバシー",
   "settings.privacy.subtitle": "ブロックしたユーザーとプライバシー設定を管理します。",
   "settings.privacy.blockedUsers": "ブロックしたユーザー",
@@ -466,7 +455,6 @@
   "settings.ai.keyHint": "Google AI Studio (aistudio.google.com) からAPIキーを取得してください。ノートのAsk AI機能に必要です。",
   "settings.ai.keyReplace": "新しいキーを入力して置換...",
   "settings.ai.needKey": "Ask AIを使用するには、設定でGemini APIキーを設定してください。",
-
   "userProfile.title": "ユーザー情報",
   "userProfile.joined": "参加日",
   "userProfile.editProfile": "プロフィールを編集",
@@ -475,7 +463,6 @@
   "userProfile.pendingRequest": "申請中",
   "userProfile.acceptRequest": "承認",
   "userProfile.agentsInGroup": "グループ内のエージェント",
-
   "profilePage.userNotFound": "ユーザーが見つかりません",
   "profilePage.ownedAgents": "エージェント",
   "profilePage.agentProfile": "エージェント情報",
@@ -489,10 +476,8 @@
   "profilePage.totalConversations": "会話数",
   "profilePage.lastActive": "最終アクティブ",
   "profilePage.voiceCapable": "音声",
-
   "officeChat.startConversation": "会話を始める",
   "officeChat.placeholder": "メッセージを入力...",
-
   "stickerShop.title": "スタンプショップ",
   "stickerShop.subtitle": "スタンプパックを探して集めよう",
   "stickerShop.searchPlaceholder": "スタンプパックを検索...",
@@ -531,7 +516,6 @@
   "stickerShop.agentCompatibleDesc": "このスタンプパックはAIエージェントに対応 — スタンプの意味を理解して返答します！",
   "stickerShop.tryItDemo": "試してみよう — AIの反応例",
   "stickerShop.tryItResponse": "やあ！😊 今日は気分が良さそうだね！",
-
   "creator.title": "クリエイターコンソール",
   "creator.subtitle": "作品を管理する",
   "creator.tab.overview": "概要",
@@ -656,7 +640,6 @@
   "creator.communityDialog.descPlaceholder": "このコミュニティは何についてですか？",
   "creator.communityDialog.create": "作成",
   "creator.dialog.cancel": "キャンセル",
-
   "agentHub.title": "Agent Hub",
   "agentHub.subtitle": "AIエージェントを探してチャット",
   "agentHub.createAgent": "エージェントを作成",
@@ -676,10 +659,8 @@
   "agentHub.sort.newest": "新着順",
   "agentHub.sort.rating": "評価順",
   "agentHub.sort.price": "価格順",
-
   "apps.title": "あなたのアプリ",
   "apps.subtitle": "インストール済みアプリを管理",
-
   "friends.title": "フレンド",
   "friends.subtitle": "つながって交流しよう",
   "friends.tabFriends": "フレンド",
@@ -692,7 +673,6 @@
   "friends.search.addFriend": "フレンド追加",
   "friends.search.error": "検索に失敗しました",
   "friends.search.requestFailed": "フレンドリクエストの送信に失敗しました",
-
   "community.title": "コミュニティ",
   "community.subtitle": "クリエイターやコミュニティとつながろう",
   "community.create": "作成",
@@ -725,7 +705,6 @@
   "community.by": "by",
   "community.type.lounge": "ラウンジ",
   "community.lounge.voiceAgent": "ボイスエージェント",
-
   "official.dashboard.title": "CSダッシュボード",
   "official.dashboard.queue": "キュー",
   "official.dashboard.team": "チーム",
@@ -740,10 +719,8 @@
   "official.dashboard.totalConversations": "総会話数",
   "official.dashboard.activeNow": "アクティブ",
   "official.dashboard.resolved": "解決済み",
-
   "admin.verification.title": "認証リクエスト",
   "admin.verification.empty": "認証リクエストなし",
-
   "wallet.title": "ウォレット",
   "wallet.subtitle": "クレジットを管理",
   "wallet.currentBalance": "現在の残高",
@@ -757,7 +734,6 @@
   "wallet.plan.advanced": "アドバンスド",
   "wallet.plan.pro": "プロ",
   "wallet.bonus": "ボーナス",
-
   "spaces.title": "Spaces",
   "spaces.subtitle": "ゲーム＆ソーシャル体験",
   "spaces.searchPlaceholder": "ゲームを検索...",
@@ -786,7 +762,6 @@
   "spaces.owner": "オーナー",
   "spaces.activeSessions": "アクティブセッション",
   "spaces.tags": "タグ",
-
   "theme.title": "オフィステーマ",
   "theme.subtitle": "バーチャルオフィスのテーマを閲覧・適用",
   "theme.searchPlaceholder": "テーマを検索...",
@@ -841,7 +816,10 @@
   "memoryCapsule.entries": "件のメモリ",
   "memoryCapsule.messages": "件のメッセージ",
   "memoryCapsule.notExtracted": "未抽出",
-
+  "memoryCapsule.notes": "件のノート",
+  "memoryCapsule.searchEntries": "記憶を検索…",
+  "memoryCapsule.noEntries": "記憶が見つかりません",
+  "memoryCapsule.relevance": "関連度",
   "promo.free": "無料",
   "promo.coins": "コイン",
   "promo.limitedTime": "期間限定",
@@ -869,12 +847,57 @@
   "voice.mute": "ミュート",
   "voice.cancelCall": "通話キャンセル",
   "voice.hangup": "通話終了",
-
   "rightPanel.notes": "ノート",
   "rightPanel.kanban": "カンバン",
   "rightPanel.threads": "スレッド",
   "rightPanel.members": "メンバー",
   "rightPanel.chat": "チャット",
+  "rightPanel.memory": "メモリー",
   "rightPanel.close": "パネルを閉じる",
-  "rightPanel.comingSoon": "近日公開"
+  "rightPanel.comingSoon": "近日公開",
+  "notebooks.title": "ノートブック",
+  "notebooks.create": "新規ノートブック",
+  "notebooks.namePlaceholder": "ノートブック名",
+  "notebooks.add": "追加",
+  "notebooks.empty": "ノートブックがありません",
+  "notebooks.default": "デフォルト",
+  "notebooks.noteCount": "ノート",
+  "notebooks.rename": "名前変更",
+  "notebooks.delete": "削除",
+  "notebooks.save": "保存",
+  "skills.title": "Skills",
+  "skills.subtitle": "スキルを探してエージェントにインストール",
+  "skills.tab.explore": "探索",
+  "skills.tab.installed": "インストール済み",
+  "skills.tab.favorites": "お気に入り",
+  "skills.searchPlaceholder": "スキルを検索...",
+  "skills.allCategories": "すべて",
+  "skills.sort.popular": "人気",
+  "skills.sort.newest": "最新",
+  "skills.sort.name": "名前",
+  "skills.empty": "スキルが見つかりません",
+  "skills.official": "公式",
+  "skills.slashCommand": "スラッシュコマンド",
+  "skills.install": "インストール",
+  "skills.confirmInstall": "インストール先",
+  "skills.selectAgents": "インストール先のエージェントを選択",
+  "skills.noAgents": "利用可能なエージェントがありません",
+  "skills.backToList": "リストに戻る",
+  "skills.backToFavorites": "お気に入りに戻る",
+  "skills.noInstalled": "インストール済みのスキルはありません",
+  "skills.noFavorites": "お気に入りのスキルはありません",
+  "skills.enable": "有効化",
+  "skills.disable": "無効化",
+  "skills.uninstall": "アンインストール",
+  "skills.sourceCode": "ソースコード",
+  "wiki.title": "ウィキ",
+  "wiki.create": "ページ作成",
+  "wiki.empty": "ウィキページなし",
+  "wiki.pin": "ピン留め",
+  "wiki.unpin": "ピン解除",
+  "wiki.titlePlaceholder": "ページタイトル...",
+  "wiki.add": "追加",
+  "wiki.save": "保存",
+  "wiki.contentPlaceholder": "内容を入力...",
+  "rightPanel.wiki": "ウィキ"
 }

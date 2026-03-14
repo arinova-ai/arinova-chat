@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -14,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, Loader2, Plus, Check, Search, Users } from "lucide-react";
+import { Bot, Loader2, Plus, Search, Users } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { useTranslation } from "@/lib/i18n";
 

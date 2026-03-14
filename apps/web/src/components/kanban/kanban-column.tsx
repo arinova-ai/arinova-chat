@@ -1,8 +1,8 @@
 "use client";
 
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { ArrowDownAZ, ArrowUpAZ, Check, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { X, Loader2 } from "lucide-react";
@@ -23,6 +23,33 @@ import {
 import { useTranslation } from "@/lib/i18n";
 import { SortableCard, CompactCard } from "./kanban-card";
 import type { KanbanCard, KanbanColumn } from "./types";
+
+// ── Sort helpers ──────────────────────────────────────────────
+
+type SortBy = "manual" | "created-desc" | "created-asc" | "updated-desc" | "updated-asc" | "priority-desc" | "priority-asc";
+
+const PRIORITY_RANK: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+
+function sortCards(cards: KanbanCard[], sortBy: SortBy): KanbanCard[] {
+  if (sortBy === "manual") return cards;
+  const sorted = [...cards];
+  switch (sortBy) {
+    case "created-desc":
+      return sorted.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    case "created-asc":
+      return sorted.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+    case "updated-desc":
+      return sorted.sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? ""));
+    case "updated-asc":
+      return sorted.sort((a, b) => (a.updatedAt ?? a.createdAt ?? "").localeCompare(b.updatedAt ?? b.createdAt ?? ""));
+    case "priority-desc":
+      return sorted.sort((a, b) => (PRIORITY_RANK[b.priority ?? ""] ?? 0) - (PRIORITY_RANK[a.priority ?? ""] ?? 0));
+    case "priority-asc":
+      return sorted.sort((a, b) => (PRIORITY_RANK[a.priority ?? ""] ?? 0) - (PRIORITY_RANK[b.priority ?? ""] ?? 0));
+    default:
+      return sorted;
+  }
+}
 
 // ── Full Column (with DnD + column menu) ──────────────────────
 
@@ -53,10 +80,14 @@ export function FullColumn({
   onRenameColumn?: (columnId: string, name: string) => void;
   onDeleteColumn?: (columnId: string) => void;
 }) {
+  const { t } = useTranslation();
+  const [sortBy, setSortBy] = useState<SortBy>("manual");
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(column.name);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const renameRef = useRef<HTMLInputElement>(null);
+
+  const sortedCards = useMemo(() => sortCards(cards, sortBy), [cards, sortBy]);
 
   useEffect(() => {
     if (renaming) renameRef.current?.focus();
@@ -126,6 +157,33 @@ export function FullColumn({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* Sort dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`rounded-md p-1 transition-colors ${sortBy !== "manual" ? "text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+              >
+                <ArrowDownAZ className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {([
+                ["manual", t("kanban.sort.manual")] as const,
+                ["created-desc", t("kanban.sort.createdDesc")] as const,
+                ["created-asc", t("kanban.sort.createdAsc")] as const,
+                ["updated-desc", t("kanban.sort.updatedDesc")] as const,
+                ["updated-asc", t("kanban.sort.updatedAsc")] as const,
+                ["priority-desc", t("kanban.sort.priorityDesc")] as const,
+                ["priority-asc", t("kanban.sort.priorityAsc")] as const,
+              ] as [SortBy, string][]).map(([key, label]) => (
+                <DropdownMenuItem key={key} onClick={() => setSortBy(key)}>
+                  {sortBy === key && <Check className="h-3.5 w-3.5 mr-2" />}
+                  <span className={sortBy !== key ? "ml-[22px]" : ""}>{label}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             type="button"
             onClick={() => onAddCard(column.id)}
@@ -138,8 +196,8 @@ export function FullColumn({
 
       {/* Cards */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[60px]">
-        <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-          {cards.map((card) => (
+        <SortableContext items={sortedCards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          {sortedCards.map((card) => (
             <SortableCard
               key={card.id}
               card={card}
@@ -149,10 +207,11 @@ export function FullColumn({
               agentNames={agentNames}
               onDelete={onDeleteCard}
               onSelect={onSelectCard}
+              dragDisabled={sortBy !== "manual"}
             />
           ))}
         </SortableContext>
-        {cards.length === 0 && (
+        {sortedCards.length === 0 && (
           <p className="py-6 text-center text-xs text-muted-foreground/60">No cards</p>
         )}
       </div>

@@ -9,8 +9,9 @@ import { StickerPanel } from "./sticker-panel";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
 import { SearchResults } from "./search-results";
-import { NotebookSheet } from "./notebook-sheet";
+import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
+import { WikiPanel } from "./wiki-panel";
 
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
@@ -52,7 +53,7 @@ export function ChatArea() {
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
-  const [droppedNote, setDroppedNote] = useState<{ id: string; title: string } | null>(null);
+  const [wikiOpen, setWikiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
 
@@ -91,7 +92,7 @@ export function ChatArea() {
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current++;
-    if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes("application/x-arinova-note")) {
+    if (e.dataTransfer.types.includes("Files") || e.dataTransfer.types.includes("application/x-arinova-note") || e.dataTransfer.types.includes("application/x-arinova-kanban-card")) {
       setIsDragging(true);
     }
   }, []);
@@ -116,14 +117,34 @@ export function ChatArea() {
     setIsDragging(false);
     dragCounterRef.current = 0;
 
-    // Check for note drop first
+    // Check for note drop — attach to input box (user sends with optional text)
     const noteData = e.dataTransfer.getData("application/x-arinova-note");
     if (noteData) {
       try {
-        const note = JSON.parse(noteData) as { id: string; title: string };
-        setDroppedNote(note);
+        const note = JSON.parse(noteData) as { id: string; title: string; preview?: string };
+        useChatStore.getState().setAttachedCard({
+          type: "note",
+          id: note.id,
+          title: note.title,
+          preview: note.preview,
+        });
         return;
-      } catch { /* fall through to file handling */ }
+      } catch { /* fall through */ }
+    }
+
+    // Check for kanban card drop — attach to input box (user sends with optional text)
+    const kanbanData = e.dataTransfer.getData("application/x-arinova-kanban-card");
+    if (kanbanData) {
+      try {
+        const card = JSON.parse(kanbanData) as { id: string; title: string; preview?: string };
+        useChatStore.getState().setAttachedCard({
+          type: "kanban",
+          id: card.id,
+          title: card.title,
+          preview: card.preview,
+        });
+        return;
+      } catch { /* fall through */ }
     }
 
     const files = e.dataTransfer.files;
@@ -222,6 +243,13 @@ export function ChatArea() {
             openNotebook();
           }
         }}
+        onWikiClick={conversation.type === "group" ? () => {
+          if (window.matchMedia("(min-width: 1280px)").matches) {
+            useRightPanelStore.getState().setActiveTab("wiki");
+          } else {
+            setWikiOpen(true);
+          }
+        } : undefined}
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
@@ -236,8 +264,6 @@ export function ChatArea() {
         <ChatInput
           droppedFiles={droppedFiles}
           onDropHandled={() => setDroppedFiles(null)}
-          droppedNote={droppedNote}
-          onNoteDropHandled={() => setDroppedNote(null)}
           stickerOpen={stickerOpen}
           onStickerToggle={() => setStickerOpen((prev) => !prev)}
         />
@@ -286,7 +312,7 @@ export function ChatArea() {
         initialTab={mediaFilesTab}
       />
 
-      <NotebookSheet
+      <NotebookList
         open={notebookOpen}
         onOpenChange={(open) => { if (!open) closeNotebook(); }}
         conversationId={activeConversationId}
@@ -296,6 +322,13 @@ export function ChatArea() {
         onOpenChange={(open) => { if (!open) closeKanbanSidebar(); }}
         conversationId={activeConversationId}
       />
+      {conversation.type === "group" && (
+        <WikiPanel
+          open={wikiOpen}
+          onOpenChange={setWikiOpen}
+          conversationId={activeConversationId}
+        />
+      )}
     </div>
   );
 }

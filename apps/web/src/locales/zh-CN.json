@@ -6,16 +6,15 @@
   "nav.friends": "好友",
   "nav.community": "社区",
   "nav.theme": "主题",
-  "nav.market": "Agent Hub",
+  "nav.market": "Skills",
   "nav.wallet": "钱包",
   "nav.settings": "设置",
-  "nav.agentHub": "Agent Hub",
+  "nav.agentHub": "Skills",
   "nav.themeStore": "主题商店",
   "nav.stickers": "贴纸商店",
   "nav.addShortcut": "添加",
   "nav.allShortcutsAdded": "所有快捷方式已添加",
   "nav.creator": "创作者控制台",
-
   "common.save": "保存更改",
   "common.cancel": "取消",
   "common.confirm": "确认",
@@ -49,15 +48,11 @@
   "common.description": "描述",
   "common.category": "分类",
   "common.export": "导出",
-
   "errors.somethingWentWrong": "发生错误",
   "errors.unexpectedError": "发生了意外错误，请重试或刷新页面。",
-
   "connection.syncing": "同步中...",
   "connection.reconnecting": "重新连接中...",
-
   "time.yesterday": "昨天",
-
   "chat.subtitle": "与你的团队即时沟通",
   "chat.collapseSidebar": "收起侧边栏",
   "chat.expandSidebar": "展开侧边栏",
@@ -84,7 +79,6 @@
   "chat.uploadFailed": "上传失败，请重试",
   "chat.imagesSelected": "已选择 {count} 张图片",
   "chat.imageCount": "{n}/{max}",
-
   "chat.actions.copy": "复制消息",
   "chat.actions.reply": "回复",
   "chat.actions.startThread": "开始讨论串",
@@ -97,16 +91,13 @@
   "chat.actions.unpin": "取消置顶",
   "chat.actions.report": "举报",
   "chat.actions.share": "分享",
-
   "share.title": "分享",
   "share.sendToConversation": "发送到对话",
   "share.shareExternal": "分享到外部",
   "share.copyContent": "复制内容",
   "share.sentToConversation": "已发送到对话",
-
   "chat.selection.count": "已选择 {count} 条",
   "chat.selection.copied": "已复制到剪贴板",
-
   "chat.status.error": "错误",
   "chat.status.stopped": "已停止",
   "chat.sharedNote": "分享了一篇笔记",
@@ -116,20 +107,16 @@
   "chat.status.queued": "排队中",
   "chat.status.thinking": "思考中",
   "chat.status.queuedLabel": "排队中",
-
   "chat.replies.one": "条回复",
   "chat.replies.other": "条回复",
-
   "chat.thread.title": "讨论串",
   "chat.thread.noReplies": "暂无回复",
   "chat.thread.startDiscussion": "在下方开始讨论",
   "chat.thread.placeholder": "在讨论串中回复...",
-
   "chat.kanban.title": "任务",
   "chat.kanban.empty": "暂无任务",
   "chat.kanban.addCard": "添加卡片",
   "chat.kanban.newCardPlaceholder": "卡片标题...",
-
   "chat.notebook.title": "笔记",
   "chat.notebook.empty": "暂无笔记",
   "chat.notebook.create": "创建",
@@ -152,9 +139,7 @@
   "chat.notebook.autoTag": "自动标签",
   "chat.notebook.askAi": "问 AI",
   "chat.notebook.confirmDelete": "确定要删除此笔记吗？",
-
   "chat.kanban.openTask": "打开任务",
-
   "chat.search.title": "搜索",
   "chat.search.results": "条结果",
   "chat.search.result": "条结果",
@@ -162,9 +147,7 @@
   "chat.search.inConversation": "在对话中搜索",
   "chat.search.nOfTotal": "{n} / {total}",
   "chat.unreadDivider": "以下是未读消息",
-
   "chat.messageActions": "消息操作",
-
   "chat.header.members": "成员",
   "chat.header.memberCount": "{count} 位成员",
   "chat.header.group": "群组",
@@ -197,14 +180,12 @@
   "chat.header.voiceCall": "语音通话",
   "chat.header.inCall": "通话中",
   "chat.header.voiceUnavailable": "语音通话不可用",
-
   "conversation.rename": "重命名",
   "conversation.pin": "置顶",
   "conversation.unpin": "取消置顶",
   "conversation.delete": "删除",
   "conversation.deleteTitle": "删除对话",
   "conversation.deleteDesc": "确定要删除此对话吗？此操作无法撤销，所有消息将被永久删除。",
-
   "newChat.title": "新对话",
   "newChat.noAgents": "暂无 Agent，添加一个来开始聊天。",
   "newChat.createBot": "创建 Bot",
@@ -236,7 +217,6 @@
   "newChat.a2aHint": "留空可先创建 Bot，之后再连接 Agent。",
   "newChat.chatWithFriend": "与好友聊天",
   "newChat.noFriendsHint": "暂无好友，请先添加好友才能开始对话。",
-
   "botManage.title": "管理 Bot",
   "botManage.clickChangeAvatar": "点击更换头像",
   "botManage.name": "名称",
@@ -273,7 +253,6 @@
   "botManage.confirmDelete": "确认删除",
   "botManage.deleteBot": "删除 Bot",
   "botManage.deleteBotConfirm": "确定要删除吗？这将删除与此 Bot 的所有对话。",
-
   "group.title": "群组信息",
   "group.members": "成员",
   "group.settings": "设置",
@@ -309,14 +288,25 @@
   "group.groupNamePlaceholder": "群组名称",
   "group.mentionOnly": "仅限提及",
   "group.mentionOnlyDesc": "仅被 @提及的 Agent 会回应",
-
+  "group.memoryCapsule": "记忆胶囊",
+  "group.memoryCapsuleDesc": "使用 AI 从群组聊天记录中提取关键记忆。适用于新成员入职或回顾过去的决策。",
+  "group.extractMemory": "提取记忆",
+  "group.refreshMemory": "重新提取",
+  "group.capsuleReady": "已完成",
+  "group.capsuleExtracting": "提取中...",
+  "group.capsuleFailed": "提取失败",
+  "group.messages": "消息数",
+  "group.memories": "记忆数",
+  "group.capsuleVisibility": "谁可以查看",
+  "group.visibilityOwnerOnly": "仅群主",
+  "group.visibilityAdmins": "管理员",
+  "group.visibilityAllMembers": "所有成员",
   "addMember.title": "添加成员",
   "addMember.searchPlaceholder": "搜索好友或 Agent...",
   "addMember.friends": "好友",
   "addMember.myAgents": "我的 Agent",
   "addMember.noMatches": "未找到匹配结果",
   "addMember.allAdded": "所有好友和 Agent 已是成员",
-
   "agentSheet.title": "Agent 资料",
   "agentSheet.working": "工作中",
   "agentSheet.online": "在线",
@@ -326,7 +316,6 @@
   "agentSheet.save": "保存",
   "agentSheet.conversations": "对话",
   "agentSheet.owner": "拥有者",
-
   "agentProfile.listenMode": "聆听模式",
   "agentProfile.listenMode.all": "全面监听",
   "agentProfile.listenMode.all.desc": "接收所有消息，不需要 @提及",
@@ -343,7 +332,6 @@
   "agentProfile.allowedUsers": "允许的用户",
   "agentProfile.allowedUsers.selected": "已选 {count} 人",
   "agentProfile.noOtherUsers": "此群组中没有其他用户",
-
   "office.title": "办公室",
   "office.subtitle": "虚拟工作空间",
   "office.tab.scene": "场景",
@@ -371,7 +359,6 @@
   "office.notes.stopSharing": "停止分享",
   "office.notes.linkCopied": "链接已复制！",
   "office.notes.publicNote": "公开笔记",
-
   "kanban.share.title": "分享",
   "kanban.share.publicLink": "创建公开链接",
   "kanban.share.toChat": "分享到对话",
@@ -379,15 +366,20 @@
   "kanban.share.stopSharing": "停止分享",
   "kanban.share.linkCopied": "链接已复制！",
   "kanban.share.publicCard": "公开卡片",
-
+  "kanban.sort.manual": "手动排序",
+  "kanban.sort.createdDesc": "最新创建",
+  "kanban.sort.createdAsc": "最早创建",
+  "kanban.sort.updatedDesc": "最近更新",
+  "kanban.sort.updatedAsc": "最早更新",
+  "kanban.sort.priorityDesc": "优先级：高→低",
+  "kanban.sort.priorityAsc": "优先级：低→高",
+  "kanban.search.placeholder": "搜索卡片…",
   "settings.title": "设置",
   "settings.subtitle": "自定义你的使用体验",
-
   "settings.nav.profile": "个人资料",
   "settings.nav.language": "语言",
   "settings.nav.notifications": "通知",
   "settings.nav.privacy": "隐私",
-
   "settings.profile.title": "个人资料",
   "settings.profile.subtitle": "管理你的个人信息与偏好设置。",
   "settings.profile.changeAvatar": "更换头像",
@@ -416,7 +408,6 @@
   "settings.profile.passwordMismatch": "两次密码输入不一致",
   "settings.profile.passwordChanged": "密码修改成功",
   "settings.profile.passwordChangeFailed": "密码修改失败",
-
   "settings.language.title": "语言",
   "settings.language.subtitle": "选择您偏好的语言。",
   "settings.appearance.title": "外观",
@@ -431,7 +422,6 @@
   "settings.appearance.performance": "性能模式",
   "settings.appearance.performanceDesc": "降低质量，提升速度",
   "settings.appearance.language": "语言",
-
   "settings.notifications.title": "通知",
   "settings.notifications.subtitle": "管理你的通知接收方式。",
   "settings.notifications.push": "推送通知",
@@ -450,7 +440,6 @@
   "settings.notifications.to": "到",
   "settings.notifications.chatSounds": "聊天音效",
   "settings.notifications.chatSoundsDesc": "发送和接收消息时播放音效",
-
   "settings.privacy.title": "隐私",
   "settings.privacy.subtitle": "管理屏蔽的用户与隐私设置。",
   "settings.privacy.blockedUsers": "已屏蔽的用户",
@@ -466,7 +455,6 @@
   "settings.ai.keyHint": "从 Google AI Studio (aistudio.google.com) 获取您的 API 密钥。Ask AI 功能需要此密钥。",
   "settings.ai.keyReplace": "输入新密钥以替换...",
   "settings.ai.needKey": "请至设置页面设置您的 Gemini API 密钥以使用 Ask AI。",
-
   "userProfile.title": "用户资料",
   "userProfile.joined": "加入于",
   "userProfile.editProfile": "编辑个人资料",
@@ -475,7 +463,6 @@
   "userProfile.pendingRequest": "等待中",
   "userProfile.acceptRequest": "接受",
   "userProfile.agentsInGroup": "群组中的 Agent",
-
   "profilePage.userNotFound": "未找到用户",
   "profilePage.ownedAgents": "Agent",
   "profilePage.agentProfile": "Agent 资料",
@@ -489,10 +476,8 @@
   "profilePage.totalConversations": "对话数",
   "profilePage.lastActive": "最近活动",
   "profilePage.voiceCapable": "语音",
-
   "officeChat.startConversation": "开始对话",
   "officeChat.placeholder": "输入消息...",
-
   "stickerShop.title": "贴纸商店",
   "stickerShop.subtitle": "探索并收集贴纸包",
   "stickerShop.searchPlaceholder": "搜索贴纸包...",
@@ -531,7 +516,6 @@
   "stickerShop.agentCompatibleDesc": "此贴图包支持 AI 助理 — 它们能理解并回应这些贴图！",
   "stickerShop.tryItDemo": "试试看 — AI 助理的回应方式",
   "stickerShop.tryItResponse": "嗨！😊 你今天看起来心情很好呢！",
-
   "creator.title": "创作者控制台",
   "creator.subtitle": "管理你的作品",
   "creator.tab.overview": "总览",
@@ -656,7 +640,6 @@
   "creator.communityDialog.descPlaceholder": "这个社区是关于什么的？",
   "creator.communityDialog.create": "创建",
   "creator.dialog.cancel": "取消",
-
   "agentHub.title": "Agent Hub",
   "agentHub.subtitle": "探索并与 AI Agent 聊天",
   "agentHub.createAgent": "创建 Agent",
@@ -676,10 +659,8 @@
   "agentHub.sort.newest": "最新",
   "agentHub.sort.rating": "评分",
   "agentHub.sort.price": "价格",
-
   "apps.title": "你的应用",
   "apps.subtitle": "管理已安装的应用",
-
   "friends.title": "好友",
   "friends.subtitle": "交流与社交",
   "friends.tabFriends": "好友",
@@ -692,7 +673,6 @@
   "friends.search.addFriend": "加好友",
   "friends.search.error": "搜索失败",
   "friends.search.requestFailed": "好友请求发送失败",
-
   "community.title": "社区",
   "community.subtitle": "与创作者和社区互动交流",
   "community.create": "创建",
@@ -725,7 +705,6 @@
   "community.by": "由",
   "community.type.lounge": "交流厅",
   "community.lounge.voiceAgent": "语音代理",
-
   "official.dashboard.title": "客服管理",
   "official.dashboard.queue": "排队列表",
   "official.dashboard.team": "团队",
@@ -740,10 +719,8 @@
   "official.dashboard.totalConversations": "总对话数",
   "official.dashboard.activeNow": "进行中",
   "official.dashboard.resolved": "已解决",
-
   "admin.verification.title": "验证申请",
   "admin.verification.empty": "无验证申请",
-
   "wallet.title": "钱包",
   "wallet.subtitle": "管理你的积分",
   "wallet.currentBalance": "当前余额",
@@ -757,7 +734,6 @@
   "wallet.plan.advanced": "进阶方案",
   "wallet.plan.pro": "专业方案",
   "wallet.bonus": "赠送",
-
   "spaces.title": "空间",
   "spaces.subtitle": "游戏与社交体验",
   "spaces.searchPlaceholder": "搜索游戏...",
@@ -790,7 +766,6 @@
   "spaces.owner": "拥有者",
   "spaces.activeSessions": "进行中",
   "spaces.tags": "标签",
-
   "theme.title": "办公室主题",
   "theme.subtitle": "浏览并应用虚拟办公室主题",
   "theme.searchPlaceholder": "搜索主题...",
@@ -845,7 +820,10 @@
   "memoryCapsule.entries": "条记忆",
   "memoryCapsule.messages": "条消息",
   "memoryCapsule.notExtracted": "尚未提取",
-
+  "memoryCapsule.notes": "条笔记",
+  "memoryCapsule.searchEntries": "搜索记忆…",
+  "memoryCapsule.noEntries": "没有找到记忆",
+  "memoryCapsule.relevance": "相关度",
   "promo.free": "免费",
   "promo.coins": "金币",
   "promo.limitedTime": "限时优惠",
@@ -873,12 +851,57 @@
   "voice.mute": "静音",
   "voice.cancelCall": "取消通话",
   "voice.hangup": "挂断",
-
   "rightPanel.notes": "笔记",
   "rightPanel.kanban": "看板",
   "rightPanel.threads": "讨论串",
   "rightPanel.members": "成员",
   "rightPanel.chat": "对话",
+  "rightPanel.memory": "记忆胶囊",
   "rightPanel.close": "收合面板",
-  "rightPanel.comingSoon": "即将推出"
+  "rightPanel.comingSoon": "即将推出",
+  "notebooks.title": "笔记本",
+  "notebooks.create": "新建笔记本",
+  "notebooks.namePlaceholder": "笔记本名称",
+  "notebooks.add": "添加",
+  "notebooks.empty": "暂无笔记本",
+  "notebooks.default": "默认",
+  "notebooks.noteCount": "笔记",
+  "notebooks.rename": "重命名",
+  "notebooks.delete": "删除",
+  "notebooks.save": "保存",
+  "skills.title": "Skills",
+  "skills.subtitle": "发现并安装 Skills 到你的 Agent",
+  "skills.tab.explore": "探索",
+  "skills.tab.installed": "已安装",
+  "skills.tab.favorites": "收藏",
+  "skills.searchPlaceholder": "搜索 Skills...",
+  "skills.allCategories": "全部",
+  "skills.sort.popular": "热门",
+  "skills.sort.newest": "最新",
+  "skills.sort.name": "名称",
+  "skills.empty": "未找到 Skills",
+  "skills.official": "官方",
+  "skills.slashCommand": "斜杠命令",
+  "skills.install": "安装",
+  "skills.confirmInstall": "安装到",
+  "skills.selectAgents": "选择要安装的 Agent",
+  "skills.noAgents": "没有可用的 Agent",
+  "skills.backToList": "返回列表",
+  "skills.backToFavorites": "返回收藏",
+  "skills.noInstalled": "尚未安装任何 Skill",
+  "skills.noFavorites": "暂无收藏的 Skill",
+  "skills.enable": "启用",
+  "skills.disable": "停用",
+  "skills.uninstall": "卸载",
+  "skills.sourceCode": "源代码",
+  "wiki.title": "维基",
+  "wiki.create": "创建页面",
+  "wiki.empty": "暂无维基页面",
+  "wiki.pin": "置顶",
+  "wiki.unpin": "取消置顶",
+  "wiki.titlePlaceholder": "页面标题...",
+  "wiki.add": "添加",
+  "wiki.save": "保存",
+  "wiki.contentPlaceholder": "撰写内容...",
+  "rightPanel.wiki": "维基"
 }

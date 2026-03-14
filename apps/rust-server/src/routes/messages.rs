@@ -89,6 +89,7 @@ pub(crate) struct CursorTimestamp {
 }
 
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 struct ConvCheck {
     id: Uuid,
 }

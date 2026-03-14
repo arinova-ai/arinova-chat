@@ -2,9 +2,10 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2 } from "lucide-react";
+import { GripVertical, Trash2, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PRIORITY_CONFIG, PRIORITY_BORDER, type KanbanCard, type KanbanColumn } from "./types";
+import { useChatStore } from "@/store/chat-store";
 
 // ── Priority Badge ──────────────────────────────────────────
 
@@ -28,6 +29,7 @@ export function SortableCard({
   labels,
   onDelete,
   onSelect,
+  dragDisabled,
 }: {
   card: KanbanCard;
   agents: string[];
@@ -36,10 +38,12 @@ export function SortableCard({
   labels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
   onDelete: (id: string) => void;
   onSelect: (card: KanbanCard) => void;
+  dragDisabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: "card", card },
+    disabled: dragDisabled,
   });
 
   const style = {
@@ -53,18 +57,28 @@ export function SortableCard({
       ref={setNodeRef}
       style={style}
       className="group relative rounded-lg border border-border bg-card p-3 shadow-sm hover:border-border/80 transition-colors cursor-pointer"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(
+          "application/x-arinova-kanban-card",
+          JSON.stringify({ id: card.id, title: card.title, columnName: card.columnId })
+        );
+        e.dataTransfer.effectAllowed = "copy";
+      }}
       onClick={() => onSelect(card)}
     >
       <div className="flex items-start gap-2">
-        <button
-          type="button"
-          className="mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        {!dragDisabled && (
+          <button
+            type="button"
+            className="mt-0.5 shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-foreground leading-snug">{card.title}</div>
           {card.description && (
@@ -100,13 +114,33 @@ export function SortableCard({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
-          className="shrink-0 rounded p-1 text-muted-foreground/0 group-hover:text-muted-foreground hover:text-red-400 transition-colors"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex shrink-0 flex-col gap-0.5">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const store = useChatStore.getState();
+              store.setAttachedCard({
+                type: "kanban",
+                id: card.id,
+                title: card.title,
+                preview: card.description?.slice(0, 80) || undefined,
+              });
+              store.closeKanbanSidebar();
+            }}
+            className="rounded p-1 text-muted-foreground hover:text-brand transition-colors md:hidden"
+            title="Attach to chat"
+          >
+            <Paperclip className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(card.id); }}
+            className="rounded p-1 text-muted-foreground/0 group-hover:text-muted-foreground hover:text-red-400 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -129,6 +163,14 @@ export function CompactCard({
     <div
       role="button"
       tabIndex={0}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(
+          "application/x-arinova-kanban-card",
+          JSON.stringify({ id: card.id, title: card.title, columnName: card.columnId })
+        );
+        e.dataTransfer.effectAllowed = "copy";
+      }}
       onClick={() => onSelect(card)}
       onKeyDown={(e) => { if (e.key === "Enter") onSelect(card); }}
       className={cn(
@@ -140,17 +182,36 @@ export function CompactCard({
       {card.description && (
         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{card.description}</p>
       )}
-      {/* Move dropdown */}
-      <select
-        className="mt-1 w-full text-[10px] bg-transparent border border-border rounded px-1 py-0.5 text-muted-foreground"
-        value={card.columnId}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => onMoveCard(card.id, e.target.value)}
-      >
-        {columns.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
+      <div className="mt-1 flex items-center gap-1">
+        <select
+          className="flex-1 text-[10px] bg-transparent border border-border rounded px-1 py-0.5 text-muted-foreground"
+          value={card.columnId}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onMoveCard(card.id, e.target.value)}
+        >
+          {columns.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const store = useChatStore.getState();
+            store.setAttachedCard({
+              type: "kanban",
+              id: card.id,
+              title: card.title,
+              preview: card.description?.slice(0, 80) || undefined,
+            });
+            store.closeKanbanSidebar();
+          }}
+          className="rounded p-1 text-muted-foreground hover:text-brand transition-colors"
+          title="Attach to chat"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }

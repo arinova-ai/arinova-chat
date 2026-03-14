@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post, delete, patch},
+    routing::{get, post, patch},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -352,6 +352,7 @@ async fn update_account(
     push_field!(body.context_window, "context_window");
     push_field!(body.voice_sample_url, "voice_sample_url");
     push_field!(body.voice_clone_id, "voice_clone_id");
+    let _ = param_index; // suppress unused_assignments warning
 
     if set_clauses.is_empty() {
         return (

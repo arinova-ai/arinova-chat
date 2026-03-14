@@ -95,7 +95,10 @@ async fn create_report(
     let description = body
         .description
         .as_deref()
-        .map(|d| &d[..d.len().min(500)]);
+        .map(|d| {
+            let end = d.char_indices().nth(500).map(|(i, _)| i).unwrap_or(d.len());
+            &d[..end]
+        });
 
     // Verify message exists and user has access
     let msg = sqlx::query_as::<_, (Uuid,)>(

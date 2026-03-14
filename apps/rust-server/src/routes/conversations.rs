@@ -790,7 +790,7 @@ async fn delete_conversation(
     .fetch_optional(&state.db)
     .await;
 
-    let (_, agent_id, conv_type) = match conv {
+    let (_, _agent_id, conv_type) = match conv {
         Ok(Some(c)) => c,
         Ok(None) => {
             return (

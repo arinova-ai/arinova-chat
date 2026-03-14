@@ -6,16 +6,15 @@
   "nav.friends": "Rakan",
   "nav.community": "Komuniti",
   "nav.theme": "Tema",
-  "nav.market": "Agent Hub",
+  "nav.market": "Skills",
   "nav.wallet": "Dompet",
   "nav.settings": "Tetapan",
-  "nav.agentHub": "Agent Hub",
+  "nav.agentHub": "Skills",
   "nav.themeStore": "Kedai Tema",
   "nav.stickers": "Kedai Pelekat",
   "nav.addShortcut": "Tambah",
   "nav.allShortcutsAdded": "Semua pintasan ditambah",
   "nav.creator": "Konsol Pencipta",
-
   "common.save": "Simpan Perubahan",
   "common.cancel": "Batal",
   "common.confirm": "Sahkan",
@@ -49,15 +48,11 @@
   "common.description": "Penerangan",
   "common.category": "Kategori",
   "common.export": "Eksport",
-
   "errors.somethingWentWrong": "Sesuatu telah berlaku",
   "errors.unexpectedError": "Ralat tidak dijangka berlaku. Cuba semula atau muat semula halaman.",
-
   "connection.syncing": "Menyegerakkan...",
   "connection.reconnecting": "Menyambung semula...",
-
   "time.yesterday": "Semalam",
-
   "chat.subtitle": "Berhubung dengan pasukan anda serta-merta",
   "chat.collapseSidebar": "Kecilkan bar sisi",
   "chat.expandSidebar": "Kembangkan bar sisi",
@@ -84,7 +79,6 @@
   "chat.uploadFailed": "Muat naik gagal, sila cuba lagi",
   "chat.imagesSelected": "{count} imej dipilih",
   "chat.imageCount": "{n}/{max}",
-
   "chat.actions.copy": "Salin mesej",
   "chat.actions.reply": "Balas",
   "chat.actions.startThread": "Mulakan utas",
@@ -97,16 +91,13 @@
   "chat.actions.unpin": "Nyahsemat",
   "chat.actions.report": "Laporkan",
   "chat.actions.share": "Kongsi",
-
   "share.title": "Kongsi",
   "share.sendToConversation": "Hantar ke perbualan",
   "share.shareExternal": "Kongsi luaran",
   "share.copyContent": "Salin kandungan",
   "share.sentToConversation": "Dihantar ke perbualan",
-
   "chat.selection.count": "{count} dipilih",
   "chat.selection.copied": "Disalin ke papan keratan",
-
   "chat.status.error": "Ralat",
   "chat.status.stopped": "Dihentikan",
   "chat.sharedNote": "Berkongsi nota",
@@ -116,20 +107,16 @@
   "chat.status.queued": "Beratur",
   "chat.status.thinking": "berfikir",
   "chat.status.queuedLabel": "beratur",
-
   "chat.replies.one": "balasan",
   "chat.replies.other": "balasan",
-
   "chat.thread.title": "Utas",
   "chat.thread.noReplies": "Tiada balasan lagi",
   "chat.thread.startDiscussion": "Mulakan perbincangan di bawah",
   "chat.thread.placeholder": "Balas dalam utas...",
-
   "chat.kanban.title": "Tugasan",
   "chat.kanban.empty": "Tiada tugasan lagi",
   "chat.kanban.addCard": "Tambah kad",
   "chat.kanban.newCardPlaceholder": "Tajuk kad...",
-
   "chat.notebook.title": "Nota",
   "chat.notebook.empty": "Tiada nota lagi",
   "chat.notebook.create": "Cipta",
@@ -152,9 +139,7 @@
   "chat.notebook.autoTag": "Tag auto",
   "chat.notebook.askAi": "Tanya AI",
   "chat.notebook.confirmDelete": "Adakah anda pasti mahu memadamkan nota ini?",
-
   "chat.kanban.openTask": "Buka tugas",
-
   "chat.search.title": "Cari",
   "chat.search.results": "keputusan",
   "chat.search.result": "keputusan",
@@ -162,9 +147,7 @@
   "chat.search.inConversation": "Cari dalam perbualan",
   "chat.search.nOfTotal": "{n} daripada {total}",
   "chat.unreadDivider": "Mesej belum dibaca",
-
   "chat.messageActions": "Tindakan mesej",
-
   "chat.header.members": "Ahli",
   "chat.header.memberCount": "{count} ahli",
   "chat.header.group": "Kumpulan",
@@ -197,14 +180,12 @@
   "chat.header.voiceCall": "Panggilan suara",
   "chat.header.inCall": "Dalam panggilan",
   "chat.header.voiceUnavailable": "Panggilan suara tidak tersedia",
-
   "conversation.rename": "Namakan semula",
   "conversation.pin": "Semat",
   "conversation.unpin": "Nyahsemat",
   "conversation.delete": "Padam",
   "conversation.deleteTitle": "Padam perbualan",
   "conversation.deleteDesc": "Adakah anda pasti mahu memadam perbualan ini? Tindakan ini tidak boleh dibatalkan dan semua mesej akan dipadam secara kekal.",
-
   "newChat.title": "Perbualan Baharu",
   "newChat.noAgents": "Tiada ejen lagi. Tambah satu untuk mula bersembang.",
   "newChat.createBot": "Cipta Bot",
@@ -236,7 +217,6 @@
   "newChat.a2aHint": "Biarkan kosong untuk mencipta bot dahulu, kemudian sambungkan ejen kemudian.",
   "newChat.chatWithFriend": "Sembang dengan Rakan",
   "newChat.noFriendsHint": "Tiada rakan lagi. Tambah rakan terlebih dahulu untuk memulakan perbualan.",
-
   "botManage.title": "Urus Bot",
   "botManage.clickChangeAvatar": "Klik untuk tukar avatar",
   "botManage.name": "Nama",
@@ -273,7 +253,6 @@
   "botManage.confirmDelete": "Sahkan Pemadaman",
   "botManage.deleteBot": "Padam Bot",
   "botManage.deleteBotConfirm": "Adakah anda pasti? Ini akan memadam semua perbualan dengan bot ini.",
-
   "group.title": "Maklumat Kumpulan",
   "group.members": "Ahli",
   "group.settings": "Tetapan",
@@ -309,14 +288,25 @@
   "group.groupNamePlaceholder": "Nama kumpulan",
   "group.mentionOnly": "Sebutan Sahaja",
   "group.mentionOnlyDesc": "Hanya ejen yang @disebut akan bertindak balas",
-
+  "group.memoryCapsule": "Kapsul Memori",
+  "group.memoryCapsuleDesc": "Ekstrak memori utama dari sejarah chat kumpulan menggunakan AI. Berguna untuk onboarding ahli baru atau menyemak keputusan lepas.",
+  "group.extractMemory": "Ekstrak Memori",
+  "group.refreshMemory": "Muat Semula Memori",
+  "group.capsuleReady": "Sedia",
+  "group.capsuleExtracting": "Mengekstrak...",
+  "group.capsuleFailed": "Gagal",
+  "group.messages": "Mesej",
+  "group.memories": "Memori",
+  "group.capsuleVisibility": "Siapa boleh lihat",
+  "group.visibilityOwnerOnly": "Pemilik sahaja",
+  "group.visibilityAdmins": "Pentadbir",
+  "group.visibilityAllMembers": "Semua ahli",
   "addMember.title": "Tambah Ahli",
   "addMember.searchPlaceholder": "Cari rakan atau ejen...",
   "addMember.friends": "Rakan",
   "addMember.myAgents": "Ejen Saya",
   "addMember.noMatches": "Tiada padanan ditemui",
   "addMember.allAdded": "Semua rakan dan ejen sudah menjadi ahli",
-
   "agentSheet.title": "Profil ejen",
   "agentSheet.working": "Bekerja",
   "agentSheet.online": "Dalam Talian",
@@ -326,7 +316,6 @@
   "agentSheet.save": "Simpan",
   "agentSheet.conversations": "Perbualan",
   "agentSheet.owner": "Pemilik",
-
   "agentProfile.listenMode": "Mod Dengar",
   "agentProfile.listenMode.all": "Dengar semua",
   "agentProfile.listenMode.all.desc": "Menerima semua mesej — tanpa @sebutan diperlukan",
@@ -343,7 +332,6 @@
   "agentProfile.allowedUsers": "Pengguna Dibenarkan",
   "agentProfile.allowedUsers.selected": "{count} dipilih",
   "agentProfile.noOtherUsers": "Tiada pengguna lain dalam kumpulan ini",
-
   "office.title": "Pejabat",
   "office.subtitle": "Ruang Kerja Maya",
   "office.tab.scene": "Pemandangan",
@@ -371,7 +359,6 @@
   "office.notes.stopSharing": "Henti Kongsi",
   "office.notes.linkCopied": "Pautan disalin!",
   "office.notes.publicNote": "Nota Dikongsi",
-
   "kanban.share.title": "Kongsi",
   "kanban.share.publicLink": "Cipta Pautan Awam",
   "kanban.share.toChat": "Kongsi ke Chat",
@@ -379,15 +366,20 @@
   "kanban.share.stopSharing": "Berhenti Berkongsi",
   "kanban.share.linkCopied": "Pautan disalin!",
   "kanban.share.publicCard": "Kad Dikongsi",
-
+  "kanban.sort.manual": "Manual",
+  "kanban.sort.createdDesc": "Terbaru",
+  "kanban.sort.createdAsc": "Terlama",
+  "kanban.sort.updatedDesc": "Baru dikemas kini",
+  "kanban.sort.updatedAsc": "Lama dikemas kini",
+  "kanban.sort.priorityDesc": "Keutamaan: Tinggi → Rendah",
+  "kanban.sort.priorityAsc": "Keutamaan: Rendah → Tinggi",
+  "kanban.search.placeholder": "Cari kad…",
   "settings.title": "Tetapan",
   "settings.subtitle": "Sesuaikan pengalaman anda",
-
   "settings.nav.profile": "Profil",
   "settings.nav.language": "Bahasa",
   "settings.nav.notifications": "Pemberitahuan",
   "settings.nav.privacy": "Privasi",
-
   "settings.profile.title": "Profil",
   "settings.profile.subtitle": "Urus maklumat peribadi dan keutamaan anda.",
   "settings.profile.changeAvatar": "Tukar Avatar",
@@ -416,7 +408,6 @@
   "settings.profile.passwordMismatch": "Kata laluan tidak sepadan",
   "settings.profile.passwordChanged": "Kata laluan berjaya ditukar",
   "settings.profile.passwordChangeFailed": "Gagal menukar kata laluan",
-
   "settings.language.title": "Bahasa",
   "settings.language.subtitle": "Pilih bahasa pilihan anda.",
   "settings.appearance.title": "Penampilan",
@@ -431,7 +422,6 @@
   "settings.appearance.performance": "Prestasi",
   "settings.appearance.performanceDesc": "Kualiti dikurangkan, lebih pantas",
   "settings.appearance.language": "Bahasa",
-
   "settings.notifications.title": "Pemberitahuan",
   "settings.notifications.subtitle": "Urus cara anda menerima pemberitahuan.",
   "settings.notifications.push": "Pemberitahuan Tolak",
@@ -450,7 +440,6 @@
   "settings.notifications.to": "Hingga",
   "settings.notifications.chatSounds": "Bunyi sembang",
   "settings.notifications.chatSoundsDesc": "Mainkan bunyi semasa menghantar dan menerima mesej",
-
   "settings.privacy.title": "Privasi",
   "settings.privacy.subtitle": "Urus pengguna yang disekat dan tetapan privasi.",
   "settings.privacy.blockedUsers": "Pengguna Disekat",
@@ -466,7 +455,6 @@
   "settings.ai.keyHint": "Dapatkan kunci API anda dari Google AI Studio (aistudio.google.com). Diperlukan untuk Ask AI dalam nota.",
   "settings.ai.keyReplace": "Masukkan kunci baharu untuk menggantikan...",
   "settings.ai.needKey": "Tetapkan kunci API Gemini anda di Tetapan untuk menggunakan Ask AI.",
-
   "userProfile.title": "Profil Pengguna",
   "userProfile.joined": "Menyertai",
   "userProfile.editProfile": "Edit Profil",
@@ -475,7 +463,6 @@
   "userProfile.pendingRequest": "Menunggu",
   "userProfile.acceptRequest": "Terima",
   "userProfile.agentsInGroup": "Ejen dalam kumpulan ini",
-
   "profilePage.userNotFound": "Pengguna tidak ditemui",
   "profilePage.ownedAgents": "Ejen",
   "profilePage.agentProfile": "Profil Ejen",
@@ -489,10 +476,8 @@
   "profilePage.totalConversations": "Perbualan",
   "profilePage.lastActive": "Terakhir Aktif",
   "profilePage.voiceCapable": "Suara",
-
   "officeChat.startConversation": "Mulakan perbualan",
   "officeChat.placeholder": "Taip mesej...",
-
   "stickerShop.title": "Kedai Pelekat",
   "stickerShop.subtitle": "Temui & kumpul pek pelekat",
   "stickerShop.searchPlaceholder": "Cari pek pelekat...",
@@ -531,7 +516,6 @@
   "stickerShop.agentCompatibleDesc": "Pek pelekat ini serasi dengan ejen AI — mereka boleh memahami dan bertindak balas terhadap pelekat ini!",
   "stickerShop.tryItDemo": "Cuba — lihat respons AI",
   "stickerShop.tryItResponse": "Hai! 😊 Nampaknya hari ini mood kamu baik!",
-
   "creator.title": "Konsol Pencipta",
   "creator.subtitle": "Urus ciptaan anda",
   "creator.tab.overview": "Gambaran Keseluruhan",
@@ -656,7 +640,6 @@
   "creator.communityDialog.descPlaceholder": "Komuniti ini tentang apa?",
   "creator.communityDialog.create": "Cipta",
   "creator.dialog.cancel": "Batal",
-
   "agentHub.title": "Agent Hub",
   "agentHub.subtitle": "Temui & sembang dengan ejen AI",
   "agentHub.createAgent": "Cipta Ejen",
@@ -676,10 +659,8 @@
   "agentHub.sort.newest": "Terbaharu",
   "agentHub.sort.rating": "Penilaian",
   "agentHub.sort.price": "Harga",
-
   "apps.title": "Aplikasi Anda",
   "apps.subtitle": "Urus aplikasi yang dipasang",
-
   "friends.title": "Rakan",
   "friends.subtitle": "Berhubung dan bersosial",
   "friends.tabFriends": "Rakan",
@@ -692,7 +673,6 @@
   "friends.search.addFriend": "Tambah Rakan",
   "friends.search.error": "Gagal mencari pengguna",
   "friends.search.requestFailed": "Gagal menghantar permintaan rakan",
-
   "community.title": "Komuniti",
   "community.subtitle": "Berhubung dengan pencipta dan komuniti",
   "community.create": "Cipta",
@@ -725,7 +705,6 @@
   "community.by": "oleh",
   "community.type.lounge": "Lounge",
   "community.lounge.voiceAgent": "Ejen Suara",
-
   "official.dashboard.title": "Papan Pemuka CS",
   "official.dashboard.queue": "Barisan",
   "official.dashboard.team": "Pasukan",
@@ -740,10 +719,8 @@
   "official.dashboard.totalConversations": "Jumlah perbualan",
   "official.dashboard.activeNow": "Aktif sekarang",
   "official.dashboard.resolved": "Selesai",
-
   "admin.verification.title": "Permintaan pengesahan",
   "admin.verification.empty": "Tiada permintaan pengesahan",
-
   "wallet.title": "Dompet",
   "wallet.subtitle": "Urus kredit anda",
   "wallet.currentBalance": "Baki Semasa",
@@ -757,7 +734,6 @@
   "wallet.plan.advanced": "Lanjutan",
   "wallet.plan.pro": "Pro",
   "wallet.bonus": "bonus",
-
   "spaces.title": "Spaces",
   "spaces.subtitle": "Permainan & pengalaman sosial",
   "spaces.searchPlaceholder": "Cari permainan...",
@@ -786,7 +762,6 @@
   "spaces.owner": "Pemilik",
   "spaces.activeSessions": "Sesi Aktif",
   "spaces.tags": "Tag",
-
   "theme.title": "Tema Pejabat",
   "theme.subtitle": "Layari dan gunakan tema untuk pejabat maya anda",
   "theme.searchPlaceholder": "Cari tema...",
@@ -841,7 +816,10 @@
   "memoryCapsule.entries": "memori",
   "memoryCapsule.messages": "mesej",
   "memoryCapsule.notExtracted": "Belum diekstrak",
-
+  "memoryCapsule.notes": "nota",
+  "memoryCapsule.searchEntries": "Cari memori…",
+  "memoryCapsule.noEntries": "Tiada memori ditemui",
+  "memoryCapsule.relevance": "Kerelevanan",
   "promo.free": "Percuma",
   "promo.coins": "syiling",
   "promo.limitedTime": "Masa Terhad",
@@ -869,12 +847,57 @@
   "voice.mute": "Bisukan",
   "voice.cancelCall": "Batal panggilan",
   "voice.hangup": "Tamatkan panggilan",
-
   "rightPanel.notes": "Nota",
   "rightPanel.kanban": "Kanban",
   "rightPanel.threads": "Thread",
   "rightPanel.members": "Ahli",
   "rightPanel.chat": "Sembang",
+  "rightPanel.memory": "Memori",
   "rightPanel.close": "Tutup panel",
-  "rightPanel.comingSoon": "akan datang"
+  "rightPanel.comingSoon": "akan datang",
+  "notebooks.title": "Buku Nota",
+  "notebooks.create": "Buku nota baharu",
+  "notebooks.namePlaceholder": "Nama buku nota",
+  "notebooks.add": "Tambah",
+  "notebooks.empty": "Tiada buku nota",
+  "notebooks.default": "lalai",
+  "notebooks.noteCount": "nota",
+  "notebooks.rename": "Namakan semula",
+  "notebooks.delete": "Padam",
+  "notebooks.save": "Simpan",
+  "skills.title": "Skills",
+  "skills.subtitle": "Temui dan pasang skills untuk ejen anda",
+  "skills.tab.explore": "Terokai",
+  "skills.tab.installed": "Dipasang",
+  "skills.tab.favorites": "Kegemaran",
+  "skills.searchPlaceholder": "Cari skills...",
+  "skills.allCategories": "Semua",
+  "skills.sort.popular": "Popular",
+  "skills.sort.newest": "Terbaharu",
+  "skills.sort.name": "Nama",
+  "skills.empty": "Tiada skills dijumpai",
+  "skills.official": "Rasmi",
+  "skills.slashCommand": "Perintah Slash",
+  "skills.install": "Pasang",
+  "skills.confirmInstall": "Pasang ke",
+  "skills.selectAgents": "Pilih ejen untuk pemasangan",
+  "skills.noAgents": "Tiada ejen tersedia",
+  "skills.backToList": "Kembali ke senarai",
+  "skills.backToFavorites": "Kembali ke kegemaran",
+  "skills.noInstalled": "Tiada skills dipasang",
+  "skills.noFavorites": "Tiada skills kegemaran",
+  "skills.enable": "Dayakan",
+  "skills.disable": "Lumpuhkan",
+  "skills.uninstall": "Nyahpasang",
+  "skills.sourceCode": "Kod sumber",
+  "wiki.title": "Wiki",
+  "wiki.create": "Cipta halaman",
+  "wiki.empty": "Tiada halaman wiki",
+  "wiki.pin": "Semat",
+  "wiki.unpin": "Nyahsemat",
+  "wiki.titlePlaceholder": "Tajuk halaman...",
+  "wiki.add": "Tambah",
+  "wiki.save": "Simpan",
+  "wiki.contentPlaceholder": "Tulis kandungan...",
+  "rightPanel.wiki": "Wiki"
 }

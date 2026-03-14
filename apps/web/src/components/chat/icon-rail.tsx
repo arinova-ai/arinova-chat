@@ -4,17 +4,23 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, UserPlus,
-  Palette, Users, Store, Wallet, Settings, Smile,
-  LayoutDashboard, Plus, Mic, Compass, type LucideIcon,
+  Palette, Users, Sparkles, Store, Wallet, Settings, Smile,
+  LayoutDashboard, Plus, Mic, Check, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { useShortcutStore } from "@/store/shortcut-store";
+import { useNavPinStore, DEFAULT_NAV_IDS, PINNABLE_NAV_IDS } from "@/store/nav-pin-store";
 import { AddShortcutPopover } from "./add-shortcut-sheet";
 import { AccountSwitcher } from "@/components/accounts/account-switcher";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
-/** Lucide icon per nav id — active/inactive styling via parent text color */
+/** Lucide icon per nav id */
 const NAV_ICONS: Record<string, LucideIcon> = {
   chat: MessageSquare,
   office: Building2,
@@ -24,7 +30,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   friends: UserPlus,
   theme: Palette,
   community: Users,
-  market: Store,
+  market: Sparkles,
   wallet: Wallet,
   settings: Settings,
   "explore-official": Building2,
@@ -46,7 +52,6 @@ interface NavEntry {
   id: string;
   label: string;
   href?: string;
-  action?: () => void;
 }
 
 export function IconRail() {
@@ -85,42 +90,35 @@ export function IconRail() {
 
   const activeId = getActiveId();
 
-  // ── Primary ──
-  const primaryItems: NavEntry[] = [
+  // ── All nav items (order matters) ──
+  const ALL_ITEMS: NavEntry[] = [
     { id: "chat", label: t("nav.chat"), href: "/" },
     { id: "office", label: t("nav.office"), href: "/office" },
-    { id: "spaces", label: t("nav.spaces"), href: "/spaces" },
-  ];
-
-  // ── Social ──
-  const friendsItem: NavEntry = {
-    id: "friends",
-    label: t("nav.friends"),
-    href: "/friends",
-  };
-
-  const socialItems: NavEntry[] = [
+    { id: "friends", label: t("nav.friends"), href: "/friends" },
     { id: "community", label: t("nav.community"), href: "/community" },
-  ];
-
-  // ── Explore ──
-  const exploreItems: NavEntry[] = [
+    { id: "stickers", label: t("nav.stickers"), href: "/stickers" },
+    { id: "spaces", label: t("nav.spaces"), href: "/spaces" },
     { id: "explore-official", label: t("nav.exploreOfficial"), href: "/explore/official" },
     { id: "explore-lounge", label: t("nav.exploreLounge"), href: "/explore/lounge" },
-  ];
-
-  // ── Market ──
-  const marketItems: NavEntry[] = [
-    { id: "stickers", label: t("nav.stickers"), href: "/stickers" },
     { id: "market", label: t("nav.market"), href: "/agent-hub" },
     { id: "theme", label: t("nav.theme"), href: "/office/themes" },
-  ];
-
-  // ── Create ──
-  const createItems: NavEntry[] = [
     { id: "creator", label: t("nav.creator"), href: "/creator" },
     { id: "wallet", label: t("nav.wallet"), href: "/wallet" },
   ];
+
+  const pinnedIds = useNavPinStore((s) => s.pinnedIds);
+  const togglePin = useNavPinStore((s) => s.togglePin);
+
+  const defaultSet = new Set<string>(DEFAULT_NAV_IDS);
+  const pinnableSet = new Set<string>(PINNABLE_NAV_IDS);
+
+  // Visible items: defaults + user-pinned
+  const visibleItems = ALL_ITEMS.filter(
+    (item) => defaultSet.has(item.id) || pinnedIds.includes(item.id),
+  );
+
+  // Pinnable items for the popover
+  const pinnableItems = ALL_ITEMS.filter((item) => pinnableSet.has(item.id));
 
   const settingsItem: NavEntry = {
     id: "settings",
@@ -128,11 +126,13 @@ export function IconRail() {
     href: "/settings",
   };
 
+  // Custom shortcuts
   const shortcuts = useShortcutStore((s) => s.shortcuts);
   const removeShortcut = useShortcutStore((s) => s.removeShortcut);
   const fetchShortcuts = useShortcutStore((s) => s.fetchShortcuts);
   const loaded = useShortcutStore((s) => s.loaded);
   const [addPopoverOpen, setAddPopoverOpen] = useState(false);
+  const [pinPopoverOpen, setPinPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (!loaded) fetchShortcuts();
@@ -147,7 +147,6 @@ export function IconRail() {
         type="button"
         onClick={() => {
           if (item.href) router.push(item.href);
-          else if (item.action) item.action();
         }}
         className={cn(
           "flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors",
@@ -176,85 +175,93 @@ export function IconRail() {
         <img src="/assets/nav/logo-arinova-white.svg" alt="Arinova" width={28} height={28} className="h-7 w-7" />
       </div>
 
-      {/* Main nav */}
+      {/* Main nav — no dividers */}
       <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto scrollbar-none">
-        {/* Primary: Chat, Office, Spaces */}
-        {primaryItems.map((item) => renderButton(item))}
-
-        {/* ── divider ── */}
-        <div className="my-1 h-px w-8 bg-border" />
-
-        {/* Social: Friends, Community */}
-        <div className="relative">
-          {renderButton(friendsItem)}
-          {pendingRequestCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white pointer-events-none">
-              {pendingRequestCount}
-            </span>
-          )}
-        </div>
-        {socialItems.map((item) => renderButton(item))}
-
-        {/* ── divider ── */}
-        <div className="my-1 h-px w-8 bg-border" />
-
-        {/* Explore: Official, Clubs, Lounge */}
-        {exploreItems.map((item) => renderButton(item))}
-
-        {/* ── divider ── */}
-        <div className="my-1 h-px w-8 bg-border" />
-
-        {/* Market: Sticker Shop, Agent Hub, Theme */}
-        {marketItems.map((item) => renderButton(item))}
-
-        {/* ── divider ── */}
-        <div className="my-1 h-px w-8 bg-border" />
-
-        {/* Create: Creator Console, Wallet */}
-        {createItems.map((item) => renderButton(item))}
-
-        {/* ── Custom shortcuts ── */}
-        {shortcuts.length > 0 && (
-          <>
-            <div className="my-1 h-px w-8 bg-border" />
-            {shortcuts.map((sc, i) => {
-              const Icon = SHORTCUT_ICONS[sc.icon] ?? Globe;
-              return (
-                <button
-                  key={`sc-${i}`}
-                  type="button"
-                  onClick={() => {
-                    if (sc.url) router.push(sc.url);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    removeShortcut(i);
-                  }}
-                  className={cn(
-                    "flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors",
-                    "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                  )}
-                  title={sc.label}
-                >
-                  <Icon className="h-6 w-6" />
-                  <span className="truncate max-w-[52px]">{sc.label}</span>
-                </button>
-              );
-            })}
-          </>
+        {visibleItems.map((item) =>
+          item.id === "friends" ? (
+            <div key={item.id} className="relative">
+              {renderButton(item)}
+              {pendingRequestCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white pointer-events-none">
+                  {pendingRequestCount}
+                </span>
+              )}
+            </div>
+          ) : (
+            renderButton(item)
+          ),
         )}
 
-        {/* Add shortcut button */}
-        <AddShortcutPopover open={addPopoverOpen} onOpenChange={setAddPopoverOpen}>
-          <button
-            type="button"
-            onClick={() => setAddPopoverOpen(true)}
-            className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] text-muted-foreground/50 border-2 border-dashed border-muted-foreground/20 hover:bg-accent/30 transition-colors mt-1"
-            title={t("nav.addShortcut")}
-          >
-            <Plus className="h-5 w-5" />
-          </button>
-        </AddShortcutPopover>
+        {/* Custom shortcuts */}
+        {shortcuts.map((sc, i) => {
+          const Icon = SHORTCUT_ICONS[sc.icon] ?? Globe;
+          return (
+            <button
+              key={`sc-${i}`}
+              type="button"
+              onClick={() => {
+                if (sc.url) router.push(sc.url);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                removeShortcut(i);
+              }}
+              className={cn(
+                "flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors",
+                "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+              )}
+              title={sc.label}
+            >
+              <Icon className="h-6 w-6" />
+              <span className="truncate max-w-[52px]">{sc.label}</span>
+            </button>
+          );
+        })}
+
+        {/* Pin nav items button */}
+        <Popover open={pinPopoverOpen} onOpenChange={setPinPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] text-muted-foreground/50 border-2 border-dashed border-muted-foreground/20 hover:bg-accent/30 transition-colors mt-1"
+              title={t("nav.addShortcut")}
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" className="w-52 p-1">
+            <div className="space-y-0.5">
+              {pinnableItems.map((item) => {
+                const Icon = NAV_ICONS[item.id];
+                const isPinned = pinnedIds.includes(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => togglePin(item.id)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
+                  >
+                    {Icon && <Icon className="h-4 w-4 shrink-0" />}
+                    <span className="flex-1 text-left truncate">{item.label}</span>
+                    {isPinned && <Check className="h-3.5 w-3.5 text-brand-text shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Divider + custom shortcuts link */}
+            <div className="my-1 h-px bg-border" />
+            <AddShortcutPopover open={addPopoverOpen} onOpenChange={setAddPopoverOpen}>
+              <button
+                type="button"
+                onClick={() => setAddPopoverOpen(true)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent transition-colors"
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">{t("nav.addShortcut")}</span>
+              </button>
+            </AddShortcutPopover>
+          </PopoverContent>
+        </Popover>
       </nav>
 
       {/* Settings pinned to bottom */}

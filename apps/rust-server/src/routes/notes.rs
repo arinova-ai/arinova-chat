@@ -753,11 +753,13 @@ async fn create_note(
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct UpdateNoteBody {
     title: Option<String>,
     content: Option<String>,
     tags: Option<Vec<String>>,
+    is_pinned: Option<bool>,
+    notebook_id: Option<String>,
 }
 
 /// PATCH /api/conversations/:id/notes/:noteId
@@ -767,7 +769,7 @@ async fn update_note(
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<UpdateNoteBody>,
 ) -> Response {
-    if body.title.is_none() && body.content.is_none() && body.tags.is_none() {
+    if body.title.is_none() && body.content.is_none() && body.tags.is_none() && body.is_pinned.is_none() && body.notebook_id.is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Nothing to update"})),
@@ -834,7 +836,7 @@ async fn update_note(
     }
 
     // Dynamic UPDATE — build SET clauses
-    let now = Utc::now();
+    let _now = Utc::now();
     let mut set_clauses = vec!["updated_at = NOW()".to_string()];
     let mut param_idx = 1u32;
 
@@ -844,12 +846,62 @@ async fn update_note(
         title: Option<String>,
         content: Option<String>,
         tags: Option<Vec<String>>,
+        is_pinned: Option<bool>,
+        notebook_id: Option<Option<Uuid>>,
     }
-    let dyn_params = DynParam {
+    let mut dyn_params = DynParam {
         title: body.title.as_ref().map(|t| t.trim().to_string()),
         content: body.content.clone(),
         tags: body.tags.as_ref().map(|t| t.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()),
+        is_pinned: body.is_pinned,
+        notebook_id: None,
     };
+
+    // Validate notebook_id: empty string → clear (None), valid UUID → Some, invalid → 400
+    if let Some(ref nb_str) = body.notebook_id {
+        if nb_str.is_empty() {
+            dyn_params.notebook_id = Some(None);
+        } else {
+            match Uuid::parse_str(nb_str) {
+                Ok(nb_id) => {
+                    // Verify notebook ownership
+                    let nb_owner: Option<(String,)> = sqlx::query_as(
+                        "SELECT owner_id FROM notebooks WHERE id = $1",
+                    )
+                    .bind(nb_id)
+                    .fetch_optional(&state.db)
+                    .await
+                    .unwrap_or(None);
+                    match nb_owner {
+                        Some((oid,)) if oid == user.id => {
+                            dyn_params.notebook_id = Some(Some(nb_id));
+                        }
+                        Some(_) => {
+                            return (
+                                StatusCode::FORBIDDEN,
+                                Json(json!({"error": "Notebook does not belong to you"})),
+                            )
+                                .into_response();
+                        }
+                        None => {
+                            return (
+                                StatusCode::NOT_FOUND,
+                                Json(json!({"error": "Notebook not found"})),
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+                Err(_) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": "Invalid notebookId"})),
+                    )
+                        .into_response();
+                }
+            }
+        }
+    }
 
     if dyn_params.title.is_some() {
         set_clauses.push(format!("title = ${param_idx}"));
@@ -861,6 +913,14 @@ async fn update_note(
     }
     if dyn_params.tags.is_some() {
         set_clauses.push(format!("tags = ${param_idx}"));
+        param_idx += 1;
+    }
+    if dyn_params.is_pinned.is_some() {
+        set_clauses.push(format!("is_pinned = ${param_idx}"));
+        param_idx += 1;
+    }
+    if dyn_params.notebook_id.is_some() {
+        set_clauses.push(format!("notebook_id = ${param_idx}"));
         param_idx += 1;
     }
 
@@ -875,6 +935,8 @@ async fn update_note(
     if let Some(ref title) = dyn_params.title { q = q.bind(title); }
     if let Some(ref content) = dyn_params.content { q = q.bind(content); }
     if let Some(ref tags) = dyn_params.tags { q = q.bind(tags); }
+    if let Some(is_pinned) = dyn_params.is_pinned { q = q.bind(is_pinned); }
+    if let Some(ref notebook_id) = dyn_params.notebook_id { q = q.bind(*notebook_id); }
     q = q.bind(note_id).bind(conv_id);
 
     let updated = q.execute(&state.db).await;
@@ -1303,6 +1365,7 @@ async fn share_note(
                     None,
                     &[],
                     None,
+                    None,
                     &state_clone.ws,
                     &state_clone.db,
                     &state_clone.redis,
@@ -1447,6 +1510,7 @@ async fn share_note_to_conversation(
                     None,
                     None,
                     &[],
+                    None,
                     None,
                     &state_clone.ws,
                     &state_clone.db,
@@ -1667,6 +1731,7 @@ pub fn spawn_summary_if_needed(db: PgPool, gemini_key: String, note_id: Uuid, co
 // ===== Task 3: Extract capsule from note =====
 
 /// POST /api/conversations/:id/notes/:noteId/extract-capsule
+#[allow(dead_code)]
 async fn extract_capsule_from_note(
     State(state): State<AppState>,
     user: AuthUser,
@@ -1774,7 +1839,8 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
     if content.trim().len() < 20 {
         return vec![];
     }
-    let query_text = &content[..content.len().min(200)];
+    let end = content.char_indices().nth(200).map(|(i, _)| i).unwrap_or(content.len());
+    let query_text = &content[..end];
     let tsquery = query_text
         .split_whitespace()
         .take(8)
@@ -1827,7 +1893,8 @@ pub async fn suggest_tags(gemini_key: &str, title: &str, content: &str) -> Vec<S
     }
     let system = "Based on the note title and content, suggest 2-3 short tags (single words, lowercase, no #). \
                   Output only the tags separated by commas. Example: feature, urgent, design";
-    let prompt = format!("Title: {}\n\nContent: {}", title, &content[..content.len().min(1000)]);
+    let content_end = content.char_indices().nth(1000).map(|(i, _)| i).unwrap_or(content.len());
+    let prompt = format!("Title: {}\n\nContent: {}", title, &content[..content_end]);
 
     match call_gemini(gemini_key, system, &prompt, 64).await {
         Ok(text) => text
@@ -1873,7 +1940,8 @@ async fn auto_tag_note(
     }
 
     // Build tsquery from note content
-    let query_text = format!("{} {}", title, &content[..content.len().min(200)]);
+    let content_end = content.char_indices().nth(200).map(|(i, _)| i).unwrap_or(content.len());
+    let query_text = format!("{} {}", title, &content[..content_end]);
     let tsquery = query_text
         .split_whitespace()
         .take(8)

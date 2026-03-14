@@ -238,6 +238,15 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_voice_calls_caller ON voice_calls(caller_id);
         CREATE INDEX IF NOT EXISTS idx_voice_calls_callee ON voice_calls(callee_id);
 
+        CREATE TABLE IF NOT EXISTS board_members (
+            board_id UUID NOT NULL REFERENCES kanban_boards(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            permission TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view', 'edit')),
+            invited_by TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (board_id, user_id)
+        );
+
         CREATE TABLE IF NOT EXISTS kanban_card_notes (
             card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
             note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
@@ -323,6 +332,10 @@ async fn main() {
         ALTER TABLE kanban_boards ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS progress JSONB;
 
+        -- Group memory capsule columns
+        ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'owner_only';
+        ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS group_conversation_id UUID;
+
         DO $$ BEGIN
             ALTER TYPE agent_listen_mode ADD VALUE IF NOT EXISTS 'allowlist_mentions';
         EXCEPTION WHEN duplicate_object THEN NULL;
@@ -334,6 +347,70 @@ async fn main() {
             granted_by TEXT NOT NULL,
             granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (agent_id, capsule_id)
+        );
+
+        -- Notebooks for hierarchical note organization
+        CREATE TABLE IF NOT EXISTS notebooks (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            owner_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+            name VARCHAR(255) NOT NULL,
+            is_default BOOLEAN NOT NULL DEFAULT false,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_notebooks_owner ON notebooks(owner_id, sort_order);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notebooks_owner_default ON notebooks (owner_id) WHERE is_default = true;
+
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS notebook_id UUID REFERENCES notebooks(id) ON DELETE SET NULL;
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES conversation_notes(id) ON DELETE SET NULL;
+        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT false;
+
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_notebook ON conversation_notes(notebook_id) WHERE notebook_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_parent ON conversation_notes(parent_id) WHERE parent_id IS NOT NULL;
+
+        -- Skills marketplace
+        CREATE TABLE IF NOT EXISTS skills (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(100) NOT NULL,
+            slug VARCHAR(100) NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT '',
+            category VARCHAR(50) NOT NULL DEFAULT 'general',
+            icon_url TEXT,
+            version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
+            slash_command VARCHAR(50),
+            prompt_template TEXT NOT NULL DEFAULT '',
+            prompt_content TEXT NOT NULL DEFAULT '',
+            parameters JSONB NOT NULL DEFAULT '[]'::jsonb,
+            is_official BOOLEAN NOT NULL DEFAULT false,
+            is_public BOOLEAN NOT NULL DEFAULT true,
+            created_by TEXT REFERENCES "user"(id) ON DELETE SET NULL,
+            install_count INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category);
+        CREATE INDEX IF NOT EXISTS idx_skills_slug ON skills(slug);
+        CREATE INDEX IF NOT EXISTS idx_skills_public ON skills(is_public, category);
+
+        CREATE TABLE IF NOT EXISTS agent_skills (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            skill_id UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+            installed_by TEXT REFERENCES "user"(id) ON DELETE SET NULL,
+            is_enabled BOOLEAN NOT NULL DEFAULT true,
+            config JSONB NOT NULL DEFAULT '{}'::jsonb,
+            installed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(agent_id, skill_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_agent_skills_skill ON agent_skills(skill_id);
+
+        CREATE TABLE IF NOT EXISTS user_favorite_skills (
+            user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+            skill_id UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, skill_id)
         );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
@@ -518,6 +595,12 @@ async fn main() {
         .merge(routes::voice::router())
         .merge(routes::conversation_settings::router())
         .merge(routes::accounts::router())
+        .merge(routes::notebooks::router())
+        .merge(routes::agent_notebooks::router())
+        .merge(routes::skills::router())
+        .merge(routes::agent_skills::router())
+        .merge(routes::wiki::router())
+        .merge(routes::docs::router())
         .merge(ws::handler::router())
         .merge(ws::agent_handler::router())
         .merge(ws::voice_handler::router())

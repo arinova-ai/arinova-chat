@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, patch, post},
+    routing::{get, post},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -563,7 +563,7 @@ async fn agent_update_note(
         }
     }
 
-    let now = Utc::now();
+    let _now = Utc::now();
 
     // Dynamic UPDATE — build SET clauses
     let mut set_clauses = vec!["updated_at = NOW()".to_string()];

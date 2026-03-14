@@ -6,16 +6,15 @@
   "nav.friends": "好友",
   "nav.community": "社群",
   "nav.theme": "佈景主題",
-  "nav.market": "Agent Hub",
+  "nav.market": "Skills",
   "nav.wallet": "錢包",
   "nav.settings": "設定",
-  "nav.agentHub": "Agent Hub",
+  "nav.agentHub": "Skills",
   "nav.themeStore": "主題商店",
   "nav.stickers": "貼圖商店",
   "nav.addShortcut": "新增",
   "nav.allShortcutsAdded": "所有捷徑已新增",
   "nav.creator": "創作者主控台",
-
   "common.save": "儲存變更",
   "common.cancel": "取消",
   "common.confirm": "確認",
@@ -49,15 +48,11 @@
   "common.description": "說明",
   "common.category": "分類",
   "common.export": "匯出",
-
   "errors.somethingWentWrong": "發生錯誤",
   "errors.unexpectedError": "發生未預期的錯誤，請重試或重新整理頁面。",
-
   "connection.syncing": "同步中...",
   "connection.reconnecting": "重新連線中...",
-
   "time.yesterday": "昨天",
-
   "chat.subtitle": "與你的團隊即時溝通",
   "chat.collapseSidebar": "收合側邊欄",
   "chat.expandSidebar": "展開側邊欄",
@@ -86,7 +81,6 @@
   "chat.uploadFailed": "上傳失敗，請重試",
   "chat.imagesSelected": "已選擇 {count} 張圖片",
   "chat.imageCount": "{n}/{max}",
-
   "chat.actions.copy": "複製訊息",
   "chat.actions.reply": "回覆",
   "chat.actions.startThread": "開始討論串",
@@ -99,16 +93,13 @@
   "chat.actions.unpin": "取消釘選",
   "chat.actions.report": "檢舉",
   "chat.actions.share": "分享",
-
   "share.title": "分享",
   "share.sendToConversation": "傳送到對話",
   "share.shareExternal": "分享到外部",
   "share.copyContent": "複製內容",
   "share.sentToConversation": "已傳送到對話",
-
   "chat.selection.count": "{count} 則已選取",
   "chat.selection.copied": "已複製到剪貼簿",
-
   "chat.status.error": "錯誤",
   "chat.status.stopped": "已停止",
   "chat.sharedNote": "分享了一篇筆記",
@@ -118,20 +109,16 @@
   "chat.status.queued": "排隊中",
   "chat.status.thinking": "思考中",
   "chat.status.queuedLabel": "排隊中",
-
   "chat.replies.one": "則回覆",
   "chat.replies.other": "則回覆",
-
   "chat.thread.title": "討論串",
   "chat.thread.noReplies": "尚無回覆",
   "chat.thread.startDiscussion": "在下方開始討論",
   "chat.thread.placeholder": "在討論串中回覆...",
-
   "chat.kanban.title": "任務",
   "chat.kanban.empty": "尚無任務",
   "chat.kanban.addCard": "新增卡片",
   "chat.kanban.newCardPlaceholder": "卡片標題...",
-
   "chat.notebook.title": "筆記",
   "chat.notebook.empty": "尚無筆記",
   "chat.notebook.create": "建立",
@@ -154,9 +141,7 @@
   "chat.notebook.autoTag": "自動標籤",
   "chat.notebook.askAi": "問 AI",
   "chat.notebook.confirmDelete": "確定要刪除此筆記嗎？",
-
   "chat.kanban.openTask": "開啟任務",
-
   "chat.search.title": "搜尋",
   "chat.search.results": "筆結果",
   "chat.search.result": "筆結果",
@@ -164,9 +149,7 @@
   "chat.search.inConversation": "在對話中搜尋",
   "chat.search.nOfTotal": "{n} / {total}",
   "chat.unreadDivider": "以下是未讀訊息",
-
   "chat.messageActions": "訊息操作",
-
   "chat.header.members": "成員",
   "chat.header.memberCount": "{count} 位成員",
   "chat.header.group": "群組",
@@ -199,14 +182,12 @@
   "chat.header.voiceCall": "語音通話",
   "chat.header.inCall": "通話中",
   "chat.header.voiceUnavailable": "語音通話不可用",
-
   "conversation.rename": "重新命名",
   "conversation.pin": "釘選",
   "conversation.unpin": "取消釘選",
   "conversation.delete": "刪除",
   "conversation.deleteTitle": "刪除對話",
   "conversation.deleteDesc": "確定要刪除此對話嗎？此操作無法復原，所有訊息將被永久移除。",
-
   "newChat.title": "新對話",
   "newChat.noAgents": "尚無 Agent，新增一個來開始聊天。",
   "newChat.createBot": "建立 Bot",
@@ -238,7 +219,6 @@
   "newChat.a2aHint": "留空可先建立 Bot，之後再連接 Agent。",
   "newChat.chatWithFriend": "與好友聊天",
   "newChat.noFriendsHint": "尚無好友，請先新增好友才能開始對話。",
-
   "botManage.title": "管理 Bot",
   "botManage.clickChangeAvatar": "點擊更換頭像",
   "botManage.name": "名稱",
@@ -275,7 +255,6 @@
   "botManage.confirmDelete": "確認刪除",
   "botManage.deleteBot": "刪除 Bot",
   "botManage.deleteBotConfirm": "確定要刪除嗎？這將刪除與此 Bot 的所有對話。",
-
   "group.title": "群組資訊",
   "group.members": "成員",
   "group.settings": "設定",
@@ -311,14 +290,25 @@
   "group.groupNamePlaceholder": "群組名稱",
   "group.mentionOnly": "僅限提及",
   "group.mentionOnlyDesc": "僅被 @提及的 Agent 會回應",
-
+  "group.memoryCapsule": "記憶膠囊",
+  "group.memoryCapsuleDesc": "使用 AI 從群組聊天記錄中提取關鍵記憶。適用於新成員入職或回顧過去的決策。",
+  "group.extractMemory": "提取記憶",
+  "group.refreshMemory": "重新提取",
+  "group.capsuleReady": "已完成",
+  "group.capsuleExtracting": "提取中...",
+  "group.capsuleFailed": "提取失敗",
+  "group.messages": "訊息數",
+  "group.memories": "記憶數",
+  "group.capsuleVisibility": "誰可以查看",
+  "group.visibilityOwnerOnly": "僅群主",
+  "group.visibilityAdmins": "管理員",
+  "group.visibilityAllMembers": "所有成員",
   "addMember.title": "新增成員",
   "addMember.searchPlaceholder": "搜尋好友或 Agent...",
   "addMember.friends": "好友",
   "addMember.myAgents": "我的 Agent",
   "addMember.noMatches": "找不到符合的結果",
   "addMember.allAdded": "所有好友和 Agent 已是成員",
-
   "agentSheet.title": "Agent 資料",
   "agentSheet.working": "工作中",
   "agentSheet.online": "線上",
@@ -328,7 +318,6 @@
   "agentSheet.save": "儲存",
   "agentSheet.conversations": "對話",
   "agentSheet.owner": "擁有者",
-
   "agentProfile.listenMode": "聆聽模式",
   "agentProfile.listenMode.all": "全面監聽",
   "agentProfile.listenMode.all.desc": "接收所有訊息，不需要 @提及",
@@ -349,7 +338,6 @@
   "agentProfile.memoryCapsules": "記憶膠囊",
   "agentProfile.memoryCapsules.desc": "切換此 Agent 可存取的記憶膠囊",
   "agentProfile.noOtherUsers": "此群組中沒有其他使用者",
-
   "office.title": "辦公室",
   "office.subtitle": "虛擬工作空間",
   "office.tab.scene": "場景",
@@ -377,7 +365,6 @@
   "office.notes.stopSharing": "停止分享",
   "office.notes.linkCopied": "連結已複製！",
   "office.notes.publicNote": "公開筆記",
-
   "kanban.share.title": "分享",
   "kanban.share.publicLink": "建立公開連結",
   "kanban.share.toChat": "分享到對話",
@@ -385,15 +372,20 @@
   "kanban.share.stopSharing": "停止分享",
   "kanban.share.linkCopied": "連結已複製！",
   "kanban.share.publicCard": "公開卡片",
-
+  "kanban.sort.manual": "手動排序",
+  "kanban.sort.createdDesc": "最新建立",
+  "kanban.sort.createdAsc": "最早建立",
+  "kanban.sort.updatedDesc": "最近更新",
+  "kanban.sort.updatedAsc": "最早更新",
+  "kanban.sort.priorityDesc": "優先級：高→低",
+  "kanban.sort.priorityAsc": "優先級：低→高",
+  "kanban.search.placeholder": "搜尋卡片…",
   "settings.title": "設定",
   "settings.subtitle": "自訂你的使用體驗",
-
   "settings.nav.profile": "個人檔案",
   "settings.nav.language": "語言",
   "settings.nav.notifications": "通知",
   "settings.nav.privacy": "隱私",
-
   "settings.profile.title": "個人檔案",
   "settings.profile.subtitle": "管理你的個人資訊與偏好設定。",
   "settings.profile.changeAvatar": "更換頭像",
@@ -422,7 +414,6 @@
   "settings.profile.passwordMismatch": "兩次密碼輸入不一致",
   "settings.profile.passwordChanged": "密碼變更成功",
   "settings.profile.passwordChangeFailed": "密碼變更失敗",
-
   "settings.language.title": "語言",
   "settings.language.subtitle": "選擇您偏好的語言。",
   "settings.appearance.title": "外觀",
@@ -437,7 +428,6 @@
   "settings.appearance.performance": "效能模式",
   "settings.appearance.performanceDesc": "降低品質，提升速度",
   "settings.appearance.language": "語言",
-
   "settings.notifications.title": "通知",
   "settings.notifications.subtitle": "管理你的通知接收方式。",
   "settings.notifications.push": "推播通知",
@@ -456,7 +446,6 @@
   "settings.notifications.to": "到",
   "settings.notifications.chatSounds": "聊天音效",
   "settings.notifications.chatSoundsDesc": "傳送和接收訊息時播放音效",
-
   "settings.privacy.title": "隱私",
   "settings.privacy.subtitle": "管理封鎖的使用者與隱私設定。",
   "settings.privacy.blockedUsers": "已封鎖的使用者",
@@ -472,7 +461,6 @@
   "settings.ai.keyHint": "從 Google AI Studio (aistudio.google.com) 取得您的 API 金鑰。Ask AI 功能需要此金鑰。",
   "settings.ai.keyReplace": "輸入新金鑰以取代...",
   "settings.ai.needKey": "請至設定頁面設定您的 Gemini API 金鑰以使用 Ask AI。",
-
   "userProfile.title": "使用者資訊",
   "userProfile.joined": "加入於",
   "userProfile.editProfile": "編輯個人資料",
@@ -481,7 +469,6 @@
   "userProfile.pendingRequest": "等待中",
   "userProfile.acceptRequest": "接受",
   "userProfile.agentsInGroup": "群組中的 Agent",
-
   "profilePage.userNotFound": "找不到使用者",
   "profilePage.ownedAgents": "Agent",
   "profilePage.agentProfile": "Agent 資料",
@@ -495,10 +482,8 @@
   "profilePage.totalConversations": "對話數",
   "profilePage.lastActive": "最近活動",
   "profilePage.voiceCapable": "語音",
-
   "officeChat.startConversation": "開始對話",
   "officeChat.placeholder": "輸入訊息...",
-
   "stickerShop.title": "貼圖商店",
   "stickerShop.subtitle": "探索並收集貼圖包",
   "stickerShop.searchPlaceholder": "搜尋貼圖包...",
@@ -537,7 +522,6 @@
   "stickerShop.agentCompatibleDesc": "此貼圖包支援 AI 助理 — 它們能理解並回應這些貼圖！",
   "stickerShop.tryItDemo": "試試看 — AI 助理的回應方式",
   "stickerShop.tryItResponse": "嗨！😊 你今天看起來心情很好呢！",
-
   "creator.title": "創作者主控台",
   "creator.subtitle": "管理你的作品",
   "creator.tab.overview": "總覽",
@@ -674,7 +658,6 @@
   "creator.spaceDialog.tags": "標籤（逗號分隔）",
   "creator.spaceDialog.tagsPlaceholder": "有趣, 多人, 休閒",
   "creator.spaceDialog.create": "建立",
-
   "agentHub.title": "Agent Hub",
   "agentHub.subtitle": "探索並與 AI Agent 聊天",
   "agentHub.createAgent": "建立 Agent",
@@ -694,10 +677,8 @@
   "agentHub.sort.newest": "最新",
   "agentHub.sort.rating": "評分",
   "agentHub.sort.price": "價格",
-
   "apps.title": "你的應用",
   "apps.subtitle": "管理已安裝的應用",
-
   "friends.title": "好友",
   "friends.subtitle": "交流與社交",
   "friends.tabFriends": "好友",
@@ -710,7 +691,6 @@
   "friends.search.addFriend": "加好友",
   "friends.search.error": "搜尋失敗",
   "friends.search.requestFailed": "好友邀請送出失敗",
-
   "community.title": "社群",
   "community.subtitle": "與創作者和社群互動交流",
   "community.create": "建立",
@@ -749,7 +729,6 @@
   "community.by": "由",
   "community.type.lounge": "交流廳",
   "community.lounge.voiceAgent": "語音代理",
-
   "official.dashboard.title": "客服管理",
   "official.dashboard.queue": "排隊列表",
   "official.dashboard.team": "團隊",
@@ -764,10 +743,8 @@
   "official.dashboard.totalConversations": "總對話數",
   "official.dashboard.activeNow": "進行中",
   "official.dashboard.resolved": "已解決",
-
   "admin.verification.title": "驗證申請",
   "admin.verification.empty": "無驗證申請",
-
   "wallet.title": "錢包",
   "wallet.subtitle": "管理你的點數",
   "wallet.currentBalance": "目前餘額",
@@ -781,7 +758,6 @@
   "wallet.plan.advanced": "進階方案",
   "wallet.plan.pro": "專業方案",
   "wallet.bonus": "贈送",
-
   "spaces.title": "空間",
   "spaces.subtitle": "遊戲與社交體驗",
   "spaces.searchPlaceholder": "搜尋遊戲...",
@@ -814,7 +790,6 @@
   "spaces.owner": "擁有者",
   "spaces.activeSessions": "進行中",
   "spaces.tags": "標籤",
-
   "theme.title": "辦公室主題",
   "theme.subtitle": "瀏覽並套用虛擬辦公室主題",
   "theme.searchPlaceholder": "搜尋主題...",
@@ -869,7 +844,10 @@
   "memoryCapsule.entries": "則記憶",
   "memoryCapsule.messages": "則訊息",
   "memoryCapsule.notExtracted": "尚未提取",
-
+  "memoryCapsule.notes": "則筆記",
+  "memoryCapsule.searchEntries": "搜尋記憶…",
+  "memoryCapsule.noEntries": "沒有找到記憶",
+  "memoryCapsule.relevance": "相關度",
   "promo.free": "免費",
   "promo.coins": "金幣",
   "promo.limitedTime": "限時優惠",
@@ -897,11 +875,9 @@
   "voice.mute": "靜音",
   "voice.cancelCall": "取消通話",
   "voice.hangup": "掛斷",
-
   "nav.exploreOfficial": "官方",
   "nav.exploreCommunities": "社群",
   "nav.exploreLounge": "Lounge",
-
   "accounts.personal": "個人",
   "accounts.create": "建立帳號",
   "accounts.createTitle": "建立新帳號",
@@ -948,7 +924,6 @@
   "accounts.takeover": "接管",
   "accounts.takeoverDesc": "從 AI 接管此對話",
   "accounts.releaseToAI": "交回 AI",
-
   "explore.official": "官方帳號",
   "explore.communities": "社群",
   "explore.lounge": "Lounge",
@@ -958,12 +933,57 @@
   "explore.join": "加入",
   "explore.noAccounts": "尚無帳號",
   "explore.noCommunities": "尚無社群",
-
   "rightPanel.notes": "筆記",
   "rightPanel.kanban": "看板",
   "rightPanel.threads": "討論串",
   "rightPanel.members": "成員",
   "rightPanel.chat": "對話",
+  "rightPanel.memory": "記憶膠囊",
   "rightPanel.close": "收合面板",
-  "rightPanel.comingSoon": "即將推出"
+  "rightPanel.comingSoon": "即將推出",
+  "notebooks.title": "筆記本",
+  "notebooks.create": "新增筆記本",
+  "notebooks.namePlaceholder": "筆記本名稱",
+  "notebooks.add": "新增",
+  "notebooks.empty": "尚無筆記本",
+  "notebooks.default": "預設",
+  "notebooks.noteCount": "筆記",
+  "notebooks.rename": "重命名",
+  "notebooks.delete": "刪除",
+  "notebooks.save": "儲存",
+  "skills.title": "Skills",
+  "skills.subtitle": "探索並安裝 Skills 到你的 Agent",
+  "skills.tab.explore": "探索",
+  "skills.tab.installed": "已安裝",
+  "skills.tab.favorites": "收藏",
+  "skills.searchPlaceholder": "搜尋 Skills...",
+  "skills.allCategories": "全部",
+  "skills.sort.popular": "熱門",
+  "skills.sort.newest": "最新",
+  "skills.sort.name": "名稱",
+  "skills.empty": "找不到 Skills",
+  "skills.official": "官方",
+  "skills.slashCommand": "斜線指令",
+  "skills.install": "安裝",
+  "skills.confirmInstall": "安裝到",
+  "skills.selectAgents": "選擇要安裝的 Agent",
+  "skills.noAgents": "沒有可用的 Agent",
+  "skills.backToList": "返回列表",
+  "skills.backToFavorites": "返回收藏",
+  "skills.noInstalled": "尚未安裝任何 Skill",
+  "skills.noFavorites": "尚無收藏的 Skill",
+  "skills.enable": "啟用",
+  "skills.disable": "停用",
+  "skills.uninstall": "解除安裝",
+  "skills.sourceCode": "原始碼",
+  "wiki.title": "維基",
+  "wiki.create": "建立頁面",
+  "wiki.empty": "尚無維基頁面",
+  "wiki.pin": "釘選",
+  "wiki.unpin": "取消釘選",
+  "wiki.titlePlaceholder": "頁面標題...",
+  "wiki.add": "新增",
+  "wiki.save": "儲存",
+  "wiki.contentPlaceholder": "撰寫內容...",
+  "rightPanel.wiki": "維基"
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -21,6 +21,10 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Search,
+  Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -46,7 +50,7 @@ import { AddCardSheet } from "./add-card-sheet";
 import { ArchivedCardsSheet } from "./archived-cards-sheet";
 import { FullColumn, CompactColumn } from "./kanban-column";
 import { CardOverlay } from "./kanban-card";
-import type { KanbanCard, KanbanColumn, BoardData, CardCommit, CardLabel } from "./types";
+import type { KanbanCard, BoardData, CardCommit } from "./types";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -84,6 +88,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const [activeCard, setActiveCard] = useState<KanbanCard | null>(null);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Board management state
   const [creatingBoard, setCreatingBoard] = useState(false);
@@ -95,6 +100,14 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   // Column management state
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
+
+  // Board members state
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [boardMembers, setBoardMembers] = useState<{ userId: string; username: string; permission: string }[]>([]);
+  const [boardOwner, setBoardOwner] = useState<{ userId: string; username: string } | null>(null);
+  const [inviteUsername, setInviteUsername] = useState("");
+  const [invitePermission, setInvitePermission] = useState("view");
+  const [membersLoading, setMembersLoading] = useState(false);
 
   // Use DnD in full mode on desktop only
   const useDnd = mode === "full" && !isMobile;
@@ -238,6 +251,52 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     }
   }, [fetchBoard, conversationId]);
 
+  // ── Board Members ──────────────────────────────────────
+
+  const fetchBoardMembers = useCallback(async () => {
+    if (!selectedBoardId) return;
+    setMembersLoading(true);
+    try {
+      const data = await api<{ owner: { userId: string; username: string } | null; members: { userId: string; username: string; permission: string }[] }>(
+        `/api/kanban/boards/${selectedBoardId}/members`
+      );
+      setBoardOwner(data.owner);
+      setBoardMembers(data.members);
+    } catch { /* */ }
+    setMembersLoading(false);
+  }, [selectedBoardId]);
+
+  const handleInviteMember = useCallback(async () => {
+    if (!inviteUsername.trim() || !selectedBoardId) return;
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}/members`, {
+        method: "POST",
+        body: JSON.stringify({ username: inviteUsername.trim(), permission: invitePermission }),
+      });
+      setInviteUsername("");
+      await fetchBoardMembers();
+    } catch { /* api shows toast */ }
+  }, [inviteUsername, invitePermission, selectedBoardId, fetchBoardMembers]);
+
+  const handleRemoveMember = useCallback(async (userId: string) => {
+    if (!selectedBoardId) return;
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}/members/${userId}`, { method: "DELETE" });
+      await fetchBoardMembers();
+    } catch { /* */ }
+  }, [selectedBoardId, fetchBoardMembers]);
+
+  const handleUpdateMemberPermission = useCallback(async (userId: string, perm: string) => {
+    if (!selectedBoardId) return;
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}/members/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permission: perm }),
+      });
+      await fetchBoardMembers();
+    } catch { /* */ }
+  }, [selectedBoardId, fetchBoardMembers]);
+
   // ── Column CRUD ───────────────────────────────────────
 
   const handleCreateColumn = useCallback(async () => {
@@ -278,15 +337,17 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   );
 
   const cardsByColumn = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     const map = new Map<string, KanbanCard[]>();
     for (const col of columns) map.set(col.id, []);
     for (const card of board?.cards ?? []) {
+      if (q && !card.title.toLowerCase().includes(q) && !(card.description ?? "").toLowerCase().includes(q)) continue;
       const list = map.get(card.columnId);
       if (list) list.push(card);
     }
     for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
     return map;
-  }, [board, columns]);
+  }, [board, columns, searchQuery]);
 
   const cardAgentsMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -760,6 +821,79 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Board Members Dialog */}
+      <Dialog open={membersOpen} onOpenChange={setMembersOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Board Members</DialogTitle>
+            <DialogDescription>Share this board with other users.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Invite form */}
+            <div className="flex gap-2">
+              <Input
+                value={inviteUsername}
+                onChange={(e) => setInviteUsername(e.target.value)}
+                placeholder="Username"
+                className="flex-1"
+                onKeyDown={(e) => { if (e.key === "Enter") handleInviteMember(); }}
+              />
+              <select
+                value={invitePermission}
+                onChange={(e) => setInvitePermission(e.target.value)}
+                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+              >
+                <option value="view">View</option>
+                <option value="edit">Edit</option>
+              </select>
+              <Button size="sm" onClick={handleInviteMember} disabled={!inviteUsername.trim()}>Invite</Button>
+            </div>
+
+            {/* Owner */}
+            {boardOwner && (
+              <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
+                <div>
+                  <span className="text-sm font-medium">{boardOwner.username}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">Owner</span>
+                </div>
+              </div>
+            )}
+
+            {/* Members list */}
+            {membersLoading ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : boardMembers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-2">No members yet</p>
+            ) : (
+              <div className="space-y-1">
+                {boardMembers.map((m) => (
+                  <div key={m.userId} className="flex items-center justify-between rounded-md px-3 py-2 hover:bg-muted/50">
+                    <span className="text-sm font-medium">{m.username}</span>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={m.permission}
+                        onChange={(e) => handleUpdateMemberPermission(m.userId, e.target.value)}
+                        className="rounded border border-input bg-background px-1.5 py-0.5 text-xs"
+                      >
+                        <option value="view">View</option>
+                        <option value="edit">Edit</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(m.userId)}
+                        className="rounded p-1 text-muted-foreground hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
@@ -772,14 +906,42 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 pt-3 md:px-4 md:pt-4 pb-0">
             {boardSelector}
-            <button
-              type="button"
-              onClick={() => setArchivedOpen(true)}
-              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              Archived
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t("kanban.search.placeholder")}
+                  className="h-7 w-48 pl-7 pr-7 text-xs"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setMembersOpen(true); fetchBoardMembers(); }}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Users className="h-3.5 w-3.5" />
+                Members
+              </button>
+              <button
+                type="button"
+                onClick={() => setArchivedOpen(true)}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                Archived
+              </button>
+            </div>
           </div>
 
           {emptyState ?? (
@@ -844,9 +1006,27 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   return (
     <>
       <div className="flex flex-col flex-1 min-h-0 h-full">
-        {/* Board selector for compact mode */}
+        {/* Board selector + search for compact mode */}
         <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 shrink-0">
           {boardSelector}
+          <div className="relative ml-auto">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t("kanban.search.placeholder")}
+              className="h-6 w-36 pl-6 pr-6 text-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </div>
         {emptyState ?? (
           <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden h-full">
