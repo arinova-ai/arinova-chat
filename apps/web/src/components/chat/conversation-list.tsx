@@ -58,7 +58,7 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
     } else if (tab === "officials") {
       filtered = conversations.filter((c) => c.type === "official" || !!c.officialCommunityId);
     } else if (tab === "communities") {
-      filtered = conversations.filter((c) => c.type === "community");
+      filtered = conversations.filter((c) => c.type === "community" || (c.type as string) === "club");
     } else if (tab === "lounges") {
       filtered = conversations.filter((c) => c.type === "lounge");
     }

@@ -1934,12 +1934,15 @@ pub(crate) async fn do_trigger_agent_response(
                             }
                         }
                         Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
-                            // Fallback: if agent_complete sent empty content, use accumulated chunks
-                            let full_content = if full_content.is_empty() && !stream_accumulated.is_empty() {
-                                tracing::warn!(
-                                    "Stream complete with empty content, using accumulated chunks: conv={} agent={} msgId={} accumulated_len={}",
-                                    conversation_id, agent_id, agent_msg_id_clone, stream_accumulated.len()
-                                );
+                            // Always prefer stream_accumulated (clean push_str concat) over
+                            // full_content which may contain spurious \n\n at chunk boundaries.
+                            let full_content = if !stream_accumulated.is_empty() {
+                                if !full_content.is_empty() && full_content != stream_accumulated {
+                                    tracing::info!(
+                                        "Stream complete: preferring accumulated chunks over agent content: conv={} agent={} msgId={} accumulated_len={} agent_len={}",
+                                        conversation_id, agent_id, agent_msg_id_clone, stream_accumulated.len(), full_content.len()
+                                    );
+                                }
                                 stream_accumulated.clone()
                             } else {
                                 full_content

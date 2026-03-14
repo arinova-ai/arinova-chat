@@ -151,11 +151,13 @@ export function SortableCard({
 export function CompactCard({
   card,
   columns,
+  labels,
   onMoveCard,
   onSelect,
 }: {
   card: KanbanCard;
   columns: KanbanColumn[];
+  labels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
   onMoveCard: (cardId: string, targetColumnId: string) => void;
   onSelect: (card: KanbanCard) => void;
 }) {
@@ -181,6 +183,19 @@ export function CompactCard({
       <p className="font-medium truncate">{card.title}</p>
       {card.description && (
         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{card.description}</p>
+      )}
+      {labels && labels.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-0.5">
+          {labels.map((l) => (
+            <span
+              key={l.labelId}
+              className="inline-block rounded-full px-1.5 py-px text-[9px] font-medium text-white"
+              style={{ backgroundColor: l.labelColor }}
+            >
+              {l.labelName}
+            </span>
+          ))}
+        </div>
       )}
       <div className="mt-1 flex items-center gap-1">
         <select

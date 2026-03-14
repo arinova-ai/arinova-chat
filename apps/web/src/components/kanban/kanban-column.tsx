@@ -271,6 +271,7 @@ export function CompactColumn({
   column,
   cards,
   allColumns,
+  cardLabelsMap,
   onMoveCard,
   onSelectCard,
   onCreateCard,
@@ -280,6 +281,7 @@ export function CompactColumn({
   column: KanbanColumn;
   cards: KanbanCard[];
   allColumns: KanbanColumn[];
+  cardLabelsMap?: Map<string, Array<{ labelId: string; labelName: string; labelColor: string }>>;
   onMoveCard: (cardId: string, targetColumnId: string) => void;
   onSelectCard: (card: KanbanCard) => void;
   onCreateCard: (columnId: string, title: string) => Promise<void>;
@@ -383,6 +385,7 @@ export function CompactColumn({
             key={card.id}
             card={card}
             columns={allColumns}
+            labels={cardLabelsMap?.get(card.id)}
             onMoveCard={onMoveCard}
             onSelect={onSelectCard}
           />

@@ -834,6 +834,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           column={col}
           cards={colCards}
           allColumns={columns}
+          cardLabelsMap={cardLabelsMap}
           onMoveCard={handleMoveCard}
           onSelectCard={handleSelectCard}
           onCreateCard={handleCreateCardCompact}
@@ -1136,6 +1137,13 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
         {/* Board selector + search for compact mode */}
         <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 shrink-0">
           {boardSelector}
+          <button
+            type="button"
+            onClick={() => setArchivedOpen(true)}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Archive className="h-3.5 w-3.5" />
+          </button>
           <div className="relative ml-auto">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
@@ -1176,6 +1184,15 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
         onUpdate={handleCardUpdate}
         onDelete={handleDeleteCard}
       />
+
+      {board && (
+        <ArchivedCardsSheet
+          open={archivedOpen}
+          boardId={board.id}
+          onClose={() => setArchivedOpen(false)}
+          onUnarchived={() => fetchBoard(board.id)}
+        />
+      )}
 
       {boardDialogs}
     </>
