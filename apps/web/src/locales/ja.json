@@ -348,6 +348,7 @@
   "office.notes.save": "保存",
   "office.notes.cancel": "キャンセル",
   "office.notes.edit": "編集",
+  "office.notes.delete": "削除",
   "office.notes.noContent": "コンテンツなし",
   "office.notes.byAgent": "{{name}} による",
   "office.notes.justNow": "たった今",

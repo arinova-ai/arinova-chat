@@ -348,6 +348,7 @@
   "office.notes.save": "Enregistrer",
   "office.notes.cancel": "Annuler",
   "office.notes.edit": "Modifier",
+  "office.notes.delete": "Supprimer",
   "office.notes.noContent": "Pas de contenu",
   "office.notes.byAgent": "par {{name}}",
   "office.notes.justNow": "à l'instant",

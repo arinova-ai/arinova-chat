@@ -354,6 +354,7 @@
   "office.notes.save": "儲存",
   "office.notes.cancel": "取消",
   "office.notes.edit": "編輯",
+  "office.notes.delete": "刪除",
   "office.notes.noContent": "無內容",
   "office.notes.byAgent": "由 {{name}}",
   "office.notes.justNow": "剛剛",

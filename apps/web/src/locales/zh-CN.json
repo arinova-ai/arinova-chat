@@ -348,6 +348,7 @@
   "office.notes.save": "保存",
   "office.notes.cancel": "取消",
   "office.notes.edit": "编辑",
+  "office.notes.delete": "删除",
   "office.notes.noContent": "无内容",
   "office.notes.byAgent": "由 {{name}}",
   "office.notes.justNow": "刚刚",

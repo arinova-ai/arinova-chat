@@ -348,6 +348,7 @@
   "office.notes.save": "저장",
   "office.notes.cancel": "취소",
   "office.notes.edit": "편집",
+  "office.notes.delete": "삭제",
   "office.notes.noContent": "내용 없음",
   "office.notes.byAgent": "{{name}}",
   "office.notes.justNow": "방금",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, FileText, ChevronRight, ChevronDown, Loader2, X, MessageSquare, Share2, Link, XCircle, Check, Tag } from "lucide-react";
+import { Search, FileText, ChevronRight, ChevronDown, Loader2, X, MessageSquare, Share2, Link, XCircle, Check, Tag, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
@@ -232,6 +232,20 @@ export default function MyNotesPage() {
       setTimeout(() => setLinkCopied(false), 2000);
     });
   }, [selectedNote]);
+
+  const handleDelete = useCallback(async () => {
+    if (!selectedNote) return;
+    if (!window.confirm(t("chat.notebook.confirmDelete"))) return;
+    try {
+      await api(`/api/conversations/${selectedNote.conversationId}/notes/${selectedNote.id}`, {
+        method: "DELETE",
+      });
+      setNotes((prev) => prev.filter((n) => n.id !== selectedNote.id));
+      setSelectedNote(null);
+    } catch {
+      // api handles error toast
+    }
+  }, [selectedNote, t]);
 
   return (
     <div className="flex h-full flex-col">
@@ -504,13 +518,23 @@ export default function MyNotesPage() {
                   </div>
                 ) : (
                   <div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingContent(selectedNote.content)}
-                      className="mb-3 rounded-md border border-border/40 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                    >
-                      {t("office.notes.edit")}
-                    </button>
+                    <div className="mb-3 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingContent(selectedNote.content)}
+                        className="rounded-md border border-border/40 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                      >
+                        {t("office.notes.edit")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        className="flex items-center gap-1 rounded-md border border-red-500/30 px-2.5 py-1 text-[11px] text-red-500 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        {t("office.notes.delete")}
+                      </button>
+                    </div>
                     <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
                       <ReactMarkdown>{selectedNote.content || `*${t("office.notes.noContent")}*`}</ReactMarkdown>
                     </div>
