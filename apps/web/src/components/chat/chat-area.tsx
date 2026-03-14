@@ -53,8 +53,6 @@ export function ChatArea() {
   const [mediaFilesTab, setMediaFilesTab] = useState<MediaFilesTab>("media");
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
-  const shareNote = useChatStore((s) => s.shareNote);
-  const shareKanbanCard = useChatStore((s) => s.shareKanbanCard);
   const [wikiOpen, setWikiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const dragCounterRef = useRef(0);
@@ -119,22 +117,32 @@ export function ChatArea() {
     setIsDragging(false);
     dragCounterRef.current = 0;
 
-    // Check for note drop — share as rich card
+    // Check for note drop — attach to input box (user sends with optional text)
     const noteData = e.dataTransfer.getData("application/x-arinova-note");
-    if (noteData && activeConversationId) {
+    if (noteData) {
       try {
-        const note = JSON.parse(noteData) as { id: string; title: string };
-        shareNote(activeConversationId, note.id).catch(() => {});
+        const note = JSON.parse(noteData) as { id: string; title: string; preview?: string };
+        useChatStore.getState().setAttachedCard({
+          type: "note",
+          id: note.id,
+          title: note.title,
+          preview: note.preview,
+        });
         return;
       } catch { /* fall through */ }
     }
 
-    // Check for kanban card drop — share as rich card
+    // Check for kanban card drop — attach to input box (user sends with optional text)
     const kanbanData = e.dataTransfer.getData("application/x-arinova-kanban-card");
-    if (kanbanData && activeConversationId) {
+    if (kanbanData) {
       try {
-        const card = JSON.parse(kanbanData) as { id: string; title: string };
-        shareKanbanCard(card.id, activeConversationId).catch(() => {});
+        const card = JSON.parse(kanbanData) as { id: string; title: string; preview?: string };
+        useChatStore.getState().setAttachedCard({
+          type: "kanban",
+          id: card.id,
+          title: card.title,
+          preview: card.preview,
+        });
         return;
       } catch { /* fall through */ }
     }
@@ -143,7 +151,7 @@ export function ChatArea() {
     if (files.length > 0) {
       setDroppedFiles(Array.from(files));
     }
-  }, [activeConversationId, shareNote, shareKanbanCard]);
+  }, []);
 
   if (searchActive) {
     return <SearchResults />;
