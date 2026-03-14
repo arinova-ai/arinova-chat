@@ -200,7 +200,8 @@ async fn can_edit_note(
     }
 }
 
-/// Check if user is a moderator (admin or vice_admin) in a conversation
+/// Check if user is a moderator (admin or vice_admin) in a conversation,
+/// or the conversation owner (for direct conversations without group members).
 async fn is_moderator(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
     let role = sqlx::query_as::<_, (String,)>(
         "SELECT role::text FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
@@ -213,7 +214,20 @@ async fn is_moderator(db: &PgPool, conv_id: Uuid, user_id: &str) -> bool {
     .flatten()
     .map(|(r,)| r);
 
-    matches!(role.as_deref(), Some("admin") | Some("vice_admin"))
+    if matches!(role.as_deref(), Some("admin") | Some("vice_admin")) {
+        return true;
+    }
+
+    // Fallback: conversation owner is implicitly a moderator
+    sqlx::query_as::<_, (i64,)>(
+        "SELECT COUNT(*) FROM conversations WHERE id = $1 AND user_id = $2",
+    )
+    .bind(conv_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .map(|(c,)| c > 0)
+    .unwrap_or(false)
 }
 
 /// Normalize a tag for comparison: trim, lowercase, strip leading '#'.

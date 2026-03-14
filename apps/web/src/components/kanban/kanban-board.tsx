@@ -57,7 +57,7 @@ import { useChatStore } from "@/store/chat-store";
 import { CardDetailSheet } from "./card-detail-sheet";
 import { AddCardSheet } from "./add-card-sheet";
 import { ArchivedCardsSheet } from "./archived-cards-sheet";
-import { FullColumn, CompactColumn } from "./kanban-column";
+import { FullColumn } from "./kanban-column";
 import { CardOverlay } from "./kanban-card";
 import type { KanbanCard, BoardData, CardCommit } from "./types";
 
@@ -73,17 +73,15 @@ interface BoardInfo {
 // ── Props ───────────────────────────────────────────────────
 
 export interface KanbanBoardProps {
-  /** "full" = Office (DnD, agent display, archived); "compact" = sidebar (dropdown move, inline add) */
-  mode: "full" | "compact";
-  /** Agent data from office stream — only needed for full mode */
+  /** Agent data from office stream */
   streamAgents?: { id: string; name: string; emoji: string }[];
-  /** Conversation ID — used for persisting board selection per conversation (compact mode) */
+  /** Conversation ID — used for persisting board selection per conversation */
   conversationId?: string;
 }
 
 // ── Component ───────────────────────────────────────────────
 
-export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanBoardProps) {
+export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -122,7 +120,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const [membersLoading, setMembersLoading] = useState(false);
 
   // Use DnD in full mode on desktop only
-  const useDnd = mode === "full" && !isMobile;
+  const useDnd = !isMobile;
 
   // ── Agent maps ──────────────────────────────────────────
 
@@ -167,7 +165,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
       // If no explicit boardId, try loading persisted preference
       let targetId = boardId || selectedBoardId;
       if (!targetId && conversationId) {
-        // Compact mode: load from conversation settings
+        // Load from conversation settings
         try {
           const settings = await api<{ kanbanBoardId?: string | null }>(
             `/api/conversations/${conversationId}/settings`,
@@ -179,7 +177,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
         } catch { /* ignore */ }
       }
       if (!targetId && !conversationId) {
-        // Full mode: load from localStorage
+        // Load from localStorage
         try {
           const stored = localStorage.getItem("kanban_selected_board");
           if (stored && allBoards.some((b) => b.id === stored)) {
@@ -814,7 +812,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const emptyState = !board ? (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
       <p className="text-sm text-muted-foreground">
-        {mode === "compact" ? t("chat.kanban.empty") : "Failed to load board."}
+        {"Failed to load board."}
       </p>
       <button type="button" onClick={() => fetchBoard()} className="text-sm text-brand-text hover:underline">
         Retry
@@ -826,23 +824,6 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
 
   const columnItems = columns.map((col) => {
     const colCards = cardsByColumn.get(col.id) ?? [];
-
-    if (mode === "compact" || isMobile) {
-      return (
-        <CompactColumn
-          key={col.id}
-          column={col}
-          cards={colCards}
-          allColumns={columns}
-          cardLabelsMap={cardLabelsMap}
-          onMoveCard={handleMoveCard}
-          onSelectCard={handleSelectCard}
-          onCreateCard={handleCreateCardCompact}
-          onRenameColumn={handleRenameColumn}
-          onDeleteColumn={handleDeleteColumn}
-        />
-      );
-    }
 
     return (
       <FullColumn
@@ -865,7 +846,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   });
 
   const columnsContent = (
-    <div className={`flex gap-3 ${mode === "compact" ? "p-4 h-full min-w-max" : ""}`}>
+    <div className="flex gap-3">
       {useDnd ? (
         <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
           {columnItems}
@@ -1016,10 +997,9 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     </>
   );
 
-  // ── Full mode layout ──────────────────────────────────
+  // ── Layout ──────────────────────────────────
 
-  if (mode === "full") {
-    return (
+  return (
       <>
         <div className="flex h-full flex-col">
           {/* Toolbar */}
@@ -1127,74 +1107,4 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
         {boardDialogs}
       </>
     );
-  }
-
-  // ── Compact mode layout ───────────────────────────────
-
-  return (
-    <>
-      <div className="flex flex-col flex-1 min-h-0 h-full">
-        {/* Board selector + search for compact mode */}
-        <div className="flex items-center gap-1.5 px-4 pt-3 pb-1 shrink-0">
-          {boardSelector}
-          <button
-            type="button"
-            onClick={() => setArchivedOpen(true)}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Archive className="h-3.5 w-3.5" />
-          </button>
-          <div className="relative ml-auto">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t("kanban.search.placeholder")}
-              className="h-6 w-36 pl-6 pr-6 text-xs"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        </div>
-        {emptyState ?? (
-          <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden h-full">
-            {columnsContent}
-          </div>
-        )}
-      </div>
-
-      <CardDetailSheet
-        card={selectedCard}
-        cardAgents={selectedCard ? (cardAgentsMap.get(selectedCard.id) ?? []) : []}
-        cardNotes={selectedCard ? (cardNotesMap.get(selectedCard.id) ?? []) : []}
-        cardCommits={selectedCard ? (cardCommitsMap.get(selectedCard.id) ?? []) : []}
-        cardLabels={selectedCard ? (cardLabelsMap.get(selectedCard.id) ?? []) : []}
-        boardLabels={boardLabels}
-        boardId={selectedBoardId ?? undefined}
-        agentEmojis={agentEmojis}
-        agentNames={agentNames}
-        onClose={() => setSelectedCard(null)}
-        onUpdate={handleCardUpdate}
-        onDelete={handleDeleteCard}
-      />
-
-      {board && (
-        <ArchivedCardsSheet
-          open={archivedOpen}
-          boardId={board.id}
-          onClose={() => setArchivedOpen(false)}
-          onUnarchived={() => fetchBoard(board.id)}
-        />
-      )}
-
-      {boardDialogs}
-    </>
-  );
 }

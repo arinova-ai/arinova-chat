@@ -61,6 +61,14 @@ pub fn router() -> Router<AppState> {
             "/api/communities/{id}/applications/{app_id}/review",
             post(review_application),
         )
+        // Member management
+        .route(
+            "/api/communities/{id}/members/{user_id}",
+            axum::routing::patch(update_member_role)
+                .delete(kick_member),
+        )
+        // Ownership transfer
+        .route("/api/communities/{id}/transfer", post(transfer_ownership))
 }
 
 // ---------------------------------------------------------------------------
@@ -2396,4 +2404,398 @@ async fn review_application(
             )
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/communities/:id/members/:user_id — Update member role
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UpdateMemberRoleBody {
+    role: String,
+}
+
+async fn update_member_role(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, target_user_id)): Path<(Uuid, String)>,
+    Json(body): Json<UpdateMemberRoleBody>,
+) -> (StatusCode, Json<Value>) {
+    // Only allow setting to "admin" or "member"
+    if body.role != "admin" && body.role != "member" {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Role must be 'admin' or 'member'" })),
+        );
+    }
+
+    // Check caller is creator or admin
+    let caller_role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let caller_role = match caller_role {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Not a member of this community" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("update_member_role: fetch caller role failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
+
+    if caller_role != "creator" && caller_role != "admin" {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only creator or admin can change roles" })),
+        );
+    }
+
+    // Don't allow changing the creator's role
+    let target_role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &target_role {
+        Ok(Some(r)) if r == "creator" => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Cannot change the creator's role" })),
+            );
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Target user is not a member" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("update_member_role: fetch target role failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+        _ => {}
+    }
+
+    let result = sqlx::query(
+        "UPDATE community_members SET role = $1 WHERE community_id = $2 AND user_id = $3",
+    )
+    .bind(&body.role)
+    .bind(id)
+    .bind(&target_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("update_member_role: update failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/communities/:id/members/:user_id — Kick member
+// ---------------------------------------------------------------------------
+
+async fn kick_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, target_user_id)): Path<(Uuid, String)>,
+) -> (StatusCode, Json<Value>) {
+    // Check caller is creator or admin
+    let caller_role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let caller_role = match caller_role {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Not a member of this community" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("kick_member: fetch caller role failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
+
+    if caller_role != "creator" && caller_role != "admin" {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only creator or admin can kick members" })),
+        );
+    }
+
+    // Cannot kick the creator
+    let target_role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &target_role {
+        Ok(Some(r)) if r == "creator" => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Cannot kick the creator" })),
+            );
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Target user is not a member" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("kick_member: fetch target role failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+        _ => {}
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("kick_member: begin tx failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
+
+    // Delete from community_members
+    if let Err(e) = sqlx::query(
+        "DELETE FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("kick_member: delete member failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    // Also remove from conversation_user_members
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(cid) = conv_id {
+        let _ = sqlx::query(
+            "DELETE FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+        )
+        .bind(cid)
+        .bind(&target_user_id)
+        .execute(&mut *tx)
+        .await;
+    }
+
+    // Decrement member_count
+    if let Err(e) = sqlx::query(
+        "UPDATE communities SET member_count = GREATEST(member_count - 1, 0), updated_at = NOW() WHERE id = $1",
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("kick_member: decrement member_count failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!("kick_member: commit failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    (StatusCode::OK, Json(json!({ "success": true })))
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/:id/transfer — Transfer ownership
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct TransferOwnershipBody {
+    #[serde(rename = "userId")]
+    user_id: String,
+}
+
+async fn transfer_ownership(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<TransferOwnershipBody>,
+) -> (StatusCode, Json<Value>) {
+    // Only creator can transfer ownership
+    let caller_role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &caller_role {
+        Ok(Some(r)) if r == "creator" => {}
+        Ok(_) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Only the creator can transfer ownership" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("transfer_ownership: fetch caller role failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    }
+
+    // Verify target is a member
+    let target_role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&body.user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &target_role {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Target user is not a member" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("transfer_ownership: fetch target role failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("transfer_ownership: begin tx failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
+
+    // Old creator becomes admin
+    if let Err(e) = sqlx::query(
+        "UPDATE community_members SET role = 'admin' WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("transfer_ownership: demote old creator failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    // New owner becomes creator
+    if let Err(e) = sqlx::query(
+        "UPDATE community_members SET role = 'creator' WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&body.user_id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("transfer_ownership: promote new creator failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    // Update communities.creator_id
+    if let Err(e) = sqlx::query(
+        "UPDATE communities SET creator_id = $1, updated_at = NOW() WHERE id = $2",
+    )
+    .bind(&body.user_id)
+    .bind(id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("transfer_ownership: update creator_id failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!("transfer_ownership: commit failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    (StatusCode::OK, Json(json!({ "success": true })))
 }

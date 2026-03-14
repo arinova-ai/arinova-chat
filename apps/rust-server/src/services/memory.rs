@@ -337,10 +337,10 @@ async fn do_extraction(
         }
 
         let models = [
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "arcee-ai/trinity-large-preview:free",
-            "google/gemma-3n-e4b-it:free",
+            "google/gemma-3-27b-it:free",
             "google/gemma-3-12b-it:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "google/gemma-3n-e4b:free",
         ];
 
         let mut chunk_result = Err(anyhow!("no models attempted"));

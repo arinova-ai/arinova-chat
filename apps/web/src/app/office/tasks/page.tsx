@@ -16,5 +16,5 @@ export default function OfficeTasksPage() {
     [stream.agents],
   );
 
-  return <KanbanBoard mode="full" streamAgents={streamAgentsList} />;
+  return <KanbanBoard streamAgents={streamAgentsList} />;
 }

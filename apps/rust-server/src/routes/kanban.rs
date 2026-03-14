@@ -2144,9 +2144,8 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
 
     lazy_archive_done_cards_by_owner(&state.db, &owner_id).await;
 
-    #[derive(Debug, Serialize, sqlx::FromRow)]
-    #[serde(rename_all = "camelCase")]
-    struct AgentCardRow {
+    #[derive(Debug, sqlx::FromRow)]
+    struct CardWithLabelRow {
         id: Uuid,
         column_id: Uuid,
         column_name: String,
@@ -2158,23 +2157,67 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
         created_by: Option<String>,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        label_id: Option<Uuid>,
+        label_name: Option<String>,
+        label_color: Option<String>,
     }
 
-    let cards = sqlx::query_as::<_, AgentCardRow>(
+    let rows = sqlx::query_as::<_, CardWithLabelRow>(
         r#"SELECT c.id, c.column_id, col.name AS column_name, c.title, c.description, c.priority,
-                  c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at
+                  c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at,
+                  l.id AS label_id, l.name AS label_name, l.color AS label_color
            FROM kanban_cards c
            JOIN kanban_columns col ON col.id = c.column_id
            JOIN kanban_boards b ON b.id = col.board_id
+           LEFT JOIN kanban_card_labels cl ON cl.card_id = c.id
+           LEFT JOIN kanban_labels l ON l.id = cl.label_id
            WHERE b.owner_id = $1 AND c.archived = FALSE
-           ORDER BY c.sort_order"#,
+           ORDER BY c.sort_order, c.id"#,
     )
     .bind(&owner_id)
     .fetch_all(&state.db)
     .await;
 
-    match cards {
-        Ok(rows) => Json(json!(rows)).into_response(),
+    match rows {
+        Ok(rows) => {
+            // Group labels per card, preserving insertion order
+            let mut cards: Vec<serde_json::Value> = Vec::new();
+            let mut id_to_idx: std::collections::HashMap<Uuid, usize> =
+                std::collections::HashMap::new();
+            for r in &rows {
+                let idx = if let Some(&i) = id_to_idx.get(&r.id) {
+                    i
+                } else {
+                    let i = cards.len();
+                    cards.push(json!({
+                        "id": r.id,
+                        "columnId": r.column_id,
+                        "columnName": r.column_name,
+                        "title": r.title,
+                        "description": r.description,
+                        "priority": r.priority,
+                        "dueDate": r.due_date.map(|t| t.to_rfc3339()),
+                        "sortOrder": r.sort_order,
+                        "createdBy": r.created_by,
+                        "createdAt": r.created_at.map(|t| t.to_rfc3339()),
+                        "updatedAt": r.updated_at.map(|t| t.to_rfc3339()),
+                        "labels": [],
+                    }));
+                    id_to_idx.insert(r.id, i);
+                    i
+                };
+                if let Some(lid) = r.label_id {
+                    if let Some(arr) = cards[idx].get_mut("labels").and_then(|v| v.as_array_mut()) {
+                        arr.push(json!({
+                            "id": lid,
+                            "name": r.label_name,
+                            "color": r.label_color,
+                        }));
+                    }
+                }
+            }
+            Json(json!(cards)).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }

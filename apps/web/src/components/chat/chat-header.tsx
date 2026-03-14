@@ -36,6 +36,7 @@ import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
+import { CommunitySettingsSheet } from "./community-settings";
 import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Pin } from "lucide-react";
@@ -100,6 +101,8 @@ export function ChatHeader({
 
   // Memory Capsule sheet
   const [memoryCapsuleOpen, setMemoryCapsuleOpen] = useState(false);
+  // Community settings sheet
+  const [communitySettingsOpen, setCommunitySettingsOpen] = useState(false);
   // Header pin settings
   const [settingsOpen, setSettingsOpen] = useState(false);
   const pinnedIds = useHeaderPinStore((s) => s.pinnedIds);
@@ -183,7 +186,7 @@ export function ChatHeader({
     }
   }, [conversationId, isMuted, toggleMuteConversation]);
 
-  const displayName = type === "group" && title ? title : agentName;
+  const displayName = (type === "group" || type === "community") && title ? title : agentName;
 
   return (
     <div className="shrink-0 border-b border-border">
@@ -247,6 +250,17 @@ export function ChatHeader({
       </button>
 
       <div className="ml-auto flex items-center gap-1">
+        {officialCommunityId && (type === "community" || type === "official" || type === "lounge") && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={t("communitySettings.title")}
+            onClick={() => setCommunitySettingsOpen(true)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        )}
         {type === "group" && conversationId ? (
           <GroupHeaderButtons
             conversationId={conversationId}
@@ -391,6 +405,14 @@ export function ChatHeader({
         }
       } : undefined}
     />
+    {officialCommunityId && conversationId && (
+      <CommunitySettingsSheet
+        open={communitySettingsOpen}
+        onClose={() => setCommunitySettingsOpen(false)}
+        communityId={officialCommunityId}
+        conversationId={conversationId}
+      />
+    )}
     </div>
   );
 }

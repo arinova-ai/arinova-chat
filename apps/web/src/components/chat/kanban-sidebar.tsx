@@ -43,7 +43,7 @@ export function KanbanSidebar({ open, onOpenChange, conversationId, inline }: Ka
           </button>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
-          <KanbanBoard mode="full" conversationId={conversationId} />
+          <KanbanBoard conversationId={conversationId} />
         </div>
       </div>,
       document.body,
@@ -89,7 +89,7 @@ export function KanbanSidebar({ open, onOpenChange, conversationId, inline }: Ka
 
       {/* Board — full mode */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <KanbanBoard mode="full" conversationId={conversationId} />
+        <KanbanBoard conversationId={conversationId} />
       </div>
     </div>
   );
