@@ -241,16 +241,13 @@ export default function MyNotesPage() {
       await api(`/api/conversations/${selectedNote.conversationId}/notes/${noteId}`, {
         method: "DELETE",
       });
+      // Remove from list FIRST (while sheet still covers the list), then close sheet
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
       setSelectedNote(null);
-      // Remove from list after sheet close animation to avoid stale render
-      setTimeout(() => {
-        setNotes((prev) => prev.filter((n) => n.id !== noteId));
-        fetchNotes();
-      }, 300);
     } catch {
       // api handles error toast
     }
-  }, [selectedNote, t, fetchNotes]);
+  }, [selectedNote, t]);
 
   return (
     <div className="flex h-full flex-col">
