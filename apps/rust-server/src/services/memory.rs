@@ -347,6 +347,26 @@ async fn do_extraction(
 
         let chunk_result = call_openrouter_with_retry(&client, openrouter_key, &body, chunk_idx).await;
 
+        // Fallback: if primary model failed, retry with fallback model
+        let chunk_result = match chunk_result {
+            Ok(v) => Ok(v),
+            Err(primary_err) => {
+                tracing::warn!(
+                    "Chunk {}/{}: primary model failed ({}), trying fallback model",
+                    chunk_idx + 1, chunks.len(), primary_err
+                );
+                let fallback_body = serde_json::json!({
+                    "model": "arcee-ai/trinity-large-preview:free",
+                    "messages": [
+                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                        {"role": "user", "content": chunk_text}
+                    ],
+                    "max_tokens": 1500
+                });
+                call_openrouter_with_retry(&client, openrouter_key, &fallback_body, chunk_idx).await
+            }
+        };
+
         let chunk_msgs = chunk_msg_counts.get(chunk_idx).copied().unwrap_or(0);
         processed_messages += chunk_msgs;
 
