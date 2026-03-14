@@ -336,36 +336,45 @@ async fn do_extraction(
             return Err(anyhow!("Extraction cancelled"));
         }
 
-        let body = serde_json::json!({
-            "model": "stepfun/step-3.5-flash:free",
-            "messages": [
-                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                {"role": "user", "content": chunk_text}
-            ],
-            "max_tokens": 1500
-        });
+        let models = [
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "arcee-ai/trinity-large-preview:free",
+            "google/gemma-3n-e4b-it:free",
+            "google/gemma-3-12b-it:free",
+        ];
 
-        let chunk_result = call_openrouter_with_retry(&client, openrouter_key, &body, chunk_idx).await;
+        let mut chunk_result = Err(anyhow!("no models attempted"));
+        for (model_idx, model) in models.iter().enumerate() {
+            let body = serde_json::json!({
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": chunk_text}
+                ],
+                "max_tokens": 1500
+            });
 
-        // Fallback: if primary model failed, retry with fallback model
-        let chunk_result = match chunk_result {
-            Ok(v) => Ok(v),
-            Err(primary_err) => {
-                tracing::warn!(
-                    "Chunk {}/{}: primary model failed ({}), trying fallback model",
-                    chunk_idx + 1, chunks.len(), primary_err
-                );
-                let fallback_body = serde_json::json!({
-                    "model": "arcee-ai/trinity-large-preview:free",
-                    "messages": [
-                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                        {"role": "user", "content": chunk_text}
-                    ],
-                    "max_tokens": 1500
-                });
-                call_openrouter_with_retry(&client, openrouter_key, &fallback_body, chunk_idx).await
+            match call_openrouter_with_retry(&client, openrouter_key, &body, chunk_idx).await {
+                Ok(v) => {
+                    chunk_result = Ok(v);
+                    break;
+                }
+                Err(e) => {
+                    if model_idx < models.len() - 1 {
+                        tracing::warn!(
+                            "Chunk {}/{}: model {} failed ({}), trying next fallback",
+                            chunk_idx + 1, chunks.len(), model, e
+                        );
+                    } else {
+                        tracing::error!(
+                            "Chunk {}/{}: all models exhausted, last error: {}",
+                            chunk_idx + 1, chunks.len(), e
+                        );
+                    }
+                    chunk_result = Err(e);
+                }
             }
-        };
+        }
 
         let chunk_msgs = chunk_msg_counts.get(chunk_idx).copied().unwrap_or(0);
         processed_messages += chunk_msgs;
