@@ -337,7 +337,7 @@ async fn do_extraction(
         }
 
         let body = serde_json::json!({
-            "model": "openrouter/auto",
+            "model": "stepfun/step-3.5-flash:free",
             "messages": [
                 {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
                 {"role": "user", "content": chunk_text}
