@@ -750,6 +750,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                               title: n.title || t("common.untitled"),
                               preview: (n.summary || n.content)?.slice(0, 80) || undefined,
                             });
+                            onOpenChange(false);
                           }}
                           t={t}
                         />

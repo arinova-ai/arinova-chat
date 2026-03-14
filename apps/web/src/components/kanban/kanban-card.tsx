@@ -119,12 +119,14 @@ export function SortableCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              useChatStore.getState().setAttachedCard({
+              const store = useChatStore.getState();
+              store.setAttachedCard({
                 type: "kanban",
                 id: card.id,
                 title: card.title,
                 preview: card.description?.slice(0, 80) || undefined,
               });
+              store.closeKanbanSidebar();
             }}
             className="rounded p-1 text-muted-foreground hover:text-brand transition-colors md:hidden"
             title="Attach to chat"
@@ -195,12 +197,14 @@ export function CompactCard({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            useChatStore.getState().setAttachedCard({
+            const store = useChatStore.getState();
+            store.setAttachedCard({
               type: "kanban",
               id: card.id,
               title: card.title,
               preview: card.description?.slice(0, 80) || undefined,
             });
+            store.closeKanbanSidebar();
           }}
           className="rounded p-1 text-muted-foreground hover:text-brand transition-colors"
           title="Attach to chat"
