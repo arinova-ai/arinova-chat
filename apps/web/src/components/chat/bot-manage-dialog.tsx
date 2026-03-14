@@ -28,12 +28,9 @@ import {
   HelpCircle,
   Loader2,
   RefreshCw,
-  Download,
   Trash2,
-  Bell,
-  BellOff,
-  Globe,
-  Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   Popover,
@@ -43,7 +40,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
-import { BACKEND_URL, assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
+import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 
 /** Popover that opens on hover (desktop) and tap (mobile). */
 function HoverPopover({ content }: { content: string }) {
@@ -90,10 +87,8 @@ interface BotManageDialogProps {
     avatarUrl: string | null;
     a2aEndpoint: string | null;
     secretToken: string | null;
-    isPublic: boolean;
     category: string | null;
     systemPrompt: string | null;
-    notificationsEnabled: boolean;
   };
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -121,8 +116,6 @@ export function BotManageDialog({
   const [description, setDescription] = useState(agent.description ?? "");
   const [category, setCategory] = useState(agent.category ?? "");
   const [systemPrompt, setSystemPrompt] = useState(agent.systemPrompt ?? "");
-  const [notificationsEnabled, setNotificationsEnabled] = useState(agent.notificationsEnabled);
-  const [isPublic, setIsPublic] = useState(agent.isPublic);
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState(agent.avatarUrl);
@@ -143,7 +136,6 @@ export function BotManageDialog({
   const [clearConfirm, setClearConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [clearing, setClearing] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   // Stats
   const [stats, setStats] = useState<AgentStats | null>(null);
@@ -155,8 +147,6 @@ export function BotManageDialog({
       setDescription(agent.description ?? "");
       setCategory(agent.category ?? "");
       setSystemPrompt(agent.systemPrompt ?? "");
-      setNotificationsEnabled(agent.notificationsEnabled);
-      setIsPublic(agent.isPublic);
       setAvatarUrl(agent.avatarUrl);
       setSaved(false);
       setError("");
@@ -178,9 +168,7 @@ export function BotManageDialog({
     name !== agent.name ||
     (description || null) !== (agent.description || null) ||
     (category || null) !== (agent.category || null) ||
-    (systemPrompt || null) !== (agent.systemPrompt || null) ||
-    notificationsEnabled !== agent.notificationsEnabled ||
-    isPublic !== agent.isPublic;
+    (systemPrompt || null) !== (agent.systemPrompt || null);
 
   const handleAvatarUpload = async (file: File) => {
     setUploading(true);
@@ -213,8 +201,6 @@ export function BotManageDialog({
         description: description || null,
         category: category || null,
         systemPrompt: systemPrompt || null,
-        notificationsEnabled,
-        isPublic,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -256,28 +242,6 @@ export function BotManageDialog({
     }
   };
 
-  const handleExport = async (format: "json" | "markdown") => {
-    setExporting(true);
-    try {
-      const res = await fetch(
-        `${BACKEND_URL}/api/agents/${agent.id}/export?format=${format}`,
-        { credentials: "include" }
-      );
-      if (!res.ok) throw new Error("Export failed");
-      const blob = await res.blob();
-      const ext = format === "markdown" ? "md" : "json";
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${agent.name}-export.${ext}`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to export");
-    } finally {
-      setExporting(false);
-    }
-  };
 
   const health = agentHealth[agent.id];
   const isConnected = health?.status === "online";
@@ -406,72 +370,6 @@ export function BotManageDialog({
             </p>
           </div>
 
-          {/* Toggles: Notifications + Public */}
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-              className="flex w-full items-center justify-between rounded-lg bg-secondary/50 px-4 py-3 transition-colors hover:bg-secondary"
-            >
-              <div className="flex items-center gap-3">
-                {notificationsEnabled ? (
-                  <Bell className="h-4 w-4 text-foreground" />
-                ) : (
-                  <BellOff className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="text-sm">{t("botManage.notifications")}</span>
-              </div>
-              <div
-                className={cn(
-                  "h-5 w-9 rounded-full transition-colors relative",
-                  notificationsEnabled ? "bg-primary" : "bg-muted"
-                )}
-              >
-                <div
-                  className={cn(
-                    "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
-                    notificationsEnabled ? "translate-x-4" : "translate-x-0.5"
-                  )}
-                />
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPublic(!isPublic)}
-              className="flex w-full items-center justify-between rounded-lg bg-secondary/50 px-4 py-3 transition-colors hover:bg-secondary"
-            >
-              <div className="flex items-center gap-3">
-                {isPublic ? (
-                  <Globe className="h-4 w-4 text-foreground" />
-                ) : (
-                  <Lock className="h-4 w-4 text-muted-foreground" />
-                )}
-                <div className="text-left">
-                  <span className="text-sm">
-                    {isPublic ? t("botManage.public") : t("botManage.private")}
-                  </span>
-                  <p className="text-xs text-muted-foreground">
-                    {isPublic
-                      ? t("botManage.publicDesc")
-                      : t("botManage.privateDesc")}
-                  </p>
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "h-5 w-9 rounded-full transition-colors relative",
-                  isPublic ? "bg-primary" : "bg-muted"
-                )}
-              >
-                <div
-                  className={cn(
-                    "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
-                    isPublic ? "translate-x-4" : "translate-x-0.5"
-                  )}
-                />
-              </div>
-            </button>
-          </div>
 
           {/* Usage Stats */}
           {stats && (
@@ -548,7 +446,7 @@ export function BotManageDialog({
                         {showToken ? localToken : "ari_" + "•".repeat(40)}
                       </code>
                       <Button variant="outline" size="icon" onClick={() => setShowToken(!showToken)} className="shrink-0">
-                        {showToken ? <Lock className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+                        {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                       <Button variant="outline" size="icon" onClick={handleCopyToken} className="shrink-0">
                         {tokenCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
@@ -585,31 +483,6 @@ export function BotManageDialog({
               t("common.save")
             )}
           </Button>
-
-          {/* Export */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t("common.export")}</label>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1 gap-2"
-                onClick={() => handleExport("json")}
-                disabled={exporting}
-              >
-                <Download className="h-4 w-4" />
-                JSON
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 gap-2"
-                onClick={() => handleExport("markdown")}
-                disabled={exporting}
-              >
-                <Download className="h-4 w-4" />
-                Markdown
-              </Button>
-            </div>
-          </div>
 
           {/* Danger zone */}
           <div className="space-y-3 rounded-lg border border-destructive/30 p-3 sm:p-4">

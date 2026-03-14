@@ -16,8 +16,7 @@ export const PLATFORM_COMMANDS: PlatformCommand[] = [
   { id: "new", name: "New Chat", description: "Start a new conversation", category: "session", handler: "store" },
   { id: "stop", name: "Stop", description: "Cancel current streaming response", category: "session", handler: "store" },
   { id: "status", name: "Status", description: "Show conversation and agent status", category: "session", handler: "store" },
-  { id: "reset", name: "Reset", description: "Start fresh session", category: "session", handler: "store" },
-  { id: "whoami", name: "Who Am I", description: "Show your profile info", category: "session", handler: "store" },
+{ id: "whoami", name: "Who Am I", description: "Show your profile info", category: "session", handler: "store" },
 
   // Display
   { id: "tts", name: "Text-to-Speech", description: "Toggle text-to-speech", category: "display", args: "[on|off]", handler: "local" },

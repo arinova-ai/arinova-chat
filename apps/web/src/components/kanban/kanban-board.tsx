@@ -1133,6 +1133,8 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             boardId={board.id}
             onClose={() => setArchivedOpen(false)}
             onUnarchived={() => fetchBoard(board.id)}
+            archivedBoards={archivedBoards}
+            onUnarchiveBoard={handleUnarchiveBoard}
           />
         )}
 

@@ -187,7 +187,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   const loadAgentSkills = useChatStore((s) => s.loadAgentSkills);
   const cancelStream = useChatStore((s) => s.cancelStream);
   const insertSystemMessage = useChatStore((s) => s.insertSystemMessage);
-  const clearConversation = useChatStore((s) => s.clearConversation);
   const getConversationStatus = useChatStore((s) => s.getConversationStatus);
   const ttsEnabled = useChatStore((s) => s.ttsEnabled);
   const setTtsEnabled = useChatStore((s) => s.setTtsEnabled);
@@ -462,13 +461,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
           insertSystemMessage(statusText);
           break;
         }
-        case "reset": {
-          if (activeConversationId) {
-            clearConversation(activeConversationId);
-          }
-          break;
-        }
-        case "tts": {
+case "tts": {
           const on = args === "on" || (args !== "off" && !ttsEnabled);
           setTtsEnabled(on);
           insertSystemMessage(`Text-to-speech ${on ? "enabled" : "disabled"}.`);
@@ -497,7 +490,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
       activeConversationId,
       ttsEnabled,
       insertSystemMessage,
-      clearConversation,
       cancelStream,
       getConversationStatus,
       setTtsEnabled,

@@ -398,14 +398,14 @@ export function CardDetailSheet({
   return (
     <>
     <Sheet open={card !== null} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background">
+      <SheetContent side="right" className="w-full sm:w-96 border-border bg-background flex flex-col overflow-hidden pt-[max(1rem,env(safe-area-inset-top))]">
         <SheetHeader>
           <SheetTitle>{editing ? "Edit Card" : "Card Details"}</SheetTitle>
           <SheetDescription className="sr-only">View and edit kanban card details</SheetDescription>
         </SheetHeader>
 
         {card && (
-          <div className="mt-4 space-y-4 px-1">
+          <div className="mt-4 space-y-4 px-1 flex-1 min-h-0 overflow-y-auto">
             {editing ? (
               <>
                 {/* Editable title */}

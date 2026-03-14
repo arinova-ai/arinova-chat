@@ -983,7 +983,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <h3 className="text-sm font-semibold flex-1">{t("chat.notebook.newNote")}</h3>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setViewMode("list"); setTitleInput(""); setContentInput(""); setTagsInput([]); }}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
