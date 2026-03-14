@@ -1182,7 +1182,7 @@ async fn get_card(
     user: AuthUser,
     Path(card_id): Path<Uuid>,
 ) -> Response {
-    if let Err(e) = verify_card_owner(&state.db, card_id, &user.id).await {
+    if let Err(e) = verify_card_access(&state.db, card_id, &user.id).await {
         return e;
     }
 

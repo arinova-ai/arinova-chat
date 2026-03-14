@@ -5,6 +5,7 @@ import { FileText, Loader2, Tag, Clock, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useChatStore } from "@/store/chat-store";
+import { useTranslation } from "@/lib/i18n";
 import {
   Sheet,
   SheetContent,
@@ -36,6 +37,7 @@ function formatTime(iso: string | null | undefined) {
 }
 
 export function ChatNoteDetailSheet() {
+  const { t } = useTranslation();
   const chatNoteDetailId = useChatStore((s) => s.chatNoteDetailId);
   const [note, setNote] = useState<NoteData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,9 +74,9 @@ export function ChatNoteDetailSheet() {
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-brand" />
-            Note Details
+            {t("noteDetail.title")}
           </SheetTitle>
-          <SheetDescription className="sr-only">View note details</SheetDescription>
+          <SheetDescription className="sr-only">{t("noteDetail.title")}</SheetDescription>
         </SheetHeader>
 
         {loading && !note && (
@@ -87,7 +89,7 @@ export function ChatNoteDetailSheet() {
           <div className="mt-4 space-y-4 px-1 overflow-y-auto max-h-[calc(100vh-8rem)]">
             {/* Title */}
             <div>
-              <h3 className="text-base font-semibold text-foreground">{note.title || "Untitled"}</h3>
+              <h3 className="text-base font-semibold text-foreground">{note.title || t("noteDetail.untitled")}</h3>
             </div>
 
             {/* Tags */}
@@ -108,16 +110,16 @@ export function ChatNoteDetailSheet() {
             {/* Summary */}
             {note.summary && (
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Summary</label>
+                <label className="text-xs font-medium text-muted-foreground">{t("noteDetail.summary")}</label>
                 <p className="mt-1 text-sm text-foreground/80 italic">{note.summary}</p>
               </div>
             )}
 
             {/* Content */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Content</label>
+              <label className="text-xs font-medium text-muted-foreground">{t("noteDetail.content")}</label>
               <div className="mt-1 text-sm text-foreground prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-code:text-foreground prose-pre:bg-muted">
-                <ReactMarkdown>{note.content || "No content."}</ReactMarkdown>
+                <ReactMarkdown>{note.content || t("noteDetail.noContent")}</ReactMarkdown>
               </div>
             </div>
 
@@ -125,16 +127,16 @@ export function ChatNoteDetailSheet() {
             <div className="space-y-1.5 pt-2 border-t border-border">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                <span>Created: {formatTime(note.createdAt)}</span>
+                <span>{t("noteDetail.created")}: {formatTime(note.createdAt)}</span>
               </div>
               {note.updatedAt && note.updatedAt !== note.createdAt && (
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
-                  <span>Updated: {formatTime(note.updatedAt)}</span>
+                  <span>{t("noteDetail.updated")}: {formatTime(note.updatedAt)}</span>
                 </div>
               )}
               <div className="text-xs text-muted-foreground">
-                By: {note.agentName || note.creatorName}
+                {t("noteDetail.by")}: {note.agentName || note.creatorName}
               </div>
             </div>
           </div>

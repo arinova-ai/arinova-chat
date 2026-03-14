@@ -954,6 +954,13 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
           preview: attachedCard.preview || "",
           tags: [],
         };
+      } else if (attachedCard.type === "commit") {
+        cardMetadata = {
+          type: "commit_share",
+          commitHash: attachedCard.id,
+          title: attachedCard.title,
+          preview: attachedCard.preview || "",
+        };
       } else {
         cardMetadata = {
           type: "kanban_card",

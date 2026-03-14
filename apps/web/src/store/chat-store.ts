@@ -152,7 +152,7 @@ interface ChatState {
   agentNotesEnabledByConversation: Record<string, boolean>;
 
   // Attached card (note or kanban card queued for sending)
-  attachedCard: { type: "note"; id: string; title: string; preview?: string } | { type: "kanban"; id: string; title: string; preview?: string } | null;
+  attachedCard: { type: "note"; id: string; title: string; preview?: string } | { type: "kanban"; id: string; title: string; preview?: string } | { type: "commit"; id: string; title: string; preview?: string } | null;
 
   // Conversation search state (in-conversation search bar)
   convSearchOpen: boolean;

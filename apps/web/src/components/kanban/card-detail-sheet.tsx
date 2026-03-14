@@ -689,7 +689,7 @@ export function CardDetailSheet({
                             type="button"
                             onClick={() => {
                               useChatStore.getState().setAttachedCard({
-                                type: "commit" as any,
+                                type: "commit",
                                 id: c.commitHash,
                                 title: c.commitHash.slice(0, 7),
                                 preview: c.message || undefined,
