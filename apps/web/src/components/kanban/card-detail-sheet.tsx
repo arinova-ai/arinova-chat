@@ -610,7 +610,7 @@ export function CardDetailSheet({
                         <button
                           key={cn.noteId}
                           type="button"
-                          onClick={() => useChatStore.getState().openNoteById(cn.noteId)}
+                          onClick={() => useChatStore.setState({ chatNoteDetailId: cn.noteId })}
                           className="flex w-full items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs text-left hover:bg-accent/50 transition-colors"
                         >
                           <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -695,7 +695,7 @@ export function CardDetailSheet({
                                 preview: c.message || undefined,
                               });
                             }}
-                            className="text-muted-foreground hover:text-brand shrink-0 md:hidden"
+                            className="text-muted-foreground hover:text-brand shrink-0"
                             title="Attach to chat"
                           >
                             <Paperclip className="h-3 w-3" />
