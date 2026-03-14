@@ -144,8 +144,11 @@ interface ChatState {
   notesByConversation: Record<string, Note[]>;
   notebookOpen: boolean;
   kanbanSidebarOpen: boolean;
+  kanbanFullscreen: boolean;
   pendingNoteId: string | null;
   pendingKanbanCardId: string | null;
+  chatCardDetailId: string | null;
+  chatNoteDetailId: string | null;
   agentNotesEnabledByConversation: Record<string, boolean>;
 
   // Attached card (note or kanban card queued for sending)
@@ -254,6 +257,7 @@ interface ChatState {
   closeNotebook: () => void;
   openKanbanSidebar: () => void;
   closeKanbanSidebar: () => void;
+  toggleKanbanFullscreen: () => void;
   loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
   createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
   updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[]; isPinned?: boolean }) => Promise<void>;
@@ -314,8 +318,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   notesByConversation: {},
   notebookOpen: false,
   kanbanSidebarOpen: false,
+  kanbanFullscreen: false,
   pendingNoteId: null,
   pendingKanbanCardId: null,
+  chatCardDetailId: null,
+  chatNoteDetailId: null,
   agentNotesEnabledByConversation: {},
   attachedCard: null,
   convSearchOpen: false,
@@ -1451,6 +1458,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     diagCount("action:closeKanbanSidebar");
     if (!get().kanbanSidebarOpen) return;
     set({ kanbanSidebarOpen: false });
+  },
+  toggleKanbanFullscreen: () => {
+    diagCount("action:toggleKanbanFullscreen");
+    set({ kanbanFullscreen: !get().kanbanFullscreen });
   },
   setAttachedCard: (card) => set({ attachedCard: card }),
   clearAttachedCard: () => set({ attachedCard: null }),

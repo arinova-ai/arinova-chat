@@ -375,6 +375,8 @@
   "kanban.sort.priorityAsc": "우선순위: 낮음→높음",
   "kanban.search.placeholder": "카드 검색…",
   "kanban.editMode": "편집",
+  "rightPanel.kanban.expand": "확대",
+  "rightPanel.kanban.collapse": "축소",
   "settings.title": "설정",
   "settings.subtitle": "사용 환경을 맞춤 설정하세요",
   "settings.nav.profile": "프로필",

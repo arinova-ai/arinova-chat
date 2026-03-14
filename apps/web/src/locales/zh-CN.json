@@ -375,6 +375,8 @@
   "kanban.sort.priorityAsc": "优先级：低→高",
   "kanban.search.placeholder": "搜索卡片…",
   "kanban.editMode": "编辑",
+  "rightPanel.kanban.expand": "展开",
+  "rightPanel.kanban.collapse": "缩小",
   "settings.title": "设置",
   "settings.subtitle": "自定义你的使用体验",
   "settings.nav.profile": "个人资料",
