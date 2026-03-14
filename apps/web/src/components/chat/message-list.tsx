@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { TypingIndicator } from "./typing-indicator";
 import { NotePreviewCard } from "./note-preview-card";
 import { KanbanCardPreview } from "./kanban-card-preview";
+import { CommitSharePreview } from "./commit-share-preview";
 import { useTranslation } from "@/lib/i18n";
 import { diagCount, useRenderDiag } from "@/lib/chat-diagnostics";
 
@@ -409,6 +410,10 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           ) : (message.metadata as Record<string, unknown>)?.type === "kanban_card" ? (
             <div className="flex justify-center py-1.5">
               <KanbanCardPreview metadata={message.metadata as { cardId: string; title: string; preview?: string; priority?: string; columnName?: string }} />
+            </div>
+          ) : (message.metadata as Record<string, unknown>)?.type === "commit_share" ? (
+            <div className="flex justify-center py-1.5">
+              <CommitSharePreview metadata={message.metadata as { commitHash: string; title: string; preview?: string }} />
             </div>
           ) : (
             <div className="flex justify-center py-1.5">

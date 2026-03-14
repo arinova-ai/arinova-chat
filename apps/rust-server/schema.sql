@@ -296,6 +296,7 @@ CREATE TABLE communities (
     verified BOOLEAN DEFAULT FALSE,
     verified_at TIMESTAMPTZ,
     default_agent_listing_id UUID REFERENCES agent_listings(id),
+    conversation_id UUID REFERENCES conversations(id),
     cs_mode VARCHAR(20) DEFAULT 'ai_only' CHECK (cs_mode IN ('ai_only', 'human_only', 'hybrid')),
     -- Lounge voice agent fields
     voice_model_id TEXT,

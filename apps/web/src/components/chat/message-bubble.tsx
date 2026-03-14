@@ -47,6 +47,7 @@ import { ShareSheet, type ShareContent } from "./share-sheet";
 import { LinkPreviewCards } from "./link-preview-card";
 import { NotePreviewCard } from "./note-preview-card";
 import { TaskPreviewCard } from "./task-preview-card";
+import { CommitSharePreview } from "./commit-share-preview";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useTranslation } from "@/lib/i18n";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -829,6 +830,9 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
             )}
             {message.metadata && typeof (message.metadata as Record<string, unknown>).cardId === "string" && (
               <TaskPreviewCard metadata={message.metadata as { cardId: string; title: string; preview?: string; priority?: string; columnName?: string }} />
+            )}
+            {message.metadata && (message.metadata as Record<string, unknown>).type === "commit_share" && (
+              <CommitSharePreview metadata={message.metadata as { commitHash: string; title: string; preview?: string }} />
             )}
           </div>
           )}

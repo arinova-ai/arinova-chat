@@ -407,6 +407,58 @@ async fn create(
         );
     }
 
+    // Create group conversation for community
+    let conv_id = Uuid::new_v4();
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO conversations (id, title, "type", user_id, mention_only)
+           VALUES ($1, $2, 'group', $3, TRUE)"#,
+    )
+    .bind(conv_id)
+    .bind(name)
+    .bind(&user.id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("Create community: create conversation failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    // Link conversation to community
+    if let Err(e) = sqlx::query(
+        "UPDATE communities SET conversation_id = $1 WHERE id = $2",
+    )
+    .bind(conv_id)
+    .bind(community_id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("Create community: link conversation failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
+    // Add creator to conversation
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO conversation_user_members (conversation_id, user_id, role)
+           VALUES ($1, $2, 'admin')"#,
+    )
+    .bind(conv_id)
+    .bind(&user.id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("Create community: add creator to conversation failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
+
     if let Err(e) = tx.commit().await {
         tracing::error!("Create community: commit failed: {}", e);
         return (
@@ -417,7 +469,7 @@ async fn create(
 
     (
         StatusCode::CREATED,
-        Json(json!({ "id": community_id })),
+        Json(json!({ "id": community_id, "conversationId": conv_id })),
     )
 }
 
@@ -643,14 +695,14 @@ async fn join(
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
     // Fetch community
-    let community = sqlx::query_as::<_, (i32, i32, String)>(
-        "SELECT join_fee, monthly_fee, status FROM communities WHERE id = $1",
+    let community = sqlx::query_as::<_, (i32, i32, String, Option<Uuid>)>(
+        "SELECT join_fee, monthly_fee, status, conversation_id FROM communities WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.db)
     .await;
 
-    let (join_fee, monthly_fee, status) = match community {
+    let (join_fee, monthly_fee, status, conversation_id) = match community {
         Ok(Some(c)) => c,
         Ok(None) => {
             return (
@@ -879,6 +931,19 @@ async fn join(
         );
     }
 
+    // Add user to community conversation
+    if let Some(conv_id) = conversation_id {
+        let _ = sqlx::query(
+            r#"INSERT INTO conversation_user_members (conversation_id, user_id, role)
+               VALUES ($1, $2, 'member')
+               ON CONFLICT DO NOTHING"#,
+        )
+        .bind(conv_id)
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await;
+    }
+
     if let Err(e) = tx.commit().await {
         tracing::error!("Join community: commit failed: {}", e);
         return (
@@ -887,7 +952,7 @@ async fn join(
         );
     }
 
-    (StatusCode::OK, Json(json!({ "success": true })))
+    (StatusCode::OK, Json(json!({ "success": true, "conversationId": conversation_id })))
 }
 
 // ---------------------------------------------------------------------------
