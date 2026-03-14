@@ -411,6 +411,8 @@ async fn handle_message(
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                 .unwrap_or_default();
 
+            let client_metadata = event.get("metadata").cloned();
+
             if conversation_id.is_empty() || content.is_empty() {
                 return;
             }
@@ -447,6 +449,7 @@ async fn handle_message(
                 thread_id,
                 &mentions,
                 client_msg_id,
+                client_metadata,
                 ws_state,
                 db,
                 redis,
@@ -894,6 +897,7 @@ pub async fn trigger_agent_response(
     thread_id: Option<String>,
     mentions: &[String],
     client_msg_id: Option<String>,
+    client_metadata: Option<serde_json::Value>,
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
@@ -1177,7 +1181,7 @@ pub async fn trigger_agent_response(
                 }
             }
         } else {
-            None
+            client_metadata.clone()
         };
 
         let _ = sqlx::query(
@@ -1266,6 +1270,7 @@ pub async fn trigger_agent_response(
                     "senderIsVerified": sender_is_verified,
                     "replyToId": reply_to_id,
                     "threadId": thread_id,
+                    "metadata": msg_metadata,
                     "createdAt": now.to_rfc3339(),
                     "updatedAt": now.to_rfc3339(),
                 }

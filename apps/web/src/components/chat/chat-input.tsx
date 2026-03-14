@@ -181,8 +181,6 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const attachedCard = useChatStore((s) => s.attachedCard);
   const clearAttachedCard = useChatStore((s) => s.clearAttachedCard);
-  const shareNote = useChatStore((s) => s.shareNote);
-  const shareKanbanCard = useChatStore((s) => s.shareKanbanCard);
   const conversations = useChatStore((s) => s.conversations);
   const agents = useChatStore((s) => s.agents);
   const agentSkills = useChatStore((s) => s.agentSkills);
@@ -936,37 +934,45 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     const trimmed = value.trim();
     const hasCard = !!attachedCard;
 
-    // If only attached card with no text, share the card and clear
-    if (hasCard && !trimmed) {
-      if (activeConversationId) {
-        if (attachedCard.type === "note") {
-          shareNote(activeConversationId, attachedCard.id).catch(() => {});
-        } else {
-          shareKanbanCard(attachedCard.id, activeConversationId).catch(() => {});
-        }
-      }
-      clearAttachedCard();
-      playSendSound();
-      return;
-    }
+    // Nothing to send
+    if (!trimmed && !hasCard) return;
 
-    if (!trimmed) return;
-
-    // Intercept platform commands
-    if (tryExecuteSlashCommand(trimmed)) {
+    // Intercept platform commands (only when no card attached)
+    if (!hasCard && trimmed && tryExecuteSlashCommand(trimmed)) {
       clearInput();
       return;
     }
 
-    // Share attached card first (as Rich Card), then send text
-    if (hasCard && activeConversationId) {
+    // Build card metadata for single-message send
+    let cardMetadata: Record<string, unknown> | undefined;
+    if (hasCard) {
       if (attachedCard.type === "note") {
-        shareNote(activeConversationId, attachedCard.id).catch(() => {});
+        cardMetadata = {
+          type: "note_share",
+          noteId: attachedCard.id,
+          title: attachedCard.title,
+          preview: attachedCard.preview || "",
+          tags: [],
+        };
       } else {
-        shareKanbanCard(attachedCard.id, activeConversationId).catch(() => {});
+        cardMetadata = {
+          type: "kanban_card",
+          cardId: attachedCard.id,
+          title: attachedCard.title,
+          preview: attachedCard.preview || "",
+        };
       }
       clearAttachedCard();
     }
+
+    // Build content: card description + user text combined
+    const content = trimmed || (hasCard
+      ? (attachedCard.type === "note"
+        ? `用戶分享了一篇筆記：${attachedCard.title}`
+        : `用戶分享了一個任務：${attachedCard.title}`)
+      : "");
+
+    if (!content) return;
 
     // Extract @mentions and resolve to agent IDs
     const mentionPattern = /@([\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]+)/g;
@@ -982,14 +988,14 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     }
 
     if (threadId) {
-      sendThreadMessage(trimmed);
+      sendThreadMessage(content);
     } else {
-      sendMessage(trimmed, mentionIds.size > 0 ? [...mentionIds] : undefined);
+      sendMessage(content, mentionIds.size > 0 ? [...mentionIds] : undefined, cardMetadata);
     }
-    addToHistory(trimmed);
+    addToHistory(trimmed || content);
     playSendSound();
     clearInput();
-  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers, addToHistory, attachedCard, activeConversationId, shareNote, shareKanbanCard, clearAttachedCard]);
+  }, [value, sendMessage, sendThreadMessage, threadId, pendingFiles, handleUpload, tryExecuteSlashCommand, clearInput, activeMembers, addToHistory, attachedCard, clearAttachedCard]);
 
   // ---------- Keyboard handling ----------
 

@@ -181,7 +181,7 @@ interface ChatState {
   loadAgents: () => Promise<void>;
   loadConversations: (query?: string) => Promise<void>;
   loadMessages: (conversationId: string, unreadCountForDivider?: number) => Promise<void>;
-  sendMessage: (content: string, mentions?: string[]) => void;
+  sendMessage: (content: string, mentions?: string[], metadata?: Record<string, unknown>) => void;
   cancelStream: (messageId?: string) => void;
   cancelAgentStream: (conversationId: string, messageId: string) => void;
   cancelQueuedMessage: (conversationId: string, messageId: string) => void;
@@ -703,7 +703,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: (content, mentions) => {
+  sendMessage: (content, mentions, metadata) => {
     const { activeConversationId, replyingTo } = get();
     if (!activeConversationId) return;
 
@@ -728,6 +728,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             senderAgentName: replyingTo.senderAgentName,
           }
         : undefined,
+      metadata: metadata as any,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -756,6 +757,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content,
       ...(replyingTo ? { replyToId: replyingTo.id } : {}),
       ...(mentions && mentions.length > 0 ? { mentions } : {}),
+      ...(metadata ? { metadata } : {}),
     });
   },
 

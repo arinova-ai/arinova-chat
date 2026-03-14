@@ -3466,6 +3466,7 @@ async fn share_card_to_conversation(
                     None,
                     &[],
                     None,
+                    None,
                     &state_clone.ws,
                     &state_clone.db,
                     &state_clone.redis,
