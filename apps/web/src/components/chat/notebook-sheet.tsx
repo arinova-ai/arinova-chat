@@ -646,9 +646,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartCreate} title={t("chat.notebook.create")}>
                     <Plus className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onOpenChange(false)}>
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             </div>
