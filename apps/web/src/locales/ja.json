@@ -374,6 +374,7 @@
   "kanban.sort.priorityDesc": "優先度：高→低",
   "kanban.sort.priorityAsc": "優先度：低→高",
   "kanban.search.placeholder": "カードを検索…",
+  "kanban.editMode": "編集",
   "settings.title": "設定",
   "settings.subtitle": "使用体験をカスタマイズ",
   "settings.nav.profile": "プロフィール",

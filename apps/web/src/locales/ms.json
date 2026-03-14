@@ -374,6 +374,7 @@
   "kanban.sort.priorityDesc": "Keutamaan: Tinggi → Rendah",
   "kanban.sort.priorityAsc": "Keutamaan: Rendah → Tinggi",
   "kanban.search.placeholder": "Cari kad…",
+  "kanban.editMode": "Edit",
   "settings.title": "Tetapan",
   "settings.subtitle": "Sesuaikan pengalaman anda",
   "settings.nav.profile": "Profil",

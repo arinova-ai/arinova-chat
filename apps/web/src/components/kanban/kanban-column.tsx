@@ -1,7 +1,8 @@
 "use client";
 
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { ArrowDownAZ, ArrowUpAZ, Check, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ArrowDownAZ, ArrowUpAZ, Check, GripVertical, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export function FullColumn({
   cardLabelsMap,
   agentEmojis,
   agentNames,
+  editMode,
   onAddCard,
   onDeleteCard,
   onSelectCard,
@@ -74,6 +76,7 @@ export function FullColumn({
   cardLabelsMap?: Map<string, Array<{ labelId: string; labelName: string; labelColor: string }>>;
   agentEmojis: Map<string, string>;
   agentNames: Map<string, string>;
+  editMode?: boolean;
   onAddCard: (columnId: string) => void;
   onDeleteCard: (id: string) => void;
   onSelectCard: (card: KanbanCard) => void;
@@ -86,6 +89,18 @@ export function FullColumn({
   const [renameValue, setRenameValue] = useState(column.name);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const renameRef = useRef<HTMLInputElement>(null);
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: column.id,
+    data: { type: "column", column },
+    disabled: !editMode,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  };
 
   const sortedCards = useMemo(() => sortCards(cards, sortBy), [cards, sortBy]);
 
@@ -108,10 +123,19 @@ export function FullColumn({
   };
 
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-xl border border-border bg-muted/30 md:w-80">
+    <div ref={setNodeRef} style={style} {...attributes} className="flex w-72 shrink-0 flex-col rounded-xl border border-border bg-muted/30 md:w-80">
       {/* Column header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          {editMode && (
+            <button
+              type="button"
+              className="cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:text-foreground shrink-0"
+              {...listeners}
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
           {renaming ? (
             <Input
               ref={renameRef}
@@ -137,26 +161,28 @@ export function FullColumn({
           </span>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { setRenameValue(column.name); setRenaming(true); }}>
-                <Pencil className="h-3.5 w-3.5 mr-2" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
-                <Trash2 className="h-3.5 w-3.5 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {editMode && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { setRenameValue(column.name); setRenaming(true); }}>
+                  <Pencil className="h-3.5 w-3.5 mr-2" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
+                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           {/* Sort dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -184,13 +210,15 @@ export function FullColumn({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            type="button"
-            onClick={() => onAddCard(column.id)}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+          {editMode && (
+            <button
+              type="button"
+              onClick={() => onAddCard(column.id)}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 

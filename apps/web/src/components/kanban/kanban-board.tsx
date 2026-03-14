@@ -14,6 +14,11 @@ import {
   type DragOverEvent,
 } from "@dnd-kit/core";
 import {
+  SortableContext,
+  arrayMove,
+  horizontalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import {
   Archive,
   ArchiveRestore,
   ChevronDown,
@@ -99,7 +104,8 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const [renameBoardName, setRenameBoardName] = useState("");
   const [archiveBoardConfirm, setArchiveBoardConfirm] = useState(false);
 
-  // Column management state
+  // Edit mode + column management state
+  const [editMode, setEditMode] = useState(false);
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
 
@@ -407,6 +413,8 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
+      const data = event.active.data.current;
+      if (data?.type === "column") return; // column drag — no overlay needed
       setActiveCard(findCard(event.active.id as string));
     },
     [findCard],
@@ -416,6 +424,8 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     (event: DragOverEvent) => {
       const { active, over } = event;
       if (!over || !board) return;
+      // Skip cross-column card moves during column drags
+      if (active.data.current?.type === "column") return;
 
       const activeId = active.id as string;
       const overId = over.id as string;
@@ -451,6 +461,35 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
       const { active, over } = event;
       if (!over || !board) return;
 
+      // ── Column reorder ──
+      if (active.data.current?.type === "column") {
+        const activeId = active.id as string;
+        const overId = over.id as string;
+        if (activeId === overId) return;
+        const oldIndex = columns.findIndex((c) => c.id === activeId);
+        const newIndex = columns.findIndex((c) => c.id === overId);
+        if (oldIndex < 0 || newIndex < 0) return;
+        const reordered = arrayMove(columns, oldIndex, newIndex);
+        // Optimistic update
+        setBoard((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            columns: reordered.map((col, i) => ({ ...col, sortOrder: i })),
+          };
+        });
+        try {
+          await api(`/api/kanban/boards/${board.id}/columns/reorder`, {
+            method: "POST",
+            body: JSON.stringify({ columnIds: reordered.map((c) => c.id) }),
+            silent: true,
+          });
+        } catch { /* ignore */ }
+        fetchBoard(board.id);
+        return;
+      }
+
+      // ── Card reorder ──
       const activeId = active.id as string;
       const overId = over.id as string;
       const card = board.cards.find((c) => c.id === activeId);
@@ -740,46 +779,55 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
 
   // ── Render columns ────────────────────────────────────
 
+  const columnItems = columns.map((col) => {
+    const colCards = cardsByColumn.get(col.id) ?? [];
+
+    if (mode === "compact" || isMobile) {
+      return (
+        <CompactColumn
+          key={col.id}
+          column={col}
+          cards={colCards}
+          allColumns={columns}
+          onMoveCard={handleMoveCard}
+          onSelectCard={handleSelectCard}
+          onCreateCard={handleCreateCardCompact}
+          onRenameColumn={handleRenameColumn}
+          onDeleteColumn={handleDeleteColumn}
+        />
+      );
+    }
+
+    return (
+      <FullColumn
+        key={col.id}
+        column={col}
+        cards={colCards}
+        allColumns={columns}
+        cardAgentsMap={cardAgentsMap}
+        cardLabelsMap={cardLabelsMap}
+        agentEmojis={agentEmojis}
+        agentNames={agentNames}
+        editMode={editMode}
+        onAddCard={setAddColumnId}
+        onDeleteCard={handleDeleteCard}
+        onSelectCard={handleSelectCard}
+        onRenameColumn={handleRenameColumn}
+        onDeleteColumn={handleDeleteColumn}
+      />
+    );
+  });
+
   const columnsContent = (
     <div className={`flex gap-3 ${mode === "compact" ? "p-4 h-full min-w-max" : ""}`}>
-      {columns.map((col) => {
-        const colCards = cardsByColumn.get(col.id) ?? [];
-
-        if (mode === "compact" || isMobile) {
-          return (
-            <CompactColumn
-              key={col.id}
-              column={col}
-              cards={colCards}
-              allColumns={columns}
-              onMoveCard={handleMoveCard}
-              onSelectCard={handleSelectCard}
-              onCreateCard={handleCreateCardCompact}
-              onRenameColumn={handleRenameColumn}
-              onDeleteColumn={handleDeleteColumn}
-            />
-          );
-        }
-
-        return (
-          <FullColumn
-            key={col.id}
-            column={col}
-            cards={colCards}
-            allColumns={columns}
-            cardAgentsMap={cardAgentsMap}
-            cardLabelsMap={cardLabelsMap}
-            agentEmojis={agentEmojis}
-            agentNames={agentNames}
-            onAddCard={setAddColumnId}
-            onDeleteCard={handleDeleteCard}
-            onSelectCard={handleSelectCard}
-            onRenameColumn={handleRenameColumn}
-            onDeleteColumn={handleDeleteColumn}
-          />
-        );
-      })}
-      {addColumnButton}
+      {useDnd ? (
+        <SortableContext items={columns.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+          {columnItems}
+        </SortableContext>
+      ) : (
+        columnItems
+      )}
+      {editMode && addColumnButton}
     </div>
   );
 
@@ -950,6 +998,14 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
                   </button>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => setEditMode((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${editMode ? "bg-brand/10 text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {t("kanban.editMode")}
+              </button>
               <button
                 type="button"
                 onClick={() => { setMembersOpen(true); fetchBoardMembers(); }}

@@ -380,6 +380,7 @@
   "kanban.sort.priorityDesc": "優先級：高→低",
   "kanban.sort.priorityAsc": "優先級：低→高",
   "kanban.search.placeholder": "搜尋卡片…",
+  "kanban.editMode": "編輯",
   "settings.title": "設定",
   "settings.subtitle": "自訂你的使用體驗",
   "settings.nav.profile": "個人檔案",

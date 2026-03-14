@@ -374,6 +374,7 @@
   "kanban.sort.priorityDesc": "Prioridad: Alta → Baja",
   "kanban.sort.priorityAsc": "Prioridad: Baja → Alta",
   "kanban.search.placeholder": "Buscar tarjetas…",
+  "kanban.editMode": "Editar",
   "settings.title": "Configuracion",
   "settings.subtitle": "Personaliza tu experiencia",
   "settings.nav.profile": "Perfil",
