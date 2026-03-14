@@ -176,14 +176,14 @@ function CapsuleDetailView({
                 key={entry.id}
                 type="button"
                 onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                className="w-full text-left rounded-lg border border-border px-3 py-2 hover:bg-accent/40 transition-colors"
+                className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${isExpanded ? "border-brand/30 bg-accent/30" : "border-border hover:bg-accent/40"}`}
               >
                 <div className="flex items-start gap-2">
                   <span className={`shrink-0 mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${colorClass}`}>
                     {(entry.importance * 100).toFixed(0)}%
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className={`text-xs ${isExpanded ? "" : "line-clamp-2"}`}>
+                    <p className={`text-xs whitespace-pre-wrap break-words ${isExpanded ? "" : "line-clamp-2"}`}>
                       {entry.content}
                     </p>
                     {/* Tags */}
