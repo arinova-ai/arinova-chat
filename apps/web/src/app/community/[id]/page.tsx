@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { BACKEND_URL } from "@/lib/config";
+import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
 import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
@@ -95,6 +96,7 @@ interface Message {
 // ---------------------------------------------------------------------------
 
 function ApprovalForm({ communityId, questions }: { communityId: string; questions: string[] }) {
+  const { t } = useTranslation();
   const [answers, setAnswers] = useState<string[]>(questions.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -115,8 +117,8 @@ function ApprovalForm({ communityId, questions }: { communityId: string; questio
   if (submitted) {
     return (
       <div className="rounded-xl border border-border bg-card p-6 text-center space-y-2">
-        <p className="text-sm font-semibold">Application Submitted</p>
-        <p className="text-xs text-muted-foreground">You&apos;ll be notified when the admin reviews your application.</p>
+        <p className="text-sm font-semibold">{t("community.detail.applicationSubmitted")}</p>
+        <p className="text-xs text-muted-foreground">{t("community.detail.applicationSubmittedHint")}</p>
       </div>
     );
   }
@@ -124,8 +126,8 @@ function ApprovalForm({ communityId, questions }: { communityId: string; questio
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-4">
       <div>
-        <h3 className="text-sm font-semibold">Application Required</h3>
-        <p className="text-xs text-muted-foreground mt-1">Answer the following questions to apply for membership.</p>
+        <h3 className="text-sm font-semibold">{t("community.detail.applicationRequired")}</h3>
+        <p className="text-xs text-muted-foreground mt-1">{t("community.detail.applicationRequiredHint")}</p>
       </div>
       {questions.map((question, i) => (
         <div key={i} className="space-y-1.5">
@@ -147,7 +149,7 @@ function ApprovalForm({ communityId, questions }: { communityId: string; questio
         onClick={handleApply}
         disabled={submitting}
       >
-        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Application"}
+        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.detail.submitApplication")}
       </Button>
     </div>
   );
@@ -158,6 +160,7 @@ function ApprovalForm({ communityId, questions }: { communityId: string; questio
 // ---------------------------------------------------------------------------
 
 function CommunityDetailContent() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { data: session } = authClient.useSession();
@@ -716,7 +719,7 @@ function CommunityDetailContent() {
                 return (
                   <div className="flex-1 flex items-center justify-center">
                     <div className="flex flex-col items-center gap-2 text-center p-4">
-                      <p className="text-sm font-medium">Start a conversation with {community.name}</p>
+                      <p className="text-sm font-medium">{t("community.detail.startConversation").replace("{name}", community.name)}</p>
                       <Button
                         className="brand-gradient-btn gap-2"
                         onClick={async () => {
@@ -738,8 +741,8 @@ function CommunityDetailContent() {
                 return (
                   <div className="flex-1 flex items-center justify-center">
                     <div className="flex flex-col items-center gap-2 text-center p-4">
-                      <p className="text-sm font-medium">Chat with {community.name}&apos;s Voice Agent</p>
-                      <p className="text-xs text-muted-foreground">Free tier available</p>
+                      <p className="text-sm font-medium">{t("community.detail.voiceChat").replace("{name}", community.name)}</p>
+                      <p className="text-xs text-muted-foreground">{t("community.detail.freeTier")}</p>
                       <Button
                         className="brand-gradient-btn gap-2"
                         onClick={async () => {
@@ -785,7 +788,7 @@ function CommunityDetailContent() {
                           {community.verified && <BadgeCheck className="h-5 w-5 text-blue-500" />}
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1"><Users className="h-4 w-4" />{community.memberCount} members</span>
+                          <span className="flex items-center gap-1"><Users className="h-4 w-4" />{community.memberCount} {t("community.detail.members")}</span>
                           {community.category && <span className="capitalize">{community.category}</span>}
                         </div>
                       </div>
@@ -798,12 +801,12 @@ function CommunityDetailContent() {
                     {/* Fee info */}
                     <div className="rounded-xl border border-border bg-card p-4 space-y-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Join fee</span>
-                        <span>{community.joinFee > 0 ? `${community.joinFee} coins` : "Free"}</span>
+                        <span className="text-muted-foreground">{t("community.detail.joinFee")}</span>
+                        <span>{community.joinFee > 0 ? `${community.joinFee} coins` : t("community.detail.free")}</span>
                       </div>
                       {community.monthlyFee > 0 && (
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Monthly fee</span>
+                          <span className="text-muted-foreground">{t("community.detail.monthlyFee")}</span>
                           <span>{community.monthlyFee} coins/month</span>
                         </div>
                       )}
@@ -819,7 +822,7 @@ function CommunityDetailContent() {
                         onClick={handleJoin}
                         disabled={joining}
                       >
-                        {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : "Join Community"}
+                        {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.detail.joinCommunity")}
                       </Button>
                     )}
                   </div>
@@ -842,7 +845,7 @@ function CommunityDetailContent() {
                       {loadingMore ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : (
-                        "Load earlier messages"
+                        t("community.detail.loadEarlier")
                       )}
                     </Button>
                   </div>
@@ -851,8 +854,8 @@ function CommunityDetailContent() {
                 {messages.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-2">
                     <Users className="h-12 w-12 opacity-40" />
-                    <p className="text-sm font-medium">No messages yet</p>
-                    <p className="text-xs">Be the first to say something!</p>
+                    <p className="text-sm font-medium">{t("community.detail.noMessages")}</p>
+                    <p className="text-xs">{t("community.detail.beFirst")}</p>
                   </div>
                 )}
 
@@ -1010,8 +1013,8 @@ function CommunityDetailContent() {
                     onKeyDown={handleKeyDown}
                     placeholder={
                       selectedAgent
-                        ? `Message @${selectedAgent.agentName}...`
-                        : "Type a message..."
+                        ? t("community.detail.messageAgent").replace("{name}", selectedAgent.agentName)
+                        : t("community.detail.typeMessage")
                     }
                     rows={1}
                     className="flex-1 resize-none rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"

@@ -2346,7 +2346,7 @@ async fn review_application(
         Ok(Some((applicant_id,))) => {
             if body.approved {
                 // Add as member
-                let _ = sqlx::query(
+                let insert_result = sqlx::query(
                     r#"INSERT INTO community_members (community_id, user_id, role)
                        VALUES ($1, $2, 'member')
                        ON CONFLICT DO NOTHING"#,
@@ -2356,13 +2356,15 @@ async fn review_application(
                 .execute(&state.db)
                 .await;
 
-                // Increment member_count
-                let _ = sqlx::query(
-                    "UPDATE communities SET member_count = member_count + 1, updated_at = NOW() WHERE id = $1",
-                )
-                .bind(community_id)
-                .execute(&state.db)
-                .await;
+                // Increment member_count only if actually inserted
+                if insert_result.as_ref().map(|r| r.rows_affected()).unwrap_or(0) > 0 {
+                    let _ = sqlx::query(
+                        "UPDATE communities SET member_count = member_count + 1, updated_at = NOW() WHERE id = $1",
+                    )
+                    .bind(community_id)
+                    .execute(&state.db)
+                    .await;
+                }
 
                 // Add to conversation
                 let conv_id = sqlx::query_scalar::<_, Uuid>(

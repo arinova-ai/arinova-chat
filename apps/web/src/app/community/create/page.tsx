@@ -25,7 +25,7 @@ const CATEGORIES = [
 const AGENT_JOIN_POLICIES = [
   { value: "owner_only", label: "Only owner's agents" },
   { value: "admin_agents", label: "Admin agents allowed" },
-  { value: "all_member_agents", label: "All member agents allowed" },
+  { value: "member_agents", label: "All member agents allowed" },
 ] as const;
 
 function CreateCommunityContent() {
@@ -152,14 +152,14 @@ function CreateCommunityContent() {
             {/* Category */}
             <div className="rounded-xl border border-border bg-card p-5 space-y-3">
               <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Category
+                {t("community.form.category")}
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                <option value="">Select a category</option>
+                <option value="">{t("community.form.categoryPlaceholder")}</option>
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -171,7 +171,7 @@ function CreateCommunityContent() {
             {/* Cover Image URL */}
             <div className="rounded-xl border border-border bg-card p-5 space-y-3">
               <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Cover Image URL
+                {t("community.form.coverImageUrl")}
               </label>
               <input
                 type="text"
@@ -181,7 +181,7 @@ function CreateCommunityContent() {
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <p className="text-[10px] text-muted-foreground">
-                Paste a URL for your community cover image
+                {t("community.form.coverImageUrlHint")}
               </p>
             </div>
 
@@ -190,10 +190,10 @@ function CreateCommunityContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                    Require Approval to Join
+                    {t("community.form.requireApproval")}
                   </label>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Members must be approved before joining
+                    {t("community.form.requireApprovalHint")}
                   </p>
                 </div>
                 <button
@@ -217,7 +217,7 @@ function CreateCommunityContent() {
               {requireApproval && (
                 <div className="space-y-3 pt-2 border-t border-border">
                   <label className="text-xs font-medium text-muted-foreground">
-                    Approval Questions
+                    {t("community.form.approvalQuestions")}
                   </label>
                   {approvalQuestions.map((question, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -225,7 +225,7 @@ function CreateCommunityContent() {
                         type="text"
                         value={question}
                         onChange={(e) => updateQuestion(i, e.target.value)}
-                        placeholder={`Question ${i + 1}`}
+                        placeholder={t("community.form.questionPlaceholder").replace("{n}", String(i + 1))}
                         className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                       />
                       {approvalQuestions.length > 1 && (
@@ -245,7 +245,7 @@ function CreateCommunityContent() {
                     className="flex items-center gap-1.5 text-xs text-brand-text hover:text-brand transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Add question
+                    {t("community.form.addQuestion")}
                   </button>
                 </div>
               )}
@@ -254,10 +254,10 @@ function CreateCommunityContent() {
             {/* Agent Join Policy */}
             <div className="rounded-xl border border-border bg-card p-5 space-y-3">
               <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                Agent Join Policy
+                {t("community.form.agentJoinPolicy")}
               </label>
               <p className="text-[10px] text-muted-foreground">
-                Who can add AI agents to this community
+                {t("community.form.agentJoinPolicyHint")}
               </p>
               <div className="space-y-2">
                 {AGENT_JOIN_POLICIES.map((policy) => (

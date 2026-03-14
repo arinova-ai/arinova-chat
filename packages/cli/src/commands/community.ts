@@ -31,7 +31,7 @@ export function registerCommunity(program: Command): void {
     .command("create")
     .description("Create a new community")
     .requiredOption("--name <name>", "Community name")
-    .option("--type <type>", "Type (club or lounge)", "club")
+    .option("--type <type>", "Type (community or lounge)", "community")
     .option("--description <desc>", "Description")
     .action(async (opts: { name: string; type: string; description?: string }) => {
       try {
