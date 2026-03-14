@@ -50,6 +50,7 @@ pub fn router() -> Router<AppState> {
             post(auto_tag_note),
         )
         // User-level note endpoints
+        .route("/api/notes/{noteId}", get(get_note_by_id))
         .route("/api/users/me/notes", get(list_user_notes))
         .route(
             "/api/notes/{noteId}/links",
@@ -469,6 +470,46 @@ async fn get_note(
             j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
             j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
             j.as_object_mut().unwrap().insert("relatedCapsules".into(), json!(related_capsules));
+            Json(j).into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Note not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /api/notes/:noteId — get a single note by ID (user must be a member of the note's conversation)
+async fn get_note_by_id(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    let row = sqlx::query_as::<_, NoteRow>(&format!(
+        "{} WHERE n.id = $1",
+        NOTE_QUERY_BASE
+    ))
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(note)) => {
+            // Verify the user is a member of the note's conversation
+            if !is_member(&state.db, note.conversation_id, &user.id).await {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({"error": "Not a member of this conversation"})),
+                )
+                    .into_response();
+            }
+            let j = note_to_json(&note);
             Json(j).into_response()
         }
         Ok(None) => (
