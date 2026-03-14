@@ -411,7 +411,15 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (!titleInput.trim()) return;
     setLoading(true);
     try {
-      const note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput);
+      let note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput);
+      if (notebookId) {
+        // Move note into the correct notebook via PATCH notebook_id
+        await api(`/api/conversations/${conversationId}/notes/${note.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ notebookId }),
+        });
+        setNotebookNotes((prev) => [note, ...prev]);
+      }
       if (note.suggestedTags?.length) {
         setSuggestedTags(note.suggestedTags.filter((t) => !tagsInput.includes(t)));
       }
@@ -422,7 +430,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     } finally {
       setLoading(false);
     }
-  }, [conversationId, titleInput, contentInput, tagsInput, createNote]);
+  }, [conversationId, notebookId, titleInput, contentInput, tagsInput, createNote]);
 
   const handleSave = useCallback(async () => {
     if (!selectedNote || !titleInput.trim()) return;
