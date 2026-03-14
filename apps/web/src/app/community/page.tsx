@@ -52,7 +52,7 @@ function CommunityBrowseContent() {
       setLoading(true);
       try {
         const params = new URLSearchParams();
-        params.set("type", "club");
+        params.set("type", "community");
         if (search.trim()) params.set("search", search.trim());
         params.set("page", String(Math.floor(currentOffset / limit) + 1));
         params.set("limit", String(limit));

@@ -49,7 +49,7 @@ pub enum ConversationType {
     H2a,
     Group,
     Official,
-    Club,
+    Community,
     Lounge,
 }
 
@@ -61,7 +61,7 @@ impl std::fmt::Display for ConversationType {
             Self::H2a => write!(f, "h2a"),
             Self::Group => write!(f, "group"),
             Self::Official => write!(f, "official"),
-            Self::Club => write!(f, "club"),
+            Self::Community => write!(f, "community"),
             Self::Lounge => write!(f, "lounge"),
         }
     }

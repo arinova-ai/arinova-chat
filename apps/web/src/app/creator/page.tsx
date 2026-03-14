@@ -783,7 +783,7 @@ function CreateCommunityDialog({
   onCreated,
   t,
 }: {
-  communityType: "club" | "lounge";
+  communityType: "community" | "lounge";
   onClose: () => void;
   onCreated: () => void;
   t: (k: string) => string;
@@ -814,7 +814,7 @@ function CreateCommunityDialog({
           body: JSON.stringify({
             name: name.trim(),
             description: description.trim() || undefined,
-            type: "club",
+            type: "community",
           }),
         });
       }
@@ -880,7 +880,7 @@ function CreateCommunityDialog({
 function CommunityTab({ t }: { t: (k: string) => string }) {
   const [communities, setCommunities] = useState<CreatorCommunity[]>([]);
   const [cLoading, setCLoading] = useState(true);
-  const [createType, setCreateType] = useState<"club" | "lounge" | null>(null);
+  const [createType, setCreateType] = useState<"community" | "lounge" | null>(null);
 
   const fetchCommunities = useCallback(() => {
     setCLoading(true);
@@ -905,7 +905,7 @@ function CommunityTab({ t }: { t: (k: string) => string }) {
             <Users2 className="h-3.5 w-3.5" />
             {t("creator.createLounge")}
           </Button>
-          <Button size="sm" variant="secondary" className="gap-1" onClick={() => setCreateType("club")}>
+          <Button size="sm" variant="secondary" className="gap-1" onClick={() => setCreateType("community")}>
             <Users className="h-3.5 w-3.5" />
             {t("creator.createCommunity")}
           </Button>
