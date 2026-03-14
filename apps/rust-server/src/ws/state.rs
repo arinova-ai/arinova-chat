@@ -42,6 +42,7 @@ pub struct QueuedResponse {
     pub reply_to_id: Option<String>,
     pub thread_id: Option<String>,
     pub user_message_id: Option<String>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// Shared WebSocket state across all connections

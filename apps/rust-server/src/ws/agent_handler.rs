@@ -466,6 +466,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                                         reply_to_id: None,
                                         thread_id: None,
                                         user_message_id: Some(msg_id.clone()),
+                                        metadata: None,
                                     });
                                 continue;
                             }
@@ -478,6 +479,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                                 None,
                                 None,
                                 &_conv_type,
+                                None,
                                 &ws_state,
                                 &db,
                                 &redis,

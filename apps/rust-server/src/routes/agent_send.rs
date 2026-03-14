@@ -255,6 +255,7 @@ async fn agent_send(
                             reply_to_id: None,
                             thread_id: None,
                             user_message_id: Some(msg_id.clone()),
+                            metadata: None,
                         });
                     continue;
                 }
@@ -267,6 +268,7 @@ async fn agent_send(
                     None,
                     None,
                     &conv_type,
+                    None,
                     &state.ws,
                     &state.db,
                     &state.redis,

@@ -1353,6 +1353,7 @@ pub async fn trigger_agent_response(
                     reply_to_id: reply_to_id.clone(),
                     thread_id: thread_id.clone(),
                     user_message_id: saved_user_msg_id.clone(),
+                    metadata: client_metadata.clone(),
                 });
 
             // Notify the user that this agent's response is queued
@@ -1386,6 +1387,7 @@ pub async fn trigger_agent_response(
             reply_to_id.as_deref(),
             thread_id.as_deref(),
             &conv_type,
+            client_metadata.as_ref(),
             ws_state,
             db,
             redis,
@@ -1404,6 +1406,7 @@ pub(crate) async fn do_trigger_agent_response(
     reply_to_id: Option<&str>,
     thread_id: Option<&str>,
     conv_type: &str,
+    client_metadata: Option<&serde_json::Value>,
     ws_state: &WsState,
     db: &PgPool,
     redis: &deadpool_redis::Pool,
@@ -1645,6 +1648,11 @@ pub(crate) async fn do_trigger_agent_response(
     // Add sticker metadata to task payload if present
     if let Some(ref meta) = sticker_metadata {
         task_payload["stickerMetadata"] = meta.clone();
+    }
+
+    // Add client message metadata (rich cards: kanban_card, commit, etc.) to task payload
+    if let Some(meta) = client_metadata {
+        task_payload["messageMetadata"] = meta.clone();
     }
 
     // Add group members context
@@ -2321,6 +2329,7 @@ fn spawn_mention_dispatch(
             Some(&reply_to_id),
             None,
             &conv_type,
+            None,
             &ws_state,
             &db,
             &redis,
@@ -2383,6 +2392,7 @@ fn process_next_in_queue(
             next.reply_to_id.as_deref(),
             next.thread_id.as_deref(),
             &conv_type,
+            next.metadata.as_ref(),
             &ws_state,
             &db,
             &redis,
