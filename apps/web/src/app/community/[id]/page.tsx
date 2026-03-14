@@ -707,7 +707,7 @@ function CommunityDetailContent() {
           )}
 
           {/* Non-member: community detail view / Member: chat view */}
-          {!membershipChecked || !currentUserId ? (
+          {!membershipChecked ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
