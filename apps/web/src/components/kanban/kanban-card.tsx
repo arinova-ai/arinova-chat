@@ -180,17 +180,34 @@ export function CompactCard({
       {card.description && (
         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{card.description}</p>
       )}
-      {/* Move dropdown */}
-      <select
-        className="mt-1 w-full text-[10px] bg-transparent border border-border rounded px-1 py-0.5 text-muted-foreground"
-        value={card.columnId}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => onMoveCard(card.id, e.target.value)}
-      >
-        {columns.map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
+      <div className="mt-1 flex items-center gap-1">
+        <select
+          className="flex-1 text-[10px] bg-transparent border border-border rounded px-1 py-0.5 text-muted-foreground"
+          value={card.columnId}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onMoveCard(card.id, e.target.value)}
+        >
+          {columns.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            useChatStore.getState().setAttachedCard({
+              type: "kanban",
+              id: card.id,
+              title: card.title,
+              preview: card.description?.slice(0, 80) || undefined,
+            });
+          }}
+          className="rounded p-1 text-muted-foreground hover:text-brand transition-colors"
+          title="Attach to chat"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
