@@ -149,7 +149,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       setBoards(result);
       // Also fetch archived boards
       try {
-        const allBoards = await api<BoardInfo[]>("/api/kanban/boards?include_archived=true", { silent: true });
+        const allBoards = await api<BoardInfo[]>("/api/kanban/boards?includeArchived=true", { silent: true });
         setArchivedBoards(allBoards.filter((b) => b.archived));
       } catch { /* ignore */ }
       return result;
