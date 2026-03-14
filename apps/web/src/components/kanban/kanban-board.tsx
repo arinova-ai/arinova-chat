@@ -98,6 +98,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [archivedBoards, setArchivedBoards] = useState<BoardInfo[]>([]);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Board management state
   const [creatingBoard, setCreatingBoard] = useState(false);
@@ -839,6 +840,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
         onAddCard={setAddColumnId}
         onDeleteCard={handleDeleteCard}
         onSelectCard={handleSelectCard}
+        onMoveCard={isMobile ? handleMoveCard : undefined}
         onRenameColumn={handleRenameColumn}
         onDeleteColumn={handleDeleteColumn}
       />
@@ -1026,6 +1028,13 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
               </div>
               <button
                 type="button"
+                onClick={() => setMobileSearchOpen((v) => !v)}
+                className={`flex items-center rounded-md px-1.5 py-1.5 text-xs font-medium transition-colors md:hidden ${mobileSearchOpen ? "bg-brand/10 text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+              >
+                <Search className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setEditMode((v) => !v)}
                 className={`flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium transition-colors ${editMode ? "bg-brand/10 text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               >
@@ -1050,6 +1059,29 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
               </button>
             </div>
           </div>
+
+          {/* Mobile search bar */}
+          {mobileSearchOpen && (
+            <div className="relative px-3 pt-2 md:hidden">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/4 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t("kanban.search.placeholder")}
+                className="h-7 w-full pl-7 pr-7 text-xs"
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-5 top-1/2 -translate-y-1/4 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
 
           {emptyState ?? (
             <div className="flex flex-1 overflow-x-auto px-3 pb-3 md:px-4 md:pb-4 pt-2 gap-3">

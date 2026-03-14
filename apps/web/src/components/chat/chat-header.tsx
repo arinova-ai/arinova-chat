@@ -315,7 +315,13 @@ export function ChatHeader({
               }
             }}
             onTransferHuman={handleTransferHuman}
-            onSettingsOpen={() => setSettingsOpen(true)}
+            onSettingsOpen={() => {
+              if ((type === "community" || type === "official" || type === "lounge") && officialCommunityId) {
+                setCommunitySettingsOpen(true);
+              } else {
+                setSettingsOpen(true);
+              }
+            }}
             t={t}
           />
         )}

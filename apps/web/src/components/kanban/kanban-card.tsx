@@ -27,8 +27,10 @@ export function SortableCard({
   agentEmojis,
   agentNames,
   labels,
+  allColumns,
   onDelete,
   onSelect,
+  onMoveCard,
   dragDisabled,
 }: {
   card: KanbanCard;
@@ -36,8 +38,10 @@ export function SortableCard({
   agentEmojis: Map<string, string>;
   agentNames: Map<string, string>;
   labels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
+  allColumns?: KanbanColumn[];
   onDelete: (id: string) => void;
   onSelect: (card: KanbanCard) => void;
+  onMoveCard?: (cardId: string, targetColumnId: string) => void;
   dragDisabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -113,6 +117,20 @@ export function SortableCard({
               </div>
             )}
           </div>
+          {allColumns && onMoveCard && (
+            <div className="mt-1.5">
+              <select
+                className="w-full text-[11px] bg-transparent border border-border rounded px-1.5 py-1 text-muted-foreground"
+                value={card.columnId}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onMoveCard(card.id, e.target.value)}
+              >
+                {allColumns.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <div className="flex shrink-0 flex-col gap-0.5">
           <button

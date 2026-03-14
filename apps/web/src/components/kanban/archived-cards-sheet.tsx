@@ -75,7 +75,7 @@ export function ArchivedCardsSheet({ open, boardId, onClose, onUnarchived }: Arc
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background flex flex-col overflow-hidden">
+      <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background flex flex-col overflow-hidden pt-[max(1rem,env(safe-area-inset-top))]">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Archive className="h-4 w-4" />

@@ -66,6 +66,7 @@ export function FullColumn({
   onAddCard,
   onDeleteCard,
   onSelectCard,
+  onMoveCard,
   onRenameColumn,
   onDeleteColumn,
 }: {
@@ -80,6 +81,7 @@ export function FullColumn({
   onAddCard: (columnId: string) => void;
   onDeleteCard: (id: string) => void;
   onSelectCard: (card: KanbanCard) => void;
+  onMoveCard?: (cardId: string, targetColumnId: string) => void;
   onRenameColumn?: (columnId: string, name: string) => void;
   onDeleteColumn?: (columnId: string) => void;
 }) {
@@ -229,10 +231,12 @@ export function FullColumn({
               card={card}
               agents={cardAgentsMap.get(card.id) ?? []}
               labels={cardLabelsMap?.get(card.id)}
+              allColumns={allColumns}
               agentEmojis={agentEmojis}
               agentNames={agentNames}
               onDelete={onDeleteCard}
               onSelect={onSelectCard}
+              onMoveCard={onMoveCard}
               dragDisabled={sortBy !== "manual"}
             />
           ))}
