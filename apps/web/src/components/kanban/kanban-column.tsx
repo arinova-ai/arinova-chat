@@ -210,15 +210,13 @@ export function FullColumn({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          {editMode && (
-            <button
-              type="button"
-              onClick={() => onAddCard(column.id)}
-              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onAddCard(column.id)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
