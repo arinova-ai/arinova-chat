@@ -60,9 +60,9 @@ export function ActiveCall() {
   const FallbackIcon = peerType === "agent" ? Bot : User;
 
   return (
-    <div className="absolute inset-0 z-40 flex flex-col bg-neutral-900/95 backdrop-blur-sm">
+    <div className="absolute inset-0 z-40 flex flex-col bg-neutral-900/95 backdrop-blur-sm" style={{ paddingTop: "env(safe-area-inset-top)" }}>
       {/* Minimize button */}
-      <div className="absolute right-4 top-4 z-10">
+      <div className="absolute right-4 z-10" style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}>
         <Button
           variant="ghost"
           size="icon"
