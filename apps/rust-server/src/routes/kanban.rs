@@ -1561,7 +1561,7 @@ async fn agent_owner_id(db: &sqlx::PgPool, agent_id: Uuid) -> Result<String, Res
 async fn get_board_member_ids(db: &sqlx::PgPool, board_id: Uuid) -> Vec<String> {
     // Get owner + all board_members
     sqlx::query_scalar::<_, String>(
-        r#"SELECT user_id FROM kanban_boards WHERE id = $1
+        r#"SELECT owner_id FROM kanban_boards WHERE id = $1
            UNION
            SELECT user_id FROM board_members WHERE board_id = $1"#,
     )
