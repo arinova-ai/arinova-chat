@@ -1025,8 +1025,8 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           {/* Toolbar */}
           <div className="flex items-center justify-between px-3 pt-3 md:px-4 md:pt-4 pb-0">
             {boardSelector}
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="flex items-center gap-1 md:gap-2">
+              <div className="relative hidden md:block">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   value={searchQuery}
@@ -1047,26 +1047,26 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
               <button
                 type="button"
                 onClick={() => setEditMode((v) => !v)}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${editMode ? "bg-brand/10 text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                className={`flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium transition-colors ${editMode ? "bg-brand/10 text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
-                {t("kanban.editMode")}
+                <span className="hidden md:inline">{t("kanban.editMode")}</span>
               </button>
               <button
                 type="button"
                 onClick={() => { setMembersOpen(true); fetchBoardMembers(); }}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Users className="h-3.5 w-3.5" />
-                Members
+                <span className="hidden md:inline">Members</span>
               </button>
               <button
                 type="button"
                 onClick={() => setArchivedOpen(true)}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Archive className="h-3.5 w-3.5" />
-                Archived
+                <span className="hidden md:inline">Archived</span>
               </button>
             </div>
           </div>

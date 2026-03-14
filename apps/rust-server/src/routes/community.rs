@@ -111,6 +111,7 @@ struct CommunityBrowseRow {
     tags: Option<Vec<String>>,
     verified: Option<bool>,
     cs_mode: Option<String>,
+    conversation_id: Option<Uuid>,
     created_at: DateTime<Utc>,
     creator_name: String,
 }
@@ -225,7 +226,7 @@ async fn browse(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.type,
                   c.join_fee, c.monthly_fee, c.agent_call_fee,
                   c.member_count, c.avatar_url, c.category, c.tags,
-                  c.verified, c.cs_mode,
+                  c.verified, c.cs_mode, c.conversation_id,
                   c.created_at, u.name AS creator_name
            FROM communities c
            JOIN "user" u ON c.creator_id = u.id
@@ -281,6 +282,7 @@ async fn browse(
                         "tags": r.tags,
                         "verified": r.verified.unwrap_or(false),
                         "csMode": r.cs_mode,
+                        "conversationId": r.conversation_id,
                         "createdAt": r.created_at.to_rfc3339(),
                         "creatorName": r.creator_name,
                     })
@@ -445,7 +447,7 @@ async fn create(
     let conv_id = Uuid::new_v4();
     if let Err(e) = sqlx::query(
         r#"INSERT INTO conversations (id, title, "type", user_id, mention_only)
-           VALUES ($1, $2, 'group', $3, TRUE)"#,
+           VALUES ($1, $2, 'community', $3, TRUE)"#,
     )
     .bind(conv_id)
     .bind(name)

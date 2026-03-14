@@ -27,6 +27,7 @@ interface CommunityItem {
   tags: string[] | null;
   verified: boolean;
   csMode: string | null;
+  conversationId: string | null;
   createdAt: string;
   creatorName?: string;
 }
@@ -46,6 +47,15 @@ function CommunityBrowseContent() {
   const [offset, setOffset] = useState(0);
   const limit = 20;
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Track user's joined community IDs for navigation
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    api<{ communities: Array<{ id: string }> }>("/api/communities/joined")
+      .then((data) => setJoinedIds(new Set(data.communities.map((c) => c.id))))
+      .catch(() => {});
+  }, []);
 
   const fetchCommunities = useCallback(
     async (currentOffset: number) => {
@@ -145,7 +155,13 @@ function CommunityBrowseContent() {
                   <CommunityCard
                     key={c.id}
                     community={c}
-                    onClick={() => router.push(`/community/${c.id}`)}
+                    onClick={() => {
+                      if (joinedIds.has(c.id) && c.conversationId) {
+                        router.push(`/?c=${c.conversationId}`);
+                      } else {
+                        router.push(`/community/${c.id}`);
+                      }
+                    }}
                   />
                 ))}
               </div>
