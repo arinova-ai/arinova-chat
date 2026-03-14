@@ -467,12 +467,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
         setSelectedNote(null);
         setViewMode("list");
       }
+      // Re-fetch to ensure list is in sync with server
+      await loadNotes(conversationId, { archived: showArchived, tags: filterTags.length ? filterTags : undefined });
     } catch {
       // Error toast handled by api()
     } finally {
       setLoading(false);
     }
-  }, [selectedNote, conversationId, deleteNote, t]);
+  }, [selectedNote, conversationId, deleteNote, loadNotes, showArchived, filterTags, t]);
 
   const handleShareNote = useCallback((note: Note) => {
     setShareContent({
