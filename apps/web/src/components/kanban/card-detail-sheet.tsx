@@ -13,6 +13,7 @@ import {
   Check,
   X,
   GitCommitHorizontal,
+  Paperclip,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { ShareSheet, type ShareContent } from "@/components/chat/share-sheet";
+import { useChatStore } from "@/store/chat-store";
 import {
   Sheet,
   SheetContent,
@@ -605,20 +607,22 @@ export function CardDetailSheet({
                   {cardNotes.length > 0 ? (
                     <div className="mt-1.5 space-y-1">
                       {cardNotes.map((cn) => (
-                        <div
+                        <button
                           key={cn.noteId}
-                          className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs"
+                          type="button"
+                          onClick={() => useChatStore.getState().openNoteById(cn.noteId)}
+                          className="flex w-full items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs text-left hover:bg-accent/50 transition-colors"
                         >
                           <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
                           <span className="flex-1 truncate text-foreground">{cn.noteTitle}</span>
                           <button
                             type="button"
-                            onClick={() => handleUnlinkNote(cn.noteId)}
+                            onClick={(e) => { e.stopPropagation(); handleUnlinkNote(cn.noteId); }}
                             className="text-muted-foreground hover:text-red-400 shrink-0"
                           >
                             <X className="h-3 w-3" />
                           </button>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   ) : (
@@ -681,6 +685,21 @@ export function CardDetailSheet({
                             <span className="flex-1 truncate text-muted-foreground">{c.message}</span>
                           )}
                           {!c.message && <span className="flex-1" />}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              useChatStore.getState().setAttachedCard({
+                                type: "commit" as any,
+                                id: c.commitHash,
+                                title: c.commitHash.slice(0, 7),
+                                preview: c.message || undefined,
+                              });
+                            }}
+                            className="text-muted-foreground hover:text-brand shrink-0 md:hidden"
+                            title="Attach to chat"
+                          >
+                            <Paperclip className="h-3 w-3" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteCommit(c.commitHash)}
