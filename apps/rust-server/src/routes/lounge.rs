@@ -64,33 +64,49 @@ async fn create_lounge(
         }
     };
 
+    // Insert community (shared columns only)
     let community_id = match sqlx::query_scalar::<_, Uuid>(
-        r#"INSERT INTO communities (creator_id, name, description, type, avatar_url,
-             voice_samples_url, free_minutes_per_day, subscription_price_cents,
-             default_agent_listing_id)
-           VALUES ($1, $2, $3, 'lounge', $4, $5, $6, $7, $8)
+        r#"INSERT INTO communities (creator_id, name, description, type, avatar_url)
+           VALUES ($1, $2, $3, 'lounge', $4)
            RETURNING id"#,
     )
     .bind(&user.id)
     .bind(name)
     .bind(body.description.as_deref())
     .bind(body.avatar_url.as_deref())
-    .bind(body.voice_samples_url.as_deref())
-    .bind(body.free_minutes_per_day.unwrap_or(5))
-    .bind(body.subscription_price_cents.unwrap_or(0))
-    .bind(body.default_agent_listing_id)
     .fetch_one(&mut *tx)
     .await
     {
         Ok(id) => id,
         Err(e) => {
-            tracing::error!("create_lounge: insert failed: {}", e);
+            tracing::error!("create_lounge: insert community failed: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Database error" })),
             );
         }
     };
+
+    // Insert lounge-specific columns
+    if let Err(e) = sqlx::query(
+        r#"INSERT INTO lounges (community_id, voice_samples_url, free_minutes_per_day,
+             subscription_price_cents, default_agent_listing_id)
+           VALUES ($1, $2, $3, $4, $5)"#,
+    )
+    .bind(community_id)
+    .bind(body.voice_samples_url.as_deref())
+    .bind(body.free_minutes_per_day.unwrap_or(5))
+    .bind(body.subscription_price_cents.unwrap_or(0))
+    .bind(body.default_agent_listing_id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!("create_lounge: insert lounges failed: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Database error" })),
+        );
+    }
 
     // Add creator as member
     if let Err(e) = sqlx::query(
@@ -134,13 +150,14 @@ async fn get_lounge(
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, LoungeRow>(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.avatar_url,
-                  c.member_count, c.voice_model_id, c.voice_model_status,
-                  c.voice_samples_url, c.free_minutes_per_day,
-                  c.subscription_price_cents, c.default_agent_listing_id,
+                  c.member_count, l.voice_model_id, l.voice_model_status,
+                  l.voice_samples_url, l.free_minutes_per_day,
+                  l.subscription_price_cents, l.default_agent_listing_id,
                   c.created_at,
                   u.name AS creator_name, u.image AS creator_image
            FROM communities c
            JOIN "user" u ON c.creator_id = u.id
+           JOIN lounges l ON l.community_id = c.id
            WHERE c.id = $1 AND c.type = 'lounge' AND c.status = 'active'"#,
     )
     .bind(id)
@@ -212,8 +229,10 @@ async fn start_chat(
 ) -> (StatusCode, Json<Value>) {
     // Verify lounge exists
     let lounge = sqlx::query_as::<_, (String, Option<Uuid>)>(
-        r#"SELECT name, default_agent_listing_id
-           FROM communities WHERE id = $1 AND type = 'lounge' AND status = 'active'"#,
+        r#"SELECT c.name, l.default_agent_listing_id
+           FROM communities c
+           LEFT JOIN lounges l ON l.community_id = c.id
+           WHERE c.id = $1 AND c.type = 'lounge' AND c.status = 'active'"#,
     )
     .bind(lounge_id)
     .fetch_optional(&state.db)

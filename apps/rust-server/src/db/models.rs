@@ -162,6 +162,7 @@ pub struct Agent {
     pub description: Option<String>,
     pub avatar_url: Option<String>,
     pub a2a_endpoint: Option<String>,
+    #[serde(skip_serializing)]
     pub secret_token: Option<String>,
     pub owner_id: String,
     pub is_public: bool,

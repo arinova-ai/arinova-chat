@@ -245,6 +245,7 @@
   "botManage.botToken": "Bot Token",
   "botManage.tokenHint": "Token kekal. Gunakan dalam konfigurasi OpenClaw untuk menyambungkan bot ini.",
   "botManage.regenerateToken": "Jana Semula Token",
+  "botManage.showToken": "Papar Token",
   "botManage.noToken": "Tiada token tersedia.",
   "botManage.export": "Eksport",
   "botManage.dangerZone": "Zon Bahaya",

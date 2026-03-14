@@ -245,6 +245,7 @@
   "botManage.botToken": "Bot Token",
   "botManage.tokenHint": "Jeton permanent. Utilisez-le dans la configuration OpenClaw pour connecter ce bot.",
   "botManage.regenerateToken": "Régénérer le jeton",
+  "botManage.showToken": "Afficher le jeton",
   "botManage.noToken": "Aucun jeton disponible.",
   "botManage.export": "Exporter",
   "botManage.dangerZone": "Zone de danger",

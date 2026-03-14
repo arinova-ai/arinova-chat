@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/agents/{id}/skills", get(get_skills))
         .route("/api/agents/{id}/avatar", post(upload_avatar))
+        .route("/api/agents/{id}/token", get(get_token))
         .route("/api/agents/{id}/regenerate-token", post(regenerate_token))
         .route("/api/agents/{id}/profile", get(get_agent_profile))
         .route("/api/agents/{id}/stats", get(get_stats))
@@ -79,7 +80,14 @@ async fn create_agent(
     .await;
 
     match result {
-        Ok(agent) => (StatusCode::CREATED, Json(json!(agent))).into_response(),
+        Ok(agent) => {
+            // Include secretToken only on creation (skip_serializing on struct)
+            let mut val = serde_json::to_value(&agent).unwrap_or_default();
+            if let Some(obj) = val.as_object_mut() {
+                obj.insert("secretToken".to_string(), json!(agent.secret_token));
+            }
+            (StatusCode::CREATED, Json(val)).into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),
@@ -384,6 +392,34 @@ async fn upload_avatar(
         Json(json!({"error": "No file uploaded"})),
     )
         .into_response()
+}
+
+async fn get_token(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let result = sqlx::query_as::<_, (Option<String>,)>(
+        "SELECT secret_token FROM agents WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match result {
+        Ok(Some((token,))) => Json(json!({"secretToken": token})).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Agent not found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }
 
 async fn regenerate_token(

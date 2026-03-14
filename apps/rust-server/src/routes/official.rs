@@ -52,8 +52,10 @@ async fn start_chat(
 ) -> (StatusCode, Json<Value>) {
     // Verify it's an official community
     let community = sqlx::query_as::<_, (String, Option<String>, Option<Uuid>)>(
-        r#"SELECT type, cs_mode, default_agent_listing_id
-           FROM communities WHERE id = $1 AND status = 'active'"#,
+        r#"SELECT c.type, o.cs_mode, o.default_agent_listing_id
+           FROM communities c
+           LEFT JOIN officials o ON o.community_id = c.id
+           WHERE c.id = $1 AND c.status = 'active'"#,
     )
     .bind(community_id)
     .fetch_optional(&state.db)
@@ -792,8 +794,10 @@ async fn review_verification(
     // If approved, mark community as verified
     if body.status == "approved" {
         if let Err(e) = sqlx::query(
-            r#"UPDATE communities SET verified = TRUE, verified_at = NOW(), updated_at = NOW()
-               WHERE id = $1"#,
+            r#"INSERT INTO officials (community_id, verified, verified_at)
+               VALUES ($1, TRUE, NOW())
+               ON CONFLICT (community_id) DO UPDATE SET
+                 verified = TRUE, verified_at = NOW(), updated_at = NOW()"#,
         )
         .bind(community_id)
         .execute(&mut *tx)

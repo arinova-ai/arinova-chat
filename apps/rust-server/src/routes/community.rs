@@ -234,10 +234,11 @@ async fn browse(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.type,
                   c.join_fee, c.monthly_fee, c.agent_call_fee,
                   c.member_count, c.avatar_url, c.category, c.tags,
-                  c.verified, c.cs_mode, c.conversation_id,
+                  o.verified, o.cs_mode, c.conversation_id,
                   c.created_at, u.name AS creator_name
            FROM communities c
            JOIN "user" u ON c.creator_id = u.id
+           LEFT JOIN officials o ON o.community_id = c.id
            WHERE c.status = 'active'
              AND ($1::text IS NULL OR c.type = $1)
              AND ($2::text IS NULL OR c.category = $2)
@@ -397,13 +398,13 @@ async fn create(
         }
     };
 
-    // Insert community
+    // Insert community (shared columns only)
     let community_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO communities (creator_id, name, description, type, join_fee, monthly_fee,
                                      agent_call_fee, category, avatar_url, cover_image_url,
-                                     member_count, cs_mode, default_agent_listing_id,
+                                     member_count,
                                      require_approval, approval_questions, agent_join_policy)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11, $12, $13, $14, $15)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11, $12, $13)
            RETURNING id"#,
     )
     .bind(&user.id)
@@ -416,8 +417,6 @@ async fn create(
     .bind(body.category.as_deref())
     .bind(body.avatar_url.as_deref())
     .bind(body.cover_image_url.as_deref())
-    .bind(cs_mode)
-    .bind(default_agent_listing_id)
     .bind(body.require_approval.unwrap_or(false))
     .bind(body.approval_questions.as_deref().unwrap_or(&[]))
     .bind(agent_join_policy)
@@ -433,6 +432,22 @@ async fn create(
             );
         }
     };
+
+    // Insert into officials table for official-type communities
+    if community_type == "official" {
+        if let Err(e) = sqlx::query(
+            r#"INSERT INTO officials (community_id, cs_mode, default_agent_listing_id)
+               VALUES ($1, $2, $3)"#,
+        )
+        .bind(community_id)
+        .bind(cs_mode)
+        .bind(default_agent_listing_id)
+        .execute(&mut *tx)
+        .await
+        {
+            tracing::error!("Create community: insert officials failed: {}", e);
+        }
+    }
 
     // Add creator as member with role=creator
     if let Err(e) = sqlx::query(
@@ -526,12 +541,14 @@ async fn get_community(
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, CommunityRow>(
-        r#"SELECT id, creator_id, name, description, type, join_fee, monthly_fee,
-                  agent_call_fee, status, member_count, avatar_url, cover_image_url,
-                  category, tags, verified, cs_mode, default_agent_listing_id,
-                  require_approval, approval_questions, agent_join_policy,
-                  created_at, updated_at
-           FROM communities WHERE id = $1"#,
+        r#"SELECT c.id, c.creator_id, c.name, c.description, c.type, c.join_fee, c.monthly_fee,
+                  c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
+                  c.category, c.tags, o.verified, o.cs_mode, o.default_agent_listing_id,
+                  c.require_approval, c.approval_questions, c.agent_join_policy,
+                  c.created_at, c.updated_at
+           FROM communities c
+           LEFT JOIN officials o ON o.community_id = c.id
+           WHERE c.id = $1"#,
     )
     .bind(id)
     .fetch_optional(&state.db)
@@ -665,8 +682,6 @@ async fn update_community(
              category = COALESCE($7, category),
              avatar_url = COALESCE($8, avatar_url),
              cover_image_url = COALESCE($9, cover_image_url),
-             cs_mode = COALESCE($10, cs_mode),
-             default_agent_listing_id = COALESCE($11, default_agent_listing_id),
              updated_at = NOW()
            WHERE id = $1"#,
     )
@@ -679,10 +694,25 @@ async fn update_community(
     .bind(body.category.as_deref())
     .bind(body.avatar_url.as_deref())
     .bind(body.cover_image_url.as_deref())
-    .bind(body.cs_mode.as_deref())
-    .bind(default_agent_id)
     .execute(&state.db)
     .await;
+
+    // Update officials table for cs_mode / default_agent_listing_id
+    if body.cs_mode.is_some() || body.default_agent_listing_id.is_some() {
+        let _ = sqlx::query(
+            r#"INSERT INTO officials (community_id, cs_mode, default_agent_listing_id)
+               VALUES ($1, COALESCE($2, 'ai_only'), $3)
+               ON CONFLICT (community_id) DO UPDATE SET
+                 cs_mode = COALESCE($2, officials.cs_mode),
+                 default_agent_listing_id = COALESCE($3, officials.default_agent_listing_id),
+                 updated_at = NOW()"#,
+        )
+        .bind(id)
+        .bind(body.cs_mode.as_deref())
+        .bind(default_agent_id)
+        .execute(&state.db)
+        .await;
+    }
 
     match result {
         Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
@@ -2041,14 +2071,15 @@ async fn my_communities(
     user: AuthUser,
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, CommunityRow>(
-        r#"SELECT id, creator_id, name, description, type, join_fee, monthly_fee,
-                  agent_call_fee, status, member_count, avatar_url, cover_image_url,
-                  category, tags, verified, cs_mode, default_agent_listing_id,
-                  require_approval, approval_questions, agent_join_policy,
-                  created_at, updated_at
-           FROM communities
-           WHERE creator_id = $1
-           ORDER BY created_at DESC"#,
+        r#"SELECT c.id, c.creator_id, c.name, c.description, c.type, c.join_fee, c.monthly_fee,
+                  c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
+                  c.category, c.tags, o.verified, o.cs_mode, o.default_agent_listing_id,
+                  c.require_approval, c.approval_questions, c.agent_join_policy,
+                  c.created_at, c.updated_at
+           FROM communities c
+           LEFT JOIN officials o ON o.community_id = c.id
+           WHERE c.creator_id = $1
+           ORDER BY c.created_at DESC"#,
     )
     .bind(&user.id)
     .fetch_all(&state.db)
@@ -2080,11 +2111,12 @@ async fn joined_communities(
     let rows = sqlx::query_as::<_, CommunityRow>(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.type, c.join_fee, c.monthly_fee,
                   c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
-                  c.category, c.tags, c.verified, c.cs_mode, c.default_agent_listing_id,
+                  c.category, c.tags, o.verified, o.cs_mode, o.default_agent_listing_id,
                   c.require_approval, c.approval_questions, c.agent_join_policy,
                   c.created_at, c.updated_at
            FROM communities c
            JOIN community_members cm ON c.id = cm.community_id
+           LEFT JOIN officials o ON o.community_id = c.id
            WHERE cm.user_id = $1 AND c.status = 'active'
            ORDER BY cm.joined_at DESC"#,
     )

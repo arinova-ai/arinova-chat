@@ -86,7 +86,6 @@ interface BotManageDialogProps {
     description: string | null;
     avatarUrl: string | null;
     a2aEndpoint: string | null;
-    secretToken: string | null;
     category: string | null;
     systemPrompt: string | null;
   };
@@ -122,8 +121,9 @@ export function BotManageDialog({
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Bot token
-  const [localToken, setLocalToken] = useState(agent.secretToken);
+  // Bot token (fetched on demand, never stored in global state)
+  const [localToken, setLocalToken] = useState<string | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [regeneratingToken, setRegeneratingToken] = useState(false);
@@ -154,8 +154,9 @@ export function BotManageDialog({
       setClearConfirm(false);
       setDeleting(false);
       setClearing(false);
-      setLocalToken(agent.secretToken);
+      setLocalToken(null);
       setShowToken(false);
+      setTokenLoading(false);
       setRegeneratingToken(false);
       // Load stats
       api<AgentStats>(`/api/agents/${agent.id}/stats`)
@@ -410,8 +411,23 @@ export function BotManageDialog({
             </div>
           </div>
 
-          {/* Bot Token (permanent, for reconnection) */}
+          {/* Bot Token (fetched on demand, never in global state) */}
           {(() => {
+            const handleFetchToken = async () => {
+              setTokenLoading(true);
+              try {
+                const result = await api<{ secretToken: string }>(
+                  `/api/agents/${agent.id}/token`
+                );
+                setLocalToken(result.secretToken);
+                setShowToken(true);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to fetch token");
+              } finally {
+                setTokenLoading(false);
+              }
+            };
+
             const handleCopyToken = async () => {
               if (!localToken) return;
               await navigator.clipboard.writeText(localToken);
@@ -428,7 +444,7 @@ export function BotManageDialog({
                   { method: "POST" }
                 );
                 setLocalToken(result.secretToken);
-                await useChatStore.getState().loadAgents();
+                setShowToken(true);
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to regenerate token");
               } finally {
@@ -461,7 +477,10 @@ export function BotManageDialog({
                     </Button>
                   </>
                 ) : (
-                  <p className="text-xs text-muted-foreground">{t("botManage.noToken")}</p>
+                  <Button variant="outline" size="sm" onClick={handleFetchToken} disabled={tokenLoading} className="gap-2">
+                    {tokenLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                    {t("botManage.showToken")}
+                  </Button>
                 )}
               </div>
             );

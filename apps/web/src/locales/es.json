@@ -245,6 +245,7 @@
   "botManage.botToken": "Bot Token",
   "botManage.tokenHint": "Token permanente. Usalo en la configuracion de OpenClaw para conectar este bot.",
   "botManage.regenerateToken": "Regenerar Token",
+  "botManage.showToken": "Mostrar Token",
   "botManage.noToken": "No hay token disponible.",
   "botManage.export": "Exportar",
   "botManage.dangerZone": "Zona de Peligro",

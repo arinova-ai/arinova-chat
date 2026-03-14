@@ -245,6 +245,7 @@
   "botManage.botToken": "Bot Token",
   "botManage.tokenHint": "永久性 Token，请在 OpenClaw 设置中使用以连接此 Bot。",
   "botManage.regenerateToken": "重新生成 Token",
+  "botManage.showToken": "显示 Token",
   "botManage.noToken": "没有可用的 Token。",
   "botManage.export": "导出",
   "botManage.dangerZone": "危险区域",
