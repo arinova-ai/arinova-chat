@@ -316,7 +316,7 @@ export function ChatHeader({
             }}
             onTransferHuman={handleTransferHuman}
             onSettingsOpen={() => {
-              if ((type === "community" || type === "official" || type === "lounge") && officialCommunityId) {
+              if (type === "community" || type === "official" || type === "lounge") {
                 setCommunitySettingsOpen(true);
               } else {
                 setSettingsOpen(true);
