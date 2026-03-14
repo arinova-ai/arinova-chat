@@ -86,7 +86,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/agent/kanban/columns/{id}", patch(agent_update_column).delete(agent_delete_column))
         .route("/api/agent/kanban/boards/{id}/columns/reorder", post(agent_reorder_columns))
         .route("/api/agent/kanban/cards", get(agent_list_cards).post(agent_create_card))
-        .route("/api/agent/kanban/cards/{id}", patch(agent_update_card))
+        .route("/api/agent/kanban/cards/{id}", patch(agent_update_card).delete(agent_delete_card))
         .route("/api/agent/kanban/cards/{id}/complete", post(agent_complete_card))
         .route(
             "/api/agent/kanban/boards/{id}/archived-cards",
@@ -955,7 +955,16 @@ async fn create_column(
     .await;
 
     match col {
-        Ok(c) => (StatusCode::CREATED, Json(json!(c))).into_response(),
+        Ok(c) => {
+            let members = get_board_member_ids(&state.db, board_id).await;
+            state.ws.broadcast_to_members(&members, &json!({
+                "type": "kanban_update",
+                "boardId": board_id,
+                "action": "column_created",
+                "data": &c,
+            }), &state.redis);
+            (StatusCode::CREATED, Json(json!(c))).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -988,7 +997,18 @@ async fn update_column(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_column(&state.db, column_id).await {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "column_updated",
+                    "data": { "columnId": column_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -1016,11 +1036,25 @@ async fn delete_column(
         return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot delete column with cards. Move or archive cards first." }))).into_response();
     }
 
+    // Get board_id before deleting the column
+    let bid = board_id_from_column(&state.db, column_id).await;
+
     let result = sqlx::query("DELETE FROM kanban_columns WHERE id = $1")
         .bind(column_id).execute(&state.db).await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = bid {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "column_deleted",
+                    "data": { "columnId": column_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -1125,7 +1159,18 @@ async fn create_card(
     .await;
 
     match result {
-        Ok(card) => (StatusCode::CREATED, Json(json!(card))).into_response(),
+        Ok(card) => {
+            if let Some(bid) = board_id_from_card(&state.db, card.id).await {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "card_created",
+                    "data": &card,
+                }), &state.redis);
+            }
+            (StatusCode::CREATED, Json(json!(card))).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -1189,7 +1234,18 @@ async fn update_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "card_updated",
+                    "data": { "cardId": card_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -1205,13 +1261,27 @@ async fn delete_card(
         return e;
     }
 
+    // Get board_id before deleting the card
+    let bid = board_id_from_card(&state.db, card_id).await;
+
     let result = sqlx::query("DELETE FROM kanban_cards WHERE id = $1")
         .bind(card_id)
         .execute(&state.db)
         .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = bid {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "card_deleted",
+                    "data": { "cardId": card_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -1486,6 +1556,41 @@ async fn agent_owner_id(db: &sqlx::PgPool, agent_id: Uuid) -> Result<String, Res
     owner.ok_or_else(|| {
         (StatusCode::NOT_FOUND, Json(json!({ "error": "Agent owner not found" }))).into_response()
     })
+}
+
+async fn get_board_member_ids(db: &sqlx::PgPool, board_id: Uuid) -> Vec<String> {
+    // Get owner + all board_members
+    sqlx::query_scalar::<_, String>(
+        r#"SELECT user_id FROM kanban_boards WHERE id = $1
+           UNION
+           SELECT user_id FROM board_members WHERE board_id = $1"#,
+    )
+    .bind(board_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default()
+}
+
+async fn board_id_from_card(db: &sqlx::PgPool, card_id: Uuid) -> Option<Uuid> {
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT kc2.board_id FROM kanban_cards kc JOIN kanban_columns kc2 ON kc.column_id = kc2.id WHERE kc.id = $1",
+    )
+    .bind(card_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+}
+
+async fn board_id_from_column(db: &sqlx::PgPool, column_id: Uuid) -> Option<Uuid> {
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT board_id FROM kanban_columns WHERE id = $1",
+    )
+    .bind(column_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
 }
 
 /// GET /api/agent/kanban/boards — list owner's boards (auto-create default if none)
@@ -1776,7 +1881,16 @@ async fn agent_create_column(
     .await;
 
     match col {
-        Ok(c) => (StatusCode::CREATED, Json(json!(c))).into_response(),
+        Ok(c) => {
+            let members = get_board_member_ids(&state.db, board_id).await;
+            state.ws.broadcast_to_members(&members, &json!({
+                "type": "kanban_update",
+                "boardId": board_id,
+                "action": "column_created",
+                "data": &c,
+            }), &state.redis);
+            (StatusCode::CREATED, Json(json!(c))).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -1813,7 +1927,18 @@ async fn agent_update_column(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_column(&state.db, column_id).await {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "column_updated",
+                    "data": { "columnId": column_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -1844,11 +1969,25 @@ async fn agent_delete_column(
         return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Cannot delete column with cards. Move or archive cards first." }))).into_response();
     }
 
+    // Get board_id before deleting the column
+    let bid = board_id_from_column(&state.db, column_id).await;
+
     let result = sqlx::query("DELETE FROM kanban_columns WHERE id = $1")
         .bind(column_id).execute(&state.db).await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = bid {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "column_deleted",
+                    "data": { "columnId": column_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -2065,6 +2204,16 @@ async fn agent_create_card(
             .execute(&state.db)
             .await;
 
+            if let Some(bid) = board_id_from_card(&state.db, card.id).await {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "card_created",
+                    "data": &card,
+                }), &state.redis);
+            }
+
             (StatusCode::CREATED, Json(json!(card))).into_response()
         }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
@@ -2113,7 +2262,59 @@ async fn agent_update_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "card_updated",
+                    "data": { "cardId": card_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response(),
+    }
+}
+
+/// DELETE /api/agent/kanban/cards/:id — delete a card (agent)
+async fn agent_delete_card(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(card_id): Path<Uuid>,
+) -> Response {
+    let owner_id = match agent_owner_id(&state.db, agent.id).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+
+    if let Err(e) = verify_card_owner(&state.db, card_id, &owner_id).await {
+        return e;
+    }
+
+    // Get board_id before deleting the card
+    let bid = board_id_from_card(&state.db, card_id).await;
+
+    let result = sqlx::query("DELETE FROM kanban_cards WHERE id = $1")
+        .bind(card_id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(_) => {
+            if let Some(bid) = bid {
+                let members = get_board_member_ids(&state.db, bid).await;
+                state.ws.broadcast_to_members(&members, &json!({
+                    "type": "kanban_update",
+                    "boardId": bid,
+                    "action": "card_deleted",
+                    "data": { "cardId": card_id },
+                }), &state.redis);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
