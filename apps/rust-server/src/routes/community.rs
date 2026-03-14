@@ -1108,7 +1108,7 @@ async fn list_members(
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, MemberRow>(
-        r#"SELECT cm.id, cm.user_id, cm.role, cm.joined_at,
+        r#"SELECT cm.id, cm.user_id, cm.role::text, cm.joined_at,
                   cm.subscription_status,
                   u.name AS user_name, u.image AS user_image
            FROM community_members cm
