@@ -749,12 +749,24 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
         >
           {/* Reply quote — above the bubble (Telegram/Discord style) */}
           {message.replyTo && (
-            <div className={cn(
-              "mb-1 flex items-center gap-1.5 text-xs",
-              isUser ? "justify-end" : "justify-start"
-            )}>
+            <button
+              type="button"
+              className={cn(
+                "mb-1 flex items-center gap-1.5 text-xs w-full cursor-pointer",
+                isUser ? "justify-end" : "justify-start"
+              )}
+              onClick={() => {
+                if (!message.replyToId) return;
+                useChatStore.setState({ highlightMessageId: message.replyToId });
+                setTimeout(() => {
+                  if (useChatStore.getState().highlightMessageId === message.replyToId) {
+                    useChatStore.setState({ highlightMessageId: null });
+                  }
+                }, 1000);
+              }}
+            >
               <Reply className="h-3 w-3 text-blue-400/60 shrink-0" />
-              <div className="min-w-0 rounded-lg bg-accent/60 px-2.5 py-1 border-l-2 border-blue-400/50">
+              <div className="min-w-0 rounded-lg bg-accent/60 px-2.5 py-1 border-l-2 border-blue-400/50 hover:bg-accent/80 transition-colors text-left">
                 <p className="text-[11px] font-medium text-blue-400/70 truncate">
                   {message.replyTo.senderAgentName ?? (message.replyTo.role === "user" ? t("common.you") : agentName ?? "Agent")}
                 </p>
@@ -762,7 +774,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
                   {message.replyTo.content}
                 </p>
               </div>
-            </div>
+            </button>
           )}
 
           {stickerUrl ? (
