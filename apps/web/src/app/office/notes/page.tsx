@@ -236,16 +236,21 @@ export default function MyNotesPage() {
   const handleDelete = useCallback(async () => {
     if (!selectedNote) return;
     if (!window.confirm(t("chat.notebook.confirmDelete"))) return;
+    const noteId = selectedNote.id;
     try {
-      await api(`/api/conversations/${selectedNote.conversationId}/notes/${selectedNote.id}`, {
+      await api(`/api/conversations/${selectedNote.conversationId}/notes/${noteId}`, {
         method: "DELETE",
       });
-      setNotes((prev) => prev.filter((n) => n.id !== selectedNote.id));
       setSelectedNote(null);
+      // Remove from list after sheet close animation to avoid stale render
+      setTimeout(() => {
+        setNotes((prev) => prev.filter((n) => n.id !== noteId));
+        fetchNotes();
+      }, 300);
     } catch {
       // api handles error toast
     }
-  }, [selectedNote, t]);
+  }, [selectedNote, t, fetchNotes]);
 
   return (
     <div className="flex h-full flex-col">
