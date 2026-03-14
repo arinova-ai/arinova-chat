@@ -41,6 +41,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -65,6 +67,7 @@ interface BoardInfo {
   id: string;
   name: string;
   createdAt?: string;
+  archived?: boolean;
 }
 
 // ── Props ───────────────────────────────────────────────────
@@ -96,6 +99,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [archivedBoards, setArchivedBoards] = useState<BoardInfo[]>([]);
 
   // Board management state
   const [creatingBoard, setCreatingBoard] = useState(false);
@@ -144,6 +148,11 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
     try {
       const result = await api<BoardInfo[]>("/api/kanban/boards", { silent: true });
       setBoards(result);
+      // Also fetch archived boards
+      try {
+        const allBoards = await api<BoardInfo[]>("/api/kanban/boards?include_archived=true", { silent: true });
+        setArchivedBoards(allBoards.filter((b) => b.archived));
+      } catch { /* ignore */ }
       return result;
     } catch {
       return [];
@@ -240,6 +249,13 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
       setBoard(null);
       setLoading(true);
       await fetchBoard();
+    } catch { /* api shows toast */ }
+  }, [selectedBoardId, fetchBoard]);
+
+  const handleUnarchiveBoard = useCallback(async (boardId: string) => {
+    try {
+      await api(`/api/kanban/boards/${boardId}/archive`, { method: "POST" });
+      await fetchBoard(selectedBoardId || undefined);
     } catch { /* api shows toast */ }
   }, [selectedBoardId, fetchBoard]);
 
@@ -714,6 +730,33 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
             <Plus className="h-3.5 w-3.5" />
             Add Board
           </DropdownMenuItem>
+          {archivedBoards.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                Archived
+              </DropdownMenuLabel>
+              {archivedBoards.map((b) => (
+                <DropdownMenuItem
+                  key={b.id}
+                  className="flex items-center justify-between gap-2 opacity-60"
+                >
+                  <span className="truncate">{b.name}</span>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUnarchiveBoard(b.id);
+                    }}
+                    title="Unarchive"
+                  >
+                    <ArchiveRestore className="h-3 w-3" />
+                  </button>
+                </DropdownMenuItem>
+              ))}
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -1063,6 +1106,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
           cardCommits={selectedCard ? (cardCommitsMap.get(selectedCard.id) ?? []) : []}
           cardLabels={selectedCard ? (cardLabelsMap.get(selectedCard.id) ?? []) : []}
           boardLabels={boardLabels}
+          boardId={selectedBoardId ?? undefined}
           agentEmojis={agentEmojis}
           agentNames={agentNames}
           onClose={() => setSelectedCard(null)}
@@ -1125,6 +1169,7 @@ export function KanbanBoard({ mode, streamAgents = [], conversationId }: KanbanB
         cardCommits={selectedCard ? (cardCommitsMap.get(selectedCard.id) ?? []) : []}
         cardLabels={selectedCard ? (cardLabelsMap.get(selectedCard.id) ?? []) : []}
         boardLabels={boardLabels}
+        boardId={selectedBoardId ?? undefined}
         agentEmojis={agentEmojis}
         agentNames={agentNames}
         onClose={() => setSelectedCard(null)}

@@ -141,6 +141,7 @@ struct BoardRow {
     id: Uuid,
     name: String,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
+    archived: bool,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -627,9 +628,9 @@ async fn list_boards(
     let include_archived = query.include_archived.unwrap_or(false);
     let boards = if include_archived {
         sqlx::query_as::<_, BoardRow>(
-            r#"SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1
+            r#"SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1
                UNION
-               SELECT b.id, b.name, b.created_at FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1
+               SELECT b.id, b.name, b.created_at, b.archived FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1
                ORDER BY created_at"#,
         )
         .bind(&user.id)
@@ -637,9 +638,9 @@ async fn list_boards(
         .await
     } else {
         sqlx::query_as::<_, BoardRow>(
-            r#"SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false
+            r#"SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1 AND archived = false
                UNION
-               SELECT b.id, b.name, b.created_at FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1 AND b.archived = false
+               SELECT b.id, b.name, b.created_at, b.archived FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1 AND b.archived = false
                ORDER BY created_at"#,
         )
         .bind(&user.id)
@@ -805,7 +806,7 @@ async fn create_board(
     }
 
     let board = sqlx::query_as::<_, BoardRow>(
-        "SELECT id, name, created_at FROM kanban_boards WHERE id = $1",
+        "SELECT id, name, created_at, archived FROM kanban_boards WHERE id = $1",
     )
     .bind(board_id)
     .fetch_one(&state.db)
@@ -1695,14 +1696,14 @@ async fn agent_list_boards(
     let include_archived = query.include_archived.unwrap_or(false);
     let boards = if include_archived {
         sqlx::query_as::<_, BoardRow>(
-            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+            "SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
         )
         .bind(&owner_id)
         .fetch_all(&state.db)
         .await
     } else {
         sqlx::query_as::<_, BoardRow>(
-            "SELECT id, name, created_at FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
+            "SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
         )
         .bind(&owner_id)
         .fetch_all(&state.db)
@@ -1804,7 +1805,7 @@ async fn agent_create_board(
     }
 
     let board = sqlx::query_as::<_, BoardRow>(
-        "SELECT id, name, created_at FROM kanban_boards WHERE id = $1",
+        "SELECT id, name, created_at, archived FROM kanban_boards WHERE id = $1",
     )
     .bind(board_id)
     .fetch_one(&state.db)

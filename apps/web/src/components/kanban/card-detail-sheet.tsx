@@ -95,6 +95,7 @@ interface CardDetailSheetProps {
   cardCommits?: CardCommitData[];
   cardLabels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
   boardLabels?: Array<{ id: string; name: string; color: string }>;
+  boardId?: string;
   agentEmojis?: Map<string, string>;
   agentNames?: Map<string, string>;
 }
@@ -111,6 +112,7 @@ export function CardDetailSheet({
   cardCommits = [],
   cardLabels = [],
   boardLabels = [],
+  boardId,
   agentEmojis = new Map(),
   agentNames = new Map(),
 }: CardDetailSheetProps) {
@@ -136,6 +138,9 @@ export function CardDetailSheet({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
+  const [creatingLabel, setCreatingLabel] = useState(false);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#6366f1");
   const { t } = useTranslation();
 
   // Fetch commits from the per-card endpoint on mount / card change
@@ -347,6 +352,30 @@ export function CardDetailSheet({
     } catch { /* api shows toast */ }
   };
 
+  const handleCreateLabel = async () => {
+    if (!card || !newLabelName.trim() || !boardId) return;
+    try {
+      const label = await api<{ id: string; name: string; color: string }>(
+        `/api/kanban/boards/${boardId}/labels`,
+        {
+          method: "POST",
+          body: JSON.stringify({ name: newLabelName.trim(), color: newLabelColor }),
+          silent: true,
+        },
+      );
+      // Also add it to the card
+      await api(`/api/kanban/cards/${card.id}/labels`, {
+        method: "POST",
+        body: JSON.stringify({ labelId: label.id }),
+        silent: true,
+      });
+      setCreatingLabel(false);
+      setNewLabelName("");
+      setNewLabelColor("#6366f1");
+      onUpdate();
+    } catch { /* api shows toast */ }
+  };
+
   const handleSave = async () => {
     if (!card || !title.trim()) return;
     setSaving(true);
@@ -477,26 +506,84 @@ export function CardDetailSheet({
                       {labelPickerOpen ? "Cancel" : "+ Add Label"}
                     </button>
                   </div>
-                  {labelPickerOpen && boardLabels.length > 0 && (
-                    <div className="mt-1.5 max-h-32 overflow-y-auto rounded-lg border border-border bg-muted/30">
+                  {labelPickerOpen && (
+                    <div className="mt-1.5 rounded-lg border border-border bg-muted/30">
+                      {/* Existing labels to add */}
                       {boardLabels
                         .filter((bl) => !cardLabels.some((cl) => cl.labelId === bl.id))
-                        .map((label) => (
-                          <button
-                            key={label.id}
-                            type="button"
-                            onClick={() => handleAddLabel(label.id)}
-                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-accent transition-colors"
-                          >
-                            <span
-                              className="h-3 w-3 rounded-full shrink-0"
-                              style={{ backgroundColor: label.color }}
-                            />
-                            <span className="flex-1 truncate text-foreground">{label.name}</span>
-                          </button>
-                        ))}
-                      {boardLabels.filter((bl) => !cardLabels.some((cl) => cl.labelId === bl.id)).length === 0 && (
-                        <p className="py-2 text-center text-[11px] text-muted-foreground">All labels assigned</p>
+                        .length > 0 && (
+                        <div className="max-h-32 overflow-y-auto">
+                          {boardLabels
+                            .filter((bl) => !cardLabels.some((cl) => cl.labelId === bl.id))
+                            .map((label) => (
+                              <button
+                                key={label.id}
+                                type="button"
+                                onClick={() => handleAddLabel(label.id)}
+                                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+                              >
+                                <span
+                                  className="h-3 w-3 rounded-full shrink-0"
+                                  style={{ backgroundColor: label.color }}
+                                />
+                                <span className="flex-1 truncate text-foreground">{label.name}</span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                      {/* Create new label */}
+                      {!creatingLabel ? (
+                        <button
+                          type="button"
+                          onClick={() => setCreatingLabel(true)}
+                          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs text-brand hover:bg-accent transition-colors border-t border-border"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Create new label</span>
+                        </button>
+                      ) : (
+                        <div className="border-t border-border p-2 space-y-2">
+                          <input
+                            type="text"
+                            value={newLabelName}
+                            onChange={(e) => setNewLabelName(e.target.value)}
+                            placeholder="Label name"
+                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleCreateLabel();
+                              if (e.key === "Escape") { setCreatingLabel(false); setNewLabelName(""); }
+                            }}
+                          />
+                          <div className="flex flex-wrap gap-1.5">
+                            {["#6366f1", "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#8b5cf6", "#ec4899"].map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => setNewLabelColor(c)}
+                                className={`h-5 w-5 rounded-full border-2 transition-colors ${newLabelColor === c ? "border-foreground scale-110" : "border-transparent"}`}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => { setCreatingLabel(false); setNewLabelName(""); }}
+                              className="flex-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCreateLabel}
+                              disabled={!newLabelName.trim()}
+                              className="flex-1 rounded-md bg-brand px-2 py-1 text-xs text-white hover:bg-brand/90 disabled:opacity-50"
+                            >
+                              Create
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
