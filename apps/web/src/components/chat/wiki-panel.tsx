@@ -35,6 +35,7 @@ interface WikiPage {
 
 interface WikiPanelProps {
   conversationId: string;
+  communityId?: string;
   inline?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -42,9 +43,12 @@ interface WikiPanelProps {
 
 type ViewMode = "list" | "detail" | "create";
 
-export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPanelProps) {
+export function WikiPanel({ conversationId, communityId, inline, open, onOpenChange }: WikiPanelProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const wikiBase = communityId
+    ? `/api/communities/${communityId}/wiki`
+    : `/api/conversations/${conversationId}/wiki`;
 
   const [pages, setPages] = useState<WikiPage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,17 +84,17 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
   }, [inline, open, onOpenChange, viewMode]);
 
   const fetchPages = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationId && !communityId) return;
     setLoading(true);
     try {
       const res = await api<{ pages: WikiPage[] }>(
-        `/api/conversations/${conversationId}/wiki`,
+        `${wikiBase}`,
         { silent: true },
       );
       setPages(res.pages);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [conversationId]);
+  }, [wikiBase, conversationId, communityId]);
 
   useEffect(() => {
     fetchPages();
@@ -128,26 +132,26 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
     setViewMode("detail");
     // Fetch full page content
     try {
-      const full = await api<WikiPage>(`/api/conversations/${conversationId}/wiki/${page.id}`);
+      const full = await api<WikiPage>(`${wikiBase}/${page.id}`);
       setSelectedPage(full);
       setEditTitle(full.title);
       setEditContent(full.content || "");
     } catch { /* keep list data */ }
-  }, [conversationId]);
+  }, [wikiBase]);
 
   const handleSave = useCallback(async () => {
     if (!selectedPage || !editTitle.trim()) return;
     setSaving(true);
     try {
       const updated = await api<WikiPage>(
-        `/api/conversations/${conversationId}/wiki/${selectedPage.id}`,
+        `${wikiBase}/${selectedPage.id}`,
         { method: "PATCH", body: JSON.stringify({ title: editTitle.trim(), content: editContent }) },
       );
       setSelectedPage(updated);
       setPages((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     } catch { /* api shows toast */ }
     setSaving(false);
-  }, [selectedPage, conversationId, editTitle, editContent]);
+  }, [selectedPage, wikiBase, editTitle, editContent]);
 
   const handleCreate = async () => {
     const title = newTitle.trim();
@@ -155,7 +159,7 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
     setSaving(true);
     try {
       const created = await api<WikiPage>(
-        `/api/conversations/${conversationId}/wiki`,
+        `${wikiBase}`,
         { method: "POST", body: JSON.stringify({ title, content: newContent }) },
       );
       setPages((prev) => [created, ...prev]);
@@ -174,7 +178,7 @@ export function WikiPanel({ conversationId, inline, open, onOpenChange }: WikiPa
   const handleTogglePin = async (page: WikiPage) => {
     try {
       const updated = await api<WikiPage>(
-        `/api/conversations/${conversationId}/wiki/${page.id}`,
+        `${wikiBase}/${page.id}`,
         { method: "PATCH", body: JSON.stringify({ isPinned: !page.isPinned }) },
       );
       setPages((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));

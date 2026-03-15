@@ -29,8 +29,10 @@ import {
   Mic,
   Search,
   Settings,
+  BookText,
 } from "lucide-react";
 import { CommunitySettingsSheet } from "@/components/chat/community-settings";
+import { WikiPanel } from "@/components/chat/wiki-panel";
 import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/utils";
 import { AudioPlayer } from "@/components/chat/audio-player";
@@ -200,6 +202,9 @@ function CommunityDetailContent() {
 
   // Community settings sheet
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Wiki
+  const [wikiOpen, setWikiOpen] = useState(false);
 
   // Verification
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -681,6 +686,15 @@ function CommunityDetailContent() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className={cn("h-8 w-8", wikiOpen && "text-blue-400")}
+                  onClick={() => setWikiOpen((v) => !v)}
+                  title={t("wiki.title")}
+                >
+                  <BookText className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-8 w-8"
                   onClick={() => setSidebarOpen((v) => !v)}
                   title={t("chat.header.members")}
@@ -724,6 +738,16 @@ function CommunityDetailContent() {
               </div>
             )}
           </div>
+
+          {/* Community wiki */}
+          {isMember && (
+            <WikiPanel
+              conversationId={id}
+              communityId={id}
+              open={wikiOpen}
+              onOpenChange={setWikiOpen}
+            />
+          )}
 
           {/* Community settings sheet */}
           {isMember && (

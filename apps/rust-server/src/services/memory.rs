@@ -451,7 +451,7 @@ async fn call_claude_cli_with_retry(
         let mut cmd = tokio::process::Command::new(CLAUDE_CLI_PATH);
         cmd.arg("-p")
             .arg("--model")
-            .arg("sonnet")
+            .arg("haiku")
             .arg("--output-format")
             .arg("text")
             .arg("--system-prompt")
