@@ -247,6 +247,7 @@
   "botManage.botToken": "Bot Token",
   "botManage.tokenHint": "永久性 Token，請在 OpenClaw 設定中使用以連接此 Bot。",
   "botManage.regenerateToken": "重新產生 Token",
+  "botManage.refreshToken": "更換 Token",
   "botManage.showToken": "顯示 Token",
   "botManage.ownerProtection": "擁有者保護",
   "botManage.ownerProtectionTooltip": "啟用後，Bot Token 將被保護，不會在 API 回應中暴露。",

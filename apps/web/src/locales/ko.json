@@ -245,6 +245,7 @@
   "botManage.botToken": "Bot Token",
   "botManage.tokenHint": "영구 토큰입니다. OpenClaw 설정에서 이 봇을 연결하는 데 사용하세요.",
   "botManage.regenerateToken": "토큰 재발급",
+  "botManage.refreshToken": "Token 갱신",
   "botManage.showToken": "토큰 보기",
   "botManage.ownerProtection": "소유자 보호",
   "botManage.ownerProtectionTooltip": "활성화하면 Bot Token이 보호되어 API 응답에 노출되지 않습니다.",

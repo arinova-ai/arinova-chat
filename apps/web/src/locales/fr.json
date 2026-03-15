@@ -245,6 +245,7 @@
   "botManage.botToken": "Bot Token",
   "botManage.tokenHint": "Jeton permanent. Utilisez-le dans la configuration OpenClaw pour connecter ce bot.",
   "botManage.regenerateToken": "Régénérer le jeton",
+  "botManage.refreshToken": "Actualiser le Token",
   "botManage.showToken": "Afficher le jeton",
   "botManage.ownerProtection": "Protection du propriétaire",
   "botManage.ownerProtectionTooltip": "Lorsqu'elle est activée, le Bot Token est protégé et ne sera pas exposé dans les réponses de l'API.",

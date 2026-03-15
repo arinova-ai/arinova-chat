@@ -173,6 +173,7 @@ pub struct Agent {
     pub quick_replies: Option<serde_json::Value>,
     pub notifications_enabled: bool,
     pub owner_protection: bool,
+    pub token_refreshed_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

@@ -25,6 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/agents/{id}/avatar", post(upload_avatar))
         .route("/api/agents/{id}/token", get(get_token))
         .route("/api/agents/{id}/regenerate-token", post(regenerate_token))
+        .route("/api/agents/{id}/refresh-token", post(refresh_token))
         .route("/api/agents/{id}/profile", get(get_agent_profile))
         .route("/api/agents/{id}/stats", get(get_stats))
         .route("/api/agents/{id}/history", delete(clear_history))
@@ -482,6 +483,56 @@ async fn regenerate_token(
         .await;
 
     Json(json!({"secretToken": new_token})).into_response()
+}
+
+async fn refresh_token(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let agent = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT id, name FROM agents WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (agent_id, agent_name) = match agent {
+        Ok(Some(a)) => a,
+        _ => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Agent not found"})),
+            )
+                .into_response();
+        }
+    };
+
+    let new_token = generate_secret_token();
+    let _ = sqlx::query(
+        "UPDATE agents SET secret_token = $1, token_refreshed_at = NOW(), updated_at = NOW() WHERE id = $2",
+    )
+    .bind(&new_token)
+    .bind(agent_id)
+    .execute(&state.db)
+    .await;
+
+    // Log token refresh event
+    let _ = sqlx::query(
+        r#"INSERT INTO agent_security_logs (agent_id, event_type, details)
+           VALUES ($1, 'token_refreshed', $2)"#,
+    )
+    .bind(agent_id)
+    .bind(json!({"agent_name": agent_name, "refreshed_by": user.id}))
+    .execute(&state.db)
+    .await;
+
+    Json(json!({
+        "secretToken": new_token,
+        "tokenRefreshedAt": chrono::Utc::now().to_rfc3339(),
+    }))
+    .into_response()
 }
 
 async fn get_stats(

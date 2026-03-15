@@ -473,18 +473,18 @@ export function BotManageDialog({
               setTimeout(() => setTokenCopied(false), 2000);
             };
 
-            const handleRegenerateToken = async () => {
+            const handleRefreshToken = async () => {
               setRegeneratingToken(true);
               setError("");
               try {
                 const result = await api<{ secretToken: string }>(
-                  `/api/agents/${agent.id}/regenerate-token`,
+                  `/api/agents/${agent.id}/refresh-token`,
                   { method: "POST" }
                 );
                 setLocalToken(result.secretToken);
                 setShowToken(true);
               } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to regenerate token");
+                setError(err instanceof Error ? err.message : "Failed to refresh token");
               } finally {
                 setRegeneratingToken(false);
               }
@@ -509,9 +509,9 @@ export function BotManageDialog({
                     <p className="text-xs text-muted-foreground">
                       {t("botManage.tokenHint")}
                     </p>
-                    <Button variant="outline" size="sm" onClick={handleRegenerateToken} disabled={regeneratingToken} className="gap-2">
+                    <Button variant="outline" size="sm" onClick={handleRefreshToken} disabled={regeneratingToken} className="gap-2 border-orange-500/30 text-orange-600 hover:bg-orange-500/10">
                       {regeneratingToken ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      {t("botManage.regenerateToken")}
+                      {t("botManage.refreshToken")}
                     </Button>
                   </>
                 ) : (
