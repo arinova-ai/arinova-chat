@@ -43,6 +43,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "official-auto-reply": MessageSquare,
   "official-knowledge": BookOpen,
   "official-subscribers": Users,
+  "official-settings": Settings,
   // Lounge account
   "lounge-dashboard": LayoutDashboard,
   "lounge-persona": Brain,
@@ -108,6 +109,7 @@ export function IconRail() {
       if (pathname.includes("/auto-reply")) return "official-auto-reply";
       if (pathname.includes("/knowledge")) return "official-knowledge";
       if (pathname.includes("/subscribers")) return "official-subscribers";
+      if (pathname.includes("/settings")) return "official-settings";
     }
     if (pathname.startsWith("/lounge") && activeAccount?.type === "lounge") {
       if (pathname.includes("/dashboard")) return "lounge-dashboard";
@@ -130,6 +132,7 @@ export function IconRail() {
     { id: "official-auto-reply", label: t("nav.autoReply"), href: `/official/${activeAccount.id}/auto-reply` },
     { id: "official-knowledge", label: t("nav.knowledge"), href: `/official/${activeAccount.id}/knowledge` },
     { id: "official-subscribers", label: t("nav.subscribers"), href: `/official/${activeAccount.id}/subscribers` },
+    { id: "official-settings", label: t("nav.settings"), href: `/official/${activeAccount.id}/settings` },
   ] : [];
 
   // ── Lounge account nav items ──

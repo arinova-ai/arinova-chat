@@ -308,7 +308,8 @@ export function MobileBottomNav() {
           label={t("nav.settings")}
           active={activeId === "settings"}
           onClick={() => {
-            if (activeAccount?.type === "lounge") router.push(`/lounge/${activeAccount.id}/settings`);
+            if (activeAccount?.type === "official") router.push(`/official/${activeAccount.id}/settings`);
+            else if (activeAccount?.type === "lounge") router.push(`/lounge/${activeAccount.id}/settings`);
             else router.push("/settings");
           }}
         />
