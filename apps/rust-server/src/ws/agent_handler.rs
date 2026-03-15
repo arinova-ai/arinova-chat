@@ -92,10 +92,19 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                 match agent {
                     Ok(Some((agent_id, agent_name, owner_id))) => {
                         // IP Whitelist check
-                        if let Some(ref ip) = client_ip {
-                            let allowed = crate::routes::user_settings::check_ip_whitelist(
-                                &state.db, &owner_id, ip,
-                            ).await.unwrap_or(true);
+                        let wl_enabled = crate::routes::user_settings::is_ip_whitelist_enabled(
+                            &state.db, &owner_id,
+                        ).await.unwrap_or(false);
+
+                        if wl_enabled {
+                            let ip_str = client_ip.as_deref().unwrap_or("");
+                            let allowed = if ip_str.is_empty() {
+                                false // Can't determine IP → reject
+                            } else {
+                                crate::routes::user_settings::check_ip_whitelist(
+                                    &state.db, &owner_id, ip_str,
+                                ).await.unwrap_or(true)
+                            };
 
                             if !allowed {
                                 let _ = sqlx::query(
@@ -103,13 +112,13 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                                        VALUES ($1::uuid, 'ip_blocked', $2)"#,
                                 )
                                 .bind(&agent_id)
-                                .bind(json!({"ip": ip, "agent_name": &agent_name, "source": "websocket"}))
+                                .bind(json!({"ip": client_ip.as_deref(), "agent_name": &agent_name, "source": "websocket"}))
                                 .execute(&state.db)
                                 .await;
 
                                 tracing::warn!(
-                                    "Agent WS REJECTED (IP whitelist): agent={} ip={}",
-                                    agent_id, ip
+                                    "Agent WS REJECTED (IP whitelist): agent={} ip={:?}",
+                                    agent_id, client_ip
                                 );
                                 let _ = tx.send(serde_json::to_string(&json!({
                                     "type": "auth_error",
@@ -132,6 +141,9 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                             .unwrap_or_default();
 
                         state.ws.agent_connections.insert(agent_id.clone(), (conn_id.clone(), tx.clone()));
+                        if let Some(ref ip) = client_ip {
+                            state.ws.agent_connection_ips.insert(agent_id.clone(), ip.clone());
+                        }
                         state.ws.agent_skills.insert(agent_id.clone(), skills.clone());
 
                         // Clean up stale streaming messages for this agent
@@ -550,6 +562,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
 
         if is_current {
             state.ws.agent_connections.remove(&agent_id);
+            state.ws.agent_connection_ips.remove(&agent_id);
             state.ws.agent_skills.remove(&agent_id);
             cleanup_agent_tasks(&state.ws, &agent_id);
 

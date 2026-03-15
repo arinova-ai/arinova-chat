@@ -69,6 +69,9 @@ pub struct WsState {
     /// Agent connections: agentId -> (connectionId, sender)
     pub agent_connections: Arc<DashMap<String, (String, WsSender)>>,
 
+    /// Agent connection IPs: agentId -> client IP (for security panel display)
+    pub agent_connection_ips: Arc<DashMap<String, String>>,
+
     /// Agent skills: agentId -> skills
     pub agent_skills: Arc<DashMap<String, Vec<AgentSkill>>>,
 
@@ -102,6 +105,7 @@ impl WsState {
             active_streams: Arc::new(DashMap::new()),
             agent_response_queues: Arc::new(DashMap::new()),
             agent_connections: Arc::new(DashMap::new()),
+            agent_connection_ips: Arc::new(DashMap::new()),
             agent_skills: Arc::new(DashMap::new()),
             pending_tasks: Arc::new(DashMap::new()),
             ws_rate_limits: Arc::new(DashMap::new()),

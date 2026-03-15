@@ -18,6 +18,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/settings/ip-whitelist", get(get_ip_whitelist).post(add_ip_whitelist))
         .route("/api/settings/ip-whitelist/{id}", delete(delete_ip_whitelist))
         .route("/api/settings/ip-whitelist/toggle", patch(toggle_ip_whitelist))
+        .route("/api/settings/agent-connections", get(get_agent_connections))
 }
 
 /// GET /api/user/settings — get current user's settings (never returns the actual key)
@@ -152,7 +153,14 @@ async fn add_ip_whitelist(
                 "id": id, "ipAddress": ip_addr, "createdAt": created_at.and_utc().to_rfc3339()
             }))).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("unique") || msg.contains("duplicate") || msg.contains("23505") {
+                (StatusCode::CONFLICT, Json(json!({"error": "This IP address is already in your whitelist"}))).into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": msg}))).into_response()
+            }
+        }
     }
 }
 
@@ -218,6 +226,44 @@ fn is_valid_ip_or_cidr(s: &str) -> bool {
         // Plain IP
         s.parse::<std::net::IpAddr>().is_ok()
     }
+}
+
+/// Check if IP whitelist is enabled for a user. Used by auth middleware.
+pub async fn is_ip_whitelist_enabled(db: &sqlx::PgPool, user_id: &str) -> Result<bool, ()> {
+    sqlx::query_as::<_, (bool,)>(
+        r#"SELECT COALESCE(ip_whitelist_enabled, false) FROM "user" WHERE id = $1"#,
+    )
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .map_err(|_| ())
+    .map(|opt| opt.map(|(e,)| e).unwrap_or(false))
+}
+
+/// GET /api/settings/agent-connections — list connected agents with their IPs
+async fn get_agent_connections(State(state): State<AppState>, user: AuthUser) -> Response {
+    // Get all agents owned by this user
+    let agents = sqlx::query_as::<_, (String, String)>(
+        "SELECT id::text, name FROM agents WHERE owner_id = $1",
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut connections = Vec::new();
+    for (agent_id, agent_name) in &agents {
+        if let Some(entry) = state.ws.agent_connection_ips.get(agent_id) {
+            connections.push(json!({
+                "agentId": agent_id,
+                "agentName": agent_name,
+                "ip": entry.value(),
+                "connected": true,
+            }));
+        }
+    }
+
+    Json(json!({ "connections": connections })).into_response()
 }
 
 /// Check if an IP address is in a user's whitelist. Used by agent auth middleware.

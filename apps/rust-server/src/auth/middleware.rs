@@ -215,13 +215,35 @@ where
 
         // IP Whitelist check: extract client IP and validate against owner's whitelist
         let client_ip = extract_client_ip(parts);
-        if let Some(ref ip) = client_ip {
+
+        // Check if whitelist is enabled for this owner
+        let wl_enabled = crate::routes::user_settings::is_ip_whitelist_enabled(
+            &app_state.db, &agent.2,
+        ).await.unwrap_or(false);
+
+        if wl_enabled {
+            let Some(ref ip) = client_ip else {
+                // Whitelist enabled but cannot determine client IP — reject
+                let _ = sqlx::query(
+                    r#"INSERT INTO agent_security_logs (agent_id, event_type, details)
+                       VALUES ($1, 'ip_blocked', $2)"#,
+                )
+                .bind(agent.0)
+                .bind(serde_json::json!({"ip": serde_json::Value::Null, "agent_name": agent.1, "reason": "no_client_ip"}))
+                .execute(&app_state.db)
+                .await;
+
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({"error": "Cannot determine client IP; connection rejected by IP whitelist"})),
+                ));
+            };
+
             let allowed = crate::routes::user_settings::check_ip_whitelist(
                 &app_state.db, &agent.2, ip,
             ).await.unwrap_or(true);
 
             if !allowed {
-                // Log security event
                 let _ = sqlx::query(
                     r#"INSERT INTO agent_security_logs (agent_id, event_type, details)
                        VALUES ($1, 'ip_blocked', $2)"#,

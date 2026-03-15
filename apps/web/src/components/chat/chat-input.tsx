@@ -964,12 +964,16 @@ case "tts": {
       clearAttachedCard();
     }
 
-    // Build content: card description + user text combined
-    const content = trimmed || (hasCard
-      ? (attachedCard.type === "note"
-        ? `用戶分享了一篇筆記：${attachedCard.title}`
-        : `用戶分享了一個任務：${attachedCard.title}`)
-      : "");
+    // Build content: always include card description so agents can read it
+    let content = trimmed;
+    if (hasCard) {
+      const desc = attachedCard.type === "note"
+        ? `[📝 Shared a note: ${attachedCard.title}]`
+        : attachedCard.type === "commit"
+          ? `[📦 Shared a commit: ${attachedCard.title}]`
+          : `[📋 Shared a kanban card: ${attachedCard.title}]`;
+      content = content ? `${desc}\n${content}` : desc;
+    }
 
     if (!content) return;
 

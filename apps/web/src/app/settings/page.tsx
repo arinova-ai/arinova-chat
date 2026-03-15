@@ -1473,6 +1473,13 @@ interface IpEntry {
   createdAt: string;
 }
 
+interface AgentConnection {
+  agentId: string;
+  agentName: string;
+  ip: string;
+  connected: boolean;
+}
+
 function SecurityPanel() {
   const { t } = useTranslation();
   const [enabled, setEnabled] = useState(false);
@@ -1482,12 +1489,17 @@ function SecurityPanel() {
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [connections, setConnections] = useState<AgentConnection[]>([]);
 
   const loadData = useCallback(async () => {
     try {
-      const res = await api<{ enabled: boolean; ips: IpEntry[] }>("/api/settings/ip-whitelist", { silent: true });
-      setEnabled(res.enabled);
-      setIps(res.ips);
+      const [wlRes, connRes] = await Promise.all([
+        api<{ enabled: boolean; ips: IpEntry[] }>("/api/settings/ip-whitelist", { silent: true }),
+        api<{ connections: AgentConnection[] }>("/api/settings/agent-connections", { silent: true }).catch(() => ({ connections: [] })),
+      ]);
+      setEnabled(wlRes.enabled);
+      setIps(wlRes.ips);
+      setConnections(connRes.connections ?? []);
     } finally {
       setLoading(false);
     }
@@ -1609,6 +1621,32 @@ function SecurityPanel() {
           <p className="text-xs text-muted-foreground">{t("settings.security.cidrHint")}</p>
         </div>
       )}
+
+      {/* Agent Connections */}
+      <Separator />
+      <div className="space-y-3">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">{t("settings.security.agentConnections")}</p>
+          <p className="text-xs text-muted-foreground">{t("settings.security.agentConnectionsDesc")}</p>
+        </div>
+        {connections.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            {t("settings.security.noConnections")}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {connections.map((conn) => (
+              <div key={conn.agentId} className="flex items-center justify-between rounded-lg bg-secondary/30 px-4 py-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  <span className="text-sm font-medium">{conn.agentName}</span>
+                </div>
+                <code className="text-xs font-mono text-muted-foreground">{conn.ip}</code>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
