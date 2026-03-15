@@ -21,8 +21,8 @@ export default function ExploreClubsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<Club[]>("/api/communities?type=community", { silent: true })
-      .then(setClubs)
+    api<Club[] | { communities: Club[] }>("/api/communities?type=community", { silent: true })
+      .then((res) => setClubs(Array.isArray(res) ? res : (res?.communities ?? [])))
       .catch(() => setClubs([]))
       .finally(() => setLoading(false));
   }, []);
