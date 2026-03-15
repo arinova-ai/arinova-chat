@@ -241,7 +241,7 @@ where
 
             let allowed = crate::routes::user_settings::check_ip_whitelist(
                 &app_state.db, &agent.2, ip,
-            ).await.unwrap_or(true);
+            ).await.unwrap_or(false);
 
             if !allowed {
                 let _ = sqlx::query(

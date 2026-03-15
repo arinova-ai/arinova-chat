@@ -30,7 +30,7 @@ export default function ExploreOfficialPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+    <div className="flex flex-col h-full bg-background pt-[env(safe-area-inset-top)]">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
         <button type="button" onClick={() => router.back()} className="rounded-lg p-1 hover:bg-accent">
           <ArrowLeft className="h-5 w-5" />

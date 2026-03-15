@@ -103,7 +103,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                             } else {
                                 crate::routes::user_settings::check_ip_whitelist(
                                     &state.db, &owner_id, ip_str,
-                                ).await.unwrap_or(true)
+                                ).await.unwrap_or(false)
                             };
 
                             if !allowed {
