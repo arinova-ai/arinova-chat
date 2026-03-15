@@ -64,7 +64,7 @@ export default function OfficialSettingsPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch(`${BACKEND_URL}/api/uploads`, {
+      const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
         method: "POST",
         credentials: "include",
         body: formData,
