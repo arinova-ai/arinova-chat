@@ -1243,6 +1243,7 @@
   "skills.noFavorites": "尚無收藏的 Skill",
   "skills.enable": "啟用",
   "skills.disable": "停用",
+  "skills.installed": "已安裝",
   "skills.uninstall": "解除安裝",
   "skills.sourceCode": "原始碼",
   "wiki.title": "維基",

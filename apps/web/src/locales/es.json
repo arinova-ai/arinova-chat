@@ -1215,6 +1215,7 @@
   "skills.noFavorites": "No hay skills favoritos",
   "skills.enable": "Habilitar",
   "skills.disable": "Deshabilitar",
+  "skills.installed": "Instalado",
   "skills.uninstall": "Desinstalar",
   "skills.sourceCode": "Código fuente",
   "wiki.title": "Wiki",

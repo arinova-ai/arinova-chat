@@ -27,7 +27,10 @@ import {
   ShieldCheck,
   LayoutDashboard,
   Mic,
+  Search,
+  Settings,
 } from "lucide-react";
+import { CommunitySettingsSheet } from "@/components/chat/community-settings";
 import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/utils";
 import { AudioPlayer } from "@/components/chat/audio-player";
@@ -189,6 +192,14 @@ function CommunityDetailContent() {
 
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Search
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Community settings sheet
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Verification
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -579,91 +590,150 @@ function CommunityDetailContent() {
         {/* Main chat area */}
         <div className="flex flex-1 flex-col min-w-0">
           {/* Header */}
-          <div className="shrink-0 border-b border-border px-4 py-3 flex items-center gap-3">
-            <button
-              onClick={() => router.push("/community")}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            {community.avatarUrl ? (
-              <img
-                src={community.avatarUrl}
-                alt={community.name}
-                className="h-8 w-8 rounded-lg object-cover"
-              />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/15 text-sm font-bold text-brand-text">
-                {community.name[0]}
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold truncate">
-                  {community.name}
-                </h2>
-                {community.verified && (
-                  <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" />
-                )}
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-                    community.type === "official"
-                      ? "bg-blue-500/15 text-blue-400"
-                      : community.type === "lounge"
-                      ? "bg-amber-500/15 text-amber-400"
-                      : "bg-purple-500/15 text-purple-400"
-                  )}
-                >
-                  {community.type === "official" ? "Official" : community.type === "lounge" ? "Lounge" : "Community"}
-                </span>
-              </div>
-              <p className="text-[10px] text-muted-foreground flex items-center gap-2">
-                <span className="flex items-center gap-1">
-                  <Users className="h-3 w-3" />
-                  {community.memberCount}
-                </span>
-                {community.agentCallFee > 0 && (
-                  <span className="flex items-center gap-1">
-                    <Coins className="h-3 w-3 text-yellow-500" />
-                    {community.agentCallFee}/call
-                  </span>
-                )}
-              </p>
-            </div>
-            {currentUserId === community.creatorId && community.type === "official" && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => router.push(`/official/${community.id}/dashboard`)}
-                title="Dashboard"
+          <div className="shrink-0 border-b border-border">
+            <div className="flex min-h-14 items-center gap-3 px-4">
+              <button
+                onClick={() => router.push("/community")}
+                className="text-muted-foreground hover:text-foreground transition-colors md:hidden"
               >
-                <LayoutDashboard className="h-4 w-4" />
-              </Button>
-            )}
-            {currentUserId === community.creatorId && !community.verified && community.type === "official" && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setVerifyOpen(true)}
-                title="Apply for verification"
-              >
-                <ShieldCheck className="h-4 w-4 text-blue-400" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setSidebarOpen((v) => !v)}
-              className="hidden md:flex"
-            >
-              {sidebarOpen ? (
-                <PanelRightClose className="h-4 w-4" />
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              {community.avatarUrl ? (
+                <img
+                  src={community.avatarUrl}
+                  alt={community.name}
+                  className="h-8 w-8 rounded-lg object-cover"
+                />
               ) : (
-                <PanelRightOpen className="h-4 w-4" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/15 text-sm font-bold text-brand-text">
+                  {community.name[0]}
+                </div>
               )}
-            </Button>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold truncate">
+                    {community.name}
+                  </h2>
+                  {community.verified && (
+                    <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" />
+                  )}
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      community.type === "official"
+                        ? "bg-blue-500/15 text-blue-400"
+                        : community.type === "lounge"
+                        ? "bg-amber-500/15 text-amber-400"
+                        : "bg-purple-500/15 text-purple-400"
+                    )}
+                  >
+                    {community.type === "official" ? "Official" : community.type === "lounge" ? "Lounge" : "Community"}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-2">
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {community.memberCount} {t("chat.header.members")}
+                  </span>
+                  {community.agentCallFee > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Coins className="h-3 w-3 text-yellow-500" />
+                      {community.agentCallFee}/call
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div className="ml-auto flex items-center gap-1">
+                {currentUserId === community.creatorId && community.type === "official" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => router.push(`/official/${community.id}/dashboard`)}
+                    title={t("nav.dashboard")}
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                  </Button>
+                )}
+                {currentUserId === community.creatorId && !community.verified && community.type === "official" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setVerifyOpen(true)}
+                    title="Apply for verification"
+                  >
+                    <ShieldCheck className="h-4 w-4 text-blue-400" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-8 w-8", searchOpen && "text-blue-400")}
+                  onClick={() => {
+                    setSearchOpen((v) => !v);
+                    if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
+                  }}
+                  title={t("chat.search.inConversation")}
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setSidebarOpen((v) => !v)}
+                  title={t("chat.header.members")}
+                >
+                  <Users className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setSettingsOpen(true)}
+                  title={t("chat.header.settings")}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Search bar */}
+            {searchOpen && (
+              <div className="flex items-center gap-2 border-t border-border/50 px-4 py-2">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setSearchOpen(false);
+                  }}
+                  placeholder={t("chat.search.inConversation")}
+                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
+
+          {/* Community settings sheet */}
+          {isMember && (
+            <CommunitySettingsSheet
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+              communityId={id}
+              conversationId={id}
+            />
+          )}
 
           {/* Verification form */}
           {verifyOpen && (

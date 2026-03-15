@@ -1215,6 +1215,7 @@
   "skills.noFavorites": "お気に入りのスキルはありません",
   "skills.enable": "有効化",
   "skills.disable": "無効化",
+  "skills.installed": "インストール済み",
   "skills.uninstall": "アンインストール",
   "skills.sourceCode": "ソースコード",
   "wiki.title": "ウィキ",

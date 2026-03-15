@@ -100,6 +100,7 @@ export function IconRail() {
     if (pathname.startsWith("/explore/official")) return "explore-official";
     if (pathname.startsWith("/explore/lounge")) return "explore-lounge";
     if (pathname.startsWith("/community")) return "community";
+    if (pathname.startsWith("/skills")) return "market";
     if (pathname.startsWith("/agent-hub")) return "market";
     if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/settings")) return "settings";
@@ -156,7 +157,7 @@ export function IconRail() {
     { id: "spaces", label: t("nav.spaces"), href: "/spaces" },
     { id: "explore-official", label: t("nav.exploreOfficial"), href: "/explore/official" },
     { id: "explore-lounge", label: t("nav.exploreLounge"), href: "/explore/lounge" },
-    { id: "market", label: t("nav.market"), href: "/agent-hub" },
+    { id: "market", label: t("nav.market"), href: "/skills" },
     { id: "theme", label: t("nav.theme"), href: "/office/themes" },
     { id: "creator", label: t("nav.creator"), href: "/creator" },
     { id: "wallet", label: t("nav.wallet"), href: "/wallet" },

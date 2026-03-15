@@ -75,6 +75,7 @@ struct SkillDetailRow {
     source_url: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    installed_agent_ids: Vec<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -133,6 +134,7 @@ fn skill_list_to_json(row: &SkillListRow) -> serde_json::Value {
 }
 
 fn skill_detail_to_json(row: &SkillDetailRow) -> serde_json::Value {
+    let agent_ids: Vec<String> = row.installed_agent_ids.iter().map(|id| id.to_string()).collect();
     json!({
         "id": row.id.to_string(),
         "name": &row.name,
@@ -150,6 +152,7 @@ fn skill_detail_to_json(row: &SkillDetailRow) -> serde_json::Value {
         "createdBy": &row.created_by,
         "installCount": row.install_count,
         "sourceUrl": &row.source_url,
+        "installedAgentIds": agent_ids,
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
     })
@@ -331,7 +334,7 @@ async fn get_skill(
     Path(id): Path<Uuid>,
 ) -> Response {
     let row = sqlx::query_as::<_, SkillDetailRow>(
-        "SELECT id, name, slug, description, category, icon_url, version, slash_command, prompt_template, prompt_content, parameters, is_official, is_public, created_by, install_count, source_url, created_at, updated_at FROM skills WHERE id = $1 AND (is_public = true OR created_by = $2)",
+        "SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version, s.slash_command, s.prompt_template, s.prompt_content, s.parameters, s.is_official, s.is_public, s.created_by, s.install_count, s.source_url, s.created_at, s.updated_at, COALESCE(ARRAY(SELECT ask.agent_id FROM agent_skills ask WHERE ask.skill_id = s.id AND ask.installed_by = $2), ARRAY[]::uuid[]) AS installed_agent_ids FROM skills s WHERE s.id = $1 AND (s.is_public = true OR s.created_by = $2)",
     )
     .bind(id)
     .bind(&user.id)

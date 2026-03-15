@@ -1215,6 +1215,7 @@
   "skills.noFavorites": "즐겨찾기한 스킬이 없습니다",
   "skills.enable": "활성화",
   "skills.disable": "비활성화",
+  "skills.installed": "설치됨",
   "skills.uninstall": "제거",
   "skills.sourceCode": "소스 코드",
   "wiki.title": "위키",

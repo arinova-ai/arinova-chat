@@ -1219,6 +1219,7 @@
   "skills.noFavorites": "暂无收藏的 Skill",
   "skills.enable": "启用",
   "skills.disable": "停用",
+  "skills.installed": "已安装",
   "skills.uninstall": "卸载",
   "skills.sourceCode": "源代码",
   "wiki.title": "维基",
