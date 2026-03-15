@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
 import { OfficeChatPanel } from "./office-chat-panel";
+import { FloatChatWindow } from "./float-chat-window";
 import { ThemeIframe } from "./theme-iframe";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useOfficeStream } from "@/hooks/use-office-stream";
@@ -53,6 +54,8 @@ function OfficeViewInner() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [characterModalSlot, setCharacterModalSlot] = useState<number | null>(null);
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
+  // Float window state: multiple simultaneous chat windows
+  const [floatWindows, setFloatWindows] = useState<string[]>([]);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
@@ -126,6 +129,7 @@ function OfficeViewInner() {
     bindAll();
   }, [bindings, displayAgents, themeId, maxAgents, fetchBindings]);
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
 
   // Character modal agent/binding for the selected slot
@@ -134,23 +138,43 @@ function OfficeViewInner() {
     ? bindings.find((b) => b.slotIndex === characterModalSlot)
     : undefined;
 
+  const openFloatWindow = useCallback((agentId: string) => {
+    setFloatWindows((prev) => prev.includes(agentId) ? prev : [...prev, agentId]);
+  }, []);
+
+  const closeFloatWindow = useCallback((agentId: string) => {
+    setFloatWindows((prev) => prev.filter((id) => id !== agentId));
+  }, []);
+
   const selectAgent = useCallback((id: string | null) => {
     if (!id) return;
-    // For iframe themes, switch to the agent's chat panel directly
+    // For iframe themes, open float window directly
     if (manifest?.renderer === "iframe") {
-      setChatAgentId(id);
+      if (isMobile) {
+        setChatAgentId(id);
+      } else {
+        openFloatWindow(id);
+      }
       return;
     }
-    // Fallback: open AgentModal
-    setSelectedAgentId(id);
-  }, [manifest]);
+    // Non-iframe: open float window (desktop) or modal (mobile)
+    if (isMobile) {
+      setSelectedAgentId(id);
+    } else {
+      openFloatWindow(id);
+    }
+  }, [manifest, isMobile, openFloatWindow]);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
   const handleOpenChat = useCallback((agentId: string) => {
     setCharacterModalSlot(null);
-    setChatAgentId(agentId);
-  }, []);
+    if (isMobile) {
+      setChatAgentId(agentId);
+    } else {
+      openFloatWindow(agentId);
+    }
+  }, [isMobile, openFloatWindow]);
   const closeChatPanel = useCallback(() => setChatAgentId(null), []);
 
   useEffect(() => {
@@ -172,7 +196,6 @@ function OfficeViewInner() {
   }, []);
 
   const themeReady = !loading && !!manifest;
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
@@ -227,7 +250,7 @@ function OfficeViewInner() {
         onOpenChat={handleOpenChat}
       />
 
-      {/* Inline chat panel */}
+      {/* Inline chat panel (mobile fallback) */}
       {chatAgentId && (
         <OfficeChatPanel
           open={!!chatAgentId}
@@ -235,6 +258,22 @@ function OfficeViewInner() {
           agentId={chatAgentId}
         />
       )}
+
+      {/* Float chat windows */}
+      {floatWindows.map((fwAgentId, idx) => {
+        const agent = stream.agents.find((a) => a.id === fwAgentId);
+        return (
+          <FloatChatWindow
+            key={fwAgentId}
+            agentId={fwAgentId}
+            agentName={agent?.name}
+            agentAvatar={undefined}
+            onClose={() => closeFloatWindow(fwAgentId)}
+            offsetIndex={idx}
+            isMobile={isMobile}
+          />
+        );
+      })}
     </div>
   );
 }

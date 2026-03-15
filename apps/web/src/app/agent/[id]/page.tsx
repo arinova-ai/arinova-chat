@@ -10,7 +10,7 @@ import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import { ArrowLeft, Brain, MessageSquare, Phone, Radio } from "lucide-react";
+import { ArrowLeft, Brain, MessageSquare, Phone, Radio, Plus, Trash2, Sparkles, BookOpen, AlertTriangle, Heart, Lightbulb, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
@@ -73,6 +73,29 @@ function AgentProfileContent() {
   const [capsules, setCapsules] = useState<CapsuleInfo[]>([]);
   const [capsuleGrants, setCapsuleGrants] = useState<Set<string>>(new Set());
   const [capsuleTogglingId, setCapsuleTogglingId] = useState<string | null>(null);
+
+  // Agent memory state (owner only)
+  interface AgentMemory {
+    id: string;
+    agentId: string;
+    category: string;
+    tier: string;
+    summary: string;
+    detail: string | null;
+    patternKey: string | null;
+    hitCount: number;
+    firstSeenAt: string;
+    lastUsedAt: string;
+  }
+  const [memories, setMemories] = useState<AgentMemory[]>([]);
+  const [memoriesLoaded, setMemoriesLoaded] = useState(false);
+  const [showMemories, setShowMemories] = useState(false);
+  const [addingMemory, setAddingMemory] = useState(false);
+  const [newCategory, setNewCategory] = useState("knowledge");
+  const [newSummary, setNewSummary] = useState("");
+  const [newDetail, setNewDetail] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractResult, setExtractResult] = useState<string | null>(null);
 
   // Listen mode state (group context only)
   const [groupMembers, setGroupMembers] = useState<GroupMembers | null>(null);
@@ -151,6 +174,74 @@ function AgentProfileContent() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [agent, agentId, session?.user?.id, agent?.ownerId]);
+
+  // Load agent memories (owner only)
+  useEffect(() => {
+    if (!agent || !session?.user?.id || session.user.id !== agent.ownerId || !showMemories) return;
+    if (memoriesLoaded) return;
+    let cancelled = false;
+    api<{ memories: AgentMemory[] }>(`/api/agent/memories?agent_id=${agentId}`, { silent: true })
+      .then((res) => {
+        if (!cancelled) {
+          setMemories(res.memories);
+          setMemoriesLoaded(true);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [agent, agentId, session?.user?.id, agent?.ownerId, showMemories, memoriesLoaded]);
+
+  const handleAddMemory = useCallback(async () => {
+    if (!newSummary.trim()) return;
+    try {
+      const m = await api<AgentMemory>("/api/agent/memories", {
+        method: "POST",
+        body: JSON.stringify({
+          agent_id: agentId,
+          category: newCategory,
+          summary: newSummary.trim(),
+          detail: newDetail.trim() || null,
+        }),
+      });
+      setMemories((prev) => [m, ...prev]);
+      setNewSummary("");
+      setNewDetail("");
+      setAddingMemory(false);
+    } catch { /* toast handled by api() */ }
+  }, [agentId, newCategory, newSummary, newDetail]);
+
+  const handleDeleteMemory = useCallback(async (memoryId: string) => {
+    try {
+      await api(`/api/agent/memories/${memoryId}`, { method: "DELETE" });
+      setMemories((prev) => prev.filter((m) => m.id !== memoryId));
+    } catch { /* toast handled by api() */ }
+  }, []);
+
+  const handleExtractMemories = useCallback(async () => {
+    // Find direct conversation with this agent
+    const directConv = conversations.find(
+      (c) => c.agentId === agentId && (c.type === "h2a" || c.type === "direct")
+    );
+    if (!directConv) {
+      setExtractResult(t("agentMemories.selectConversation"));
+      return;
+    }
+    setExtracting(true);
+    setExtractResult(null);
+    try {
+      const res = await api<{ extracted: number }>("/api/agent/memories/extract", {
+        method: "POST",
+        body: JSON.stringify({
+          agent_id: agentId,
+          conversation_id: directConv.id,
+        }),
+      });
+      setExtractResult(t("agentMemories.extracted").replace("{count}", String(res.extracted)));
+      // Reload memories
+      setMemoriesLoaded(false);
+    } catch { /* toast handled by api() */ }
+    finally { setExtracting(false); }
+  }, [agentId, conversations, t]);
 
   const handleToggleCapsuleGrant = useCallback(async (capsuleId: string, granted: boolean) => {
     setCapsuleTogglingId(capsuleId);
@@ -594,6 +685,148 @@ function AgentProfileContent() {
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {/* Agent Memories (owner only) */}
+                {isOwner && (
+                  <div className="mt-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setShowMemories(!showMemories)}
+                        className="flex items-center gap-2 hover:opacity-80"
+                      >
+                        <Lightbulb className="h-4 w-4 text-amber-500" />
+                        <h3 className="text-sm font-semibold">
+                          {t("agentMemories.title")}
+                        </h3>
+                        <span className="text-xs text-muted-foreground">
+                          ({memories.length})
+                        </span>
+                      </button>
+                      {showMemories && (
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 text-xs"
+                            onClick={handleExtractMemories}
+                            disabled={extracting}
+                          >
+                            <Sparkles className="h-3 w-3" />
+                            {extracting ? t("agentMemories.extracting") : t("agentMemories.extract")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 text-xs"
+                            onClick={() => setAddingMemory(true)}
+                          >
+                            <Plus className="h-3 w-3" />
+                            {t("agentMemories.add")}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {showMemories && (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          {t("agentMemories.desc")}
+                        </p>
+
+                        {extractResult && (
+                          <p className="text-xs text-brand-text">{extractResult}</p>
+                        )}
+
+                        {/* Add memory form */}
+                        {addingMemory && (
+                          <div className="rounded-lg border border-border p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <select
+                                value={newCategory}
+                                onChange={(e) => setNewCategory(e.target.value)}
+                                className="rounded border bg-background px-2 py-1 text-xs outline-none"
+                              >
+                                <option value="correction">{t("agentMemories.correction")}</option>
+                                <option value="preference">{t("agentMemories.preference")}</option>
+                                <option value="knowledge">{t("agentMemories.knowledge")}</option>
+                                <option value="error">{t("agentMemories.error")}</option>
+                              </select>
+                              <Button variant="ghost" size="icon-xs" onClick={() => setAddingMemory(false)}>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            <input
+                              type="text"
+                              value={newSummary}
+                              onChange={(e) => setNewSummary(e.target.value)}
+                              placeholder={t("agentMemories.summary")}
+                              className="w-full rounded border bg-background px-2 py-1.5 text-sm outline-none focus:border-brand"
+                            />
+                            <textarea
+                              value={newDetail}
+                              onChange={(e) => setNewDetail(e.target.value)}
+                              placeholder={t("agentMemories.detail")}
+                              rows={2}
+                              className="w-full resize-none rounded border bg-background px-2 py-1.5 text-sm outline-none focus:border-brand"
+                            />
+                            <Button size="sm" onClick={handleAddMemory} disabled={!newSummary.trim()}>
+                              {t("agentMemories.add")}
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Memory list */}
+                        {memories.length === 0 && memoriesLoaded && (
+                          <p className="text-xs text-muted-foreground text-center py-4">
+                            {t("agentMemories.empty")}
+                          </p>
+                        )}
+
+                        <div className="space-y-1.5">
+                          {memories.map((mem) => {
+                            const catIcon =
+                              mem.category === "correction" ? <AlertTriangle className="h-3.5 w-3.5 text-orange-500" /> :
+                              mem.category === "preference" ? <Heart className="h-3.5 w-3.5 text-pink-500" /> :
+                              mem.category === "error" ? <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> :
+                              <BookOpen className="h-3.5 w-3.5 text-blue-500" />;
+
+                            return (
+                              <div
+                                key={mem.id}
+                                className="group flex items-start gap-2.5 rounded-lg bg-secondary/60 px-3 py-2.5"
+                              >
+                                <div className="mt-0.5 shrink-0">{catIcon}</div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm">{mem.summary}</p>
+                                  {mem.detail && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">{mem.detail}</p>
+                                  )}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[10px] text-muted-foreground capitalize">{t(`agentMemories.${mem.category}`)}</span>
+                                    {mem.hitCount > 1 && (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        {mem.hitCount} {t("agentMemories.hits")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="opacity-0 group-hover:opacity-100 shrink-0"
+                                  onClick={() => handleDeleteMemory(mem.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </>
