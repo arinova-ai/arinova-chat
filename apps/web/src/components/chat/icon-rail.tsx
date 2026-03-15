@@ -5,13 +5,15 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, UserPlus,
   Palette, Users, Sparkles, Store, Wallet, Settings, Smile,
-  LayoutDashboard, Plus, Mic, Check, type LucideIcon,
+  LayoutDashboard, Plus, Mic, Check, Send, BookOpen, Brain,
+  BookHeart, Eye, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { useShortcutStore } from "@/store/shortcut-store";
 import { useNavPinStore, DEFAULT_NAV_IDS, PINNABLE_NAV_IDS } from "@/store/nav-pin-store";
+import { useAccountStore } from "@/store/account-store";
 import { AddShortcutPopover } from "./add-shortcut-sheet";
 import { AccountSwitcher } from "@/components/accounts/account-switcher";
 import {
@@ -35,6 +37,19 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   settings: Settings,
   "explore-official": Building2,
   "explore-lounge": Mic,
+  // Official account
+  "official-dashboard": LayoutDashboard,
+  "official-broadcast": Send,
+  "official-auto-reply": MessageSquare,
+  "official-knowledge": BookOpen,
+  "official-subscribers": Users,
+  // Lounge account
+  "lounge-dashboard": LayoutDashboard,
+  "lounge-persona": Brain,
+  "lounge-diary": BookHeart,
+  "lounge-preview": Eye,
+  "lounge-settings": Settings,
+  "lounge-fans": Users,
 };
 
 const SHORTCUT_ICONS: Record<string, LucideIcon> = {
@@ -71,6 +86,8 @@ export function IconRail() {
     return () => clearInterval(interval);
   }, []);
 
+  const activeAccount = useAccountStore((s) => s.accounts.find((a) => a.id === s.activeAccountId));
+
   const getActiveId = () => {
     if (pathname === "/" || pathname.startsWith("/chat")) return "chat";
     if (pathname.startsWith("/office/themes")) return "theme";
@@ -85,12 +102,48 @@ export function IconRail() {
     if (pathname.startsWith("/agent-hub")) return "market";
     if (pathname.startsWith("/wallet")) return "wallet";
     if (pathname.startsWith("/settings")) return "settings";
+    if (pathname.startsWith("/official") && activeAccount?.type === "official") {
+      if (pathname.includes("/dashboard")) return "official-dashboard";
+      if (pathname.includes("/broadcast")) return "official-broadcast";
+      if (pathname.includes("/auto-reply")) return "official-auto-reply";
+      if (pathname.includes("/knowledge")) return "official-knowledge";
+      if (pathname.includes("/subscribers")) return "official-subscribers";
+    }
+    if (pathname.startsWith("/lounge") && activeAccount?.type === "lounge") {
+      if (pathname.includes("/dashboard")) return "lounge-dashboard";
+      if (pathname.includes("/persona")) return "lounge-persona";
+      if (pathname.includes("/diary")) return "lounge-diary";
+      if (pathname.includes("/preview")) return "lounge-preview";
+      if (pathname.includes("/settings")) return "lounge-settings";
+      if (pathname.includes("/fans")) return "lounge-fans";
+    }
     return "chat";
   };
 
   const activeId = getActiveId();
 
-  // ── All nav items (order matters) ──
+  // ── Official account nav items ──
+  const officialItems: NavEntry[] = activeAccount ? [
+    { id: "chat", label: t("nav.chat"), href: "/" },
+    { id: "official-dashboard", label: t("nav.dashboard"), href: `/official/${activeAccount.id}/dashboard` },
+    { id: "official-broadcast", label: t("nav.broadcast"), href: `/official/${activeAccount.id}/broadcast` },
+    { id: "official-auto-reply", label: t("nav.autoReply"), href: `/official/${activeAccount.id}/auto-reply` },
+    { id: "official-knowledge", label: t("nav.knowledge"), href: `/official/${activeAccount.id}/knowledge` },
+    { id: "official-subscribers", label: t("nav.subscribers"), href: `/official/${activeAccount.id}/subscribers` },
+  ] : [];
+
+  // ── Lounge account nav items ──
+  const loungeItems: NavEntry[] = activeAccount ? [
+    { id: "chat", label: t("nav.chat"), href: "/" },
+    { id: "lounge-dashboard", label: t("nav.dashboard"), href: `/lounge/${activeAccount.id}/dashboard` },
+    { id: "lounge-persona", label: t("nav.persona"), href: `/lounge/${activeAccount.id}/persona` },
+    { id: "lounge-diary", label: t("nav.diary"), href: `/lounge/${activeAccount.id}/diary` },
+    { id: "lounge-preview", label: t("nav.preview"), href: `/lounge/${activeAccount.id}/preview` },
+    { id: "lounge-settings", label: t("nav.loungeSettings"), href: `/lounge/${activeAccount.id}/settings` },
+    { id: "lounge-fans", label: t("nav.fans"), href: `/lounge/${activeAccount.id}/fans` },
+  ] : [];
+
+  // ── Personal account nav items (order matters) ──
   const ALL_ITEMS: NavEntry[] = [
     { id: "chat", label: t("nav.chat"), href: "/" },
     { id: "office", label: t("nav.office"), href: "/office" },
@@ -112,12 +165,19 @@ export function IconRail() {
   const defaultSet = new Set<string>(DEFAULT_NAV_IDS);
   const pinnableSet = new Set<string>(PINNABLE_NAV_IDS);
 
-  // Visible items: defaults + user-pinned
-  const visibleItems = ALL_ITEMS.filter(
-    (item) => defaultSet.has(item.id) || pinnedIds.includes(item.id),
-  );
+  // Determine which items to show based on active account type
+  const isOfficialAccount = activeAccount?.type === "official";
+  const isLoungeAccount = activeAccount?.type === "lounge";
 
-  // Pinnable items for the popover
+  const visibleItems = isOfficialAccount
+    ? officialItems
+    : isLoungeAccount
+    ? loungeItems
+    : ALL_ITEMS.filter(
+        (item) => defaultSet.has(item.id) || pinnedIds.includes(item.id),
+      );
+
+  // Pinnable items for the popover (personal accounts only)
   const pinnableItems = ALL_ITEMS.filter((item) => pinnableSet.has(item.id));
 
   const settingsItem: NavEntry = {

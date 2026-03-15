@@ -1092,6 +1092,8 @@
   "nav.voiceRoom": "语音房",
   "nav.fans": "粉丝管理",
   "nav.subscribers": "订阅者",
+  "nav.dashboard": "仪表板",
+  "nav.loungeSettings": "设置",
   "accounts.personal": "个人",
   "accounts.create": "创建帐号",
   "accounts.createTitle": "创建新帐号",

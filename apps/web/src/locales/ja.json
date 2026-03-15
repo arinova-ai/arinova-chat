@@ -16,6 +16,8 @@
   "nav.allShortcutsAdded": "すべてのショートカットが追加済み",
   "nav.creator": "クリエイターコンソール",
   "nav.subscribers": "購読者",
+  "nav.dashboard": "ダッシュボード",
+  "nav.loungeSettings": "設定",
   "common.save": "変更を保存",
   "common.cancel": "キャンセル",
   "common.confirm": "確認",
