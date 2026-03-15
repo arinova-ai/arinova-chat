@@ -237,7 +237,7 @@ export function ChatHeader({
                 {t(`community.cs.status.${csStatus}`)}
               </span>
             </p>
-          ) : type === "group" ? (
+          ) : type === "group" || type === "community" ? (
             <p className="text-xs text-muted-foreground truncate">
               {memberCount ? `${memberCount} ${t("chat.header.members")}` : t("chat.header.group")}
             </p>
@@ -261,7 +261,7 @@ export function ChatHeader({
             <Settings className="h-4 w-4" />
           </Button>
         )}
-        {type === "group" && conversationId ? (
+        {(type === "group" || type === "community") && conversationId ? (
           <GroupHeaderButtons
             conversationId={conversationId}
             groupPins={groupPins}
