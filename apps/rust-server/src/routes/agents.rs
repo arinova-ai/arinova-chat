@@ -52,6 +52,8 @@ struct UpdateAgentBody {
     #[serde(rename = "isPublic")]
     is_public: Option<bool>,
     category: Option<String>,
+    #[serde(rename = "ownerProtection")]
+    owner_protection: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -105,7 +107,18 @@ async fn list_agents(State(state): State<AppState>, user: AuthUser) -> Response 
     .await;
 
     match agents {
-        Ok(agents) => Json(json!(agents)).into_response(),
+        Ok(agents) => {
+            let vals: Vec<Value> = agents.into_iter().map(|a| {
+                let mut val = serde_json::to_value(&a).unwrap_or_default();
+                if !a.owner_protection {
+                    if let Some(obj) = val.as_object_mut() {
+                        obj.insert("secretToken".to_string(), json!(a.secret_token));
+                    }
+                }
+                val
+            }).collect();
+            Json(json!(vals)).into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),
@@ -128,7 +141,15 @@ async fn get_agent(
     .await;
 
     match agent {
-        Ok(Some(agent)) => Json(json!(agent)).into_response(),
+        Ok(Some(agent)) => {
+            let mut val = serde_json::to_value(&agent).unwrap_or_default();
+            if !agent.owner_protection {
+                if let Some(obj) = val.as_object_mut() {
+                    obj.insert("secretToken".to_string(), json!(agent.secret_token));
+                }
+            }
+            Json(val).into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Agent not found"})),
@@ -204,6 +225,7 @@ async fn update_agent(
            notifications_enabled = COALESCE($7, notifications_enabled),
            is_public = COALESCE($8, is_public),
            category = COALESCE($9, category),
+           owner_protection = COALESCE($10, owner_protection),
            updated_at = NOW()
            WHERE id = $1 AND owner_id = $2
            RETURNING *"#,
@@ -217,11 +239,20 @@ async fn update_agent(
     .bind(body.notifications_enabled)
     .bind(body.is_public)
     .bind(&body.category)
+    .bind(body.owner_protection)
     .fetch_optional(&state.db)
     .await;
 
     match result {
-        Ok(Some(agent)) => Json(json!(agent)).into_response(),
+        Ok(Some(agent)) => {
+            let mut val = serde_json::to_value(&agent).unwrap_or_default();
+            if !agent.owner_protection {
+                if let Some(obj) = val.as_object_mut() {
+                    obj.insert("secretToken".to_string(), json!(agent.secret_token));
+                }
+            }
+            Json(val).into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Agent not found"})),

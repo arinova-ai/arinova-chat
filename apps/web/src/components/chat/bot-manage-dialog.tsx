@@ -28,10 +28,12 @@ import {
   HelpCircle,
   Loader2,
   RefreshCw,
+  Shield,
   Trash2,
   Eye,
   EyeOff,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   Popover,
   PopoverTrigger,
@@ -88,6 +90,7 @@ interface BotManageDialogProps {
     a2aEndpoint: string | null;
     category: string | null;
     systemPrompt: string | null;
+    ownerProtection?: boolean;
   };
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -128,6 +131,10 @@ export function BotManageDialog({
   const [showToken, setShowToken] = useState(false);
   const [regeneratingToken, setRegeneratingToken] = useState(false);
 
+  // Owner protection toggle
+  const [ownerProtection, setOwnerProtection] = useState(agent.ownerProtection !== false);
+  const [protectionSaving, setProtectionSaving] = useState(false);
+
   // UI state
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -158,6 +165,7 @@ export function BotManageDialog({
       setShowToken(false);
       setTokenLoading(false);
       setRegeneratingToken(false);
+      setOwnerProtection(agent.ownerProtection !== false);
       // Load stats
       api<AgentStats>(`/api/agents/${agent.id}/stats`)
         .then(setStats)
@@ -408,6 +416,36 @@ export function BotManageDialog({
                   {isConnected ? t("botManage.connected") : t("botManage.notConnected")}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Owner Protection */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-1.5 text-sm font-medium">
+              <Shield className="h-4 w-4 text-orange-500" />
+              {t("botManage.ownerProtection")}
+              <HoverPopover content={t("botManage.ownerProtectionTooltip")} />
+            </label>
+            <div className="flex items-center justify-between rounded-lg bg-secondary/50 px-4 py-3">
+              <span className="text-sm text-muted-foreground">
+                {ownerProtection ? t("botManage.ownerProtectionOn") : t("botManage.ownerProtectionOff")}
+              </span>
+              <Switch
+                checked={ownerProtection}
+                disabled={protectionSaving}
+                onCheckedChange={async (checked) => {
+                  setProtectionSaving(true);
+                  try {
+                    await updateAgent(agent.id, { ownerProtection: checked });
+                    setOwnerProtection(checked);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to update");
+                  } finally {
+                    setProtectionSaving(false);
+                  }
+                }}
+                className="data-[state=checked]:bg-orange-500"
+              />
             </div>
           </div>
 
