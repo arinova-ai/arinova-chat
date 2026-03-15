@@ -17,6 +17,7 @@ import {
   LogOut,
   Bell,
   Clock,
+  Shield,
   ShieldBan,
   Camera,
   Languages,
@@ -28,6 +29,8 @@ import {
   Settings,
   Volume2,
   VolumeX,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { compressImage } from "@/lib/image-compress";
@@ -44,7 +47,7 @@ import { isSoundEnabled, setSoundEnabled } from "@/lib/sounds";
 
 // ───── Types ─────
 
-type SettingsSection = "profile" | "language" | "notifications" | "privacy" | "ai";
+type SettingsSection = "profile" | "language" | "notifications" | "privacy" | "ai" | "security";
 
 interface NotificationPrefs {
   globalEnabled: boolean;
@@ -77,6 +80,7 @@ const NAV_ITEMS: { id: SettingsSection; labelKey: string; icon: React.ReactNode 
   { id: "notifications", labelKey: "settings.nav.notifications", icon: <Bell className="h-4 w-4" /> },
   { id: "privacy", labelKey: "settings.nav.privacy", icon: <ShieldBan className="h-4 w-4" /> },
   { id: "ai", labelKey: "settings.nav.ai", icon: <Zap className="h-4 w-4" /> },
+  { id: "security", labelKey: "settings.nav.security", icon: <Shield className="h-4 w-4" /> },
 ];
 
 // ───── Avatar Crop Dialog ─────
@@ -1461,6 +1465,154 @@ function AiPanel() {
   );
 }
 
+// ───── Security Panel (IP Whitelist) ─────
+
+interface IpEntry {
+  id: string;
+  ipAddress: string;
+  createdAt: string;
+}
+
+function SecurityPanel() {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState(false);
+  const [ips, setIps] = useState<IpEntry[]>([]);
+  const [newIp, setNewIp] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const res = await api<{ enabled: boolean; ips: IpEntry[] }>("/api/settings/ip-whitelist", { silent: true });
+      setEnabled(res.enabled);
+      setIps(res.ips);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleToggle = async (checked: boolean) => {
+    setSaving(true);
+    try {
+      await api("/api/settings/ip-whitelist/toggle", {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: checked }),
+      });
+      setEnabled(checked);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAdd = async () => {
+    const ip = newIp.trim();
+    if (!ip) return;
+    setAdding(true);
+    try {
+      const entry = await api<IpEntry>("/api/settings/ip-whitelist", {
+        method: "POST",
+        body: JSON.stringify({ ipAddress: ip }),
+      });
+      setIps((prev) => [...prev, entry]);
+      setNewIp("");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await api(`/api/settings/ip-whitelist/${id}`, { method: "DELETE" });
+      setIps((prev) => prev.filter((e) => e.id !== id));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 p-4">
+      <div>
+        <h3 className="text-lg font-semibold">{t("settings.security.title")}</h3>
+        <p className="text-sm text-muted-foreground mt-1">{t("settings.security.description")}</p>
+      </div>
+
+      {/* IP Whitelist Toggle */}
+      <div className="flex items-center justify-between rounded-lg bg-secondary/50 px-4 py-3">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">{t("settings.security.ipWhitelist")}</p>
+          <p className="text-xs text-muted-foreground">{t("settings.security.ipWhitelistDesc")}</p>
+        </div>
+        <Switch
+          checked={enabled}
+          disabled={saving}
+          onCheckedChange={handleToggle}
+        />
+      </div>
+
+      {/* IP List */}
+      {enabled && (
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={newIp}
+              onChange={(e) => setNewIp(e.target.value)}
+              placeholder={t("settings.security.ipPlaceholder")}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              className="flex-1"
+            />
+            <Button onClick={handleAdd} disabled={adding || !newIp.trim()} size="sm" className="gap-1.5">
+              {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {t("settings.security.addIp")}
+            </Button>
+          </div>
+
+          {ips.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {t("settings.security.noIps")}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {ips.map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between rounded-lg bg-secondary/30 px-4 py-2.5">
+                  <code className="text-sm font-mono">{entry.ipAddress}</code>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(entry.id)}
+                    disabled={deletingId === entry.id}
+                  >
+                    {deletingId === entry.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">{t("settings.security.cidrHint")}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ───── Settings Layout ─────
 
 function SettingsContent() {
@@ -1486,6 +1638,7 @@ function SettingsContent() {
       case "notifications": return <NotificationPanel />;
       case "privacy": return <PrivacyPanel />;
       case "ai": return <AiPanel />;
+      case "security": return <SecurityPanel />;
     }
   };
 

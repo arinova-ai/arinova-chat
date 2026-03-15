@@ -28,11 +28,24 @@ pub fn router() -> Router<AppState> {
 async fn agent_ws_upgrade(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
-    ws.on_upgrade(move |socket| handle_agent_ws(socket, state))
+    // Extract client IP before upgrade (headers unavailable after upgrade)
+    let client_ip = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|xff| xff.split(',').next())
+        .map(|s| s.trim().to_string())
+        .or_else(|| {
+            headers.get("x-real-ip")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.trim().to_string())
+        });
+
+    ws.on_upgrade(move |socket| handle_agent_ws(socket, state, client_ip))
 }
 
-async fn handle_agent_ws(socket: WebSocket, state: AppState) {
+async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<String>) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // Unique ID for this connection — used to avoid cleanup race conditions on reconnect
@@ -69,15 +82,43 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
                 let bot_token = event.get("botToken").and_then(|v| v.as_str()).unwrap_or("");
 
                 // Look up agent by botToken (secret_token)
-                let agent = sqlx::query_as::<_, (String, String)>(
-                    r#"SELECT id::text, name FROM agents WHERE secret_token = $1"#,
+                let agent = sqlx::query_as::<_, (String, String, String)>(
+                    r#"SELECT id::text, name, owner_id FROM agents WHERE secret_token = $1"#,
                 )
                 .bind(bot_token)
                 .fetch_optional(&state.db)
                 .await;
 
                 match agent {
-                    Ok(Some((agent_id, agent_name))) => {
+                    Ok(Some((agent_id, agent_name, owner_id))) => {
+                        // IP Whitelist check
+                        if let Some(ref ip) = client_ip {
+                            let allowed = crate::routes::user_settings::check_ip_whitelist(
+                                &state.db, &owner_id, ip,
+                            ).await.unwrap_or(true);
+
+                            if !allowed {
+                                let _ = sqlx::query(
+                                    r#"INSERT INTO agent_security_logs (agent_id, event_type, details)
+                                       VALUES ($1::uuid, 'ip_blocked', $2)"#,
+                                )
+                                .bind(&agent_id)
+                                .bind(json!({"ip": ip, "agent_name": &agent_name, "source": "websocket"}))
+                                .execute(&state.db)
+                                .await;
+
+                                tracing::warn!(
+                                    "Agent WS REJECTED (IP whitelist): agent={} ip={}",
+                                    agent_id, ip
+                                );
+                                let _ = tx.send(serde_json::to_string(&json!({
+                                    "type": "auth_error",
+                                    "error": "IP address not in whitelist"
+                                })).unwrap());
+                                return None;
+                            }
+                        }
+
                         // Close any existing connection for this agent
                         if let Some((_, (_, old_sender))) = state.ws.agent_connections.remove(&agent_id) {
                             // The old connection will close when sender is dropped

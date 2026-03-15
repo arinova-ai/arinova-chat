@@ -213,12 +213,58 @@ where
         .map_err(|_| reject())?
         .ok_or_else(reject)?;
 
+        // IP Whitelist check: extract client IP and validate against owner's whitelist
+        let client_ip = extract_client_ip(parts);
+        if let Some(ref ip) = client_ip {
+            let allowed = crate::routes::user_settings::check_ip_whitelist(
+                &app_state.db, &agent.2, ip,
+            ).await.unwrap_or(true);
+
+            if !allowed {
+                // Log security event
+                let _ = sqlx::query(
+                    r#"INSERT INTO agent_security_logs (agent_id, event_type, details)
+                       VALUES ($1, 'ip_blocked', $2)"#,
+                )
+                .bind(agent.0)
+                .bind(serde_json::json!({"ip": ip, "agent_name": agent.1}))
+                .execute(&app_state.db)
+                .await;
+
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({"error": "IP address not in whitelist"})),
+                ));
+            }
+        }
+
         Ok(AuthAgent {
             id: agent.0,
             name: agent.1,
             owner_id: agent.2,
         })
     }
+}
+
+/// Extract the client IP from request headers (X-Forwarded-For, X-Real-IP, or direct).
+fn extract_client_ip(parts: &Parts) -> Option<String> {
+    // Prefer X-Forwarded-For (first IP is the client)
+    if let Some(xff) = parts.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        if let Some(first) = xff.split(',').next() {
+            let ip = first.trim();
+            if !ip.is_empty() {
+                return Some(ip.to_string());
+            }
+        }
+    }
+    // Fallback to X-Real-IP
+    if let Some(xri) = parts.headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
+        let ip = xri.trim();
+        if !ip.is_empty() {
+            return Some(ip.to_string());
+        }
+    }
+    None
 }
 
 /// Extract the Better Auth session token from the cookie header.

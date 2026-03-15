@@ -1330,8 +1330,6 @@ pub async fn trigger_agent_response(
     };
 
     // Dispatch to each agent (may be empty if mention_only and no mentions matched)
-    // Note: owner_protection check happens inside do_trigger_agent_response() —
-    // non-owner dispatches are silently blocked there with logging + push notification.
     if is_non_ai_sticker {
         tracing::info!("Skipping agent dispatch for non-AI sticker in conv={}", conversation_id);
     }
@@ -1414,66 +1412,17 @@ pub(crate) async fn do_trigger_agent_response(
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
 ) {
-    let agent = sqlx::query_as::<_, (String, Option<String>, String, bool)>(
-        r#"SELECT name, system_prompt, owner_id, owner_protection FROM agents WHERE id = $1::uuid"#,
+    let agent = sqlx::query_as::<_, (String, Option<String>)>(
+        r#"SELECT name, system_prompt FROM agents WHERE id = $1::uuid"#,
     )
     .bind(agent_id)
     .fetch_optional(db)
     .await;
 
-    let (agent_name, system_prompt, agent_owner_id, owner_protection) = match agent {
+    let (agent_name, system_prompt) = match agent {
         Ok(Some(a)) => a,
         _ => return,
     };
-
-    // Owner Protection: silently block dispatch if sender is not the agent owner
-    if owner_protection && user_id != agent_owner_id {
-        tracing::warn!(
-            "Owner protection blocked do_trigger: agent={} sender={} owner={}",
-            agent_id, user_id, agent_owner_id
-        );
-        // Log + notify (spawn to avoid blocking)
-        let db2 = db.clone();
-        let config2 = config.clone();
-        let ws2 = ws_state.clone();
-        let aid = agent_id.to_string();
-        let aname = agent_name.clone();
-        let owner = agent_owner_id.clone();
-        let uid = user_id.to_string();
-        let cid = conversation_id.to_string();
-        tokio::spawn(async move {
-            let _ = sqlx::query(
-                r#"INSERT INTO agent_security_logs (agent_id, event_type, details)
-                   VALUES ($1::uuid, 'unauthorized_dispatch', $2)"#,
-            )
-            .bind(&aid)
-            .bind(json!({"sender_user_id": uid, "conversation_id": cid}))
-            .execute(&db2)
-            .await;
-
-            let _ = send_push_to_user(
-                &db2, &config2, &owner,
-                &PushPayload {
-                    notification_type: "security_alert".into(),
-                    title: "\u{26a0}\u{fe0f} Bot Token 安全警告".into(),
-                    body: format!(
-                        "{} 的 bot token 疑似外洩，有非授權操作嘗試。請前往設定頁面更換 token。",
-                        aname
-                    ),
-                    url: Some(format!("/?agent={}", aid)),
-                    message_id: None,
-                },
-            ).await;
-
-            ws2.send_to_user(&owner, &json!({
-                "type": "security_alert",
-                "agentId": aid,
-                "agentName": aname,
-                "event": "unauthorized_dispatch",
-            }));
-        });
-        return;
-    }
 
     // Fetch agent's owner for blocking filter
     let agent_owner = sqlx::query_as::<_, (Option<String>,)>(
