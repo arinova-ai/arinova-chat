@@ -27,7 +27,6 @@ import {
   ShieldCheck,
   LayoutDashboard,
   Mic,
-  Search,
   Settings,
   BookText,
 } from "lucide-react";
@@ -194,11 +193,6 @@ function CommunityDetailContent() {
 
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Search
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Community settings sheet
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -674,18 +668,6 @@ function CommunityDetailContent() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={cn("h-8 w-8", searchOpen && "text-blue-400")}
-                  onClick={() => {
-                    setSearchOpen((v) => !v);
-                    if (!searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
-                  }}
-                  title={t("chat.search.inConversation")}
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
                   className={cn("h-8 w-8", wikiOpen && "text-blue-400")}
                   onClick={() => setWikiOpen((v) => !v)}
                   title={t("wiki.title")}
@@ -701,42 +683,20 @@ function CommunityDetailContent() {
                 >
                   <Users className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setSettingsOpen(true)}
-                  title={t("chat.header.settings")}
-                >
-                  <Settings className="h-4 w-4" />
-                </Button>
+                {isMember && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setSettingsOpen(true)}
+                    title={t("chat.header.settings")}
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
 
-            {/* Search bar */}
-            {searchOpen && (
-              <div className="flex items-center gap-2 border-t border-border/50 px-4 py-2">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setSearchOpen(false);
-                  }}
-                  placeholder={t("chat.search.inConversation")}
-                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0"
-                  onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )}
           </div>
 
           {/* Community wiki */}
