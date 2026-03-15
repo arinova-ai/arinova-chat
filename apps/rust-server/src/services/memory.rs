@@ -3,7 +3,6 @@
 use anyhow::{anyhow, Context};
 use pgvector::Vector;
 use reqwest::Client;
-use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -12,8 +11,6 @@ use tokio_util::sync::CancellationToken;
 use crate::config::Config;
 use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
 use crate::services::push::{send_push_to_user, PushPayload};
-
-const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
 Extract key facts, preferences, and important information from this conversation. \
@@ -29,8 +26,11 @@ IMPORTANT: Extract memories in the SAME LANGUAGE as the original conversation. I
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;
 
-/// Max characters per chunk sent to Gemini (~7500 tokens)
-const CHUNK_CHAR_LIMIT: usize = 30_000;
+/// Max characters per chunk sent to Claude CLI (~30k tokens)
+const CHUNK_CHAR_LIMIT: usize = 120_000;
+
+/// Path to the claude CLI binary on the staging server
+const CLAUDE_CLI_PATH: &str = "/root/.cargo/bin/claude";
 
 /// Truncate a string to at most `max_bytes` without splitting a UTF-8 character.
 fn safe_truncate(s: &str, max_bytes: usize) -> &str {
@@ -44,20 +44,7 @@ fn safe_truncate(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 
-#[derive(Deserialize)]
-struct OpenRouterResponse {
-    choices: Option<Vec<OpenRouterChoice>>,
-}
-#[derive(Deserialize)]
-struct OpenRouterChoice {
-    message: Option<OpenRouterMessage>,
-}
-#[derive(Deserialize)]
-struct OpenRouterMessage {
-    content: Option<String>,
-}
-
-/// Extract memories from a capsule's source conversation using Gemini,
+/// Extract memories from a capsule's source conversation using Claude CLI,
 /// generate embeddings, and store in memory_entries.
 /// Supports incremental extraction via `extracted_through` watermark.
 /// Returns the number of memory entries created.
@@ -315,12 +302,7 @@ async fn do_extraction(
         messages.len(), chunks.len(), capsule_id
     );
 
-    // 5. Call OpenRouter per chunk to extract key memories (with 1 retry on failure)
-    let openrouter_key = config
-        .openrouter_api_key
-        .as_deref()
-        .ok_or_else(|| anyhow!("OPENROUTER_API_KEY not configured"))?;
-
+    // 5. Call Claude CLI per chunk to extract key memories (with 1 retry on failure)
     let client = Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(120))
@@ -336,45 +318,7 @@ async fn do_extraction(
             return Err(anyhow!("Extraction cancelled"));
         }
 
-        let models = [
-            "google/gemma-3-27b-it:free",
-            "google/gemma-3-12b-it:free",
-            "nvidia/nemotron-3-nano-30b-a3b:free",
-            "google/gemma-3n-e4b:free",
-        ];
-
-        let mut chunk_result = Err(anyhow!("no models attempted"));
-        for (model_idx, model) in models.iter().enumerate() {
-            let body = serde_json::json!({
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                    {"role": "user", "content": chunk_text}
-                ],
-                "max_tokens": 1500
-            });
-
-            match call_openrouter_with_retry(&client, openrouter_key, &body, chunk_idx).await {
-                Ok(v) => {
-                    chunk_result = Ok(v);
-                    break;
-                }
-                Err(e) => {
-                    if model_idx < models.len() - 1 {
-                        tracing::warn!(
-                            "Chunk {}/{}: model {} failed ({}), trying next fallback",
-                            chunk_idx + 1, chunks.len(), model, e
-                        );
-                    } else {
-                        tracing::error!(
-                            "Chunk {}/{}: all models exhausted, last error: {}",
-                            chunk_idx + 1, chunks.len(), e
-                        );
-                    }
-                    chunk_result = Err(e);
-                }
-            }
-        }
+        let chunk_result = call_claude_cli_with_retry(chunk_text, chunk_idx).await;
 
         let chunk_msgs = chunk_msg_counts.get(chunk_idx).copied().unwrap_or(0);
         processed_messages += chunk_msgs;
@@ -421,7 +365,7 @@ async fn do_extraction(
     }
 
     if chunks_succeeded == 0 {
-        return Err(anyhow!("All {} chunk(s) failed during OpenRouter extraction", chunks.len()));
+        return Err(anyhow!("All {} chunk(s) failed during Claude CLI extraction", chunks.len()));
     }
 
     // Only advance watermark if ALL chunks succeeded to avoid permanently skipping failed chunks
@@ -498,59 +442,60 @@ async fn do_extraction(
     Ok((parsed_entries.len(), msg_count, first_msg_utc, effective_watermark))
 }
 
-/// Send a single chunk to OpenRouter, retry once on failure (or on null content from thinking models).
-async fn call_openrouter_with_retry(
-    client: &Client,
-    api_key: &str,
-    body: &serde_json::Value,
+/// Call `claude -p` CLI to extract memories from a chunk, retry once on failure.
+async fn call_claude_cli_with_retry(
+    chunk_text: &str,
     chunk_idx: usize,
 ) -> anyhow::Result<String> {
     for attempt in 0..2u8 {
-        let resp = client
-            .post(OPENROUTER_URL)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .json(body)
-            .send()
-            .await;
-        match resp {
-            Ok(r) if r.status().is_success() => {
-                let parsed: OpenRouterResponse = r.json().await.context("Failed to parse OpenRouter response")?;
-                let text = parsed
-                    .choices
-                    .and_then(|c| c.into_iter().next())
-                    .and_then(|c| c.message)
-                    .and_then(|m| m.content);
-                match text {
-                    Some(t) if !t.trim().is_empty() => return Ok(t),
-                    _ => {
-                        // content is null/empty — thinking model issue, retry once
-                        if attempt == 0 {
-                            tracing::warn!("Chunk {} attempt 1: null/empty content (thinking model?), retrying...", chunk_idx);
-                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                            continue;
-                        }
-                        return Err(anyhow!("OpenRouter returned null content after retry (chunk {})", chunk_idx));
-                    }
-                }
+        let mut cmd = tokio::process::Command::new(CLAUDE_CLI_PATH);
+        cmd.arg("-p")
+            .arg("--model")
+            .arg("sonnet")
+            .arg("--output-format")
+            .arg("text")
+            .arg("--system-prompt")
+            .arg(EXTRACTION_SYSTEM_PROMPT)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn().context("Failed to spawn claude CLI")?;
+
+        // Write chunk_text via stdin (avoids command line argument length limits)
+        if let Some(mut stdin) = child.stdin.take() {
+            use tokio::io::AsyncWriteExt;
+            let _ = stdin.write_all(chunk_text.as_bytes()).await;
+            drop(stdin); // close stdin to signal EOF
+        }
+
+        let output = child.wait_with_output().await.context("claude CLI process failed")?;
+
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout).to_string();
+            if !text.trim().is_empty() {
+                return Ok(text);
             }
-            Ok(r) => {
-                let status = r.status();
-                let body_text = r.text().await.unwrap_or_default();
-                if attempt == 0 {
-                    tracing::warn!("Chunk {} attempt 1 failed ({}), retrying...", chunk_idx, status);
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                    continue;
-                }
-                return Err(anyhow!("OpenRouter API returned {}: {}", status, body_text));
+            if attempt == 0 {
+                tracing::warn!("Chunk {} attempt 1: empty output from claude CLI, retrying...", chunk_idx);
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                continue;
             }
-            Err(e) => {
-                if attempt == 0 {
-                    tracing::warn!("Chunk {} attempt 1 network error, retrying: {}", chunk_idx, e);
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                    continue;
-                }
-                return Err(anyhow!("OpenRouter request failed: {}", e));
+            return Err(anyhow!("claude CLI returned empty output after retry (chunk {})", chunk_idx));
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if attempt == 0 {
+                tracing::warn!(
+                    "Chunk {} attempt 1: claude CLI exited with {}, retrying... stderr: {}",
+                    chunk_idx, output.status, stderr
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                continue;
             }
+            return Err(anyhow!(
+                "claude CLI failed with exit code {} (chunk {}): {}",
+                output.status, chunk_idx, stderr
+            ));
         }
     }
     unreachable!()
