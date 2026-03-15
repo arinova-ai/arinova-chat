@@ -82,6 +82,23 @@ type TabKey = (typeof TAB_KEYS)[number];
 
 // ===== Main Content =====
 
+/** Translate a skill's name/description using locale keys, falling back to DB value */
+function useSkillI18n() {
+  const { t } = useTranslation();
+  return {
+    skillName: (skill: { slug: string; name: string }) => {
+      const key = `skill.n.${skill.slug}`;
+      const translated = t(key);
+      return translated === key ? skill.name : translated;
+    },
+    skillDesc: (skill: { slug: string; description: string }) => {
+      const key = `skill.d.${skill.slug}`;
+      const translated = t(key);
+      return translated === key ? skill.description : translated;
+    },
+  };
+}
+
 function SkillsContent() {
   const { t } = useTranslation();
   const agents = useChatStore((s) => s.agents);
@@ -143,6 +160,7 @@ function SkillsContent() {
 
 function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
   const { t } = useTranslation();
+  const { skillName, skillDesc } = useSkillI18n();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -266,11 +284,11 @@ function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
               <img src={selectedSkill.iconUrl} alt="" className="h-14 w-14 rounded-xl object-cover" />
             ) : (
               <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand/15 text-xl font-bold text-brand-text">
-                {selectedSkill.name[0]}
+                {skillName(selectedSkill)[0]}
               </div>
             )}
             <div className="flex-1">
-              <h2 className="text-xl font-bold">{selectedSkill.name}</h2>
+              <h2 className="text-xl font-bold">{skillName(selectedSkill)}</h2>
               <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="rounded-full bg-secondary px-2 py-0.5">{selectedSkill.category}</span>
                 <span>v{selectedSkill.version}</span>
@@ -286,7 +304,7 @@ function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
             </div>
           </div>
 
-          <p className="mt-4 text-sm text-foreground/80 whitespace-pre-wrap">{selectedSkill.description}</p>
+          <p className="mt-4 text-sm text-foreground/80 whitespace-pre-wrap">{skillDesc(selectedSkill)}</p>
 
           {selectedSkill.slashCommand && (
             <div className="mt-4 rounded-lg border border-border bg-secondary/50 p-3">
@@ -468,12 +486,12 @@ function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
                     <img src={skill.iconUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
                   ) : (
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand/15 text-sm font-bold text-brand-text">
-                      {skill.name[0]}
+                      {skillName(skill)[0]}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-semibold">{skill.name}</h3>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{skill.description}</p>
+                    <h3 className="truncate text-sm font-semibold">{skillName(skill)}</h3>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{skillDesc(skill)}</p>
                   </div>
                 </div>
 
@@ -514,6 +532,7 @@ function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
 
 function InstalledTab({ agents }: { agents: { id: string; name: string }[] }) {
   const { t } = useTranslation();
+  const { skillName, skillDesc } = useSkillI18n();
   const [skillsByAgent, setSkillsByAgent] = useState<Record<string, InstalledSkill[]>>({});
   const [loading, setLoading] = useState(true);
 
@@ -606,11 +625,11 @@ function InstalledTab({ agents }: { agents: { id: string; name: string }[] }) {
                     <img src={skill.iconUrl} alt="" className="h-8 w-8 rounded-lg object-cover" />
                   ) : (
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/15 text-xs font-bold text-brand-text">
-                      {skill.name[0]}
+                      {skillName(skill)[0]}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{skill.name}</div>
+                    <div className="text-sm font-medium truncate">{skillName(skill)}</div>
                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                       {skill.slashCommand && (
                         <span className="font-mono">/{skill.slashCommand}</span>
@@ -659,6 +678,7 @@ function InstalledTab({ agents }: { agents: { id: string; name: string }[] }) {
 
 function FavoritesTab({ agents }: { agents: { id: string; name: string }[] }) {
   const { t } = useTranslation();
+  const { skillName, skillDesc } = useSkillI18n();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSkill, setSelectedSkill] = useState<SkillDetail | null>(null);
@@ -736,12 +756,12 @@ function FavoritesTab({ agents }: { agents: { id: string; name: string }[] }) {
               <img src={selectedSkill.iconUrl} alt="" className="h-14 w-14 rounded-xl object-cover" />
             ) : (
               <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-brand/15 text-xl font-bold text-brand-text">
-                {selectedSkill.name[0]}
+                {skillName(selectedSkill)[0]}
               </div>
             )}
             <div className="flex-1">
-              <h2 className="text-xl font-bold">{selectedSkill.name}</h2>
-              <p className="mt-2 text-sm text-foreground/80 whitespace-pre-wrap">{selectedSkill.description}</p>
+              <h2 className="text-xl font-bold">{skillName(selectedSkill)}</h2>
+              <p className="mt-2 text-sm text-foreground/80 whitespace-pre-wrap">{skillDesc(selectedSkill)}</p>
             </div>
           </div>
 
@@ -861,12 +881,12 @@ function FavoritesTab({ agents }: { agents: { id: string; name: string }[] }) {
                 <img src={skill.iconUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand/15 text-sm font-bold text-brand-text">
-                  {skill.name[0]}
+                  {skillName(skill)[0]}
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-semibold">{skill.name}</h3>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{skill.description}</p>
+                <h3 className="truncate text-sm font-semibold">{skillName(skill)}</h3>
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{skillDesc(skill)}</p>
               </div>
             </div>
 
