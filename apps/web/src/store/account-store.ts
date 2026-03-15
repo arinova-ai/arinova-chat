@@ -25,6 +25,20 @@ export interface Account {
   autoReplyMode: string | null;
   autoReplySystemPrompt: string | null;
   autoReplyWebhookUrl: string | null;
+  // Lounge-specific
+  personaCatchphrase: string | null;
+  personaTone: string | null;
+  personaPersonality: string | null;
+  personaTemplate: string | null;
+  personaAge: number | null;
+  personaInterests: string | null;
+  personaBackstory: string | null;
+  personaIntro: string | null;
+  personaForbiddenTopics: string | null;
+  pricingMode: string | null;
+  pricingAmount: number | null;
+  freeTrialMessages: number | null;
+  voiceModelStatus: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +68,43 @@ export interface AnalyticsData {
     gifts: number;
     conversations: number;
   }>;
+}
+
+export interface DiaryEntry {
+  id: string;
+  date: string;
+  content: string;
+  imageUrl: string | null;
+  isImportant: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GiftCatalogItem {
+  id: string;
+  name: string;
+  icon: string;
+  price: number;
+  category: string | null;
+  sortOrder: number;
+}
+
+export interface FanEntry {
+  userId: string;
+  userName: string;
+  userImage: string | null;
+  level: number;
+  totalSpent: number;
+  totalMessages: number;
+  updatedAt: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  userName: string;
+  userImage: string | null;
+  totalGifted: number;
 }
 
 export interface AccountConversation {
@@ -109,6 +160,27 @@ interface AccountState {
   // Subscribe/Unsubscribe (as a user, not as owner)
   subscribe: (accountId: string) => Promise<void>;
   unsubscribe: (accountId: string) => Promise<void>;
+
+  // Lounge: Diaries
+  loadDiaries: (accountId: string) => Promise<DiaryEntry[]>;
+  createDiary: (accountId: string, data: { content: string; date?: string; imageUrl?: string; isImportant?: boolean }) => Promise<DiaryEntry>;
+  updateDiary: (accountId: string, diaryId: string, data: Partial<DiaryEntry>) => Promise<void>;
+  deleteDiary: (accountId: string, diaryId: string) => Promise<void>;
+
+  // Lounge: Preview
+  sendPreviewMessage: (accountId: string, content: string) => Promise<unknown>;
+  loadPreviewMessages: (accountId: string) => Promise<unknown[]>;
+  clearPreview: (accountId: string) => Promise<void>;
+
+  // Gift catalog + tokens
+  loadGiftCatalog: () => Promise<GiftCatalogItem[]>;
+  sendGiftV2: (toAccountId: string, giftId: string, quantity?: number, message?: string) => Promise<{ newBalance: number }>;
+  getTokenBalance: () => Promise<number>;
+  topupTokens: (amount: number) => Promise<number>;
+
+  // Fans
+  loadFans: (accountId: string) => Promise<FanEntry[]>;
+  loadLeaderboard: (accountId: string) => Promise<LeaderboardEntry[]>;
 }
 
 const stored =
@@ -223,5 +295,74 @@ export const useAccountStore = create<AccountState>((set, get) => ({
 
   unsubscribe: async (accountId) => {
     await api(`/api/accounts/${accountId}/subscribe`, { method: "DELETE" });
+  },
+
+  // Lounge: Diaries
+  loadDiaries: async (accountId) => {
+    const res = await api<DiaryEntry[] | { diaries: DiaryEntry[] }>(`/api/accounts/${accountId}/diaries`);
+    return Array.isArray(res) ? res : (res?.diaries ?? []);
+  },
+  createDiary: async (accountId, data) => {
+    return api<DiaryEntry>(`/api/accounts/${accountId}/diaries`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  updateDiary: async (accountId, diaryId, data) => {
+    await api(`/api/accounts/${accountId}/diaries/${diaryId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+  deleteDiary: async (accountId, diaryId) => {
+    await api(`/api/accounts/${accountId}/diaries/${diaryId}`, { method: "DELETE" });
+  },
+
+  // Lounge: Preview
+  sendPreviewMessage: async (accountId, content) => {
+    return api(`/api/accounts/${accountId}/preview`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+  },
+  loadPreviewMessages: async (accountId) => {
+    const res = await api<{ messages: unknown[] }>(`/api/accounts/${accountId}/preview/messages`);
+    return res?.messages ?? [];
+  },
+  clearPreview: async (accountId) => {
+    await api(`/api/accounts/${accountId}/preview`, { method: "DELETE" });
+  },
+
+  // Gift catalog + tokens
+  loadGiftCatalog: async () => {
+    const res = await api<GiftCatalogItem[] | { gifts: GiftCatalogItem[] }>("/api/gifts/catalog");
+    return Array.isArray(res) ? res : (res?.gifts ?? []);
+  },
+  sendGiftV2: async (toAccountId, giftId, quantity, message) => {
+    return api<{ newBalance: number }>("/api/gifts/send", {
+      method: "POST",
+      body: JSON.stringify({ toAccountId, giftId, quantity: quantity ?? 1, message }),
+    });
+  },
+  getTokenBalance: async () => {
+    const res = await api<{ balance: number }>("/api/tokens/balance");
+    return res?.balance ?? 0;
+  },
+  topupTokens: async (amount) => {
+    const res = await api<{ balance: number }>("/api/tokens/topup", {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    });
+    return res?.balance ?? 0;
+  },
+
+  // Fans
+  loadFans: async (accountId) => {
+    const res = await api<FanEntry[] | { fans: FanEntry[] }>(`/api/accounts/${accountId}/fans`);
+    return Array.isArray(res) ? res : (res?.fans ?? []);
+  },
+  loadLeaderboard: async (accountId) => {
+    const res = await api<LeaderboardEntry[] | { leaderboard: LeaderboardEntry[] }>(`/api/accounts/${accountId}/gifts/leaderboard`);
+    return Array.isArray(res) ? res : (res?.leaderboard ?? []);
   },
 }));

@@ -43,6 +43,25 @@ pub fn router() -> Router<AppState> {
         // Knowledge base
         .route("/api/accounts/{id}/knowledge", get(list_knowledge).post(create_knowledge))
         .route("/api/accounts/{id}/knowledge/{kb_id}", axum::routing::delete(delete_knowledge))
+        // Lounge: Persona (uses update_account for fields)
+        // Lounge: Diary CRUD
+        .route("/api/accounts/{id}/diaries", get(list_diaries).post(create_diary))
+        .route("/api/accounts/{id}/diaries/{diary_id}", patch(update_diary).delete(delete_diary))
+        // Lounge: Preview (simulation)
+        .route("/api/accounts/{id}/preview", post(create_preview_message).delete(clear_preview))
+        .route("/api/accounts/{id}/preview/messages", get(list_preview_messages))
+        // Lounge: Gift catalog + token system
+        .route("/api/gifts/catalog", get(list_gift_catalog))
+        .route("/api/gifts/send", post(send_gift_v2))
+        .route("/api/tokens/balance", get(get_token_balance))
+        .route("/api/tokens/topup", post(topup_tokens))
+        .route("/api/tokens/transactions", get(list_token_transactions))
+        // Lounge: Fan levels + leaderboard
+        .route("/api/accounts/{id}/fans", get(list_fans))
+        .route("/api/accounts/{id}/gifts/leaderboard", get(gift_leaderboard))
+        // Lounge: Voice samples
+        .route("/api/accounts/{id}/voice-samples", get(list_voice_samples).post(add_voice_sample))
+        .route("/api/accounts/{id}/voice-samples/{sample_id}", axum::routing::delete(delete_voice_sample))
 }
 
 // ===========================================================================
@@ -221,6 +240,19 @@ async fn list_accounts(
         auto_reply_mode: Option<String>,
         auto_reply_system_prompt: Option<String>,
         auto_reply_webhook_url: Option<String>,
+        persona_catchphrase: Option<String>,
+        persona_tone: Option<String>,
+        persona_personality: Option<String>,
+        persona_template: Option<String>,
+        persona_age: Option<i32>,
+        persona_interests: Option<String>,
+        persona_backstory: Option<String>,
+        persona_intro: Option<String>,
+        persona_forbidden_topics: Option<String>,
+        pricing_mode: Option<String>,
+        pricing_amount: Option<i32>,
+        free_trial_messages: Option<i32>,
+        voice_model_status: Option<String>,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     }
@@ -231,6 +263,10 @@ async fn list_accounts(
                   voice_sample_url, voice_clone_id,
                   is_public, category, welcome_enabled, welcome_message,
                   auto_reply_mode, auto_reply_system_prompt, auto_reply_webhook_url,
+                  persona_catchphrase, persona_tone, persona_personality, persona_template,
+                  persona_age, persona_interests, persona_backstory, persona_intro,
+                  persona_forbidden_topics, pricing_mode, pricing_amount, free_trial_messages,
+                  voice_model_status,
                   created_at, updated_at
            FROM accounts
            WHERE owner_id = $1
@@ -275,6 +311,19 @@ async fn list_accounts(
                         "autoReplyMode": r.auto_reply_mode,
                         "autoReplySystemPrompt": r.auto_reply_system_prompt,
                         "autoReplyWebhookUrl": r.auto_reply_webhook_url,
+                        "personaCatchphrase": r.persona_catchphrase,
+                        "personaTone": r.persona_tone,
+                        "personaPersonality": r.persona_personality,
+                        "personaTemplate": r.persona_template,
+                        "personaAge": r.persona_age,
+                        "personaInterests": r.persona_interests,
+                        "personaBackstory": r.persona_backstory,
+                        "personaIntro": r.persona_intro,
+                        "personaForbiddenTopics": r.persona_forbidden_topics,
+                        "pricingMode": r.pricing_mode,
+                        "pricingAmount": r.pricing_amount,
+                        "freeTrialMessages": r.free_trial_messages,
+                        "voiceModelStatus": r.voice_model_status,
                         "createdAt": r.created_at.to_rfc3339(),
                         "updatedAt": r.updated_at.to_rfc3339(),
                     })
@@ -326,6 +375,31 @@ struct UpdateAccountBody {
     auto_reply_system_prompt: Option<String>,
     #[serde(rename = "autoReplyWebhookUrl")]
     auto_reply_webhook_url: Option<String>,
+    // Lounge-specific
+    #[serde(rename = "personaCatchphrase")]
+    persona_catchphrase: Option<String>,
+    #[serde(rename = "personaTone")]
+    persona_tone: Option<String>,
+    #[serde(rename = "personaPersonality")]
+    persona_personality: Option<String>,
+    #[serde(rename = "personaTemplate")]
+    persona_template: Option<String>,
+    #[serde(rename = "personaAge")]
+    persona_age: Option<i32>,
+    #[serde(rename = "personaInterests")]
+    persona_interests: Option<String>,
+    #[serde(rename = "personaBackstory")]
+    persona_backstory: Option<String>,
+    #[serde(rename = "personaIntro")]
+    persona_intro: Option<String>,
+    #[serde(rename = "personaForbiddenTopics")]
+    persona_forbidden_topics: Option<String>,
+    #[serde(rename = "pricingMode")]
+    pricing_mode: Option<String>,
+    #[serde(rename = "pricingAmount")]
+    pricing_amount: Option<i32>,
+    #[serde(rename = "freeTrialMessages")]
+    free_trial_messages: Option<i32>,
 }
 
 /// PATCH /api/accounts/:id — Update account (verify owner)
@@ -407,6 +481,18 @@ async fn update_account(
     push_field!(body.auto_reply_mode, "auto_reply_mode");
     push_field!(body.auto_reply_system_prompt, "auto_reply_system_prompt");
     push_field!(body.auto_reply_webhook_url, "auto_reply_webhook_url");
+    push_field!(body.persona_catchphrase, "persona_catchphrase");
+    push_field!(body.persona_tone, "persona_tone");
+    push_field!(body.persona_personality, "persona_personality");
+    push_field!(body.persona_template, "persona_template");
+    push_field!(body.persona_age, "persona_age");
+    push_field!(body.persona_interests, "persona_interests");
+    push_field!(body.persona_backstory, "persona_backstory");
+    push_field!(body.persona_intro, "persona_intro");
+    push_field!(body.persona_forbidden_topics, "persona_forbidden_topics");
+    push_field!(body.pricing_mode, "pricing_mode");
+    push_field!(body.pricing_amount, "pricing_amount");
+    push_field!(body.free_trial_messages, "free_trial_messages");
     let _ = param_index; // suppress unused_assignments warning
 
     if set_clauses.is_empty() {
@@ -478,6 +564,42 @@ async fn update_account(
     }
     if let Some(ref auto_reply_webhook_url) = body.auto_reply_webhook_url {
         query = query.bind(auto_reply_webhook_url);
+    }
+    if let Some(ref persona_catchphrase) = body.persona_catchphrase {
+        query = query.bind(persona_catchphrase);
+    }
+    if let Some(ref persona_tone) = body.persona_tone {
+        query = query.bind(persona_tone);
+    }
+    if let Some(ref persona_personality) = body.persona_personality {
+        query = query.bind(persona_personality);
+    }
+    if let Some(ref persona_template) = body.persona_template {
+        query = query.bind(persona_template);
+    }
+    if let Some(ref persona_age) = body.persona_age {
+        query = query.bind(persona_age);
+    }
+    if let Some(ref persona_interests) = body.persona_interests {
+        query = query.bind(persona_interests);
+    }
+    if let Some(ref persona_backstory) = body.persona_backstory {
+        query = query.bind(persona_backstory);
+    }
+    if let Some(ref persona_intro) = body.persona_intro {
+        query = query.bind(persona_intro);
+    }
+    if let Some(ref persona_forbidden_topics) = body.persona_forbidden_topics {
+        query = query.bind(persona_forbidden_topics);
+    }
+    if let Some(ref pricing_mode) = body.pricing_mode {
+        query = query.bind(pricing_mode);
+    }
+    if let Some(ref pricing_amount) = body.pricing_amount {
+        query = query.bind(pricing_amount);
+    }
+    if let Some(ref free_trial_messages) = body.free_trial_messages {
+        query = query.bind(free_trial_messages);
     }
 
     let result = query.execute(&state.db).await;
@@ -2033,6 +2155,672 @@ async fn delete_knowledge(
         Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
         Err(e) => {
             tracing::error!("delete_knowledge failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+// ===========================================================================
+// Lounge: Diary CRUD
+// ===========================================================================
+
+#[derive(Deserialize)]
+struct CreateDiaryBody {
+    content: String,
+    date: Option<String>,
+    #[serde(rename = "imageUrl")]
+    image_url: Option<String>,
+    #[serde(rename = "isImportant")]
+    is_important: Option<bool>,
+}
+
+async fn create_diary(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreateDiaryBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let date_str = body.date.unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
+    let is_important = body.is_important.unwrap_or(false);
+
+    let row = sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
+        r#"INSERT INTO lounge_diaries (account_id, date, content, image_url, is_important)
+           VALUES ($1, $2::date, $3, $4, $5)
+           RETURNING id, created_at"#,
+    )
+    .bind(id)
+    .bind(&date_str)
+    .bind(&body.content)
+    .bind(body.image_url.as_deref())
+    .bind(is_important)
+    .fetch_one(&state.db)
+    .await;
+
+    match row {
+        Ok((diary_id, created_at)) => (StatusCode::CREATED, Json(json!({
+            "id": diary_id,
+            "date": date_str,
+            "content": body.content,
+            "imageUrl": body.image_url,
+            "isImportant": is_important,
+            "createdAt": created_at.to_rfc3339(),
+        }))),
+        Err(e) => {
+            tracing::error!("create_diary failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn list_diaries(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<String>, bool, DateTime<Utc>, DateTime<Utc>)>(
+        r#"SELECT id, date::text, content, image_url, is_important, created_at, updated_at
+           FROM lounge_diaries
+           WHERE account_id = $1
+           ORDER BY date DESC"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let items: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0,
+                "date": r.1,
+                "content": r.2,
+                "imageUrl": r.3,
+                "isImportant": r.4,
+                "createdAt": r.5.to_rfc3339(),
+                "updatedAt": r.6.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "diaries": items })))
+        }
+        Err(e) => {
+            tracing::error!("list_diaries failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateDiaryBody {
+    content: Option<String>,
+    #[serde(rename = "imageUrl")]
+    image_url: Option<String>,
+    #[serde(rename = "isImportant")]
+    is_important: Option<bool>,
+}
+
+async fn update_diary(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, diary_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<UpdateDiaryBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let mut set_clauses: Vec<String> = Vec::new();
+    let mut param_index = 3u32; // $1=diary_id, $2=account_id
+
+    if body.content.is_some() { set_clauses.push(format!("content = ${}", param_index)); param_index += 1; }
+    if body.image_url.is_some() { set_clauses.push(format!("image_url = ${}", param_index)); param_index += 1; }
+    if body.is_important.is_some() { set_clauses.push(format!("is_important = ${}", param_index)); param_index += 1; }
+    let _ = param_index;
+
+    if set_clauses.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "No fields to update" })));
+    }
+
+    set_clauses.push("updated_at = NOW()".to_string());
+    let sql = format!("UPDATE lounge_diaries SET {} WHERE id = $1 AND account_id = $2", set_clauses.join(", "));
+
+    let mut query = sqlx::query(&sql).bind(diary_id).bind(id);
+    if let Some(ref content) = body.content { query = query.bind(content); }
+    if let Some(ref image_url) = body.image_url { query = query.bind(image_url); }
+    if let Some(ref is_important) = body.is_important { query = query.bind(is_important); }
+
+    match query.execute(&state.db).await {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Diary not found" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("update_diary failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn delete_diary(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, diary_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    match sqlx::query("DELETE FROM lounge_diaries WHERE id = $1 AND account_id = $2")
+        .bind(diary_id).bind(id).execute(&state.db).await
+    {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Diary not found" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("delete_diary failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+// ===========================================================================
+// Lounge: Preview (Simulation) Conversations
+// ===========================================================================
+
+#[derive(Deserialize)]
+struct PreviewMessageBody {
+    content: String,
+}
+
+async fn create_preview_message(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<PreviewMessageBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    // Find or create preview conversation
+    let conv_id = match sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM lounge_preview_conversations WHERE account_id = $1 LIMIT 1"
+    ).bind(id).fetch_optional(&state.db).await {
+        Ok(Some(cid)) => cid,
+        Ok(None) => {
+            match sqlx::query_scalar::<_, Uuid>(
+                "INSERT INTO lounge_preview_conversations (account_id) VALUES ($1) RETURNING id"
+            ).bind(id).fetch_one(&state.db).await {
+                Ok(cid) => cid,
+                Err(e) => {
+                    tracing::error!("create_preview_message: create conv failed: {}", e);
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("create_preview_message: find conv failed: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
+        }
+    };
+
+    // Insert user message
+    let user_msg = sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
+        "INSERT INTO lounge_preview_messages (conversation_id, role, content) VALUES ($1, 'user', $2) RETURNING id, created_at"
+    ).bind(conv_id).bind(&body.content).fetch_one(&state.db).await;
+
+    match user_msg {
+        Ok((msg_id, created_at)) => {
+            // TODO: In a full implementation, call AI to generate assistant response
+            // For now, return the user message
+            (StatusCode::CREATED, Json(json!({
+                "id": msg_id,
+                "conversationId": conv_id,
+                "role": "user",
+                "content": body.content,
+                "createdAt": created_at.to_rfc3339(),
+            })))
+        }
+        Err(e) => {
+            tracing::error!("create_preview_message failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn list_preview_messages(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>)>(
+        r#"SELECT m.id, m.role, m.content, m.created_at
+           FROM lounge_preview_messages m
+           JOIN lounge_preview_conversations c ON c.id = m.conversation_id
+           WHERE c.account_id = $1
+           ORDER BY m.created_at ASC"#,
+    ).bind(id).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(rows) => {
+            let messages: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0,
+                "role": r.1,
+                "content": r.2,
+                "createdAt": r.3.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "messages": messages })))
+        }
+        Err(e) => {
+            tracing::error!("list_preview_messages failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn clear_preview(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let _ = sqlx::query(
+        "DELETE FROM lounge_preview_conversations WHERE account_id = $1"
+    ).bind(id).execute(&state.db).await;
+
+    (StatusCode::OK, Json(json!({ "success": true })))
+}
+
+// ===========================================================================
+// Gift Catalog + Token System
+// ===========================================================================
+
+async fn list_gift_catalog(
+    State(state): State<AppState>,
+    _user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, (Uuid, String, String, i32, Option<String>, i32)>(
+        r#"SELECT id, name, icon, price, category, sort_order
+           FROM gift_catalog
+           WHERE is_active = true
+           ORDER BY sort_order ASC"#,
+    ).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(rows) => {
+            let gifts: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0,
+                "name": r.1,
+                "icon": r.2,
+                "price": r.3,
+                "category": r.4,
+                "sortOrder": r.5,
+            })).collect();
+            (StatusCode::OK, Json(json!({ "gifts": gifts })))
+        }
+        Err(e) => {
+            tracing::error!("list_gift_catalog failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct SendGiftV2Body {
+    #[serde(rename = "toAccountId")]
+    to_account_id: Uuid,
+    #[serde(rename = "giftId")]
+    gift_id: Uuid,
+    quantity: Option<i32>,
+    message: Option<String>,
+}
+
+async fn send_gift_v2(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<SendGiftV2Body>,
+) -> (StatusCode, Json<Value>) {
+    let quantity = body.quantity.unwrap_or(1);
+    if quantity < 1 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Quantity must be at least 1" })));
+    }
+
+    // Get gift price
+    let gift = sqlx::query_as::<_, (i32,)>(
+        "SELECT price FROM gift_catalog WHERE id = $1 AND is_active = true"
+    ).bind(body.gift_id).fetch_optional(&state.db).await;
+
+    let price = match gift {
+        Ok(Some((p,))) => p,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({ "error": "Gift not found" }))),
+        Err(e) => {
+            tracing::error!("send_gift_v2: fetch gift failed: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
+        }
+    };
+
+    let total_price = price * quantity;
+
+    // Check balance
+    let balance = sqlx::query_scalar::<_, i32>(
+        "SELECT balance FROM user_token_balance WHERE user_id = $1"
+    ).bind(&user.id).fetch_optional(&state.db).await.unwrap_or(None).unwrap_or(0);
+
+    if balance < total_price {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Insufficient balance", "required": total_price, "balance": balance })));
+    }
+
+    // Begin transaction
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("send_gift_v2: begin tx failed: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
+        }
+    };
+
+    // Deduct balance
+    let new_balance = balance - total_price;
+    let _ = sqlx::query(
+        "INSERT INTO user_token_balance (user_id, balance, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (user_id) DO UPDATE SET balance = $2, updated_at = NOW()"
+    ).bind(&user.id).bind(new_balance).execute(&mut *tx).await;
+
+    // Record gift transaction
+    let gift_tx_id = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO gift_transactions (from_user_id, to_account_id, gift_id, quantity, total_price, message) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id"
+    ).bind(&user.id).bind(body.to_account_id).bind(body.gift_id).bind(quantity).bind(total_price).bind(body.message.as_deref())
+    .fetch_one(&mut *tx).await;
+
+    let gift_tx_id = match gift_tx_id {
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!("send_gift_v2: insert gift_tx failed: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
+        }
+    };
+
+    // Record token transaction (spend)
+    let _ = sqlx::query(
+        "INSERT INTO token_transactions (user_id, type, amount, balance_after, description, related_gift_id) VALUES ($1, 'spend', $2, $3, 'Gift sent', $4)"
+    ).bind(&user.id).bind(-total_price).bind(new_balance).bind(gift_tx_id).execute(&mut *tx).await;
+
+    // Credit to account owner
+    let owner_id = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM accounts WHERE id = $1"
+    ).bind(body.to_account_id).fetch_optional(&mut *tx).await;
+
+    if let Ok(Some(owner_id)) = owner_id {
+        let _ = sqlx::query(
+            "INSERT INTO user_token_balance (user_id, balance, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (user_id) DO UPDATE SET balance = user_token_balance.balance + $2, updated_at = NOW()"
+        ).bind(&owner_id).bind(total_price).execute(&mut *tx).await;
+
+        let _ = sqlx::query(
+            "INSERT INTO token_transactions (user_id, type, amount, balance_after, description, related_gift_id) VALUES ($1, 'gift_received', $2, 0, 'Gift received', $3)"
+        ).bind(&owner_id).bind(total_price).bind(gift_tx_id).execute(&mut *tx).await;
+    }
+
+    // Update fan level
+    let _ = sqlx::query(
+        r#"INSERT INTO lounge_fan_levels (account_id, user_id, total_spent, level)
+           VALUES ($1, $2, $3, GREATEST(1, ($3 / 500) + 1))
+           ON CONFLICT (account_id, user_id) DO UPDATE
+           SET total_spent = lounge_fan_levels.total_spent + $3,
+               level = GREATEST(1, ((lounge_fan_levels.total_spent + $3) / 500) + 1),
+               updated_at = NOW()"#
+    ).bind(body.to_account_id).bind(&user.id).bind(total_price).execute(&mut *tx).await;
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!("send_gift_v2: commit failed: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
+    }
+
+    (StatusCode::OK, Json(json!({ "success": true, "transactionId": gift_tx_id, "newBalance": new_balance })))
+}
+
+async fn get_token_balance(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let balance = sqlx::query_scalar::<_, i32>(
+        "SELECT balance FROM user_token_balance WHERE user_id = $1"
+    ).bind(&user.id).fetch_optional(&state.db).await.unwrap_or(None).unwrap_or(0);
+
+    (StatusCode::OK, Json(json!({ "balance": balance })))
+}
+
+#[derive(Deserialize)]
+struct TopupBody {
+    amount: i32,
+}
+
+async fn topup_tokens(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<TopupBody>,
+) -> (StatusCode, Json<Value>) {
+    if body.amount <= 0 {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Amount must be positive" })));
+    }
+
+    let new_balance = sqlx::query_scalar::<_, i32>(
+        r#"INSERT INTO user_token_balance (user_id, balance, updated_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (user_id) DO UPDATE SET balance = user_token_balance.balance + $2, updated_at = NOW()
+           RETURNING balance"#,
+    ).bind(&user.id).bind(body.amount).fetch_one(&state.db).await;
+
+    match new_balance {
+        Ok(balance) => {
+            let _ = sqlx::query(
+                "INSERT INTO token_transactions (user_id, type, amount, balance_after, description) VALUES ($1, 'topup', $2, $3, 'Token top-up')"
+            ).bind(&user.id).bind(body.amount).bind(balance).execute(&state.db).await;
+            (StatusCode::OK, Json(json!({ "balance": balance })))
+        }
+        Err(e) => {
+            tracing::error!("topup_tokens failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn list_token_transactions(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, (Uuid, String, i32, i32, Option<String>, DateTime<Utc>)>(
+        r#"SELECT id, type, amount, balance_after, description, created_at
+           FROM token_transactions
+           WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT 50"#,
+    ).bind(&user.id).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(rows) => {
+            let txs: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0,
+                "type": r.1,
+                "amount": r.2,
+                "balanceAfter": r.3,
+                "description": r.4,
+                "createdAt": r.5.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "transactions": txs })))
+        }
+        Err(e) => {
+            tracing::error!("list_token_transactions failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+// ===========================================================================
+// Lounge: Fan levels + Leaderboard
+// ===========================================================================
+
+async fn list_fans(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let rows = sqlx::query_as::<_, (String, String, Option<String>, i32, i32, i32, DateTime<Utc>)>(
+        r#"SELECT u.id, u.name, u.image, f.level, f.total_spent, f.total_messages, f.updated_at
+           FROM lounge_fan_levels f
+           JOIN "user" u ON u.id = f.user_id
+           WHERE f.account_id = $1
+           ORDER BY f.total_spent DESC"#,
+    ).bind(id).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(rows) => {
+            let fans: Vec<Value> = rows.iter().map(|r| json!({
+                "userId": r.0,
+                "userName": r.1,
+                "userImage": r.2,
+                "level": r.3,
+                "totalSpent": r.4,
+                "totalMessages": r.5,
+                "updatedAt": r.6.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "fans": fans })))
+        }
+        Err(e) => {
+            tracing::error!("list_fans failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn gift_leaderboard(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, (String, String, Option<String>, i64)>(
+        r#"SELECT u.id, u.name, u.image, SUM(gt.total_price)::bigint as total
+           FROM gift_transactions gt
+           JOIN "user" u ON u.id = gt.from_user_id
+           WHERE gt.to_account_id = $1
+           GROUP BY u.id, u.name, u.image
+           ORDER BY total DESC
+           LIMIT 20"#,
+    ).bind(id).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(rows) => {
+            let leaderboard: Vec<Value> = rows.iter().enumerate().map(|(i, r)| json!({
+                "rank": i + 1,
+                "userId": r.0,
+                "userName": r.1,
+                "userImage": r.2,
+                "totalGifted": r.3,
+            })).collect();
+            (StatusCode::OK, Json(json!({ "leaderboard": leaderboard })))
+        }
+        Err(e) => {
+            tracing::error!("gift_leaderboard failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+// ===========================================================================
+// Lounge: Voice Samples
+// ===========================================================================
+
+#[derive(Deserialize)]
+struct AddVoiceSampleBody {
+    url: String,
+    #[serde(rename = "durationSeconds")]
+    duration_seconds: Option<i32>,
+}
+
+async fn add_voice_sample(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<AddVoiceSampleBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let row = sqlx::query_as::<_, (Uuid,)>(
+        "INSERT INTO lounge_voice_samples (account_id, url, duration_seconds) VALUES ($1, $2, $3) RETURNING id"
+    ).bind(id).bind(&body.url).bind(body.duration_seconds).fetch_one(&state.db).await;
+
+    match row {
+        Ok((sample_id,)) => (StatusCode::CREATED, Json(json!({ "id": sample_id, "url": body.url }))),
+        Err(e) => {
+            tracing::error!("add_voice_sample failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn list_voice_samples(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, Option<i32>, String, DateTime<Utc>)>(
+        r#"SELECT id, url, duration_seconds, status, created_at
+           FROM lounge_voice_samples
+           WHERE account_id = $1
+           ORDER BY created_at DESC"#,
+    ).bind(id).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(rows) => {
+            let samples: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0,
+                "url": r.1,
+                "durationSeconds": r.2,
+                "status": r.3,
+                "createdAt": r.4.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "samples": samples })))
+        }
+        Err(e) => {
+            tracing::error!("list_voice_samples failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn delete_voice_sample(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, sample_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    match sqlx::query("DELETE FROM lounge_voice_samples WHERE id = $1 AND account_id = $2")
+        .bind(sample_id).bind(id).execute(&state.db).await
+    {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Sample not found" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("delete_voice_sample failed: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
         }
     }

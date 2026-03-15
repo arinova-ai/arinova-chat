@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, Users, UserPlus, Wallet, Mic,
-  Palette, Store, Settings, Smile, PenTool, Plus, X, Radio, BookOpen, Send, type LucideIcon,
+  Palette, Store, Settings, Smile, PenTool, Plus, X, Radio, BookOpen, Send,
+  Brain, BookHeart, Eye, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
@@ -89,9 +90,10 @@ export function MobileBottomNav() {
   ];
 
   const loungeItems = [
-    { id: "voice-room", icon: Radio, label: t("nav.voiceRoom"), href: "#" },
-    { id: "fans", icon: Users, label: t("nav.fans"), href: "#" },
-    { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
+    { id: "persona", icon: Brain, label: t("nav.persona"), href: `/lounge/${activeAccount?.id}/persona` },
+    { id: "diary", icon: BookHeart, label: t("nav.diary"), href: `/lounge/${activeAccount?.id}/diary` },
+    { id: "preview", icon: Eye, label: t("nav.preview"), href: `/lounge/${activeAccount?.id}/preview` },
+    { id: "fans", icon: Users, label: t("nav.fans"), href: `/lounge/${activeAccount?.id}/fans` },
   ];
 
   const sheetItems = !activeAccount
