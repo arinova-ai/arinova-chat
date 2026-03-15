@@ -644,7 +644,7 @@ async fn update_community(
 ) -> (StatusCode, Json<Value>) {
     // Verify creator or admin
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT cm.role FROM community_members cm WHERE cm.community_id = $1 AND cm.user_id = $2",
+        "SELECT cm.role::text FROM community_members cm WHERE cm.community_id = $1 AND cm.user_id = $2",
     )
     .bind(id)
     .fetch_optional(&state.db)
@@ -1120,7 +1120,7 @@ async fn leave(
 ) -> (StatusCode, Json<Value>) {
     // Can't leave if creator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
@@ -2336,7 +2336,7 @@ async fn list_applications(
 ) -> (StatusCode, Json<Value>) {
     // Must be creator or moderator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
@@ -2409,7 +2409,7 @@ async fn review_application(
 ) -> (StatusCode, Json<Value>) {
     // Must be creator or moderator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&user.id)
@@ -2536,7 +2536,7 @@ async fn update_member_role(
 
     // Check caller is creator or admin
     let caller_role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
@@ -2569,7 +2569,7 @@ async fn update_member_role(
 
     // Don't allow changing the creator's role
     let target_role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&target_user_id)
@@ -2631,7 +2631,7 @@ async fn kick_member(
 ) -> (StatusCode, Json<Value>) {
     // Check caller is creator or admin
     let caller_role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
@@ -2664,7 +2664,7 @@ async fn kick_member(
 
     // Cannot kick the creator
     let target_role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&target_user_id)
@@ -2785,7 +2785,7 @@ async fn transfer_ownership(
 ) -> (StatusCode, Json<Value>) {
     // Only creator can transfer ownership
     let caller_role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
@@ -2811,7 +2811,7 @@ async fn transfer_ownership(
 
     // Verify target is a member
     let target_role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&body.user_id)
@@ -2974,7 +2974,7 @@ async fn create_invite(
 ) -> (StatusCode, Json<Value>) {
     // Check permission: creator/moderator always, members only if invite_permission = 'member'
     let member = sqlx::query_as::<_, (String, String)>(
-        r#"SELECT cm.role, c.invite_permission
+        r#"SELECT cm.role::text, c.invite_permission
            FROM community_members cm
            JOIN communities c ON c.id = cm.community_id
            WHERE cm.community_id = $1 AND cm.user_id = $2"#,
@@ -3060,7 +3060,7 @@ async fn list_invites(
 ) -> (StatusCode, Json<Value>) {
     // Must be creator or moderator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
@@ -3126,7 +3126,7 @@ async fn delete_invite(
 ) -> (StatusCode, Json<Value>) {
     // Must be creator or moderator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
