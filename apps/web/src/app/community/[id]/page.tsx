@@ -702,7 +702,7 @@ function CommunityDetailContent() {
           {/* Community wiki */}
           {isMember && (
             <WikiPanel
-              conversationId={id}
+              conversationId=""
               communityId={id}
               open={wikiOpen}
               onOpenChange={setWikiOpen}
