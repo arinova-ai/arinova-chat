@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Plus, Building2, Mic, User } from "lucide-react";
+import { ChevronDown, Plus, Building2, Mic, User, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,9 +10,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useAccountStore } from "@/store/account-store";
+import { useAccountStore, type Account } from "@/store/account-store";
 import { useTranslation } from "@/lib/i18n";
 import { CreateAccountDialog } from "./create-account-dialog";
+import { AccountManageOverlay } from "./account-manage-overlay";
 
 export function AccountSwitcher() {
   const { t } = useTranslation();
@@ -21,6 +22,7 @@ export function AccountSwitcher() {
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const loadAccounts = useAccountStore((s) => s.loadAccounts);
   const [createOpen, setCreateOpen] = useState(false);
+  const [manageAccount, setManageAccount] = useState<Account | null>(null);
 
   useEffect(() => {
     loadAccounts();
@@ -71,10 +73,20 @@ export function AccountSwitcher() {
               ) : (
                 <Mic className="mr-2 h-4 w-4 text-purple-500" />
               )}
-              <span className="truncate">{account.name}</span>
+              <span className="flex-1 truncate">{account.name}</span>
               {activeAccountId === account.id && (
-                <span className="ml-auto text-xs text-brand">✓</span>
+                <span className="text-xs text-brand">✓</span>
               )}
+              <button
+                type="button"
+                className="ml-1 rounded p-0.5 hover:bg-accent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setManageAccount(account);
+                }}
+              >
+                <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
             </DropdownMenuItem>
           ))}
 
@@ -89,6 +101,13 @@ export function AccountSwitcher() {
       </DropdownMenu>
 
       <CreateAccountDialog open={createOpen} onOpenChange={setCreateOpen} />
+
+      {manageAccount && (
+        <AccountManageOverlay
+          account={manageAccount}
+          onClose={() => setManageAccount(null)}
+        />
+      )}
     </>
   );
 }

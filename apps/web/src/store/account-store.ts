@@ -48,9 +48,19 @@ export interface AnalyticsData {
   }>;
 }
 
+export interface AccountConversation {
+  id: string;
+  title: string | null;
+  type: string | null;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface AccountState {
   accounts: Account[];
   activeAccountId: string | null;
+  accountConversations: AccountConversation[];
   loading: boolean;
 
   // Actions
@@ -65,6 +75,7 @@ interface AccountState {
   updateAccount: (id: string, data: Partial<Account>) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   setActiveAccount: (id: string | null) => void;
+  loadAccountConversations: (accountId: string) => Promise<void>;
 
   // Subscribers
   loadSubscribers: (accountId: string) => Promise<AccountSubscriber[]>;
@@ -100,6 +111,7 @@ const stored =
 export const useAccountStore = create<AccountState>((set, get) => ({
   accounts: [],
   activeAccountId: stored,
+  accountConversations: [],
   loading: false,
 
   loadAccounts: async () => {
@@ -143,11 +155,21 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   },
 
   setActiveAccount: (id) => {
-    set({ activeAccountId: id });
+    set({ activeAccountId: id, accountConversations: [] });
     if (id) {
       localStorage.setItem("activeAccountId", id);
+      get().loadAccountConversations(id);
     } else {
       localStorage.removeItem("activeAccountId");
+    }
+  },
+
+  loadAccountConversations: async (accountId) => {
+    try {
+      const convs = await api<AccountConversation[]>(`/api/accounts/${accountId}/conversations`);
+      set({ accountConversations: convs });
+    } catch {
+      set({ accountConversations: [] });
     }
   },
 

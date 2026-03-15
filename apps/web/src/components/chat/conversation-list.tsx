@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { MessageCirclePlus } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { useAccountStore } from "@/store/account-store";
 import { ConversationItem } from "./conversation-item";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
@@ -28,7 +29,7 @@ function savePinnedOrder(order: string[]) {
 
 export function ConversationList({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation();
-  const conversations = useChatStore((s) => s.conversations);
+  const allConversations = useChatStore((s) => s.conversations);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const updateConversation = useChatStore((s) => s.updateConversation);
@@ -38,6 +39,25 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
   const thinkingAgents = useChatStore((s) => s.thinkingAgents);
   const mutedConversations = useChatStore((s) => s.mutedConversations);
   const toggleMuteConversation = useChatStore((s) => s.toggleMuteConversation);
+
+  // Account filtering
+  const activeAccountId = useAccountStore((s) => s.activeAccountId);
+  const accountConversations = useAccountStore((s) => s.accountConversations);
+  const loadAccountConversations = useAccountStore((s) => s.loadAccountConversations);
+
+  // Reload account conversations when activeAccountId changes
+  useEffect(() => {
+    if (activeAccountId) {
+      loadAccountConversations(activeAccountId);
+    }
+  }, [activeAccountId, loadAccountConversations]);
+
+  // Filter conversations: account mode shows only account conversations
+  const conversations = useMemo(() => {
+    if (!activeAccountId) return allConversations;
+    const accountConvIds = new Set(accountConversations.map((c) => c.id));
+    return allConversations.filter((c) => accountConvIds.has(c.id));
+  }, [allConversations, activeAccountId, accountConversations]);
 
   const [tab, setTab] = useState<Tab>("all");
   const [pinnedOrder, setPinnedOrder] = useState<string[]>(loadPinnedOrder);

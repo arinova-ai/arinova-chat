@@ -4,13 +4,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, Users, UserPlus, Wallet, Mic,
-  Palette, Store, Settings, Smile, PenTool, Plus, X, type LucideIcon,
+  Palette, Store, Settings, Smile, PenTool, Plus, X, Radio, BookOpen, Send, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 import { useShortcutStore } from "@/store/shortcut-store";
+import { useAccountStore } from "@/store/account-store";
 import { AddShortcutSheet } from "./add-shortcut-sheet";
 
 /** Lucide icon per nav id — active/inactive styling via parent text color */
@@ -66,7 +67,9 @@ export function MobileBottomNav() {
 
   const activeId = getActiveId();
 
-  const sheetItems = [
+  const activeAccount = useAccountStore((s) => s.accounts.find((a) => a.id === s.activeAccountId));
+
+  const personalItems = [
     { id: "spaces", icon: Globe, label: t("nav.spaces"), href: "/spaces" },
     { id: "stickers", icon: Smile, label: t("nav.stickers"), href: "/stickers" },
     { id: "creator", icon: PenTool, label: t("nav.creator"), href: "/creator" },
@@ -77,6 +80,25 @@ export function MobileBottomNav() {
     { id: "explore-official", icon: Building2, label: t("nav.exploreOfficial"), href: "/explore/official" },
     { id: "explore-lounge", icon: Mic, label: t("nav.exploreLounge"), href: "/explore/lounge" },
   ];
+
+  const officialItems = [
+    { id: "broadcast", icon: Send, label: t("nav.broadcast"), href: "#" },
+    { id: "auto-reply", icon: MessageSquare, label: t("nav.autoReply"), href: "#" },
+    { id: "knowledge", icon: BookOpen, label: t("nav.knowledge"), href: "#" },
+    { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
+  ];
+
+  const loungeItems = [
+    { id: "voice-room", icon: Radio, label: t("nav.voiceRoom"), href: "#" },
+    { id: "fans", icon: Users, label: t("nav.fans"), href: "#" },
+    { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
+  ];
+
+  const sheetItems = !activeAccount
+    ? personalItems
+    : activeAccount.type === "official"
+    ? officialItems
+    : loungeItems;
 
   const shortcuts = useShortcutStore((s) => s.shortcuts);
   const editing = useShortcutStore((s) => s.editing);
