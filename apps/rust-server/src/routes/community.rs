@@ -69,6 +69,21 @@ pub fn router() -> Router<AppState> {
         )
         // Ownership transfer
         .route("/api/communities/{id}/transfer", post(transfer_ownership))
+        // Notification preferences
+        .route(
+            "/api/communities/{id}/members/me/preferences",
+            axum::routing::patch(update_my_preferences),
+        )
+        // Invites
+        .route(
+            "/api/communities/{id}/invites",
+            get(list_invites).post(create_invite),
+        )
+        .route(
+            "/api/communities/{id}/invites/{invite_id}",
+            axum::routing::delete(delete_invite),
+        )
+        .route("/api/communities/join-by-invite/{code}", post(join_by_invite))
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +113,10 @@ struct CommunityRow {
     require_approval: bool,
     approval_questions: Option<Vec<String>>,
     agent_join_policy: String,
+    is_private: bool,
+    invite_permission: String,
+    post_permission: String,
+    allow_agents: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -131,6 +150,7 @@ struct MemberRow {
     role: String,
     joined_at: DateTime<Utc>,
     subscription_status: Option<String>,
+    notification_preference: String,
     user_name: String,
     user_image: Option<String>,
 }
@@ -203,6 +223,10 @@ fn community_json(r: &CommunityRow) -> Value {
         "requireApproval": r.require_approval,
         "approvalQuestions": r.approval_questions,
         "agentJoinPolicy": r.agent_join_policy,
+        "isPrivate": r.is_private,
+        "invitePermission": r.invite_permission,
+        "postPermission": r.post_permission,
+        "allowAgents": r.allow_agents,
         "createdAt": r.created_at.to_rfc3339(),
         "updatedAt": r.updated_at.to_rfc3339(),
     })
@@ -545,6 +569,7 @@ async fn get_community(
                   c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
                   c.category, c.tags, o.verified, o.cs_mode, o.default_agent_listing_id,
                   c.require_approval, c.approval_questions, c.agent_join_policy,
+                  c.is_private, c.invite_permission, c.post_permission, c.allow_agents,
                   c.created_at, c.updated_at
            FROM communities c
            LEFT JOIN officials o ON o.community_id = c.id
@@ -593,6 +618,22 @@ struct UpdateBody {
     cs_mode: Option<String>,
     #[serde(rename = "defaultAgentListingId")]
     default_agent_listing_id: Option<String>,
+    // Phase 1
+    #[serde(rename = "requireApproval")]
+    require_approval: Option<bool>,
+    #[serde(rename = "approvalQuestions")]
+    approval_questions: Option<Vec<String>>,
+    #[serde(rename = "isPrivate")]
+    is_private: Option<bool>,
+    // Phase 2
+    #[serde(rename = "agentJoinPolicy")]
+    agent_join_policy: Option<String>,
+    #[serde(rename = "invitePermission")]
+    invite_permission: Option<String>,
+    #[serde(rename = "postPermission")]
+    post_permission: Option<String>,
+    #[serde(rename = "allowAgents")]
+    allow_agents: Option<bool>,
 }
 
 async fn update_community(
@@ -601,30 +642,30 @@ async fn update_community(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateBody>,
 ) -> (StatusCode, Json<Value>) {
-    // Verify creator
-    let creator_id = sqlx::query_scalar::<_, String>(
-        "SELECT creator_id FROM communities WHERE id = $1",
+    // Verify creator or admin
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT cm.role FROM community_members cm WHERE cm.community_id = $1 AND cm.user_id = $2",
     )
     .bind(id)
     .fetch_optional(&state.db)
     .await;
 
-    match &creator_id {
-        Ok(Some(cid)) if cid == &user.id => {}
+    match &role {
+        Ok(Some(r)) if r == "creator" || r == "moderator" => {}
         Ok(Some(_)) => {
             return (
                 StatusCode::FORBIDDEN,
-                Json(json!({ "error": "Only the creator can update this community" })),
+                Json(json!({ "error": "Only creator or admin can update this community" })),
             );
         }
         Ok(None) => {
             return (
                 StatusCode::NOT_FOUND,
-                Json(json!({ "error": "Community not found" })),
+                Json(json!({ "error": "Community not found or not a member" })),
             );
         }
         Err(e) => {
-            tracing::error!("Update community: verify creator failed: {}", e);
+            tracing::error!("Update community: verify role failed: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Database error" })),
@@ -667,6 +708,23 @@ async fn update_community(
         }
     }
 
+    // Validate enum fields
+    if let Some(ref p) = body.agent_join_policy {
+        if !["owner_only", "admin_agents", "member_agents"].contains(&p.as_str()) {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid agentJoinPolicy" })));
+        }
+    }
+    if let Some(ref p) = body.invite_permission {
+        if !["admin", "member"].contains(&p.as_str()) {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid invitePermission" })));
+        }
+    }
+    if let Some(ref p) = body.post_permission {
+        if !["everyone", "admin_only"].contains(&p.as_str()) {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Invalid postPermission" })));
+        }
+    }
+
     let default_agent_id = body
         .default_agent_listing_id
         .as_deref()
@@ -682,6 +740,13 @@ async fn update_community(
              category = COALESCE($7, category),
              avatar_url = COALESCE($8, avatar_url),
              cover_image_url = COALESCE($9, cover_image_url),
+             require_approval = COALESCE($10, require_approval),
+             is_private = COALESCE($11, is_private),
+             agent_join_policy = COALESCE($12, agent_join_policy),
+             invite_permission = COALESCE($13, invite_permission),
+             post_permission = COALESCE($14, post_permission),
+             allow_agents = COALESCE($15, allow_agents),
+             approval_questions = COALESCE($16, approval_questions),
              updated_at = NOW()
            WHERE id = $1"#,
     )
@@ -694,6 +759,13 @@ async fn update_community(
     .bind(body.category.as_deref())
     .bind(body.avatar_url.as_deref())
     .bind(body.cover_image_url.as_deref())
+    .bind(body.require_approval)
+    .bind(body.is_private)
+    .bind(body.agent_join_policy.as_deref())
+    .bind(body.invite_permission.as_deref())
+    .bind(body.post_permission.as_deref())
+    .bind(body.allow_agents)
+    .bind(body.approval_questions.as_deref())
     .execute(&state.db)
     .await;
 
@@ -1139,7 +1211,7 @@ async fn list_members(
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, MemberRow>(
         r#"SELECT cm.id, cm.user_id, cm.role::text, cm.joined_at,
-                  cm.subscription_status,
+                  cm.subscription_status, cm.notification_preference,
                   u.name AS user_name, u.image AS user_image
            FROM community_members cm
            JOIN "user" u ON cm.user_id = u.id
@@ -1163,6 +1235,7 @@ async fn list_members(
                         "role": r.role,
                         "joinedAt": r.joined_at.to_rfc3339(),
                         "subscriptionStatus": r.subscription_status,
+                        "notificationPreference": r.notification_preference,
                         "userName": r.user_name,
                         "userImage": r.user_image,
                     })
@@ -2830,4 +2903,393 @@ async fn transfer_ownership(
     }
 
     (StatusCode::OK, Json(json!({ "success": true })))
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/communities/:id/members/me/preferences — Update notification prefs
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UpdatePreferencesBody {
+    #[serde(rename = "notificationPreference")]
+    notification_preference: String,
+}
+
+async fn update_my_preferences(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdatePreferencesBody>,
+) -> (StatusCode, Json<Value>) {
+    if !["all", "mentions", "mute"].contains(&body.notification_preference.as_str()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Invalid notificationPreference. Must be: all, mentions, mute" })),
+        );
+    }
+
+    let result = sqlx::query(
+        r#"UPDATE community_members SET notification_preference = $1
+           WHERE community_id = $2 AND user_id = $3"#,
+    )
+    .bind(&body.notification_preference)
+    .bind(id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Not a member of this community" })),
+        ),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("Update notification preference failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/:id/invites — Create invite link/code
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CreateInviteBody {
+    #[serde(rename = "maxUses")]
+    max_uses: Option<i32>,
+    #[serde(rename = "expiresInHours")]
+    expires_in_hours: Option<i64>,
+}
+
+async fn create_invite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreateInviteBody>,
+) -> (StatusCode, Json<Value>) {
+    // Check permission: creator/moderator always, members only if invite_permission = 'member'
+    let member = sqlx::query_as::<_, (String, String)>(
+        r#"SELECT cm.role, c.invite_permission
+           FROM community_members cm
+           JOIN communities c ON c.id = cm.community_id
+           WHERE cm.community_id = $1 AND cm.user_id = $2"#,
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &member {
+        Ok(Some((role, perm))) => {
+            let is_admin = role == "creator" || role == "moderator";
+            if !is_admin && perm != "member" {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({ "error": "Not authorized to create invites" })),
+                );
+            }
+        }
+        Ok(None) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Not a member of this community" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("Create invite: check member failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    }
+
+    // Generate a short invite code
+    let code = format!("{}", &Uuid::new_v4().to_string()[..8]);
+
+    let expires_at = body
+        .expires_in_hours
+        .map(|h| Utc::now() + chrono::Duration::hours(h));
+
+    let invite_id = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO community_invites (community_id, created_by, code, max_uses, expires_at)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id"#,
+    )
+    .bind(id)
+    .bind(&user.id)
+    .bind(&code)
+    .bind(body.max_uses)
+    .bind(expires_at)
+    .fetch_one(&state.db)
+    .await;
+
+    match invite_id {
+        Ok(iid) => (
+            StatusCode::CREATED,
+            Json(json!({
+                "id": iid,
+                "code": code,
+                "maxUses": body.max_uses,
+                "expiresAt": expires_at.map(|e| e.to_rfc3339()),
+            })),
+        ),
+        Err(e) => {
+            tracing::error!("Create invite failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/communities/:id/invites — List invites (admin only)
+// ---------------------------------------------------------------------------
+
+async fn list_invites(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    // Must be creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match role {
+        Ok(Some(r)) if r == "creator" || r == "moderator" => {}
+        _ => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Not authorized" })),
+            )
+        }
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<i32>, i32, Option<DateTime<Utc>>, DateTime<Utc>)>(
+        r#"SELECT ci.id, ci.code, ci.created_by, ci.max_uses, ci.use_count, ci.expires_at, ci.created_at
+           FROM community_invites ci
+           WHERE ci.community_id = $1
+           ORDER BY ci.created_at DESC"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(invites) => {
+            let list: Vec<Value> = invites
+                .iter()
+                .map(|r| {
+                    json!({
+                        "id": r.0,
+                        "code": r.1,
+                        "createdBy": r.2,
+                        "maxUses": r.3,
+                        "useCount": r.4,
+                        "expiresAt": r.5.map(|e| e.to_rfc3339()),
+                        "createdAt": r.6.to_rfc3339(),
+                    })
+                })
+                .collect();
+            (StatusCode::OK, Json(json!({ "invites": list })))
+        }
+        Err(e) => {
+            tracing::error!("List invites failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/communities/:id/invites/:invite_id — Delete invite
+// ---------------------------------------------------------------------------
+
+async fn delete_invite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, invite_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    // Must be creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match role {
+        Ok(Some(r)) if r == "creator" || r == "moderator" => {}
+        _ => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Not authorized" })),
+            )
+        }
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM community_invites WHERE id = $1 AND community_id = $2",
+    )
+    .bind(invite_id)
+    .bind(id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Invite not found" })),
+        ),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("Delete invite failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/join-by-invite/:code — Join via invite code
+// ---------------------------------------------------------------------------
+
+async fn join_by_invite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(code): Path<String>,
+) -> (StatusCode, Json<Value>) {
+    // Look up the invite
+    let invite = sqlx::query_as::<_, (Uuid, Uuid, Option<i32>, i32, Option<DateTime<Utc>>)>(
+        r#"SELECT id, community_id, max_uses, use_count, expires_at
+           FROM community_invites
+           WHERE code = $1"#,
+    )
+    .bind(&code)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (invite_id, community_id, max_uses, use_count, expires_at) = match invite {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Invalid invite code" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("Join by invite: lookup failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    };
+
+    // Check expiration
+    if let Some(exp) = expires_at {
+        if exp < Utc::now() {
+            return (
+                StatusCode::GONE,
+                Json(json!({ "error": "Invite has expired" })),
+            );
+        }
+    }
+
+    // Check max uses
+    if let Some(max) = max_uses {
+        if use_count >= max {
+            return (
+                StatusCode::GONE,
+                Json(json!({ "error": "Invite has reached maximum uses" })),
+            );
+        }
+    }
+
+    // Check if already member
+    let existing = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    if matches!(existing, Ok(Some(_))) {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "Already a member" })),
+        );
+    }
+
+    // Add member
+    let _ = sqlx::query(
+        r#"INSERT INTO community_members (community_id, user_id, role)
+           VALUES ($1, $2, 'member')
+           ON CONFLICT DO NOTHING"#,
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    // Increment member_count
+    let _ = sqlx::query(
+        "UPDATE communities SET member_count = member_count + 1, updated_at = NOW() WHERE id = $1",
+    )
+    .bind(community_id)
+    .execute(&state.db)
+    .await;
+
+    // Increment invite use_count
+    let _ = sqlx::query(
+        "UPDATE community_invites SET use_count = use_count + 1 WHERE id = $1",
+    )
+    .bind(invite_id)
+    .execute(&state.db)
+    .await;
+
+    // Add to group conversation
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
+    )
+    .bind(community_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(cid) = conv_id {
+        let _ = sqlx::query(
+            r#"INSERT INTO conversation_user_members (conversation_id, user_id, role)
+               VALUES ($1, $2, 'member')
+               ON CONFLICT DO NOTHING"#,
+        )
+        .bind(cid)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({ "success": true, "communityId": community_id })),
+    )
 }

@@ -295,6 +295,11 @@ CREATE TABLE communities (
     category TEXT,
     tags TEXT[],
     tts_voice TEXT DEFAULT 'alloy',
+    -- Permissions
+    is_private BOOLEAN NOT NULL DEFAULT FALSE,
+    invite_permission TEXT NOT NULL DEFAULT 'admin' CHECK (invite_permission IN ('admin', 'member')),
+    post_permission TEXT NOT NULL DEFAULT 'everyone' CHECK (post_permission IN ('everyone', 'admin_only')),
+    allow_agents BOOLEAN NOT NULL DEFAULT TRUE,
     -- Official fields
     verified BOOLEAN DEFAULT FALSE,
     verified_at TIMESTAMPTZ,
@@ -318,6 +323,7 @@ CREATE TABLE community_members (
     user_id TEXT NOT NULL REFERENCES "user"(id),
     role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('creator', 'moderator', 'member', 'cs_agent')),
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notification_preference TEXT NOT NULL DEFAULT 'all' CHECK (notification_preference IN ('all', 'mentions', 'mute')),
     -- Subscription
     subscription_status TEXT DEFAULT 'active' CHECK (subscription_status IN ('active', 'expired', 'cancelled')),
     subscription_expires_at TIMESTAMPTZ,
@@ -337,6 +343,20 @@ CREATE TABLE community_join_applications (
 
 CREATE INDEX IF NOT EXISTS idx_community_join_applications_community_status
     ON community_join_applications(community_id, status);
+
+CREATE TABLE community_invites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+    created_by TEXT NOT NULL REFERENCES "user"(id),
+    code VARCHAR(20) NOT NULL UNIQUE,
+    max_uses INTEGER,
+    use_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_invites_community ON community_invites(community_id);
+CREATE INDEX IF NOT EXISTS idx_community_invites_code ON community_invites(code);
 
 CREATE TABLE community_agents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
