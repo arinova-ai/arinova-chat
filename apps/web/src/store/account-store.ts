@@ -174,7 +174,10 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   },
 
   loadSubscribers: async (accountId) => {
-    return api<AccountSubscriber[]>(`/api/accounts/${accountId}/subscribers`);
+    const res = await api<AccountSubscriber[] | { subscribers: AccountSubscriber[] }>(
+      `/api/accounts/${accountId}/subscribers`,
+    );
+    return Array.isArray(res) ? res : (res?.subscribers ?? []);
   },
 
   broadcast: async (accountId, content) => {

@@ -56,7 +56,7 @@ export function FriendsPanel({ onStartConversation }: FriendsPanelProps) {
     setLoading(true);
     try {
       const data = await loadSubscribers(activeAccountId);
-      setSubscribers(data);
+      setSubscribers(Array.isArray(data) ? data : []);
     } catch {
       setError("Failed to load subscribers");
     } finally {
