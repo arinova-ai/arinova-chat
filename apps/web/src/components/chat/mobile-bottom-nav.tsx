@@ -82,10 +82,10 @@ export function MobileBottomNav() {
   ];
 
   const officialItems = [
-    { id: "broadcast", icon: Send, label: t("nav.broadcast"), href: "#" },
-    { id: "auto-reply", icon: MessageSquare, label: t("nav.autoReply"), href: "#" },
-    { id: "knowledge", icon: BookOpen, label: t("nav.knowledge"), href: "#" },
-    { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
+    { id: "broadcast", icon: Send, label: t("nav.broadcast"), href: `/official/${activeAccount?.id}/broadcast` },
+    { id: "auto-reply", icon: MessageSquare, label: t("nav.autoReply"), href: `/official/${activeAccount?.id}/auto-reply` },
+    { id: "knowledge", icon: BookOpen, label: t("nav.knowledge"), href: `/official/${activeAccount?.id}/knowledge` },
+    { id: "subscribers", icon: Users, label: t("nav.subscribers"), href: `/official/${activeAccount?.id}/subscribers` },
   ];
 
   const loungeItems = [

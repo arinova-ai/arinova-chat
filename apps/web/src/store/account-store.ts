@@ -17,6 +17,14 @@ export interface Account {
   contextWindow: number;
   voiceSampleUrl: string | null;
   voiceCloneId: string | null;
+  // Official-specific
+  isPublic: boolean;
+  category: string | null;
+  welcomeEnabled: boolean;
+  welcomeMessage: string | null;
+  autoReplyMode: string | null;
+  autoReplySystemPrompt: string | null;
+  autoReplyWebhookUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

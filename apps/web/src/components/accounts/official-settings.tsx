@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Building2, Bot, Users, Send, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useAccountStore, type Account, type AccountSubscriber } from "@/store/account-store";
 import { useTranslation } from "@/lib/i18n";
 
@@ -27,6 +28,8 @@ export function OfficialSettings({ account, onClose }: Props) {
   const [model, setModel] = useState(account.model ?? "");
   const [contextWindow, setContextWindow] = useState(account.contextWindow);
   const [subscribers, setSubscribers] = useState<AccountSubscriber[]>([]);
+  const [isPublic, setIsPublic] = useState(account.isPublic);
+  const [category, setCategory] = useState(account.category ?? "");
   const [broadcastContent, setBroadcastContent] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -39,7 +42,7 @@ export function OfficialSettings({ account, onClose }: Props) {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      await updateAccount(account.id, { name, bio });
+      await updateAccount(account.id, { name, bio, isPublic, category: category || null });
     } finally {
       setSaving(false);
     }
@@ -122,6 +125,30 @@ export function OfficialSettings({ account, onClose }: Props) {
                 rows={4}
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
               />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-sm font-medium">{t("accounts.isPublic")}</label>
+                <p className="text-xs text-muted-foreground">{t("accounts.isPublicDesc")}</p>
+              </div>
+              <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">{t("accounts.category")}</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">{t("accounts.categoryNone")}</option>
+                <option value="news">{t("accounts.categoryNews")}</option>
+                <option value="entertainment">{t("accounts.categoryEntertainment")}</option>
+                <option value="education">{t("accounts.categoryEducation")}</option>
+                <option value="technology">{t("accounts.categoryTechnology")}</option>
+                <option value="lifestyle">{t("accounts.categoryLifestyle")}</option>
+                <option value="business">{t("accounts.categoryBusiness")}</option>
+                <option value="other">{t("accounts.categoryOther")}</option>
+              </select>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSaveProfile} disabled={saving}>

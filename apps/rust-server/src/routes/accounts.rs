@@ -26,6 +26,23 @@ pub fn router() -> Router<AppState> {
         .route("/api/accounts/{id}/analytics", get(get_analytics))
         .route("/api/explore/official", get(explore_official))
         .route("/api/explore/lounge", get(explore_lounge))
+        // Broadcast CRUD
+        .route("/api/accounts/{id}/broadcasts", get(list_broadcasts).post(create_broadcast))
+        .route(
+            "/api/accounts/{id}/broadcasts/{broadcast_id}",
+            patch(update_broadcast).delete(delete_broadcast),
+        )
+        .route("/api/accounts/{id}/broadcasts/{broadcast_id}/send", post(send_broadcast))
+        // Subscriber management
+        .route("/api/accounts/{id}/subscribers/{user_id}/block", post(block_subscriber))
+        .route("/api/accounts/{id}/subscribers/{user_id}/unblock", post(unblock_subscriber))
+        // Subscriber tags
+        .route("/api/accounts/{id}/tags", get(list_tags).post(create_tag))
+        .route("/api/accounts/{id}/tags/{tag_id}", axum::routing::delete(delete_tag))
+        .route("/api/accounts/{id}/subscribers/{user_id}/tags", post(assign_tag).delete(remove_tag))
+        // Knowledge base
+        .route("/api/accounts/{id}/knowledge", get(list_knowledge).post(create_knowledge))
+        .route("/api/accounts/{id}/knowledge/{kb_id}", axum::routing::delete(delete_knowledge))
 }
 
 // ===========================================================================
@@ -197,6 +214,13 @@ async fn list_accounts(
         context_window: Option<i32>,
         voice_sample_url: Option<String>,
         voice_clone_id: Option<String>,
+        is_public: bool,
+        category: Option<String>,
+        welcome_enabled: bool,
+        welcome_message: Option<String>,
+        auto_reply_mode: Option<String>,
+        auto_reply_system_prompt: Option<String>,
+        auto_reply_webhook_url: Option<String>,
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     }
@@ -204,7 +228,10 @@ async fn list_accounts(
     let rows = sqlx::query_as::<_, AccountRow>(
         r#"SELECT id, name, type, avatar, bio, agent_id, proxy_user_id,
                   ai_mode, system_prompt, api_key, model, context_window,
-                  voice_sample_url, voice_clone_id, created_at, updated_at
+                  voice_sample_url, voice_clone_id,
+                  is_public, category, welcome_enabled, welcome_message,
+                  auto_reply_mode, auto_reply_system_prompt, auto_reply_webhook_url,
+                  created_at, updated_at
            FROM accounts
            WHERE owner_id = $1
            ORDER BY created_at DESC"#,
@@ -241,6 +268,13 @@ async fn list_accounts(
                         "contextWindow": r.context_window,
                         "voiceSampleUrl": r.voice_sample_url,
                         "voiceCloneId": r.voice_clone_id,
+                        "isPublic": r.is_public,
+                        "category": r.category,
+                        "welcomeEnabled": r.welcome_enabled,
+                        "welcomeMessage": r.welcome_message,
+                        "autoReplyMode": r.auto_reply_mode,
+                        "autoReplySystemPrompt": r.auto_reply_system_prompt,
+                        "autoReplyWebhookUrl": r.auto_reply_webhook_url,
                         "createdAt": r.created_at.to_rfc3339(),
                         "updatedAt": r.updated_at.to_rfc3339(),
                     })
@@ -278,6 +312,20 @@ struct UpdateAccountBody {
     voice_sample_url: Option<String>,
     #[serde(rename = "voiceCloneId")]
     voice_clone_id: Option<String>,
+    // Official-specific
+    #[serde(rename = "isPublic")]
+    is_public: Option<bool>,
+    category: Option<String>,
+    #[serde(rename = "welcomeEnabled")]
+    welcome_enabled: Option<bool>,
+    #[serde(rename = "welcomeMessage")]
+    welcome_message: Option<String>,
+    #[serde(rename = "autoReplyMode")]
+    auto_reply_mode: Option<String>,
+    #[serde(rename = "autoReplySystemPrompt")]
+    auto_reply_system_prompt: Option<String>,
+    #[serde(rename = "autoReplyWebhookUrl")]
+    auto_reply_webhook_url: Option<String>,
 }
 
 /// PATCH /api/accounts/:id — Update account (verify owner)
@@ -352,6 +400,13 @@ async fn update_account(
     push_field!(body.context_window, "context_window");
     push_field!(body.voice_sample_url, "voice_sample_url");
     push_field!(body.voice_clone_id, "voice_clone_id");
+    push_field!(body.is_public, "is_public");
+    push_field!(body.category, "category");
+    push_field!(body.welcome_enabled, "welcome_enabled");
+    push_field!(body.welcome_message, "welcome_message");
+    push_field!(body.auto_reply_mode, "auto_reply_mode");
+    push_field!(body.auto_reply_system_prompt, "auto_reply_system_prompt");
+    push_field!(body.auto_reply_webhook_url, "auto_reply_webhook_url");
     let _ = param_index; // suppress unused_assignments warning
 
     if set_clauses.is_empty() {
@@ -402,6 +457,27 @@ async fn update_account(
     }
     if let Some(ref voice_clone_id) = body.voice_clone_id {
         query = query.bind(voice_clone_id);
+    }
+    if let Some(ref is_public) = body.is_public {
+        query = query.bind(is_public);
+    }
+    if let Some(ref category) = body.category {
+        query = query.bind(category);
+    }
+    if let Some(ref welcome_enabled) = body.welcome_enabled {
+        query = query.bind(welcome_enabled);
+    }
+    if let Some(ref welcome_message) = body.welcome_message {
+        query = query.bind(welcome_message);
+    }
+    if let Some(ref auto_reply_mode) = body.auto_reply_mode {
+        query = query.bind(auto_reply_mode);
+    }
+    if let Some(ref auto_reply_system_prompt) = body.auto_reply_system_prompt {
+        query = query.bind(auto_reply_system_prompt);
+    }
+    if let Some(ref auto_reply_webhook_url) = body.auto_reply_webhook_url {
+        query = query.bind(auto_reply_webhook_url);
     }
 
     let result = query.execute(&state.db).await;
@@ -1367,5 +1443,615 @@ async fn explore_lounge(
                 Json(json!({ "error": "Database error" })),
             )
         }
+    }
+}
+
+// ===========================================================================
+// Broadcast CRUD
+// ===========================================================================
+
+#[derive(Deserialize)]
+struct CreateBroadcastBody {
+    content: String,
+    status: Option<String>,
+    #[serde(rename = "scheduledAt")]
+    scheduled_at: Option<String>,
+    #[serde(rename = "targetFilter")]
+    target_filter: Option<Value>,
+}
+
+async fn create_broadcast(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreateBroadcastBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let status = body.status.as_deref().unwrap_or("draft");
+    if !["draft", "scheduled"].contains(&status) {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Status must be draft or scheduled" })));
+    }
+
+    let scheduled_at: Option<DateTime<Utc>> = body.scheduled_at.as_deref().and_then(|s| s.parse().ok());
+
+    let row = sqlx::query_as::<_, (Uuid,)>(
+        r#"INSERT INTO official_broadcasts (account_id, content, status, scheduled_at, target_filter)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id"#,
+    )
+    .bind(id)
+    .bind(&body.content)
+    .bind(status)
+    .bind(scheduled_at)
+    .bind(body.target_filter.as_ref().unwrap_or(&json!({})))
+    .fetch_one(&state.db)
+    .await;
+
+    match row {
+        Ok((bid,)) => (StatusCode::CREATED, Json(json!({ "id": bid }))),
+        Err(e) => {
+            tracing::error!("create_broadcast failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn list_broadcasts(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, i32, i32, i32, DateTime<Utc>)>(
+        r#"SELECT id, content, status, scheduled_at, sent_at, total_recipients, delivered_count, read_count, created_at
+           FROM official_broadcasts
+           WHERE account_id = $1
+           ORDER BY created_at DESC
+           LIMIT 50"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let list: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0,
+                "content": r.1,
+                "status": r.2,
+                "scheduledAt": r.3.map(|d| d.to_rfc3339()),
+                "sentAt": r.4.map(|d| d.to_rfc3339()),
+                "totalRecipients": r.5,
+                "deliveredCount": r.6,
+                "readCount": r.7,
+                "createdAt": r.8.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "broadcasts": list })))
+        }
+        Err(e) => {
+            tracing::error!("list_broadcasts failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateBroadcastBody {
+    content: Option<String>,
+    status: Option<String>,
+    #[serde(rename = "scheduledAt")]
+    scheduled_at: Option<String>,
+}
+
+async fn update_broadcast(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, broadcast_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<UpdateBroadcastBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let scheduled_at: Option<DateTime<Utc>> = body.scheduled_at.as_deref().and_then(|s| s.parse().ok());
+
+    let result = sqlx::query(
+        r#"UPDATE official_broadcasts SET
+             content = COALESCE($3, content),
+             status = COALESCE($4, status),
+             scheduled_at = COALESCE($5, scheduled_at),
+             updated_at = NOW()
+           WHERE id = $1 AND account_id = $2 AND status IN ('draft', 'scheduled')"#,
+    )
+    .bind(broadcast_id)
+    .bind(id)
+    .bind(body.content.as_deref())
+    .bind(body.status.as_deref())
+    .bind(scheduled_at)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Broadcast not found or already sent" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("update_broadcast failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn delete_broadcast(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, broadcast_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM official_broadcasts WHERE id = $1 AND account_id = $2",
+    )
+    .bind(broadcast_id)
+    .bind(id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Broadcast not found" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("delete_broadcast failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+/// POST /api/accounts/:id/broadcasts/:broadcast_id/send — Send a broadcast immediately
+async fn send_broadcast(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, broadcast_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    let account = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT owner_id, proxy_user_id FROM accounts WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let proxy_user_id = match account {
+        Ok(Some((owner_id, Some(pid)))) if owner_id == user.id => pid,
+        _ => return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not authorized" }))),
+    };
+
+    // Get broadcast content
+    let broadcast = sqlx::query_as::<_, (String, String)>(
+        "SELECT content, status FROM official_broadcasts WHERE id = $1 AND account_id = $2",
+    )
+    .bind(broadcast_id)
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let content = match broadcast {
+        Ok(Some((c, status))) if status == "draft" || status == "scheduled" => c,
+        Ok(Some(_)) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Broadcast already sent" }))),
+        _ => return (StatusCode::NOT_FOUND, Json(json!({ "error": "Broadcast not found" }))),
+    };
+
+    // Get all subscriber conversations
+    let conversations = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT conversation_id FROM account_subscribers WHERE account_id = $1 AND blocked_at IS NULL",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let total = conversations.len() as i32;
+    let mut delivered = 0i32;
+
+    for (conv_id,) in &conversations {
+        if sqlx::query(
+            r#"INSERT INTO messages (conversation_id, sender_id, content, type) VALUES ($1, $2, $3, 'text')"#,
+        )
+        .bind(conv_id)
+        .bind(&proxy_user_id)
+        .bind(&content)
+        .execute(&state.db)
+        .await
+        .is_ok()
+        {
+            delivered += 1;
+        }
+    }
+
+    // Update broadcast status
+    let _ = sqlx::query(
+        r#"UPDATE official_broadcasts SET status = 'sent', sent_at = NOW(),
+             total_recipients = $3, delivered_count = $4
+           WHERE id = $1 AND account_id = $2"#,
+    )
+    .bind(broadcast_id)
+    .bind(id)
+    .bind(total)
+    .bind(delivered)
+    .execute(&state.db)
+    .await;
+
+    (StatusCode::OK, Json(json!({ "sent": delivered, "total": total })))
+}
+
+// ===========================================================================
+// Subscriber Management
+// ===========================================================================
+
+async fn block_subscriber(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, target_user_id)): Path<(Uuid, String)>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let result = sqlx::query(
+        "UPDATE account_subscribers SET blocked_at = NOW() WHERE account_id = $1 AND user_id = $2 AND blocked_at IS NULL",
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Subscriber not found" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("block_subscriber failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn unblock_subscriber(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, target_user_id)): Path<(Uuid, String)>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let result = sqlx::query(
+        "UPDATE account_subscribers SET blocked_at = NULL WHERE account_id = $1 AND user_id = $2 AND blocked_at IS NOT NULL",
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Subscriber not found or not blocked" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("unblock_subscriber failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+// ===========================================================================
+// Subscriber Tags
+// ===========================================================================
+
+#[derive(Deserialize)]
+struct CreateTagBody {
+    name: String,
+    color: Option<String>,
+}
+
+async fn list_tags(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>)>(
+        "SELECT id, name, color, created_at FROM official_subscriber_tags WHERE account_id = $1 ORDER BY name",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let tags: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0, "name": r.1, "color": r.2, "createdAt": r.3.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "tags": tags })))
+        }
+        Err(e) => {
+            tracing::error!("list_tags failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn create_tag(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreateTagBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let row = sqlx::query_as::<_, (Uuid,)>(
+        "INSERT INTO official_subscriber_tags (account_id, name, color) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(id)
+    .bind(&body.name)
+    .bind(body.color.as_deref().unwrap_or("gray"))
+    .fetch_one(&state.db)
+    .await;
+
+    match row {
+        Ok((tid,)) => (StatusCode::CREATED, Json(json!({ "id": tid, "name": body.name }))),
+        Err(e) => {
+            if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
+                return (StatusCode::CONFLICT, Json(json!({ "error": "Tag already exists" })));
+            }
+            tracing::error!("create_tag failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn delete_tag(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, tag_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let result = sqlx::query("DELETE FROM official_subscriber_tags WHERE id = $1 AND account_id = $2")
+        .bind(tag_id)
+        .bind(id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Tag not found" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("delete_tag failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct TagAssignBody {
+    #[serde(rename = "tagId")]
+    tag_id: Uuid,
+}
+
+async fn assign_tag(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, target_user_id)): Path<(Uuid, String)>,
+    Json(body): Json<TagAssignBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    // Get subscriber ID
+    let sub = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM account_subscribers WHERE account_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let sub_id = match sub {
+        Ok(Some(sid)) => sid,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({ "error": "Subscriber not found" }))),
+    };
+
+    let _ = sqlx::query(
+        "INSERT INTO official_subscriber_tag_assignments (subscriber_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(sub_id)
+    .bind(body.tag_id)
+    .execute(&state.db)
+    .await;
+
+    (StatusCode::OK, Json(json!({ "success": true })))
+}
+
+async fn remove_tag(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, target_user_id)): Path<(Uuid, String)>,
+    Json(body): Json<TagAssignBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let sub = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM account_subscribers WHERE account_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let sub_id = match sub {
+        Ok(Some(sid)) => sid,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({ "error": "Subscriber not found" }))),
+    };
+
+    let _ = sqlx::query(
+        "DELETE FROM official_subscriber_tag_assignments WHERE subscriber_id = $1 AND tag_id = $2",
+    )
+    .bind(sub_id)
+    .bind(body.tag_id)
+    .execute(&state.db)
+    .await;
+
+    (StatusCode::OK, Json(json!({ "success": true })))
+}
+
+// ===========================================================================
+// Knowledge Base
+// ===========================================================================
+
+#[derive(Deserialize)]
+struct CreateKnowledgeBody {
+    #[serde(rename = "type")]
+    kb_type: String,
+    title: String,
+    content: Option<String>,
+    #[serde(rename = "fileUrl")]
+    file_url: Option<String>,
+    #[serde(rename = "sourceUrl")]
+    source_url: Option<String>,
+}
+
+async fn create_knowledge(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreateKnowledgeBody>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    if !["file", "faq", "url"].contains(&body.kb_type.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Type must be file, faq, or url" })));
+    }
+
+    let row = sqlx::query_as::<_, (Uuid,)>(
+        r#"INSERT INTO official_knowledge_base (account_id, type, title, content, file_url, source_url, status)
+           VALUES ($1, $2, $3, $4, $5, $6, 'ready')
+           RETURNING id"#,
+    )
+    .bind(id)
+    .bind(&body.kb_type)
+    .bind(&body.title)
+    .bind(body.content.as_deref())
+    .bind(body.file_url.as_deref())
+    .bind(body.source_url.as_deref())
+    .fetch_one(&state.db)
+    .await;
+
+    match row {
+        Ok((kid,)) => (StatusCode::CREATED, Json(json!({ "id": kid }))),
+        Err(e) => {
+            tracing::error!("create_knowledge failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn list_knowledge(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>, Option<String>, String, i32, DateTime<Utc>)>(
+        r#"SELECT id, type, title, content, file_url, source_url, status, chunk_count, created_at
+           FROM official_knowledge_base
+           WHERE account_id = $1
+           ORDER BY created_at DESC"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let items: Vec<Value> = rows.iter().map(|r| json!({
+                "id": r.0,
+                "type": r.1,
+                "title": r.2,
+                "content": r.3,
+                "fileUrl": r.4,
+                "sourceUrl": r.5,
+                "status": r.6,
+                "chunkCount": r.7,
+                "createdAt": r.8.to_rfc3339(),
+            })).collect();
+            (StatusCode::OK, Json(json!({ "items": items })))
+        }
+        Err(e) => {
+            tracing::error!("list_knowledge failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+async fn delete_knowledge(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, kb_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    if verify_owner(&state.db, id, &user.id).await.is_err() {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Not the account owner" })));
+    }
+
+    let result = sqlx::query("DELETE FROM official_knowledge_base WHERE id = $1 AND account_id = $2")
+        .bind(kb_id)
+        .bind(id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (StatusCode::NOT_FOUND, Json(json!({ "error": "Knowledge base item not found" }))),
+        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Err(e) => {
+            tracing::error!("delete_knowledge failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
+        }
+    }
+}
+
+// ===========================================================================
+// Helper: verify account ownership
+// ===========================================================================
+
+async fn verify_owner(db: &sqlx::PgPool, account_id: Uuid, user_id: &str) -> Result<(), ()> {
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM accounts WHERE id = $1",
+    )
+    .bind(account_id)
+    .fetch_optional(db)
+    .await;
+
+    match owner {
+        Ok(Some(oid)) if oid == user_id => Ok(()),
+        _ => Err(()),
     }
 }

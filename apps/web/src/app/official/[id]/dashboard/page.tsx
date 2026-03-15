@@ -1,126 +1,157 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Headset, Users, BarChart3, Settings, RefreshCw, CheckCircle2, Clock, UserPlus } from "lucide-react";
+import {
+  ArrowLeft,
+  Users,
+  UserPlus,
+  Mail,
+  MailOpen,
+  Send,
+  Radio,
+  Bot,
+  Webhook,
+  MessageSquareOff,
+  BookOpen,
+  AlertCircle,
+  RefreshCw,
+  ChevronRight,
+  BarChart3,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
+import { useAccountStore, type AnalyticsData } from "@/store/account-store";
 import { cn } from "@/lib/utils";
 
-type DashTab = "queue" | "team" | "stats" | "settings";
-
-interface QueueItem {
-  conversationId: string;
-  userId: string;
-  status: string;
+interface Broadcast {
+  id: string;
+  content: string;
+  status: "sent" | "scheduled" | "draft";
   createdAt: string;
-  userName?: string;
+  sentAt?: string;
+  recipientCount?: number;
 }
 
-interface TeamMember {
-  userId: string;
-  role: string;
-  displayName?: string;
+interface KnowledgeItem {
+  id: string;
+  title: string;
 }
 
-interface Community {
+interface AccountInfo {
   id: string;
   name: string;
-  csMode: string | null;
-  verified: boolean;
+  autoReplyMode: string | null;
+  welcomeEnabled: boolean;
+  welcomeMessage: string | null;
 }
+
+type ChartRange = "7d" | "30d";
 
 export default function OfficialDashboardPage() {
   const { t } = useTranslation();
   const params = useParams();
   const router = useRouter();
-  const communityId = params.id as string;
+  const accountId = params.id as string;
+  const loadAnalytics = useAccountStore((s) => s.loadAnalytics);
 
-  const [tab, setTab] = useState<DashTab>("queue");
-  const [community, setCommunity] = useState<Community | null>(null);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [team, setTeam] = useState<TeamMember[]>([]);
-  const [stats, setStats] = useState<{ total: number; active: number; resolved: number; avgTime: string }>({ total: 0, active: 0, resolved: 0, avgTime: "-" });
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  const [knowledgeCount, setKnowledgeCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [chartRange, setChartRange] = useState<ChartRange>("7d");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [commData, queueData] = await Promise.all([
-        api<{ community: Community }>(`/api/communities/${communityId}`),
-        api<{ queue: QueueItem[] }>(`/api/communities/${communityId}/cs-queue`),
-      ]);
-      setCommunity(commData.community);
-      setQueue(queueData.queue);
+      const [accountData, analyticsData, broadcastData, knowledgeData] =
+        await Promise.all([
+          api<AccountInfo>(`/api/accounts/${accountId}`),
+          loadAnalytics(accountId),
+          api<{ broadcasts: Broadcast[] }>(
+            `/api/accounts/${accountId}/broadcasts`,
+            { silent: true },
+          ).catch(() => ({ broadcasts: [] })),
+          api<{ items: KnowledgeItem[] }>(
+            `/api/accounts/${accountId}/knowledge`,
+            { silent: true },
+          ).catch(() => ({ items: [] })),
+        ]);
 
-      // Derive stats from queue
-      const total = queueData.queue.length;
-      const active = queueData.queue.filter((q: QueueItem) => q.status === "human_active" || q.status === "ai_active").length;
-      const resolved = queueData.queue.filter((q: QueueItem) => q.status === "resolved").length;
-      setStats({ total, active, resolved, avgTime: "-" });
+      setAccount(accountData);
+      setAnalytics(analyticsData);
+      setBroadcasts(broadcastData.broadcasts ?? []);
+      setKnowledgeCount(
+        Array.isArray(knowledgeData)
+          ? knowledgeData.length
+          : (knowledgeData.items?.length ?? 0),
+      );
 
-      // Fetch team
-      const teamData = await api<{ members: TeamMember[] }>(`/api/communities/${communityId}/members?role=cs_agent`, { silent: true }).catch(() => ({ members: [] }));
-      setTeam(teamData.members);
+      // Derive unread from conversations
+      try {
+        const convs = await api<
+          { id: string; status?: string; unread?: boolean }[]
+        >(`/api/accounts/${accountId}/conversations`, { silent: true });
+        const unread = convs.filter(
+          (c) => c.unread || c.status === "unresolved",
+        ).length;
+        setUnreadCount(unread);
+      } catch {
+        setUnreadCount(0);
+      }
     } catch {
-      // ignore
+      // ignore top-level errors
     } finally {
       setLoading(false);
     }
-  }, [communityId]);
+  }, [accountId, loadAnalytics]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const handleAccept = async (conversationId: string) => {
-    try {
-      await api(`/api/communities/${communityId}/accept-transfer`, {
-        method: "POST",
-        body: JSON.stringify({ conversationId }),
-      });
-      fetchData();
-    } catch {}
-  };
+  // Chart data derived from analytics
+  const chartData = useMemo(() => {
+    if (!analytics?.dailyStats) return [];
+    const days = chartRange === "7d" ? 7 : 30;
+    const stats = analytics.dailyStats.slice(-days);
+    return stats;
+  }, [analytics, chartRange]);
 
-  const handleResolve = async (conversationId: string) => {
-    try {
-      await api(`/api/communities/${communityId}/resolve`, {
-        method: "POST",
-        body: JSON.stringify({ conversationId }),
-      });
-      fetchData();
-    } catch {}
-  };
+  const chartMax = useMemo(() => {
+    if (chartData.length === 0) return 1;
+    return Math.max(...chartData.map((d) => d.subscribers), 1);
+  }, [chartData]);
 
-  const handleInviteCs = async () => {
-    if (!inviteEmail.trim()) return;
-    try {
-      await api(`/api/communities/${communityId}/invite-cs`, {
-        method: "POST",
-        body: JSON.stringify({ userId: inviteEmail.trim() }),
-      });
-      setInviteEmail("");
-      fetchData();
-    } catch {}
-  };
+  // Today's new subscribers
+  const todayNew = useMemo(() => {
+    if (!analytics?.dailyStats || analytics.dailyStats.length === 0) return 0;
+    const today = new Date().toISOString().slice(0, 10);
+    const todayStat = analytics.dailyStats.find((d) => d.date === today);
+    return todayStat?.subscribers ?? 0;
+  }, [analytics]);
 
-  const handleUpdateCsMode = async (mode: string) => {
-    try {
-      await api(`/api/communities/${communityId}`, {
-        method: "PUT",
-        body: JSON.stringify({ csMode: mode }),
-      });
-      setCommunity((c) => c ? { ...c, csMode: mode } : c);
-    } catch {}
-  };
+  // Total broadcasts sent
+  const totalBroadcastsSent = broadcasts.filter(
+    (b) => b.status === "sent",
+  ).length;
 
-  const tabs: { id: DashTab; icon: typeof Headset; label: string }[] = [
-    { id: "queue", icon: Headset, label: t("official.dashboard.queue") },
-    { id: "team", icon: Users, label: t("official.dashboard.team") },
-    { id: "stats", icon: BarChart3, label: t("official.dashboard.stats") },
-    { id: "settings", icon: Settings, label: t("official.dashboard.settings") },
-  ];
+  // Recent 3 broadcasts
+  const recentBroadcasts = broadcasts.slice(0, 3);
+
+  // Auto-reply mode label
+  const autoReplyModeLabel = account?.autoReplyMode ?? "none";
+
+  const autoReplyIcon =
+    autoReplyModeLabel === "ai"
+      ? Bot
+      : autoReplyModeLabel === "webhook"
+        ? Webhook
+        : MessageSquareOff;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -130,149 +161,322 @@ export default function OfficialDashboardPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold truncate">{community?.name ?? "..."}</h1>
-          <p className="text-xs text-muted-foreground">{t("official.dashboard.title")}</p>
+          <h1 className="truncate text-lg font-semibold">
+            {account?.name ?? "..."}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            {t("official.dashboard.title")}
+          </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={fetchData} disabled={loading}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={fetchData}
+          disabled={loading}
+        >
           <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
         </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 px-4 pt-3 pb-2">
-        {tabs.map((tb) => {
-          const Icon = tb.icon;
-          return (
-            <button
-              key={tb.id}
-              type="button"
-              onClick={() => setTab(tb.id)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                tab === tb.id ? "bg-blue-600 text-white" : "bg-secondary text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {tb.label}
-            </button>
-          );
-        })}
-      </div>
+      <div className="flex-1 space-y-4 px-4 py-4">
+        {/* Overview Cards */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <OverviewCard
+            icon={Users}
+            label={t("official.dashboard.subscribers")}
+            value={analytics?.subscriberCount ?? 0}
+            iconColor="text-blue-500"
+          />
+          <OverviewCard
+            icon={UserPlus}
+            label={t("official.dashboard.todayNew")}
+            value={todayNew}
+            iconColor="text-green-500"
+          />
+          <OverviewCard
+            icon={MailOpen}
+            label={t("official.dashboard.unreadMessages")}
+            value={unreadCount}
+            iconColor="text-orange-500"
+          />
+          <OverviewCard
+            icon={Send}
+            label={t("official.dashboard.totalBroadcasts")}
+            value={totalBroadcastsSent}
+            iconColor="text-purple-500"
+          />
+        </div>
 
-      {/* Content */}
-      <div className="flex-1 px-4 py-3">
-        {tab === "queue" && (
-          <div className="flex flex-col gap-2">
-            {queue.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">{t("official.dashboard.emptyQueue")}</p>
-            ) : (
-              queue.map((item) => (
-                <div key={item.conversationId} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.userName ?? item.userId}</p>
-                    <p className={cn(
-                      "text-xs",
-                      item.status === "waiting_human" && "text-yellow-500",
-                      item.status === "human_active" && "text-green-500",
-                      item.status === "ai_active" && "text-blue-500",
-                      item.status === "resolved" && "text-muted-foreground",
-                    )}>
-                      {t(`community.cs.status.${item.status}`)}
-                    </p>
-                  </div>
-                  <div className="flex gap-1.5">
-                    {item.status === "waiting_human" && (
-                      <Button size="sm" variant="default" onClick={() => handleAccept(item.conversationId)}>
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                        {t("official.dashboard.accept")}
-                      </Button>
-                    )}
-                    {(item.status === "human_active" || item.status === "ai_active") && (
-                      <Button size="sm" variant="outline" onClick={() => handleResolve(item.conversationId)}>
-                        <Clock className="h-3.5 w-3.5 mr-1" />
-                        {t("official.dashboard.resolve")}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+        {/* Subscriber Growth Chart */}
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">
+              {t("official.dashboard.subscriberGrowth")}
+            </h2>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setChartRange("7d")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  chartRange === "7d"
+                    ? "bg-blue-600 text-white"
+                    : "bg-secondary text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("official.dashboard.chart7d")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartRange("30d")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  chartRange === "30d"
+                    ? "bg-blue-600 text-white"
+                    : "bg-secondary text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("official.dashboard.chart30d")}
+              </button>
+            </div>
           </div>
-        )}
+          {chartData.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {t("official.dashboard.noChartData")}
+            </p>
+          ) : (
+            <div className="flex items-end gap-1" style={{ height: 120 }}>
+              {chartData.map((day) => {
+                const height = Math.max(
+                  (day.subscribers / chartMax) * 100,
+                  2,
+                );
+                return (
+                  <div
+                    key={day.date}
+                    className="group relative flex flex-1 flex-col items-center"
+                  >
+                    <div
+                      className="w-full rounded-t bg-blue-500 transition-colors group-hover:bg-blue-400"
+                      style={{ height: `${height}%` }}
+                      title={`${day.date}: ${day.subscribers}`}
+                    />
+                    {/* Show date label for 7d view or every 5th bar in 30d */}
+                    {(chartRange === "7d" ||
+                      chartData.indexOf(day) % 5 === 0) && (
+                      <span className="mt-1 text-[9px] text-muted-foreground">
+                        {day.date.slice(5)}
+                      </span>
+                    )}
+                    {/* Tooltip on hover */}
+                    <div className="pointer-events-none absolute -top-8 left-1/2 z-20 hidden -translate-x-1/2 rounded bg-foreground px-1.5 py-0.5 text-[10px] text-background group-hover:block">
+                      {day.subscribers}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-        {tab === "team" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder={t("official.dashboard.invitePlaceholder")}
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-              />
-              <Button size="sm" onClick={handleInviteCs}>
-                <UserPlus className="h-4 w-4 mr-1" />
-                {t("official.dashboard.invite")}
+        {/* Two-column section: Recent Broadcasts + Status cards */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Recent Broadcasts */}
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">
+                {t("official.dashboard.recentBroadcasts")}
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto px-2 py-1 text-xs"
+                onClick={() =>
+                  router.push(`/official/${accountId}/broadcasts`)
+                }
+              >
+                {t("official.dashboard.viewAll")}
+                <ChevronRight className="ml-0.5 h-3 w-3" />
               </Button>
             </div>
-            {team.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">{t("official.dashboard.noTeam")}</p>
+            {recentBroadcasts.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                {t("official.dashboard.noBroadcasts")}
+              </p>
             ) : (
-              team.map((m) => (
-                <div key={m.userId} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-                  <Users className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{m.displayName ?? m.userId}</p>
-                    <p className="text-xs text-muted-foreground">{m.role}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {tab === "stats" && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <StatCard label={t("official.dashboard.totalConversations")} value={stats.total} />
-            <StatCard label={t("official.dashboard.activeNow")} value={stats.active} />
-            <StatCard label={t("official.dashboard.resolved")} value={stats.resolved} />
-          </div>
-        )}
-
-        {tab === "settings" && community && (
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium">{t("community.form.csMode")}</label>
-              <div className="flex gap-2">
-                {(["ai_only", "human_only", "hybrid"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => handleUpdateCsMode(mode)}
-                    className={cn(
-                      "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-                      community.csMode === mode
-                        ? "bg-blue-600 text-white"
-                        : "bg-secondary text-muted-foreground hover:text-foreground"
-                    )}
+              <div className="flex flex-col gap-2">
+                {recentBroadcasts.map((bc) => (
+                  <div
+                    key={bc.id}
+                    className="flex items-start gap-2 rounded-md border border-border p-2.5"
                   >
-                    {t(`community.csMode.${mode}`)}
-                  </button>
+                    <Radio className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm">{bc.content}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {bc.sentAt
+                          ? new Date(bc.sentAt).toLocaleDateString()
+                          : new Date(bc.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <BroadcastStatusBadge status={bc.status} />
+                  </div>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Right column: stacked cards */}
+          <div className="flex flex-col gap-4">
+            {/* Auto-Reply Status */}
+            <div className="rounded-lg border border-border bg-card p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">
+                  {t("official.dashboard.autoReplyStatus")}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-2 py-1 text-xs"
+                  onClick={() =>
+                    router.push(`/official/${accountId}/auto-reply`)
+                  }
+                >
+                  {t("official.dashboard.settings")}
+                  <ChevronRight className="ml-0.5 h-3 w-3" />
+                </Button>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const Icon = autoReplyIcon;
+                    return <Icon className="h-4 w-4 text-muted-foreground" />;
+                  })()}
+                  <span className="text-sm">
+                    {t("official.dashboard.autoReplyMode")}:
+                  </span>
+                  <Badge variant="secondary">
+                    {t(`official.dashboard.autoReplyMode.${autoReplyModeLabel}`)}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {t("official.dashboard.welcomeMessage")}:
+                  </span>
+                  <Badge
+                    variant={account?.welcomeEnabled ? "default" : "outline"}
+                  >
+                    {account?.welcomeEnabled
+                      ? t("official.dashboard.on")
+                      : t("official.dashboard.off")}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Knowledge Base Status */}
+            <div className="rounded-lg border border-border bg-card p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">
+                  {t("official.dashboard.knowledgeBase")}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-2 py-1 text-xs"
+                  onClick={() =>
+                    router.push(`/official/${accountId}/knowledge`)
+                  }
+                >
+                  {t("official.dashboard.manage")}
+                  <ChevronRight className="ml-0.5 h-3 w-3" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {t("official.dashboard.knowledgeItems", {
+                    count: knowledgeCount,
+                  })}
+                </span>
+              </div>
+            </div>
+
+            {/* Pending Items */}
+            <div className="rounded-lg border border-border bg-card p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle
+                    className={cn(
+                      "h-4 w-4",
+                      unreadCount > 0
+                        ? "text-orange-500"
+                        : "text-muted-foreground",
+                    )}
+                  />
+                  <h2 className="text-sm font-semibold">
+                    {t("official.dashboard.pendingItems")}
+                  </h2>
+                </div>
+                <span
+                  className={cn(
+                    "text-lg font-bold",
+                    unreadCount > 0 ? "text-orange-500" : "text-foreground",
+                  )}
+                >
+                  {unreadCount}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("official.dashboard.pendingDescription")}
+              </p>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: number | string }) {
+/* ------------------------------------------------------------------ */
+/* Sub-components                                                      */
+/* ------------------------------------------------------------------ */
+
+function OverviewCard({
+  icon: Icon,
+  label,
+  value,
+  iconColor,
+}: {
+  icon: typeof Users;
+  label: string;
+  value: number | string;
+  iconColor?: string;
+}) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4 text-center">
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Icon className={cn("h-4 w-4", iconColor ?? "text-muted-foreground")} />
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
       <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{label}</p>
     </div>
+  );
+}
+
+function BroadcastStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
+  const variant =
+    status === "sent"
+      ? "default"
+      : status === "scheduled"
+        ? "secondary"
+        : "outline";
+
+  return (
+    <Badge variant={variant} className="shrink-0">
+      {t(`official.dashboard.broadcastStatus.${status}`)}
+    </Badge>
   );
 }
