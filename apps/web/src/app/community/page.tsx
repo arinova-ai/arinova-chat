@@ -28,6 +28,7 @@ interface CommunityItem {
   verified: boolean;
   csMode: string | null;
   conversationId: string | null;
+  isJoined: boolean;
   createdAt: string;
   creatorName?: string;
 }
@@ -147,7 +148,7 @@ function CommunityBrowseContent() {
                     key={c.id}
                     community={c}
                     onClick={() => {
-                      if (c.conversationId) {
+                      if (c.isJoined && c.conversationId) {
                         router.push(`/?c=${c.conversationId}`);
                       } else {
                         router.push(`/community/${c.id}`);

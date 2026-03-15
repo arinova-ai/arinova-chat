@@ -141,6 +141,7 @@ struct CommunityBrowseRow {
     conversation_id: Option<Uuid>,
     created_at: DateTime<Utc>,
     creator_name: String,
+    is_joined: Option<bool>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -246,23 +247,48 @@ struct BrowseQuery {
     limit: Option<i64>,
 }
 
+/// Try to extract user_id from the session cookie (optional auth for public endpoints).
+async fn extract_user_id_from_cookie(
+    db: &sqlx::PgPool,
+    headers: &axum::http::HeaderMap,
+) -> Option<String> {
+    let cookie_header = headers.get("cookie")?.to_str().ok()?;
+    let token = cookie_header
+        .split(';')
+        .find_map(|c| c.trim().strip_prefix("better-auth.session_token="))
+        .filter(|v| !v.is_empty())?;
+    sqlx::query_scalar::<_, String>(
+        r#"SELECT user_id FROM "session" WHERE token = $1 AND expires_at > NOW()"#,
+    )
+    .bind(token)
+    .fetch_optional(db)
+    .await
+    .ok()?
+}
+
 async fn browse(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Query(q): Query<BrowseQuery>,
 ) -> (StatusCode, Json<Value>) {
     let limit = q.limit.unwrap_or(20).min(50);
     let page = q.page.unwrap_or(1).max(1);
     let offset = (page - 1) * limit;
 
+    // Optional auth: try to extract user_id from session cookie
+    let user_id = extract_user_id_from_cookie(&state.db, &headers).await;
+
     let rows = sqlx::query_as::<_, CommunityBrowseRow>(
         r#"SELECT c.id, c.creator_id, c.name, c.description, c.type,
                   c.join_fee, c.monthly_fee, c.agent_call_fee,
                   c.member_count, c.avatar_url, c.category, c.tags,
                   o.verified, o.cs_mode, c.conversation_id,
-                  c.created_at, u.name AS creator_name
+                  c.created_at, u.name AS creator_name,
+                  CASE WHEN cm.user_id IS NOT NULL THEN true ELSE false END AS is_joined
            FROM communities c
            JOIN "user" u ON c.creator_id = u.id
            LEFT JOIN officials o ON o.community_id = c.id
+           LEFT JOIN community_members cm ON cm.community_id = c.id AND cm.user_id = $6
            WHERE c.status = 'active'
              AND ($1::text IS NULL OR c.type = $1)
              AND ($2::text IS NULL OR c.category = $2)
@@ -275,6 +301,7 @@ async fn browse(
     .bind(q.search.as_deref())
     .bind(limit)
     .bind(offset)
+    .bind(user_id.as_deref())
     .fetch_all(&state.db)
     .await;
 
@@ -316,6 +343,7 @@ async fn browse(
                         "verified": r.verified.unwrap_or(false),
                         "csMode": r.cs_mode,
                         "conversationId": r.conversation_id,
+                        "isJoined": r.is_joined.unwrap_or(false),
                         "createdAt": r.created_at.to_rfc3339(),
                         "creatorName": r.creator_name,
                     })
