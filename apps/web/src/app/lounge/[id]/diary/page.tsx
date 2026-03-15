@@ -248,7 +248,7 @@ export default function DiaryPage({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push(`/lounge/${accountId}`)}
+          onClick={() => router.push(`/lounge/${accountId}/dashboard`)}
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>

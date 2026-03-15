@@ -115,7 +115,7 @@ export default function OfficialSettingsPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.back()}
+          onClick={() => router.push(`/official/${accountId}/dashboard`)}
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />

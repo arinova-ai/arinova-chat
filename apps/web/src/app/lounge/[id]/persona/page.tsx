@@ -165,7 +165,7 @@ export default function PersonaPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.back()}
+          onClick={() => router.push(`/lounge/${accountId}/dashboard`)}
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />

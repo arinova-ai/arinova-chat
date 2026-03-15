@@ -157,7 +157,7 @@ export default function OfficialDashboardPage() {
     <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)]">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+        <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1">
@@ -292,7 +292,7 @@ export default function OfficialDashboardPage() {
                 size="sm"
                 className="h-auto px-2 py-1 text-xs"
                 onClick={() =>
-                  router.push(`/official/${accountId}/broadcasts`)
+                  router.push(`/official/${accountId}/broadcast`)
                 }
               >
                 {t("official.dashboard.viewAll")}
