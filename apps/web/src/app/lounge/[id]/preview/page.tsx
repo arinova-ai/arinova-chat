@@ -92,7 +92,7 @@ export default function PreviewChatPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col pt-[env(safe-area-inset-top)]">
       {/* Header */}
       <header className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">

@@ -159,7 +159,7 @@ export default function PersonaPage() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
       {/* Header */}
       <header className="flex items-center gap-3 border-b px-4 py-3">
         <Button

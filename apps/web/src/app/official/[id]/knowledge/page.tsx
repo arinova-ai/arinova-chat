@@ -151,7 +151,7 @@ export default function KnowledgeBasePage({
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)]">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <Link href={`/official/${id}/dashboard`}>
