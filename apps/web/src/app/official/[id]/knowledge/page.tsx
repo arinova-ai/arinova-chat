@@ -10,6 +10,9 @@ import {
   Globe,
   Trash2,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +55,14 @@ export default function KnowledgeBasePage({
   const [fileUrl, setFileUrl] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editFileUrl, setEditFileUrl] = useState("");
+  const [editSourceUrl, setEditSourceUrl] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -106,8 +117,42 @@ export default function KnowledgeBasePage({
         method: "DELETE",
       });
       setItems((prev) => prev.filter((item) => item.id !== kbId));
+      if (editingId === kbId) setEditingId(null);
     } catch {
       // handled by api()
+    }
+  };
+
+  const startEditing = (item: KnowledgeItem) => {
+    if (editingId === item.id) {
+      setEditingId(null);
+      return;
+    }
+    setEditingId(item.id);
+    setEditTitle(item.title);
+    setEditContent(item.content ?? "");
+    setEditFileUrl(item.fileUrl ?? "");
+    setEditSourceUrl(item.sourceUrl ?? "");
+  };
+
+  const handleSaveEdit = async (item: KnowledgeItem) => {
+    setEditSaving(true);
+    try {
+      const body: Record<string, string> = { title: editTitle.trim() };
+      if (item.type === "faq") body.content = editContent.trim();
+      if (item.type === "file") body.fileUrl = editFileUrl.trim();
+      if (item.type === "url") body.sourceUrl = editSourceUrl.trim();
+
+      await api(`/api/accounts/${id}/knowledge/${item.id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      setEditingId(null);
+      fetchItems();
+    } catch {
+      // handled by api()
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -267,30 +312,96 @@ export default function KnowledgeBasePage({
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-card p-3"
+                  className="rounded-lg border border-border bg-card"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {typeBadge(item.type)}
-                      {statusBadge(item.status)}
-                      {item.chunkCount != null && (
-                        <span className="text-xs text-muted-foreground">
-                          {t("official.knowledge.chunks", {
-                            count: item.chunkCount,
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(item.id)}
-                    className="text-destructive hover:text-destructive"
+                  <button
+                    type="button"
+                    onClick={() => startEditing(item)}
+                    className="flex w-full items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {typeBadge(item.type)}
+                        {statusBadge(item.status)}
+                        {item.chunkCount != null && (
+                          <span className="text-xs text-muted-foreground">
+                            {t("official.knowledge.chunks", {
+                              count: item.chunkCount,
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {editingId === item.id ? (
+                      <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                  </button>
+
+                  {/* Expanded edit form */}
+                  {editingId === item.id && (
+                    <div className="border-t border-border p-3 space-y-3">
+                      <Input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        placeholder={t("official.knowledge.titlePlaceholder")}
+                      />
+
+                      {item.type === "faq" && (
+                        <Textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          placeholder={t("official.knowledge.answerPlaceholder")}
+                          rows={4}
+                        />
+                      )}
+
+                      {item.type === "file" && (
+                        <Input
+                          value={editFileUrl}
+                          onChange={(e) => setEditFileUrl(e.target.value)}
+                          placeholder={t("official.knowledge.fileUrlPlaceholder")}
+                        />
+                      )}
+
+                      {item.type === "url" && (
+                        <Input
+                          value={editSourceUrl}
+                          onChange={(e) => setEditSourceUrl(e.target.value)}
+                          placeholder={t("official.knowledge.sourceUrlPlaceholder")}
+                        />
+                      )}
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveEdit(item)}
+                          disabled={editSaving || !editTitle.trim()}
+                        >
+                          <Save className="h-4 w-4 mr-1" />
+                          {editSaving ? "..." : t("common.save")}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditingId(null)}
+                        >
+                          {t("common.cancel")}
+                        </Button>
+                        <div className="flex-1" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(item.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

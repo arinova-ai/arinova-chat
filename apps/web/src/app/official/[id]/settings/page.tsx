@@ -1,21 +1,24 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Save, Trash2, AlertTriangle, Upload, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "@/lib/i18n";
 import { useAccountStore } from "@/store/account-store";
 import { api } from "@/lib/api";
 
-type Tab = "general" | "auto-reply" | "danger";
+type Tab = "general" | "danger";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
 
 export default function OfficialSettingsPage() {
   const params = useParams();
   const router = useRouter();
   const { t } = useTranslation();
   const { updateAccount, deleteAccount } = useAccountStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const accountId = params.id as string;
 
@@ -28,10 +31,7 @@ export default function OfficialSettingsPage() {
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-
-  // Auto-reply
-  const [welcomeEnabled, setWelcomeEnabled] = useState(false);
-  const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   // Danger
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -45,14 +45,11 @@ export default function OfficialSettingsPage() {
           bio: string | null;
           avatar: string | null;
           isPublic: boolean;
-          welcomeMessage: string | null;
         }>(`/api/accounts/${accountId}`);
         setName(account.name ?? "");
         setBio(account.bio ?? "");
         setAvatarUrl(account.avatar ?? "");
         setIsPublic(account.isPublic ?? false);
-        setWelcomeEnabled(!!account.welcomeMessage);
-        setWelcomeMessage(account.welcomeMessage ?? "");
       } catch (err) {
         console.error("Failed to load account:", err);
       } finally {
@@ -61,6 +58,27 @@ export default function OfficialSettingsPage() {
     }
     loadAccount();
   }, [accountId]);
+
+  const handleAvatarUpload = useCallback(async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${BACKEND_URL}/api/uploads`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.url) {
+        setAvatarUrl(data.url);
+      }
+    } catch (err) {
+      console.error("Failed to upload avatar:", err);
+    } finally {
+      setUploading(false);
+    }
+  }, []);
 
   const handleSaveGeneral = useCallback(async () => {
     setSaving(true);
@@ -77,19 +95,6 @@ export default function OfficialSettingsPage() {
       setSaving(false);
     }
   }, [accountId, isPublic, name, bio, avatarUrl, updateAccount]);
-
-  const handleSaveAutoReply = useCallback(async () => {
-    setSaving(true);
-    try {
-      await updateAccount(accountId, {
-        welcomeMessage: welcomeEnabled ? welcomeMessage : null,
-      });
-    } catch (err) {
-      console.error("Failed to save auto-reply settings:", err);
-    } finally {
-      setSaving(false);
-    }
-  }, [accountId, welcomeEnabled, welcomeMessage, updateAccount]);
 
   const handleDelete = useCallback(async () => {
     try {
@@ -128,7 +133,6 @@ export default function OfficialSettingsPage() {
         {(
           [
             { id: "general", label: t("official.settings.general") },
-            { id: "auto-reply", label: t("official.settings.autoReply") },
             { id: "danger", label: t("official.settings.dangerZone") },
           ] as const
         ).map((tb) => (
@@ -193,73 +197,57 @@ export default function OfficialSettingsPage() {
                 />
               </div>
 
-              {/* Avatar URL */}
+              {/* Avatar Upload */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Avatar URL</label>
-                <input
-                  type="text"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-brand"
-                />
+                <label className="text-sm font-medium">{t("common.avatar")}</label>
+                <div className="flex items-center gap-4">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
+                      className="h-16 w-16 rounded-full object-cover border"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border bg-muted">
+                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleAvatarUpload(file);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {uploading ? "..." : t("common.upload")}
+                    </Button>
+                    {avatarUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAvatarUrl("")}
+                        className="text-destructive"
+                      >
+                        {t("common.remove")}
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Save */}
               <Button onClick={handleSaveGeneral} disabled={saving}>
-                <Save className="mr-2 h-4 w-4" />
-                {saving ? "..." : t("common.save")}
-              </Button>
-            </>
-          )}
-
-          {/* ==================== Auto-Reply Tab ==================== */}
-          {tab === "auto-reply" && (
-            <>
-              {/* Welcome message toggle */}
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <p className="text-sm font-medium">
-                    {t("official.settings.welcomeToggle")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("official.settings.welcomeDesc")}
-                  </p>
-                </div>
-                <Switch
-                  checked={welcomeEnabled}
-                  onCheckedChange={setWelcomeEnabled}
-                />
-              </div>
-
-              {/* Welcome message */}
-              {welcomeEnabled && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {t("official.settings.welcomeMessage")}
-                  </label>
-                  <textarea
-                    value={welcomeMessage}
-                    onChange={(e) => setWelcomeMessage(e.target.value)}
-                    rows={4}
-                    placeholder={t("official.settings.welcomePlaceholder")}
-                    className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-brand"
-                  />
-                </div>
-              )}
-
-              {/* Link to full auto-reply */}
-              <Button
-                variant="outline"
-                onClick={() =>
-                  router.push(`/official/${accountId}/auto-reply`)
-                }
-              >
-                {t("official.settings.manageAutoReply")}
-              </Button>
-
-              {/* Save */}
-              <Button onClick={handleSaveAutoReply} disabled={saving}>
                 <Save className="mr-2 h-4 w-4" />
                 {saving ? "..." : t("common.save")}
               </Button>
