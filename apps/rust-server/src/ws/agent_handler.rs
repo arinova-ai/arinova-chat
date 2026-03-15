@@ -542,6 +542,127 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                         }
                     }
                 }
+                "agent_telemetry" => {
+                    let telemetry_event = event.get("event").and_then(|v| v.as_str()).unwrap_or("");
+                    let data = event.get("data").cloned().unwrap_or(json!({}));
+
+                    match telemetry_event {
+                        "session_start" => {
+                            let session_id = data.get("sessionId").and_then(|v| v.as_str()).unwrap_or("");
+                            let model = data.get("model").and_then(|v| v.as_str());
+                            let provider = data.get("provider").and_then(|v| v.as_str());
+
+                            let _ = sqlx::query(
+                                r#"INSERT INTO agent_sessions (agent_id, session_id, model, provider)
+                                   VALUES ($1::uuid, $2, $3, $4)"#,
+                            )
+                            .bind(&agent_id_clone)
+                            .bind(session_id)
+                            .bind(model)
+                            .bind(provider)
+                            .execute(&db)
+                            .await;
+                        }
+                        "session_end" => {
+                            let session_id = data.get("sessionId").and_then(|v| v.as_str()).unwrap_or("");
+                            let message_count = data.get("messageCount").and_then(|v| v.as_i64()).map(|v| v as i32);
+                            let duration_ms = data.get("durationMs").and_then(|v| v.as_i64());
+
+                            let _ = sqlx::query(
+                                r#"UPDATE agent_sessions
+                                   SET ended_at = NOW(), message_count = COALESCE($3, message_count), duration_ms = $4
+                                   WHERE agent_id = $1::uuid AND session_id = $2
+                                     AND ended_at IS NULL"#,
+                            )
+                            .bind(&agent_id_clone)
+                            .bind(session_id)
+                            .bind(message_count)
+                            .bind(duration_ms)
+                            .execute(&db)
+                            .await;
+                        }
+                        "llm_output" => {
+                            let session_id = data.get("sessionId").and_then(|v| v.as_str()).unwrap_or("");
+                            let model = data.get("model").and_then(|v| v.as_str());
+                            let provider = data.get("provider").and_then(|v| v.as_str());
+                            let usage = data.get("usage").cloned().unwrap_or(json!({}));
+
+                            let _ = sqlx::query(
+                                r#"INSERT INTO agent_token_usage (agent_id, session_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_tokens, model, provider)
+                                   VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)"#,
+                            )
+                            .bind(&agent_id_clone)
+                            .bind(session_id)
+                            .bind(usage.get("input").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                            .bind(usage.get("output").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                            .bind(usage.get("cacheRead").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                            .bind(usage.get("cacheWrite").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                            .bind(usage.get("total").and_then(|v| v.as_i64()).unwrap_or(0) as i32)
+                            .bind(model)
+                            .bind(provider)
+                            .execute(&db)
+                            .await;
+                        }
+                        "tool_call" => {
+                            let session_id = data.get("sessionId").and_then(|v| v.as_str()).unwrap_or("");
+                            let tool_name = data.get("toolName").and_then(|v| v.as_str()).unwrap_or("");
+                            let duration_ms = data.get("durationMs").and_then(|v| v.as_i64());
+                            let success = data.get("success").and_then(|v| v.as_bool()).unwrap_or(true);
+                            let error = data.get("error").and_then(|v| v.as_str());
+
+                            let _ = sqlx::query(
+                                r#"INSERT INTO agent_tool_logs (agent_id, session_id, tool_name, duration_ms, success, error)
+                                   VALUES ($1::uuid, $2, $3, $4, $5, $6)"#,
+                            )
+                            .bind(&agent_id_clone)
+                            .bind(session_id)
+                            .bind(tool_name)
+                            .bind(duration_ms)
+                            .bind(success)
+                            .bind(error)
+                            .execute(&db)
+                            .await;
+                        }
+                        "compaction" => {
+                            let session_id = data.get("sessionId").and_then(|v| v.as_str()).unwrap_or("");
+                            let message_count = data.get("messageCount").and_then(|v| v.as_i64()).map(|v| v as i32);
+                            let compacted_count = data.get("compactedCount").and_then(|v| v.as_i64()).map(|v| v as i32);
+                            let token_count = data.get("tokenCount").and_then(|v| v.as_i64()).map(|v| v as i32);
+
+                            let _ = sqlx::query(
+                                r#"INSERT INTO agent_compaction_logs (agent_id, session_id, message_count, compacted_count, token_count)
+                                   VALUES ($1::uuid, $2, $3, $4, $5)"#,
+                            )
+                            .bind(&agent_id_clone)
+                            .bind(session_id)
+                            .bind(message_count)
+                            .bind(compacted_count)
+                            .bind(token_count)
+                            .execute(&db)
+                            .await;
+                        }
+                        "agent_end" => {
+                            // Update the session with final stats
+                            let session_id = data.get("sessionId").and_then(|v| v.as_str()).unwrap_or("");
+                            let duration_ms = data.get("durationMs").and_then(|v| v.as_i64());
+
+                            let _ = sqlx::query(
+                                r#"UPDATE agent_sessions
+                                   SET ended_at = NOW(), duration_ms = COALESCE($3, duration_ms)
+                                   WHERE agent_id = $1::uuid AND session_id = $2
+                                     AND ended_at IS NULL"#,
+                            )
+                            .bind(&agent_id_clone)
+                            .bind(session_id)
+                            .bind(duration_ms)
+                            .execute(&db)
+                            .await;
+                        }
+                        _ => {
+                            tracing::debug!("Unknown telemetry event: {}", telemetry_event);
+                        }
+                    }
+                }
                 _ => {}
             }
         }

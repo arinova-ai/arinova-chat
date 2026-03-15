@@ -134,6 +134,14 @@ export class ArinovaAgent {
     }
   }
 
+  /**
+   * Send a telemetry event to the server.
+   * Silently no-ops if WebSocket is not connected.
+   */
+  sendTelemetry(event: string, data: Record<string, unknown>): void {
+    this.send({ type: "agent_telemetry", event, data });
+  }
+
   private emit(event: "connected" | "disconnected"): void;
   private emit(event: "error", error: Error): void;
   private emit(event: string, ...args: unknown[]): void {

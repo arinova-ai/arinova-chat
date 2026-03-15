@@ -1,6 +1,19 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import type { InternalEvent } from "./types.js";
 import { officeState } from "./state.js";
+import { getAgentInstance } from "../runtime.js";
+
+/**
+ * Send telemetry data to the backend via the agent's existing WS connection.
+ * Silently no-ops if agent instance is not available.
+ */
+function sendTelemetry(accountId: string | undefined, event: string, data: Record<string, unknown>): void {
+  if (!accountId) return;
+  const agent = getAgentInstance(accountId);
+  if (agent) {
+    agent.sendTelemetry(event, data);
+  }
+}
 
 /**
  * Register hook listeners with the OpenClaw plugin API.
@@ -14,16 +27,24 @@ export function registerHooks(api: OpenClawPluginApi): void {
   // ── Session lifecycle ──────────────────────────────────
 
   api.on("session_start", (event, ctx) => {
+    const accountId = acct(ctx);
     emit({
       type: "session_start",
       agentId: ctx.agentId ?? "unknown",
       sessionId: event.sessionId,
       timestamp: Date.now(),
       data: { resumedFrom: event.resumedFrom },
-    }, acct(ctx));
+    }, accountId);
+    const ev = event as Record<string, unknown>;
+    sendTelemetry(accountId, "session_start", {
+      sessionId: event.sessionId,
+      model: ev.model as string | undefined,
+      provider: ev.provider as string | undefined,
+    });
   });
 
   api.on("session_end", (event, ctx) => {
+    const accountId = acct(ctx);
     emit({
       type: "session_end",
       agentId: ctx.agentId ?? "unknown",
@@ -33,7 +54,12 @@ export function registerHooks(api: OpenClawPluginApi): void {
         messageCount: event.messageCount,
         durationMs: event.durationMs,
       },
-    }, acct(ctx));
+    }, accountId);
+    sendTelemetry(accountId, "session_end", {
+      sessionId: event.sessionId,
+      messageCount: event.messageCount,
+      durationMs: event.durationMs,
+    });
   });
 
   // ── LLM activity ──────────────────────────────────────
@@ -52,6 +78,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
   });
 
   api.on("llm_output", (event, ctx) => {
+    const accountId = acct(ctx);
     emit({
       type: "llm_output",
       agentId: ctx.agentId ?? "unknown",
@@ -62,12 +89,26 @@ export function registerHooks(api: OpenClawPluginApi): void {
         provider: event.provider,
         usage: event.usage,
       },
-    }, acct(ctx));
+    }, accountId);
+    const usage = event.usage as Record<string, unknown> | undefined;
+    sendTelemetry(accountId, "llm_output", {
+      sessionId: event.sessionId,
+      model: event.model,
+      provider: event.provider,
+      usage: {
+        input: usage?.inputTokens ?? usage?.input ?? 0,
+        output: usage?.outputTokens ?? usage?.output ?? 0,
+        cacheRead: usage?.cacheReadTokens ?? usage?.cacheRead ?? 0,
+        cacheWrite: usage?.cacheWriteTokens ?? usage?.cacheWrite ?? 0,
+        total: usage?.totalTokens ?? usage?.total ?? 0,
+      },
+    });
   });
 
   // ── Tool calls ────────────────────────────────────────
 
   api.on("after_tool_call", (event, ctx) => {
+    const accountId = acct(ctx);
     const hasError = Boolean(event.error);
     emit({
       type: hasError ? "tool_result" : "tool_call",
@@ -79,7 +120,14 @@ export function registerHooks(api: OpenClawPluginApi): void {
         durationMs: event.durationMs,
         error: event.error,
       },
-    }, acct(ctx));
+    }, accountId);
+    sendTelemetry(accountId, "tool_call", {
+      sessionId: ctx.sessionKey ?? "",
+      toolName: event.toolName,
+      durationMs: event.durationMs,
+      success: !hasError,
+      error: event.error,
+    });
 
     // Persistent tool errors → blocked
     if (hasError) {
@@ -121,6 +169,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
   // ── Agent run completion ──────────────────────────────
 
   api.on("agent_end", (event, ctx) => {
+    const accountId = acct(ctx);
     if (!event.success && event.error) {
       emit({
         type: "agent_error",
@@ -128,7 +177,7 @@ export function registerHooks(api: OpenClawPluginApi): void {
         sessionId: ctx.sessionKey ?? "",
         timestamp: Date.now(),
         data: { error: event.error, durationMs: event.durationMs },
-      }, acct(ctx));
+      }, accountId);
     } else {
       emit({
         type: "agent_end",
@@ -136,8 +185,14 @@ export function registerHooks(api: OpenClawPluginApi): void {
         sessionId: ctx.sessionKey ?? "",
         timestamp: Date.now(),
         data: { durationMs: event.durationMs },
-      }, acct(ctx));
+      }, accountId);
     }
+    sendTelemetry(accountId, "agent_end", {
+      sessionId: ctx.sessionKey ?? "",
+      success: event.success,
+      error: event.error,
+      durationMs: event.durationMs,
+    });
   });
 
   // ── Subagent collaboration ────────────────────────────
