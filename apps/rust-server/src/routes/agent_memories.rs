@@ -185,8 +185,18 @@ async fn create_memory(
     .fetch_one(&state.db)
     .await;
 
-    if !matches!(owns, Ok(true)) {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not agent owner"}))).into_response();
+    match owns {
+        Ok(true) => {}
+        Ok(false) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not agent owner"}))).into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     }
 
     let valid_categories = ["correction", "preference", "knowledge", "error"];
@@ -198,8 +208,14 @@ async fn create_memory(
             .into_response();
     }
 
+    // Normalize pattern_key: treat empty/whitespace-only as None
+    let pattern_key = body.pattern_key.as_deref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
     // Upsert by pattern_key if provided
-    let row = if let Some(ref pk) = body.pattern_key {
+    let row = if let Some(ref pk) = pattern_key {
         sqlx::query_as::<_, MemoryRow>(
             r#"INSERT INTO agent_memories (agent_id, category, summary, detail, pattern_key)
                VALUES ($1, $2, $3, $4, $5)
@@ -358,8 +374,18 @@ async fn extract_memories(
     .fetch_one(&state.db)
     .await;
 
-    if !matches!(owns, Ok(true)) {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not agent owner"}))).into_response();
+    match owns {
+        Ok(true) => {}
+        Ok(false) => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Not agent owner"}))).into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     }
 
     // Verify user is in the conversation
@@ -376,12 +402,22 @@ async fn extract_memories(
     .fetch_one(&state.db)
     .await;
 
-    if !matches!(in_conv, Ok(true)) {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not in conversation"})),
-        )
-            .into_response();
+    match in_conv {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not in conversation"})),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     }
 
     // Fetch recent messages from the conversation
@@ -453,7 +489,11 @@ async fn extract_memories(
                 _ => continue,
             };
             let detail = parsed["detail"].as_str();
-            let pattern_key = parsed["pattern_key"].as_str();
+            // Normalize pattern_key: treat empty/whitespace-only as None
+            let pattern_key = parsed["pattern_key"]
+                .as_str()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
 
             let valid_categories = ["correction", "preference", "knowledge", "error"];
             let cat = if valid_categories.contains(&category) {
@@ -462,7 +502,7 @@ async fn extract_memories(
                 "knowledge"
             };
 
-            // Upsert by pattern_key
+            // Upsert by pattern_key if non-empty, otherwise plain INSERT
             let row = if let Some(pk) = pattern_key {
                 sqlx::query_as::<_, MemoryRow>(
                     r#"INSERT INTO agent_memories (agent_id, category, summary, detail, pattern_key, source_conversation_id)

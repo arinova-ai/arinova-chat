@@ -156,6 +156,9 @@ export function FloatChatWindow({
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }, []);
 
+  // Track active listeners for cleanup on unmount
+  const cleanupRef = useRef<(() => void) | null>(null);
+
   // ── Drag handlers ─────────────────────────────────────────
   const onDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -174,9 +177,14 @@ export function FloatChatWindow({
       dragRef.current = null;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      cleanupRef.current = null;
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    cleanupRef.current = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
   }, [pos]);
 
   // ── Resize handlers ───────────────────────────────────────
@@ -198,10 +206,20 @@ export function FloatChatWindow({
       resizeRef.current = null;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      cleanupRef.current = null;
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    cleanupRef.current = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
   }, [size]);
+
+  // Cleanup drag/resize listeners on unmount
+  useEffect(() => {
+    return () => { cleanupRef.current?.(); };
+  }, []);
 
   // ── Mobile: bottom sheet ──────────────────────────────────
   if (isMobile) {
