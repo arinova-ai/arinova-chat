@@ -13,9 +13,7 @@ use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio::time::{timeout, Duration};
 
-use crate::auth::session::validate_session;
 use crate::services::message_seq::get_next_seq;
-use crate::services::push::{send_push_to_user, PushPayload};
 use crate::ws::handler::{filter_agents_for_dispatch, AgentFilterConfig, do_trigger_agent_response, get_conv_member_ids};
 use crate::ws::state::{AgentEvent, AgentSkill, PendingTask, QueuedResponse, WsState};
 use crate::AppState;
@@ -69,83 +67,17 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState) {
 
             if event_type == "agent_auth" {
                 let bot_token = event.get("botToken").and_then(|v| v.as_str()).unwrap_or("");
-                let owner_token = event.get("ownerToken").and_then(|v| v.as_str()).unwrap_or("");
 
-                // Look up agent by botToken (secret_token) — include owner_id and owner_protection
-                let agent = sqlx::query_as::<_, (String, String, String, bool)>(
-                    r#"SELECT id::text, name, owner_id, owner_protection FROM agents WHERE secret_token = $1"#,
+                // Look up agent by botToken (secret_token)
+                let agent = sqlx::query_as::<_, (String, String)>(
+                    r#"SELECT id::text, name FROM agents WHERE secret_token = $1"#,
                 )
                 .bind(bot_token)
                 .fetch_optional(&state.db)
                 .await;
 
                 match agent {
-                    Ok(Some((agent_id, agent_name, owner_id, owner_protection))) => {
-                        // Owner Protection: verify the connecting client is the owner
-                        if owner_protection {
-                            let is_owner = if !owner_token.is_empty() {
-                                match validate_session(&state.db, owner_token).await {
-                                    Ok(Some(session)) => session.user_id == owner_id,
-                                    _ => false,
-                                }
-                            } else {
-                                false
-                            };
-
-                            if !is_owner {
-                                // Log unauthorized connection attempt
-                                let details = json!({
-                                    "reason": "non_owner_connection",
-                                    "has_owner_token": !owner_token.is_empty(),
-                                });
-                                let _ = sqlx::query(
-                                    r#"INSERT INTO agent_security_logs (agent_id, event_type, details)
-                                       VALUES ($1::uuid, 'unauthorized_connection', $2)"#,
-                                )
-                                .bind(&agent_id)
-                                .bind(&details)
-                                .execute(&state.db)
-                                .await;
-
-                                // Push notification to owner
-                                let push_payload = PushPayload {
-                                    notification_type: "security_alert".into(),
-                                    title: "\u{26a0}\u{fe0f} Bot Token 安全警告".into(),
-                                    body: format!(
-                                        "{} 的 bot token 疑似外洩，有非授權連線嘗試。請前往設定頁面更換 token。",
-                                        agent_name
-                                    ),
-                                    url: Some(format!("/?agent={}", agent_id)),
-                                    message_id: None,
-                                };
-                                let _ = send_push_to_user(
-                                    &state.db,
-                                    &state.config,
-                                    &owner_id,
-                                    &push_payload,
-                                ).await;
-
-                                // Also send real-time WS notification to owner
-                                state.ws.send_to_user(&owner_id, &json!({
-                                    "type": "security_alert",
-                                    "agentId": agent_id,
-                                    "agentName": agent_name,
-                                    "event": "unauthorized_connection",
-                                    "message": format!("{} 的 bot token 疑似外洩，有非授權連線嘗試。", agent_name),
-                                }));
-
-                                tracing::warn!(
-                                    "Agent WS REJECTED (owner_protection): agentId={} name=\"{}\" owner={}",
-                                    agent_id, agent_name, owner_id
-                                );
-
-                                let _ = tx.send(serde_json::to_string(&json!({
-                                    "type": "auth_error",
-                                    "error": "Owner protection is enabled. Provide a valid ownerToken."
-                                })).unwrap());
-                                return None;
-                            }
-                        }
+                    Ok(Some((agent_id, agent_name))) => {
                         // Close any existing connection for this agent
                         if let Some((_, (_, old_sender))) = state.ws.agent_connections.remove(&agent_id) {
                             // The old connection will close when sender is dropped
