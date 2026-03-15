@@ -215,7 +215,7 @@ export default function LoungeSettingsPage() {
     try {
       const formData = new FormData();
       formData.append("file", audioBlob, "voice-sample.webm");
-      const res = await api<{ url: string }>("/api/uploads", {
+      const res = await api<{ url: string }>("/api/auth/upload-avatar", {
         method: "POST",
         body: formData,
       });
