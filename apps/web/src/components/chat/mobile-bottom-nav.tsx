@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, Users, UserPlus, Wallet, Mic,
   Palette, Store, Settings, Smile, PenTool, Plus, X, Radio, BookOpen, Send,
-  Brain, BookHeart, Eye, type LucideIcon,
+  Brain, BookHeart, Eye, LayoutDashboard, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
@@ -19,6 +19,7 @@ import { AddShortcutSheet } from "./add-shortcut-sheet";
 const NAV_ICONS: Record<string, LucideIcon> = {
   chat: MessageSquare,
   office: Building2,
+  dashboard: LayoutDashboard,
   friends: UserPlus,
   settings: Settings,
 };
@@ -60,6 +61,7 @@ export function MobileBottomNav() {
 
   const getActiveId = () => {
     if (pathname === "/" || pathname.startsWith("/chat")) return "chat";
+    if (pathname.startsWith("/official") || pathname.startsWith("/lounge")) return "office";
     if (pathname.startsWith("/office")) return "office";
     if (pathname.startsWith("/friends")) return "friends";
     if (pathname.startsWith("/settings")) return "settings";
@@ -249,12 +251,16 @@ export function MobileBottomNav() {
           onClick={() => router.push("/")}
         />
 
-        {/* Office */}
+        {/* Office / Dashboard */}
         <NavButton
-          iconId="office"
-          label={t("nav.office")}
+          iconId={activeAccount?.type === "official" || activeAccount?.type === "lounge" ? "dashboard" : "office"}
+          label={activeAccount?.type === "official" || activeAccount?.type === "lounge" ? t("nav.dashboard") : t("nav.office")}
           active={activeId === "office"}
-          onClick={() => router.push("/office")}
+          onClick={() => {
+            if (activeAccount?.type === "official") router.push(`/official/${activeAccount.id}/dashboard`);
+            else if (activeAccount?.type === "lounge") router.push(`/lounge/${activeAccount.id}/dashboard`);
+            else router.push("/office");
+          }}
         />
 
         {/* Center Arinova button — elevated */}
@@ -301,7 +307,10 @@ export function MobileBottomNav() {
           iconId="settings"
           label={t("nav.settings")}
           active={activeId === "settings"}
-          onClick={() => router.push("/settings")}
+          onClick={() => {
+            if (activeAccount?.type === "lounge") router.push(`/lounge/${activeAccount.id}/settings`);
+            else router.push("/settings");
+          }}
         />
       </nav>
 
