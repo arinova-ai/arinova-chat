@@ -48,15 +48,6 @@ function CommunityBrowseContent() {
   const limit = 20;
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Track user's joined community IDs for navigation
-  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    api<{ communities: Array<{ id: string }> }>("/api/communities/joined")
-      .then((data) => setJoinedIds(new Set(data.communities.map((c) => c.id))))
-      .catch(() => {});
-  }, []);
-
   const fetchCommunities = useCallback(
     async (currentOffset: number) => {
       setLoading(true);
@@ -156,7 +147,7 @@ function CommunityBrowseContent() {
                     key={c.id}
                     community={c}
                     onClick={() => {
-                      if (joinedIds.has(c.id) && c.conversationId) {
+                      if (c.conversationId) {
                         router.push(`/?c=${c.conversationId}`);
                       } else {
                         router.push(`/community/${c.id}`);
