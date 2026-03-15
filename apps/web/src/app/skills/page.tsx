@@ -44,6 +44,8 @@ interface Skill {
   createdBy: string | null;
   installCount: number;
   sourceUrl?: string | null;
+  nameI18n?: Record<string, string>;
+  descriptionI18n?: Record<string, string>;
   isFavorited?: boolean;
   installedAgentIds?: string[];
   createdAt: string;
@@ -82,19 +84,15 @@ type TabKey = (typeof TAB_KEYS)[number];
 
 // ===== Main Content =====
 
-/** Translate a skill's name/description using locale keys, falling back to DB value */
+/** Translate a skill's name/description using DB i18n fields, falling back to English */
 function useSkillI18n() {
-  const { t } = useTranslation();
+  const { locale } = useTranslation();
   return {
-    skillName: (skill: { slug: string; name: string }) => {
-      const key = `skill.n.${skill.slug}`;
-      const translated = t(key);
-      return translated === key ? skill.name : translated;
+    skillName: (skill: { name: string; nameI18n?: Record<string, string> }) => {
+      return skill.nameI18n?.[locale] ?? skill.name;
     },
-    skillDesc: (skill: { slug: string; description: string }) => {
-      const key = `skill.d.${skill.slug}`;
-      const translated = t(key);
-      return translated === key ? skill.description : translated;
+    skillDesc: (skill: { description: string; descriptionI18n?: Record<string, string> }) => {
+      return skill.descriptionI18n?.[locale] ?? skill.description;
     },
   };
 }
