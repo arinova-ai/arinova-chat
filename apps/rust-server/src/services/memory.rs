@@ -30,7 +30,7 @@ const EMBEDDING_BATCH_SIZE: usize = 100;
 const CHUNK_CHAR_LIMIT: usize = 120_000;
 
 /// Path to the claude CLI binary on the staging server
-const CLAUDE_CLI_PATH: &str = "/root/.cargo/bin/claude";
+const CLAUDE_CLI_PATH: &str = "/root/.local/bin/claude";
 
 /// Truncate a string to at most `max_bytes` without splitting a UTF-8 character.
 fn safe_truncate(s: &str, max_bytes: usize) -> &str {
