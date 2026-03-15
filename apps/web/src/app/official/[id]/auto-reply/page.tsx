@@ -99,7 +99,7 @@ export default function AutoReplyPage({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push(`/official/${accountId}/dashboard`)}
+          onClick={() => router.back()}
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>

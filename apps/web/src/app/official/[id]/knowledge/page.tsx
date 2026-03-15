@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Plus,
@@ -40,6 +40,7 @@ export default function KnowledgeBasePage({
 }) {
   const { id } = use(params);
   const { t } = useTranslation();
+  const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<KbTab>("file");
   const [items, setItems] = useState<KnowledgeItem[]>([]);
@@ -154,11 +155,9 @@ export default function KnowledgeBasePage({
     <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)]">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
-        <Link href={`/official/${id}/dashboard`}>
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold truncate">
             {t("official.knowledge.title")}

@@ -148,7 +148,7 @@ export default function FansPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push(`/lounge/${accountId}/dashboard`)}
+          onClick={() => router.back()}
           className="shrink-0"
         >
           <ArrowLeft className="h-5 w-5" />

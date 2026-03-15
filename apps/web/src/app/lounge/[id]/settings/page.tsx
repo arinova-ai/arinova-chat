@@ -280,7 +280,7 @@ export default function LoungeSettingsPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push(`/lounge/${accountId}/dashboard`)}
+          onClick={() => router.back()}
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />
