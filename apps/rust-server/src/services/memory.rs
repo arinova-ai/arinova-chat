@@ -465,11 +465,25 @@ async fn call_claude_cli_with_retry(
         // Write chunk_text via stdin (avoids command line argument length limits)
         if let Some(mut stdin) = child.stdin.take() {
             use tokio::io::AsyncWriteExt;
-            let _ = stdin.write_all(chunk_text.as_bytes()).await;
+            stdin.write_all(chunk_text.as_bytes()).await.context("Failed to write chunk to claude CLI stdin")?;
             drop(stdin); // close stdin to signal EOF
         }
 
-        let output = child.wait_with_output().await.context("claude CLI process failed")?;
+        // 5-minute timeout to prevent hanging if claude CLI stalls
+        let output = match tokio::time::timeout(
+            std::time::Duration::from_secs(300),
+            child.wait_with_output(),
+        ).await {
+            Ok(result) => result.context("claude CLI process failed")?,
+            Err(_) => {
+                if attempt == 0 {
+                    tracing::warn!("Chunk {} attempt 1: claude CLI timed out after 5 min, retrying...", chunk_idx);
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    continue;
+                }
+                return Err(anyhow!("claude CLI timed out after 5 min (chunk {})", chunk_idx));
+            }
+        };
 
         if output.status.success() {
             let text = String::from_utf8_lossy(&output.stdout).to_string();
