@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { BACKEND_URL } from "@/lib/config";
+
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
 import { AuthGuard } from "@/components/auth-guard";
@@ -13,14 +13,9 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   Loader2,
-  Send,
   Coins,
   Users,
   Bot,
-  PanelRightOpen,
-  PanelRightClose,
-  AlertCircle,
-  AtSign,
   X,
   BadgeCheck,
   MessageSquare,
@@ -30,11 +25,12 @@ import {
   Settings,
   BookText,
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CommunitySettingsSheet } from "@/components/chat/community-settings";
 import { WikiPanel } from "@/components/chat/wiki-panel";
 import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/utils";
-import { AudioPlayer } from "@/components/chat/audio-player";
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,6 +52,7 @@ interface Community {
   category: string | null;
   verified: boolean;
   csMode: string | null;
+  conversationId: string | null;
   requireApproval?: boolean;
   approvalQuestions?: string[];
   agentJoinPolicy?: string;
@@ -80,19 +77,6 @@ interface Agent {
   description: string;
   model: string;
   addedAt: string;
-}
-
-interface Message {
-  id: string;
-  userId: string | null;
-  agentListingId: string | null;
-  content: string;
-  messageType: string;
-  createdAt: string;
-  userName: string | null;
-  userImage: string | null;
-  agentName: string | null;
-  ttsAudioUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,25 +158,14 @@ function CommunityDetailContent() {
   const [community, setCommunity] = useState<Community | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [isMember, setIsMember] = useState(false);
   const [membershipChecked, setMembershipChecked] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-
-  // Chat
-  const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
-
-  // Agent picker
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [agentPickerOpen, setAgentPickerOpen] = useState(false);
 
   // Sidebar
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileMembersOpen, setMobileMembersOpen] = useState(false);
 
   // Community settings sheet
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -204,11 +177,6 @@ function CommunityDetailContent() {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyForm, setVerifyForm] = useState({ businessName: "", businessRegistration: "", documentsUrl: "" });
   const [verifySubmitting, setVerifySubmitting] = useState(false);
-
-  // Refs
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [notFound, setNotFound] = useState(false);
 
@@ -256,17 +224,6 @@ function CommunityDetailContent() {
         setIsMember(userIsMember);
         setMembershipChecked(true);
 
-        // Load messages if member
-        if (userIsMember) {
-          try {
-            const msgData = await api<{ messages: Message[] }>(
-              `/api/communities/${id}/messages?limit=50`
-            );
-            if (!cancelled) setMessages(msgData.messages);
-          } catch {
-            // may fail if not member — handled
-          }
-        }
       } catch {
         // members/agents API may fail — still grant access to creator
         if (!cancelled && isCreator) {
@@ -285,37 +242,13 @@ function CommunityDetailContent() {
     };
   }, [id, currentUserId]);
 
-  // Abort streaming on unmount
+  // ------ Redirect members to main chat ------
   useEffect(() => {
-    return () => abortRef.current?.abort();
-  }, []);
-
-  // Auto-scroll on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // ------ Load more messages ------
-
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || messages.length === 0) return;
-    setLoadingMore(true);
-    try {
-      const oldest = messages[0].createdAt;
-      const data = await api<{ messages: Message[] }>(
-        `/api/communities/${id}/messages?before=${encodeURIComponent(oldest)}&limit=50`
-      );
-      if (data.messages.length === 0) {
-        setHasMore(false);
-      } else {
-        setMessages((prev) => [...data.messages, ...prev]);
-      }
-    } catch {
-      // handled
-    } finally {
-      setLoadingMore(false);
+    if (membershipChecked && isMember && community?.conversationId) {
+      useChatStore.getState().setActiveConversation(community.conversationId);
+      router.replace(`/?c=${community.conversationId}`);
     }
-  }, [id, messages, loadingMore, hasMore]);
+  }, [membershipChecked, isMember, community?.conversationId, router]);
 
   // ------ Join ------
 
@@ -328,14 +261,8 @@ function CommunityDetailContent() {
         router.push(`/?c=${joinRes.conversationId}`);
         return;
       }
-      // Fallback: stay on community page as member
+      // Fallback: reload page to pick up membership
       setIsMember(true);
-      const [membersData, msgData] = await Promise.all([
-        api<{ members: Member[] }>(`/api/communities/${id}/members`),
-        api<{ messages: Message[] }>(`/api/communities/${id}/messages?limit=50`),
-      ]);
-      setMembers(membersData.members);
-      setMessages(msgData.messages);
       if (community) {
         setCommunity({ ...community, memberCount: community.memberCount + 1 });
       }
@@ -345,191 +272,6 @@ function CommunityDetailContent() {
       setJoining(false);
     }
   }, [id, community, router]);
-
-  // ------ Send text message ------
-
-  const sendTextMessage = useCallback(async () => {
-    const text = input.trim();
-    if (!text || streaming) return;
-    setInput("");
-    setError(null);
-
-    try {
-      const msg = await api<Message>(`/api/communities/${id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content: text }),
-      });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: msg.id,
-          userId: currentUserId ?? null,
-          agentListingId: null,
-          content: text,
-          messageType: "text",
-          createdAt: new Date().toISOString(),
-          userName: session?.user?.name ?? null,
-          userImage: (session?.user as Record<string, unknown>)?.image as string | null ?? null,
-          agentName: null,
-        },
-      ]);
-    } catch {
-      // handled
-    }
-  }, [input, streaming, id, currentUserId, session]);
-
-  // ------ Send agent message (SSE) ------
-
-  const sendAgentMessage = useCallback(async () => {
-    const text = input.trim();
-    if (!text || streaming || !selectedAgent) return;
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setInput("");
-    setError(null);
-    setStreaming(true);
-
-    // Add user message
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      userId: currentUserId ?? null,
-      agentListingId: null,
-      content: text,
-      messageType: "text",
-      createdAt: new Date().toISOString(),
-      userName: session?.user?.name ?? null,
-      userImage: (session?.user as Record<string, unknown>)?.image as string | null ?? null,
-      agentName: null,
-    };
-    setMessages((prev) => [...prev, userMsg]);
-
-    // Add empty assistant message
-    const assistantId = crypto.randomUUID();
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: assistantId,
-        userId: null,
-        agentListingId: selectedAgent.listingId,
-        content: "",
-        messageType: "text",
-        createdAt: new Date().toISOString(),
-        userName: null,
-        userImage: null,
-        agentName: selectedAgent.agentName,
-      },
-    ]);
-
-    const agentId = selectedAgent.listingId;
-    setSelectedAgent(null);
-
-    try {
-      const res = await fetch(
-        `${BACKEND_URL}/api/communities/${id}/agent-chat`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: text,
-            listingId: agentId,
-          }),
-          signal: controller.signal,
-        }
-      );
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6);
-          try {
-            const event = JSON.parse(jsonStr);
-
-            if (event.type === "chunk") {
-              setMessages((prev) => {
-                const copy = [...prev];
-                const last = copy[copy.length - 1];
-                if (last && last.agentListingId) {
-                  copy[copy.length - 1] = {
-                    ...last,
-                    content: last.content + event.content,
-                  };
-                }
-                return copy;
-              });
-            } else if (event.type === "audio_ready") {
-              setMessages((prev) => {
-                const copy = [...prev];
-                const last = copy[copy.length - 1];
-                if (last?.agentListingId) {
-                  copy[copy.length - 1] = { ...last, ttsAudioUrl: event.audioUrl };
-                }
-                return copy;
-              });
-            } else if (event.type === "error") {
-              setError(event.message ?? "Agent error");
-              // Remove empty assistant placeholder
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.agentListingId && !last.content) {
-                  return prev.slice(0, -1);
-                }
-                return prev;
-              });
-            }
-          } catch {
-            // skip malformed JSON
-          }
-        }
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      const msg =
-        err instanceof Error ? err.message : "Failed to send message";
-      setError(msg);
-      // Remove empty assistant
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.agentListingId && !last.content) {
-          return prev.slice(0, -1);
-        }
-        return prev;
-      });
-    } finally {
-      setStreaming(false);
-    }
-  }, [input, streaming, selectedAgent, id, currentUserId, session]);
-
-  // ------ Send ------
-
-  const handleSend = useCallback(() => {
-    if (selectedAgent) {
-      sendAgentMessage();
-    } else {
-      sendTextMessage();
-    }
-  }, [selectedAgent, sendAgentMessage, sendTextMessage]);
 
   const handleSubmitVerification = useCallback(async () => {
     setVerifySubmitting(true);
@@ -543,13 +285,6 @@ function CommunityDetailContent() {
       setVerifySubmitting(false);
     }
   }, [id, verifyForm]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   // ------ Render ------
 
@@ -566,13 +301,13 @@ function CommunityDetailContent() {
       <div className="flex h-dvh items-center justify-center bg-background">
         <div className="text-center space-y-2">
           <p className="text-lg font-semibold text-muted-foreground">
-            Community not found
+            {t("community.detail.notFound")}
           </p>
           <Button
             variant="secondary"
             onClick={() => router.push("/community")}
           >
-            Back to Communities
+            {t("community.detail.backToCommunities")}
           </Button>
         </div>
       </div>
@@ -626,7 +361,7 @@ function CommunityDetailContent() {
                         : "bg-purple-500/15 text-purple-400"
                     )}
                   >
-                    {community.type === "official" ? "Official" : community.type === "lounge" ? "Lounge" : "Community"}
+                    {t(`community.type.${community.type === "community" ? "community" : community.type}`)}
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground flex items-center gap-2">
@@ -637,7 +372,7 @@ function CommunityDetailContent() {
                   {community.agentCallFee > 0 && (
                     <span className="flex items-center gap-1">
                       <Coins className="h-3 w-3 text-yellow-500" />
-                      {community.agentCallFee}/call
+                      {community.agentCallFee}{t("community.detail.perCall")}
                     </span>
                   )}
                 </p>
@@ -660,7 +395,7 @@ function CommunityDetailContent() {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() => setVerifyOpen(true)}
-                    title="Apply for verification"
+                    title={t("community.detail.applyVerification")}
                   >
                     <ShieldCheck className="h-4 w-4 text-blue-400" />
                   </Button>
@@ -677,8 +412,17 @@ function CommunityDetailContent() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-8 w-8 hidden md:inline-flex"
                   onClick={() => setSidebarOpen((v) => !v)}
+                  title={t("chat.header.members")}
+                >
+                  <Users className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 md:hidden"
+                  onClick={() => setMobileMembersOpen(true)}
                   title={t("chat.header.members")}
                 >
                   <Users className="h-4 w-4" />
@@ -723,28 +467,28 @@ function CommunityDetailContent() {
           {verifyOpen && (
             <div className="shrink-0 border-b border-border bg-card/50 px-4 py-3 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Apply for Verification</h3>
+                <h3 className="text-sm font-semibold">{t("community.detail.applyVerification")}</h3>
                 <button onClick={() => setVerifyOpen(false)} className="text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <input
                 type="text"
-                placeholder="Business name"
+                placeholder={t("community.detail.businessName")}
                 value={verifyForm.businessName}
                 onChange={(e) => setVerifyForm((f) => ({ ...f, businessName: e.target.value }))}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
               <input
                 type="text"
-                placeholder="Business registration number"
+                placeholder={t("community.detail.businessRegNumber")}
                 value={verifyForm.businessRegistration}
                 onChange={(e) => setVerifyForm((f) => ({ ...f, businessRegistration: e.target.value }))}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
               <input
                 type="text"
-                placeholder="Documents URL (optional)"
+                placeholder={t("community.detail.documentsUrl")}
                 value={verifyForm.documentsUrl}
                 onChange={(e) => setVerifyForm((f) => ({ ...f, documentsUrl: e.target.value }))}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
@@ -755,7 +499,7 @@ function CommunityDetailContent() {
                 disabled={!verifyForm.businessName.trim() || verifySubmitting}
                 onClick={handleSubmitVerification}
               >
-                {verifySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit"}
+                {verifySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.detail.submit")}
               </Button>
             </div>
           )}
@@ -785,7 +529,7 @@ function CommunityDetailContent() {
                         }}
                       >
                         <MessageSquare className="h-4 w-4" />
-                        Start Chat
+                        {t("community.detail.startChat")}
                       </Button>
                     </div>
                   </div>
@@ -808,7 +552,7 @@ function CommunityDetailContent() {
                         }}
                       >
                         <Mic className="h-4 w-4" />
-                        Start Voice Chat
+                        {t("community.detail.startVoiceChat")}
                       </Button>
                     </div>
                   </div>
@@ -884,211 +628,10 @@ function CommunityDetailContent() {
               );
             })()
           ) : (
-            /* ---------- Member: chat messages + input ---------- */
-            <>
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-                {hasMore && messages.length > 0 && (
-                  <div className="flex justify-center">
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={loadMore}
-                      disabled={loadingMore}
-                    >
-                      {loadingMore ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        t("community.detail.loadEarlier")
-                      )}
-                    </Button>
-                  </div>
-                )}
-
-                {messages.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-2">
-                    <Users className="h-12 w-12 opacity-40" />
-                    <p className="text-sm font-medium">{t("community.detail.noMessages")}</p>
-                    <p className="text-xs">{t("community.detail.beFirst")}</p>
-                  </div>
-                )}
-
-                {messages.map((msg) => {
-                  const isOwn = msg.userId === currentUserId;
-                  const isAgent = !!msg.agentListingId;
-
-                  return (
-                    <div
-                      key={msg.id}
-                      className={cn(
-                        "flex",
-                        isOwn ? "justify-end" : "justify-start"
-                      )}
-                    >
-                      <div className={cn("max-w-[80%]", isOwn ? "" : "flex gap-2")}>
-                        {!isOwn && (
-                          <div className="shrink-0 mt-1">
-                            {isAgent ? (
-                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500/15">
-                                <Bot className="h-3.5 w-3.5 text-purple-400" />
-                              </div>
-                            ) : msg.userImage ? (
-                              <img
-                                src={msg.userImage}
-                                alt=""
-                                className="h-7 w-7 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand/15 text-[10px] font-bold text-brand-text">
-                                {(msg.userName ?? "?")[0]}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div>
-                          {!isOwn && (
-                            <p className="mb-0.5 text-[10px] font-medium text-muted-foreground">
-                              {isAgent ? msg.agentName : msg.userName}
-                            </p>
-                          )}
-                          <div
-                            className={cn(
-                              "rounded-2xl px-3 py-2 text-sm",
-                              isOwn
-                                ? "bg-brand text-white rounded-br-md"
-                                : isAgent
-                                ? "bg-purple-500/10 border border-purple-500/20 rounded-bl-md"
-                                : "bg-card border border-border rounded-bl-md"
-                            )}
-                          >
-                            <p className="whitespace-pre-wrap break-words">
-                              {msg.content}
-                            </p>
-                            {msg.ttsAudioUrl && (
-                              <div className="mt-1.5">
-                                <AudioPlayer src={msg.ttsAudioUrl} />
-                              </div>
-                            )}
-                            {isAgent && !msg.content && streaming && (
-                              <span className="inline-flex gap-0.5">
-                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse" />
-                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse [animation-delay:150ms]" />
-                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse [animation-delay:300ms]" />
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {error && (
-                  <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                    {error}
-                    {error.includes("Insufficient") && (
-                      <Button
-                        variant="secondary"
-                        size="xs"
-                        className="ml-auto"
-                        onClick={() => router.push("/wallet")}
-                      >
-                        Top Up
-                      </Button>
-                    )}
-                  </div>
-                )}
-
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Input area */}
-              <div className="shrink-0 border-t border-border p-3 pb-24 md:pb-3">
-                {/* Agent picker dropdown */}
-                {agentPickerOpen && agents.length > 0 && (
-                  <div className="mb-2 rounded-lg border border-border bg-card p-2 max-h-40 overflow-y-auto">
-                    {agents.map((a) => (
-                      <button
-                        key={a.listingId}
-                        type="button"
-                        onClick={() => {
-                          setSelectedAgent(a);
-                          setAgentPickerOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
-                      >
-                        <Bot className="h-4 w-4 text-purple-400 shrink-0" />
-                        <span className="truncate">{a.agentName}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Selected agent indicator */}
-                {selectedAgent && (
-                  <div className="mb-2 flex items-center gap-2 rounded-lg bg-purple-500/10 px-3 py-1.5 text-xs">
-                    <Bot className="h-3.5 w-3.5 text-purple-400" />
-                    <span className="text-purple-300">
-                      Messaging @{selectedAgent.agentName}
-                    </span>
-                    {community.agentCallFee > 0 && (
-                      <span className="flex items-center gap-0.5 text-yellow-500">
-                        <Coins className="h-3 w-3" />
-                        {community.agentCallFee}
-                      </span>
-                    )}
-                    <button
-                      onClick={() => setSelectedAgent(null)}
-                      className="ml-auto text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex items-end gap-2">
-                  {agents.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setAgentPickerOpen((v) => !v)}
-                      className={cn(
-                        agentPickerOpen && "bg-accent"
-                      )}
-                    >
-                      <AtSign className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={
-                      selectedAgent
-                        ? t("community.detail.messageAgent").replace("{name}", selectedAgent.agentName)
-                        : t("community.detail.typeMessage")
-                    }
-                    rows={1}
-                    className="flex-1 resize-none rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    style={{ maxHeight: 120 }}
-                  />
-                  <Button
-                    size="sm"
-                    className="brand-gradient-btn h-10 w-10 shrink-0 rounded-xl p-0"
-                    disabled={!input.trim() || streaming}
-                    onClick={handleSend}
-                  >
-                    {streaming ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </>
+            /* ---------- Member: redirecting to main chat ---------- */
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
           )}
 
           <MobileBottomNav />
@@ -1100,7 +643,7 @@ function CommunityDetailContent() {
             {/* Members */}
             <div className="p-4">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Members ({members.length})
+                {t("community.detail.membersCount", { count: String(members.length) })}
               </h3>
               <div className="space-y-1.5">
                 {members.map((m) => (
@@ -1133,7 +676,7 @@ function CommunityDetailContent() {
             {agents.length > 0 && (
               <div className="p-4 border-t border-border">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  AI Agents ({agents.length})
+                  {t("community.detail.aiAgentsCount", { count: String(agents.length) })}
                 </h3>
                 <div className="space-y-1.5">
                   {agents.map((a) => (
@@ -1161,6 +704,60 @@ function CommunityDetailContent() {
           </div>
         )}
       </div>
+
+      {/* Mobile Members Sheet */}
+      <Sheet open={mobileMembersOpen} onOpenChange={setMobileMembersOpen}>
+        <SheetContent side="right" className="w-80 sm:max-w-sm p-0 overflow-y-auto">
+          <SheetHeader className="px-4 pt-4 pb-2">
+            <SheetTitle className="text-base">{t("chat.header.members")}</SheetTitle>
+          </SheetHeader>
+          <div className="border-b border-border" />
+          <div className="p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              {t("community.detail.membersCount", { count: String(members.length) })}
+            </h3>
+            <div className="space-y-1.5">
+              {members.map((m) => (
+                <div key={m.id} className="flex items-center gap-2">
+                  {m.userImage ? (
+                    <img src={m.userImage} alt="" className="h-6 w-6 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-brand/15 text-[10px] font-bold text-brand-text">
+                      {m.userName[0]}
+                    </div>
+                  )}
+                  <span className="text-xs truncate flex-1">{m.userName}</span>
+                  {m.role !== "member" && (
+                    <span className="text-[10px] text-muted-foreground capitalize">{m.role}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          {agents.length > 0 && (
+            <div className="p-4 border-t border-border">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                {t("community.detail.aiAgentsCount", { count: String(agents.length) })}
+              </h3>
+              <div className="space-y-1.5">
+                {agents.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2">
+                    {a.avatarUrl ? (
+                      <img src={a.avatarUrl} alt="" className="h-6 w-6 rounded-lg object-cover" />
+                    ) : (
+                      <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-purple-500/15">
+                        <Bot className="h-3 w-3 text-purple-400" />
+                      </div>
+                    )}
+                    <span className="text-xs truncate flex-1">{a.agentName}</span>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
