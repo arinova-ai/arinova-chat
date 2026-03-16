@@ -253,9 +253,13 @@ function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
         method: "POST",
         body: JSON.stringify({ agentIds: selectedAgentIds }),
       });
+      // Update local state immediately so checkmarks appear without refresh
+      setSelectedSkill({
+        ...selectedSkill,
+        installedAgentIds: [...(selectedSkill.installedAgentIds ?? []), ...selectedAgentIds],
+      });
       setShowInstallDialog(false);
       setSelectedAgentIds([]);
-      // Refresh list to update installedAgentIds
       fetchSkills(1);
     } catch {
       // auto-handled
@@ -725,6 +729,11 @@ function FavoritesTab({ agents }: { agents: { id: string; name: string }[] }) {
       await api(`/api/skills/${selectedSkill.id}/install`, {
         method: "POST",
         body: JSON.stringify({ agentIds: selectedAgentIds }),
+      });
+      // Update local state immediately so checkmarks appear without refresh
+      setSelectedSkill({
+        ...selectedSkill,
+        installedAgentIds: [...(selectedSkill.installedAgentIds ?? []), ...selectedAgentIds],
       });
       setShowInstallDialog(false);
       setSelectedAgentIds([]);
