@@ -564,10 +564,21 @@ async fn handle_message(
                         }
                     }
 
+                    // Anonymize userId for community conversations
+                    let typing_user_id: String = if conv_type == "community" {
+                        use sha2::{Sha256, Digest};
+                        let mut hasher = Sha256::new();
+                        hasher.update(conversation_id.as_bytes());
+                        hasher.update(user_id.as_bytes());
+                        format!("anon-{}", hex::encode(&hasher.finalize()[..8]))
+                    } else {
+                        user_id.to_string()
+                    };
+
                     ws_state.broadcast_to_members(&member_ids, &json!({
                         "type": "user_typing",
                         "conversationId": conversation_id,
-                        "userId": user_id,
+                        "userId": typing_user_id,
                         "userName": sender_name
                     }), redis);
                 }
@@ -1052,6 +1063,16 @@ pub async fn trigger_agent_response(
 
             // Broadcast new message to all conversation members
             let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
+            // Anonymize identity fields for community conversations
+            let (broadcast_user_id, broadcast_username, broadcast_is_verified): (String, &str, bool) = if conv_type == "community" {
+                use sha2::{Sha256, Digest};
+                let mut hasher = Sha256::new();
+                hasher.update(conversation_id.as_bytes());
+                hasher.update(user_id.as_bytes());
+                (format!("anon-{}", hex::encode(&hasher.finalize()[..8])), "", false)
+            } else {
+                (user_id.to_string(), sender_username, sender_is_verified)
+            };
             let msg_event = json!({
                 "type": "new_message",
                 "conversationId": conversation_id,
@@ -1063,11 +1084,11 @@ pub async fn trigger_agent_response(
                     "role": "user",
                     "content": content,
                     "status": "completed",
-                    "senderUserId": user_id,
+                    "senderUserId": broadcast_user_id,
                     "senderUserName": &sender_name,
-                    "senderUsername": sender_username,
+                    "senderUsername": broadcast_username,
                     "senderUserImage": sender_image,
-                    "senderIsVerified": sender_is_verified,
+                    "senderIsVerified": broadcast_is_verified,
                     "replyToId": reply_to_id,
                     "threadId": thread_id,
                     "createdAt": chrono::Utc::now().to_rfc3339(),
@@ -1306,6 +1327,16 @@ pub async fn trigger_agent_response(
             let sender_image = sender_image_owned.as_deref();
 
             let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
+            // Anonymize identity fields for community conversations
+            let (broadcast_user_id, broadcast_username, broadcast_is_verified): (String, &str, bool) = if conv_type == "community" {
+                use sha2::{Sha256, Digest};
+                let mut hasher = Sha256::new();
+                hasher.update(conversation_id.as_bytes());
+                hasher.update(user_id.as_bytes());
+                (format!("anon-{}", hex::encode(&hasher.finalize()[..8])), "", false)
+            } else {
+                (user_id.to_string(), sender_username, sender_is_verified)
+            };
             let user_msg_event = json!({
                 "type": "new_message",
                 "conversationId": conversation_id,
@@ -1317,11 +1348,11 @@ pub async fn trigger_agent_response(
                     "role": "user",
                     "content": content,
                     "status": "completed",
-                    "senderUserId": user_id,
+                    "senderUserId": broadcast_user_id,
                     "senderUserName": &sender_name,
-                    "senderUsername": sender_username,
+                    "senderUsername": broadcast_username,
                     "senderUserImage": sender_image,
-                    "senderIsVerified": sender_is_verified,
+                    "senderIsVerified": broadcast_is_verified,
                     "replyToId": reply_to_id,
                     "threadId": thread_id,
                     "metadata": msg_metadata,
@@ -1688,6 +1719,17 @@ pub(crate) async fn do_trigger_agent_response(
     .flatten()
     .and_then(|(u,)| u);
 
+    // Anonymize sender identity for community conversations (agents shouldn't see real identity either)
+    let (task_sender_user_id, task_sender_username): (String, Option<String>) = if conv_type == "community" {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(conversation_id.as_bytes());
+        hasher.update(user_id.as_bytes());
+        (format!("anon-{}", hex::encode(&hasher.finalize()[..8])), None)
+    } else {
+        (user_id.to_string(), sender_username)
+    };
+
     // Build task payload with group context and reply context
     let mut task_payload = json!({
         "type": "task",
@@ -1695,8 +1737,8 @@ pub(crate) async fn do_trigger_agent_response(
         "conversationId": conversation_id,
         "content": task_content,
         "conversationType": conv_type,
-        "senderUserId": user_id,
-        "senderUsername": sender_username
+        "senderUserId": task_sender_user_id,
+        "senderUsername": task_sender_username
     });
 
     // Add sticker metadata to task payload if present
@@ -2056,6 +2098,21 @@ pub(crate) async fn do_trigger_agent_response(
                                                 "messageId": &mid,
                                                 "linkPreviews": previews,
                                             }), &redis3);
+                                        }
+                                    });
+                                }
+
+                                // Spawn auto memory extraction in background (throttled)
+                                {
+                                    let db4 = db.clone();
+                                    let aid = agent_id.clone();
+                                    let cid4 = conversation_id.clone();
+                                    tokio::spawn(async move {
+                                        if let (Ok(aid_uuid), Ok(cid_uuid)) = (
+                                            uuid::Uuid::parse_str(&aid),
+                                            uuid::Uuid::parse_str(&cid4),
+                                        ) {
+                                            crate::routes::agent_memories::maybe_extract_memories(&db4, aid_uuid, cid_uuid).await;
                                         }
                                     });
                                 }

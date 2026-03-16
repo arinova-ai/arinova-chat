@@ -393,15 +393,26 @@ async fn list_members(
             } else {
                 &r.5
             };
+            // Anonymize userId, username, and isVerified for community conversations
+            let (shown_user_id, shown_username, shown_is_verified) = if is_community {
+                use sha2::{Sha256, Digest};
+                let mut hasher = Sha256::new();
+                hasher.update(id.as_bytes());
+                hasher.update(r.1.as_bytes());
+                let anon_id = format!("anon-{}", hex::encode(&hasher.finalize()[..8]));
+                (anon_id, None, false)
+            } else {
+                (r.1.clone(), r.6.clone(), r.7)
+            };
             json!({
                 "id": r.0,
-                "userId": r.1,
+                "userId": shown_user_id,
                 "role": r.2,
                 "joinedAt": r.3.and_utc().to_rfc3339(),
                 "name": shown_name,
                 "image": shown_image,
-                "username": r.6,
-                "isVerified": r.7,
+                "username": shown_username,
+                "isVerified": shown_is_verified,
             })
         })
         .collect();

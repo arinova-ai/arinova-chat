@@ -550,6 +550,172 @@ async fn extract_memories(
     .into_response()
 }
 
+/// Auto-extract memories in the background after an agent reply completes.
+/// Throttle: only runs if last extraction was > 30 minutes ago (or never).
+pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversation_id: Uuid) {
+    const THROTTLE_MINUTES: i64 = 30;
+
+    // Check last_memory_extracted_at on the agent
+    let last_extracted: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT last_memory_extracted_at FROM agents WHERE id = $1",
+    )
+    .bind(agent_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(last) = last_extracted {
+        let elapsed = chrono::Utc::now() - last;
+        if elapsed.num_minutes() < THROTTLE_MINUTES {
+            return; // Too soon, skip
+        }
+    }
+
+    // Optimistically update last_memory_extracted_at to prevent concurrent runs
+    let now = chrono::Utc::now();
+    let updated = sqlx::query(
+        r#"UPDATE agents SET last_memory_extracted_at = $1
+           WHERE id = $2
+             AND (last_memory_extracted_at IS NULL OR last_memory_extracted_at < $3)"#,
+    )
+    .bind(now)
+    .bind(agent_id)
+    .bind(now - chrono::Duration::minutes(THROTTLE_MINUTES))
+    .execute(db)
+    .await;
+
+    // If no rows updated, another task claimed the slot — skip
+    if updated.map(|r| r.rows_affected()).unwrap_or(0) == 0 {
+        return;
+    }
+
+    tracing::info!(
+        "auto_extract_memories: starting for agent={} conv={}",
+        agent_id, conversation_id
+    );
+
+    // Determine since timestamp: use the previous last_memory_extracted_at
+    let since = last_extracted.map(|t| t.to_rfc3339());
+
+    // Fetch recent messages (incremental if since is set)
+    let mut msg_sql = String::from(
+        r#"SELECT
+             CASE WHEN m.role::text = 'user' THEN COALESCE(u.name, 'User') ELSE COALESCE(a.name, 'Agent') END AS sender_name,
+             m.content,
+             m.created_at
+           FROM messages m
+           LEFT JOIN "user" u ON m.sender_user_id = u.id
+           LEFT JOIN agents a ON m.sender_agent_id = a.id
+           WHERE m.conversation_id = $1 AND m.content IS NOT NULL AND m.content != ''"#,
+    );
+    if since.is_some() {
+        msg_sql.push_str(" AND m.created_at > $2::timestamptz");
+    }
+    msg_sql.push_str(" ORDER BY m.created_at ASC LIMIT 500");
+
+    let messages: Vec<(String, String, chrono::DateTime<chrono::Utc>)> = if let Some(ref s) = since {
+        sqlx::query_as(&msg_sql)
+            .bind(conversation_id)
+            .bind(s)
+            .fetch_all(db)
+            .await
+            .unwrap_or_default()
+    } else {
+        sqlx::query_as(&msg_sql)
+            .bind(conversation_id)
+            .fetch_all(db)
+            .await
+            .unwrap_or_default()
+    };
+
+    if messages.is_empty() {
+        tracing::info!("auto_extract_memories: no new messages, skipping");
+        return;
+    }
+
+    // Build conversation text for Claude
+    let conv_text: String = messages
+        .iter()
+        .map(|(name, content, ts)| format!("[{}] {}: {}", ts.format("%H:%M"), name, content))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Call claude CLI
+    let output = match call_claude_extract(&conv_text).await {
+        Ok(text) => text,
+        Err(e) => {
+            tracing::error!("auto_extract_memories: claude failed: {e}");
+            return;
+        }
+    };
+
+    // Parse JSON lines and upsert
+    let mut count = 0u32;
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() || !line.starts_with('{') {
+            continue;
+        }
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
+            let category = parsed["category"].as_str().unwrap_or("knowledge");
+            let summary = match parsed["summary"].as_str() {
+                Some(s) if !s.is_empty() => s,
+                _ => continue,
+            };
+            let detail = parsed["detail"].as_str();
+            let pattern_key = parsed["pattern_key"]
+                .as_str()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
+
+            let valid_categories = ["correction", "preference", "knowledge", "error"];
+            let cat = if valid_categories.contains(&category) { category } else { "knowledge" };
+
+            let result = if let Some(pk) = pattern_key {
+                sqlx::query(
+                    r#"INSERT INTO agent_memories (agent_id, category, summary, detail, pattern_key, source_conversation_id)
+                       VALUES ($1, $2, $3, $4, $5, $6)
+                       ON CONFLICT (agent_id, pattern_key) DO UPDATE
+                         SET summary = EXCLUDED.summary,
+                             detail = EXCLUDED.detail,
+                             hit_count = agent_memories.hit_count + 1,
+                             last_used_at = NOW()"#,
+                )
+                .bind(agent_id)
+                .bind(cat)
+                .bind(summary)
+                .bind(detail)
+                .bind(pk)
+                .bind(conversation_id)
+                .execute(db)
+                .await
+            } else {
+                sqlx::query(
+                    r#"INSERT INTO agent_memories (agent_id, category, summary, detail, source_conversation_id)
+                       VALUES ($1, $2, $3, $4, $5)"#,
+                )
+                .bind(agent_id)
+                .bind(cat)
+                .bind(summary)
+                .bind(detail)
+                .bind(conversation_id)
+                .execute(db)
+                .await
+            };
+
+            if result.is_ok() {
+                count += 1;
+            }
+        }
+    }
+
+    tracing::info!(
+        "auto_extract_memories: done agent={} conv={} extracted={}",
+        agent_id, conversation_id, count
+    );
+}
+
 /// Call `claude -p --model haiku` to extract memories from conversation text
 async fn call_claude_extract(conv_text: &str) -> anyhow::Result<String> {
     use anyhow::Context;
