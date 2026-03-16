@@ -26,8 +26,8 @@ IMPORTANT: Extract memories in the SAME LANGUAGE as the original conversation. I
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;
 
-/// Max characters per chunk sent to Claude CLI (~30k tokens)
-const CHUNK_CHAR_LIMIT: usize = 120_000;
+/// Max characters per chunk sent to Claude CLI (~15k tokens)
+const CHUNK_CHAR_LIMIT: usize = 60_000;
 
 /// Path to the claude CLI binary on the staging server
 const CLAUDE_CLI_PATH: &str = "/root/.local/bin/claude";
@@ -414,12 +414,10 @@ async fn do_extraction(
                 "Partial extraction: {}/{} chunks succeeded — no successful chunk time range found, keeping existing watermark",
                 chunks_succeeded, chunks.len()
             );
+            // Keep existing watermark (or now if NULL) — never reset to epoch
             extracted_through
                 .map(|dt| chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc))
-                .unwrap_or_else(|| chrono::DateTime::from_naive_utc_and_offset(
-                    chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(),
-                    chrono::Utc,
-                ))
+                .unwrap_or_else(chrono::Utc::now)
         }
     };
 
@@ -489,7 +487,7 @@ async fn call_claude_cli_with_retry(
         let mut cmd = tokio::process::Command::new(CLAUDE_CLI_PATH);
         cmd.arg("-p")
             .arg("--model")
-            .arg("haiku")
+            .arg("claude-haiku-4-5-20251001")
             .arg("--output-format")
             .arg("text")
             .arg("--system-prompt")
@@ -508,12 +506,18 @@ async fn call_claude_cli_with_retry(
         }
 
         // 5-minute timeout to prevent hanging if claude CLI stalls
+        // Capture PID before moving child into wait_with_output
+        let child_pid = child.id();
         let output = match tokio::time::timeout(
             std::time::Duration::from_secs(300),
             child.wait_with_output(),
         ).await {
             Ok(result) => result.context("claude CLI process failed")?,
             Err(_) => {
+                // Kill the orphaned process via PID
+                if let Some(pid) = child_pid {
+                    let _ = std::process::Command::new("kill").arg("-9").arg(pid.to_string()).output();
+                }
                 if attempt == 0 {
                     tracing::warn!("Chunk {} attempt 1: claude CLI timed out after 5 min, retrying...", chunk_idx);
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
