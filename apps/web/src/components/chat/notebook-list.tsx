@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import {
   BookOpen,
+  Brain,
   Plus,
   ArrowLeft,
   MoreHorizontal,
@@ -30,6 +31,7 @@ interface Notebook {
   name: string;
   isDefault: boolean;
   sortOrder: number;
+  includeInCapsule: boolean;
   noteCount: number;
   createdAt: string;
   updatedAt: string;
@@ -163,6 +165,18 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
     }
   };
 
+  const handleToggleCapsule = async (id: string, current: boolean) => {
+    try {
+      await api(`/api/notebooks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ includeInCapsule: !current }),
+      });
+      fetchNotebooks();
+    } catch {
+      // auto-handled
+    }
+  };
+
   // If a notebook is selected, show notes for that notebook
   if (selectedNotebook) {
     if (!inline && !open) return null;
@@ -280,24 +294,37 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
                       {nb.noteCount} {t("notebooks.noteCount")}
+                      {nb.includeInCapsule && <Brain className="h-3 w-3 text-brand/60" />}
                     </div>
                   </div>
 
                   {/* Context menu */}
-                  {!nb.isDefault && (
-                    <Popover open={menuOpenId === nb.id} onOpenChange={(o) => setMenuOpenId(o ? nb.id : null)}>
-                      <PopoverTrigger asChild>
-                        <div
-                          role="button"
-                          onClick={(e) => { e.stopPropagation(); setMenuOpenId(nb.id); }}
-                          className="opacity-0 group-hover:opacity-100 rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
-                        >
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </div>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-36 p-1" align="end" side="bottom">
+                  <Popover open={menuOpenId === nb.id} onOpenChange={(o) => setMenuOpenId(o ? nb.id : null)}>
+                    <PopoverTrigger asChild>
+                      <div
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(nb.id); }}
+                        className="opacity-0 group-hover:opacity-100 rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-1" align="end" side="bottom">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleCapsule(nb.id, nb.includeInCapsule);
+                          setMenuOpenId(null);
+                        }}
+                      >
+                        <Brain className={`h-3 w-3 ${nb.includeInCapsule ? "text-brand" : "text-muted-foreground"}`} />
+                        {nb.includeInCapsule ? t("notebooks.excludeFromCapsule") : t("notebooks.includeInCapsule")}
+                      </button>
+                      {!nb.isDefault && (
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
@@ -310,6 +337,8 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         >
                           <Pencil className="h-3 w-3" /> {t("notebooks.rename")}
                         </button>
+                      )}
+                      {!nb.isDefault && (
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
@@ -321,9 +350,9 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         >
                           <Trash2 className="h-3 w-3" /> {t("notebooks.delete")}
                         </button>
+                      )}
                       </PopoverContent>
                     </Popover>
-                  )}
                 </button>
               )}
             </div>

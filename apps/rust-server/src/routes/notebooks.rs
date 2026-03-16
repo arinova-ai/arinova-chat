@@ -33,6 +33,7 @@ struct NotebookRow {
     name: String,
     is_default: bool,
     sort_order: i32,
+    include_in_capsule: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     note_count: Option<i64>,
@@ -48,6 +49,7 @@ struct CreateNotebookBody {
 struct UpdateNotebookBody {
     name: Option<String>,
     sort_order: Option<i32>,
+    include_in_capsule: Option<bool>,
 }
 
 // ===== Helpers =====
@@ -102,6 +104,7 @@ fn notebook_to_json(row: &NotebookRow) -> serde_json::Value {
         "name": &row.name,
         "isDefault": row.is_default,
         "sortOrder": row.sort_order,
+        "includeInCapsule": row.include_in_capsule,
         "noteCount": row.note_count.unwrap_or(0),
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
@@ -125,7 +128,7 @@ async fn list_notebooks(
 
     let rows = sqlx::query_as::<_, NotebookRow>(
         r#"
-        SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.created_at, n.updated_at,
+        SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, n.created_at, n.updated_at,
                (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count
         FROM notebooks n
         WHERE n.owner_id = $1
@@ -179,7 +182,7 @@ async fn create_notebook(
         r#"
         INSERT INTO notebooks (owner_id, name, sort_order)
         VALUES ($1, $2, $3)
-        RETURNING id, owner_id, name, is_default, sort_order, created_at, updated_at, 0::bigint AS note_count
+        RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count
         "#,
     )
     .bind(&user.id)
@@ -205,7 +208,7 @@ async fn update_notebook(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateNotebookBody>,
 ) -> Response {
-    if body.name.is_none() && body.sort_order.is_none() {
+    if body.name.is_none() && body.sort_order.is_none() && body.include_in_capsule.is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Nothing to update"})),
@@ -262,9 +265,13 @@ async fn update_notebook(
         sets.push(format!("sort_order = ${idx}"));
         idx += 1;
     }
+    if body.include_in_capsule.is_some() {
+        sets.push(format!("include_in_capsule = ${idx}"));
+        idx += 1;
+    }
 
     let sql = format!(
-        "UPDATE notebooks SET {} WHERE id = ${} RETURNING id, owner_id, name, is_default, sort_order, created_at, updated_at, 0::bigint AS note_count",
+        "UPDATE notebooks SET {} WHERE id = ${} RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count",
         sets.join(", "),
         idx
     );
@@ -275,6 +282,9 @@ async fn update_notebook(
     }
     if let Some(sort_order) = body.sort_order {
         q = q.bind(sort_order);
+    }
+    if let Some(include_in_capsule) = body.include_in_capsule {
+        q = q.bind(include_in_capsule);
     }
     q = q.bind(id);
 

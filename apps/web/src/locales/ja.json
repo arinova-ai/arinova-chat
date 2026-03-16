@@ -1209,6 +1209,8 @@
   "notebooks.rename": "名前変更",
   "notebooks.delete": "削除",
   "notebooks.save": "保存",
+  "notebooks.includeInCapsule": "カプセルに含める",
+  "notebooks.excludeFromCapsule": "カプセルから除外",
   "skills.title": "Skills",
   "skills.subtitle": "スキルを探してエージェントにインストール",
   "skills.tab.explore": "探索",

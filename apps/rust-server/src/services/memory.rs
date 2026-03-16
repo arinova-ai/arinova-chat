@@ -79,7 +79,9 @@ pub async fn extract_capsule(
             let note_count = sqlx::query_scalar::<_, i64>(
                 r#"SELECT COUNT(*) FROM conversation_notes n
                    JOIN note_conversation_links ncl ON ncl.note_id = n.id
-                   WHERE ncl.conversation_id = $1 AND n.content != ''"#,
+                   LEFT JOIN notebooks nb ON nb.id = n.notebook_id
+                   WHERE ncl.conversation_id = $1 AND n.content != ''
+                     AND COALESCE(nb.include_in_capsule, true) = true"#,
             )
             .bind(conv_id)
             .fetch_one(&db)
@@ -210,7 +212,9 @@ async fn do_extraction(
             r#"SELECT n.title, n.content, n.created_at
                FROM conversation_notes n
                JOIN note_conversation_links ncl ON ncl.note_id = n.id
+               LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                WHERE ncl.conversation_id = $1 AND n.content != '' AND n.created_at > $2
+                 AND COALESCE(nb.include_in_capsule, true) = true
                ORDER BY n.created_at ASC"#,
         )
         .bind(conversation_id)
@@ -223,7 +227,9 @@ async fn do_extraction(
             r#"SELECT n.title, n.content, n.created_at
                FROM conversation_notes n
                JOIN note_conversation_links ncl ON ncl.note_id = n.id
+               LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                WHERE ncl.conversation_id = $1 AND n.content != ''
+                 AND COALESCE(nb.include_in_capsule, true) = true
                ORDER BY n.created_at ASC"#,
         )
         .bind(conversation_id)

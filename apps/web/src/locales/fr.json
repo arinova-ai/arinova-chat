@@ -1209,6 +1209,8 @@
   "notebooks.rename": "Renommer",
   "notebooks.delete": "Supprimer",
   "notebooks.save": "Enregistrer",
+  "notebooks.includeInCapsule": "Inclure dans la capsule",
+  "notebooks.excludeFromCapsule": "Exclure de la capsule",
   "skills.title": "Skills",
   "skills.subtitle": "Découvrez et installez des skills pour vos agents",
   "skills.tab.explore": "Explorer",

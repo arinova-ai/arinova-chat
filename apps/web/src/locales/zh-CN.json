@@ -1213,6 +1213,8 @@
   "notebooks.rename": "重命名",
   "notebooks.delete": "删除",
   "notebooks.save": "保存",
+  "notebooks.includeInCapsule": "纳入记忆胶囊",
+  "notebooks.excludeFromCapsule": "排除记忆胶囊",
   "skills.title": "Skills",
   "skills.subtitle": "发现并安装 Skills 到你的 Agent",
   "skills.tab.explore": "探索",
