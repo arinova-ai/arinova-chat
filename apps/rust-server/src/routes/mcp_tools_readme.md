@@ -49,7 +49,58 @@ Supported file types: PNG, JPG, GIF, WebP, SVG, PDF, TXT, Markdown, JSON, CSV.
 
 ---
 
+### Notebooks
+
+Notebooks are **owner-level** containers for notes — they belong to a user, not a conversation. Each user has a default notebook ("My Notes"). Notes live inside notebooks, and each conversation can set a preferred notebook via per-conversation preference.
+
+| Tool | Description |
+|------|-------------|
+| `arinova_list_notebooks` | List all notebooks for a user |
+| `arinova_create_notebook` | Create a new notebook |
+| `arinova_update_notebook` | Update a notebook (rename, reorder) |
+| `arinova_delete_notebook` | Delete a notebook (not the default) |
+| `arinova_list_notebook_notes` | List notes inside a specific notebook |
+
+#### arinova_list_notebooks
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `userId` | string | Yes | User ID (notebook owner) |
+
+#### arinova_create_notebook
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `userId` | string | Yes | User ID (notebook owner) |
+| `name` | string | Yes | Notebook name |
+
+#### arinova_update_notebook
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `notebookId` | string | Yes | Notebook ID |
+| `name` | string | No | New name |
+| `sortOrder` | number | No | Display order |
+
+#### arinova_delete_notebook
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `notebookId` | string | Yes | Notebook ID to delete |
+
+> Cannot delete the default notebook.
+
+#### arinova_list_notebook_notes
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `notebookId` | string | Yes | Notebook ID |
+
+---
+
 ### Notes
+
+Notes are stored inside notebooks. When accessed via a conversation, notes use the conversation owner's preferred notebook (or default notebook if no preference is set).
 
 | Tool | Description |
 |------|-------------|
@@ -77,6 +128,7 @@ Supported file types: PNG, JPG, GIF, WebP, SVG, PDF, TXT, Markdown, JSON, CSV.
 | `title` | string | Yes | Note title |
 | `content` | string | Yes | Note content (markdown supported) |
 | `tags` | string[] | No | Tags for categorization |
+| `notebookId` | string | No | Target notebook ID. If omitted, uses the conversation owner's default notebook |
 
 #### arinova_update_note
 
@@ -351,6 +403,29 @@ curl -s "$BASE_URL/api/agent/messages/<CONV_ID>?limit=50" \
 curl -s -X POST "$BASE_URL/api/agent/upload" \
   -H "Authorization: Bearer <TOKEN>" \
   -F "conversationId=<CONV_ID>" -F "file=@/path/to/file.png"
+```
+
+### Notebooks
+
+```bash
+# List notebooks
+curl -s "$BASE_URL/api/agent/notebooks?userId=<USER_ID>" -H "Authorization: Bearer <TOKEN>"
+
+# Create notebook
+curl -s -X POST "$BASE_URL/api/agent/notebooks" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN>" \
+  -d '{ "name": "Work Notes", "userId": "<USER_ID>" }'
+
+# Update notebook
+curl -s -X PATCH "$BASE_URL/api/agent/notebooks/<NOTEBOOK_ID>" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN>" \
+  -d '{ "name": "Renamed" }'
+
+# Delete notebook
+curl -s -X DELETE "$BASE_URL/api/agent/notebooks/<NOTEBOOK_ID>" -H "Authorization: Bearer <TOKEN>"
+
+# List notes in notebook
+curl -s "$BASE_URL/api/agent/notebooks/<NOTEBOOK_ID>/notes" -H "Authorization: Bearer <TOKEN>"
 ```
 
 ### Notes
