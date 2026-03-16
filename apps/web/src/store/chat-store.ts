@@ -1734,39 +1734,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         });
 
-        // Update thread list items for live thread list
-        const curThreadList = get().threadListItems[conversationId];
-        if (curThreadList) {
-          const parentMsg = mainMsgs.find((m) => m.id === threadId);
-          const existing = curThreadList.find((t) => t.threadId === threadId);
-          if (existing) {
-            set({
-              threadListItems: {
-                ...get().threadListItems,
-                [conversationId]: curThreadList.map((t) =>
-                  t.threadId === threadId
-                    ? { ...t, replyCount: t.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: msg.content.slice(0, 100) }
-                    : t
-                ),
-              },
-            });
-          } else if (parentMsg) {
-            set({
-              threadListItems: {
-                ...get().threadListItems,
-                [conversationId]: [
-                  {
-                    threadId,
-                    originalMessage: { content: parentMsg.content, role: parentMsg.role, senderAgentName: parentMsg.senderAgentName ?? null },
-                    replyCount: 1,
-                    lastReplyAt: new Date().toISOString(),
-                    participants: [],
-                    lastReplyPreview: msg.content.slice(0, 100),
-                  },
-                  ...curThreadList,
-                ],
-              },
-            });
+        // Update thread list items for non-agent replies (agent replies handled by stream_end)
+        if (msg.role !== "agent") {
+          const curThreadList = get().threadListItems[conversationId];
+          if (curThreadList) {
+            const parentMsg = mainMsgs.find((m) => m.id === threadId);
+            const existing = curThreadList.find((t) => t.threadId === threadId);
+            if (existing) {
+              set({
+                threadListItems: {
+                  ...get().threadListItems,
+                  [conversationId]: curThreadList.map((t) =>
+                    t.threadId === threadId
+                      ? { ...t, replyCount: t.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: msg.content.slice(0, 100) }
+                      : t
+                  ),
+                },
+              });
+            } else if (parentMsg) {
+              set({
+                threadListItems: {
+                  ...get().threadListItems,
+                  [conversationId]: [
+                    {
+                      threadId,
+                      originalMessage: { content: parentMsg.content, role: parentMsg.role, senderAgentName: parentMsg.senderAgentName ?? null },
+                      replyCount: 1,
+                      lastReplyAt: new Date().toISOString(),
+                      participants: [],
+                      lastReplyPreview: msg.content.slice(0, 100),
+                    },
+                    ...curThreadList,
+                  ],
+                },
+              });
+            }
           }
         }
 
@@ -2340,30 +2342,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
             },
           });
         }
-        // Update replyCount + lastReplyPreview on stream_end (single increment per reply)
+        // Only update lastReplyPreview on stream_end existing-message path (replyCount already incremented by stillThinking path)
         if (finalContent) {
           const seMainMsgs2 = get().messagesByConversation[conversationId] ?? [];
           set({
             messagesByConversation: {
               ...get().messagesByConversation,
               [conversationId]: seMainMsgs2.map((m) =>
-                m.id === threadId
-                  ? { ...m, threadSummary: { replyCount: (m.threadSummary?.replyCount ?? 0) + 1, lastReplyAt: new Date().toISOString(), participants: m.threadSummary?.participants ?? [], lastReplyPreview: finalContent.slice(0, 100) } }
+                m.id === threadId && m.threadSummary
+                  ? { ...m, threadSummary: { ...m.threadSummary, lastReplyPreview: finalContent.slice(0, 100) } }
                   : m
               ),
             },
           });
           const seThreadList2 = get().threadListItems[conversationId];
           if (seThreadList2) {
-            const se2Existing = seThreadList2.find((t2) => t2.threadId === threadId);
-            if (se2Existing) {
-              set({ threadListItems: { ...get().threadListItems, [conversationId]: seThreadList2.map((t2) => t2.threadId === threadId ? { ...t2, replyCount: t2.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: finalContent.slice(0, 100) } : t2) } });
-            } else {
-              const se2Parent = seMainMsgs2.find((m) => m.id === threadId);
-              if (se2Parent) {
-                set({ threadListItems: { ...get().threadListItems, [conversationId]: [{ threadId, originalMessage: { content: se2Parent.content, role: se2Parent.role, senderAgentName: se2Parent.senderAgentName ?? null }, replyCount: 1, lastReplyAt: new Date().toISOString(), participants: [], lastReplyPreview: finalContent.slice(0, 100) }, ...seThreadList2] } });
-              }
-            }
+            set({ threadListItems: { ...get().threadListItems, [conversationId]: seThreadList2.map((t2) => t2.threadId === threadId ? { ...t2, lastReplyPreview: finalContent.slice(0, 100) } : t2) } });
           }
         }
       } else {

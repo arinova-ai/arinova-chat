@@ -23,6 +23,8 @@ interface ThreadListSheetProps {
   conversationId: string;
 }
 
+const EMPTY_THREADS: ThreadListItem[] = [];
+
 function formatTime(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();
@@ -36,7 +38,7 @@ function formatTime(date: Date | string): string {
 export function ThreadListContent({ conversationId }: { conversationId: string }) {
   const { t } = useTranslation();
   const openThread = useChatStore((s) => s.openThread);
-  const threads = useChatStore((s) => s.threadListItems[conversationId] ?? []);
+  const threads = useChatStore((s) => s.threadListItems[conversationId] ?? EMPTY_THREADS);
   const setThreadListItems = useChatStore((s) => s.setThreadListItems);
   const [loading, setLoading] = useState(false);
 
@@ -53,7 +55,7 @@ export function ThreadListContent({ conversationId }: { conversationId: string }
     } finally {
       setLoading(false);
     }
-  }, [conversationId, setThreadListItems]);
+  }, [conversationId]);
 
   useEffect(() => {
     fetchThreads();
@@ -126,7 +128,7 @@ function ThreadListInner({
 export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadListSheetProps) {
   const { t } = useTranslation();
   const openThread = useChatStore((s) => s.openThread);
-  const threads = useChatStore((s) => s.threadListItems[conversationId] ?? []);
+  const threads = useChatStore((s) => s.threadListItems[conversationId] ?? EMPTY_THREADS);
   const setThreadListItems = useChatStore((s) => s.setThreadListItems);
   const [loading, setLoading] = useState(false);
 
@@ -143,7 +145,7 @@ export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadLi
     } finally {
       setLoading(false);
     }
-  }, [conversationId, setThreadListItems]);
+  }, [conversationId]);
 
   useEffect(() => {
     if (open) {
