@@ -101,6 +101,7 @@ pub(crate) async fn with_attachments(
     db: &PgPool,
     config: &crate::config::Config,
     items: &[MessageRow],
+    caller_id: Option<&str>,
 ) -> Vec<serde_json::Value> {
     if items.is_empty() {
         return vec![];
@@ -162,19 +163,24 @@ pub(crate) async fn with_attachments(
 
     // Fetch community anonymous identities for community conversations
     // If the conversation is a community conversation, override sender info with display_name/member_avatar_url
-    let community_identities: std::collections::HashMap<String, (String, Option<String>)> = {
-        // Check if any message's conversation is a community conversation
+    let is_community_conv = {
         let conv_id = items.first().map(|m| m.conversation_id);
         if let Some(cid) = conv_id {
-            let is_community = sqlx::query_scalar::<_, bool>(
+            sqlx::query_scalar::<_, bool>(
                 r#"SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND "type" = 'community')"#,
             )
             .bind(cid)
             .fetch_one(db)
             .await
-            .unwrap_or(false);
-
-            if is_community {
+            .unwrap_or(false)
+        } else {
+            false
+        }
+    };
+    let community_identities: std::collections::HashMap<String, (String, Option<String>)> = {
+        let conv_id = items.first().map(|m| m.conversation_id);
+        if is_community_conv {
+            if let Some(cid) = conv_id {
                 // Get the community_id for this conversation
                 let community_id: Option<Uuid> = sqlx::query_scalar(
                     "SELECT id FROM communities WHERE conversation_id = $1",
@@ -787,7 +793,7 @@ async fn get_messages(
             all_items.push(clone_message_row(m));
         }
 
-        let messages_with_atts = with_attachments(&state.db, &state.config, &all_items).await;
+        let messages_with_atts = with_attachments(&state.db, &state.config, &all_items, None).await;
         let messages_enriched =
             enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 
@@ -856,7 +862,7 @@ async fn get_messages(
         let has_more_down = result.len() as i64 > limit;
         let items: Vec<MessageRow> = result.into_iter().take(limit as usize).collect();
 
-        let messages_with_atts = with_attachments(&state.db, &state.config, &items).await;
+        let messages_with_atts = with_attachments(&state.db, &state.config, &items, None).await;
         let messages_enriched =
             enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 
@@ -940,7 +946,7 @@ async fn load_default_messages(
         None
     };
 
-    let messages_with_atts = with_attachments(&state.db, &state.config, &items).await;
+    let messages_with_atts = with_attachments(&state.db, &state.config, &items, None).await;
     let messages_enriched =
         enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 
@@ -1286,7 +1292,7 @@ async fn get_thread_messages(
         None
     };
 
-    let messages_with_atts = with_attachments(&state.db, &state.config, &items).await;
+    let messages_with_atts = with_attachments(&state.db, &state.config, &items, None).await;
     let messages_enriched =
         enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 

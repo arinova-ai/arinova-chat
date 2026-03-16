@@ -132,6 +132,32 @@ export function ChatHeader({
     }
   }, [conversationId, peerUserId, agentId, agentName, agentAvatarUrl, isInCall, startCall]);
 
+  // Pending applications badge (community only)
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => {
+    if (type !== "community" || !officialCommunityId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await api<{ requireApproval?: boolean; myRole?: string }>(
+          `/api/communities/${officialCommunityId}`,
+          { silent: true },
+        );
+        if (cancelled) return;
+        const canManage = detail.myRole === "creator" || detail.myRole === "moderator";
+        if (!detail.requireApproval || !canManage) return;
+        const res = await api<{ applications: { status: string }[] }>(
+          `/api/communities/${officialCommunityId}/applications`,
+          { silent: true },
+        );
+        if (cancelled) return;
+        const pending = (res.applications ?? []).filter((a) => a.status === "pending");
+        setPendingCount(pending.length);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [type, officialCommunityId]);
+
   // Official CS status
   const [csStatus, setCsStatus] = useState<string | null>(null);
   useEffect(() => {
@@ -239,8 +265,13 @@ export function ChatHeader({
               </span>
             </p>
           ) : type === "group" || type === "community" ? (
-            <p className="text-xs text-muted-foreground truncate">
-              {memberCount ? `${memberCount} ${t("chat.header.members")}` : t("chat.header.group")}
+            <p className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+              <span>{memberCount ? `${memberCount} ${t("chat.header.members")}` : t("chat.header.group")}</span>
+              {pendingCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none">
+                  {pendingCount}
+                </span>
+              )}
             </p>
           ) : agentDescription ? (
             <p className="text-xs text-muted-foreground truncate">

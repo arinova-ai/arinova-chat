@@ -213,13 +213,14 @@ async fn is_member_or_creator(
 }
 
 fn community_json(r: &CommunityRow) -> Value {
-    community_json_with_identity(r, None, None)
+    community_json_with_identity(r, None, None, None)
 }
 
 fn community_json_with_identity(
     r: &CommunityRow,
     my_display_name: Option<&str>,
     my_avatar_url: Option<&str>,
+    my_role: Option<&str>,
 ) -> Value {
     let mut obj = json!({
         "id": r.id,
@@ -255,6 +256,9 @@ fn community_json_with_identity(
     }
     if let Some(url) = my_avatar_url {
         obj["myAvatarUrl"] = json!(url);
+    }
+    if let Some(role) = my_role {
+        obj["myRole"] = json!(role);
     }
     obj
 }
@@ -636,11 +640,11 @@ async fn get_community(
 
     match row {
         Ok(Some(r)) => {
-            // Try to get caller's community identity
+            // Try to get caller's community identity + role
             let user_id = extract_user_id_from_cookie(&state.db, &headers).await;
-            let (my_display_name, my_avatar_url) = if let Some(ref uid) = user_id {
-                sqlx::query_as::<_, (Option<String>, Option<String>)>(
-                    "SELECT display_name, member_avatar_url FROM community_members WHERE community_id = $1 AND user_id = $2",
+            let (my_display_name, my_avatar_url, my_role) = if let Some(ref uid) = user_id {
+                sqlx::query_as::<_, (Option<String>, Option<String>, String)>(
+                    "SELECT display_name, member_avatar_url, role FROM community_members WHERE community_id = $1 AND user_id = $2",
                 )
                 .bind(id)
                 .bind(uid)
@@ -648,14 +652,16 @@ async fn get_community(
                 .await
                 .ok()
                 .flatten()
-                .unwrap_or((None, None))
+                .map(|(dn, av, r)| (dn, av, Some(r)))
+                .unwrap_or((None, None, None))
             } else {
-                (None, None)
+                (None, None, None)
             };
             (StatusCode::OK, Json(community_json_with_identity(
                 &r,
                 my_display_name.as_deref(),
                 my_avatar_url.as_deref(),
+                my_role.as_deref(),
             )))
         }
         Ok(None) => (

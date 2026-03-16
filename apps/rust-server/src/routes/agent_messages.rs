@@ -162,7 +162,7 @@ async fn agent_get_messages(
             all_items.push(m);
         }
 
-        let messages = with_attachments(&state.db, &state.config, &all_items).await;
+        let messages = with_attachments(&state.db, &state.config, &all_items, None).await;
         let next_cursor = if has_more {
             all_items.first().map(|m| json!(m.id))
         } else {
@@ -223,7 +223,7 @@ async fn agent_get_messages(
 
         let has_more = result.len() as i64 > limit;
         let items: Vec<MessageRow> = result.into_iter().take(limit as usize).collect();
-        let messages = with_attachments(&state.db, &state.config, &items).await;
+        let messages = with_attachments(&state.db, &state.config, &items, None).await;
 
         return Json(json!({
             "messages": messages,
@@ -305,7 +305,7 @@ async fn load_agent_messages(
         None
     };
 
-    let messages = with_attachments(&state.db, &state.config, &items).await;
+    let messages = with_attachments(&state.db, &state.config, &items, None).await;
 
     Json(json!({
         "messages": messages,
