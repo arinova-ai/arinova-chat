@@ -1383,6 +1383,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content,
       status: "completed",
       threadId: activeThreadId,
+      senderUserId: get().currentUserId || undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
