@@ -95,6 +95,19 @@ export interface ThinkingAgent {
   queued?: boolean;
 }
 
+export interface ThreadListItem {
+  threadId: string;
+  originalMessage: {
+    content: string;
+    role: string;
+    senderAgentName: string | null;
+  };
+  replyCount: number;
+  lastReplyAt: string;
+  participants: string[];
+  lastReplyPreview: string | null;
+}
+
 interface ChatState {
   agents: Agent[];
   conversations: ConversationWithAgent[];
@@ -136,6 +149,7 @@ interface ChatState {
   activeThreadId: string | null;
   threadMessages: Record<string, Message[]>;
   threadLoading: boolean;
+  threadListItems: Record<string, ThreadListItem[]>;
 
   // Pin state
   pinnedMessageIds: Record<string, Set<string>>; // conversationId → set of pinned message IDs
@@ -244,6 +258,7 @@ interface ChatState {
   closeThread: () => void;
   loadThreadMessages: (conversationId: string, threadId: string) => Promise<void>;
   sendThreadMessage: (content: string) => void;
+  setThreadListItems: (conversationId: string, items: ThreadListItem[]) => void;
   setInputDraft: (conversationId: string, text: string) => void;
   clearInputDraft: (conversationId: string) => void;
 
@@ -314,6 +329,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   activeThreadId: null,
   threadMessages: {},
   threadLoading: false,
+  threadListItems: {},
   pinnedMessageIds: {},
   notesByConversation: {},
   notebookOpen: false,
@@ -1389,6 +1405,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  setThreadListItems: (conversationId, items) => {
+    set({
+      threadListItems: {
+        ...get().threadListItems,
+        [conversationId]: items,
+      },
+    });
+  },
+
   loadPins: async (conversationId) => {
     diagCount("action:loadPins");
     try {
@@ -1708,6 +1733,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ),
           },
         });
+
+        // Update thread list items for live thread list
+        const curThreadList = get().threadListItems[conversationId];
+        if (curThreadList) {
+          const parentMsg = mainMsgs.find((m) => m.id === threadId);
+          const existing = curThreadList.find((t) => t.threadId === threadId);
+          if (existing) {
+            set({
+              threadListItems: {
+                ...get().threadListItems,
+                [conversationId]: curThreadList.map((t) =>
+                  t.threadId === threadId
+                    ? { ...t, replyCount: t.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: msg.content.slice(0, 100) }
+                    : t
+                ),
+              },
+            });
+          } else if (parentMsg) {
+            set({
+              threadListItems: {
+                ...get().threadListItems,
+                [conversationId]: [
+                  {
+                    threadId,
+                    originalMessage: { content: parentMsg.content, role: parentMsg.role, senderAgentName: parentMsg.senderAgentName ?? null },
+                    replyCount: 1,
+                    lastReplyAt: new Date().toISOString(),
+                    participants: [],
+                    lastReplyPreview: msg.content.slice(0, 100),
+                  },
+                  ...curThreadList,
+                ],
+              },
+            });
+          }
+        }
 
         if (conversationId === activeConversationId && msg.seq > 0) {
           wsManager.send({ type: "mark_read", conversationId, seq: msg.seq });
@@ -2061,6 +2122,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
               [conversationId]: thinking.filter((t) => t.messageId !== messageId),
             },
           });
+          // Update parent threadSummary + thread list on first chunk
+          const scMainMsgs = get().messagesByConversation[conversationId] ?? [];
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: scMainMsgs.map((m) =>
+                m.id === threadId
+                  ? { ...m, threadSummary: { replyCount: (m.threadSummary?.replyCount ?? 0) + 1, lastReplyAt: new Date().toISOString(), participants: m.threadSummary?.participants ?? [], lastReplyPreview: chunk.slice(0, 100) } }
+                  : m
+              ),
+            },
+          });
+          const scThreadList = get().threadListItems[conversationId];
+          if (scThreadList) {
+            const scExisting = scThreadList.find((t2) => t2.threadId === threadId);
+            if (scExisting) {
+              set({ threadListItems: { ...get().threadListItems, [conversationId]: scThreadList.map((t2) => t2.threadId === threadId ? { ...t2, replyCount: t2.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: chunk.slice(0, 100) } : t2) } });
+            } else {
+              const scParent = scMainMsgs.find((m) => m.id === threadId);
+              if (scParent) {
+                set({ threadListItems: { ...get().threadListItems, [conversationId]: [{ threadId, originalMessage: { content: scParent.content, role: scParent.role, senderAgentName: scParent.senderAgentName ?? null }, replyCount: 1, lastReplyAt: new Date().toISOString(), participants: [], lastReplyPreview: chunk.slice(0, 100) }, ...scThreadList] } });
+              }
+            }
+          }
         } else {
           const current = get().messagesByConversation[conversationId] ?? [];
           set({
@@ -2153,6 +2238,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 [conversationId]: thinking.filter((t) => t.messageId !== messageId),
               },
             });
+            // Update parent threadSummary + thread list (Bug 1 + Bug 2 fix)
+            const seMainMsgs = get().messagesByConversation[conversationId] ?? [];
+            set({
+              messagesByConversation: {
+                ...get().messagesByConversation,
+                [conversationId]: seMainMsgs.map((m) =>
+                  m.id === threadId
+                    ? { ...m, threadSummary: { replyCount: (m.threadSummary?.replyCount ?? 0) + 1, lastReplyAt: new Date().toISOString(), participants: m.threadSummary?.participants ?? [], lastReplyPreview: finalContent?.slice(0, 100) ?? null } }
+                    : m
+                ),
+              },
+            });
+            const seThreadList = get().threadListItems[conversationId];
+            if (seThreadList) {
+              const seExisting = seThreadList.find((t2) => t2.threadId === threadId);
+              if (seExisting) {
+                set({ threadListItems: { ...get().threadListItems, [conversationId]: seThreadList.map((t2) => t2.threadId === threadId ? { ...t2, replyCount: t2.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: finalContent?.slice(0, 100) ?? null } : t2) } });
+              } else {
+                const seParent = seMainMsgs.find((m) => m.id === threadId);
+                if (seParent) {
+                  set({ threadListItems: { ...get().threadListItems, [conversationId]: [{ threadId, originalMessage: { content: seParent.content, role: seParent.role, senderAgentName: seParent.senderAgentName ?? null }, replyCount: 1, lastReplyAt: new Date().toISOString(), participants: [], lastReplyPreview: finalContent?.slice(0, 100) ?? null }, ...seThreadList] } });
+                }
+              }
+            }
           } else {
             const current = get().messagesByConversation[conversationId] ?? [];
             set({
@@ -2242,6 +2351,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
               ),
             },
           });
+        }
+        // Update lastReplyPreview with final content (replyCount already incremented by stream_chunk)
+        if (finalContent) {
+          const seMainMsgs2 = get().messagesByConversation[conversationId] ?? [];
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: seMainMsgs2.map((m) =>
+                m.id === threadId && m.threadSummary
+                  ? { ...m, threadSummary: { ...m.threadSummary, lastReplyPreview: finalContent.slice(0, 100) } }
+                  : m
+              ),
+            },
+          });
+          const seThreadList2 = get().threadListItems[conversationId];
+          if (seThreadList2) {
+            set({ threadListItems: { ...get().threadListItems, [conversationId]: seThreadList2.map((t2) => t2.threadId === threadId ? { ...t2, lastReplyPreview: finalContent.slice(0, 100) } : t2) } });
+          }
         }
       } else {
         const current = get().messagesByConversation[conversationId] ?? [];

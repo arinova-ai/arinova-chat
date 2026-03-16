@@ -8,25 +8,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { MessageSquare, Loader2 } from "lucide-react";
-import { useChatStore } from "@/store/chat-store";
+import { useChatStore, type ThreadListItem } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 
-interface ThreadItem {
-  threadId: string;
-  originalMessage: {
-    content: string;
-    role: string;
-    senderAgentName: string | null;
-  };
-  replyCount: number;
-  lastReplyAt: string;
-  participants: string[];
-  lastReplyPreview: string | null;
-}
-
 interface ThreadsResponse {
-  threads: ThreadItem[];
+  threads: ThreadListItem[];
   hasMore: boolean;
 }
 
@@ -49,7 +36,8 @@ function formatTime(date: Date | string): string {
 export function ThreadListContent({ conversationId }: { conversationId: string }) {
   const { t } = useTranslation();
   const openThread = useChatStore((s) => s.openThread);
-  const [threads, setThreads] = useState<ThreadItem[]>([]);
+  const threads = useChatStore((s) => s.threadListItems[conversationId] ?? []);
+  const setThreadListItems = useChatStore((s) => s.setThreadListItems);
   const [loading, setLoading] = useState(false);
 
   const fetchThreads = useCallback(async () => {
@@ -59,13 +47,13 @@ export function ThreadListContent({ conversationId }: { conversationId: string }
       const data = await api<ThreadsResponse>(
         `/api/conversations/${conversationId}/threads?limit=50`
       );
-      setThreads(data.threads);
+      setThreadListItems(conversationId, data.threads);
     } catch (err) {
       console.error("[ThreadList] Failed to fetch threads:", err);
     } finally {
       setLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, setThreadListItems]);
 
   useEffect(() => {
     fetchThreads();
@@ -88,7 +76,7 @@ function ThreadListInner({
   onClose,
   t,
 }: {
-  threads: ThreadItem[];
+  threads: ThreadListItem[];
   loading: boolean;
   openThread: (id: string) => void;
   onClose?: () => void;
@@ -138,7 +126,8 @@ function ThreadListInner({
 export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadListSheetProps) {
   const { t } = useTranslation();
   const openThread = useChatStore((s) => s.openThread);
-  const [threads, setThreads] = useState<ThreadItem[]>([]);
+  const threads = useChatStore((s) => s.threadListItems[conversationId] ?? []);
+  const setThreadListItems = useChatStore((s) => s.setThreadListItems);
   const [loading, setLoading] = useState(false);
 
   const fetchThreads = useCallback(async () => {
@@ -148,13 +137,13 @@ export function ThreadListSheet({ open, onOpenChange, conversationId }: ThreadLi
       const data = await api<ThreadsResponse>(
         `/api/conversations/${conversationId}/threads?limit=50`
       );
-      setThreads(data.threads);
+      setThreadListItems(conversationId, data.threads);
     } catch (err) {
       console.error("[ThreadList] Failed to fetch threads:", err);
     } finally {
       setLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, setThreadListItems]);
 
   useEffect(() => {
     if (open) {
