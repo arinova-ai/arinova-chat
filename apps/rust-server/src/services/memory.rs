@@ -80,10 +80,18 @@ pub async fn extract_capsule(
                 r#"SELECT COUNT(*) FROM conversation_notes n
                    JOIN note_conversation_links ncl ON ncl.note_id = n.id
                    LEFT JOIN notebooks nb ON nb.id = n.notebook_id
+                   LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $2
                    WHERE ncl.conversation_id = $1 AND n.content != ''
-                     AND COALESCE(nb.include_in_capsule, true) = true"#,
+                     AND (
+                       -- If notebook has capsule links configured, require a link to this capsule
+                       ncl2.capsule_id IS NOT NULL
+                       -- Otherwise fall back to legacy include_in_capsule flag
+                       OR (NOT EXISTS (SELECT 1 FROM notebook_capsule_links WHERE notebook_id = nb.id)
+                           AND COALESCE(nb.include_in_capsule, true) = true)
+                     )"#,
             )
             .bind(conv_id)
+            .bind(capsule_id)
             .fetch_one(&db)
             .await
             .unwrap_or(0);
@@ -207,18 +215,26 @@ async fn do_extraction(
     let msg_count = messages.len();
 
     // 3b. Fetch linked notes incrementally (only new notes since last extraction)
+    // If notebook has capsule links configured, only include notes linked to THIS capsule.
+    // Otherwise fall back to legacy include_in_capsule flag.
     let notes: Vec<(String, String, chrono::NaiveDateTime)> = if let Some(nw) = notes_extracted_through {
         sqlx::query_as(
             r#"SELECT n.title, n.content, n.created_at
                FROM conversation_notes n
                JOIN note_conversation_links ncl ON ncl.note_id = n.id
                LEFT JOIN notebooks nb ON nb.id = n.notebook_id
+               LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $3
                WHERE ncl.conversation_id = $1 AND n.content != '' AND n.created_at > $2
-                 AND COALESCE(nb.include_in_capsule, true) = true
+                 AND (
+                   ncl2.capsule_id IS NOT NULL
+                   OR (NOT EXISTS (SELECT 1 FROM notebook_capsule_links WHERE notebook_id = nb.id)
+                       AND COALESCE(nb.include_in_capsule, true) = true)
+                 )
                ORDER BY n.created_at ASC"#,
         )
         .bind(conversation_id)
         .bind(nw)
+        .bind(capsule_id)
         .fetch_all(db)
         .await
         .unwrap_or_default()
@@ -228,11 +244,17 @@ async fn do_extraction(
                FROM conversation_notes n
                JOIN note_conversation_links ncl ON ncl.note_id = n.id
                LEFT JOIN notebooks nb ON nb.id = n.notebook_id
+               LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $2
                WHERE ncl.conversation_id = $1 AND n.content != ''
-                 AND COALESCE(nb.include_in_capsule, true) = true
+                 AND (
+                   ncl2.capsule_id IS NOT NULL
+                   OR (NOT EXISTS (SELECT 1 FROM notebook_capsule_links WHERE notebook_id = nb.id)
+                       AND COALESCE(nb.include_in_capsule, true) = true)
+                 )
                ORDER BY n.created_at ASC"#,
         )
         .bind(conversation_id)
+        .bind(capsule_id)
         .fetch_all(db)
         .await
         .unwrap_or_default()

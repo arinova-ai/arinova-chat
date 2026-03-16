@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, patch},
+    routing::{get, patch, put},
     Router,
 };
 use chrono::{DateTime, Utc};
@@ -22,6 +22,10 @@ pub fn router() -> Router<AppState> {
             patch(update_notebook).delete(delete_notebook),
         )
         .route("/api/notebooks/{id}/notes", get(list_notebook_notes))
+        .route(
+            "/api/notebooks/{id}/capsule-links",
+            get(get_capsule_links).put(set_capsule_links),
+        )
 }
 
 // ===== Types =====
@@ -452,4 +456,126 @@ async fn list_notebook_notes(
         )
             .into_response(),
     }
+}
+
+// ===== Capsule Links =====
+
+/// GET /api/notebooks/:id/capsule-links — list capsule IDs linked to this notebook
+async fn get_capsule_links(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    // Verify ownership
+    let owner = sqlx::query_scalar::<_, String>("SELECT owner_id FROM notebooks WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await;
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your notebook"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Notebook not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT capsule_id FROM notebook_capsule_links WHERE notebook_id = $1",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(ids) => {
+            let capsule_ids: Vec<String> = ids.iter().map(|(cid,)| cid.to_string()).collect();
+            Json(json!({ "capsuleIds": capsule_ids })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetCapsuleLinksBody {
+    capsule_ids: Vec<Uuid>,
+}
+
+/// PUT /api/notebooks/:id/capsule-links — replace all capsule links for this notebook
+async fn set_capsule_links(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SetCapsuleLinksBody>,
+) -> Response {
+    // Verify ownership
+    let owner = sqlx::query_scalar::<_, String>("SELECT owner_id FROM notebooks WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await;
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your notebook"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Notebook not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    // Verify all capsule_ids belong to this user
+    if !body.capsule_ids.is_empty() {
+        let owned_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM memory_capsules WHERE id = ANY($1) AND owner_id = $2",
+        )
+        .bind(&body.capsule_ids)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if owned_count != body.capsule_ids.len() as i64 {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Some capsules do not belong to you"}))).into_response();
+        }
+    }
+
+    // Replace links in a transaction
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if let Err(e) = sqlx::query("DELETE FROM notebook_capsule_links WHERE notebook_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+    }
+
+    for cid in &body.capsule_ids {
+        if let Err(e) = sqlx::query(
+            "INSERT INTO notebook_capsule_links (notebook_id, capsule_id) VALUES ($1, $2)",
+        )
+        .bind(id)
+        .bind(cid)
+        .execute(&mut *tx)
+        .await
+        {
+            let _ = tx.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+        }
+    }
+
+    // Also update legacy include_in_capsule flag for backward compat
+    let include = !body.capsule_ids.is_empty();
+    let _ = sqlx::query("UPDATE notebooks SET include_in_capsule = $1 WHERE id = $2")
+        .bind(include)
+        .bind(id)
+        .execute(&mut *tx)
+        .await;
+
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+    }
+
+    let capsule_ids: Vec<String> = body.capsule_ids.iter().map(|c| c.to_string()).collect();
+    Json(json!({ "capsuleIds": capsule_ids })).into_response()
 }

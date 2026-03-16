@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import {
   BookOpen,
   Brain,
+  Check,
   Plus,
   ArrowLeft,
   MoreHorizontal,
@@ -56,6 +57,10 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [capsuleSelectorId, setCapsuleSelectorId] = useState<string | null>(null);
+  const [allCapsules, setAllCapsules] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCapsuleIds, setSelectedCapsuleIds] = useState<string[]>([]);
+  const [capsuleLoading, setCapsuleLoading] = useState(false);
   const userDismissedRef = useRef(false);
 
   // Synchronously reset state when conversation changes (before render output)
@@ -172,15 +177,39 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
     }
   };
 
-  const handleToggleCapsule = async (id: string, current: boolean) => {
+  const handleManageCapsules = async (notebookId: string) => {
+    setCapsuleSelectorId(notebookId);
+    setCapsuleLoading(true);
     try {
-      await api(`/api/notebooks/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ includeInCapsule: !current }),
+      const [capsulesRes, linksRes] = await Promise.all([
+        api<{ capsules: { id: string; name: string }[] }>("/api/memory/capsules", { silent: true }),
+        api<{ capsuleIds: string[] }>(`/api/notebooks/${notebookId}/capsule-links`, { silent: true }),
+      ]);
+      setAllCapsules(capsulesRes.capsules || []);
+      setSelectedCapsuleIds(linksRes.capsuleIds || []);
+    } catch {
+      setAllCapsules([]);
+      setSelectedCapsuleIds([]);
+    } finally {
+      setCapsuleLoading(false);
+    }
+  };
+
+  const handleToggleCapsuleLink = async (capsuleId: string) => {
+    if (!capsuleSelectorId) return;
+    const next = selectedCapsuleIds.includes(capsuleId)
+      ? selectedCapsuleIds.filter((id) => id !== capsuleId)
+      : [...selectedCapsuleIds, capsuleId];
+    setSelectedCapsuleIds(next);
+    try {
+      await api(`/api/notebooks/${capsuleSelectorId}/capsule-links`, {
+        method: "PUT",
+        body: JSON.stringify({ capsuleIds: next }),
       });
       fetchNotebooks();
     } catch {
-      // auto-handled
+      // revert on error
+      setSelectedCapsuleIds(selectedCapsuleIds);
     }
   };
 
@@ -308,7 +337,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                   </div>
 
                   {/* Context menu */}
-                  <Popover open={menuOpenId === nb.id} onOpenChange={(o) => setMenuOpenId(o ? nb.id : null)}>
+                  <Popover open={menuOpenId === nb.id} onOpenChange={(o) => { setMenuOpenId(o ? nb.id : null); if (!o) setCapsuleSelectorId(null); }}>
                     <PopoverTrigger asChild>
                       <div
                         role="button"
@@ -319,18 +348,49 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                       </div>
                     </PopoverTrigger>
                     <PopoverContent className="w-48 p-1" align="end" side="bottom">
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleCapsule(nb.id, nb.includeInCapsule);
-                          setMenuOpenId(null);
-                        }}
-                      >
-                        <Brain className={`h-3 w-3 ${nb.includeInCapsule ? "text-brand" : "text-muted-foreground"}`} />
-                        {nb.includeInCapsule ? t("notebooks.excludeFromCapsule") : t("notebooks.includeInCapsule")}
-                      </button>
+                      {capsuleSelectorId === nb.id ? (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border mb-1">
+                            <button type="button" onClick={() => setCapsuleSelectorId(null)} className="hover:text-foreground">
+                              <ArrowLeft className="h-3 w-3" />
+                            </button>
+                            {t("notebooks.manageCapsules")}
+                          </div>
+                          {capsuleLoading ? (
+                            <div className="flex justify-center py-3">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            </div>
+                          ) : allCapsules.length === 0 ? (
+                            <div className="px-2 py-2 text-xs text-muted-foreground">{t("notebooks.noCapsules")}</div>
+                          ) : (
+                            allCapsules.map((cap) => (
+                              <button
+                                key={cap.id}
+                                type="button"
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                                onClick={() => handleToggleCapsuleLink(cap.id)}
+                              >
+                                <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 ${selectedCapsuleIds.includes(cap.id) ? "bg-brand border-brand text-white" : "border-muted-foreground/30"}`}>
+                                  {selectedCapsuleIds.includes(cap.id) && <Check className="h-2.5 w-2.5" />}
+                                </div>
+                                <span className="truncate">{cap.name}</span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleManageCapsules(nb.id);
+                          }}
+                        >
+                          <Brain className={`h-3 w-3 ${nb.includeInCapsule ? "text-brand" : "text-muted-foreground"}`} />
+                          {t("notebooks.manageCapsules")}
+                        </button>
+                      )}
                       {!nb.isDefault && (
                         <button
                           type="button"
