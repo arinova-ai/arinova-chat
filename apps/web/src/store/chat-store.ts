@@ -1395,6 +1395,65 @@ export const useChatStore = create<ChatState>((set, get) => ({
       },
     });
 
+    // Optimistic: update parent threadSummary for immediate thread indicator
+    const mainMsgs = get().messagesByConversation[activeConversationId] ?? [];
+    set({
+      messagesByConversation: {
+        ...get().messagesByConversation,
+        [activeConversationId]: mainMsgs.map((m) =>
+          m.id === activeThreadId
+            ? {
+                ...m,
+                threadSummary: {
+                  replyCount: (m.threadSummary?.replyCount ?? 0) + 1,
+                  lastReplyAt: new Date().toISOString(),
+                  participants: m.threadSummary?.participants ?? [],
+                  lastReplyPreview: content.slice(0, 100),
+                },
+              }
+            : m
+        ),
+      },
+    });
+
+    // Also update threadListItems if loaded
+    const curThreadList = get().threadListItems[activeConversationId];
+    if (curThreadList) {
+      const existing = curThreadList.find((t) => t.threadId === activeThreadId);
+      if (existing) {
+        set({
+          threadListItems: {
+            ...get().threadListItems,
+            [activeConversationId]: curThreadList.map((t) =>
+              t.threadId === activeThreadId
+                ? { ...t, replyCount: t.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: content.slice(0, 100) }
+                : t
+            ),
+          },
+        });
+      } else {
+        const parentMsg = mainMsgs.find((m) => m.id === activeThreadId);
+        if (parentMsg) {
+          set({
+            threadListItems: {
+              ...get().threadListItems,
+              [activeConversationId]: [
+                {
+                  threadId: activeThreadId,
+                  originalMessage: { content: parentMsg.content, role: parentMsg.role, senderAgentName: parentMsg.senderAgentName ?? null },
+                  replyCount: 1,
+                  lastReplyAt: new Date().toISOString(),
+                  participants: [],
+                  lastReplyPreview: content.slice(0, 100),
+                },
+                ...curThreadList,
+              ],
+            },
+          });
+        }
+      }
+    }
+
     // Send via WebSocket with threadId + client UUID
     wsManager.send({
       type: "send_message",
@@ -1713,29 +1772,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
         }
 
-        // Update parent message's threadSummary in main conversation
+        // Update parent message's threadSummary — skip if alreadyExists (optimistic update already done)
         const mainMsgs = get().messagesByConversation[conversationId] ?? [];
-        set({
-          messagesByConversation: {
-            ...get().messagesByConversation,
-            [conversationId]: mainMsgs.map((m) =>
-              m.id === threadId
-                ? {
-                    ...m,
-                    threadSummary: {
-                      replyCount: (m.threadSummary?.replyCount ?? 0) + 1,
-                      lastReplyAt: new Date().toISOString(),
-                      participants: m.threadSummary?.participants ?? [],
-                      lastReplyPreview: msg.content.slice(0, 100),
-                    },
-                  }
-                : m
-            ),
-          },
-        });
+        if (!alreadyExists) {
+          set({
+            messagesByConversation: {
+              ...get().messagesByConversation,
+              [conversationId]: mainMsgs.map((m) =>
+                m.id === threadId
+                  ? {
+                      ...m,
+                      threadSummary: {
+                        replyCount: (m.threadSummary?.replyCount ?? 0) + 1,
+                        lastReplyAt: new Date().toISOString(),
+                        participants: m.threadSummary?.participants ?? [],
+                        lastReplyPreview: msg.content.slice(0, 100),
+                      },
+                    }
+                  : m
+              ),
+            },
+          });
+        }
 
         // Update thread list items for non-agent replies (agent replies handled by stream_end)
-        if (msg.role !== "agent") {
+        if (msg.role !== "agent" && !alreadyExists) {
           const curThreadList = get().threadListItems[conversationId];
           if (curThreadList) {
             const parentMsg = mainMsgs.find((m) => m.id === threadId);
