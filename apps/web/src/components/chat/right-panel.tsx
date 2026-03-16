@@ -195,7 +195,14 @@ function TabContent({ tab }: { tab: string }) {
     case "notes":
       return <NotebookList inline conversationId={activeConversationId} open />;
     case "wiki":
-      return <WikiPanel inline conversationId={activeConversationId} open />;
+      return (
+        <WikiPanel
+          inline
+          conversationId={activeConversationId}
+          communityId={activeConversation?.type === "community" ? activeConversation.officialCommunityId ?? undefined : undefined}
+          open
+        />
+      );
     case "kanban":
       return <KanbanSidebar inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
     case "threads":
