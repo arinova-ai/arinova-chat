@@ -119,8 +119,9 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
       api(`/api/conversations/${conversationId}/notebook-preference`, {
         method: "PUT",
         body: JSON.stringify({ notebookId: nb.id }),
-        silent: true,
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error("[notebook-preference] PUT failed:", err);
+      });
     }
   }, [conversationId]);
 
