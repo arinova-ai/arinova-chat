@@ -1401,5 +1401,17 @@
   "community.detail.coinsPerMonth": "{{amount}} コイン/月",
   "community.detail.noChatYet": "チャット準備中",
   "community.detail.noChatYetHint": "コミュニティチャットはまだ利用できません。後ほどお試しください。",
-  "community.joined": "参加済み"
+  "community.joined": "参加済み",
+  "community.identity.title": "コミュニティID",
+  "community.identity.nickname": "ニックネーム",
+  "community.identity.nicknamePlaceholder": "ニックネームを入力",
+  "community.identity.avatar": "アバターURL",
+  "community.identity.avatarPlaceholder": "アバター画像のURL（任意）",
+  "community.identity.create": "ニックネームを設定して参加",
+  "community.identity.update": "IDを更新",
+  "community.identity.updating": "更新中...",
+  "community.identity.updated": "更新完了",
+  "community.identity.desc": "このコミュニティでのあなたのID。他のメンバーにはこの名前のみ表示されます。",
+  "community.identity.joinTitle": "IDを選択",
+  "community.identity.joinDesc": "このコミュニティのニックネームを選択してください。実名は他のメンバーに表示されません。"
 }

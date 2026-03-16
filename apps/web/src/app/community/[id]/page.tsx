@@ -26,6 +26,8 @@ import {
   BookText,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { CommunitySettingsSheet } from "@/components/chat/community-settings";
 import { WikiPanel } from "@/components/chat/wiki-panel";
 import { useChatStore } from "@/store/chat-store";
@@ -173,6 +175,11 @@ function CommunityDetailContent() {
   // Wiki
   const [wikiOpen, setWikiOpen] = useState(false);
 
+  // Join identity dialog
+  const [joinDialogOpen, setJoinDialogOpen] = useState(false);
+  const [joinNickname, setJoinNickname] = useState("");
+  const [joinAvatarUrl, setJoinAvatarUrl] = useState("");
+
   // Verification
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyForm, setVerifyForm] = useState({ businessName: "", businessRegistration: "", documentsUrl: "" });
@@ -249,10 +256,25 @@ function CommunityDetailContent() {
 
   // ------ Join ------
 
+  // Open identity dialog instead of joining directly
+  const handleJoinClick = useCallback(() => {
+    setJoinNickname("");
+    setJoinAvatarUrl("");
+    setJoinDialogOpen(true);
+  }, []);
+
   const handleJoin = useCallback(async () => {
+    if (!joinNickname.trim()) return;
     setJoining(true);
+    setJoinDialogOpen(false);
     try {
-      const joinRes = await api<{ conversationId?: string }>(`/api/communities/${id}/join`, { method: "POST" });
+      const joinRes = await api<{ conversationId?: string }>(`/api/communities/${id}/join`, {
+        method: "POST",
+        body: JSON.stringify({
+          displayName: joinNickname.trim(),
+          avatarUrl: joinAvatarUrl.trim() || null,
+        }),
+      });
       if (joinRes.conversationId) {
         useChatStore.getState().setActiveConversation(joinRes.conversationId);
         router.push(`/?c=${joinRes.conversationId}`);
@@ -268,7 +290,7 @@ function CommunityDetailContent() {
     } finally {
       setJoining(false);
     }
-  }, [id, community, router]);
+  }, [id, community, router, joinNickname, joinAvatarUrl]);
 
   const handleSubmitVerification = useCallback(async () => {
     setVerifySubmitting(true);
@@ -614,7 +636,7 @@ function CommunityDetailContent() {
                       <Button
                         className="brand-gradient-btn w-full"
                         size="lg"
-                        onClick={handleJoin}
+                        onClick={handleJoinClick}
                         disabled={joining}
                       >
                         {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.detail.joinCommunity")}
@@ -638,6 +660,43 @@ function CommunityDetailContent() {
               </div>
             </div>
           )}
+
+          {/* Join Identity Dialog */}
+          <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{t("community.identity.joinTitle")}</DialogTitle>
+                <DialogDescription>{t("community.identity.joinDesc")}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">{t("community.identity.nickname")}</label>
+                  <Input
+                    value={joinNickname}
+                    onChange={(e) => setJoinNickname(e.target.value)}
+                    placeholder={t("community.identity.nicknamePlaceholder")}
+                    maxLength={50}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">{t("community.identity.avatar")}</label>
+                  <Input
+                    value={joinAvatarUrl}
+                    onChange={(e) => setJoinAvatarUrl(e.target.value)}
+                    placeholder={t("community.identity.avatarPlaceholder")}
+                  />
+                </div>
+                <Button
+                  className="brand-gradient-btn w-full"
+                  onClick={handleJoin}
+                  disabled={!joinNickname.trim() || joining}
+                >
+                  {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.identity.create")}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <MobileBottomNav />
         </div>

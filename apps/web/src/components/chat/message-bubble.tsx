@@ -596,9 +596,10 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
     setReportLoading(false);
   };
 
+  const isCommunityConversation = conversation?.type === "community";
   const showUserProfile = useMemo(
-    () => !isUser && message.role === "user" && !!message.senderUserId,
-    [isUser, message.role, message.senderUserId]
+    () => !isUser && message.role === "user" && !!message.senderUserId && !isCommunityConversation,
+    [isUser, message.role, message.senderUserId, isCommunityConversation]
   );
   const resolvedAgentId = useMemo(() => {
     if (message.senderAgentId) return message.senderAgentId;
@@ -618,8 +619,8 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
     [isUser, message.role, resolvedAgentId]
   );
   const showOwnProfile = useMemo(
-    () => isUser && !!currentUserId,
-    [isUser, currentUserId]
+    () => isUser && !!currentUserId && !isCommunityConversation,
+    [isUser, currentUserId, isCommunityConversation]
   );
   const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile;
   const longPressHandlers = useLongPress(() => {

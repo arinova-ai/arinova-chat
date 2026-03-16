@@ -1379,5 +1379,17 @@
   "community.detail.coinsPerMonth": "{{amount}} 代币/月",
   "community.detail.noChatYet": "聊天室准备中",
   "community.detail.noChatYetHint": "社群聊天室尚未建立，请稍后再试。",
-  "community.joined": "已加入"
+  "community.joined": "已加入",
+  "community.identity.title": "社群身份",
+  "community.identity.nickname": "昵称",
+  "community.identity.nicknamePlaceholder": "输入你的昵称",
+  "community.identity.avatar": "头像网址",
+  "community.identity.avatarPlaceholder": "输入头像图片网址（选填）",
+  "community.identity.create": "设定昵称并加入",
+  "community.identity.update": "更新身份",
+  "community.identity.updating": "更新中...",
+  "community.identity.updated": "已更新",
+  "community.identity.desc": "你在此社群中的身份，其他成员只会看到这个名称。",
+  "community.identity.joinTitle": "选择你的身份",
+  "community.identity.joinDesc": "为此社群选择一个昵称，你的真实身份将对其他成员隐藏。"
 }

@@ -160,6 +160,53 @@ pub(crate) async fn with_attachments(
         std::collections::HashMap::new()
     };
 
+    // Fetch community anonymous identities for community conversations
+    // If the conversation is a community conversation, override sender info with display_name/member_avatar_url
+    let community_identities: std::collections::HashMap<String, (String, Option<String>)> = {
+        // Check if any message's conversation is a community conversation
+        let conv_id = items.first().map(|m| m.conversation_id);
+        if let Some(cid) = conv_id {
+            let is_community = sqlx::query_scalar::<_, bool>(
+                r#"SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND "type" = 'community')"#,
+            )
+            .bind(cid)
+            .fetch_one(db)
+            .await
+            .unwrap_or(false);
+
+            if is_community {
+                // Get the community_id for this conversation
+                let community_id: Option<Uuid> = sqlx::query_scalar(
+                    "SELECT id FROM communities WHERE conversation_id = $1",
+                )
+                .bind(cid)
+                .fetch_optional(db)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(com_id) = community_id {
+                    sqlx::query_as::<_, (String, Option<String>, Option<String>)>(
+                        "SELECT user_id, display_name, member_avatar_url FROM community_members WHERE community_id = $1 AND display_name IS NOT NULL",
+                    )
+                    .bind(com_id)
+                    .fetch_all(db)
+                    .await
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|(uid, dn, av)| dn.map(|n| (uid, (n, av))))
+                    .collect()
+                } else {
+                    std::collections::HashMap::new()
+                }
+            } else {
+                std::collections::HashMap::new()
+            }
+        } else {
+            std::collections::HashMap::new()
+        }
+    };
+
     // Fetch thread summaries for messages that have threads
     let thread_summary_data: std::collections::HashMap<Uuid, (i32, NaiveDateTime, Vec<String>, Option<String>)> = {
         let msg_ids: Vec<Uuid> = items.iter().map(|m| m.id).collect();
@@ -281,10 +328,28 @@ pub(crate) async fn with_attachments(
 
             {
                 let sender_user_info = m.sender_user_id.as_ref().and_then(|uid| sender_user_names.get(uid));
-                let sender_username = sender_user_info.and_then(|(_, u, _, _)| u.clone());
-                let sender_user_name = sender_user_info.map(|(n, _, _, _)| n.clone());
-                let sender_user_image = sender_user_info.and_then(|(_, _, img, _)| img.clone());
-                let sender_is_verified = sender_user_info.map(|(_, _, _, v)| *v).unwrap_or(false);
+                // Check for community anonymous identity override
+                let community_identity = m.sender_user_id.as_ref().and_then(|uid| community_identities.get(uid));
+                let sender_username = if community_identity.is_some() {
+                    None // Hide real username for anonymous identity
+                } else {
+                    sender_user_info.and_then(|(_, u, _, _)| u.clone())
+                };
+                let sender_user_name = if let Some((display_name, _)) = community_identity {
+                    Some(display_name.clone())
+                } else {
+                    sender_user_info.map(|(n, _, _, _)| n.clone())
+                };
+                let sender_user_image = if let Some((_, avatar_url)) = community_identity {
+                    avatar_url.clone()
+                } else {
+                    sender_user_info.and_then(|(_, _, img, _)| img.clone())
+                };
+                let sender_is_verified = if community_identity.is_some() {
+                    false // Anonymous users don't show verification
+                } else {
+                    sender_user_info.map(|(_, _, _, v)| *v).unwrap_or(false)
+                };
 
                 let thread_summary = thread_summary_data.get(&m.id).map(|(count, last, parts, preview)| {
                     json!({

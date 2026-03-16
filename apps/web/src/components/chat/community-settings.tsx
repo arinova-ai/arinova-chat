@@ -28,6 +28,7 @@ import {
   Crown,
   Shield,
   User,
+  UserCircle2,
   UserMinus,
   ArrowUpDown,
   Trash2,
@@ -82,6 +83,8 @@ interface Member {
   userName: string;
   userImage: string | null;
   notificationPreference: string;
+  displayName?: string | null;
+  memberAvatarUrl?: string | null;
 }
 
 interface Application {
@@ -146,6 +149,11 @@ export function CommunitySettingsSheet({
   const [notifPref, setNotifPref] = useState("all");
   const [notifSaving, setNotifSaving] = useState(false);
 
+  // Community identity
+  const [identityName, setIdentityName] = useState("");
+  const [identityAvatar, setIdentityAvatar] = useState("");
+  const [identitySaveState, setIdentitySaveState] = useState<"idle" | "saving" | "saved">("idle");
+
   // Invite creation
   const [inviteMaxUses, setInviteMaxUses] = useState("");
   const [inviteExpiry, setInviteExpiry] = useState("24");
@@ -177,9 +185,13 @@ export function CommunitySettingsSheet({
       setAllowAgents(communityData.allowAgents);
       setAgentJoinPolicy(communityData.agentJoinPolicy);
 
-      // Set current user's notification preference
+      // Set current user's notification preference and identity
       const me = membersData.members.find((m: Member) => m.userId === session.data?.user?.id);
-      if (me) setNotifPref(me.notificationPreference);
+      if (me) {
+        setNotifPref(me.notificationPreference);
+        setIdentityName(me.displayName ?? "");
+        setIdentityAvatar(me.memberAvatarUrl ?? "");
+      }
     } catch {
       // error toast handled by api()
     } finally {
@@ -271,6 +283,25 @@ export function CommunitySettingsSheet({
     },
     [communityId]
   );
+
+  // ── Update Community Identity ──
+  const handleSaveIdentity = useCallback(async () => {
+    if (!communityId || !identityName.trim()) return;
+    setIdentitySaveState("saving");
+    try {
+      await api(`/api/communities/${communityId}/identity`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          displayName: identityName.trim(),
+          avatarUrl: identityAvatar.trim() || null,
+        }),
+      });
+      setIdentitySaveState("saved");
+      setTimeout(() => setIdentitySaveState("idle"), 2000);
+    } catch {
+      setIdentitySaveState("idle");
+    }
+  }, [communityId, identityName, identityAvatar]);
 
   // ── Member Management ──
   const handleUpdateRole = useCallback(
@@ -663,6 +694,45 @@ export function CommunitySettingsSheet({
             {/* ── Personal Settings Tab ── */}
             {activeTab === "personal" && (
               <div className="space-y-4">
+                {/* Community Identity */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <UserCircle2 className="h-4 w-4" />
+                    <h3 className="text-sm font-semibold">{t("community.identity.title")}</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t("community.identity.desc")}</p>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">{t("community.identity.nickname")}</label>
+                    <Input
+                      value={identityName}
+                      onChange={(e) => setIdentityName(e.target.value)}
+                      placeholder={t("community.identity.nicknamePlaceholder")}
+                      maxLength={50}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground">{t("community.identity.avatar")}</label>
+                    <Input
+                      value={identityAvatar}
+                      onChange={(e) => setIdentityAvatar(e.target.value)}
+                      placeholder={t("community.identity.avatarPlaceholder")}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveIdentity}
+                    disabled={identitySaveState === "saving" || !identityName.trim()}
+                  >
+                    {identitySaveState === "saving"
+                      ? t("community.identity.updating")
+                      : identitySaveState === "saved"
+                        ? t("community.identity.updated")
+                        : t("community.identity.update")}
+                  </Button>
+                </div>
+
+                <Separator />
+
                 <h3 className="text-sm font-semibold">{t("communitySettings.notifications")}</h3>
                 <p className="text-xs text-muted-foreground">{t("communitySettings.notificationsDesc")}</p>
                 <div className="space-y-2">

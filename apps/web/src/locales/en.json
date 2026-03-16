@@ -1430,5 +1430,17 @@
   "community.detail.coinsPerMonth": "{{amount}} coins/month",
   "community.detail.noChatYet": "Chat is being set up",
   "community.detail.noChatYetHint": "The community chat is not yet available. Please check back later.",
-  "community.joined": "Joined"
+  "community.joined": "Joined",
+  "community.identity.title": "Community Identity",
+  "community.identity.nickname": "Nickname",
+  "community.identity.nicknamePlaceholder": "Enter your nickname",
+  "community.identity.avatar": "Avatar URL",
+  "community.identity.avatarPlaceholder": "Enter avatar image URL (optional)",
+  "community.identity.create": "Set Nickname to Join",
+  "community.identity.update": "Update Identity",
+  "community.identity.updating": "Updating...",
+  "community.identity.updated": "Updated",
+  "community.identity.desc": "Your identity in this community. Other members will only see this name.",
+  "community.identity.joinTitle": "Choose Your Identity",
+  "community.identity.joinDesc": "Pick a nickname for this community. Your real identity will be hidden from other members."
 }

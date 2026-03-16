@@ -1375,5 +1375,17 @@
   "community.detail.coinsPerMonth": "{{amount}} monedas/mes",
   "community.detail.noChatYet": "Chat en preparación",
   "community.detail.noChatYetHint": "El chat de la comunidad aún no está disponible. Inténtalo más tarde.",
-  "community.joined": "Unido"
+  "community.joined": "Unido",
+  "community.identity.title": "Identidad de Comunidad",
+  "community.identity.nickname": "Apodo",
+  "community.identity.nicknamePlaceholder": "Ingresa tu apodo",
+  "community.identity.avatar": "URL del avatar",
+  "community.identity.avatarPlaceholder": "URL de imagen del avatar (opcional)",
+  "community.identity.create": "Establecer apodo y unirse",
+  "community.identity.update": "Actualizar identidad",
+  "community.identity.updating": "Actualizando...",
+  "community.identity.updated": "Actualizado",
+  "community.identity.desc": "Tu identidad en esta comunidad. Los demás miembros solo verán este nombre.",
+  "community.identity.joinTitle": "Elige tu identidad",
+  "community.identity.joinDesc": "Elige un apodo para esta comunidad. Tu identidad real estará oculta para los demás miembros."
 }

@@ -1375,5 +1375,17 @@
   "community.detail.coinsPerMonth": "{{amount}} syiling/bulan",
   "community.detail.noChatYet": "Sembang sedang disediakan",
   "community.detail.noChatYetHint": "Sembang komuniti belum tersedia. Sila cuba lagi nanti.",
-  "community.joined": "Disertai"
+  "community.joined": "Disertai",
+  "community.identity.title": "Identiti Komuniti",
+  "community.identity.nickname": "Nama Samaran",
+  "community.identity.nicknamePlaceholder": "Masukkan nama samaran anda",
+  "community.identity.avatar": "URL Avatar",
+  "community.identity.avatarPlaceholder": "URL imej avatar (pilihan)",
+  "community.identity.create": "Tetapkan nama samaran dan sertai",
+  "community.identity.update": "Kemas kini identiti",
+  "community.identity.updating": "Mengemas kini...",
+  "community.identity.updated": "Dikemas kini",
+  "community.identity.desc": "Identiti anda dalam komuniti ini. Ahli lain hanya akan melihat nama ini.",
+  "community.identity.joinTitle": "Pilih identiti anda",
+  "community.identity.joinDesc": "Pilih nama samaran untuk komuniti ini. Identiti sebenar anda akan disembunyikan daripada ahli lain."
 }

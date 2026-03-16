@@ -69,6 +69,11 @@ pub fn router() -> Router<AppState> {
         )
         // Ownership transfer
         .route("/api/communities/{id}/transfer", post(transfer_ownership))
+        // Anonymous identity
+        .route(
+            "/api/communities/{id}/identity",
+            axum::routing::patch(update_community_identity),
+        )
         // Notification preferences
         .route(
             "/api/communities/{id}/members/me/preferences",
@@ -155,6 +160,8 @@ struct MemberRow {
     notification_preference: String,
     user_name: String,
     user_image: Option<String>,
+    display_name: Option<String>,
+    member_avatar_url: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -180,6 +187,8 @@ struct CommunityMessageRow {
     user_image: Option<String>,
     agent_name: Option<String>,
     tts_audio_url: Option<String>,
+    display_name: Option<String>,
+    member_avatar_url: Option<String>,
 }
 
 async fn is_member_or_creator(
@@ -204,7 +213,15 @@ async fn is_member_or_creator(
 }
 
 fn community_json(r: &CommunityRow) -> Value {
-    json!({
+    community_json_with_identity(r, None, None)
+}
+
+fn community_json_with_identity(
+    r: &CommunityRow,
+    my_display_name: Option<&str>,
+    my_avatar_url: Option<&str>,
+) -> Value {
+    let mut obj = json!({
         "id": r.id,
         "creatorId": r.creator_id,
         "name": r.name,
@@ -232,7 +249,14 @@ fn community_json(r: &CommunityRow) -> Value {
         "conversationId": r.conversation_id,
         "createdAt": r.created_at.to_rfc3339(),
         "updatedAt": r.updated_at.to_rfc3339(),
-    })
+    });
+    if let Some(name) = my_display_name {
+        obj["myDisplayName"] = json!(name);
+    }
+    if let Some(url) = my_avatar_url {
+        obj["myAvatarUrl"] = json!(url);
+    }
+    obj
 }
 
 // ---------------------------------------------------------------------------
@@ -592,6 +616,7 @@ async fn create(
 
 async fn get_community(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
     let row = sqlx::query_as::<_, CommunityRow>(
@@ -610,7 +635,29 @@ async fn get_community(
     .await;
 
     match row {
-        Ok(Some(r)) => (StatusCode::OK, Json(community_json(&r))),
+        Ok(Some(r)) => {
+            // Try to get caller's community identity
+            let user_id = extract_user_id_from_cookie(&state.db, &headers).await;
+            let (my_display_name, my_avatar_url) = if let Some(ref uid) = user_id {
+                sqlx::query_as::<_, (Option<String>, Option<String>)>(
+                    "SELECT display_name, member_avatar_url FROM community_members WHERE community_id = $1 AND user_id = $2",
+                )
+                .bind(id)
+                .bind(uid)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or((None, None))
+            } else {
+                (None, None)
+            };
+            (StatusCode::OK, Json(community_json_with_identity(
+                &r,
+                my_display_name.as_deref(),
+                my_avatar_url.as_deref(),
+            )))
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({ "error": "Community not found" })),
@@ -866,11 +913,23 @@ async fn delete_community(
 // POST /api/communities/:id/join — Join community
 // ---------------------------------------------------------------------------
 
+#[derive(Deserialize)]
+struct JoinBody {
+    #[serde(rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(rename = "avatarUrl")]
+    avatar_url: Option<String>,
+}
+
 async fn join(
     State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
+    body: Option<Json<JoinBody>>,
 ) -> (StatusCode, Json<Value>) {
+    let join_body = body.map(|b| b.0);
+    let display_name = join_body.as_ref().and_then(|b| b.display_name.clone()).unwrap_or_default();
+    let member_avatar_url = join_body.as_ref().and_then(|b| b.avatar_url.clone());
     // Fetch community
     let community = sqlx::query_as::<_, (i32, i32, String, Option<Uuid>, bool)>(
         "SELECT join_fee, monthly_fee, status, conversation_id, require_approval FROM communities WHERE id = $1",
@@ -1074,20 +1133,24 @@ async fn join(
 
     let insert_result = if subscription_expires.is_some() {
         sqlx::query(
-            r#"INSERT INTO community_members (community_id, user_id, role, subscription_status, subscription_expires_at)
-               VALUES ($1, $2, 'member', 'active', NOW() + INTERVAL '30 days')"#,
+            r#"INSERT INTO community_members (community_id, user_id, role, subscription_status, subscription_expires_at, display_name, member_avatar_url)
+               VALUES ($1, $2, 'member', 'active', NOW() + INTERVAL '30 days', NULLIF($3, ''), $4)"#,
         )
         .bind(id)
         .bind(&user.id)
+        .bind(&display_name)
+        .bind(member_avatar_url.as_deref())
         .execute(&mut *tx)
         .await
     } else {
         sqlx::query(
-            r#"INSERT INTO community_members (community_id, user_id, role)
-               VALUES ($1, $2, 'member')"#,
+            r#"INSERT INTO community_members (community_id, user_id, role, display_name, member_avatar_url)
+               VALUES ($1, $2, 'member', NULLIF($3, ''), $4)"#,
         )
         .bind(id)
         .bind(&user.id)
+        .bind(&display_name)
+        .bind(member_avatar_url.as_deref())
         .execute(&mut *tx)
         .await
     };
@@ -1242,7 +1305,8 @@ async fn list_members(
     let rows = sqlx::query_as::<_, MemberRow>(
         r#"SELECT cm.id, cm.user_id, cm.role::text, cm.joined_at,
                   cm.subscription_status, cm.notification_preference,
-                  u.name AS user_name, u.image AS user_image
+                  u.name AS user_name, u.image AS user_image,
+                  cm.display_name, cm.member_avatar_url
            FROM community_members cm
            JOIN "user" u ON cm.user_id = u.id
            WHERE cm.community_id = $1
@@ -1259,6 +1323,13 @@ async fn list_members(
             let members: Vec<Value> = rows
                 .iter()
                 .map(|r| {
+                    // Use anonymous display_name if set, otherwise fall back to real name
+                    let shown_name = r.display_name.as_deref().unwrap_or(&r.user_name);
+                    let shown_image = if r.member_avatar_url.is_some() {
+                        &r.member_avatar_url
+                    } else {
+                        &r.user_image
+                    };
                     json!({
                         "id": r.id,
                         "userId": r.user_id,
@@ -1266,8 +1337,10 @@ async fn list_members(
                         "joinedAt": r.joined_at.to_rfc3339(),
                         "subscriptionStatus": r.subscription_status,
                         "notificationPreference": r.notification_preference,
-                        "userName": r.user_name,
-                        "userImage": r.user_image,
+                        "userName": shown_name,
+                        "userImage": shown_image,
+                        "displayName": r.display_name,
+                        "memberAvatarUrl": r.member_avatar_url,
                     })
                 })
                 .collect();
@@ -2102,10 +2175,12 @@ async fn get_messages(
         sqlx::query_as::<_, CommunityMessageRow>(
             r#"SELECT m.id, m.user_id, m.agent_listing_id, m.content, m.message_type, m.created_at,
                       u.name AS user_name, u.image AS user_image,
-                      l.agent_name, m.tts_audio_url
+                      l.agent_name, m.tts_audio_url,
+                      cm.display_name, cm.member_avatar_url
                FROM community_messages m
                LEFT JOIN "user" u ON m.user_id = u.id
                LEFT JOIN agent_listings l ON m.agent_listing_id = l.id
+               LEFT JOIN community_members cm ON cm.community_id = m.community_id AND cm.user_id = m.user_id
                WHERE m.community_id = $1 AND m.created_at < $2::timestamptz
                ORDER BY m.created_at DESC
                LIMIT $3"#,
@@ -2119,10 +2194,12 @@ async fn get_messages(
         sqlx::query_as::<_, CommunityMessageRow>(
             r#"SELECT m.id, m.user_id, m.agent_listing_id, m.content, m.message_type, m.created_at,
                       u.name AS user_name, u.image AS user_image,
-                      l.agent_name, m.tts_audio_url
+                      l.agent_name, m.tts_audio_url,
+                      cm.display_name, cm.member_avatar_url
                FROM community_messages m
                LEFT JOIN "user" u ON m.user_id = u.id
                LEFT JOIN agent_listings l ON m.agent_listing_id = l.id
+               LEFT JOIN community_members cm ON cm.community_id = m.community_id AND cm.user_id = m.user_id
                WHERE m.community_id = $1
                ORDER BY m.created_at DESC
                LIMIT $2"#,
@@ -2139,6 +2216,13 @@ async fn get_messages(
                 .iter()
                 .rev() // reverse to chronological order
                 .map(|r| {
+                    // Use anonymous identity if set
+                    let shown_name = r.display_name.as_deref().or(r.user_name.as_deref());
+                    let shown_image = if r.member_avatar_url.is_some() {
+                        &r.member_avatar_url
+                    } else {
+                        &r.user_image
+                    };
                     json!({
                         "id": r.id,
                         "userId": r.user_id,
@@ -2146,8 +2230,8 @@ async fn get_messages(
                         "content": r.content,
                         "messageType": r.message_type,
                         "createdAt": r.created_at.to_rfc3339(),
-                        "userName": r.user_name,
-                        "userImage": r.user_image,
+                        "userName": shown_name,
+                        "userImage": shown_image,
                         "agentName": r.agent_name,
                         "ttsAudioUrl": r.tts_audio_url,
                     })
@@ -2989,6 +3073,67 @@ async fn update_my_preferences(
 }
 
 // ---------------------------------------------------------------------------
+// PATCH /api/communities/:id/identity — Update anonymous identity
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UpdateIdentityBody {
+    #[serde(rename = "displayName")]
+    display_name: String,
+    #[serde(rename = "avatarUrl")]
+    avatar_url: Option<String>,
+}
+
+async fn update_community_identity(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<UpdateIdentityBody>,
+) -> (StatusCode, Json<Value>) {
+    let name = body.display_name.trim();
+    if name.is_empty() || name.len() > 50 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Display name must be 1-50 characters" })),
+        );
+    }
+
+    let result = sqlx::query(
+        r#"UPDATE community_members
+           SET display_name = $1, member_avatar_url = $2
+           WHERE community_id = $3 AND user_id = $4"#,
+    )
+    .bind(name)
+    .bind(body.avatar_url.as_deref())
+    .bind(id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() == 0 => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "Not a member of this community" })),
+        ),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({
+                "success": true,
+                "displayName": name,
+                "avatarUrl": body.avatar_url,
+            })),
+        ),
+        Err(e) => {
+            tracing::error!("Update community identity failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/communities/:id/invites — Create invite link/code
 // ---------------------------------------------------------------------------
 
@@ -3205,11 +3350,23 @@ async fn delete_invite(
 // POST /api/communities/join-by-invite/:code — Join via invite code
 // ---------------------------------------------------------------------------
 
+#[derive(Deserialize)]
+struct JoinByInviteBody {
+    #[serde(rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(rename = "avatarUrl")]
+    avatar_url: Option<String>,
+}
+
 async fn join_by_invite(
     State(state): State<AppState>,
     user: AuthUser,
     Path(code): Path<String>,
+    body: Option<Json<JoinByInviteBody>>,
 ) -> (StatusCode, Json<Value>) {
+    let invite_body = body.map(|b| b.0);
+    let display_name = invite_body.as_ref().and_then(|b| b.display_name.clone());
+    let member_avatar_url = invite_body.as_ref().and_then(|b| b.avatar_url.clone());
     // Look up the invite
     let invite = sqlx::query_as::<_, (Uuid, Uuid, Option<i32>, i32, Option<DateTime<Utc>>)>(
         r#"SELECT id, community_id, max_uses, use_count, expires_at
@@ -3273,14 +3430,16 @@ async fn join_by_invite(
         );
     }
 
-    // Add member
+    // Add member with anonymous identity
     let _ = sqlx::query(
-        r#"INSERT INTO community_members (community_id, user_id, role)
-           VALUES ($1, $2, 'member')
+        r#"INSERT INTO community_members (community_id, user_id, role, display_name, member_avatar_url)
+           VALUES ($1, $2, 'member', $3, $4)
            ON CONFLICT DO NOTHING"#,
     )
     .bind(community_id)
     .bind(&user.id)
+    .bind(display_name.as_deref())
+    .bind(member_avatar_url.as_deref())
     .execute(&state.db)
     .await;
 

@@ -1375,5 +1375,17 @@
   "community.detail.coinsPerMonth": "{{amount}} pièces/mois",
   "community.detail.noChatYet": "Chat en préparation",
   "community.detail.noChatYetHint": "Le chat de la communauté n'est pas encore disponible. Veuillez réessayer plus tard.",
-  "community.joined": "Rejoint"
+  "community.joined": "Rejoint",
+  "community.identity.title": "Identite communautaire",
+  "community.identity.nickname": "Pseudonyme",
+  "community.identity.nicknamePlaceholder": "Entrez votre pseudonyme",
+  "community.identity.avatar": "URL de l'avatar",
+  "community.identity.avatarPlaceholder": "URL de l'image avatar (facultatif)",
+  "community.identity.create": "Definir le pseudonyme et rejoindre",
+  "community.identity.update": "Mettre a jour l'identite",
+  "community.identity.updating": "Mise a jour...",
+  "community.identity.updated": "Mis a jour",
+  "community.identity.desc": "Votre identite dans cette communaute. Les autres membres ne verront que ce nom.",
+  "community.identity.joinTitle": "Choisissez votre identite",
+  "community.identity.joinDesc": "Choisissez un pseudonyme pour cette communaute. Votre identite reelle sera cachee aux autres membres."
 }

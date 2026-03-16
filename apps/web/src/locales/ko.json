@@ -1375,5 +1375,17 @@
   "community.detail.coinsPerMonth": "{{amount}} 코인/월",
   "community.detail.noChatYet": "채팅 준비 중",
   "community.detail.noChatYetHint": "커뮤니티 채팅이 아직 준비되지 않았습니다. 나중에 다시 확인해 주세요.",
-  "community.joined": "가입됨"
+  "community.joined": "가입됨",
+  "community.identity.title": "커뮤니티 신원",
+  "community.identity.nickname": "닉네임",
+  "community.identity.nicknamePlaceholder": "닉네임을 입력하세요",
+  "community.identity.avatar": "아바타 URL",
+  "community.identity.avatarPlaceholder": "아바타 이미지 URL (선택사항)",
+  "community.identity.create": "닉네임 설정 후 가입",
+  "community.identity.update": "신원 업데이트",
+  "community.identity.updating": "업데이트 중...",
+  "community.identity.updated": "업데이트 완료",
+  "community.identity.desc": "이 커뮤니티에서의 신원입니다. 다른 멤버에게는 이 이름만 표시됩니다.",
+  "community.identity.joinTitle": "신원 선택",
+  "community.identity.joinDesc": "이 커뮤니티의 닉네임을 선택하세요. 실제 신원은 다른 멤버에게 숨겨집니다."
 }
