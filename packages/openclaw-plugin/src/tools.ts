@@ -333,13 +333,17 @@ export function registerTools(api: OpenClawPluginApi) {
         tags: Type.Optional(
           Type.Array(Type.String(), { description: "Tags for categorization" }),
         ),
+        notebookId: Type.Optional(
+          Type.String({ description: "Target notebook ID. If omitted, uses the conversation owner's default notebook." }),
+        ),
       }),
       async execute(_toolCallId, params) {
-        const { conversationId, title, content, tags } = params as {
+        const { conversationId, title, content, tags, notebookId } = params as {
           conversationId: string;
           title: string;
           content: string;
           tags?: string[];
+          notebookId?: string;
         };
         try {
           const account = resolveAccount();
@@ -347,7 +351,7 @@ export function registerTools(api: OpenClawPluginApi) {
             method: "POST",
             url: `${account.apiUrl}/api/agent/conversations/${encodeURIComponent(conversationId)}/notes`,
             token: account.botToken,
-            body: { title, content, tags: tags ?? [] },
+            body: { title, content, tags: tags ?? [], ...(notebookId ? { notebookId } : {}) },
           });
 
           return {

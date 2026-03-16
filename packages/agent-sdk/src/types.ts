@@ -160,6 +160,8 @@ export interface CreateNoteBody {
   title: string;
   content?: string;
   tags?: string[];
+  /** Target notebook ID. If omitted, uses the conversation owner's default notebook. */
+  notebookId?: string;
 }
 
 /** Body for updateNote(). */
