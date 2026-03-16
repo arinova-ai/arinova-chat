@@ -11,6 +11,7 @@ import { useOfficeStream } from "@/hooks/use-office-stream";
 import { useTheme } from "./theme-context";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { Agent } from "./types";
 
 
@@ -188,7 +189,7 @@ function OfficeViewInner() {
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
       {/* Office map area — always takes full remaining space; ref must always mount for ResizeObserver */}
-      <div ref={mapContainerRef} className="flex-1 min-h-0">
+      <div ref={mapContainerRef} className={cn("flex-1 min-h-0", isMobile && floatWindows.length > 0 && "pointer-events-none overflow-hidden")}>
         {!themeReady ? (
           <div className="flex h-full items-center justify-center">
             <ArinovaSpinner />

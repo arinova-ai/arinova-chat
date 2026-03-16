@@ -3012,27 +3012,25 @@ async fn set_board_preference(
             .into_response();
     }
 
-    // Verify board ownership
-    let board_owner = sqlx::query_scalar::<_, String>(
-        "SELECT owner_id FROM kanban_boards WHERE id = $1 AND is_archived = false",
+    // Verify board access (owner OR member)
+    let has_access = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM kanban_boards b
+            WHERE b.id = $1 AND b.is_archived = false
+              AND (b.owner_id = $2 OR EXISTS(SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.user_id = $2))
+        )"#,
     )
     .bind(body.board_id)
-    .fetch_optional(&state.db)
+    .bind(&user.id)
+    .fetch_one(&state.db)
     .await;
 
-    match board_owner {
-        Ok(Some(owner)) if owner == user.id => {}
-        Ok(Some(_)) => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "Not your board"})),
-            )
-                .into_response();
-        }
-        Ok(None) => {
+    match has_access {
+        Ok(true) => {}
+        Ok(false) => {
             return (
                 StatusCode::NOT_FOUND,
-                Json(json!({"error": "Board not found"})),
+                Json(json!({"error": "Board not found or no access"})),
             )
                 .into_response();
         }

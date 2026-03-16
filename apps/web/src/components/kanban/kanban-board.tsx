@@ -301,6 +301,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       api(`/api/conversations/${conversationId}/board-preference`, {
         method: "PUT",
         body: JSON.stringify({ boardId }),
+        silent: true,
       }).catch((err) => {
         console.error("[board-preference] PUT failed:", err);
       });

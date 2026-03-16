@@ -427,7 +427,7 @@ async fn extract_memories(
              m.content,
              m.created_at
            FROM messages m
-           LEFT JOIN "user" u ON m.sender_user_id = u.id
+           LEFT JOIN "user" u ON m.sender_user_id = u.id::text
            LEFT JOIN agents a ON m.sender_agent_id = a.id
            WHERE m.conversation_id = $1 AND m.content IS NOT NULL AND m.content != ''"#,
     );
@@ -618,7 +618,7 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
              m.content,
              m.created_at
            FROM messages m
-           LEFT JOIN "user" u ON m.sender_user_id = u.id
+           LEFT JOIN "user" u ON m.sender_user_id = u.id::text
            LEFT JOIN agents a ON m.sender_agent_id = a.id
            WHERE m.conversation_id = $1 AND m.content IS NOT NULL AND m.content != ''"#,
     );
@@ -628,18 +628,30 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
     msg_sql.push_str(" ORDER BY m.created_at ASC LIMIT 500");
 
     let messages: Vec<(String, String, chrono::DateTime<chrono::Utc>)> = if let Some(ref s) = since {
-        sqlx::query_as(&msg_sql)
+        match sqlx::query_as(&msg_sql)
             .bind(conversation_id)
             .bind(s)
             .fetch_all(db)
             .await
-            .unwrap_or_default()
+        {
+            Ok(rows) => rows,
+            Err(e) => {
+                tracing::error!("auto_extract_memories: failed to fetch messages: {e}");
+                return;
+            }
+        }
     } else {
-        sqlx::query_as(&msg_sql)
+        match sqlx::query_as(&msg_sql)
             .bind(conversation_id)
             .fetch_all(db)
             .await
-            .unwrap_or_default()
+        {
+            Ok(rows) => rows,
+            Err(e) => {
+                tracing::error!("auto_extract_memories: failed to fetch messages: {e}");
+                return;
+            }
+        }
     };
 
     if messages.is_empty() {

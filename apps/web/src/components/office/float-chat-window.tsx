@@ -240,8 +240,8 @@ export function FloatChatWindow({
     if (!touch) return;
     const dx = touch.clientX - touchDragRef.current.startX;
     const dy = touch.clientY - touchDragRef.current.startY;
-    const maxX = window.innerWidth - size.w;
-    const maxY = window.innerHeight - MOBILE_BOTTOM_NAV_HEIGHT - size.h;
+    const maxX = Math.max(0, window.innerWidth - size.w);
+    const maxY = Math.max(0, window.innerHeight - MOBILE_BOTTOM_NAV_HEIGHT - size.h);
     setPos({
       x: Math.max(0, Math.min(maxX, touchDragRef.current.posX + dx)),
       y: Math.max(0, Math.min(maxY, touchDragRef.current.posY + dy)),
@@ -307,13 +307,12 @@ export function FloatChatWindow({
           minHeight: MOBILE_MIN_HEIGHT,
         }}
       >
-        {/* Title bar — touch draggable */}
+        {/* Title bar — touch draggable (touch-only on touch devices, mouse-only otherwise) */}
         <div
-          className="flex items-center gap-2 px-3 py-2.5 border-b border-border bg-muted/50 shrink-0 select-none"
+          className="flex items-center gap-2 px-3 py-2.5 border-b border-border bg-muted/50 shrink-0 select-none touch-none"
           onTouchStart={onTouchDragStart}
           onTouchMove={onTouchDragMove}
           onTouchEnd={onTouchDragEnd}
-          onMouseDown={onDragStart}
         >
           {/* Drag handle indicator */}
           <div className="absolute left-1/2 top-1.5 -translate-x-1/2 w-8 h-1 rounded-full bg-muted-foreground/30" />
@@ -363,7 +362,7 @@ export function FloatChatWindow({
         </div>
 
         {/* Input */}
-        <div className="shrink-0 border-t px-3 py-2.5">
+        <div className="shrink-0 border-t px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
           <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}
@@ -372,6 +371,8 @@ export function FloatChatWindow({
               onKeyDown={handleKeyDown}
               placeholder={t("officeChat.placeholder")}
               rows={1}
+              enterKeyHint="send"
+              inputMode="text"
               className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
             <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={!input.trim()}>
