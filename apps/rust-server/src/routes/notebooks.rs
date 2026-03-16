@@ -54,7 +54,7 @@ struct UpdateNotebookBody {
 
 /// Ensure the user has a default notebook; create one if missing.
 /// Also backfill any notes without notebook_id into the default notebook.
-async fn ensure_default_notebook(db: &sqlx::PgPool, user_id: &str) -> Result<(), sqlx::Error> {
+pub(crate) async fn ensure_default_notebook(db: &sqlx::PgPool, user_id: &str) -> Result<(), sqlx::Error> {
     // Upsert: insert if no default exists (partial unique index prevents duplicates)
     sqlx::query(
         "INSERT INTO notebooks (owner_id, name, is_default, sort_order) VALUES ($1, 'My Notes', true, 0) ON CONFLICT DO NOTHING",
@@ -81,6 +81,18 @@ async fn ensure_default_notebook(db: &sqlx::PgPool, user_id: &str) -> Result<(),
     .await?;
 
     Ok(())
+}
+
+/// Get (or create) the default notebook ID for a user.
+pub(crate) async fn get_default_notebook_id(db: &sqlx::PgPool, user_id: &str) -> Result<Uuid, sqlx::Error> {
+    ensure_default_notebook(db, user_id).await?;
+    let (id,): (Uuid,) = sqlx::query_as(
+        "SELECT id FROM notebooks WHERE owner_id = $1 AND is_default = true LIMIT 1",
+    )
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
+    Ok(id)
 }
 
 fn notebook_to_json(row: &NotebookRow) -> serde_json::Value {

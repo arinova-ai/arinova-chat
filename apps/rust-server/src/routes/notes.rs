@@ -73,6 +73,11 @@ pub fn router() -> Router<AppState> {
             "/api/conversations/{id}/notes/upload",
             post(upload_note_image),
         )
+        // Notebook preference per conversation
+        .route(
+            "/api/conversations/{id}/notebook-preference",
+            get(get_notebook_preference).put(set_notebook_preference),
+        )
 }
 
 // ===== Internal types =====
@@ -80,7 +85,7 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, FromRow)]
 struct NoteRow {
     id: Uuid,
-    conversation_id: Uuid,
+    conversation_id: Option<Uuid>,
     creator_id: String,
     creator_type: String,
     agent_id: Option<Uuid>,
@@ -156,7 +161,7 @@ async fn get_conv_member_ids(db: &PgPool, conv_id: Uuid) -> Vec<String> {
 fn note_to_json(n: &NoteRow) -> serde_json::Value {
     json!({
         "id": n.id,
-        "conversationId": n.conversation_id,
+        "conversationId": n.conversation_id.map(|id| json!(id)).unwrap_or(serde_json::Value::Null),
         "creatorId": n.creator_id,
         "creatorType": n.creator_type,
         "creatorName": n.creator_name,
@@ -515,13 +520,24 @@ async fn get_note_by_id(
 
     match row {
         Ok(Some(note)) => {
-            // Verify the user is a member of the note's conversation
-            if !is_member(&state.db, note.conversation_id, &user.id).await {
-                return (
-                    StatusCode::FORBIDDEN,
-                    Json(json!({"error": "Not a member of this conversation"})),
-                )
-                    .into_response();
+            // Verify the user is a member of the note's conversation (if it has one)
+            if let Some(cid) = note.conversation_id {
+                if !is_member(&state.db, cid, &user.id).await {
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(json!({"error": "Not a member of this conversation"})),
+                    )
+                        .into_response();
+                }
+            } else {
+                // No conversation — check note ownership
+                if note.creator_id != user.id {
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(json!({"error": "Not authorized"})),
+                    )
+                        .into_response();
+                }
             }
             let j = note_to_json(&note);
             Json(j).into_response()
@@ -617,7 +633,45 @@ async fn list_notes(
             tag_filter.iter().map(|t| format!("'{}'", t.replace('\'', "''"))).collect::<Vec<_>>().join(","))
     };
 
-    let rows = if let Some(ts) = cursor_ts {
+    // Resolve notebook: preference → default notebook
+    let notebook_id: Option<Uuid> = sqlx::query_scalar::<_, Uuid>(
+        "SELECT notebook_id FROM conversation_notebook_preference WHERE user_id = $1 AND conversation_id = $2",
+    )
+    .bind(&user.id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let notebook_id = match notebook_id {
+        Some(id) => Some(id),
+        None => super::notebooks::get_default_notebook_id(&state.db, &user.id).await.ok(),
+    };
+
+    // If we have a notebook, query by notebook_id; otherwise fallback to conversation links
+    let rows = if let Some(nb_id) = notebook_id {
+        if let Some(ts) = cursor_ts {
+            sqlx::query_as::<_, NoteRow>(&format!(
+                "{} WHERE n.notebook_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
+                NOTE_QUERY_BASE, archive_cond, tag_cond
+            ))
+            .bind(nb_id)
+            .bind(ts)
+            .bind(limit + 1)
+            .fetch_all(&state.db)
+            .await
+        } else {
+            sqlx::query_as::<_, NoteRow>(&format!(
+                "{} WHERE n.notebook_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
+                NOTE_QUERY_BASE, archive_cond, tag_cond
+            ))
+            .bind(nb_id)
+            .bind(limit + 1)
+            .fetch_all(&state.db)
+            .await
+        }
+    } else if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, NoteRow>(&format!(
             "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
             NOTE_QUERY_BASE, archive_cond, tag_cond
@@ -675,6 +729,8 @@ struct CreateNoteBody {
     content: String,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default, rename = "notebookId")]
+    notebook_id: Option<String>,
 }
 
 /// POST /api/conversations/:id/notes
@@ -705,13 +761,43 @@ async fn create_note(
     let now = Utc::now();
     let tags: Vec<String> = body.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
 
+    // Resolve notebook_id: explicit param → conversation preference → default notebook
+    let notebook_id: Option<Uuid> = if let Some(ref nb_str) = body.notebook_id {
+        match Uuid::parse_str(nb_str) {
+            Ok(id) => Some(id),
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "Invalid notebookId"})),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        // Try conversation preference, then default
+        let pref = sqlx::query_scalar::<_, Uuid>(
+            "SELECT notebook_id FROM conversation_notebook_preference WHERE user_id = $1 AND conversation_id = $2",
+        )
+        .bind(&user.id)
+        .bind(conv_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+        match pref {
+            Some(id) => Some(id),
+            None => super::notebooks::get_default_notebook_id(&state.db, &user.id).await.ok(),
+        }
+    };
+
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, owner_id, title, content, tags, created_at, updated_at)
-           VALUES ($1, $2, $3, 'user', $3, $4, $5, $6, $7, $7)"#,
+        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, owner_id, notebook_id, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, $3, 'user', $3, $4, $5, $6, $7, $8, $8)"#,
     )
     .bind(note_id)
     .bind(conv_id)
     .bind(&user.id)
+    .bind(notebook_id)
     .bind(title)
     .bind(&body.content)
     .bind(&tags)
@@ -2711,4 +2797,116 @@ async fn upload_note_image(
     }
 
     (StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Notebook preference per conversation
+// ---------------------------------------------------------------------------
+
+/// GET /api/conversations/:id/notebook-preference
+async fn get_notebook_preference(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conv_id): Path<Uuid>,
+) -> Response {
+    let row = sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
+        "SELECT notebook_id, updated_at FROM conversation_notebook_preference WHERE user_id = $1 AND conversation_id = $2",
+    )
+    .bind(&user.id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some((notebook_id, updated_at))) => {
+            Json(json!({
+                "notebookId": notebook_id,
+                "updatedAt": updated_at.to_rfc3339(),
+            }))
+            .into_response()
+        }
+        Ok(None) => {
+            // Return default notebook
+            match super::notebooks::get_default_notebook_id(&state.db, &user.id).await {
+                Ok(nb_id) => Json(json!({ "notebookId": nb_id, "isDefault": true })).into_response(),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": e.to_string()})),
+                )
+                    .into_response(),
+            }
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SetNotebookPreferenceBody {
+    #[serde(rename = "notebookId")]
+    notebook_id: Uuid,
+}
+
+/// PUT /api/conversations/:id/notebook-preference
+async fn set_notebook_preference(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conv_id): Path<Uuid>,
+    Json(body): Json<SetNotebookPreferenceBody>,
+) -> Response {
+    // Verify notebook ownership
+    let nb_owner = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM notebooks WHERE id = $1",
+    )
+    .bind(body.notebook_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match nb_owner {
+        Ok(Some(owner)) if owner == user.id => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not your notebook"})),
+            )
+                .into_response();
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Notebook not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    }
+
+    let result = sqlx::query(
+        r#"INSERT INTO conversation_notebook_preference (user_id, conversation_id, notebook_id, updated_at)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (user_id, conversation_id) DO UPDATE SET notebook_id = $3, updated_at = NOW()"#,
+    )
+    .bind(&user.id)
+    .bind(conv_id)
+    .bind(body.notebook_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"success": true, "notebookId": body.notebook_id})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }

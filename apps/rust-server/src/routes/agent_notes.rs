@@ -36,7 +36,7 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, FromRow)]
 struct NoteRow {
     id: Uuid,
-    conversation_id: Uuid,
+    conversation_id: Option<Uuid>,
     creator_id: String,
     creator_type: String,
     agent_id: Option<Uuid>,
@@ -330,6 +330,8 @@ struct CreateNoteBody {
     content: String,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default, rename = "notebookId")]
+    notebook_id: Option<String>,
 }
 
 /// POST /api/agent/conversations/:convId/notes
@@ -398,15 +400,24 @@ async fn agent_create_note(
     .flatten()
     .unwrap_or_else(|| creator_id.clone());
 
+    // Resolve notebook_id: explicit param → owner's default notebook
+    let notebook_id: Option<Uuid> = if let Some(ref nb_str) = body.notebook_id {
+        Uuid::parse_str(nb_str).ok()
+    } else {
+        // Use conversation owner's default notebook
+        super::notebooks::get_default_notebook_id(&state.db, &conv_owner_id).await.ok()
+    };
+
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, agent_id, owner_id, title, content, tags, created_at, updated_at)
-           VALUES ($1, $2, $3, 'agent', $4, $5, $6, $7, $8, $9, $9)"#,
+        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, agent_id, owner_id, notebook_id, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, $3, 'agent', $4, $5, $6, $7, $8, $9, $10, $10)"#,
     )
     .bind(note_id)
     .bind(conv_id)
     .bind(&creator_id)
     .bind(agent.id)
     .bind(&conv_owner_id)
+    .bind(notebook_id)
     .bind(title)
     .bind(&body.content)
     .bind(&tags)
