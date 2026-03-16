@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   BookOpen,
   Bot,
@@ -381,7 +382,10 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                       <div
                         role="button"
                         onClick={(e) => { e.stopPropagation(); setMenuOpenId(nb.id); }}
-                        className="opacity-0 group-hover:opacity-100 rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+                        className={cn(
+                          "rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors",
+                          isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                        )}
                       >
                         <MoreHorizontal className="h-3.5 w-3.5" />
                       </div>
