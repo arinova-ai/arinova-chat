@@ -1362,7 +1362,7 @@
   "community.detail.startChat": "开始聊天",
   "community.detail.startVoiceChat": "开始语音聊天",
   "community.detail.membersCount": "成员（{{count}}）",
-  "community.detail.aiAgentsCount": "AI Agents（{{count}}）",
+  "community.detail.aiAgentsCount": "AI 代理（{{count}}）",
   "community.form.agentPolicy.ownerOnly": "仅拥有者的 Agent",
   "community.form.agentPolicy.adminAgents": "管理员的 Agent 可加入",
   "community.form.agentPolicy.memberAgents": "所有成员的 Agent 可加入"

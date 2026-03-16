@@ -1412,7 +1412,7 @@
   "community.detail.startChat": "開始聊天",
   "community.detail.startVoiceChat": "開始語音聊天",
   "community.detail.membersCount": "成員（{{count}}）",
-  "community.detail.aiAgentsCount": "AI Agents（{{count}}）",
+  "community.detail.aiAgentsCount": "AI 代理（{{count}}）",
   "community.form.agentPolicy.ownerOnly": "僅擁有者的 Agent",
   "community.form.agentPolicy.adminAgents": "管理員的 Agent 可加入",
   "community.form.agentPolicy.memberAgents": "所有成員的 Agent 可加入"

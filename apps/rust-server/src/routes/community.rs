@@ -2178,7 +2178,8 @@ async fn my_communities(
                   c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
                   c.category, c.tags, o.verified, o.cs_mode, o.default_agent_listing_id,
                   c.require_approval, c.approval_questions, c.agent_join_policy,
-                  c.created_at, c.updated_at
+                  c.is_private, c.invite_permission, c.post_permission, c.allow_agents,
+                  c.conversation_id, c.created_at, c.updated_at
            FROM communities c
            LEFT JOIN officials o ON o.community_id = c.id
            WHERE c.creator_id = $1
@@ -2216,7 +2217,8 @@ async fn joined_communities(
                   c.agent_call_fee, c.status, c.member_count, c.avatar_url, c.cover_image_url,
                   c.category, c.tags, o.verified, o.cs_mode, o.default_agent_listing_id,
                   c.require_approval, c.approval_questions, c.agent_join_policy,
-                  c.created_at, c.updated_at
+                  c.is_private, c.invite_permission, c.post_permission, c.allow_agents,
+                  c.conversation_id, c.created_at, c.updated_at
            FROM communities c
            JOIN community_members cm ON c.id = cm.community_id
            LEFT JOIN officials o ON o.community_id = c.id
