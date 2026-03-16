@@ -423,12 +423,12 @@ async fn extract_memories(
     // Fetch recent messages from the conversation
     let mut msg_sql = String::from(
         r#"SELECT
-             CASE WHEN m.sender_type = 'user' THEN COALESCE(u.name, 'User') ELSE COALESCE(a.name, 'Agent') END AS sender_name,
+             CASE WHEN m.role::text = 'user' THEN COALESCE(u.name, 'User') ELSE COALESCE(a.name, 'Agent') END AS sender_name,
              m.content,
              m.created_at
            FROM messages m
-           LEFT JOIN "user" u ON m.user_id = u.id::text
-           LEFT JOIN agents a ON m.agent_id = a.id
+           LEFT JOIN "user" u ON m.sender_user_id = u.id
+           LEFT JOIN agents a ON m.sender_agent_id = a.id
            WHERE m.conversation_id = $1 AND m.content IS NOT NULL AND m.content != ''"#,
     );
     if body.since.is_some() {
@@ -436,19 +436,29 @@ async fn extract_memories(
     }
     msg_sql.push_str(" ORDER BY m.created_at ASC LIMIT 500");
 
-    let messages: Vec<(String, String, chrono::DateTime<chrono::Utc>)> = if let Some(ref since) = body.since {
-        sqlx::query_as(&msg_sql)
-            .bind(body.conversation_id)
-            .bind(since)
-            .fetch_all(&state.db)
-            .await
-            .unwrap_or_default()
-    } else {
-        sqlx::query_as(&msg_sql)
-            .bind(body.conversation_id)
-            .fetch_all(&state.db)
-            .await
-            .unwrap_or_default()
+    let messages: Vec<(String, String, chrono::DateTime<chrono::Utc>)> = {
+        let result = if let Some(ref since) = body.since {
+            sqlx::query_as(&msg_sql)
+                .bind(body.conversation_id)
+                .bind(since)
+                .fetch_all(&state.db)
+                .await
+        } else {
+            sqlx::query_as(&msg_sql)
+                .bind(body.conversation_id)
+                .fetch_all(&state.db)
+                .await
+        };
+        match result {
+            Ok(rows) => rows,
+            Err(e) => {
+                tracing::error!("extract_memories: failed to fetch messages: {e}");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to fetch messages: {e}")})),
+                ).into_response();
+            }
+        }
     };
 
     if messages.is_empty() {
