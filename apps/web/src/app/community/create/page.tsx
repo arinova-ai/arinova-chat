@@ -158,7 +158,7 @@ function CreateCommunityContent() {
                 <option value="">{t("community.form.categoryPlaceholder")}</option>
                 {CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    {t(`community.category.${cat}`)}
                   </option>
                 ))}
               </select>

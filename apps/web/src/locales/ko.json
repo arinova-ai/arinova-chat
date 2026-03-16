@@ -1361,5 +1361,14 @@
   "community.detail.aiAgentsCount": "AI 에이전트 ({{count}})",
   "community.form.agentPolicy.ownerOnly": "소유자의 에이전트만",
   "community.form.agentPolicy.adminAgents": "관리자 에이전트 허용",
-  "community.form.agentPolicy.memberAgents": "모든 멤버 에이전트 허용"
+  "community.form.agentPolicy.memberAgents": "모든 멤버 에이전트 허용",
+  "community.category.general": "일반",
+  "community.category.gaming": "게임",
+  "community.category.tech": "기술",
+  "community.category.art": "예술",
+  "community.category.music": "음악",
+  "community.category.education": "교육",
+  "community.category.business": "비즈니스",
+  "community.category.lifestyle": "라이프스타일",
+  "community.category.other": "기타"
 }

@@ -1361,5 +1361,14 @@
   "community.detail.aiAgentsCount": "Ejen AI ({{count}})",
   "community.form.agentPolicy.ownerOnly": "Ejen pemilik sahaja",
   "community.form.agentPolicy.adminAgents": "Ejen admin dibenarkan",
-  "community.form.agentPolicy.memberAgents": "Ejen semua ahli dibenarkan"
+  "community.form.agentPolicy.memberAgents": "Ejen semua ahli dibenarkan",
+  "community.category.general": "Umum",
+  "community.category.gaming": "Permainan",
+  "community.category.tech": "Teknologi",
+  "community.category.art": "Seni",
+  "community.category.music": "Muzik",
+  "community.category.education": "Pendidikan",
+  "community.category.business": "Perniagaan",
+  "community.category.lifestyle": "Gaya Hidup",
+  "community.category.other": "Lain-lain"
 }

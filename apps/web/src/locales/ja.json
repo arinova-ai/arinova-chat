@@ -1387,5 +1387,14 @@
   "community.detail.aiAgentsCount": "AIエージェント（{{count}}）",
   "community.form.agentPolicy.ownerOnly": "オーナーのエージェントのみ",
   "community.form.agentPolicy.adminAgents": "管理者のエージェントも許可",
-  "community.form.agentPolicy.memberAgents": "全メンバーのエージェントを許可"
+  "community.form.agentPolicy.memberAgents": "全メンバーのエージェントを許可",
+  "community.category.general": "総合",
+  "community.category.gaming": "ゲーム",
+  "community.category.tech": "テクノロジー",
+  "community.category.art": "アート",
+  "community.category.music": "音楽",
+  "community.category.education": "教育",
+  "community.category.business": "ビジネス",
+  "community.category.lifestyle": "ライフスタイル",
+  "community.category.other": "その他"
 }

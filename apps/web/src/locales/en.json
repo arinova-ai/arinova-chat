@@ -1416,5 +1416,14 @@
   "community.detail.aiAgentsCount": "AI Agents ({{count}})",
   "community.form.agentPolicy.ownerOnly": "Only owner's agents",
   "community.form.agentPolicy.adminAgents": "Admin agents allowed",
-  "community.form.agentPolicy.memberAgents": "All member agents allowed"
+  "community.form.agentPolicy.memberAgents": "All member agents allowed",
+  "community.category.general": "General",
+  "community.category.gaming": "Gaming",
+  "community.category.tech": "Tech",
+  "community.category.art": "Art",
+  "community.category.music": "Music",
+  "community.category.education": "Education",
+  "community.category.business": "Business",
+  "community.category.lifestyle": "Lifestyle",
+  "community.category.other": "Other"
 }

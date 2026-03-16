@@ -1415,5 +1415,14 @@
   "community.detail.aiAgentsCount": "AI 代理（{{count}}）",
   "community.form.agentPolicy.ownerOnly": "僅擁有者的 Agent",
   "community.form.agentPolicy.adminAgents": "管理員的 Agent 可加入",
-  "community.form.agentPolicy.memberAgents": "所有成員的 Agent 可加入"
+  "community.form.agentPolicy.memberAgents": "所有成員的 Agent 可加入",
+  "community.category.general": "綜合",
+  "community.category.gaming": "遊戲",
+  "community.category.tech": "科技",
+  "community.category.art": "藝術",
+  "community.category.music": "音樂",
+  "community.category.education": "教育",
+  "community.category.business": "商業",
+  "community.category.lifestyle": "生活",
+  "community.category.other": "其他"
 }

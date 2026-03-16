@@ -1361,5 +1361,14 @@
   "community.detail.aiAgentsCount": "Agentes IA ({{count}})",
   "community.form.agentPolicy.ownerOnly": "Solo agentes del propietario",
   "community.form.agentPolicy.adminAgents": "Agentes de administradores permitidos",
-  "community.form.agentPolicy.memberAgents": "Agentes de todos los miembros permitidos"
+  "community.form.agentPolicy.memberAgents": "Agentes de todos los miembros permitidos",
+  "community.category.general": "General",
+  "community.category.gaming": "Juegos",
+  "community.category.tech": "Tecnología",
+  "community.category.art": "Arte",
+  "community.category.music": "Música",
+  "community.category.education": "Educación",
+  "community.category.business": "Negocios",
+  "community.category.lifestyle": "Estilo de vida",
+  "community.category.other": "Otros"
 }
