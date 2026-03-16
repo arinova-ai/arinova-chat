@@ -257,7 +257,7 @@ export function ChatHeader({
             size="icon"
             className="h-8 w-8"
             title={t("communitySettings.title")}
-            onClick={() => setCommunitySettingsOpen(true)}
+            onClick={() => { setCommunitySettingsTab(undefined); setCommunitySettingsOpen(true); }}
           >
             <Settings className="h-4 w-4" />
           </Button>
@@ -332,6 +332,7 @@ export function ChatHeader({
             onTransferHuman={handleTransferHuman}
             onSettingsOpen={() => {
               if (type === "community" || type === "official" || type === "lounge") {
+                setCommunitySettingsTab(undefined);
                 setCommunitySettingsOpen(true);
               } else {
                 setSettingsOpen(true);
