@@ -433,23 +433,29 @@ async fn list_notebook_notes(
     }
 
     // Check notebook-level agent permissions
-    let has_perms = sqlx::query_scalar::<_, i64>(
+    let has_perms = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM notebook_agent_permissions WHERE notebook_id = $1",
     )
     .bind(id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
 
     if has_perms > 0 {
-        let granted = sqlx::query_scalar::<_, i64>(
+        let granted = match sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM notebook_agent_permissions WHERE notebook_id = $1 AND agent_id = $2",
         )
         .bind(id)
         .bind(agent.id)
         .fetch_one(&state.db)
         .await
-        .unwrap_or(0);
+        {
+            Ok(c) => c,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        };
 
         if granted == 0 {
             return (

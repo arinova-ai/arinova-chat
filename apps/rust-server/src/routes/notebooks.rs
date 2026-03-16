@@ -643,6 +643,24 @@ async fn set_agent_permissions(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 
+    // Validate agent_ids belong to the user (via conversations)
+    if !body.agent_ids.is_empty() {
+        let valid_ids = match sqlx::query_scalar::<_, Uuid>(
+            "SELECT DISTINCT agent_id FROM conversations WHERE user_id = $1 AND agent_id = ANY($2)",
+        )
+        .bind(&user.id)
+        .bind(&body.agent_ids)
+        .fetch_all(&state.db)
+        .await
+        {
+            Ok(ids) => ids,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        };
+        if valid_ids.len() != body.agent_ids.len() {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "One or more agent IDs are invalid"}))).into_response();
+        }
+    }
+
     // Replace permissions in a transaction
     let mut tx = match state.db.begin().await {
         Ok(tx) => tx,

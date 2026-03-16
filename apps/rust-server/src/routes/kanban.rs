@@ -1930,22 +1930,28 @@ async fn agent_list_columns(
     }
 
     // Check board-level agent permissions
-    let has_perms = sqlx::query_scalar::<_, i64>(
+    let has_perms = match sqlx::query_scalar::<_, i64>(
         "SELECT COUNT(*) FROM board_agent_permissions WHERE board_id = $1",
     )
     .bind(board_id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(0);
+    {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
     if has_perms > 0 {
-        let granted = sqlx::query_scalar::<_, i64>(
+        let granted = match sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2",
         )
         .bind(board_id)
         .bind(agent.id)
         .fetch_one(&state.db)
         .await
-        .unwrap_or(0);
+        {
+            Ok(c) => c,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        };
         if granted == 0 {
             return (StatusCode::FORBIDDEN, Json(json!({"error": "Agent does not have access to this board"}))).into_response();
         }
@@ -4018,6 +4024,24 @@ async fn set_board_agent_permissions(
         Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your board"}))).into_response(),
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Board not found"}))).into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    // Validate agent_ids belong to the user (via conversations)
+    if !body.agent_ids.is_empty() {
+        let valid_ids = match sqlx::query_scalar::<_, Uuid>(
+            "SELECT DISTINCT agent_id FROM conversations WHERE user_id = $1 AND agent_id = ANY($2)",
+        )
+        .bind(&user.id)
+        .bind(&body.agent_ids)
+        .fetch_all(&state.db)
+        .await
+        {
+            Ok(ids) => ids,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        };
+        if valid_ids.len() != body.agent_ids.len() {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "One or more agent IDs are invalid"}))).into_response();
+        }
     }
 
     let mut tx = match state.db.begin().await {
