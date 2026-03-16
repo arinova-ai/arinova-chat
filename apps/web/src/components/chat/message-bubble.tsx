@@ -107,20 +107,63 @@ function stripAttachmentMarkdown(content: string, attachmentUrls: string[]): str
 }
 
 /**
+ * Compute the same anon hash the backend uses for community conversations.
+ * SHA-256(conversationId + userId) → "anon-{first 8 bytes hex}"
+ * Results are cached so the async crypto call only runs once per key.
+ */
+const anonHashCache = new Map<string, string>();
+const anonHashPending = new Map<string, Promise<string>>();
+
+async function computeAnonHash(conversationId: string, userId: string): Promise<string> {
+  const key = `${conversationId}:${userId}`;
+  const cached = anonHashCache.get(key);
+  if (cached) return cached;
+  const pending = anonHashPending.get(key);
+  if (pending) return pending;
+  const promise = (async () => {
+    const encoder = new TextEncoder();
+    const data = new Uint8Array([...encoder.encode(conversationId), ...encoder.encode(userId)]);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hex = Array.from(new Uint8Array(hashBuffer).slice(0, 8))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const result = `anon-${hex}`;
+    anonHashCache.set(key, result);
+    anonHashPending.delete(key);
+    return result;
+  })();
+  anonHashPending.set(key, promise);
+  return promise;
+}
+
+/** Synchronous lookup of a previously computed anon hash. */
+function getAnonHashSync(conversationId: string, userId: string): string | undefined {
+  return anonHashCache.get(`${conversationId}:${userId}`);
+}
+
+/**
  * Determine if a message was sent by the current user.
  *
  * Cases:
  * - Optimistic messages: `id` starts with "temp-" (created locally before server confirmation)
  * - Confirmed messages: `senderUserId` matches the current session user
- * - Other users' messages: role is "user" but neither condition matches → false
+ * - Community conversations: `senderUserId` may be anon-hashed; match against cached hash
+ * - Other users' messages: role is "user" but no condition matches → false
  *
  * IMPORTANT: Do NOT use `!senderUserId` as an own-message signal.
  * Messages from other users may also arrive without senderUserId during
  * WS race conditions (#28, #35, #36).
  */
 export function isOwnMessage(message: Message, currentUserId: string | undefined): boolean {
-  return message.role === "user" &&
-    (message.id.startsWith("temp-") || message.senderUserId === currentUserId);
+  if (message.role !== "user") return false;
+  if (message.id.startsWith("temp-")) return true;
+  if (message.senderUserId === currentUserId) return true;
+  // Check anon hash match for community conversations
+  if (currentUserId && message.senderUserId?.startsWith("anon-")) {
+    const anonHash = getAnonHashSync(message.conversationId, currentUserId);
+    if (anonHash && message.senderUserId === anonHash) return true;
+  }
+  return false;
 }
 
 const STICKER_RE = /^!\[sticker\]\((\/stickers\/.+\.png)\)$/;
@@ -551,6 +594,14 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id;
+  const conversation = useChatStore((s) => s.conversations.find((c) => c.id === message.conversationId));
+  // For community conversations, pre-compute the anon hash so isOwnMessage can match
+  const [, setAnonReady] = useState(0);
+  useEffect(() => {
+    if (currentUserId && conversation?.type === "community" && !getAnonHashSync(message.conversationId, currentUserId)) {
+      computeAnonHash(message.conversationId, currentUserId).then(() => setAnonReady((n) => n + 1));
+    }
+  }, [currentUserId, message.conversationId, conversation?.type]);
   const isUser = isOwnMessage(message, currentUserId);
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
@@ -573,7 +624,6 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
   const togglePin = useChatStore((s) => s.togglePin);
   const isPinned = useChatStore((s) => s.pinnedMessageIds[message.conversationId]?.has(message.id) ?? false);
 
-  const conversation = useChatStore((s) => s.conversations.find((c) => c.id === message.conversationId));
   const router = useRouter();
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
