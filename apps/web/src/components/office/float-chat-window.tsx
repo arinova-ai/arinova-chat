@@ -240,13 +240,13 @@ export function FloatChatWindow({
     if (!touch) return;
     const dx = touch.clientX - touchDragRef.current.startX;
     const dy = touch.clientY - touchDragRef.current.startY;
-    const maxX = window.innerWidth - 40;
-    const maxY = window.innerHeight - MOBILE_BOTTOM_NAV_HEIGHT - 40;
+    const maxX = window.innerWidth - size.w;
+    const maxY = window.innerHeight - MOBILE_BOTTOM_NAV_HEIGHT - size.h;
     setPos({
       x: Math.max(0, Math.min(maxX, touchDragRef.current.posX + dx)),
       y: Math.max(0, Math.min(maxY, touchDragRef.current.posY + dy)),
     });
-  }, []);
+  }, [size]);
 
   const onTouchDragEnd = useCallback(() => {
     touchDragRef.current = null;
