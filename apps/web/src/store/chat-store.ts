@@ -2122,30 +2122,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
               [conversationId]: thinking.filter((t) => t.messageId !== messageId),
             },
           });
-          // Update parent threadSummary + thread list on first chunk
+          // Update parent threadSummary preview on first chunk (replyCount deferred to stream_end)
           const scMainMsgs = get().messagesByConversation[conversationId] ?? [];
           set({
             messagesByConversation: {
               ...get().messagesByConversation,
               [conversationId]: scMainMsgs.map((m) =>
-                m.id === threadId
-                  ? { ...m, threadSummary: { replyCount: (m.threadSummary?.replyCount ?? 0) + 1, lastReplyAt: new Date().toISOString(), participants: m.threadSummary?.participants ?? [], lastReplyPreview: chunk.slice(0, 100) } }
+                m.id === threadId && m.threadSummary
+                  ? { ...m, threadSummary: { ...m.threadSummary, lastReplyPreview: chunk.slice(0, 100) } }
                   : m
               ),
             },
           });
-          const scThreadList = get().threadListItems[conversationId];
-          if (scThreadList) {
-            const scExisting = scThreadList.find((t2) => t2.threadId === threadId);
-            if (scExisting) {
-              set({ threadListItems: { ...get().threadListItems, [conversationId]: scThreadList.map((t2) => t2.threadId === threadId ? { ...t2, replyCount: t2.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: chunk.slice(0, 100) } : t2) } });
-            } else {
-              const scParent = scMainMsgs.find((m) => m.id === threadId);
-              if (scParent) {
-                set({ threadListItems: { ...get().threadListItems, [conversationId]: [{ threadId, originalMessage: { content: scParent.content, role: scParent.role, senderAgentName: scParent.senderAgentName ?? null }, replyCount: 1, lastReplyAt: new Date().toISOString(), participants: [], lastReplyPreview: chunk.slice(0, 100) }, ...scThreadList] } });
-              }
-            }
-          }
         } else {
           const current = get().messagesByConversation[conversationId] ?? [];
           set({
@@ -2352,22 +2340,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
             },
           });
         }
-        // Update lastReplyPreview with final content (replyCount already incremented by stream_chunk)
+        // Update replyCount + lastReplyPreview on stream_end (single increment per reply)
         if (finalContent) {
           const seMainMsgs2 = get().messagesByConversation[conversationId] ?? [];
           set({
             messagesByConversation: {
               ...get().messagesByConversation,
               [conversationId]: seMainMsgs2.map((m) =>
-                m.id === threadId && m.threadSummary
-                  ? { ...m, threadSummary: { ...m.threadSummary, lastReplyPreview: finalContent.slice(0, 100) } }
+                m.id === threadId
+                  ? { ...m, threadSummary: { replyCount: (m.threadSummary?.replyCount ?? 0) + 1, lastReplyAt: new Date().toISOString(), participants: m.threadSummary?.participants ?? [], lastReplyPreview: finalContent.slice(0, 100) } }
                   : m
               ),
             },
           });
           const seThreadList2 = get().threadListItems[conversationId];
           if (seThreadList2) {
-            set({ threadListItems: { ...get().threadListItems, [conversationId]: seThreadList2.map((t2) => t2.threadId === threadId ? { ...t2, lastReplyPreview: finalContent.slice(0, 100) } : t2) } });
+            const se2Existing = seThreadList2.find((t2) => t2.threadId === threadId);
+            if (se2Existing) {
+              set({ threadListItems: { ...get().threadListItems, [conversationId]: seThreadList2.map((t2) => t2.threadId === threadId ? { ...t2, replyCount: t2.replyCount + 1, lastReplyAt: new Date().toISOString(), lastReplyPreview: finalContent.slice(0, 100) } : t2) } });
+            } else {
+              const se2Parent = seMainMsgs2.find((m) => m.id === threadId);
+              if (se2Parent) {
+                set({ threadListItems: { ...get().threadListItems, [conversationId]: [{ threadId, originalMessage: { content: se2Parent.content, role: se2Parent.role, senderAgentName: se2Parent.senderAgentName ?? null }, replyCount: 1, lastReplyAt: new Date().toISOString(), participants: [], lastReplyPreview: finalContent.slice(0, 100) }, ...seThreadList2] } });
+              }
+            }
           }
         }
       } else {
