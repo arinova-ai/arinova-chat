@@ -368,6 +368,19 @@ pub(crate) async fn with_attachments(
                     })
                 });
 
+                // Anonymize senderUserId for community conversations
+                let sender_user_id_out: Option<String> = if is_community_conv {
+                    m.sender_user_id.as_ref().map(|uid| {
+                        use sha2::{Sha256, Digest};
+                        let mut hasher = Sha256::new();
+                        hasher.update(m.conversation_id.to_string().as_bytes());
+                        hasher.update(uid.as_bytes());
+                        format!("anon-{}", hex::encode(&hasher.finalize()[..8]))
+                    })
+                } else {
+                    m.sender_user_id.clone()
+                };
+
                 json!({
                     "id": m.id,
                     "conversationId": m.conversation_id,
@@ -377,7 +390,7 @@ pub(crate) async fn with_attachments(
                     "status": m.status,
                     "senderAgentId": m.sender_agent_id,
                     "senderAgentName": sender_agent_name,
-                    "senderUserId": m.sender_user_id,
+                    "senderUserId": sender_user_id_out,
                     "senderUsername": sender_username,
                     "senderUserName": sender_user_name,
                     "senderUserImage": sender_user_image,

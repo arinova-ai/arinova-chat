@@ -1197,6 +1197,13 @@ async fn join(
     };
 
     if let Err(e) = insert_result {
+        let msg = e.to_string();
+        if msg.contains("uq_community_members_display_name") || msg.contains("23505") {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "This display name is already taken in this community" })),
+            );
+        }
         tracing::error!("Join community: insert member failed: {}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -3229,11 +3236,20 @@ async fn update_community_identity(
             })),
         ),
         Err(e) => {
-            tracing::error!("Update community identity failed: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Database error" })),
-            )
+            // Handle unique constraint violation (race condition)
+            let msg = e.to_string();
+            if msg.contains("uq_community_members_display_name") || msg.contains("23505") {
+                (
+                    StatusCode::CONFLICT,
+                    Json(json!({ "error": "This display name is already taken in this community" })),
+                )
+            } else {
+                tracing::error!("Update community identity failed: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "Database error" })),
+                )
+            }
         }
     }
 }
