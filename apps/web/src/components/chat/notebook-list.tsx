@@ -86,6 +86,11 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   // Load conversation notebook preference from API
   useEffect(() => {
     if (!conversationId || notebooks.length === 0) return;
+    // Skip auto-selection if user just dismissed (clicked back)
+    if (userDismissedRef.current) {
+      setPreferenceLoaded(true);
+      return;
+    }
     let cancelled = false;
     setPreferenceLoaded(false);
     setSelectedNotebook(null);
@@ -94,9 +99,10 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
       { silent: true },
     )
       .then((pref) => {
-        if (cancelled) return;
-        if (pref.notebookId) {
-          const nb = notebooks.find((n) => n.id === pref.notebookId);
+        if (cancelled || userDismissedRef.current) return;
+        const prefId = pref.notebookId ? String(pref.notebookId) : null;
+        if (prefId) {
+          const nb = notebooks.find((n) => n.id === prefId);
           if (nb) setSelectedNotebook(nb);
           else setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
         } else {
@@ -104,7 +110,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
         }
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || userDismissedRef.current) return;
         setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
       })
       .finally(() => { if (!cancelled) setPreferenceLoaded(true); });
