@@ -1370,5 +1370,10 @@
   "community.category.education": "Éducation",
   "community.category.business": "Business",
   "community.category.lifestyle": "Style de vie",
-  "community.category.other": "Autre"
+  "community.category.other": "Autre",
+  "community.detail.coinsAmount": "{{amount}} pièces",
+  "community.detail.coinsPerMonth": "{{amount}} pièces/mois",
+  "community.detail.noChatYet": "Chat en préparation",
+  "community.detail.noChatYetHint": "Le chat de la communauté n'est pas encore disponible. Veuillez réessayer plus tard.",
+  "community.joined": "Rejoint"
 }

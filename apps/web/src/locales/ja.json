@@ -1396,5 +1396,10 @@
   "community.category.education": "教育",
   "community.category.business": "ビジネス",
   "community.category.lifestyle": "ライフスタイル",
-  "community.category.other": "その他"
+  "community.category.other": "その他",
+  "community.detail.coinsAmount": "{{amount}} コイン",
+  "community.detail.coinsPerMonth": "{{amount}} コイン/月",
+  "community.detail.noChatYet": "チャット準備中",
+  "community.detail.noChatYetHint": "コミュニティチャットはまだ利用できません。後ほどお試しください。",
+  "community.joined": "参加済み"
 }

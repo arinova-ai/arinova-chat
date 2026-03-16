@@ -178,8 +178,6 @@ function CommunityDetailContent() {
   const [verifyForm, setVerifyForm] = useState({ businessName: "", businessRegistration: "", documentsUrl: "" });
   const [verifySubmitting, setVerifySubmitting] = useState(false);
 
-  const [notFound, setNotFound] = useState(false);
-
   // ------ Load data ------
 
   useEffect(() => {
@@ -196,7 +194,6 @@ function CommunityDetailContent() {
           communityData = await api<Community>(`/api/communities/${id}`);
         } catch {
           if (!cancelled) {
-            setNotFound(true);
             setLoading(false);
           }
           return;
@@ -600,12 +597,12 @@ function CommunityDetailContent() {
                     <div className="rounded-xl border border-border bg-card p-4 space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">{t("community.detail.joinFee")}</span>
-                        <span>{community.joinFee > 0 ? `${community.joinFee} coins` : t("community.detail.free")}</span>
+                        <span>{community.joinFee > 0 ? t("community.detail.coinsAmount", { amount: String(community.joinFee) }) : t("community.detail.free")}</span>
                       </div>
                       {community.monthlyFee > 0 && (
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">{t("community.detail.monthlyFee")}</span>
-                          <span>{community.monthlyFee} coins/month</span>
+                          <span>{t("community.detail.coinsPerMonth", { amount: String(community.monthlyFee) })}</span>
                         </div>
                       )}
                     </div>
@@ -627,10 +624,18 @@ function CommunityDetailContent() {
                 </div>
               );
             })()
-          ) : (
+          ) : community.conversationId ? (
             /* ---------- Member: redirecting to main chat ---------- */
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            /* ---------- Member: no conversation linked yet ---------- */
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center space-y-2 p-4">
+                <p className="text-sm font-medium">{t("community.detail.noChatYet")}</p>
+                <p className="text-xs text-muted-foreground">{t("community.detail.noChatYetHint")}</p>
+              </div>
             </div>
           )}
 

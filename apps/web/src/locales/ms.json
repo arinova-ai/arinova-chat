@@ -1370,5 +1370,10 @@
   "community.category.education": "Pendidikan",
   "community.category.business": "Perniagaan",
   "community.category.lifestyle": "Gaya Hidup",
-  "community.category.other": "Lain-lain"
+  "community.category.other": "Lain-lain",
+  "community.detail.coinsAmount": "{{amount}} syiling",
+  "community.detail.coinsPerMonth": "{{amount}} syiling/bulan",
+  "community.detail.noChatYet": "Sembang sedang disediakan",
+  "community.detail.noChatYetHint": "Sembang komuniti belum tersedia. Sila cuba lagi nanti.",
+  "community.joined": "Disertai"
 }

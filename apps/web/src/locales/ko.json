@@ -1370,5 +1370,10 @@
   "community.category.education": "교육",
   "community.category.business": "비즈니스",
   "community.category.lifestyle": "라이프스타일",
-  "community.category.other": "기타"
+  "community.category.other": "기타",
+  "community.detail.coinsAmount": "{{amount}} 코인",
+  "community.detail.coinsPerMonth": "{{amount}} 코인/월",
+  "community.detail.noChatYet": "채팅 준비 중",
+  "community.detail.noChatYetHint": "커뮤니티 채팅이 아직 준비되지 않았습니다. 나중에 다시 확인해 주세요.",
+  "community.joined": "가입됨"
 }

@@ -9,7 +9,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { PageTitle } from "@/components/ui/page-title";
-import { Loader2, Search, Plus, Users, Coins, BadgeCheck } from "lucide-react";
+import { Loader2, Search, Plus, Users, Coins, BadgeCheck, CheckCircle2 } from "lucide-react";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 
 interface CommunityItem {
@@ -216,6 +216,12 @@ function CommunityCard({
             <h3 className="text-sm font-semibold truncate">{c.name}</h3>
             {c.verified && (
               <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" />
+            )}
+            {c.isJoined && (
+              <span className="flex items-center gap-0.5 shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500">
+                <CheckCircle2 className="h-3 w-3" />
+                {t("community.joined")}
+              </span>
             )}
           </div>
           {c.description && (

@@ -1374,5 +1374,10 @@
   "community.category.education": "教育",
   "community.category.business": "商业",
   "community.category.lifestyle": "生活",
-  "community.category.other": "其他"
+  "community.category.other": "其他",
+  "community.detail.coinsAmount": "{{amount}} 代币",
+  "community.detail.coinsPerMonth": "{{amount}} 代币/月",
+  "community.detail.noChatYet": "聊天室准备中",
+  "community.detail.noChatYetHint": "社群聊天室尚未建立，请稍后再试。",
+  "community.joined": "已加入"
 }

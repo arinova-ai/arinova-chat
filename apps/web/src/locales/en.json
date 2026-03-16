@@ -1425,5 +1425,10 @@
   "community.category.education": "Education",
   "community.category.business": "Business",
   "community.category.lifestyle": "Lifestyle",
-  "community.category.other": "Other"
+  "community.category.other": "Other",
+  "community.detail.coinsAmount": "{{amount}} coins",
+  "community.detail.coinsPerMonth": "{{amount}} coins/month",
+  "community.detail.noChatYet": "Chat is being set up",
+  "community.detail.noChatYetHint": "The community chat is not yet available. Please check back later.",
+  "community.joined": "Joined"
 }
