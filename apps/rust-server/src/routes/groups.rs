@@ -318,19 +318,50 @@ async fn list_members(
     .await
     .unwrap_or_default();
 
-    // Fetch user members
-    let user_members = sqlx::query_as::<_, (Uuid, String, String, chrono::NaiveDateTime, String, Option<String>, Option<String>, bool)>(
-        r#"SELECT cum.id, cum.user_id, cum.role::text, cum.joined_at,
-                  u.name, u.image, u.username, u.is_verified
-           FROM conversation_user_members cum
-           JOIN "user" u ON u.id = cum.user_id
-           WHERE cum.conversation_id = $1
-           ORDER BY cum.joined_at"#,
+    // Check if this is a community conversation
+    let is_community = sqlx::query_as::<_, (String,)>(
+        r#"SELECT type::text FROM conversations WHERE id = $1"#,
     )
     .bind(id)
-    .fetch_all(&state.db)
+    .fetch_optional(&state.db)
     .await
-    .unwrap_or_default();
+    .ok()
+    .flatten()
+    .map(|(t,)| t == "community")
+    .unwrap_or(false);
+
+    // Fetch user members — for community conversations, join community_members for anonymous identity
+    let user_members = if is_community {
+        sqlx::query_as::<_, (Uuid, String, String, chrono::NaiveDateTime, String, Option<String>, Option<String>, bool, Option<String>, Option<String>)>(
+            r#"SELECT cum.id, cum.user_id, cum.role::text, cum.joined_at,
+                      u.name, u.image, u.username, u.is_verified,
+                      cm.display_name, cm.member_avatar_url
+               FROM conversation_user_members cum
+               JOIN "user" u ON u.id = cum.user_id
+               LEFT JOIN communities c ON c.conversation_id = cum.conversation_id
+               LEFT JOIN community_members cm ON cm.community_id = c.id AND cm.user_id = cum.user_id
+               WHERE cum.conversation_id = $1
+               ORDER BY cum.joined_at"#,
+        )
+        .bind(id)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default()
+    } else {
+        sqlx::query_as::<_, (Uuid, String, String, chrono::NaiveDateTime, String, Option<String>, Option<String>, bool, Option<String>, Option<String>)>(
+            r#"SELECT cum.id, cum.user_id, cum.role::text, cum.joined_at,
+                      u.name, u.image, u.username, u.is_verified,
+                      NULL::text AS display_name, NULL::text AS member_avatar_url
+               FROM conversation_user_members cum
+               JOIN "user" u ON u.id = cum.user_id
+               WHERE cum.conversation_id = $1
+               ORDER BY cum.joined_at"#,
+        )
+        .bind(id)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default()
+    };
 
     let agents_json: Vec<serde_json::Value> = agent_members
         .iter()
@@ -351,13 +382,24 @@ async fn list_members(
     let users_json: Vec<serde_json::Value> = user_members
         .iter()
         .map(|r| {
+            // For community conversations, use display_name/avatar if available
+            let shown_name = if is_community {
+                r.8.as_deref().unwrap_or(&r.4)
+            } else {
+                &r.4
+            };
+            let shown_image = if is_community && r.9.is_some() {
+                &r.9
+            } else {
+                &r.5
+            };
             json!({
                 "id": r.0,
                 "userId": r.1,
                 "role": r.2,
                 "joinedAt": r.3.and_utc().to_rfc3339(),
-                "name": r.4,
-                "image": r.5,
+                "name": shown_name,
+                "image": shown_image,
                 "username": r.6,
                 "isVerified": r.7,
             })

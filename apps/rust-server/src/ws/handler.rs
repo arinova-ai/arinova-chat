@@ -522,7 +522,7 @@ async fn handle_message(
             .await;
 
             if let Ok(Some((conv_type,))) = conv_type {
-                if conv_type == "group" {
+                if conv_type == "group" || conv_type == "community" {
                     // Get member IDs to broadcast to (excluding sender)
                     let member_ids: Vec<String> = sqlx::query_as::<_, (String,)>(
                         r#"SELECT user_id FROM conversation_user_members WHERE conversation_id = $1::uuid AND user_id != $2"#
@@ -536,8 +536,8 @@ async fn handle_message(
                     .map(|r| r.0)
                     .collect();
 
-                    // Get sender name
-                    let sender_name = sqlx::query_as::<_, (String,)>(
+                    // Get sender name (use community display_name for community conversations)
+                    let mut sender_name = sqlx::query_as::<_, (String,)>(
                         r#"SELECT name FROM "user" WHERE id = $1"#
                     )
                     .bind(user_id)
@@ -547,6 +547,22 @@ async fn handle_message(
                     .flatten()
                     .map(|r| r.0)
                     .unwrap_or_else(|| "User".to_string());
+
+                    if conv_type == "community" {
+                        if let Ok(Some((dn,))) = sqlx::query_as::<_, (Option<String>,)>(
+                            r#"SELECT cm.display_name
+                               FROM community_members cm
+                               JOIN communities c ON c.id = cm.community_id
+                               WHERE c.conversation_id = $1::uuid AND cm.user_id = $2"#,
+                        )
+                        .bind(conversation_id)
+                        .bind(user_id)
+                        .fetch_optional(db)
+                        .await
+                        {
+                            if let Some(dn) = dn { sender_name = dn; }
+                        }
+                    }
 
                     ws_state.broadcast_to_members(&member_ids, &json!({
                         "type": "user_typing",
@@ -1010,10 +1026,29 @@ pub async fn trigger_agent_response(
             .ok()
             .flatten();
 
-            let sender_name = sender_info.as_ref().and_then(|(n, _, _, _)| n.as_deref()).unwrap_or("");
+            let mut sender_name = sender_info.as_ref().and_then(|(n, _, _, _)| n.as_deref()).unwrap_or("").to_string();
             let sender_username = sender_info.as_ref().and_then(|(_, u, _, _)| u.as_deref()).unwrap_or("");
-            let sender_image = sender_info.as_ref().and_then(|(_, _, img, _)| img.as_deref());
+            let mut sender_image_owned = sender_info.as_ref().and_then(|(_, _, img, _)| img.clone());
             let sender_is_verified = sender_info.as_ref().map(|(_, _, _, v)| *v).unwrap_or(false);
+
+            // For community conversations, substitute with anonymous display_name/avatar
+            if conv_type == "community" {
+                if let Ok(Some((dn, ma))) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+                    r#"SELECT cm.display_name, cm.member_avatar_url
+                       FROM community_members cm
+                       JOIN communities c ON c.id = cm.community_id
+                       WHERE c.conversation_id = $1::uuid AND cm.user_id = $2"#,
+                )
+                .bind(conversation_id)
+                .bind(user_id)
+                .fetch_optional(db)
+                .await
+                {
+                    if let Some(dn) = dn { sender_name = dn; }
+                    if ma.is_some() { sender_image_owned = ma; }
+                }
+            }
+            let sender_image = sender_image_owned.as_deref();
 
             // Broadcast new message to all conversation members
             let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
@@ -1029,7 +1064,7 @@ pub async fn trigger_agent_response(
                     "content": content,
                     "status": "completed",
                     "senderUserId": user_id,
-                    "senderUserName": sender_name,
+                    "senderUserName": &sender_name,
                     "senderUsername": sender_username,
                     "senderUserImage": sender_image,
                     "senderIsVerified": sender_is_verified,
@@ -1062,7 +1097,7 @@ pub async fn trigger_agent_response(
                             mid,
                             &crate::services::push::PushPayload {
                                 notification_type: "message".into(),
-                                title: sender_name.to_string(),
+                                title: sender_name.clone(),
                                 body: preview,
                                 url: Some(format!("/?c={}&m={}", conversation_id, msg_id)),
                                 message_id: Some(msg_id.to_string()),
@@ -1235,8 +1270,8 @@ pub async fn trigger_agent_response(
             update_thread_summary(db, tid, Some(user_id), None).await;
         }
 
-        // Broadcast user message to all conversation members (for group visibility)
-        if conv_type == "group" {
+        // Broadcast user message to all conversation members (for group/community visibility)
+        if conv_type == "group" || conv_type == "community" {
             let sender_info = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>, bool)>(
                 r#"SELECT name, username, image, is_verified FROM "user" WHERE id = $1"#,
             )
@@ -1246,10 +1281,29 @@ pub async fn trigger_agent_response(
             .ok()
             .flatten();
 
-            let sender_name = sender_info.as_ref().and_then(|(n, _, _, _)| n.as_deref()).unwrap_or("");
+            let mut sender_name = sender_info.as_ref().and_then(|(n, _, _, _)| n.as_deref()).unwrap_or("").to_string();
             let sender_username = sender_info.as_ref().and_then(|(_, u, _, _)| u.as_deref()).unwrap_or("");
-            let sender_image = sender_info.as_ref().and_then(|(_, _, img, _)| img.as_deref());
+            let mut sender_image_owned = sender_info.as_ref().and_then(|(_, _, img, _)| img.clone());
             let sender_is_verified = sender_info.as_ref().map(|(_, _, _, v)| *v).unwrap_or(false);
+
+            // For community conversations, substitute with anonymous display_name/avatar
+            if conv_type == "community" {
+                if let Ok(Some((dn, ma))) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+                    r#"SELECT cm.display_name, cm.member_avatar_url
+                       FROM community_members cm
+                       JOIN communities c ON c.id = cm.community_id
+                       WHERE c.conversation_id = $1::uuid AND cm.user_id = $2"#,
+                )
+                .bind(conversation_id)
+                .bind(user_id)
+                .fetch_optional(db)
+                .await
+                {
+                    if let Some(dn) = dn { sender_name = dn; }
+                    if ma.is_some() { sender_image_owned = ma; }
+                }
+            }
+            let sender_image = sender_image_owned.as_deref();
 
             let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
             let user_msg_event = json!({
@@ -1264,7 +1318,7 @@ pub async fn trigger_agent_response(
                     "content": content,
                     "status": "completed",
                     "senderUserId": user_id,
-                    "senderUserName": sender_name,
+                    "senderUserName": &sender_name,
                     "senderUsername": sender_username,
                     "senderUserImage": sender_image,
                     "senderIsVerified": sender_is_verified,
@@ -1298,7 +1352,7 @@ pub async fn trigger_agent_response(
                             mid,
                             &crate::services::push::PushPayload {
                                 notification_type: "message".into(),
-                                title: sender_name.to_string(),
+                                title: sender_name.clone(),
                                 body: preview,
                                 url: Some(format!("/?c={}&m={}", conversation_id, user_msg_id)),
                                 message_id: Some(user_msg_id.to_string()),

@@ -988,6 +988,28 @@ async fn join(
         );
     }
 
+    // Check display_name uniqueness within the community
+    if !display_name.is_empty() {
+        let name_taken = sqlx::query_scalar::<_, bool>(
+            r#"SELECT EXISTS(
+                   SELECT 1 FROM community_members
+                   WHERE community_id = $1 AND LOWER(display_name) = LOWER($2)
+               )"#,
+        )
+        .bind(id)
+        .bind(&display_name)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
+
+        if name_taken {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "This display name is already taken in this community" })),
+            );
+        }
+    }
+
     let total_cost = join_fee + monthly_fee;
 
     let mut tx = match state.db.begin().await {
@@ -1300,8 +1322,27 @@ async fn leave(
 
 async fn list_members(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
+    // Verify caller is a member of this community
+    match is_member_or_creator(&state.db, id, &user.id).await {
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "You must be a member to view members" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("list_members: membership check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+        Ok(true) => {}
+    }
+
     let rows = sqlx::query_as::<_, MemberRow>(
         r#"SELECT cm.id, cm.user_id, cm.role::text, cm.joined_at,
                   cm.subscription_status, cm.notification_preference,
@@ -1320,6 +1361,7 @@ async fn list_members(
 
     match rows {
         Ok(rows) => {
+            let caller_id = &user.id;
             let members: Vec<Value> = rows
                 .iter()
                 .map(|r| {
@@ -1330,9 +1372,16 @@ async fn list_members(
                     } else {
                         &r.user_image
                     };
+                    // Return real userId only for the caller; anonymize others
+                    // to prevent cross-community user tracking
+                    let exposed_user_id: Value = if r.user_id == *caller_id {
+                        json!(r.user_id)
+                    } else {
+                        json!(r.id.to_string()) // use community_member row id
+                    };
                     json!({
                         "id": r.id,
-                        "userId": r.user_id,
+                        "userId": exposed_user_id,
                         "role": r.role,
                         "joinedAt": r.joined_at.to_rfc3339(),
                         "subscriptionStatus": r.subscription_status,
@@ -2212,6 +2261,7 @@ async fn get_messages(
 
     match rows {
         Ok(rows) => {
+            let caller_id = &user.id;
             let messages: Vec<Value> = rows
                 .iter()
                 .rev() // reverse to chronological order
@@ -2223,9 +2273,24 @@ async fn get_messages(
                     } else {
                         &r.user_image
                     };
+                    // Return real userId only for the caller's own messages;
+                    // anonymize others to prevent cross-community tracking
+                    let exposed_user_id: Value = match &r.user_id {
+                        Some(uid) if uid == caller_id => json!(uid),
+                        Some(uid) => {
+                            // Use a hash so the same user's messages group consistently
+                            use sha2::{Sha256, Digest};
+                            let mut hasher = Sha256::new();
+                            hasher.update(id.as_bytes());
+                            hasher.update(uid.as_bytes());
+                            let hash = format!("anon-{}", hex::encode(&hasher.finalize()[..8]));
+                            json!(hash)
+                        }
+                        None => json!(null),
+                    };
                     json!({
                         "id": r.id,
-                        "userId": r.user_id,
+                        "userId": exposed_user_id,
                         "agentListingId": r.agent_listing_id,
                         "content": r.content,
                         "messageType": r.message_type,
@@ -3095,6 +3160,27 @@ async fn update_community_identity(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": "Display name must be 1-50 characters" })),
+        );
+    }
+
+    // Check display_name uniqueness within the community (exclude self)
+    let name_taken = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+               SELECT 1 FROM community_members
+               WHERE community_id = $1 AND LOWER(display_name) = LOWER($2) AND user_id != $3
+           )"#,
+    )
+    .bind(id)
+    .bind(name)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if name_taken {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "This display name is already taken in this community" })),
         );
     }
 
