@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
 import type { Message } from "@arinova/shared/types";
-import { cn } from "@/lib/utils";
+import { cn, isGroupLike } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -284,7 +284,7 @@ export function ConversationItem({
                 />
               )}
               <AvatarFallback className="bg-accent text-foreground/80 text-xs">
-                {type === "group" ? (
+                {isGroupLike(type) ? (
                   <Users className="h-4 w-4" />
                 ) : (
                   <Bot className="h-4 w-4" />
@@ -411,7 +411,7 @@ export function ConversationItem({
                 />
               )}
               <AvatarFallback className="bg-accent text-foreground/80 text-xs">
-                {type === "group" ? (
+                {isGroupLike(type) ? (
                   <Users className="h-5 w-5" />
                 ) : (
                   <Bot className="h-5 w-5" />

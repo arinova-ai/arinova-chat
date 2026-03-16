@@ -21,6 +21,7 @@ import { MediaFilesPanel, type MediaFilesTab } from "./media-files-panel";
 import { PinnedMessagesBar } from "./pinned-messages-bar";
 import { Upload } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { isGroupLike } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import { useRenderDiag } from "@/lib/chat-diagnostics";
@@ -214,16 +215,16 @@ export function ChatArea() {
         peerUserId={conversation.peerUserId}
         mentionOnly={conversation.mentionOnly}
         title={conversation.title}
-        memberCount={conversation.type === "group" ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
+        memberCount={isGroupLike(conversation.type) ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
         onClick={agent ? () => setManageOpen(true) : undefined}
-        onMembersClick={conversation.type === "group" ? () => {
+        onMembersClick={isGroupLike(conversation.type) ? () => {
           if (window.matchMedia("(min-width: 1280px)").matches) {
             useRightPanelStore.getState().setActiveTab("members");
           } else {
             openMembersPanel("members");
           }
         } : undefined}
-        onSettingsClick={conversation.type === "group" ? () => openMembersPanel("settings") : undefined}
+        onSettingsClick={isGroupLike(conversation.type) ? () => openMembersPanel("settings") : undefined}
         onThreadsClick={() => {
           if (window.matchMedia("(min-width: 1280px)").matches) {
             useRightPanelStore.getState().setActiveTab("threads");
@@ -245,7 +246,7 @@ export function ChatArea() {
             openNotebook();
           }
         }}
-        onWikiClick={conversation.type === "group" ? () => {
+        onWikiClick={isGroupLike(conversation.type) ? () => {
           if (window.matchMedia("(min-width: 1280px)").matches) {
             useRightPanelStore.getState().setActiveTab("wiki");
           } else {
@@ -260,7 +261,7 @@ export function ChatArea() {
         {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
       </ErrorBoundary>
       <ErrorBoundary scope="MessageList">
-        <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={conversation.type === "group"} />
+        <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={isGroupLike(conversation.type)} />
       </ErrorBoundary>
       <ErrorBoundary scope="ChatInput">
         <ChatInput
@@ -280,7 +281,7 @@ export function ChatArea() {
         />
       )}
 
-      {conversation.type === "group" && (
+      {isGroupLike(conversation.type) && (
         <>
           <GroupMembersPanel
             open={membersOpen}
@@ -324,7 +325,7 @@ export function ChatArea() {
         onOpenChange={(open) => { if (!open) closeKanbanSidebar(); }}
         conversationId={activeConversationId}
       />
-      {conversation.type === "group" && (
+      {isGroupLike(conversation.type) && (
         <WikiPanel
           open={wikiOpen}
           onOpenChange={setWikiOpen}

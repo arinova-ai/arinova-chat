@@ -18,6 +18,7 @@ import {
 } from "@/lib/platform-commands";
 import { BACKEND_URL } from "@/lib/config";
 import { api } from "@/lib/api";
+import { isGroupLike } from "@/lib/utils";
 import { compressImage } from "@/lib/image-compress";
 import type { Message } from "@arinova/shared/types";
 import { useToastStore } from "@/store/toast-store";
@@ -205,7 +206,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
 
   // Dynamic placeholder based on mentionOnly setting
   const placeholder =
-    activeConversation?.type === "group" && activeConversation.mentionOnly
+    isGroupLike(activeConversation?.type) && activeConversation?.mentionOnly
       ? "@mention an agent..."
       : "Type a message...";
 
@@ -372,7 +373,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     : [];
 
   const isMentionOnly =
-    activeConversation?.type === "group" && activeConversation.mentionOnly;
+    isGroupLike(activeConversation?.type) && activeConversation?.mentionOnly;
 
   const mentionItems = useMemo((): MentionItem[] => {
     if (mentionQuery === null || activeMembers.length === 0) return [];

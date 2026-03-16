@@ -14,7 +14,7 @@ import {
 import { useRightPanelStore } from "@/store/right-panel-store";
 import { useChatStore } from "@/store/chat-store";
 import { useTranslation } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import { cn, isGroupLike } from "@/lib/utils";
 import { NotebookList } from "./notebook-list";
 import { KanbanSidebar } from "./kanban-sidebar";
 import { ThreadListContent } from "./thread-list-sheet";
@@ -58,7 +58,7 @@ export function RightPanel() {
     const id = s.activeConversationId;
     return id ? s.conversations.find((c) => c.id === id) : undefined;
   });
-  const isGroup = activeConversation?.type === "group";
+  const isGroup = isGroupLike(activeConversation?.type);
 
   // Auto-hide on small viewports
   const [isWide, setIsWide] = useState(false);

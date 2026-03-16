@@ -4,6 +4,7 @@ import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
+import { isGroupLike } from "@/lib/utils";
 import { useNotificationStore } from "@/store/notification-store";
 import { playReceiveSound } from "@/lib/sounds";
 import {
@@ -423,7 +424,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Load conversation members for @mention support
     const conv = get().conversations.find((c) => c.id === id);
     if (conv && !get().conversationMembers[id]) {
-      if (conv.type === "group") {
+      if (isGroupLike(conv.type)) {
         get()
           .loadGroupMembersV2(id)
           .catch(() => {});
@@ -1930,7 +1931,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // When a system message arrives, refresh conversation members (for @mention)
       if (msg.role === "system") {
         const conv = get().conversations.find((c) => c.id === conversationId);
-        if (conv?.type === "group") {
+        if (isGroupLike(conv?.type)) {
           get().loadGroupMembersV2(conversationId).catch(() => {});
         }
       }

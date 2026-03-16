@@ -13,6 +13,7 @@ import { useChatStore } from "@/store/chat-store";
 import { useToastStore } from "@/store/toast-store";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
+import { isGroupLike } from "@/lib/utils";
 import { api } from "@/lib/api";
 
 interface ShareToConversationSheetProps {
@@ -130,7 +131,7 @@ export function ShareToConversationSheet({
                       />
                     )}
                     <AvatarFallback className="bg-accent text-foreground/80 text-xs">
-                      {conv.type === "group" ? (
+                      {isGroupLike(conv.type) ? (
                         <Users className="h-4 w-4" />
                       ) : (
                         <Bot className="h-4 w-4" />

@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect, memo } from "react";
 import { useRouter } from "next/navigation";
 import type { Message, Attachment } from "@arinova/shared/types";
-import { cn } from "@/lib/utils";
+import { cn, isGroupLike } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
 const MarkdownContent = dynamic(
@@ -735,7 +735,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
           } else if (showUserProfile && message.senderUserId) {
             router.push(`/profile/${message.senderUserId}`);
           } else if (showAgentProfile && resolvedAgentId) {
-            const suffix = conversation?.type === "group" ? `?convId=${message.conversationId}` : "";
+            const suffix = isGroupLike(conversation?.type) ? `?convId=${message.conversationId}` : "";
             router.push(`/agent/${resolvedAgentId}${suffix}`);
           }
         }}

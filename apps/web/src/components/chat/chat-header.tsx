@@ -30,7 +30,7 @@ import { useHeaderPinStore } from "@/store/header-pin-store";
 import { useGroupPinStore } from "@/store/group-pin-store";
 import { HEADER_BUTTONS, GROUP_HEADER_BUTTONS, GROUP_MAX_PINS, ChatHeaderSettings } from "./chat-header-settings";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
-import { cn } from "@/lib/utils";
+import { cn, isGroupLike } from "@/lib/utils";
 import type { ConversationType } from "@arinova/shared/types";
 import { getPushStatus, subscribeToPush } from "@/lib/push";
 import { useTranslation } from "@/lib/i18n";
@@ -111,7 +111,7 @@ export function ChatHeader({
   const groupPins = useGroupPinStore((s) => conversationId ? s.getPins(conversationId) : []);
   const loadGroupPins = useGroupPinStore((s) => s.loadPins);
   useEffect(() => {
-    if (type === "group" && conversationId) {
+    if (isGroupLike(type) && conversationId) {
       loadGroupPins(conversationId);
     }
   }, [type, conversationId, loadGroupPins]);
@@ -215,7 +215,7 @@ export function ChatHeader({
               className="h-full w-full object-cover"
             />
             <AvatarFallback className="bg-accent text-foreground/80 text-xs">
-              {type === "group" ? (
+              {isGroupLike(type) ? (
                 <Users className="h-4 w-4" />
               ) : (
                 <Bot className="h-4 w-4" />
@@ -402,10 +402,10 @@ export function ChatHeader({
       open={settingsOpen}
       onOpenChange={setSettingsOpen}
       conversationId={conversationId}
-      mode={type === "group" ? "group" : "direct"}
+      mode={isGroupLike(type) ? "group" : "direct"}
       groupTitle={title ?? undefined}
       groupAvatarUrl={agentAvatarUrl}
-      onGroupTitleSave={type === "group" ? (newTitle) => {
+      onGroupTitleSave={isGroupLike(type) ? (newTitle) => {
         if (conversationId) {
           useChatStore.getState().updateGroupSettings(conversationId, { title: newTitle });
         }
