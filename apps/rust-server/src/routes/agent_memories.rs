@@ -550,44 +550,47 @@ async fn extract_memories(
     .into_response()
 }
 
+/// Quick throttle check — call BEFORE tokio::spawn to avoid unnecessary task creation.
+/// Returns true if extraction should proceed (watermark is stale or missing).
+pub async fn should_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversation_id: Uuid) -> bool {
+    const THROTTLE_MINUTES: i64 = 30;
+
+    let last: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT last_extracted_at FROM agent_memory_watermarks WHERE agent_id = $1 AND conversation_id = $2",
+    )
+    .bind(agent_id)
+    .bind(conversation_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+
+    match last {
+        Some(t) => (chrono::Utc::now() - t).num_minutes() >= THROTTLE_MINUTES,
+        None => true,
+    }
+}
+
 /// Auto-extract memories in the background after an agent reply completes.
-/// Throttle: only runs if last extraction was > 30 minutes ago (or never).
+/// Uses per-conversation watermarks; only updates watermark on success.
 pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversation_id: Uuid) {
     const THROTTLE_MINUTES: i64 = 30;
 
-    // Check last_memory_extracted_at on the agent
+    // Read per-conversation watermark
     let last_extracted: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-        "SELECT last_memory_extracted_at FROM agents WHERE id = $1",
+        "SELECT last_extracted_at FROM agent_memory_watermarks WHERE agent_id = $1 AND conversation_id = $2",
     )
     .bind(agent_id)
+    .bind(conversation_id)
     .fetch_optional(db)
     .await
     .ok()
     .flatten();
 
     if let Some(last) = last_extracted {
-        let elapsed = chrono::Utc::now() - last;
-        if elapsed.num_minutes() < THROTTLE_MINUTES {
-            return; // Too soon, skip
+        if (chrono::Utc::now() - last).num_minutes() < THROTTLE_MINUTES {
+            return;
         }
-    }
-
-    // Optimistically update last_memory_extracted_at to prevent concurrent runs
-    let now = chrono::Utc::now();
-    let updated = sqlx::query(
-        r#"UPDATE agents SET last_memory_extracted_at = $1
-           WHERE id = $2
-             AND (last_memory_extracted_at IS NULL OR last_memory_extracted_at < $3)"#,
-    )
-    .bind(now)
-    .bind(agent_id)
-    .bind(now - chrono::Duration::minutes(THROTTLE_MINUTES))
-    .execute(db)
-    .await;
-
-    // If no rows updated, another task claimed the slot — skip
-    if updated.map(|r| r.rows_affected()).unwrap_or(0) == 0 {
-        return;
     }
 
     tracing::info!(
@@ -595,7 +598,7 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
         agent_id, conversation_id
     );
 
-    // Determine since timestamp: use the previous last_memory_extracted_at
+    // Determine since timestamp from per-conversation watermark
     let since = last_extracted.map(|t| t.to_rfc3339());
 
     // Fetch recent messages (incremental if since is set)
@@ -646,7 +649,7 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
         Ok(text) => text,
         Err(e) => {
             tracing::error!("auto_extract_memories: claude failed: {e}");
-            return;
+            return; // Do NOT update watermark — will retry next time
         }
     };
 
@@ -709,6 +712,18 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
             }
         }
     }
+
+    // Only update watermark AFTER successful extraction
+    let _ = sqlx::query(
+        r#"INSERT INTO agent_memory_watermarks (agent_id, conversation_id, last_extracted_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (agent_id, conversation_id) DO UPDATE
+             SET last_extracted_at = NOW()"#,
+    )
+    .bind(agent_id)
+    .bind(conversation_id)
+    .execute(db)
+    .await;
 
     tracing::info!(
         "auto_extract_memories: done agent={} conv={} extracted={}",

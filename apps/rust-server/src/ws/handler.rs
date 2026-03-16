@@ -2107,14 +2107,17 @@ pub(crate) async fn do_trigger_agent_response(
                                     let db4 = db.clone();
                                     let aid = agent_id.clone();
                                     let cid4 = conversation_id.clone();
-                                    tokio::spawn(async move {
-                                        if let (Ok(aid_uuid), Ok(cid_uuid)) = (
-                                            uuid::Uuid::parse_str(&aid),
-                                            uuid::Uuid::parse_str(&cid4),
-                                        ) {
-                                            crate::routes::agent_memories::maybe_extract_memories(&db4, aid_uuid, cid_uuid).await;
+                                    if let (Ok(aid_uuid), Ok(cid_uuid)) = (
+                                        uuid::Uuid::parse_str(&aid),
+                                        uuid::Uuid::parse_str(&cid4),
+                                    ) {
+                                        // Pre-spawn throttle check avoids unnecessary task creation
+                                        if crate::routes::agent_memories::should_extract_memories(&db4, aid_uuid, cid_uuid).await {
+                                            tokio::spawn(async move {
+                                                crate::routes::agent_memories::maybe_extract_memories(&db4, aid_uuid, cid_uuid).await;
+                                            });
                                         }
-                                    });
+                                    }
                                 }
                             }
                             ws_state.broadcast_to_members(&member_ids, &json!({
