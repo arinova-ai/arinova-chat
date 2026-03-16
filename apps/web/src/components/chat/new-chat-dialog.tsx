@@ -110,6 +110,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
           <DialogTitle>{t("newChat.title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
+          <div className="max-h-[60vh] overflow-y-auto space-y-2">
           {agents.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
               {t("newChat.noAgents")}
@@ -164,6 +165,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               </div>
             ))
           )}
+          </div>
           <div className="flex gap-2 pt-2">
             <Button
               variant="outline"
