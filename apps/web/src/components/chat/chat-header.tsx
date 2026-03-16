@@ -269,6 +269,11 @@ export function ChatHeader({
               )}>
                 {t(`community.cs.status.${csStatus}`)}
               </span>
+              {pendingCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none">
+                  {pendingCount}
+                </span>
+              )}
             </p>
           ) : type === "group" || type === "community" ? (
             <p className="flex items-center gap-1 text-xs text-muted-foreground truncate">
