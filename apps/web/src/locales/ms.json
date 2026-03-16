@@ -1346,5 +1346,20 @@
   "lounge.settings.transferOwnership": "Pindah Hak Milik",
   "lounge.settings.transferDesc": "Pindahkan lounge ini kepada pengguna lain",
   "lounge.settings.deleteAccount": "Padam Lounge",
-  "lounge.settings.deleteConfirm": "Padam lounge ini? Tindakan ini tidak boleh dibatalkan."
+  "lounge.settings.deleteConfirm": "Padam lounge ini? Tindakan ini tidak boleh dibatalkan.",
+  "community.detail.notFound": "Komuniti tidak ditemui",
+  "community.detail.backToCommunities": "Kembali ke Komuniti",
+  "community.detail.perCall": "/panggilan",
+  "community.detail.applyVerification": "Mohon Pengesahan",
+  "community.detail.businessName": "Nama perniagaan",
+  "community.detail.businessRegNumber": "Nombor pendaftaran perniagaan",
+  "community.detail.documentsUrl": "URL dokumen (pilihan)",
+  "community.detail.submit": "Hantar",
+  "community.detail.startChat": "Mula Sembang",
+  "community.detail.startVoiceChat": "Mula Sembang Suara",
+  "community.detail.membersCount": "Ahli ({{count}})",
+  "community.detail.aiAgentsCount": "Ejen AI ({{count}})",
+  "community.form.agentPolicy.ownerOnly": "Ejen pemilik sahaja",
+  "community.form.agentPolicy.adminAgents": "Ejen admin dibenarkan",
+  "community.form.agentPolicy.memberAgents": "Ejen semua ahli dibenarkan"
 }

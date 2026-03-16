@@ -84,6 +84,7 @@ interface Member {
 interface Application {
   id: string;
   userId: string;
+  userName?: string;
   answers: unknown[];
   status: string;
   createdAt: string;
@@ -545,7 +546,7 @@ export function CommunitySettingsSheet({
                     </h3>
                     {applications.map((app) => (
                       <div key={app.id} className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-2">
-                        <p className="text-sm font-medium">{app.userId}</p>
+                        <p className="text-sm font-medium">{app.userName || app.userId}</p>
                         {Array.isArray(app.answers) && app.answers.length > 0 && (
                           <div className="text-xs text-muted-foreground space-y-1">
                             {(app.answers as string[]).map((a, i) => (
@@ -874,18 +875,6 @@ export function CommunitySettingsSheet({
             {activeTab === "danger" && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">{t("communitySettings.dangerZoneDesc")}</p>
-
-                {!isCreator && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-                    onClick={handleLeave}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {t("communitySettings.leave")}
-                  </Button>
-                )}
 
                 {isCreator && (
                   <>

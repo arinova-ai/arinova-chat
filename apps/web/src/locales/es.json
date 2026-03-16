@@ -1346,5 +1346,20 @@
   "lounge.settings.transferOwnership": "Transferir propiedad",
   "lounge.settings.transferDesc": "Transferir este lounge a otro usuario",
   "lounge.settings.deleteAccount": "Eliminar Lounge",
-  "lounge.settings.deleteConfirm": "¿Eliminar este lounge? Esta acción no se puede deshacer."
+  "lounge.settings.deleteConfirm": "¿Eliminar este lounge? Esta acción no se puede deshacer.",
+  "community.detail.notFound": "Comunidad no encontrada",
+  "community.detail.backToCommunities": "Volver a Comunidades",
+  "community.detail.perCall": "/llamada",
+  "community.detail.applyVerification": "Solicitar Verificación",
+  "community.detail.businessName": "Nombre del negocio",
+  "community.detail.businessRegNumber": "Número de registro comercial",
+  "community.detail.documentsUrl": "URL de documentos (opcional)",
+  "community.detail.submit": "Enviar",
+  "community.detail.startChat": "Iniciar Chat",
+  "community.detail.startVoiceChat": "Iniciar Chat de Voz",
+  "community.detail.membersCount": "Miembros ({{count}})",
+  "community.detail.aiAgentsCount": "Agentes IA ({{count}})",
+  "community.form.agentPolicy.ownerOnly": "Solo agentes del propietario",
+  "community.form.agentPolicy.adminAgents": "Agentes de administradores permitidos",
+  "community.form.agentPolicy.memberAgents": "Agentes de todos los miembros permitidos"
 }

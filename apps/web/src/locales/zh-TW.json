@@ -1299,11 +1299,9 @@
   "wiki.save": "儲存",
   "wiki.contentPlaceholder": "撰寫內容...",
   "rightPanel.wiki": "維基",
-
   "nav.persona": "人設",
   "nav.diary": "日記",
   "nav.preview": "模擬",
-
   "lounge.dashboard.title": "Lounge 儀表板",
   "lounge.dashboard.fans": "粉絲",
   "lounge.dashboard.todayNew": "今日新增",
@@ -1323,7 +1321,6 @@
   "lounge.dashboard.viewAll": "查看全部",
   "lounge.dashboard.configured": "已設定",
   "lounge.dashboard.notConfigured": "未設定",
-
   "lounge.persona.title": "人設",
   "lounge.persona.templateSection": "範本",
   "lounge.persona.templates.friendly": "親切",
@@ -1345,7 +1342,6 @@
   "lounge.persona.safetySection": "安全邊界",
   "lounge.persona.forbiddenTopics": "禁止話題",
   "lounge.persona.forbiddenTopicsHelp": "AI 應避免討論的話題，每行一個。",
-
   "lounge.diary.title": "日記",
   "lounge.diary.newEntry": "新增日記",
   "lounge.diary.date": "日期",
@@ -1359,14 +1355,12 @@
   "lounge.diary.delete": "刪除",
   "lounge.diary.deleteConfirm": "確定刪除此日記？",
   "lounge.diary.contentPlaceholder": "寫下今天的事、想法或回憶...",
-
   "lounge.preview.title": "模擬對話",
   "lounge.preview.placeholder": "以粉絲身份輸入訊息...",
   "lounge.preview.clear": "清除",
   "lounge.preview.clearConfirm": "清除所有模擬訊息？",
   "lounge.preview.noMessages": "發送訊息來測試你的 AI 人設",
   "lounge.preview.sendingNote": "此處的訊息僅供測試，不會出現在粉絲對話中。",
-
   "lounge.fans.title": "粉絲",
   "lounge.fans.allFans": "全部粉絲",
   "lounge.fans.leaderboard": "排行榜",
@@ -1380,7 +1374,6 @@
   "lounge.fans.noLeaderboard": "尚無送禮數據",
   "lounge.fans.block": "封鎖",
   "lounge.fans.remove": "移除",
-
   "lounge.settings.title": "Lounge 設定",
   "lounge.settings.general": "一般",
   "lounge.settings.pricing": "定價",
@@ -1407,5 +1400,20 @@
   "lounge.settings.transferOwnership": "轉移所有權",
   "lounge.settings.transferDesc": "將此 Lounge 轉移給其他用戶",
   "lounge.settings.deleteAccount": "刪除 Lounge",
-  "lounge.settings.deleteConfirm": "確定要刪除此 Lounge？此操作無法復原。"
+  "lounge.settings.deleteConfirm": "確定要刪除此 Lounge？此操作無法復原。",
+  "community.detail.notFound": "找不到社群",
+  "community.detail.backToCommunities": "返回社群列表",
+  "community.detail.perCall": "/次通話",
+  "community.detail.applyVerification": "申請認證",
+  "community.detail.businessName": "商家名稱",
+  "community.detail.businessRegNumber": "營業登記號碼",
+  "community.detail.documentsUrl": "文件網址（選填）",
+  "community.detail.submit": "送出",
+  "community.detail.startChat": "開始聊天",
+  "community.detail.startVoiceChat": "開始語音聊天",
+  "community.detail.membersCount": "成員（{{count}}）",
+  "community.detail.aiAgentsCount": "AI Agents（{{count}}）",
+  "community.form.agentPolicy.ownerOnly": "僅擁有者的 Agent",
+  "community.form.agentPolicy.adminAgents": "管理員的 Agent 可加入",
+  "community.form.agentPolicy.memberAgents": "所有成員的 Agent 可加入"
 }

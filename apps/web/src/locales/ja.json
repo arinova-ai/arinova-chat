@@ -1271,11 +1271,9 @@
   "wiki.save": "保存",
   "wiki.contentPlaceholder": "内容を入力...",
   "rightPanel.wiki": "ウィキ",
-
   "nav.persona": "ペルソナ",
   "nav.diary": "日記",
   "nav.preview": "プレビュー",
-
   "lounge.dashboard.title": "ラウンジダッシュボード",
   "lounge.dashboard.fans": "ファン",
   "lounge.dashboard.todayNew": "本日の新規",
@@ -1295,7 +1293,6 @@
   "lounge.dashboard.viewAll": "すべて表示",
   "lounge.dashboard.configured": "設定済み",
   "lounge.dashboard.notConfigured": "未設定",
-
   "lounge.persona.title": "ペルソナ",
   "lounge.persona.templateSection": "テンプレート",
   "lounge.persona.templates.friendly": "フレンドリー",
@@ -1317,7 +1314,6 @@
   "lounge.persona.safetySection": "安全境界",
   "lounge.persona.forbiddenTopics": "禁止トピック",
   "lounge.persona.forbiddenTopicsHelp": "AIが避けるべきトピック。1行に1つ。",
-
   "lounge.diary.title": "日記",
   "lounge.diary.newEntry": "新規エントリー",
   "lounge.diary.date": "日付",
@@ -1331,14 +1327,12 @@
   "lounge.diary.delete": "削除",
   "lounge.diary.deleteConfirm": "この日記を削除しますか？",
   "lounge.diary.contentPlaceholder": "今日のこと、思い、記憶を書いてください...",
-
   "lounge.preview.title": "プレビューチャット",
   "lounge.preview.placeholder": "ファンとしてメッセージを入力...",
   "lounge.preview.clear": "クリア",
   "lounge.preview.clearConfirm": "すべてのプレビューメッセージをクリアしますか？",
   "lounge.preview.noMessages": "メッセージを送信してAIペルソナをテスト",
   "lounge.preview.sendingNote": "ここでのメッセージはテスト専用で、ファンの会話には表示されません。",
-
   "lounge.fans.title": "ファン",
   "lounge.fans.allFans": "全ファン",
   "lounge.fans.leaderboard": "ランキング",
@@ -1352,7 +1346,6 @@
   "lounge.fans.noLeaderboard": "ギフトデータがありません",
   "lounge.fans.block": "ブロック",
   "lounge.fans.remove": "削除",
-
   "lounge.settings.title": "ラウンジ設定",
   "lounge.settings.general": "一般",
   "lounge.settings.pricing": "料金",
@@ -1379,5 +1372,20 @@
   "lounge.settings.transferOwnership": "所有権の移転",
   "lounge.settings.transferDesc": "このラウンジを他のユーザーに移転する",
   "lounge.settings.deleteAccount": "ラウンジを削除",
-  "lounge.settings.deleteConfirm": "このラウンジを削除してよろしいですか？この操作は元に戻せません。"
+  "lounge.settings.deleteConfirm": "このラウンジを削除してよろしいですか？この操作は元に戻せません。",
+  "community.detail.notFound": "コミュニティが見つかりません",
+  "community.detail.backToCommunities": "コミュニティ一覧に戻る",
+  "community.detail.perCall": "/通話",
+  "community.detail.applyVerification": "認証を申請",
+  "community.detail.businessName": "事業者名",
+  "community.detail.businessRegNumber": "法人番号",
+  "community.detail.documentsUrl": "書類URL（任意）",
+  "community.detail.submit": "送信",
+  "community.detail.startChat": "チャットを開始",
+  "community.detail.startVoiceChat": "ボイスチャットを開始",
+  "community.detail.membersCount": "メンバー（{{count}}）",
+  "community.detail.aiAgentsCount": "AIエージェント（{{count}}）",
+  "community.form.agentPolicy.ownerOnly": "オーナーのエージェントのみ",
+  "community.form.agentPolicy.adminAgents": "管理者のエージェントも許可",
+  "community.form.agentPolicy.memberAgents": "全メンバーのエージェントを許可"
 }

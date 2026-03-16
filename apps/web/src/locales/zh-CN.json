@@ -1249,11 +1249,9 @@
   "wiki.save": "保存",
   "wiki.contentPlaceholder": "撰写内容...",
   "rightPanel.wiki": "维基",
-
   "nav.persona": "人设",
   "nav.diary": "日记",
   "nav.preview": "模拟",
-
   "lounge.dashboard.title": "Lounge 仪表板",
   "lounge.dashboard.fans": "粉丝",
   "lounge.dashboard.todayNew": "今日新增",
@@ -1273,7 +1271,6 @@
   "lounge.dashboard.viewAll": "查看全部",
   "lounge.dashboard.configured": "已配置",
   "lounge.dashboard.notConfigured": "未配置",
-
   "lounge.persona.title": "人设",
   "lounge.persona.templateSection": "模板",
   "lounge.persona.templates.friendly": "亲切",
@@ -1295,7 +1292,6 @@
   "lounge.persona.safetySection": "安全边界",
   "lounge.persona.forbiddenTopics": "禁止话题",
   "lounge.persona.forbiddenTopicsHelp": "AI 应避免讨论的话题，每行一个。",
-
   "lounge.diary.title": "日记",
   "lounge.diary.newEntry": "新增日记",
   "lounge.diary.date": "日期",
@@ -1309,14 +1305,12 @@
   "lounge.diary.delete": "删除",
   "lounge.diary.deleteConfirm": "确定删除此日记？",
   "lounge.diary.contentPlaceholder": "写下今天的事、想法或回忆...",
-
   "lounge.preview.title": "模拟对话",
   "lounge.preview.placeholder": "以粉丝身份输入消息...",
   "lounge.preview.clear": "清除",
   "lounge.preview.clearConfirm": "清除所有模拟消息？",
   "lounge.preview.noMessages": "发送消息来测试你的 AI 人设",
   "lounge.preview.sendingNote": "此处的消息仅供测试，不会出现在粉丝对话中。",
-
   "lounge.fans.title": "粉丝",
   "lounge.fans.allFans": "全部粉丝",
   "lounge.fans.leaderboard": "排行榜",
@@ -1330,7 +1324,6 @@
   "lounge.fans.noLeaderboard": "暂无送礼数据",
   "lounge.fans.block": "封锁",
   "lounge.fans.remove": "移除",
-
   "lounge.settings.title": "Lounge 设置",
   "lounge.settings.general": "通用",
   "lounge.settings.pricing": "定价",
@@ -1357,5 +1350,20 @@
   "lounge.settings.transferOwnership": "转移所有权",
   "lounge.settings.transferDesc": "将此 Lounge 转移给其他用户",
   "lounge.settings.deleteAccount": "删除 Lounge",
-  "lounge.settings.deleteConfirm": "确定要删除此 Lounge？此操作无法撤消。"
+  "lounge.settings.deleteConfirm": "确定要删除此 Lounge？此操作无法撤消。",
+  "community.detail.notFound": "找不到社群",
+  "community.detail.backToCommunities": "返回社群列表",
+  "community.detail.perCall": "/次通话",
+  "community.detail.applyVerification": "申请认证",
+  "community.detail.businessName": "商家名称",
+  "community.detail.businessRegNumber": "营业登记号码",
+  "community.detail.documentsUrl": "文件网址（选填）",
+  "community.detail.submit": "提交",
+  "community.detail.startChat": "开始聊天",
+  "community.detail.startVoiceChat": "开始语音聊天",
+  "community.detail.membersCount": "成员（{{count}}）",
+  "community.detail.aiAgentsCount": "AI Agents（{{count}}）",
+  "community.form.agentPolicy.ownerOnly": "仅拥有者的 Agent",
+  "community.form.agentPolicy.adminAgents": "管理员的 Agent 可加入",
+  "community.form.agentPolicy.memberAgents": "所有成员的 Agent 可加入"
 }

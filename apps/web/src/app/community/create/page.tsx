@@ -22,11 +22,7 @@ const CATEGORIES = [
   "other",
 ] as const;
 
-const AGENT_JOIN_POLICIES = [
-  { value: "owner_only", label: "Only owner's agents" },
-  { value: "admin_agents", label: "Admin agents allowed" },
-  { value: "member_agents", label: "All member agents allowed" },
-] as const;
+const AGENT_JOIN_POLICY_VALUES = ["owner_only", "admin_agents", "member_agents"] as const;
 
 function CreateCommunityContent() {
   const router = useRouter();
@@ -260,20 +256,20 @@ function CreateCommunityContent() {
                 {t("community.form.agentJoinPolicyHint")}
               </p>
               <div className="space-y-2">
-                {AGENT_JOIN_POLICIES.map((policy) => (
+                {AGENT_JOIN_POLICY_VALUES.map((value) => (
                   <label
-                    key={policy.value}
+                    key={value}
                     className="flex items-center gap-3 cursor-pointer rounded-lg border border-border px-3 py-2.5 hover:bg-accent/50 transition-colors"
                   >
                     <input
                       type="radio"
                       name="agentJoinPolicy"
-                      value={policy.value}
-                      checked={agentJoinPolicy === policy.value}
+                      value={value}
+                      checked={agentJoinPolicy === value}
                       onChange={(e) => setAgentJoinPolicy(e.target.value)}
                       className="h-4 w-4 accent-brand"
                     />
-                    <span className="text-sm">{policy.label}</span>
+                    <span className="text-sm">{t(`community.form.agentPolicy.${value === "owner_only" ? "ownerOnly" : value === "admin_agents" ? "adminAgents" : "memberAgents"}`)}</span>
                   </label>
                 ))}
               </div>

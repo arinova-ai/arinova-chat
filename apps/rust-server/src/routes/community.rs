@@ -117,6 +117,7 @@ struct CommunityRow {
     invite_permission: String,
     post_permission: String,
     allow_agents: bool,
+    conversation_id: Option<Uuid>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -228,6 +229,7 @@ fn community_json(r: &CommunityRow) -> Value {
         "invitePermission": r.invite_permission,
         "postPermission": r.post_permission,
         "allowAgents": r.allow_agents,
+        "conversationId": r.conversation_id,
         "createdAt": r.created_at.to_rfc3339(),
         "updatedAt": r.updated_at.to_rfc3339(),
     })
@@ -598,7 +600,7 @@ async fn get_community(
                   c.category, c.tags, o.verified, o.cs_mode, o.default_agent_listing_id,
                   c.require_approval, c.approval_questions, c.agent_join_policy,
                   c.is_private, c.invite_permission, c.post_permission, c.allow_agents,
-                  c.created_at, c.updated_at
+                  c.conversation_id, c.created_at, c.updated_at
            FROM communities c
            LEFT JOIN officials o ON o.community_id = c.id
            WHERE c.id = $1"#,
@@ -2381,9 +2383,10 @@ async fn list_applications(
         }
     }
 
-    let apps = sqlx::query_as::<_, (Uuid, String, serde_json::Value, String, DateTime<Utc>)>(
-        r#"SELECT a.id, a.user_id, a.answers, a.status, a.created_at
+    let apps = sqlx::query_as::<_, (Uuid, String, serde_json::Value, String, DateTime<Utc>, Option<String>)>(
+        r#"SELECT a.id, a.user_id, a.answers, a.status, a.created_at, u.name
            FROM community_join_applications a
+           LEFT JOIN "user" u ON u.id = a.user_id
            WHERE a.community_id = $1 AND a.status = 'pending'
            ORDER BY a.created_at"#,
     )
@@ -2399,6 +2402,7 @@ async fn list_applications(
                     json!({
                         "id": r.0,
                         "userId": r.1,
+                        "userName": r.5.as_deref().unwrap_or("Unknown"),
                         "answers": r.2,
                         "status": r.3,
                         "createdAt": r.4.to_rfc3339(),
