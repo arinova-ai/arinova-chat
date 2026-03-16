@@ -518,12 +518,12 @@ case "tts": {
       }
 
       if (item.type === "agent-skill") {
-        // Send using the slash command label (e.g. /commandName)
-        sendMessage(item.label);
-        clearInput();
+        // Fill input so user can add arguments before sending
+        setValue(`${item.label} `);
+        textareaRef.current?.focus();
       }
     },
-    [executePlatformCommand, sendMessage, clearInput]
+    [executePlatformCommand]
   );
 
   // ---------- Intercept slash commands on send ----------
