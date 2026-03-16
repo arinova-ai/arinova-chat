@@ -136,6 +136,15 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   // Use DnD in full mode on desktop only
   const useDnd = !isMobile;
 
+  // ── Agent data (fetched from API for name + avatar) ────
+  const [fetchedAgents, setFetchedAgents] = useState<{ id: string; name: string; avatarUrl?: string | null }[]>([]);
+
+  useEffect(() => {
+    api<{ id: string; name: string; avatarUrl?: string | null }[]>("/api/agents", { silent: true })
+      .then((res) => setFetchedAgents(res || []))
+      .catch(() => {});
+  }, []);
+
   // ── Agent maps ──────────────────────────────────────────
 
   const agentEmojis = useMemo(() => {
@@ -148,11 +157,23 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
 
   const agentNames = useMemo(() => {
     const map = new Map<string, string>();
-    for (const a of streamAgents) {
+    // Prefer fetched agents (always available), fall back to stream agents
+    for (const a of fetchedAgents) {
       if (a.id && a.name) map.set(a.id, a.name);
     }
+    for (const a of streamAgents) {
+      if (a.id && a.name && !map.has(a.id)) map.set(a.id, a.name);
+    }
     return map;
-  }, [streamAgents]);
+  }, [streamAgents, fetchedAgents]);
+
+  const agentAvatars = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of fetchedAgents) {
+      if (a.id && a.avatarUrl) map.set(a.id, a.avatarUrl);
+    }
+    return map;
+  }, [fetchedAgents]);
 
   // ── Data fetching ───────────────────────────────────────
 
@@ -886,6 +907,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
         cardLabelsMap={cardLabelsMap}
         agentEmojis={agentEmojis}
         agentNames={agentNames}
+        agentAvatars={agentAvatars}
         editMode={editMode}
         onAddCard={setAddColumnId}
         onDeleteCard={handleDeleteCard}

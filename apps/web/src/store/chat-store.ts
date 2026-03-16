@@ -1755,9 +1755,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
                   (m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role)
                 )) {
                   replaced = true;
+                  const preservedUserId = m.id.startsWith("temp-") ? (m.senderUserId || get().currentUserId) : undefined;
                   return {
                     ...newMsg,
-                    senderUserId: newMsg.senderUserId || get().currentUserId || undefined,
+                    senderUserId: preservedUserId || newMsg.senderUserId || get().currentUserId || undefined,
                     attachments: (newMsg.attachments?.length ? newMsg.attachments : m.attachments) ?? [],
                   };
                 }
@@ -1860,9 +1861,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 (m.id.startsWith("temp-") && m.content === msg.content && m.role === msg.role)
               )) {
                 replaced = true;
+                // When replacing a temp (own) message, preserve real userId (server may anonymize for community)
+                const preservedUserId = m.id.startsWith("temp-") ? (m.senderUserId || get().currentUserId) : undefined;
                 return {
                   ...newMsg,
-                  senderUserId: newMsg.senderUserId || get().currentUserId || undefined,
+                  senderUserId: preservedUserId || newMsg.senderUserId || get().currentUserId || undefined,
                   attachments: (newMsg.attachments?.length ? newMsg.attachments : m.attachments) ?? [],
                 };
               }

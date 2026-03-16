@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 /** Popover that opens on hover (desktop) and tap (mobile). */
 function HoverPopover({ content }: { content: string }) {
@@ -192,6 +193,24 @@ export function BotManageDialog({
     }
   };
 
+  const handleDefaultAvatar = async (url: string) => {
+    setUploading(true);
+    setError("");
+    try {
+      await api(`/api/agents/${agent.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ avatarUrl: url }),
+      });
+      setAvatarUrl(url);
+      await useChatStore.getState().loadAgents();
+      await useChatStore.getState().loadConversations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set avatar");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError("");
@@ -309,6 +328,9 @@ export function BotManageDialog({
             />
             <p className="text-xs text-muted-foreground">{t("botManage.clickChangeAvatar")}</p>
           </div>
+
+          {/* Default avatar picker */}
+          <DefaultAvatarPicker onSelect={handleDefaultAvatar} selected={avatarUrl} />
 
           {/* Name */}
           <div className="space-y-2">

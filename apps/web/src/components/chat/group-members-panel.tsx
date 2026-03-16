@@ -680,10 +680,13 @@ function AgentMemberRow({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner_only">{t("group.ownerOnly")}</SelectItem>
-                    <SelectItem value="allowed_users">{t("group.allowedUsers")}</SelectItem>
-                    <SelectItem value="allowlist_mentions">{t("group.listenMode.allowlistMentions")}</SelectItem>
+                    <SelectItem value="all">{t("group.listenMode.all")}</SelectItem>
                     <SelectItem value="all_mentions">{t("group.allMentions")}</SelectItem>
+                    <SelectItem value="owner_unmention_others_mention">{t("group.listenMode.ownerUnmentionOthersMention")}</SelectItem>
+                    <SelectItem value="owner_and_allowlist">{t("group.listenMode.ownerAndAllowlist")}</SelectItem>
+                    <SelectItem value="allowlist_mentions">{t("group.listenMode.allowlistMentions")}</SelectItem>
+                    <SelectItem value="owner_only">{t("group.ownerOnly")}</SelectItem>
+                    <SelectItem value="muted">{t("group.listenMode.muted")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

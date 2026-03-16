@@ -44,6 +44,7 @@ import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
 import { useTranslation, type Locale } from "@/lib/i18n";
 import { isSoundEnabled, setSoundEnabled } from "@/lib/sounds";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 // ───── Types ─────
 
@@ -575,6 +576,17 @@ function ProfilePanel() {
     }
   };
 
+  const handleDefaultAvatarSelect = async (url: string) => {
+    setAvatarUploading(true);
+    try {
+      await authClient.updateUser({ image: url });
+    } catch {
+      setSaveError("Failed to set avatar");
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -734,6 +746,13 @@ function ProfilePanel() {
                 }
                 e.target.value = "";
               }}
+            />
+
+            {/* Default avatar picker */}
+            <DefaultAvatarPicker
+              onSelect={handleDefaultAvatarSelect}
+              selected={session?.user?.image}
+              className="mt-3"
             />
 
             {/* Editable name */}

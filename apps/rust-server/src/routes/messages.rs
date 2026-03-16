@@ -368,14 +368,18 @@ pub(crate) async fn with_attachments(
                     })
                 });
 
-                // Anonymize senderUserId for community conversations
+                // Anonymize senderUserId for community conversations (keep real id for caller's own messages)
                 let sender_user_id_out: Option<String> = if is_community_conv {
                     m.sender_user_id.as_ref().map(|uid| {
-                        use sha2::{Sha256, Digest};
-                        let mut hasher = Sha256::new();
-                        hasher.update(m.conversation_id.to_string().as_bytes());
-                        hasher.update(uid.as_bytes());
-                        format!("anon-{}", hex::encode(&hasher.finalize()[..8]))
+                        if caller_id == Some(uid.as_str()) {
+                            uid.clone()
+                        } else {
+                            use sha2::{Sha256, Digest};
+                            let mut hasher = Sha256::new();
+                            hasher.update(m.conversation_id.to_string().as_bytes());
+                            hasher.update(uid.as_bytes());
+                            format!("anon-{}", hex::encode(&hasher.finalize()[..8]))
+                        }
                     })
                 } else {
                     m.sender_user_id.clone()
@@ -806,7 +810,7 @@ async fn get_messages(
             all_items.push(clone_message_row(m));
         }
 
-        let messages_with_atts = with_attachments(&state.db, &state.config, &all_items, None).await;
+        let messages_with_atts = with_attachments(&state.db, &state.config, &all_items, Some(&user.id)).await;
         let messages_enriched =
             enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 
@@ -875,7 +879,7 @@ async fn get_messages(
         let has_more_down = result.len() as i64 > limit;
         let items: Vec<MessageRow> = result.into_iter().take(limit as usize).collect();
 
-        let messages_with_atts = with_attachments(&state.db, &state.config, &items, None).await;
+        let messages_with_atts = with_attachments(&state.db, &state.config, &items, Some(&user.id)).await;
         let messages_enriched =
             enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 
@@ -893,7 +897,7 @@ async fn get_messages(
             Ok(u) => u,
             Err(_) => {
                 // Invalid cursor, just load from the end
-                return load_default_messages(&state, id, limit, None).await;
+                return load_default_messages(&state, id, limit, None, Some(&user.id)).await;
             }
         };
 
@@ -912,7 +916,7 @@ async fn get_messages(
         (false, None)
     };
 
-    load_default_messages(&state, id, limit, bind_cursor).await
+    load_default_messages(&state, id, limit, bind_cursor, Some(&user.id)).await
 }
 
 /// Helper for the default (before) mode message loading.
@@ -921,6 +925,7 @@ async fn load_default_messages(
     conversation_id: Uuid,
     limit: i64,
     cursor_ts: Option<NaiveDateTime>,
+    caller_id: Option<&str>,
 ) -> Response {
     let result = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, MessageRow>(
@@ -959,7 +964,7 @@ async fn load_default_messages(
         None
     };
 
-    let messages_with_atts = with_attachments(&state.db, &state.config, &items, None).await;
+    let messages_with_atts = with_attachments(&state.db, &state.config, &items, caller_id).await;
     let messages_enriched =
         enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 
@@ -1305,7 +1310,7 @@ async fn get_thread_messages(
         None
     };
 
-    let messages_with_atts = with_attachments(&state.db, &state.config, &items, None).await;
+    let messages_with_atts = with_attachments(&state.db, &state.config, &items, Some(&user.id)).await;
     let messages_enriched =
         enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 

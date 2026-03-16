@@ -49,6 +49,7 @@ import {
   Check,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 type Tab = "info" | "personal" | "permissions" | "invites" | "danger";
 
@@ -593,6 +594,10 @@ export function CommunitySettingsSheet({
                       value={identityAvatar}
                       onChange={(e) => setIdentityAvatar(e.target.value)}
                       placeholder={t("community.identity.avatarPlaceholder")}
+                    />
+                    <DefaultAvatarPicker
+                      onSelect={(url) => setIdentityAvatar(url)}
+                      selected={identityAvatar}
                     />
                   </div>
                   <Button

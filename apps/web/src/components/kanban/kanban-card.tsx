@@ -26,6 +26,7 @@ export function SortableCard({
   agents,
   agentEmojis,
   agentNames,
+  agentAvatars,
   labels,
   allColumns,
   onDelete,
@@ -37,6 +38,7 @@ export function SortableCard({
   agents: string[];
   agentEmojis: Map<string, string>;
   agentNames: Map<string, string>;
+  agentAvatars?: Map<string, string>;
   labels?: Array<{ labelId: string; labelName: string; labelColor: string }>;
   allColumns?: KanbanColumn[];
   onDelete: (id: string) => void;
@@ -105,15 +107,28 @@ export function SortableCard({
             <PriorityBadge priority={card.priority} />
             {agents.length > 0 && (
               <div className="flex -space-x-1">
-                {agents.map((aid) => (
-                  <span
-                    key={aid}
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-[10px] ring-1 ring-card"
-                    title={agentNames.get(aid) ?? aid}
-                  >
-                    {agentEmojis.get(aid) ?? "\u{1F916}"}
-                  </span>
-                ))}
+                {agents.map((aid) => {
+                  const avatarUrl = agentAvatars?.get(aid);
+                  const name = agentNames.get(aid) ?? aid;
+                  return avatarUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      key={aid}
+                      src={avatarUrl}
+                      alt={name}
+                      title={name}
+                      className="h-5 w-5 rounded-full object-cover ring-1 ring-card"
+                    />
+                  ) : (
+                    <span
+                      key={aid}
+                      className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-[10px] ring-1 ring-card"
+                      title={name}
+                    >
+                      {agentEmojis.get(aid) ?? name.charAt(0)}
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>

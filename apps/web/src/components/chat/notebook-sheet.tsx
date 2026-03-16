@@ -49,6 +49,8 @@ interface NotebookSheetProps {
   inline?: boolean;
   /** When provided, load notes from /api/notebooks/:id/notes instead of conversation notes */
   notebookId?: string;
+  /** External search query to filter notes by title/content */
+  searchQuery?: string;
 }
 
 const EMPTY_NOTES: Note[] = [];
@@ -247,7 +249,7 @@ function SwipeableNoteItem({
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -256,7 +258,13 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   const storeNotes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
   const loadStoreNotes = useChatStore((s) => s.loadNotes);
   const [notebookNotes, setNotebookNotes] = useState<Note[]>([]);
-  const notes = notebookId ? notebookNotes : storeNotes;
+  const rawNotes = notebookId ? notebookNotes : storeNotes;
+  const notes = searchQuery
+    ? rawNotes.filter((n) => {
+        const q = searchQuery.toLowerCase();
+        return (n.title?.toLowerCase().includes(q)) || (n.content?.toLowerCase().includes(q));
+      })
+    : rawNotes;
   const loadNotes = useCallback(async (cid: string, opts?: { archived?: boolean; tags?: string[] }) => {
     if (notebookId) {
       // Load from notebook API

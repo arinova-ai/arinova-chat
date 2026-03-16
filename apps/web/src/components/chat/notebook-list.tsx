@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
+  Archive,
   BookOpen,
   Bot,
   Brain,
@@ -13,6 +14,8 @@ import {
   ArrowLeft,
   MoreHorizontal,
   Pencil,
+  Search,
+  Share2,
   Trash2,
   Loader2,
   FolderOpen,
@@ -267,6 +270,22 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
           fetchNotebooks(); // refresh counts
         }}
         onClose={!inline && onOpenChange ? () => onOpenChange(false) : undefined}
+        onManageCapsules={handleManageCapsules}
+        onManageAgents={handleManageAgents}
+        onToggleCapsuleLink={handleToggleCapsuleLink}
+        onToggleAgentPermission={handleToggleAgentPermission}
+        capsuleSelectorId={capsuleSelectorId}
+        setCapsuleSelectorId={setCapsuleSelectorId}
+        allCapsules={allCapsules}
+        selectedCapsuleIds={selectedCapsuleIds}
+        capsuleLoading={capsuleLoading}
+        agentSelectorId={agentSelectorId}
+        setAgentSelectorId={setAgentSelectorId}
+        allAgents={allAgents}
+        selectedAgentIds={selectedAgentIds}
+        agentLoading={agentLoading}
+        onDelete={handleDelete}
+        onRefresh={fetchNotebooks}
       />
     );
   }
@@ -548,14 +567,50 @@ function NotebookNotes({
   inline,
   onBack,
   onClose,
+  onManageCapsules,
+  onManageAgents,
+  onToggleCapsuleLink,
+  onToggleAgentPermission,
+  capsuleSelectorId,
+  setCapsuleSelectorId,
+  allCapsules,
+  selectedCapsuleIds,
+  capsuleLoading,
+  agentSelectorId,
+  setAgentSelectorId,
+  allAgents,
+  selectedAgentIds,
+  agentLoading,
+  onDelete,
+  onRefresh,
 }: {
   notebook: Notebook;
   conversationId: string;
   inline?: boolean;
   onBack: () => void;
   onClose?: () => void;
+  onManageCapsules: (id: string) => void;
+  onManageAgents: (id: string) => void;
+  onToggleCapsuleLink: (capsuleId: string) => void;
+  onToggleAgentPermission: (agentId: string) => void;
+  capsuleSelectorId: string | null;
+  setCapsuleSelectorId: (id: string | null) => void;
+  allCapsules: { id: string; name: string }[];
+  selectedCapsuleIds: string[];
+  capsuleLoading: boolean;
+  agentSelectorId: string | null;
+  setAgentSelectorId: (id: string | null) => void;
+  allAgents: { id: string; name: string }[];
+  selectedAgentIds: string[];
+  agentLoading: boolean;
+  onDelete: (id: string) => void;
+  onRefresh: () => void;
 }) {
   const { t } = useTranslation();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const toolbarBtnClass = "rounded-md px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors flex items-center gap-1";
 
   const content = (
     <div className="flex flex-col h-full">
@@ -582,6 +637,129 @@ function NotebookNotes({
         )}
       </div>
 
+      {/* Toolbar */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border shrink-0">
+        {/* Search */}
+        {searchOpen ? (
+          <div className="flex items-center gap-1 flex-1">
+            <Input
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); } }}
+              placeholder={t("notebooks.searchNotes")}
+              className="h-7 text-xs"
+            />
+            <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(""); }} className={toolbarBtnClass}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setSearchOpen(true)} className={toolbarBtnClass}>
+            <Search className="h-3.5 w-3.5" />
+          </button>
+        )}
+
+        {!searchOpen && (
+          <>
+            {/* Share (placeholder) */}
+            <button
+              type="button"
+              className={toolbarBtnClass}
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: notebook.name, text: `Notebook: ${notebook.name}` }).catch(() => {});
+                }
+              }}
+            >
+              <Share2 className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Agent Permissions */}
+            <Popover open={agentSelectorId === notebook.id} onOpenChange={(o) => { if (!o) setAgentSelectorId(null); }}>
+              <PopoverTrigger asChild>
+                <button type="button" className={toolbarBtnClass} onClick={() => onManageAgents(notebook.id)}>
+                  <Bot className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-1" align="end" side="bottom">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border mb-1">
+                  {t("notebooks.manageAgents")}
+                </div>
+                {agentLoading ? (
+                  <div className="flex justify-center py-3"><Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /></div>
+                ) : allAgents.length === 0 ? (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">{t("notebooks.noAgents")}</div>
+                ) : (
+                  <>
+                    {selectedAgentIds.length === 0 && (
+                      <div className="px-2 py-1 text-[10px] text-muted-foreground">{t("notebooks.allAgentsDefault")}</div>
+                    )}
+                    {allAgents.map((ag) => (
+                      <button
+                        key={ag.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                        onClick={() => onToggleAgentPermission(ag.id)}
+                      >
+                        <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 ${selectedAgentIds.includes(ag.id) ? "bg-brand border-brand text-white" : "border-muted-foreground/30"}`}>
+                          {selectedAgentIds.includes(ag.id) && <Check className="h-2.5 w-2.5" />}
+                        </div>
+                        <span className="truncate">{ag.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            {/* Capsule Links */}
+            <Popover open={capsuleSelectorId === notebook.id} onOpenChange={(o) => { if (!o) setCapsuleSelectorId(null); }}>
+              <PopoverTrigger asChild>
+                <button type="button" className={toolbarBtnClass} onClick={() => onManageCapsules(notebook.id)}>
+                  <Brain className={cn("h-3.5 w-3.5", notebook.includeInCapsule && "text-brand")} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-1" align="end" side="bottom">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border mb-1">
+                  {t("notebooks.manageCapsules")}
+                </div>
+                {capsuleLoading ? (
+                  <div className="flex justify-center py-3"><Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /></div>
+                ) : allCapsules.length === 0 ? (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">{t("notebooks.noCapsules")}</div>
+                ) : (
+                  allCapsules.map((cap) => (
+                    <button
+                      key={cap.id}
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                      onClick={() => onToggleCapsuleLink(cap.id)}
+                    >
+                      <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 ${selectedCapsuleIds.includes(cap.id) ? "bg-brand border-brand text-white" : "border-muted-foreground/30"}`}>
+                        {selectedCapsuleIds.includes(cap.id) && <Check className="h-2.5 w-2.5" />}
+                      </div>
+                      <span className="truncate">{cap.name}</span>
+                    </button>
+                  ))
+                )}
+              </PopoverContent>
+            </Popover>
+
+            {/* Archive/Delete */}
+            {!notebook.isDefault && (
+              <button
+                type="button"
+                className={cn(toolbarBtnClass, "text-destructive hover:text-destructive")}
+                onClick={() => { onDelete(notebook.id); onBack(); }}
+              >
+                <Archive className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
       {/* Reuse existing NotebookSheet for note list rendering */}
       <div className="flex-1 min-h-0">
         <NotebookSheet
@@ -590,6 +768,7 @@ function NotebookNotes({
           onOpenChange={onClose ? () => onClose() : () => {}}
           conversationId={conversationId}
           notebookId={notebook.id}
+          searchQuery={searchQuery}
         />
       </div>
     </div>

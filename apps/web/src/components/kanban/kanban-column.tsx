@@ -62,6 +62,7 @@ export function FullColumn({
   cardLabelsMap,
   agentEmojis,
   agentNames,
+  agentAvatars,
   editMode,
   onAddCard,
   onDeleteCard,
@@ -77,6 +78,7 @@ export function FullColumn({
   cardLabelsMap?: Map<string, Array<{ labelId: string; labelName: string; labelColor: string }>>;
   agentEmojis: Map<string, string>;
   agentNames: Map<string, string>;
+  agentAvatars?: Map<string, string>;
   editMode?: boolean;
   onAddCard: (columnId: string) => void;
   onDeleteCard: (id: string) => void;
@@ -234,6 +236,7 @@ export function FullColumn({
               allColumns={allColumns}
               agentEmojis={agentEmojis}
               agentNames={agentNames}
+              agentAvatars={agentAvatars}
               onDelete={onDeleteCard}
               onSelect={onSelectCard}
               onMoveCard={onMoveCard}
