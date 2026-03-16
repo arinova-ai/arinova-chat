@@ -103,7 +103,7 @@ export function ChatHeader({
   const [memoryCapsuleOpen, setMemoryCapsuleOpen] = useState(false);
   // Community settings sheet
   const [communitySettingsOpen, setCommunitySettingsOpen] = useState(false);
-  const [communitySettingsTab, setCommunitySettingsTab] = useState<"info" | "members" | undefined>(undefined);
+  const [communitySettingsTab, setCommunitySettingsTab] = useState<"info" | undefined>(undefined);
   // Header pin settings
   const [settingsOpen, setSettingsOpen] = useState(false);
   const pinnedIds = useHeaderPinStore((s) => s.pinnedIds);
@@ -316,12 +316,7 @@ export function ChatHeader({
                 case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
                 case "mute": handleMuteToggle(); break;
                 case "members":
-                  if (type === "community" && officialCommunityId) {
-                    setCommunitySettingsTab("members");
-                    setCommunitySettingsOpen(true);
-                  } else {
-                    onMembersClick?.();
-                  }
+                  onMembersClick?.();
                   break;
                 case "wiki": onWikiClick?.(); break;
                 case "kanban": onKanbanClick?.(); break;

@@ -50,7 +50,7 @@ import {
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 
-type Tab = "info" | "members" | "personal" | "permissions" | "invites" | "danger";
+type Tab = "info" | "personal" | "permissions" | "invites" | "danger";
 
 interface CommunitySettingsProps {
   open: boolean;
@@ -202,11 +202,6 @@ export function CommunitySettingsSheet({
   // Load applications and invites when tab changes (admin only)
   useEffect(() => {
     if (!open || !canManage) return;
-    if (activeTab === "members") {
-      api<{ applications: Application[] }>(`/api/communities/${communityId}/applications`)
-        .then((res) => setApplications(res.applications ?? []))
-        .catch(() => {});
-    }
     if (activeTab === "invites") {
       api<{ invites: Invite[] }>(`/api/communities/${communityId}/invites`)
         .then((res) => setInvites(res.invites ?? []))
@@ -432,7 +427,6 @@ export function CommunitySettingsSheet({
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
     { id: "info", label: t("communitySettings.info"), icon: <Globe className="h-4 w-4" /> },
-    { id: "members", label: t("communitySettings.members"), icon: <Users className="h-4 w-4" /> },
     { id: "personal", label: t("communitySettings.personalSettings"), icon: <Bell className="h-4 w-4" /> },
     { id: "permissions", label: t("communitySettings.permissions"), icon: <Lock className="h-4 w-4" />, adminOnly: true },
     { id: "invites", label: t("communitySettings.invites"), icon: <Link2 className="h-4 w-4" />, adminOnly: true },
@@ -574,123 +568,6 @@ export function CommunitySettingsSheet({
             )}
 
             {/* ── Members Tab ── */}
-            {activeTab === "members" && (
-              <div className="space-y-4">
-                {/* Pending Applications (admin only) */}
-                {canManage && applications.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-amber-600">
-                      {t("communitySettings.pendingApplications")} ({applications.length})
-                    </h3>
-                    {applications.map((app) => (
-                      <div key={app.id} className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 space-y-2">
-                        <p className="text-sm font-medium">{app.userName || app.userId}</p>
-                        {Array.isArray(app.answers) && app.answers.length > 0 && (
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            {(app.answers as string[]).map((a, i) => (
-                              <p key={i}>{a}</p>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="default" onClick={() => handleReviewApplication(app.id, true)}>
-                            {t("communitySettings.approve")}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleReviewApplication(app.id, false)}>
-                            {t("communitySettings.reject")}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    <Separator />
-                  </div>
-                )}
-
-                <h3 className="text-sm font-semibold">
-                  {t("communitySettings.members")} ({members.length})
-                </h3>
-                {members.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">{t("communitySettings.noMembers")}</p>
-                ) : (
-                  <div className="space-y-2">
-                    {members.map((member) => {
-                      const isMe = member.userId === currentUserId;
-                      const isMemberCreator = member.role === "creator";
-                      return (
-                        <div key={member.userId} className="flex items-center gap-3 rounded-lg border p-2">
-                          <Avatar className="h-8 w-8">
-                            <img
-                              src={member.userImage ? assetUrl(member.userImage) : AGENT_DEFAULT_AVATAR}
-                              alt={member.userName}
-                              className="h-full w-full object-cover"
-                            />
-                            <AvatarFallback className="text-xs">{member.userName?.charAt(0) ?? "?"}</AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="truncate text-sm font-medium">{member.userName}</span>
-                              {isMe && <span className="text-xs text-muted-foreground">{t("communitySettings.you")}</span>}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {roleIcon(member.role)}
-                              <Badge variant={roleBadgeVariant(member.role)}>
-                                {t(`communitySettings.role.${member.role === "moderator" ? "admin" : member.role}`)}
-                              </Badge>
-                            </div>
-                          </div>
-                          {canManage && !isMe && !isMemberCreator && (
-                            <div className="flex items-center gap-1">
-                              {member.role === "member" ? (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  title={t("communitySettings.promote")}
-                                  onClick={() => handleUpdateRole(member.userId, "admin")}
-                                >
-                                  <Shield className="h-3.5 w-3.5" />
-                                </Button>
-                              ) : member.role === "moderator" && isCreator ? (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  title={t("communitySettings.demote")}
-                                  onClick={() => handleUpdateRole(member.userId, "member")}
-                                >
-                                  <User className="h-3.5 w-3.5" />
-                                </Button>
-                              ) : null}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive"
-                                title={t("communitySettings.kick")}
-                                onClick={() => handleKick(member.userId)}
-                              >
-                                <UserMinus className="h-3.5 w-3.5" />
-                              </Button>
-                              {isCreator && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  title={t("communitySettings.transfer")}
-                                  onClick={() => handleTransfer(member.userId, member.userName)}
-                                >
-                                  <ArrowUpDown className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* ── Personal Settings Tab ── */}
             {activeTab === "personal" && (
               <div className="space-y-4">
