@@ -4,9 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatStore } from "@/store/chat-store";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { TypingIndicator } from "@/components/chat/typing-indicator";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { X, Send, Loader2, MessageSquare, Minus, Maximize2, Minimize2 } from "lucide-react";
+import { X, Send, Loader2, MessageSquare, Minus, Maximize2 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { cn } from "@/lib/utils";
@@ -27,6 +26,11 @@ const DEFAULT_WIDTH = 360;
 const DEFAULT_HEIGHT = 480;
 const MIN_WIDTH = 280;
 const MIN_HEIGHT = 320;
+
+/** Bottom nav height + safe area buffer */
+const MOBILE_BOTTOM_NAV_HEIGHT = 80;
+const MOBILE_BUBBLE_SIZE = 56;
+const MOBILE_MIN_HEIGHT = 200;
 
 export function FloatChatWindow({
   agentId,
@@ -221,66 +225,161 @@ export function FloatChatWindow({
     return () => { cleanupRef.current?.(); };
   }, []);
 
-  // ── Mobile: bottom sheet ──────────────────────────────────
+  // ── Mobile: touch drag handlers ──────────────────────────
+  const touchDragRef = useRef<{ startX: number; startY: number; posX: number; posY: number } | null>(null);
+
+  const onTouchDragStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchDragRef.current = { startX: touch.clientX, startY: touch.clientY, posX: pos.x, posY: pos.y };
+  }, [pos]);
+
+  const onTouchDragMove = useCallback((e: React.TouchEvent) => {
+    if (!touchDragRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchDragRef.current.startX;
+    const dy = touch.clientY - touchDragRef.current.startY;
+    const maxX = window.innerWidth - 40;
+    const maxY = window.innerHeight - MOBILE_BOTTOM_NAV_HEIGHT - 40;
+    setPos({
+      x: Math.max(0, Math.min(maxX, touchDragRef.current.posX + dx)),
+      y: Math.max(0, Math.min(maxY, touchDragRef.current.posY + dy)),
+    });
+  }, []);
+
+  const onTouchDragEnd = useCallback(() => {
+    touchDragRef.current = null;
+  }, []);
+
+  // ── Mobile: set initial position ───────────────────────
+  const mobileInitialized = useRef(false);
+  useEffect(() => {
+    if (!isMobile || mobileInitialized.current) return;
+    mobileInitialized.current = true;
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    const windowH = Math.round(vh * 0.6);
+    setPos({
+      x: 8 + offsetIndex * 12,
+      y: vh - windowH - MOBILE_BOTTOM_NAV_HEIGHT - 8,
+    });
+    setSize({ w: vw - 16, h: windowH });
+  }, [isMobile, offsetIndex]);
+
+  // ── Mobile: float window ───────────────────────────────
   if (isMobile) {
+    // Minimized bubble
+    if (minimized) {
+      return (
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          className="fixed z-50 flex items-center gap-2 rounded-full bg-background border border-border shadow-xl px-3"
+          style={{
+            right: 12 + offsetIndex * (MOBILE_BUBBLE_SIZE + 8),
+            bottom: MOBILE_BOTTOM_NAV_HEIGHT + 12,
+            height: MOBILE_BUBBLE_SIZE,
+          }}
+        >
+          {agentAvatar ? (
+            <img src={assetUrl(agentAvatar)} alt="" className="h-7 w-7 rounded-full object-cover" />
+          ) : (
+            <div className="h-7 w-7 rounded-full bg-accent flex items-center justify-center text-xs">
+              {(agentName ?? "A").charAt(0)}
+            </div>
+          )}
+          <span className="text-xs font-medium truncate max-w-[80px]">{agentName ?? t("nav.chat")}</span>
+        </button>
+      );
+    }
+
+    // Expanded float window
     return (
-      <Sheet open onOpenChange={(v) => { if (!v) handleClose(); }}>
-        <SheetContent side="bottom" className="max-h-[80vh] rounded-t-2xl p-0 flex flex-col">
-          <SheetHeader className="px-4 py-3 border-b shrink-0">
-            <div className="flex items-center gap-2">
-              {agentAvatar ? (
-                <img src={assetUrl(agentAvatar)} alt="" className="h-6 w-6 rounded-full object-cover" />
-              ) : (
-                <div className="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-xs">
-                  {(agentName ?? "A").charAt(0)}
-                </div>
-              )}
-              <SheetTitle className="text-sm">{agentName ?? t("nav.chat")}</SheetTitle>
+      <div
+        className="fixed z-50 flex flex-col rounded-2xl border border-border bg-background/95 backdrop-blur-sm shadow-2xl overflow-hidden"
+        style={{
+          left: pos.x,
+          top: pos.y,
+          width: size.w,
+          height: size.h,
+          maxHeight: `calc(100vh - ${MOBILE_BOTTOM_NAV_HEIGHT + 16}px)`,
+          minHeight: MOBILE_MIN_HEIGHT,
+        }}
+      >
+        {/* Title bar — touch draggable */}
+        <div
+          className="flex items-center gap-2 px-3 py-2.5 border-b border-border bg-muted/50 shrink-0 select-none"
+          onTouchStart={onTouchDragStart}
+          onTouchMove={onTouchDragMove}
+          onTouchEnd={onTouchDragEnd}
+          onMouseDown={onDragStart}
+        >
+          {/* Drag handle indicator */}
+          <div className="absolute left-1/2 top-1.5 -translate-x-1/2 w-8 h-1 rounded-full bg-muted-foreground/30" />
+          {agentAvatar ? (
+            <img src={assetUrl(agentAvatar)} alt="" className="h-6 w-6 rounded-full object-cover pointer-events-none" />
+          ) : (
+            <div className="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-xs pointer-events-none">
+              {(agentName ?? "A").charAt(0)}
             </div>
-          </SheetHeader>
-
-          <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 min-h-0">
-            {initializing ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">{t("officeChat.startConversation")}</p>
-              </div>
-            ) : (
-              <div className="space-y-1 px-3">
-                {messages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} isInThread />
-                ))}
-              </div>
-            )}
-            {conversationId && thinking.length > 0 && (
-              <div className="px-3 mt-1">
-                <TypingIndicator conversationId={conversationId} />
-              </div>
-            )}
+          )}
+          <span className="text-sm font-medium truncate flex-1 pointer-events-none">
+            {agentName ?? t("nav.chat")}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-xs" className="h-7 w-7" onClick={() => setMinimized(true)}>
+              <Minus className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon-xs" className="h-7 w-7" onClick={handleClose}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
           </div>
+        </div>
 
-          <div className="shrink-0 border-t px-3 py-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}>
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInput}
-                onKeyDown={handleKeyDown}
-                placeholder={t("officeChat.placeholder")}
-                rows={1}
-                className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={!input.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
+        {/* Messages */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto py-2 min-h-0">
+          {initializing ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <MessageSquare className="h-7 w-7 mb-2 opacity-50" />
+              <p className="text-sm">{t("officeChat.startConversation")}</p>
+            </div>
+          ) : (
+            <div className="space-y-1 px-3">
+              {messages.map((msg) => (
+                <MessageBubble key={msg.id} message={msg} isInThread />
+              ))}
+            </div>
+          )}
+          {conversationId && thinking.length > 0 && (
+            <div className="px-3 mt-1">
+              <TypingIndicator conversationId={conversationId} />
+            </div>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="shrink-0 border-t px-3 py-2.5">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder={t("officeChat.placeholder")}
+              rows={1}
+              className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={!input.trim()}>
+              <Send className="h-4 w-4" />
+            </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      </div>
     );
   }
 

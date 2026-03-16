@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
-import { OfficeChatPanel } from "./office-chat-panel";
 import { FloatChatWindow } from "./float-chat-window";
 import { ThemeIframe } from "./theme-iframe";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
@@ -53,7 +52,6 @@ function OfficeViewInner() {
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [characterModalSlot, setCharacterModalSlot] = useState<number | null>(null);
-  const [chatAgentId, setChatAgentId] = useState<string | null>(null);
   // Float window state: multiple simultaneous chat windows
   const [floatWindows, setFloatWindows] = useState<string[]>([]);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -150,14 +148,10 @@ function OfficeViewInner() {
     if (!id) return;
     // For iframe themes, open float window directly
     if (manifest?.renderer === "iframe") {
-      if (isMobile) {
-        setChatAgentId(id);
-      } else {
-        openFloatWindow(id);
-      }
+      openFloatWindow(id);
       return;
     }
-    // Non-iframe: open float window (desktop) or modal (mobile)
+    // Non-iframe: open float window (desktop + mobile) or modal
     if (isMobile) {
       setSelectedAgentId(id);
     } else {
@@ -169,14 +163,8 @@ function OfficeViewInner() {
   const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
   const handleOpenChat = useCallback((agentId: string) => {
     setCharacterModalSlot(null);
-    if (isMobile) {
-      setChatAgentId(agentId);
-    } else {
-      openFloatWindow(agentId);
-    }
-  }, [isMobile, openFloatWindow]);
-  const closeChatPanel = useCallback(() => setChatAgentId(null), []);
-
+    openFloatWindow(agentId);
+  }, [openFloatWindow]);
   useEffect(() => {
     const el = mapContainerRef.current;
     if (!el) return;
@@ -249,15 +237,6 @@ function OfficeViewInner() {
         onBindingChange={fetchBindings}
         onOpenChat={handleOpenChat}
       />
-
-      {/* Inline chat panel (mobile fallback) */}
-      {chatAgentId && (
-        <OfficeChatPanel
-          open={!!chatAgentId}
-          onClose={closeChatPanel}
-          agentId={chatAgentId}
-        />
-      )}
 
       {/* Float chat windows */}
       {floatWindows.map((fwAgentId, idx) => {
