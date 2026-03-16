@@ -56,6 +56,15 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const userDismissedRef = useRef(false);
 
+  // Synchronously reset state when conversation changes (before render output)
+  const [prevConvId, setPrevConvId] = useState(conversationId);
+  if (prevConvId !== conversationId) {
+    setPrevConvId(conversationId);
+    setSelectedNotebook(null);
+    setPreferenceLoaded(false);
+    userDismissedRef.current = false;
+  }
+
   const fetchNotebooks = useCallback(async () => {
     setLoading(true);
     try {
