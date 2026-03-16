@@ -123,7 +123,7 @@ export function CommunitySettingsSheet({
 
   // Reset tab when opened with a different initialTab
   useEffect(() => {
-    if (open && initialTab) setActiveTab(initialTab);
+    if (open) setActiveTab(initialTab ?? "info");
   }, [open, initialTab]);
 
   // Editable fields
