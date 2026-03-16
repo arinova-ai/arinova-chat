@@ -26,6 +26,10 @@ pub fn router() -> Router<AppState> {
             "/api/notebooks/{id}/capsule-links",
             get(get_capsule_links).put(set_capsule_links),
         )
+        .route(
+            "/api/notebooks/{id}/agent-permissions",
+            get(get_agent_permissions).put(set_agent_permissions),
+        )
 }
 
 // ===== Types =====
@@ -578,4 +582,101 @@ async fn set_capsule_links(
 
     let capsule_ids: Vec<String> = body.capsule_ids.iter().map(|c| c.to_string()).collect();
     Json(json!({ "capsuleIds": capsule_ids })).into_response()
+}
+
+// ===== Agent Permissions =====
+
+/// GET /api/notebooks/:id/agent-permissions — list agent IDs with access to this notebook
+async fn get_agent_permissions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let owner = sqlx::query_scalar::<_, String>("SELECT owner_id FROM notebooks WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await;
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your notebook"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Notebook not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT agent_id FROM notebook_agent_permissions WHERE notebook_id = $1",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(ids) => {
+            let agent_ids: Vec<String> = ids.iter().map(|(aid,)| aid.to_string()).collect();
+            Json(json!({ "agentIds": agent_ids })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetAgentPermissionsBody {
+    agent_ids: Vec<Uuid>,
+}
+
+/// PUT /api/notebooks/:id/agent-permissions — replace all agent permissions for this notebook
+async fn set_agent_permissions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SetAgentPermissionsBody>,
+) -> Response {
+    let owner = sqlx::query_scalar::<_, String>("SELECT owner_id FROM notebooks WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await;
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your notebook"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Notebook not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    // Replace permissions in a transaction
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if let Err(e) = sqlx::query("DELETE FROM notebook_agent_permissions WHERE notebook_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+    }
+
+    for aid in &body.agent_ids {
+        if let Err(e) = sqlx::query(
+            "INSERT INTO notebook_agent_permissions (notebook_id, agent_id, granted_by) VALUES ($1, $2, $3)",
+        )
+        .bind(id)
+        .bind(aid)
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await
+        {
+            let _ = tx.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+    }
+
+    let agent_ids: Vec<String> = body.agent_ids.iter().map(|a| a.to_string()).collect();
+    Json(json!({ "agentIds": agent_ids })).into_response()
 }

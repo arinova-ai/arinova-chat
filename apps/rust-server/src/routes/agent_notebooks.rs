@@ -155,10 +155,17 @@ async fn list_notebooks(
                (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count
         FROM notebooks n
         WHERE n.owner_id = $1
+          AND (
+            -- No permission rows = open to all agents (backward compatible)
+            NOT EXISTS (SELECT 1 FROM notebook_agent_permissions WHERE notebook_id = n.id)
+            -- Or this agent is explicitly granted
+            OR EXISTS (SELECT 1 FROM notebook_agent_permissions WHERE notebook_id = n.id AND agent_id = $2)
+          )
         ORDER BY n.sort_order, n.created_at
         "#,
     )
     .bind(&user_id)
+    .bind(agent.id)
     .fetch_all(&state.db)
     .await;
 
@@ -423,6 +430,34 @@ async fn list_notebook_notes(
             Json(json!({"error": "Not authorized"})),
         )
             .into_response();
+    }
+
+    // Check notebook-level agent permissions
+    let has_perms = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM notebook_agent_permissions WHERE notebook_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    if has_perms > 0 {
+        let granted = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM notebook_agent_permissions WHERE notebook_id = $1 AND agent_id = $2",
+        )
+        .bind(id)
+        .bind(agent.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        if granted == 0 {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Agent does not have access to this notebook"})),
+            )
+                .into_response();
+        }
     }
 
     #[derive(FromRow)]

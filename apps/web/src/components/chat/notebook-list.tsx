@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import {
   BookOpen,
+  Bot,
   Brain,
   Check,
   Plus,
@@ -61,6 +62,10 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const [allCapsules, setAllCapsules] = useState<{ id: string; name: string }[]>([]);
   const [selectedCapsuleIds, setSelectedCapsuleIds] = useState<string[]>([]);
   const [capsuleLoading, setCapsuleLoading] = useState(false);
+  const [agentSelectorId, setAgentSelectorId] = useState<string | null>(null);
+  const [allAgents, setAllAgents] = useState<{ id: string; name: string }[]>([]);
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [agentLoading, setAgentLoading] = useState(false);
   const userDismissedRef = useRef(false);
 
   // Synchronously reset state when conversation changes (before render output)
@@ -213,6 +218,40 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
     }
   };
 
+  const handleManageAgents = async (notebookId: string) => {
+    setAgentSelectorId(notebookId);
+    setAgentLoading(true);
+    try {
+      const [agentsRes, permsRes] = await Promise.all([
+        api<{ id: string; name: string }[]>("/api/agents", { silent: true }),
+        api<{ agentIds: string[] }>(`/api/notebooks/${notebookId}/agent-permissions`, { silent: true }),
+      ]);
+      setAllAgents((agentsRes || []).map((a) => ({ id: a.id, name: a.name })));
+      setSelectedAgentIds(permsRes.agentIds || []);
+    } catch {
+      setAllAgents([]);
+      setSelectedAgentIds([]);
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const handleToggleAgentPermission = async (agentId: string) => {
+    if (!agentSelectorId) return;
+    const next = selectedAgentIds.includes(agentId)
+      ? selectedAgentIds.filter((id) => id !== agentId)
+      : [...selectedAgentIds, agentId];
+    setSelectedAgentIds(next);
+    try {
+      await api(`/api/notebooks/${agentSelectorId}/agent-permissions`, {
+        method: "PUT",
+        body: JSON.stringify({ agentIds: next }),
+      });
+    } catch {
+      setSelectedAgentIds(selectedAgentIds);
+    }
+  };
+
   // If a notebook is selected, show notes for that notebook
   if (selectedNotebook) {
     if (!inline && !open) return null;
@@ -337,7 +376,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                   </div>
 
                   {/* Context menu */}
-                  <Popover open={menuOpenId === nb.id} onOpenChange={(o) => { setMenuOpenId(o ? nb.id : null); if (!o) setCapsuleSelectorId(null); }}>
+                  <Popover open={menuOpenId === nb.id} onOpenChange={(o) => { setMenuOpenId(o ? nb.id : null); if (!o) { setCapsuleSelectorId(null); setAgentSelectorId(null); } }}>
                     <PopoverTrigger asChild>
                       <div
                         role="button"
@@ -378,7 +417,43 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                             ))
                           )}
                         </div>
+                      ) : agentSelectorId === nb.id ? (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border mb-1">
+                            <button type="button" onClick={() => setAgentSelectorId(null)} className="hover:text-foreground">
+                              <ArrowLeft className="h-3 w-3" />
+                            </button>
+                            {t("notebooks.manageAgents")}
+                          </div>
+                          {agentLoading ? (
+                            <div className="flex justify-center py-3">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            </div>
+                          ) : allAgents.length === 0 ? (
+                            <div className="px-2 py-2 text-xs text-muted-foreground">{t("notebooks.noAgents")}</div>
+                          ) : (
+                            <>
+                              {selectedAgentIds.length === 0 && (
+                                <div className="px-2 py-1 text-[10px] text-muted-foreground">{t("notebooks.allAgentsDefault")}</div>
+                              )}
+                              {allAgents.map((ag) => (
+                                <button
+                                  key={ag.id}
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                                  onClick={() => handleToggleAgentPermission(ag.id)}
+                                >
+                                  <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 ${selectedAgentIds.includes(ag.id) ? "bg-brand border-brand text-white" : "border-muted-foreground/30"}`}>
+                                    {selectedAgentIds.includes(ag.id) && <Check className="h-2.5 w-2.5" />}
+                                  </div>
+                                  <span className="truncate">{ag.name}</span>
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
                       ) : (
+                        <>
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
@@ -390,6 +465,18 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                           <Brain className={`h-3 w-3 ${nb.includeInCapsule ? "text-brand" : "text-muted-foreground"}`} />
                           {t("notebooks.manageCapsules")}
                         </button>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleManageAgents(nb.id);
+                          }}
+                        >
+                          <Bot className="h-3 w-3 text-muted-foreground" />
+                          {t("notebooks.manageAgents")}
+                        </button>
+                        </>
                       )}
                       {!nb.isDefault && (
                         <button
