@@ -135,6 +135,7 @@ export function ChatHeader({
   // Pending applications badge (community only)
   const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => {
+    setPendingCount(0);
     if (type !== "community" || !officialCommunityId) return;
     let cancelled = false;
     (async () => {
@@ -145,7 +146,10 @@ export function ChatHeader({
         );
         if (cancelled) return;
         const canManage = detail.myRole === "creator" || detail.myRole === "moderator";
-        if (!detail.requireApproval || !canManage) return;
+        if (!detail.requireApproval || !canManage) {
+          setPendingCount(0);
+          return;
+        }
         const res = await api<{ applications: { status: string }[] }>(
           `/api/communities/${officialCommunityId}/applications`,
           { silent: true },
@@ -153,7 +157,9 @@ export function ChatHeader({
         if (cancelled) return;
         const pending = (res.applications ?? []).filter((a) => a.status === "pending");
         setPendingCount(pending.length);
-      } catch {}
+      } catch {
+        setPendingCount(0);
+      }
     })();
     return () => { cancelled = true; };
   }, [type, officialCommunityId]);
@@ -267,7 +273,7 @@ export function ChatHeader({
           ) : type === "group" || type === "community" ? (
             <p className="flex items-center gap-1 text-xs text-muted-foreground truncate">
               <span>{memberCount ? `${memberCount} ${t("chat.header.members")}` : t("chat.header.group")}</span>
-              {pendingCount > 0 && (
+              {type === "community" && pendingCount > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none">
                   {pendingCount}
                 </span>
