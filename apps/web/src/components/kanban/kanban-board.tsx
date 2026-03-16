@@ -21,6 +21,8 @@ import {
 import {
   Archive,
   ArchiveRestore,
+  Bot,
+  Check,
   ChevronDown,
   Loader2,
   MoreHorizontal,
@@ -53,6 +55,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { useChatStore } from "@/store/chat-store";
 import { CardDetailSheet } from "./card-detail-sheet";
 import { AddCardSheet } from "./add-card-sheet";
@@ -119,6 +126,12 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   const [inviteUsername, setInviteUsername] = useState("");
   const [invitePermission, setInvitePermission] = useState("view");
   const [membersLoading, setMembersLoading] = useState(false);
+
+  // Agent permissions state
+  const [agentPermsOpen, setAgentPermsOpen] = useState(false);
+  const [allAgents, setAllAgents] = useState<{ id: string; name: string }[]>([]);
+  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [agentPermsLoading, setAgentPermsLoading] = useState(false);
 
   // Use DnD in full mode on desktop only
   const useDnd = !isMobile;
@@ -320,6 +333,42 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       await fetchBoardMembers();
     } catch { /* */ }
   }, [selectedBoardId, fetchBoardMembers]);
+
+  // ── Agent permissions ────────────────────────────────
+  const handleOpenAgentPerms = useCallback(async () => {
+    if (!selectedBoardId) return;
+    setAgentPermsOpen(true);
+    setAgentPermsLoading(true);
+    try {
+      const [agentsRes, permsRes] = await Promise.all([
+        api<{ id: string; name: string }[]>("/api/agents", { silent: true }),
+        api<{ agentIds: string[] }>(`/api/kanban/boards/${selectedBoardId}/agent-permissions`, { silent: true }),
+      ]);
+      setAllAgents((agentsRes || []).map((a) => ({ id: a.id, name: a.name })));
+      setSelectedAgentIds(permsRes.agentIds || []);
+    } catch {
+      setAllAgents([]);
+      setSelectedAgentIds([]);
+    } finally {
+      setAgentPermsLoading(false);
+    }
+  }, [selectedBoardId]);
+
+  const handleToggleAgentPerm = useCallback(async (agentId: string) => {
+    if (!selectedBoardId) return;
+    const next = selectedAgentIds.includes(agentId)
+      ? selectedAgentIds.filter((id) => id !== agentId)
+      : [...selectedAgentIds, agentId];
+    setSelectedAgentIds(next);
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}/agent-permissions`, {
+        method: "PUT",
+        body: JSON.stringify({ agentIds: next }),
+      });
+    } catch {
+      setSelectedAgentIds(selectedAgentIds);
+    }
+  }, [selectedBoardId, selectedAgentIds]);
 
   // ── Column CRUD ───────────────────────────────────────
 
@@ -1050,6 +1099,49 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 <Users className="h-3.5 w-3.5" />
                 <span className="hidden md:inline">Members</span>
               </button>
+              <Popover open={agentPermsOpen} onOpenChange={setAgentPermsOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAgentPerms()}
+                    className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
+                    <Bot className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">{t("kanban.agentAccess")}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-52 p-1" align="end" side="bottom">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border mb-1">
+                    {t("kanban.manageAgentAccess")}
+                  </div>
+                  {agentPermsLoading ? (
+                    <div className="flex justify-center py-3">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : allAgents.length === 0 ? (
+                    <div className="px-2 py-2 text-xs text-muted-foreground">{t("kanban.noAgents")}</div>
+                  ) : (
+                    <>
+                      {selectedAgentIds.length === 0 && (
+                        <div className="px-2 py-1 text-[10px] text-muted-foreground">{t("kanban.allAgentsDefault")}</div>
+                      )}
+                      {allAgents.map((ag) => (
+                        <button
+                          key={ag.id}
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                          onClick={() => handleToggleAgentPerm(ag.id)}
+                        >
+                          <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 ${selectedAgentIds.includes(ag.id) ? "bg-brand border-brand text-white" : "border-muted-foreground/30"}`}>
+                            {selectedAgentIds.includes(ag.id) && <Check className="h-2.5 w-2.5" />}
+                          </div>
+                          <span className="truncate">{ag.name}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </PopoverContent>
+              </Popover>
               <button
                 type="button"
                 onClick={() => setArchivedOpen(true)}

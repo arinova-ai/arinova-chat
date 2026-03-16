@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use chrono::Utc;
@@ -128,6 +128,11 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/kanban/boards/{boardId}/members/{userId}",
             patch(update_board_member).delete(remove_board_member),
+        )
+        // Agent permissions
+        .route(
+            "/api/kanban/boards/{id}/agent-permissions",
+            get(get_board_agent_permissions).put(set_board_agent_permissions),
         )
         // User notes lookup (for note selector in card detail)
         .route("/api/kanban/owner-notes", get(list_owner_notes))
@@ -1694,18 +1699,24 @@ async fn agent_list_boards(
     let _ = ensure_default_board(&state.db, &owner_id).await;
 
     let include_archived = query.include_archived.unwrap_or(false);
+    let perm_filter = r#"AND (
+            NOT EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = kb.id)
+            OR EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = kb.id AND agent_id = $2)
+          )"#;
     let boards = if include_archived {
         sqlx::query_as::<_, BoardRow>(
-            "SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1 ORDER BY created_at",
+            &format!("SELECT kb.id, kb.name, kb.created_at, kb.archived FROM kanban_boards kb WHERE kb.owner_id = $1 {} ORDER BY kb.created_at", perm_filter),
         )
         .bind(&owner_id)
+        .bind(agent.id)
         .fetch_all(&state.db)
         .await
     } else {
         sqlx::query_as::<_, BoardRow>(
-            "SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at",
+            &format!("SELECT kb.id, kb.name, kb.created_at, kb.archived FROM kanban_boards kb WHERE kb.owner_id = $1 AND kb.archived = false {} ORDER BY kb.created_at", perm_filter),
         )
         .bind(&owner_id)
+        .bind(agent.id)
         .fetch_all(&state.db)
         .await
     };
@@ -1916,6 +1927,28 @@ async fn agent_list_columns(
     };
     if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
         return e;
+    }
+
+    // Check board-level agent permissions
+    let has_perms = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM board_agent_permissions WHERE board_id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+    if has_perms > 0 {
+        let granted = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2",
+        )
+        .bind(board_id)
+        .bind(agent.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+        if granted == 0 {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Agent does not have access to this board"}))).into_response();
+        }
     }
 
     let cols = sqlx::query_as::<_, ColumnRow>(
@@ -2172,9 +2205,14 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
            LEFT JOIN kanban_card_labels cl ON cl.card_id = c.id
            LEFT JOIN kanban_labels l ON l.id = cl.label_id
            WHERE b.owner_id = $1 AND c.archived = FALSE
+             AND (
+               NOT EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = b.id)
+               OR EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = b.id AND agent_id = $2)
+             )
            ORDER BY c.sort_order, c.id"#,
     )
     .bind(&owner_id)
+    .bind(agent.id)
     .fetch_all(&state.db)
     .await;
 
@@ -3921,4 +3959,100 @@ async fn get_public_card(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
+}
+
+// ===== Board Agent Permissions =====
+
+/// GET /api/kanban/boards/:id/agent-permissions
+async fn get_board_agent_permissions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let owner = sqlx::query_scalar::<_, String>("SELECT owner_id FROM kanban_boards WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await;
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your board"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Board not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT agent_id FROM board_agent_permissions WHERE board_id = $1",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(ids) => {
+            let agent_ids: Vec<String> = ids.iter().map(|(aid,)| aid.to_string()).collect();
+            Json(json!({ "agentIds": agent_ids })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetBoardAgentPermissionsBody {
+    agent_ids: Vec<Uuid>,
+}
+
+/// PUT /api/kanban/boards/:id/agent-permissions
+async fn set_board_agent_permissions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<SetBoardAgentPermissionsBody>,
+) -> Response {
+    let owner = sqlx::query_scalar::<_, String>("SELECT owner_id FROM kanban_boards WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await;
+    match owner {
+        Ok(Some(oid)) if oid == user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your board"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Board not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if let Err(e) = sqlx::query("DELETE FROM board_agent_permissions WHERE board_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+    }
+
+    for aid in &body.agent_ids {
+        if let Err(e) = sqlx::query(
+            "INSERT INTO board_agent_permissions (board_id, agent_id, granted_by) VALUES ($1, $2, $3)",
+        )
+        .bind(id)
+        .bind(aid)
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await
+        {
+            let _ = tx.rollback().await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+    }
+
+    let agent_ids: Vec<String> = body.agent_ids.iter().map(|a| a.to_string()).collect();
+    Json(json!({ "agentIds": agent_ids })).into_response()
 }
