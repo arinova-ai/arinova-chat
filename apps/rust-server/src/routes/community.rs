@@ -644,7 +644,7 @@ async fn get_community(
             let user_id = extract_user_id_from_cookie(&state.db, &headers).await;
             let my_role = if let Some(ref uid) = user_id {
                 sqlx::query_scalar::<_, String>(
-                    "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+                    "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
                 )
                 .bind(id)
                 .bind(uid)
