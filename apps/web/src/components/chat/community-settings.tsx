@@ -49,11 +49,14 @@ import {
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 
+type Tab = "info" | "members" | "personal" | "permissions" | "invites" | "danger";
+
 interface CommunitySettingsProps {
   open: boolean;
   onClose: () => void;
   communityId: string;
   conversationId: string;
+  initialTab?: Tab;
 }
 
 interface CommunityInfo {
@@ -100,13 +103,12 @@ interface Invite {
   createdAt: string;
 }
 
-type Tab = "info" | "members" | "personal" | "permissions" | "invites" | "danger";
-
 export function CommunitySettingsSheet({
   open,
   onClose,
   communityId,
   conversationId,
+  initialTab,
 }: CommunitySettingsProps) {
   const { t } = useTranslation();
   const session = authClient.useSession();
@@ -117,7 +119,12 @@ export function CommunitySettingsSheet({
   const [applications, setApplications] = useState<Application[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("info");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? "info");
+
+  // Reset tab when opened with a different initialTab
+  useEffect(() => {
+    if (open && initialTab) setActiveTab(initialTab);
+  }, [open, initialTab]);
 
   // Editable fields
   const [name, setName] = useState("");

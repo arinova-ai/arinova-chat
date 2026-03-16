@@ -103,6 +103,7 @@ export function ChatHeader({
   const [memoryCapsuleOpen, setMemoryCapsuleOpen] = useState(false);
   // Community settings sheet
   const [communitySettingsOpen, setCommunitySettingsOpen] = useState(false);
+  const [communitySettingsTab, setCommunitySettingsTab] = useState<"info" | "members" | undefined>(undefined);
   // Header pin settings
   const [settingsOpen, setSettingsOpen] = useState(false);
   const pinnedIds = useHeaderPinStore((s) => s.pinnedIds);
@@ -271,7 +272,14 @@ export function ChatHeader({
               switch (actionId) {
                 case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
                 case "mute": handleMuteToggle(); break;
-                case "members": onMembersClick?.(); break;
+                case "members":
+                  if (type === "community" && officialCommunityId) {
+                    setCommunitySettingsTab("members");
+                    setCommunitySettingsOpen(true);
+                  } else {
+                    onMembersClick?.();
+                  }
+                  break;
                 case "wiki": onWikiClick?.(); break;
                 case "kanban": onKanbanClick?.(); break;
                 case "notebook": onNotebookClick?.(); break;
@@ -280,7 +288,14 @@ export function ChatHeader({
                 case "files": onFilesClick?.(); break;
               }
             }}
-            onSettingsOpen={() => setSettingsOpen(true)}
+            onSettingsOpen={() => {
+              if (type === "community" && officialCommunityId) {
+                setCommunitySettingsTab(undefined);
+                setCommunitySettingsOpen(true);
+              } else {
+                setSettingsOpen(true);
+              }
+            }}
             t={t}
           />
         ) : (
@@ -417,6 +432,7 @@ export function ChatHeader({
         onClose={() => setCommunitySettingsOpen(false)}
         communityId={officialCommunityId}
         conversationId={conversationId}
+        initialTab={communitySettingsTab}
       />
     )}
     </div>

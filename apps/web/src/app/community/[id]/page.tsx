@@ -456,7 +456,7 @@ function CommunityDetailContent() {
               open={settingsOpen}
               onClose={() => setSettingsOpen(false)}
               communityId={id}
-              conversationId={id}
+              conversationId={community?.conversationId ?? id}
             />
           )}
 
