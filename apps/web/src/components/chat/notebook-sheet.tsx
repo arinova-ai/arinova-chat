@@ -411,13 +411,8 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (!titleInput.trim()) return;
     setLoading(true);
     try {
-      let note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput);
+      let note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput, notebookId ?? undefined);
       if (notebookId) {
-        // Move note into the correct notebook via PATCH notebook_id
-        await api(`/api/conversations/${conversationId}/notes/${note.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ notebookId }),
-        });
         setNotebookNotes((prev) => [note, ...prev]);
       }
       if (note.suggestedTags?.length) {

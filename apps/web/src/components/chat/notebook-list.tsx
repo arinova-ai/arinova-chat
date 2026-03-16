@@ -47,12 +47,8 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const isMobile = useIsMobile();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(() => {
-    try {
-      const saved = localStorage.getItem("arinova-last-notebook");
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  });
+  const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(null);
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -76,21 +72,43 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
     fetchNotebooks();
   }, [fetchNotebooks]);
 
-  // Persist selectedNotebook to localStorage
+  // Load conversation notebook preference from API
   useEffect(() => {
-    if (selectedNotebook) {
-      localStorage.setItem("arinova-last-notebook", JSON.stringify(selectedNotebook));
-    } else {
-      localStorage.removeItem("arinova-last-notebook");
-    }
-  }, [selectedNotebook]);
+    if (!conversationId || notebooks.length === 0) return;
+    setPreferenceLoaded(false);
+    api<{ notebookId?: string; isDefault?: boolean }>(
+      `/api/conversations/${conversationId}/notebook-preference`,
+      { silent: true },
+    )
+      .then((pref) => {
+        if (pref.notebookId) {
+          const nb = notebooks.find((n) => n.id === pref.notebookId);
+          if (nb) setSelectedNotebook(nb);
+          else if (!userDismissedRef.current) setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
+        } else if (!userDismissedRef.current) {
+          setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
+        }
+      })
+      .catch(() => {
+        if (!userDismissedRef.current) {
+          setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
+        }
+      })
+      .finally(() => setPreferenceLoaded(true));
+  }, [conversationId, notebooks]);
 
-  // Auto-enter default notebook if only one exists
-  useEffect(() => {
-    if (!loading && notebooks.length === 1 && !selectedNotebook && !userDismissedRef.current) {
-      setSelectedNotebook(notebooks[0]);
+  // Save preference when user selects a notebook
+  const selectNotebook = useCallback((nb: Notebook) => {
+    userDismissedRef.current = false;
+    setSelectedNotebook(nb);
+    if (conversationId) {
+      api(`/api/conversations/${conversationId}/notebook-preference`, {
+        method: "PUT",
+        body: JSON.stringify({ notebookId: nb.id }),
+        silent: true,
+      }).catch(() => {});
     }
-  }, [loading, notebooks, selectedNotebook]);
+  }, [conversationId]);
 
   const handleCreate = async () => {
     const name = newName.trim();
@@ -237,7 +255,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
               ) : (
                 <button
                   type="button"
-                  onClick={() => { userDismissedRef.current = false; setSelectedNotebook(nb); }}
+                  onClick={() => selectNotebook(nb)}
                   className="flex items-center w-full px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
                 >
                   <BookOpen className="h-4 w-4 text-muted-foreground mr-2.5 shrink-0" />

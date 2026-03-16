@@ -275,7 +275,7 @@ interface ChatState {
   closeKanbanSidebar: () => void;
   toggleKanbanFullscreen: () => void;
   loadNotes: (conversationId: string, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
-  createNote: (conversationId: string, title: string, content: string, tags?: string[]) => Promise<Note>;
+  createNote: (conversationId: string, title: string, content: string, tags?: string[], notebookId?: string) => Promise<Note>;
   updateNote: (conversationId: string, noteId: string, updates: { title?: string; content?: string; tags?: string[]; isPinned?: boolean }) => Promise<void>;
   deleteNote: (conversationId: string, noteId: string) => Promise<void>;
   archiveNote: (conversationId: string, noteId: string) => Promise<void>;
@@ -1572,12 +1572,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  createNote: async (conversationId, title, content, tags) => {
+  createNote: async (conversationId, title, content, tags, notebookId) => {
     const note = await api<Note>(
       `/api/conversations/${conversationId}/notes`,
       {
         method: "POST",
-        body: JSON.stringify({ title, content, tags: tags ?? [] }),
+        body: JSON.stringify({ title, content, tags: tags ?? [], ...(notebookId ? { notebookId } : {}) }),
       }
     );
     const current = get().notesByConversation[conversationId] ?? [];
