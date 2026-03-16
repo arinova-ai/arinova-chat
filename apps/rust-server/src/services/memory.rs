@@ -55,8 +55,8 @@ pub async fn extract_capsule(
     cancel: CancellationToken,
 ) -> anyhow::Result<usize> {
     // 1. Fetch capsule metadata
-    let (conv_id, owner_id, capsule_name, extracted_through) = sqlx::query_as::<_, (Uuid, String, String, Option<chrono::DateTime<chrono::Utc>>)>(
-        "SELECT source_conversation_id, owner_id, name, extracted_through FROM memory_capsules WHERE id = $1",
+    let (conv_id, owner_id, capsule_name, extracted_through, notes_extracted_through) = sqlx::query_as::<_, (Uuid, String, String, Option<chrono::DateTime<chrono::Utc>>, Option<chrono::DateTime<chrono::Utc>>)>(
+        "SELECT source_conversation_id, owner_id, name, extracted_through, notes_extracted_through FROM memory_capsules WHERE id = $1",
     )
     .bind(capsule_id)
     .fetch_optional(&db)
@@ -70,10 +70,11 @@ pub async fn extract_capsule(
         .await?;
 
     let extracted_through_naive = extracted_through.map(|dt| dt.naive_utc());
+    let notes_extracted_through_naive = notes_extracted_through.map(|dt| dt.naive_utc());
 
     // Run extraction, and on any error mark as 'failed'
-    match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive, &cancel).await {
-        Ok((count, msg_count, first_msg_time, new_watermark)) => {
+    match do_extraction(&db, &config, capsule_id, conv_id, extracted_through_naive, notes_extracted_through_naive, &cancel).await {
+        Ok((count, msg_count, first_msg_time, new_watermark, new_notes_watermark)) => {
             // Update note_count from linked conversation notes
             let note_count = sqlx::query_scalar::<_, i64>(
                 r#"SELECT COUNT(*) FROM conversation_notes n
@@ -87,7 +88,7 @@ pub async fn extract_capsule(
 
             // Only finalize if not cancelled (abort handler may have changed status)
             let result = sqlx::query(
-                "UPDATE memory_capsules SET status = 'ready', progress = NULL, created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5, note_count = $6 WHERE id = $1 AND status = 'extracting'",
+                "UPDATE memory_capsules SET status = 'ready', progress = NULL, created_at = LEAST(created_at, $2), extracted_through = $3, entry_count = entry_count + $4, message_count = message_count + $5, note_count = $6, notes_extracted_through = $7 WHERE id = $1 AND status = 'extracting'",
             )
             .bind(capsule_id)
             .bind(first_msg_time)
@@ -95,6 +96,7 @@ pub async fn extract_capsule(
             .bind(count as i32)
             .bind(msg_count as i32)
             .bind(note_count as i32)
+            .bind(new_notes_watermark)
             .execute(&db)
             .await?;
 
@@ -170,9 +172,10 @@ async fn do_extraction(
     capsule_id: Uuid,
     conversation_id: Uuid,
     extracted_through: Option<chrono::NaiveDateTime>,
+    notes_extracted_through: Option<chrono::NaiveDateTime>,
     cancel: &CancellationToken,
-) -> anyhow::Result<(usize, usize, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> {
-    // Returns (entry_count, message_count, first_message_time, new_watermark)
+) -> anyhow::Result<(usize, usize, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>)> {
+    // Returns (entry_count, message_count, first_message_time, new_watermark, new_notes_watermark)
     // 3. Fetch messages (incremental: only after extracted_through if set)
     let messages = if let Some(watermark) = extracted_through {
         sqlx::query_as::<_, (String, String, chrono::NaiveDateTime)>(
@@ -201,24 +204,46 @@ async fn do_extraction(
 
     let msg_count = messages.len();
 
-    // 3b. Fetch linked notes to include as context (via note_conversation_links)
-    let notes: Vec<(String, String)> = sqlx::query_as(
-        r#"SELECT n.title, n.content
-           FROM conversation_notes n
-           JOIN note_conversation_links ncl ON ncl.note_id = n.id
-           WHERE ncl.conversation_id = $1 AND n.content != ''
-           ORDER BY n.created_at ASC"#,
-    )
-    .bind(conversation_id)
-    .fetch_all(db)
-    .await
-    .unwrap_or_default();
+    // 3b. Fetch linked notes incrementally (only new notes since last extraction)
+    let notes: Vec<(String, String, chrono::NaiveDateTime)> = if let Some(nw) = notes_extracted_through {
+        sqlx::query_as(
+            r#"SELECT n.title, n.content, n.created_at
+               FROM conversation_notes n
+               JOIN note_conversation_links ncl ON ncl.note_id = n.id
+               WHERE ncl.conversation_id = $1 AND n.content != '' AND n.created_at > $2
+               ORDER BY n.created_at ASC"#,
+        )
+        .bind(conversation_id)
+        .bind(nw)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default()
+    } else {
+        sqlx::query_as(
+            r#"SELECT n.title, n.content, n.created_at
+               FROM conversation_notes n
+               JOIN note_conversation_links ncl ON ncl.note_id = n.id
+               WHERE ncl.conversation_id = $1 AND n.content != ''
+               ORDER BY n.created_at ASC"#,
+        )
+        .bind(conversation_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default()
+    };
+
+    // Notes watermark = max created_at from fetched notes
+    let new_notes_watermark: Option<chrono::DateTime<chrono::Utc>> = notes
+        .iter()
+        .map(|(_, _, ts)| *ts)
+        .max()
+        .map(|t| chrono::DateTime::from_naive_utc_and_offset(t, chrono::Utc));
 
     if messages.is_empty() && notes.is_empty() {
         // No new messages and no linked notes — return 0 entries
         let now = chrono::Utc::now();
         let wm = extracted_through.map(|w| chrono::DateTime::from_naive_utc_and_offset(w, chrono::Utc)).unwrap_or(now);
-        return Ok((0, 0, wm, wm));
+        return Ok((0, 0, wm, wm, new_notes_watermark));
     }
 
     // Time range from fetched messages
@@ -265,7 +290,7 @@ async fn do_extraction(
     // Prepend notes as context in the first chunk
     if !notes.is_empty() {
         current_chunk.push_str("=== Conversation Notes ===\n");
-        for (title, content) in &notes {
+        for (title, content, _ts) in &notes {
             let note_line = format!("[note] {}: {}\n", title, safe_truncate(content, 2000));
             current_chunk.push_str(&note_line);
         }
@@ -368,25 +393,38 @@ async fn do_extraction(
         return Err(anyhow!("All {} chunk(s) failed during Claude CLI extraction", chunks.len()));
     }
 
-    // Only advance watermark if ALL chunks succeeded to avoid permanently skipping failed chunks
+    // Advance watermark to the last successfully processed chunk's end time
     let effective_watermark = if chunks_succeeded == chunks.len() {
         new_watermark_utc
     } else {
-        tracing::warn!(
-            "Partial extraction: {}/{} chunks succeeded — watermark NOT advanced so failed chunks can be retried",
-            chunks_succeeded, chunks.len()
-        );
-        // Keep existing watermark (or epoch if first extraction)
-        extracted_through
-            .map(|dt| chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc))
-            .unwrap_or_else(|| chrono::DateTime::from_naive_utc_and_offset(
-                chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(),
-                chrono::Utc,
-            ))
+        // Find the last succeeded chunk's time range to advance watermark partially
+        // This avoids re-extracting successfully processed chunks on retry
+        let last_succeeded_end: Option<chrono::NaiveDateTime> = (0..chunks.len())
+            .filter(|ci| parsed_entries.iter().any(|(_, _, _, idx)| idx == ci))
+            .filter_map(|ci| chunk_time_ranges.get(ci).map(|&(_, end)| end))
+            .last();
+        if let Some(end) = last_succeeded_end {
+            tracing::warn!(
+                "Partial extraction: {}/{} chunks succeeded — watermark advanced to last successful chunk",
+                chunks_succeeded, chunks.len()
+            );
+            chrono::DateTime::from_naive_utc_and_offset(end, chrono::Utc)
+        } else {
+            tracing::warn!(
+                "Partial extraction: {}/{} chunks succeeded — no successful chunk time range found, keeping existing watermark",
+                chunks_succeeded, chunks.len()
+            );
+            extracted_through
+                .map(|dt| chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc))
+                .unwrap_or_else(|| chrono::DateTime::from_naive_utc_and_offset(
+                    chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(),
+                    chrono::Utc,
+                ))
+        }
     };
 
     if parsed_entries.is_empty() {
-        return Ok((0, msg_count, first_msg_utc, effective_watermark));
+        return Ok((0, msg_count, first_msg_utc, effective_watermark, new_notes_watermark));
     }
 
     let entry_texts: Vec<String> = parsed_entries.iter().map(|(t, _, _, _)| t.clone()).collect();
@@ -439,7 +477,7 @@ async fn do_extraction(
 
     tx.commit().await.context("Failed to commit memory entries")?;
 
-    Ok((parsed_entries.len(), msg_count, first_msg_utc, effective_watermark))
+    Ok((parsed_entries.len(), msg_count, first_msg_utc, effective_watermark, new_notes_watermark))
 }
 
 /// Call `claude -p` CLI to extract memories from a chunk, retry once on failure.

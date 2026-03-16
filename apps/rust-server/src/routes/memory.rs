@@ -169,22 +169,21 @@ async fn create_capsule(
     struct MsgStats {
         cnt: i64,
         min_at: Option<chrono::DateTime<chrono::Utc>>,
-        max_at: Option<chrono::DateTime<chrono::Utc>>,
     }
     let stats = sqlx::query_as::<_, MsgStats>(
-        "SELECT COUNT(*) AS cnt, MIN(created_at) AS min_at, MAX(created_at) AS max_at FROM messages WHERE conversation_id = $1",
+        "SELECT COUNT(*) AS cnt, MIN(created_at) AS min_at FROM messages WHERE conversation_id = $1",
     )
     .bind(body.conversation_id)
     .fetch_one(&state.db)
     .await
-    .unwrap_or(MsgStats { cnt: 0, min_at: None, max_at: None });
+    .unwrap_or(MsgStats { cnt: 0, min_at: None });
 
     let message_count = stats.cnt as i32;
 
-    // Create capsule with status=extracting; set extracted_through to last message time
+    // Create capsule with status=extracting; extracted_through=NULL so first extraction gets all messages
     let capsule_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO memory_capsules (owner_id, name, source_conversation_id, message_count, status, created_at, extracted_through)
-           VALUES ($1, $2, $3, $4, 'extracting', COALESCE($5, NOW()), $6)
+           VALUES ($1, $2, $3, $4, 'extracting', COALESCE($5, NOW()), NULL)
            RETURNING id"#,
     )
     .bind(&user.id)
@@ -192,7 +191,6 @@ async fn create_capsule(
     .bind(body.conversation_id)
     .bind(message_count)
     .bind(stats.min_at)
-    .bind(stats.max_at)
     .fetch_one(&state.db)
     .await
     {
