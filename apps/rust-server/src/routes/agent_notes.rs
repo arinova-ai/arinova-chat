@@ -402,7 +402,16 @@ async fn agent_create_note(
 
     // Resolve notebook_id: explicit param → owner's default notebook
     let notebook_id: Option<Uuid> = if let Some(ref nb_str) = body.notebook_id {
-        Uuid::parse_str(nb_str).ok()
+        match Uuid::parse_str(nb_str) {
+            Ok(id) => Some(id),
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "Invalid notebookId"})),
+                )
+                    .into_response();
+            }
+        }
     } else {
         // Use conversation owner's default notebook
         super::notebooks::get_default_notebook_id(&state.db, &conv_owner_id).await.ok()

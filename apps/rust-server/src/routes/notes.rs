@@ -2809,6 +2809,14 @@ async fn get_notebook_preference(
     user: AuthUser,
     Path(conv_id): Path<Uuid>,
 ) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
     let row = sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
         "SELECT notebook_id, updated_at FROM conversation_notebook_preference WHERE user_id = $1 AND conversation_id = $2",
     )
@@ -2857,6 +2865,14 @@ async fn set_notebook_preference(
     Path(conv_id): Path<Uuid>,
     Json(body): Json<SetNotebookPreferenceBody>,
 ) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
     // Verify notebook ownership
     let nb_owner = sqlx::query_scalar::<_, String>(
         "SELECT owner_id FROM notebooks WHERE id = $1",

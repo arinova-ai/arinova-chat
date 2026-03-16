@@ -75,26 +75,29 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   // Load conversation notebook preference from API
   useEffect(() => {
     if (!conversationId || notebooks.length === 0) return;
+    let cancelled = false;
     setPreferenceLoaded(false);
+    setSelectedNotebook(null);
     api<{ notebookId?: string; isDefault?: boolean }>(
       `/api/conversations/${conversationId}/notebook-preference`,
       { silent: true },
     )
       .then((pref) => {
+        if (cancelled) return;
         if (pref.notebookId) {
           const nb = notebooks.find((n) => n.id === pref.notebookId);
           if (nb) setSelectedNotebook(nb);
-          else if (!userDismissedRef.current) setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
-        } else if (!userDismissedRef.current) {
+          else setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
+        } else {
           setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
         }
       })
       .catch(() => {
-        if (!userDismissedRef.current) {
-          setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
-        }
+        if (cancelled) return;
+        setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
       })
-      .finally(() => setPreferenceLoaded(true));
+      .finally(() => { if (!cancelled) setPreferenceLoaded(true); });
+    return () => { cancelled = true; };
   }, [conversationId, notebooks]);
 
   // Save preference when user selects a notebook
