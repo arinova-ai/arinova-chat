@@ -112,7 +112,7 @@ export function ChatHeader({
   const groupPins = useGroupPinStore((s) => conversationId ? s.getPins(conversationId) : []);
   const loadGroupPins = useGroupPinStore((s) => s.loadPins);
   useEffect(() => {
-    if (isGroupLike(type) && conversationId) {
+    if (type === "group" && conversationId) {
       loadGroupPins(conversationId);
     }
   }, [type, conversationId, loadGroupPins]);
@@ -268,6 +268,7 @@ export function ChatHeader({
             groupPins={groupPins}
             convSearchOpen={convSearchOpen}
             isMuted={isMuted}
+            isCommunity={type === "community"}
             onAction={(actionId) => {
               switch (actionId) {
                 case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
@@ -583,22 +584,28 @@ interface GroupHeaderButtonsProps {
   groupPins: string[];
   convSearchOpen: boolean;
   isMuted: boolean;
+  isCommunity?: boolean;
   onAction: (id: string) => void;
   onSettingsOpen: () => void;
   t: (key: string) => string;
 }
+
+const COMMUNITY_FIXED_BUTTONS = ["search", "members", "mute", "wiki", "threads"];
 
 function GroupHeaderButtons({
   conversationId,
   groupPins,
   convSearchOpen,
   isMuted,
+  isCommunity,
   onAction,
   onSettingsOpen,
   t,
 }: GroupHeaderButtonsProps) {
   const togglePin = useGroupPinStore((s) => s.togglePin);
-  const pinned = GROUP_HEADER_BUTTONS.filter((btn) => groupPins.includes(btn.id));
+  const pinned = isCommunity
+    ? GROUP_HEADER_BUTTONS.filter((btn) => COMMUNITY_FIXED_BUTTONS.includes(btn.id))
+    : GROUP_HEADER_BUTTONS.filter((btn) => groupPins.includes(btn.id));
 
   const getActiveColor = (id: string): string => {
     if (id === "search" && convSearchOpen) return "text-blue-400";
@@ -641,7 +648,7 @@ function GroupHeaderButtons({
         <DropdownMenuContent align="end">
           {GROUP_HEADER_BUTTONS.map((btn) => {
             const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
-            const isPinned = groupPins.includes(btn.id);
+            const isPinned = !isCommunity && groupPins.includes(btn.id);
             return (
               <DropdownMenuItem
                 key={btn.id}
