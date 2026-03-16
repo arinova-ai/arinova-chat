@@ -640,11 +640,11 @@ async fn get_community(
 
     match row {
         Ok(Some(r)) => {
-            // Try to get caller's community identity + role
+            // Try to get caller's role (must succeed independently)
             let user_id = extract_user_id_from_cookie(&state.db, &headers).await;
-            let (my_display_name, my_avatar_url, my_role) = if let Some(ref uid) = user_id {
-                sqlx::query_as::<_, (Option<String>, Option<String>, String)>(
-                    "SELECT display_name, member_avatar_url, role FROM community_members WHERE community_id = $1 AND user_id = $2",
+            let my_role = if let Some(ref uid) = user_id {
+                sqlx::query_scalar::<_, String>(
+                    "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
                 )
                 .bind(id)
                 .bind(uid)
@@ -652,10 +652,23 @@ async fn get_community(
                 .await
                 .ok()
                 .flatten()
-                .map(|(dn, av, r)| (dn, av, Some(r)))
-                .unwrap_or((None, None, None))
             } else {
-                (None, None, None)
+                None
+            };
+            // Try to get caller's community identity (may fail if migration not yet run)
+            let (my_display_name, my_avatar_url) = if let Some(ref uid) = user_id {
+                sqlx::query_as::<_, (Option<String>, Option<String>)>(
+                    "SELECT display_name, member_avatar_url FROM community_members WHERE community_id = $1 AND user_id = $2",
+                )
+                .bind(id)
+                .bind(uid)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or((None, None))
+            } else {
+                (None, None)
             };
             (StatusCode::OK, Json(community_json_with_identity(
                 &r,
