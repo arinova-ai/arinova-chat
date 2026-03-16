@@ -78,6 +78,11 @@ pub fn router() -> Router<AppState> {
             "/api/conversations/{id}/notebook-preference",
             get(get_notebook_preference).put(set_notebook_preference),
         )
+        // Board preference per conversation
+        .route(
+            "/api/conversations/{id}/board-preference",
+            get(get_board_preference).put(set_board_preference),
+        )
 }
 
 // ===== Internal types =====
@@ -2919,6 +2924,133 @@ async fn set_notebook_preference(
 
     match result {
         Ok(_) => Json(json!({"success": true, "notebookId": body.notebook_id})).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+// ── Board preference per conversation ──────────────────────────────────
+
+/// GET /api/conversations/:id/board-preference
+async fn get_board_preference(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conv_id): Path<Uuid>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
+    let row = sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
+        "SELECT board_id, updated_at FROM conversation_board_preference WHERE user_id = $1 AND conversation_id = $2",
+    )
+    .bind(&user.id)
+    .bind(conv_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some((board_id, updated_at))) => {
+            Json(json!({
+                "boardId": board_id,
+                "updatedAt": updated_at.to_rfc3339(),
+            }))
+            .into_response()
+        }
+        Ok(None) => {
+            // Return first non-archived board as default
+            let default_board = sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM kanban_boards WHERE owner_id = $1 AND is_archived = false ORDER BY created_at ASC LIMIT 1",
+            )
+            .bind(&user.id)
+            .fetch_optional(&state.db)
+            .await;
+
+            match default_board {
+                Ok(Some(bid)) => Json(json!({ "boardId": bid, "isDefault": true })).into_response(),
+                Ok(None) => Json(json!({ "boardId": null, "isDefault": true })).into_response(),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": e.to_string()})),
+                )
+                    .into_response(),
+            }
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SetBoardPreferenceBody {
+    #[serde(rename = "boardId")]
+    board_id: Uuid,
+}
+
+/// PUT /api/conversations/:id/board-preference
+async fn set_board_preference(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conv_id): Path<Uuid>,
+    Json(body): Json<SetBoardPreferenceBody>,
+) -> Response {
+    if !is_member(&state.db, conv_id, &user.id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Not a member of this conversation"})),
+        )
+            .into_response();
+    }
+
+    // Verify board exists and is not archived
+    let board_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM kanban_boards WHERE id = $1 AND is_archived = false)",
+    )
+    .bind(body.board_id)
+    .fetch_one(&state.db)
+    .await;
+
+    match board_exists {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Board not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    }
+
+    let result = sqlx::query(
+        r#"INSERT INTO conversation_board_preference (user_id, conversation_id, board_id, updated_at)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (user_id, conversation_id) DO UPDATE SET board_id = $3, updated_at = NOW()"#,
+    )
+    .bind(&user.id)
+    .bind(conv_id)
+    .bind(body.board_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({"success": true, "boardId": body.board_id})).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),

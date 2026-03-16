@@ -166,14 +166,14 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       // If no explicit boardId, try loading persisted preference
       let targetId = boardId || selectedBoardId;
       if (!targetId && conversationId) {
-        // Load from conversation settings
+        // Load from per-conversation board preference
         try {
-          const settings = await api<{ kanbanBoardId?: string | null }>(
-            `/api/conversations/${conversationId}/settings`,
+          const pref = await api<{ boardId?: string | null }>(
+            `/api/conversations/${conversationId}/board-preference`,
             { silent: true },
           );
-          if (settings.kanbanBoardId && allBoards.some((b) => b.id === settings.kanbanBoardId)) {
-            targetId = settings.kanbanBoardId;
+          if (pref.boardId && allBoards.some((b) => b.id === String(pref.boardId))) {
+            targetId = String(pref.boardId);
           }
         } catch { /* ignore */ }
       }
@@ -264,11 +264,12 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
     await fetchBoard(boardId);
     // Persist board selection
     if (conversationId) {
-      api(`/api/conversations/${conversationId}/settings`, {
-        method: "PATCH",
-        body: JSON.stringify({ kanbanBoardId: boardId }),
-        silent: true,
-      }).catch(() => {});
+      api(`/api/conversations/${conversationId}/board-preference`, {
+        method: "PUT",
+        body: JSON.stringify({ boardId }),
+      }).catch((err) => {
+        console.error("[board-preference] PUT failed:", err);
+      });
     } else {
       try { localStorage.setItem("kanban_selected_board", boardId); } catch { /* ignore */ }
     }
