@@ -584,7 +584,7 @@ function CommunityDetailContent() {
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1"><Users className="h-4 w-4" />{community.memberCount} {t("community.detail.members")}</span>
-                          {community.category && <span className="capitalize">{community.category}</span>}
+                          {community.category && <span>{t(`community.category.${community.category}`)}</span>}
                         </div>
                       </div>
                     </div>
