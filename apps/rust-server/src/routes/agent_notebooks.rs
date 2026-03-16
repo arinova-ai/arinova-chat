@@ -104,12 +104,7 @@ async fn agent_has_conversation_with_user(
     user_id: &str,
 ) -> bool {
     sqlx::query_as::<_, (i64,)>(
-        r#"SELECT COUNT(*) FROM conversations c
-           WHERE c.agent_id = $1
-             AND EXISTS (
-               SELECT 1 FROM conversation_user_members m
-               WHERE m.conversation_id = c.id AND m.user_id = $2
-             )"#,
+        "SELECT COUNT(*) FROM conversations c WHERE c.agent_id = $1 AND c.user_id = $2",
     )
     .bind(agent_id)
     .bind(user_id)
