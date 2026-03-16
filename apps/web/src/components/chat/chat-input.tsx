@@ -1171,7 +1171,7 @@ case "tts": {
 
   return (
     <div className="shrink-0 border-t border-border p-4 pb-[max(1.125rem,calc(env(safe-area-inset-bottom,1rem)+2px))]">
-      <div className="relative mx-auto max-w-5xl">
+      <div className="relative mx-auto max-w-3xl">
         {/* Slash command popup */}
         {showSlashPopup && hasSelectableItems && (
           <div

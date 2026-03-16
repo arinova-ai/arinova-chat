@@ -18,7 +18,7 @@ export const useRightPanelStore = create<RightPanelState>()((set) => ({
   isOpen: false,
   activeTab: "notes",
   sideChatConversationId: null,
-  panelWidth: 380,
+  panelWidth: 480,
   setOpen: (open) => set({ isOpen: open }),
   toggle: () => set((s) => ({ isOpen: !s.isOpen })),
   setActiveTab: (tab) => set({ activeTab: tab, isOpen: true }),
