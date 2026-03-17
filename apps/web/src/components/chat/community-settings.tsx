@@ -396,8 +396,13 @@ export function CommunitySettingsSheet({
     }
     useToastStore.getState().addToast(t("communitySettings.deleteSuccess"), "success");
     onClose();
-    useChatStore.getState().setActiveConversation(null);
-  }, [communityId, t, onClose]);
+    const store = useChatStore.getState();
+    store.setActiveConversation(null);
+    // Remove the conversation from the list so it disappears immediately
+    useChatStore.setState({
+      conversations: store.conversations.filter((c) => c.id !== conversationId),
+    });
+  }, [communityId, conversationId, t, onClose]);
 
   const handleTransfer = useCallback(
     async (targetUserId: string, targetName: string) => {
