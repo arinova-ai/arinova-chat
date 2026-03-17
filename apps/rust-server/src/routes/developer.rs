@@ -153,11 +153,12 @@ async fn create_dev_app(
     }
 
     let client_id = generate_client_id(&name);
-    let client_secret = generate_client_secret();
     let category = body.category.as_deref().unwrap_or("other");
     let redirect_uri = body.external_url.as_deref().unwrap_or("https://example.com/callback");
 
-    let is_public = body.is_public.unwrap_or(false);
+    // All new apps are public (PKCE) by default — no client_secret needed
+    let is_public = body.is_public.unwrap_or(true);
+    let client_secret = if is_public { String::new() } else { generate_client_secret() };
 
     let result = sqlx::query_as::<_, AppRow>(
         r#"INSERT INTO oauth_apps (client_id, client_secret, name, redirect_uri, description, icon_url, created_by, category, external_url, status, is_public)
@@ -181,7 +182,9 @@ async fn create_dev_app(
         Ok(app) => {
             let mut resp = app_json(&app);
             resp["clientId"] = json!(client_id);
-            resp["clientSecret"] = json!(client_secret);
+            if !is_public && !client_secret.is_empty() {
+                resp["clientSecret"] = json!(client_secret);
+            }
             (StatusCode::CREATED, Json(resp)).into_response()
         }
         Err(e) => {

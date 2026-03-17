@@ -1,109 +1,91 @@
-# @arinova-ai/spaces-sdk
+# @arinova/spaces-sdk
 
-Official SDK for integrating external games with the Arinova platform.
+OAuth PKCE SDK for Arinova Spaces — authenticate users without exposing secrets.
 
-## Install
+## Installation
 
 ```bash
-npm install @arinova-ai/spaces-sdk
+npm install @arinova/spaces-sdk
 ```
 
 ## Quick Start
 
-### 1. Initialize
+```js
+import { Arinova } from "@arinova/spaces-sdk";
 
-```typescript
-import { Arinova } from "@arinova-ai/spaces-sdk";
+const arinova = new Arinova({ appId: "your-client-id" });
 
-Arinova.init({
+// Trigger login (opens popup)
+const token = await arinova.login();
+console.log(token.user.name);       // "Alice"
+console.log(token.access_token);    // Bearer token for API calls
+```
+
+## Setup
+
+1. Register your app: `arinova-cli app create --name "My App" --redirect-uri "https://myapp.com"`
+2. Copy the `Client ID` from the output
+3. No `client_secret` needed — all apps use PKCE
+
+## API
+
+### `new Arinova(config)`
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `appId` | `string` | *required* | Your OAuth app client_id |
+| `endpoint` | `string` | `https://chat.arinova.ai` | Arinova server URL |
+| `redirectUri` | `string` | `{origin}/callback` | OAuth callback URL |
+| `scope` | `string` | `"profile"` | OAuth scope |
+
+### `arinova.login(): Promise<TokenResponse>`
+
+Opens a popup for user authorization (PKCE flow). Returns:
+
+```ts
+{
+  access_token: string;
+  token_type: "Bearer";
+  expires_in: 604800;  // 7 days
+  scope: "profile";
+  user: { id, name, email, image };
+}
+```
+
+### `arinova.handleCallback(): Promise<TokenResponse>`
+
+Call on your redirect_uri page to complete the flow (for redirect mode instead of popup).
+
+## PKCE Flow
+
+1. SDK generates `code_verifier` (random) and `code_challenge = BASE64URL(SHA256(code_verifier))`
+2. User is redirected to Arinova with `code_challenge`
+3. After authorization, Arinova redirects back with `code`
+4. SDK exchanges `code` + `code_verifier` for `access_token` (no secret needed)
+
+## redirect_uri Rules
+
+- Origin match: scheme + host + port must match your registered URI
+- Path can differ (SDK uses `window.location.origin + /callback` by default)
+- Must use HTTPS in production
+- `http://localhost` is allowed for development
+
+## Example: Redirect Mode
+
+If popups are blocked, use redirect mode:
+
+```js
+// On login page:
+const arinova = new Arinova({
   appId: "your-client-id",
-  baseUrl: "https://api.arinova.ai", // optional, defaults to production
+  redirectUri: "https://myapp.com/auth/callback",
 });
+arinova.login(); // Will redirect if popup is blocked
+
+// On callback page (/auth/callback):
+const arinova = new Arinova({
+  appId: "your-client-id",
+  redirectUri: "https://myapp.com/auth/callback",
+});
+const token = await arinova.handleCallback();
 ```
-
-### 2a. Connect (Recommended)
-
-The easiest way to authenticate. Works automatically in both contexts:
-
-- **Embedded in Arinova Chat iframe**: receives auth via `postMessage` from the parent window (no redirect needed).
-- **Standalone (outside iframe)**: falls back to the OAuth login flow.
-
-```typescript
-const { user, accessToken, agents } = await Arinova.connect({ timeout: 5000 });
-// user: { id, name, email, image }
-// accessToken: session token for API calls
-// agents: user's connected agents (may be empty)
-```
-
-### 2b. Login (Manual OAuth Flow)
-
-```typescript
-// Redirect to Arinova login
-Arinova.login({ scope: ["profile", "agents"] });
-
-// Handle callback (on your redirect page)
-const { user, accessToken } = await Arinova.handleCallback({
-  code: urlParams.get("code"),
-  clientId: "your-client-id",
-  clientSecret: "your-client-secret",
-  redirectUri: window.location.origin + "/callback",
-});
-```
-
-### 3. Use Agent API
-
-```typescript
-// Get user's agents
-const agents = await Arinova.user.agents(accessToken);
-
-// Chat with agent (sync)
-const { response } = await Arinova.agent.chat({
-  agentId: agents[0].id,
-  prompt: "Your board state...",
-  accessToken,
-});
-
-// Chat with agent (streaming)
-const result = await Arinova.agent.chatStream({
-  agentId: agents[0].id,
-  prompt: "Your move?",
-  accessToken,
-  onChunk: (chunk) => console.log("Streaming:", chunk),
-});
-```
-
-### 4. Economy (Server-to-Server)
-
-```typescript
-// Charge coins
-const { newBalance } = await Arinova.economy.charge({
-  userId: "user-id",
-  amount: 10,
-  description: "Game entry fee",
-  clientId: "your-client-id",
-  clientSecret: "your-client-secret",
-});
-
-// Award coins
-const { newBalance, platformFee } = await Arinova.economy.award({
-  userId: "user-id",
-  amount: 20,
-  description: "Game prize",
-  clientId: "your-client-id",
-  clientSecret: "your-client-secret",
-});
-```
-
-## API Reference
-
-### `Arinova.init(config)`
-### `Arinova.connect(options?)`
-### `Arinova.login(options?)`
-### `Arinova.handleCallback(params)`
-### `Arinova.user.profile(accessToken)`
-### `Arinova.user.agents(accessToken)`
-### `Arinova.agent.chat(options)`
-### `Arinova.agent.chatStream(options)`
-### `Arinova.economy.charge(options)`
-### `Arinova.economy.award(options)`
-### `Arinova.economy.balance(accessToken)`

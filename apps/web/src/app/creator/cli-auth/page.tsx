@@ -2,11 +2,20 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Terminal, Check, Copy, Loader2, ShieldCheck } from "lucide-react";
+import { Terminal, Check, Copy, Loader2, ShieldCheck, Trash2, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuthGuard } from "@/components/auth-guard";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
+
+interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
 
 function CliAuthContent() {
   const { t } = useTranslation();
@@ -18,6 +27,26 @@ function CliAuthContent() {
   const [redirecting, setRedirecting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Key list
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [keysLoading, setKeysLoading] = useState(true);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const fetchKeys = useCallback(async () => {
+    try {
+      const res = await api<{ keys: ApiKey[] }>("/api/creator/api-keys");
+      setKeys(res.keys.filter((k) => !k.revokedAt));
+    } catch {
+      // ignore
+    } finally {
+      setKeysLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!callbackUrl) fetchKeys();
+  }, [callbackUrl, fetchKeys]);
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
@@ -31,17 +60,18 @@ function CliAuthContent() {
       const key = res.key;
       setToken(key);
 
-      // If callback URL is provided (from CLI), redirect automatically
       if (callbackUrl) {
         setRedirecting(true);
         window.location.href = `${callbackUrl}?key=${encodeURIComponent(key)}`;
+      } else {
+        fetchKeys();
       }
     } catch {
       setError("Failed to generate token. Please try again.");
     } finally {
       setGenerating(false);
     }
-  }, [callbackUrl]);
+  }, [callbackUrl, fetchKeys]);
 
   // Auto-generate if callback is present (CLI flow)
   useEffect(() => {
@@ -57,14 +87,27 @@ function CliAuthContent() {
     setTimeout(() => setCopied(false), 2000);
   }, [token]);
 
+  const handleRevoke = useCallback(
+    async (id: string) => {
+      setRevokingId(id);
+      try {
+        await api(`/api/creator/api-keys/${id}`, { method: "DELETE" });
+        setKeys((prev) => prev.filter((k) => k.id !== id));
+      } catch {
+        // ignore
+      } finally {
+        setRevokingId(null);
+      }
+    },
+    []
+  );
+
   if (redirecting) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-6 text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">
-            Redirecting to CLI...
-          </p>
+          <p className="text-sm text-muted-foreground">Redirecting to CLI...</p>
         </div>
       </div>
     );
@@ -81,7 +124,7 @@ function CliAuthContent() {
           <p className="text-sm text-muted-foreground">
             {callbackUrl
               ? "Authorize the Arinova CLI to access your account."
-              : "Generate a token to use with the Arinova CLI."}
+              : "Manage your CLI access tokens."}
           </p>
         </div>
 
@@ -97,11 +140,7 @@ function CliAuthContent() {
               <div className="flex items-start gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div className="text-sm text-muted-foreground">
-                  <p>This will create a CLI access token for your account. The token can:</p>
-                  <ul className="mt-2 list-disc pl-4 space-y-1">
-                    <li>Manage your agents and stickers</li>
-                    <li>Access the Creator API</li>
-                  </ul>
+                  <p>CLI tokens can manage your agents, stickers, and access the Creator API.</p>
                 </div>
               </div>
             </div>
@@ -117,7 +156,7 @@ function CliAuthContent() {
                 ) : (
                   <Terminal className="mr-2 h-4 w-4" />
                 )}
-                {generating ? "Generating..." : "Generate CLI Token"}
+                {generating ? "Generating..." : "Generate New Token"}
               </Button>
             )}
 
@@ -161,6 +200,14 @@ function CliAuthContent() {
                   <p className="text-xs text-muted-foreground">
                     Run: <code className="bg-muted px-1 rounded">arinova-cli auth set-key {"{token}"}</code>
                   </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => setToken(null)}
+                  >
+                    Done
+                  </Button>
                 </>
               )}
 
@@ -177,6 +224,57 @@ function CliAuthContent() {
                 </p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Key list (only in manual mode) */}
+        {!callbackUrl && !token && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-medium flex items-center gap-2">
+              <Key className="h-4 w-4" />
+              Active Tokens
+            </h2>
+            {keysLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : keys.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                No active tokens. Generate one above.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {keys.map((k) => (
+                  <div
+                    key={k.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{k.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {k.prefix}...
+                        {k.lastUsedAt
+                          ? ` · Last used ${new Date(k.lastUsedAt).toLocaleDateString()}`
+                          : ` · Created ${new Date(k.createdAt).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive flex-shrink-0"
+                      onClick={() => handleRevoke(k.id)}
+                      disabled={revokingId === k.id}
+                    >
+                      {revokingId === k.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

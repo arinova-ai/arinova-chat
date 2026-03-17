@@ -81,59 +81,36 @@ Register and manage OAuth apps for third-party integrations.
 arinova-cli app create --name "My Game" --redirect-uri "https://mygame.com/callback"
 ```
 
-On success, the CLI prints `clientId` and `clientSecret`. **Save the secret immediately** — it cannot be retrieved again.
+All apps are **public clients** (PKCE) — no `client_secret` needed.
 
 ### App commands
 
 ```bash
 arinova-cli app list                              # List your apps
 arinova-cli app show <id>                         # Show app details
-arinova-cli app credentials <id>                  # Show client ID + redirect URIs
 arinova-cli app update <id> --redirect-uri <uri>  # Update redirect URI
-arinova-cli app regenerate-secret <id>            # Regenerate client secret
 arinova-cli app delete <id>                       # Delete an app
 ```
 
 ### Using your OAuth app
 
-In your web app, initialize the Arinova SDK:
+Install the Spaces SDK (`@arinova/spaces-sdk`) in your web app:
 
 ```js
-Arinova.init({ appId: "<your-client-id>" });
+import { Arinova } from "@arinova/spaces-sdk";
+const arinova = new Arinova({ appId: "<your-client-id>" });
+const token = await arinova.login();
 ```
 
-### Public vs Confidential Clients
+### OAuth Flow (PKCE)
 
-| | Public (SPA) | Confidential (Server) |
-|---|---|---|
-| Create | `--public` flag | Default |
-| Secret | Not needed | Required for token exchange |
-| Security | Uses PKCE (code_challenge) | Uses client_secret |
-| Use case | Browser apps, mobile apps | Server-side apps |
-
-### OAuth Flow — Confidential Client
-
-1. Redirect to `https://chat.arinova.ai/oauth/authorize?client_id=<id>&redirect_uri=<uri>&scope=profile&state=<random>`
-2. User authorizes on Arinova
-3. Arinova redirects to your `redirect_uri` with `?code=<auth-code>&state=<state>`
-4. Exchange code: `POST /oauth/token` with `{ grant_type: "authorization_code", client_id, client_secret, code, redirect_uri }`
-5. Use the access token (Bearer) to call Arinova APIs
-
-### OAuth Flow — Public Client (PKCE)
-
-1. Generate a random `code_verifier` (43-128 chars, URL-safe)
-2. Compute `code_challenge = BASE64URL(SHA256(code_verifier))`
-3. Redirect to `https://chat.arinova.ai/oauth/authorize?client_id=<id>&redirect_uri=<uri>&scope=profile&state=<random>&code_challenge=<challenge>&code_challenge_method=S256`
-4. User authorizes on Arinova
-5. Arinova redirects to your `redirect_uri` with `?code=<auth-code>&state=<state>`
-6. Exchange code: `POST /oauth/token` with `{ grant_type: "authorization_code", client_id, code, redirect_uri, code_verifier }` (no client_secret)
-7. Use the access token (Bearer) to call Arinova APIs
+All apps use PKCE — no `client_secret` needed. The Spaces SDK handles this automatically. For manual implementation, see the [Spaces SDK README](../spaces-sdk/README.md).
 
 ### redirect_uri rules
 
 - Origin match: scheme + host + port must match (path can differ)
 - Must use HTTPS in production
-- `http://localhost:*` is allowed for development
+- `http://localhost` is allowed for development
 
 ### Web UI
 

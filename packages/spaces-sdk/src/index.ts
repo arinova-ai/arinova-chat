@@ -1,336 +1,221 @@
-import type {
-  ArinovaConfig,
-  LoginOptions,
-  LoginResult,
-  ConnectOptions,
-  ConnectResult,
-  ArinovaUser,
-  AgentInfo,
-  AgentChatOptions,
-  AgentChatResponse,
-  AgentChatStreamOptions,
-  AgentChatStreamResponse,
-  ChargeOptions,
-  ChargeResponse,
-  AwardOptions,
-  AwardResponse,
-  BalanceResponse,
-  SSEEvent,
-} from "./types.js";
+/**
+ * Arinova Spaces SDK
+ *
+ * Public client OAuth with PKCE — no client_secret needed.
+ *
+ * Usage:
+ *   const arinova = new Arinova({ appId: "my-app-abc123" });
+ *   const token = await arinova.login();
+ *   // token.access_token is ready to use
+ */
 
-export type * from "./types.js";
-
-let _config: ArinovaConfig | null = null;
-let _oauthClientInfo: { clientId: string; clientSecret: string } | null = null;
-
-function getBaseUrl(): string {
-  if (!_config) throw new Error("Arinova SDK not initialized. Call Arinova.init() first.");
-  return _config.baseUrl || "https://api.arinova.ai";
+export interface ArinovaConfig {
+  /** Your OAuth app's client_id (from Developer Console) */
+  appId: string;
+  /** Arinova server URL (default: https://chat.arinova.ai) */
+  endpoint?: string;
+  /** OAuth redirect URI (default: current page origin + /callback) */
+  redirectUri?: string;
+  /** OAuth scope (default: "profile") */
+  scope?: string;
 }
 
-function getConfig(): ArinovaConfig {
-  if (!_config) throw new Error("Arinova SDK not initialized. Call Arinova.init() first.");
-  return _config;
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  scope: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    image: string | null;
+  };
 }
 
-export const Arinova = {
-  /**
-   * Initialize the SDK with your app configuration.
-   */
-  init(config: ArinovaConfig & { clientId?: string; clientSecret?: string }) {
-    _config = config;
-    if (config.clientId && config.clientSecret) {
-      _oauthClientInfo = { clientId: config.clientId, clientSecret: config.clientSecret };
-    }
-  },
+export class Arinova {
+  private appId: string;
+  private endpoint: string;
+  private redirectUri: string;
+  private scope: string;
+
+  constructor(config: ArinovaConfig) {
+    this.appId = config.appId;
+    this.endpoint = (config.endpoint ?? "https://chat.arinova.ai").replace(
+      /\/+$/,
+      ""
+    );
+    this.redirectUri =
+      config.redirectUri ?? `${window.location.origin}/callback`;
+    this.scope = config.scope ?? "profile";
+  }
 
   /**
-   * Connect to Arinova — works seamlessly in both iframe and standalone contexts.
-   *
-   * - **Inside an iframe** (embedded in Arinova Chat): receives auth via postMessage from the parent window.
-   * - **Outside an iframe** (standalone): falls back to the OAuth login() flow.
-   *
-   * @param options.timeout - How long to wait for postMessage in iframe mode (default: 5000ms)
-   * @returns Promise resolving with user, accessToken, and agents
+   * Start the OAuth PKCE login flow.
+   * Opens a popup window for authorization.
+   * Returns the token response on success.
    */
-  async connect(options?: ConnectOptions): Promise<ConnectResult> {
-    const timeout = options?.timeout ?? 5000;
+  async login(): Promise<TokenResponse> {
+    const { verifier, challenge } = await generatePKCE();
+    const state = generateRandom(32);
 
-    const inIframe = typeof window !== "undefined" && window.self !== window.top;
-
-    if (!inIframe) {
-      // Not in iframe — fall back to OAuth login flow
-      this.login();
-      // login() redirects, so this promise never resolves in practice
-      return new Promise(() => {});
-    }
-
-    // In iframe — listen for postMessage auth from parent
-    return new Promise<ConnectResult>((resolve, reject) => {
-      let settled = false;
-
-      const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          window.removeEventListener("message", handler);
-          reject(new Error("Arinova connect timeout: no auth message received from parent window within " + timeout + "ms"));
-        }
-      }, timeout);
-
-      function handler(event: MessageEvent) {
-        if (event.data?.type !== "arinova:auth") return;
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        window.removeEventListener("message", handler);
-
-        const { user, accessToken, agents } = event.data.payload as ConnectResult;
-        resolve({ user, accessToken, agents: agents ?? [] });
-      }
-
-      window.addEventListener("message", handler);
-    });
-  },
-
-  /**
-   * Redirect to Arinova OAuth login page.
-   * Call this from your game's frontend.
-   */
-  login(options?: LoginOptions): void {
-    const config = getConfig();
-    const baseUrl = getBaseUrl();
-    const scope = options?.scope?.join(" ") || "profile";
-
-    // Store current URL for callback
-    const currentUrl = typeof window !== "undefined" ? window.location.href : "";
+    // Store state + verifier for callback validation
+    sessionStorage.setItem("arinova_pkce_verifier", verifier);
+    sessionStorage.setItem("arinova_pkce_state", state);
 
     const params = new URLSearchParams({
-      client_id: config.appId,
-      redirect_uri: currentUrl,
-      scope,
-      state: crypto.randomUUID(),
+      client_id: this.appId,
+      redirect_uri: this.redirectUri,
+      scope: this.scope,
+      state,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      response_type: "code",
     });
 
-    window.location.href = `${baseUrl}/oauth/authorize?${params}`;
-  },
+    const authUrl = `${this.endpoint}/oauth/authorize?${params}`;
+
+    return new Promise<TokenResponse>((resolve, reject) => {
+      const popup = window.open(authUrl, "arinova_auth", "width=500,height=600");
+
+      if (!popup) {
+        // Fallback: redirect instead of popup
+        window.location.href = authUrl;
+        reject(new Error("Popup blocked — redirecting instead"));
+        return;
+      }
+
+      const interval = setInterval(() => {
+        try {
+          if (popup.closed) {
+            clearInterval(interval);
+            reject(new Error("Login cancelled"));
+          }
+
+          const popupUrl = popup.location.href;
+          if (popupUrl.startsWith(this.redirectUri)) {
+            clearInterval(interval);
+            popup.close();
+
+            const url = new URL(popupUrl);
+            const code = url.searchParams.get("code");
+            const returnedState = url.searchParams.get("state");
+
+            if (returnedState !== state) {
+              reject(new Error("State mismatch — possible CSRF attack"));
+              return;
+            }
+
+            if (!code) {
+              reject(
+                new Error(
+                  url.searchParams.get("error_description") ?? "No code received"
+                )
+              );
+              return;
+            }
+
+            this.exchangeCode(code, verifier).then(resolve).catch(reject);
+          }
+        } catch {
+          // Cross-origin — popup is on a different domain, ignore
+        }
+      }, 200);
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        clearInterval(interval);
+        try { popup.close(); } catch { /* ignore */ }
+        reject(new Error("Login timed out"));
+      }, 300_000);
+    });
+  }
 
   /**
-   * Handle the OAuth callback. Call this on your redirect page.
-   * Exchanges the authorization code for an access token.
+   * Handle the OAuth callback (call this on your redirect_uri page).
+   * Reads code and state from URL, exchanges for token.
    */
-  async handleCallback(params: {
-    code: string;
-    clientId: string;
-    clientSecret: string;
-    redirectUri: string;
-  }): Promise<LoginResult> {
-    const baseUrl = getBaseUrl();
+  async handleCallback(): Promise<TokenResponse> {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const verifier = sessionStorage.getItem("arinova_pkce_verifier");
+    const expectedState = sessionStorage.getItem("arinova_pkce_state");
 
-    const res = await fetch(`${baseUrl}/oauth/token`, {
+    sessionStorage.removeItem("arinova_pkce_verifier");
+    sessionStorage.removeItem("arinova_pkce_state");
+
+    if (!code) {
+      throw new Error(
+        url.searchParams.get("error_description") ?? "No authorization code"
+      );
+    }
+    if (state !== expectedState) {
+      throw new Error("State mismatch");
+    }
+    if (!verifier) {
+      throw new Error("No PKCE verifier found — did you start login()?");
+    }
+
+    return this.exchangeCode(code, verifier);
+  }
+
+  private async exchangeCode(
+    code: string,
+    codeVerifier: string
+  ): Promise<TokenResponse> {
+    const res = await fetch(`${this.endpoint}/oauth/token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         grant_type: "authorization_code",
-        code: params.code,
-        client_id: params.clientId,
-        client_secret: params.clientSecret,
-        redirect_uri: params.redirectUri,
+        client_id: this.appId,
+        code,
+        redirect_uri: this.redirectUri,
+        code_verifier: codeVerifier,
       }),
     });
 
     if (!res.ok) {
-      const error = await res.json().catch(() => ({ error: "token_exchange_failed" }));
-      throw new Error(error.error || "Token exchange failed");
+      const body = await res.json().catch(() => ({}));
+      throw new Error(
+        (body as Record<string, string>).error_description ??
+          (body as Record<string, string>).error ??
+          `Token exchange failed (${res.status})`
+      );
     }
 
-    const data = await res.json();
-    return {
-      user: data.user,
-      accessToken: data.access_token,
-    };
-  },
+    return res.json() as Promise<TokenResponse>;
+  }
+}
 
-  user: {
-    /**
-     * Get the authenticated user's profile.
-     */
-    async profile(accessToken: string): Promise<ArinovaUser> {
-      const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/user/profile`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) throw new Error("Failed to get user profile");
-      return res.json();
-    },
+// ── PKCE Helpers ──────────────────────────────────────────────
 
-    /**
-     * Get the authenticated user's agents.
-     * Requires "agents" scope.
-     */
-    async agents(accessToken: string): Promise<AgentInfo[]> {
-      const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/user/agents`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) throw new Error("Failed to get user agents");
-      const data = await res.json();
-      return data.agents;
-    },
-  },
+function generateRandom(length: number): string {
+  const array = new Uint8Array(length);
+  crypto.getRandomValues(array);
+  return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
-  agent: {
-    /**
-     * Send a prompt to a user's agent and get a complete response.
-     */
-    async chat(options: AgentChatOptions): Promise<AgentChatResponse> {
-      const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/agent/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${options.accessToken}`,
-        },
-        body: JSON.stringify({
-          agentId: options.agentId,
-          prompt: options.prompt,
-          systemPrompt: options.systemPrompt,
-        }),
-      });
+async function generatePKCE(): Promise<{
+  verifier: string;
+  challenge: string;
+}> {
+  const verifier = generateRandom(32); // 64 hex chars
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  const challenge = base64UrlEncode(new Uint8Array(hash));
+  return { verifier, challenge };
+}
 
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: "agent_chat_failed" }));
-        throw new Error(error.error || "Agent chat failed");
-      }
+function base64UrlEncode(buffer: Uint8Array): string {
+  let binary = "";
+  for (const byte of buffer) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 
-      return res.json();
-    },
-
-    /**
-     * Send a prompt to a user's agent and receive a streaming response via SSE.
-     */
-    async chatStream(options: AgentChatStreamOptions): Promise<AgentChatStreamResponse> {
-      const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/agent/chat/stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${options.accessToken}`,
-        },
-        body: JSON.stringify({
-          agentId: options.agentId,
-          prompt: options.prompt,
-          systemPrompt: options.systemPrompt,
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: "agent_stream_failed" }));
-        throw new Error(error.error || "Agent stream failed");
-      }
-
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = "";
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event: SSEEvent = JSON.parse(line.slice(6));
-            if (event.type === "chunk") {
-              options.onChunk(event.content);
-              fullContent = event.content;
-            } else if (event.type === "done") {
-              fullContent = event.content;
-            } else if (event.type === "error") {
-              throw new Error(event.error);
-            }
-          } catch (e) {
-            if (e instanceof Error && e.message !== "Unexpected end of JSON input") throw e;
-          }
-        }
-      }
-
-      return { content: fullContent, agentId: options.agentId };
-    },
-  },
-
-  economy: {
-    /**
-     * Charge coins from a user's balance (server-to-server).
-     * Requires clientId and clientSecret.
-     */
-    async charge(options: ChargeOptions & { clientId: string; clientSecret: string }): Promise<ChargeResponse> {
-      const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/economy/charge`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Client-Id": options.clientId,
-          "X-App-Secret": options.clientSecret,
-        },
-        body: JSON.stringify({
-          userId: options.userId,
-          amount: options.amount,
-          description: options.description,
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: "charge_failed" }));
-        throw new Error(error.error || "Charge failed");
-      }
-
-      return res.json();
-    },
-
-    /**
-     * Award coins to a user (server-to-server).
-     * Requires clientId and clientSecret.
-     */
-    async award(options: AwardOptions & { clientId: string; clientSecret: string }): Promise<AwardResponse> {
-      const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/economy/award`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Client-Id": options.clientId,
-          "X-App-Secret": options.clientSecret,
-        },
-        body: JSON.stringify({
-          userId: options.userId,
-          amount: options.amount,
-          description: options.description,
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: "award_failed" }));
-        throw new Error(error.error || "Award failed");
-      }
-
-      return res.json();
-    },
-
-    /**
-     * Get a user's coin balance (uses OAuth access token).
-     */
-    async balance(accessToken: string): Promise<BalanceResponse> {
-      const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/api/v1/economy/balance`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (!res.ok) throw new Error("Failed to get balance");
-      return res.json();
-    },
-  },
-};
+// Default export for convenience
+export default Arinova;

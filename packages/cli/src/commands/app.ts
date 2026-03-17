@@ -29,19 +29,17 @@ export function registerApp(program: Command): void {
 
   app
     .command("create")
-    .description("Create a new OAuth app")
+    .description("Create a new OAuth app (public client, uses PKCE)")
     .requiredOption("--name <name>", "App name")
     .option("--redirect-uri <uri>", "Redirect URI")
     .option("--description <desc>", "Description")
     .option("--category <cat>", "Category (game, tool, social, etc.)", "other")
-    .option("--public", "Create as public client (SPA, uses PKCE instead of client_secret)")
     .action(
       async (opts: {
         name: string;
         redirectUri?: string;
         description?: string;
         category: string;
-        public?: boolean;
       }) => {
         try {
           const data = await post("/api/developer/apps", {
@@ -49,20 +47,12 @@ export function registerApp(program: Command): void {
             description: opts.description,
             category: opts.category,
             externalUrl: opts.redirectUri,
-            isPublic: opts.public ?? false,
           });
           printResult(data);
           const d = data as Record<string, unknown>;
           if (d.clientId) {
-            console.log(`\n  Client ID:     ${d.clientId}`);
-          }
-          if (d.isPublic) {
-            console.log("  Type:          Public (PKCE) — no client_secret needed");
-          } else if (d.clientSecret) {
-            console.log(
-              "\nSave the secret — it will not be shown again:"
-            );
-            console.log(`  Client Secret: ${d.clientSecret}`);
+            console.log(`\n  Client ID: ${d.clientId}`);
+            console.log("  Type:      Public (PKCE) — no client_secret needed");
           }
         } catch (err) {
           printError(err);
@@ -120,39 +110,6 @@ export function registerApp(program: Command): void {
       try {
         await del(`/api/developer/apps/${id}`);
         printSuccess(`App ${id} deleted.`);
-      } catch (err) {
-        printError(err);
-      }
-    });
-
-  app
-    .command("credentials <id>")
-    .description("Show app credentials (client ID and redirect URIs)")
-    .action(async (id: string) => {
-      try {
-        const data = await get(`/api/developer/apps/${id}/credentials`);
-        printResult(data);
-      } catch (err) {
-        printError(err);
-      }
-    });
-
-  app
-    .command("regenerate-secret <id>")
-    .description("Regenerate app client secret")
-    .action(async (id: string) => {
-      try {
-        const data = await post(
-          `/api/developer/apps/${id}/regenerate-secret`
-        );
-        printResult(data);
-        const d = data as Record<string, unknown>;
-        if (d.clientSecret) {
-          console.log(
-            "\nNew secret (save it now — it will not be shown again):"
-          );
-          console.log(`  ${d.clientSecret}`);
-        }
       } catch (err) {
         printError(err);
       }
