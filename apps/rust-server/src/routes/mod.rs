@@ -55,6 +55,7 @@ pub mod agent_skills;
 pub mod wiki;
 pub mod docs;
 pub mod agent_memories;
+pub mod developer;
 
 use axum::Router;
 use crate::AppState;
@@ -116,5 +117,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(wiki::router())
         .merge(docs::router())
         .merge(agent_memories::router())
+        .merge(developer::router())
         .with_state(state)
 }

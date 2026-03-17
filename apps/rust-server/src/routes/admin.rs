@@ -20,6 +20,17 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/users/{id}/verify", patch(set_verify))
         .route("/api/admin/users/{id}/ban", post(ban_user))
         .route("/api/admin/users/{id}/unban", post(unban_user))
+        // App review stubs (planned feature)
+        .route("/api/admin/review/apps", get(review_apps_stub))
+        .route("/api/admin/review/apps/{id}/{action}", post(review_app_action_stub))
+}
+
+async fn review_apps_stub(_admin: AuthAdmin) -> Json<serde_json::Value> {
+    Json(json!({ "apps": [] }))
+}
+
+async fn review_app_action_stub(_admin: AuthAdmin) -> (StatusCode, Json<serde_json::Value>) {
+    (StatusCode::NOT_IMPLEMENTED, Json(json!({ "error": "App review not yet implemented" })))
 }
 
 // ── Broadcast ──────────────────────────────────────────────────────────

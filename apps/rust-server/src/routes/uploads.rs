@@ -30,6 +30,7 @@ pub fn router() -> Router<AppState> {
             post(upload_file),
         )
         .route("/api/attachments/{id}", get(get_attachment))
+        .route("/api/uploads", post(generic_upload))
 }
 
 async fn upload_file(
@@ -513,4 +514,89 @@ async fn get_attachment(
         )
             .into_response(),
     }
+}
+
+/// POST /api/uploads — Generic file upload (authenticated), returns { url }.
+/// Used by lounge voice sample upload and other non-conversation file uploads.
+async fn generic_upload(
+    State(state): State<AppState>,
+    user: AuthUser,
+    mut multipart: Multipart,
+) -> Response {
+    let max_size: usize = 20 * 1024 * 1024; // 20 MB
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
+
+        if BLOCKED_TYPES.contains(&content_type.as_str()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": format!("File type '{}' is not allowed", content_type)})),
+            )
+                .into_response();
+        }
+
+        let file_name = field.file_name().unwrap_or("upload").to_string();
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file data"})))
+                    .into_response();
+            }
+        };
+
+        if data.len() > max_size {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": format!("File size exceeds maximum allowed size ({} bytes)", max_size)})),
+            )
+                .into_response();
+        }
+
+        let ext = file_name.rsplit('.').next().unwrap_or("bin");
+        let stored_name = format!("{}_{}.{}", Uuid::new_v4(), chrono::Utc::now().timestamp(), ext);
+        let r2_key = format!("uploads/{}/{}", user.id, stored_name);
+
+        let url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(
+                s3,
+                &state.config.r2_bucket,
+                &r2_key,
+                data.to_vec(),
+                &content_type,
+                &state.config.r2_public_url,
+            )
+            .await
+            {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("uploads").join(&user.id);
+                    let _ = tokio::fs::create_dir_all(&dir).await;
+                    if let Err(e) = tokio::fs::write(dir.join(&stored_name), &data).await {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"error": format!("Failed to store file: {}", e)})),
+                        )
+                            .into_response();
+                    }
+                    format!("/uploads/uploads/{}/{}", user.id, stored_name)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("uploads").join(&user.id);
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            if let Err(e) = tokio::fs::write(dir.join(&stored_name), &data).await {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to store file: {}", e)})),
+                )
+                    .into_response();
+            }
+            format!("/uploads/uploads/{}/{}", user.id, stored_name)
+        };
+
+        return (StatusCode::OK, Json(json!({ "url": url }))).into_response();
+    }
+
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response()
 }
