@@ -60,7 +60,9 @@ pub mod developer;
 use axum::Router;
 use crate::AppState;
 
-pub fn create_router(state: AppState) -> Router {
+/// Build the complete API router (without .with_state()).
+/// main.rs merges WS handlers and applies state + middleware layers.
+pub fn api_router() -> Router<AppState> {
     Router::new()
         .merge(health::router())
         .merge(auth::router())
@@ -69,6 +71,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(messages::router())
         .merge(groups::router())
         .merge(reactions::router())
+        .merge(pins::router())
         .merge(uploads::router())
         .merge(push::router())
         .merge(notifications::router())
@@ -93,7 +96,6 @@ pub fn create_router(state: AppState) -> Router {
         .merge(stickers::router())
         .merge(admin::router())
         .merge(reports::router())
-        .merge(pins::router())
         .merge(notes::router())
         .merge(agent_notes::router())
         .merge(notebooks::router())
@@ -111,6 +113,8 @@ pub fn create_router(state: AppState) -> Router {
         .merge(activity::router())
         .merge(dashboard::router())
         .merge(user_settings::router())
+        .merge(voice::router())
+        .merge(conversation_settings::router())
         .merge(accounts::router())
         .merge(skills::router())
         .merge(agent_skills::router())
@@ -118,5 +122,9 @@ pub fn create_router(state: AppState) -> Router {
         .merge(docs::router())
         .merge(agent_memories::router())
         .merge(developer::router())
-        .with_state(state)
+}
+
+/// Legacy wrapper — kept for backward compatibility.
+pub fn create_router(state: AppState) -> Router {
+    api_router().with_state(state)
 }
