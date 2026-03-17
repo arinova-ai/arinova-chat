@@ -903,19 +903,50 @@ async fn delete_community(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
-    let result = sqlx::query(
-        r#"UPDATE communities SET status = 'archived', updated_at = NOW()
-           WHERE id = $1 AND creator_id = $2 AND status != 'archived'"#,
+    // Verify creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT cm.role::text FROM community_members cm WHERE cm.community_id = $1 AND cm.user_id = $2",
     )
     .bind(id)
     .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match &role {
+        Ok(Some(r)) if r == "creator" || r == "moderator" => {}
+        Ok(Some(_)) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Only creator or moderator can delete this community" })),
+            );
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Community not found" })),
+            );
+        }
+        Err(e) => {
+            tracing::error!("Delete community role check failed: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Database error" })),
+            );
+        }
+    }
+
+    let result = sqlx::query(
+        r#"UPDATE communities SET status = 'archived', updated_at = NOW()
+           WHERE id = $1 AND status != 'archived'"#,
+    )
+    .bind(id)
     .execute(&state.db)
     .await;
 
     match result {
         Ok(r) if r.rows_affected() == 0 => (
             StatusCode::NOT_FOUND,
-            Json(json!({ "error": "Community not found or not authorized" })),
+            Json(json!({ "error": "Community not found or already archived" })),
         ),
         Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
         Err(e) => {

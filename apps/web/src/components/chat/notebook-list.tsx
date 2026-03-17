@@ -813,6 +813,7 @@ function NotebookNotes({
           conversationId={conversationId}
           notebookId={notebook.id}
           searchQuery={searchQuery}
+          includeInCapsule={notebook.includeInCapsule}
         />
       </div>
     </div>

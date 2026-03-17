@@ -53,6 +53,8 @@ interface NotebookSheetProps {
   searchQuery?: string;
   /** Hide the Active/Archived tab toggle (used when parent manages archived notes) */
   hideArchivedTab?: boolean;
+  /** Whether the notebook has memory capsule association enabled */
+  includeInCapsule?: boolean;
 }
 
 const EMPTY_NOTES: Note[] = [];
@@ -251,7 +253,7 @@ function SwipeableNoteItem({
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery, hideArchivedTab }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery, hideArchivedTab, includeInCapsule }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -467,7 +469,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (!window.confirm(t("chat.notebook.confirmDelete"))) return;
     setLoading(true);
     try {
-      await deleteNote(conversationId, target.id);
+      await deleteNote(target.conversationId || conversationId, target.id);
       if (selectedNote?.id === target.id) {
         setSelectedNote(null);
         setViewMode("list");
@@ -882,7 +884,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                 </div>
               )}
               {/* Related Capsules (Task 3) */}
-              {selectedNote.relatedCapsules && selectedNote.relatedCapsules.length > 0 && (
+              {includeInCapsule !== false && selectedNote.relatedCapsules && selectedNote.relatedCapsules.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-border">
                   <h4 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-2">
                     <Brain className="h-3 w-3" />

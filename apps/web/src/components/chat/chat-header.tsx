@@ -293,17 +293,6 @@ export function ChatHeader({
       </button>
 
       <div className="ml-auto flex items-center gap-1">
-        {officialCommunityId && (type === "community" || type === "official" || type === "lounge") && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title={t("communitySettings.title")}
-            onClick={() => { setCommunitySettingsTab(undefined); setCommunitySettingsOpen(true); }}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-        )}
         {(type === "group" || type === "community") && conversationId ? (
           <GroupHeaderButtons
             conversationId={conversationId}
