@@ -83,16 +83,16 @@ async fn authorize(
     State(state): State<AppState>,
     Query(q): Query<AuthorizeQuery>,
 ) -> Response {
-    // Validate client_id and redirect_uri (origin match)
-    let app = sqlx::query_as::<_, (Uuid, String, String)>(
-        "SELECT id, redirect_uri, name FROM oauth_apps WHERE client_id = $1",
+    // Validate client_id
+    let app = sqlx::query_as::<_, (Uuid, String, String, bool)>(
+        "SELECT id, redirect_uri, name, is_public FROM oauth_apps WHERE client_id = $1",
     )
     .bind(&q.client_id)
     .fetch_optional(&state.db)
     .await;
 
-    let (_app_id, registered_uri, app_name) = match app {
-        Ok(Some(row)) => (row.0, row.1, row.2),
+    let (_app_id, registered_uri, app_name, is_public) = match app {
+        Ok(Some(row)) => (row.0, row.1, row.2, row.3),
         Ok(None) => {
             return (
                 StatusCode::BAD_REQUEST,
@@ -109,10 +109,25 @@ async fn authorize(
         }
     };
 
-    if !origins_match(&registered_uri, &q.redirect_uri) {
+    // redirect_uri: public client = origin match, confidential = exact match
+    let uri_ok = if is_public {
+        origins_match(&registered_uri, &q.redirect_uri)
+    } else {
+        q.redirect_uri == registered_uri
+    };
+    if !uri_ok {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"error": "invalid_request", "error_description": "redirect_uri origin mismatch"})),
+            Json(json!({"error": "invalid_request", "error_description": "redirect_uri mismatch"})),
+        )
+            .into_response();
+    }
+
+    // Public clients must provide code_challenge at authorize time
+    if is_public && q.code_challenge.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "invalid_request", "error_description": "Public clients must use PKCE (code_challenge required)"})),
         )
             .into_response();
     }
@@ -208,16 +223,16 @@ pub async fn authorize_consent(
         }
     };
 
-    // Validate client_id and redirect_uri (origin match)
-    let app = sqlx::query_as::<_, (Uuid, String)>(
-        "SELECT id, redirect_uri FROM oauth_apps WHERE client_id = $1",
+    // Validate client_id
+    let app = sqlx::query_as::<_, (Uuid, String, bool)>(
+        "SELECT id, redirect_uri, is_public FROM oauth_apps WHERE client_id = $1",
     )
     .bind(&body.client_id)
     .fetch_optional(&state.db)
     .await;
 
-    let (app_id, registered_uri) = match app {
-        Ok(Some(row)) => (row.0, row.1),
+    let (app_id, registered_uri, is_public) = match app {
+        Ok(Some(row)) => (row.0, row.1, row.2),
         Ok(None) => {
             return (
                 StatusCode::BAD_REQUEST,
@@ -234,10 +249,16 @@ pub async fn authorize_consent(
         }
     };
 
-    if !origins_match(&registered_uri, &body.redirect_uri) {
+    // redirect_uri: public client = origin match, confidential = exact match
+    let uri_ok = if is_public {
+        origins_match(&registered_uri, &body.redirect_uri)
+    } else {
+        body.redirect_uri == registered_uri
+    };
+    if !uri_ok {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"error": "invalid_request", "error_description": "redirect_uri origin mismatch"})),
+            Json(json!({"error": "invalid_request", "error_description": "redirect_uri mismatch"})),
         )
             .into_response();
     }
@@ -346,11 +367,16 @@ async fn token_exchange(
         }
     }
 
-    // Origin match for redirect_uri
-    if !origins_match(&registered_uri, &body.redirect_uri) {
+    // redirect_uri: public client = origin match, confidential = exact match
+    let uri_ok = if is_public {
+        origins_match(&registered_uri, &body.redirect_uri)
+    } else {
+        body.redirect_uri == registered_uri
+    };
+    if !uri_ok {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({"error": "invalid_request", "error_description": "redirect_uri origin mismatch"})),
+            Json(json!({"error": "invalid_request", "error_description": "redirect_uri mismatch"})),
         )
             .into_response();
     }
