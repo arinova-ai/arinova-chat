@@ -1176,8 +1176,13 @@ async fn update_notes_settings(
             .into_response();
     }
 
+    // Use upsert: the conversation owner may pass is_member via the fallback
+    // path (conversations.user_id) without having a row in conversation_user_members.
     let result = sqlx::query(
-        "UPDATE conversation_user_members SET agent_notes_enabled = $1 WHERE conversation_id = $2 AND user_id = $3",
+        r#"INSERT INTO conversation_user_members (conversation_id, user_id, agent_notes_enabled)
+           VALUES ($2, $3, $1)
+           ON CONFLICT (conversation_id, user_id)
+           DO UPDATE SET agent_notes_enabled = $1"#,
     )
     .bind(body.agent_notes_enabled)
     .bind(conv_id)
@@ -1186,14 +1191,9 @@ async fn update_notes_settings(
     .await;
 
     match result {
-        Ok(r) if r.rows_affected() > 0 => {
+        Ok(_) => {
             Json(json!({ "agentNotesEnabled": body.agent_notes_enabled })).into_response()
         }
-        Ok(_) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Membership record not found"})),
-        )
-            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": e.to_string()})),
