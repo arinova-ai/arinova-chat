@@ -936,8 +936,18 @@ async fn delete_community(
         }
     }
 
+    // Fetch conversation_id before archiving
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1 AND conversation_id IS NOT NULL",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
     let result = sqlx::query(
-        r#"UPDATE communities SET status = 'archived', updated_at = NOW()
+        r#"UPDATE communities SET status = 'archived', conversation_id = NULL, updated_at = NOW()
            WHERE id = $1 AND status != 'archived'"#,
     )
     .bind(id)
@@ -949,7 +959,16 @@ async fn delete_community(
             StatusCode::NOT_FOUND,
             Json(json!({ "error": "Community not found or already archived" })),
         ),
-        Ok(_) => (StatusCode::OK, Json(json!({ "success": true }))),
+        Ok(_) => {
+            // Delete the associated conversation
+            if let Some(cid) = conv_id {
+                let _ = sqlx::query("DELETE FROM conversations WHERE id = $1")
+                    .bind(cid)
+                    .execute(&state.db)
+                    .await;
+            }
+            (StatusCode::OK, Json(json!({ "success": true })))
+        }
         Err(e) => {
             tracing::error!("Delete community failed: {}", e);
             (
