@@ -10,6 +10,7 @@ import { registerCommunity } from "./commands/community.js";
 import { registerSpace } from "./commands/space.js";
 import { registerStats } from "./commands/stats.js";
 import { registerList } from "./commands/list.js";
+import { registerApp } from "./commands/app.js";
 
 const program = new Command();
 
@@ -37,5 +38,6 @@ registerCommunity(program);
 registerSpace(program);
 registerStats(program);
 registerList(program);
+registerApp(program);
 
 program.parse();

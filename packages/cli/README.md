@@ -71,6 +71,54 @@ arinova-cli space unpublish <id>                # Make space private
 arinova-cli space delete <id>                   # Delete a space
 ```
 
+## OAuth Apps
+
+Register and manage OAuth apps for third-party integrations.
+
+### Create an OAuth app
+
+```bash
+arinova-cli app create --name "My Game" --redirect-uri "https://mygame.com/callback"
+```
+
+On success, the CLI prints `clientId` and `clientSecret`. **Save the secret immediately** — it cannot be retrieved again.
+
+### App commands
+
+```bash
+arinova-cli app list                              # List your apps
+arinova-cli app show <id>                         # Show app details
+arinova-cli app credentials <id>                  # Show client ID + redirect URIs
+arinova-cli app update <id> --redirect-uri <uri>  # Update redirect URI
+arinova-cli app regenerate-secret <id>            # Regenerate client secret
+arinova-cli app delete <id>                       # Delete an app
+```
+
+### Using your OAuth app
+
+In your web app, initialize the Arinova SDK:
+
+```js
+Arinova.init({ appId: "<your-client-id>" });
+```
+
+**OAuth flow:**
+
+1. Your app redirects users to `https://chat.arinova.ai/oauth/authorize?client_id=<id>&redirect_uri=<uri>&scope=profile&state=<random>`
+2. User authorizes on Arinova
+3. Arinova redirects back to your `redirect_uri` with `?code=<auth-code>&state=<state>`
+4. Your server exchanges the code for an access token: `POST /oauth/token` with `{ client_id, client_secret, code, redirect_uri }`
+5. Use the access token to call Arinova APIs on behalf of the user
+
+**redirect_uri rules:**
+- Must match exactly what was registered (strict comparison)
+- Must use HTTPS in production
+- `http://localhost:*` is allowed for development
+
+### Web UI
+
+You can also manage OAuth apps at `/developer` in the Arinova web interface.
+
 ## Other Commands
 
 ```bash

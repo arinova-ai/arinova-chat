@@ -412,6 +412,10 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (user_id, skill_id)
         );
+
+        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'other';
+        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS external_url TEXT;
+        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
