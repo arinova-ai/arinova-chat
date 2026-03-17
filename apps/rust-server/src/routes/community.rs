@@ -203,6 +203,7 @@ async fn is_member_or_creator(
                LEFT JOIN community_members cm
                  ON cm.community_id = c.id AND cm.user_id = $2
                WHERE c.id = $1
+                 AND c.status != 'archived'
                  AND (c.creator_id = $2 OR cm.user_id IS NOT NULL)
            )"#,
     )
@@ -632,7 +633,7 @@ async fn get_community(
                   c.conversation_id, c.created_at, c.updated_at
            FROM communities c
            LEFT JOIN officials o ON o.community_id = c.id
-           WHERE c.id = $1"#,
+           WHERE c.id = $1 AND c.status != 'archived'"#,
     )
     .bind(id)
     .fetch_optional(&state.db)
@@ -2388,7 +2389,7 @@ async fn my_communities(
                   c.conversation_id, c.created_at, c.updated_at
            FROM communities c
            LEFT JOIN officials o ON o.community_id = c.id
-           WHERE c.creator_id = $1
+           WHERE c.creator_id = $1 AND c.status != 'archived'
            ORDER BY c.created_at DESC"#,
     )
     .bind(&user.id)
