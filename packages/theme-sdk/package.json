@@ -1,0 +1,7 @@
+{
+  "name": "@arinova-ai/theme-sdk",
+  "version": "0.1.0",
+  "description": "Arinova Office Theme SDK — bridge script for theme iframes",
+  "main": "src/bridge.js",
+  "files": ["src/bridge.js"]
+}

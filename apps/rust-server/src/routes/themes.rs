@@ -1280,7 +1280,7 @@ if (window.__ARINOVA_REGISTER_THEME__) window.__ARINOVA_REGISTER_THEME__(theme);
 
 /// The SDK bridge script, embedded as a const.
 /// Served at GET /sdk/bridge.js
-const BRIDGE_JS: &str = include_str!("../static/bridge.js");
+const BRIDGE_JS: &str = include_str!("../../../../packages/theme-sdk/src/bridge.js");
 
 async fn sdk_bridge() -> Response {
     (

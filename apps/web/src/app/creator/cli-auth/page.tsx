@@ -17,10 +17,21 @@ interface ApiKey {
   revokedAt: string | null;
 }
 
+function isLocalCallback(url: string | null): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 function CliAuthContent() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callback");
+  const rawCallback = searchParams.get("callback");
+  const callbackUrl = isLocalCallback(rawCallback) ? rawCallback : null;
 
   const [generating, setGenerating] = useState(false);
   const [token, setToken] = useState<string | null>(null);
