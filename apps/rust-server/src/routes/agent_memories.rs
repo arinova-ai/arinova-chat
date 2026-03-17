@@ -425,7 +425,7 @@ async fn extract_memories(
         r#"SELECT
              CASE WHEN m.role::text = 'user' THEN COALESCE(u.name, 'User') ELSE COALESCE(a.name, 'Agent') END AS sender_name,
              m.content,
-             m.created_at
+             m.created_at::timestamptz
            FROM messages m
            LEFT JOIN "user" u ON m.sender_user_id = u.id::text
            LEFT JOIN agents a ON m.sender_agent_id = a.id
@@ -616,7 +616,7 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
         r#"SELECT
              CASE WHEN m.role::text = 'user' THEN COALESCE(u.name, 'User') ELSE COALESCE(a.name, 'Agent') END AS sender_name,
              m.content,
-             m.created_at
+             m.created_at::timestamptz
            FROM messages m
            LEFT JOIN "user" u ON m.sender_user_id = u.id::text
            LEFT JOIN agents a ON m.sender_agent_id = a.id
