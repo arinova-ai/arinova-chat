@@ -30,7 +30,6 @@ export function registerTheme(program: Command): void {
           table(themes as Record<string, unknown>[], [
             { key: "id", label: "ID" },
             { key: "name", label: "Name" },
-            { key: "renderer", label: "Renderer" },
             { key: "price", label: "Price" },
             { key: "status", label: "Status" },
           ]);

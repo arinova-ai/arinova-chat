@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
 import { FloatChatWindow } from "./float-chat-window";
@@ -21,9 +20,6 @@ interface BindingRow {
   agentName: string | null;
   agentAvatarUrl: string | null;
 }
-
-// Dynamic import — PixiJS only works client-side
-const OfficeMap = dynamic(() => import("./office-map"), { ssr: false });
 
 function makeEmptySlot(index: number): Agent {
   return {
@@ -147,18 +143,9 @@ function OfficeViewInner() {
 
   const selectAgent = useCallback((id: string | null) => {
     if (!id) return;
-    // For iframe themes, open float window directly
-    if (manifest?.renderer === "iframe") {
-      openFloatWindow(id);
-      return;
-    }
-    // Non-iframe: open float window (desktop + mobile) or modal
-    if (isMobile) {
-      setSelectedAgentId(id);
-    } else {
-      openFloatWindow(id);
-    }
-  }, [manifest, isMobile, openFloatWindow]);
+    // All themes use iframe — open float window directly
+    openFloatWindow(id);
+  }, [openFloatWindow]);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
@@ -194,7 +181,7 @@ function OfficeViewInner() {
           <div className="flex h-full items-center justify-center">
             <ArinovaSpinner />
           </div>
-        ) : manifest.renderer === "iframe" ? (
+        ) : (
           mapSize.width > 0 && mapSize.height > 0 && (
             <ThemeIframe
               themeId={themeId}
@@ -205,19 +192,6 @@ function OfficeViewInner() {
               isMobile={isMobile}
               onSelectAgent={(id) => selectAgent(id)}
               onOpenChat={handleOpenChat}
-            />
-          )
-        ) : (
-          mapSize.width > 0 && mapSize.height > 0 && (
-            <OfficeMap
-              agents={displayAgents}
-              selectedAgentId={selectedAgentId}
-              onSelectAgent={selectAgent}
-              onCharacterClick={() => setCharacterModalSlot(0)}
-              width={mapSize.width}
-              height={mapSize.height}
-              manifest={manifest}
-              themeId={themeId}
             />
           )
         )}

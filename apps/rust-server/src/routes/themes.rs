@@ -234,13 +234,7 @@ struct ManifestMeta {
     #[serde(default)]
     license: Option<String>,
     #[serde(default)]
-    room: Option<Value>,
-    #[serde(default)]
     zones: Option<Vec<Value>>,
-    #[serde(default)]
-    layers: Option<Vec<Value>>,
-    #[serde(default)]
-    characters: Option<Value>,
     #[serde(default, rename = "maxAgents")]
     max_agents: Option<i32>,
 }
@@ -277,40 +271,8 @@ fn validate_manifest(raw: &[u8]) -> Result<ManifestMeta, String> {
         return Err("version must be semver (e.g. 1.0.0)".into());
     }
 
-    // Renderer-specific checks
-    let renderer = meta.renderer.as_deref().unwrap_or("pixi");
-    let is_v3 = renderer == "threejs"
-        || meta.room.as_ref().and_then(|r| r.get("model")).is_some();
-
-    match renderer {
-        "sprite" | "iframe" => {
-            // sprite themes have their own structure — skip v2 zone/layer validation
-            // iframe (SDK v2) themes use entry JS loaded in sandboxed iframe — no zones/layers needed
-        }
-        _ if is_v3 => {
-            // v3: needs room.model
-            let has_room_model = meta
-                .room
-                .as_ref()
-                .and_then(|r| r.get("model"))
-                .and_then(|m| m.as_str())
-                .map_or(false, |s| !s.is_empty());
-            if !has_room_model {
-                return Err("v3 (threejs) themes require room.model path".into());
-            }
-        }
-        _ => {
-            // v2 (pixi): needs zones, layers, characters
-            let zones_empty = meta.zones.as_ref().map_or(true, |z| z.is_empty());
-            let layers_empty = meta.layers.as_ref().map_or(true, |l| l.is_empty());
-            let chars_missing = meta.characters.is_none();
-            if zones_empty || layers_empty || chars_missing {
-                return Err(
-                    "v2 (pixi) themes require non-empty zones, layers, and a characters config".into(),
-                );
-            }
-        }
-    }
+    // All themes are iframe-based — renderer field is kept for DB compatibility
+    // but no renderer-specific validation is needed
 
     Ok(meta)
 }
@@ -596,7 +558,7 @@ async fn upload_theme(
     }
 
     // Phase 4: Upsert theme metadata into DB
-    let renderer = meta.renderer.as_deref().unwrap_or("pixi").to_string();
+    let renderer = meta.renderer.as_deref().unwrap_or("iframe").to_string();
     let description = meta.description.as_deref().unwrap_or("").to_string();
     let preview = meta.preview.as_deref().unwrap_or("preview.png").to_string();
     let tags: Vec<String> = meta.tags.unwrap_or_default();

@@ -61,95 +61,14 @@ export function validateManifest(data: unknown): ThemeManifest {
   if (typeof d.name !== "string") throw new Error("Manifest missing 'name'");
   if (typeof d.version !== "string") throw new Error("Manifest missing 'version'");
 
-  // iframe themes only need basic fields + path safety — skip canvas/zones/layers/characters
-  const isIframe = d.renderer === "iframe";
-
-  if (!isIframe) {
-    const canvas = d.canvas as Record<string, unknown> | undefined;
-    if (!canvas || typeof canvas.width !== "number" || typeof canvas.height !== "number") {
-      throw new Error("Manifest missing valid 'canvas' (width/height)");
-    }
-    if (canvas.width <= 0 || canvas.height <= 0) {
-      throw new Error("Canvas width/height must be > 0");
-    }
-    if (!canvas.background || typeof canvas.background !== "object") {
-      throw new Error("Manifest missing 'canvas.background'");
-    }
-
-    // Path safety: background images
-    const bg = canvas.background as Record<string, unknown>;
-    if (bg.image != null) assertSafePath(bg.image, "canvas.background.image");
-    if (bg.image2x != null) assertSafePath(bg.image2x, "canvas.background.image2x");
-    if (bg.mobile != null) assertSafePath(bg.mobile, "canvas.background.mobile");
-
-    // v3 themes use room.model
-    const room = d.room as Record<string, unknown> | undefined;
-    const isV3 = !!room?.model;
-
-    if (!isV3) {
-      // Zones: must be non-empty, each zone must have ≥1 seat
-      if (!Array.isArray(d.zones)) throw new Error("Manifest missing 'zones' array");
-      const zones = d.zones as unknown[];
-      if (zones.length === 0) throw new Error("Manifest 'zones' must not be empty");
-      for (const zone of zones) {
-        const z = zone as Record<string, unknown>;
-        if (!z.id || !z.bounds || !Array.isArray(z.seats)) {
-          throw new Error(`Zone '${z.id ?? "unknown"}' missing id/bounds/seats`);
-        }
-        if ((z.seats as unknown[]).length === 0) {
-          throw new Error(`Zone '${z.id}' must have at least 1 seat`);
-        }
-      }
-
-      // Layers: must have entries
-      if (!Array.isArray(d.layers) || (d.layers as unknown[]).length === 0) {
-        throw new Error("Manifest missing 'layers' array");
-      }
-
-      // Characters: statusBadge.colors must exist
-      const chars = d.characters as Record<string, unknown> | undefined;
-      if (!chars?.statusBadge || typeof chars.statusBadge !== "object") {
-        throw new Error("Manifest missing 'characters.statusBadge'");
-      }
-      const badge = chars.statusBadge as Record<string, unknown>;
-      if (!badge.colors || typeof badge.colors !== "object") {
-        throw new Error("Manifest missing 'characters.statusBadge.colors'");
-      }
-    }
-
-    // Path safety: atlas, seatSprites, audio (pixi-specific assets)
-    const charsForPath = d.characters as Record<string, unknown> | undefined;
-    if (charsForPath && typeof charsForPath.atlas === "string" && charsForPath.atlas.length > 0) {
-      assertSafePath(charsForPath.atlas, "characters.atlas");
-    }
-    if (charsForPath?.seatSprites && typeof charsForPath.seatSprites === "object") {
-      const ss = charsForPath.seatSprites as Record<string, Record<string, string[]>>;
-      for (const [seatId, statusMap] of Object.entries(ss)) {
-        for (const [status, paths] of Object.entries(statusMap)) {
-          if (Array.isArray(paths)) {
-            for (const p of paths) {
-              assertSafePath(p, `characters.seatSprites.${seatId}.${status}`);
-            }
-          }
-        }
-      }
-    }
-    const audio = d.audio as Record<string, unknown> | undefined;
-    if (audio?.ambient) {
-      const ambient = audio.ambient as Record<string, unknown>;
-      if (ambient.src) assertSafePath(ambient.src, "audio.ambient.src");
-    }
+  // entry: required
+  if (typeof d.entry !== "string" || d.entry.length === 0) {
+    throw new Error("Theme missing required 'entry' path");
   }
+  assertSafePath(d.entry, "entry");
 
-  // Path safety: preview (shared by all renderers)
+  // Path safety: preview
   if (d.preview != null) assertSafePath(d.preview, "preview");
-  // iframe: entry is required
-  if (isIframe) {
-    if (typeof d.entry !== "string" || d.entry.length === 0) {
-      throw new Error("iframe theme missing required 'entry' path");
-    }
-    assertSafePath(d.entry, "entry");
-  }
 
   return data as ThemeManifest;
 }

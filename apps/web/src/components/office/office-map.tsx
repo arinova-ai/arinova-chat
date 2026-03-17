@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { Agent } from "./types";
-import type { ThemeManifest, RendererType } from "./theme-types";
+import type { ThemeManifest } from "./theme-types";
 import { createRenderer } from "./renderer";
 import { getThemeBaseUrl } from "./theme-loader";
 import type { OfficeRenderer } from "./renderer/types";
@@ -48,22 +48,13 @@ export default function OfficeMap({
   widthRef.current = width;
   heightRef.current = height;
 
-  // ── Quality change listener — triggers full re-init ────────
-  const [qualityVersion, setQualityVersion] = useState(0);
-  useEffect(() => {
-    const handler = () => setQualityVersion((v) => v + 1);
-    window.addEventListener("arinova:quality-change", handler);
-    return () => window.removeEventListener("arinova:quality-change", handler);
-  }, []);
-
-  // ── Init / re-init when theme or quality changes ──────────
+  // ── Init / re-init when theme changes ──────────────────────
   useEffect(() => {
     if (!canvasRef.current) return;
     const container = canvasRef.current;
     let destroyed = false;
 
-    const rendererType: RendererType = manifest?.renderer ?? "pixi";
-    const renderer = createRenderer(rendererType);
+    const renderer = createRenderer();
     renderer.onAgentClick = (id: string) => onSelectRef.current(id);
     renderer.onCharacterClick = () => onCharacterClickRef.current?.();
 
@@ -104,7 +95,7 @@ export default function OfficeMap({
       renderer.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manifest, themeId, qualityVersion]);
+  }, [manifest, themeId]);
 
   // ── Resize ────────────────────────────────────────────────────
   useEffect(() => {

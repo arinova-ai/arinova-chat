@@ -7,89 +7,59 @@
    cp -r _template/ my-cool-theme/
    ```
 2. Edit `theme.json` — update `id`, `name`, `author`, `description`, `tags`.
-3. Replace `preview.png` with a 16:9 screenshot of your theme (recommended: 1280x720).
-4. Add your background image and sprite assets.
-5. Validate your theme:
+3. Create `theme.js` — your entry point (see below).
+4. Replace `preview.png` with a 16:9 screenshot (recommended: 1280x720).
+5. Upload via CLI:
    ```
-   npx arinova-theme-validate ./my-cool-theme/
+   arinova-cli theme build
+   arinova-cli theme upload theme.json my-cool-theme.zip
    ```
-6. Upload via the Creator Dashboard or CLI.
 
 ## Directory Structure
 
 ```
 my-cool-theme/
   theme.json       # Theme manifest (required)
-  preview.png      # Store preview image (required, 16:9, max 1280x720)
-  background.png   # Main background image
-  background@2x.png  # Retina background (optional)
-  background-mobile.png  # Mobile background (optional)
-  sprites/         # Sprite assets for furniture, characters, effects
-    desk.png
-    plant.png
-    characters.png
-  audio/           # Audio assets (optional)
-    ambient.mp3
+  theme.js         # Entry JS file (required)
+  preview.png      # Store preview image (required, 16:9)
+  assets/          # Static resources (optional)
+    background.png
+    sprites/
+    audio/
 ```
 
-## Theme Types
+## Theme Entry File
 
-### v2 — PixiJS (2D sprite-based)
-Set `renderer` to `"pixi"` (default). Requires:
-- `canvas` with background image
-- `layers` array (z-ordering)
-- `zones` array with seats (agent positions)
-- `characters` config (sprite atlas)
-- `furniture` array (decorative sprites)
+Your `theme.js` must export an object with lifecycle methods:
 
-### v3 — Three.js (3D model-based)
-Set `renderer` to `"threejs"`. Requires:
-- `room.model` — path to a `.glb` room model
-- `character.model` — path to a `.glb` animated character
-- `camera` — camera position and settings
-- `lighting` — ambient and directional lights
-
-## Asset Guidelines
-
-| Asset Type | Format | Max Size | Max Dimensions |
-|------------|--------|----------|----------------|
-| Background | PNG, JPG, WebP | 10 MB | 4096x4096 |
-| Sprites | PNG, JPG, WebP | 10 MB | 4096x4096 |
-| Preview | PNG | 10 MB | 1280x720 recommended |
-| GLB (High) | GLB, glTF | 50 MB | — |
-| GLB (Performance) | GLB, glTF | 20 MB | — |
-| Audio | MP3, OGG | 5 MB | — |
-| theme.json | JSON | 256 KB | — |
-| Total bundle | — | 200 MB | — |
-
-## Quality Modes
-
-Add a `quality` block to provide alternative assets for High Resolution and Performance modes:
-
-```json
-{
-  "quality": {
-    "high": {
-      "room": { "model": "models/room-high.glb" },
-      "background": { "image": "background@2x.png" }
-    },
-    "performance": {
-      "room": { "model": "models/room-low.glb" },
-      "background": { "image": "background-low.png" }
-    }
-  }
-}
+```js
+export default {
+  async init(sdk, container) {
+    // sdk: Arinova SDK bridge (agents, events, asset loading)
+    // container: DOM element to render into
+    // Use any rendering tech: DOM, Canvas, WebGL, Three.js, PixiJS, etc.
+  },
+  resize(width, height) { /* viewport changed */ },
+  destroy() { /* clean up */ },
+};
 ```
 
-When quality overrides are defined, both `high` and `performance` asset files must exist in the bundle.
+## SDK Bridge
 
-## Manifest Reference
+The `sdk` object provides:
+- `sdk.agents` — current agent list
+- `sdk.onAgentsChange(callback)` — subscribe to updates
+- `sdk.selectAgent(id)` — notify host of agent click
+- `sdk.assetUrl(path)` — resolve relative asset URLs
+- `sdk.width`, `sdk.height`, `sdk.isMobile`, `sdk.pixelRatio`
 
-See the included `theme.json` for a fully annotated example of all available fields.
+## Development
 
-For the complete type definitions, refer to:
-- `apps/web/src/components/office/theme-types.ts` — TypeScript interfaces
-- `packages/shared/src/schemas/theme.ts` — Zod validation schema
+```
+arinova-cli theme init my-theme
+cd my-theme
+arinova-cli theme dev   # starts dev server at localhost:3100
+```
 
 ## License
 

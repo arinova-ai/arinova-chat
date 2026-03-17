@@ -10,15 +10,12 @@ import {
   Lock,
   Star,
   Users,
-  Monitor,
   Clapperboard,
   Maximize,
   Tag,
-  Sparkles,
   Download,
 } from "lucide-react";
 import { useTheme } from "@/components/office/theme-context";
-import { loadTheme } from "@/components/office/theme-loader";
 import type { ThemeEntry } from "@/components/office/theme-registry";
 import { useTranslation } from "@/lib/i18n";
 
@@ -97,7 +94,6 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
   const [toast, setToast] = useState(false);
   const [liked, setLiked] = useState(false);
   const [activeThumb, setActiveThumb] = useState(0);
-  const [qualityModes, setQualityModes] = useState("Standard");
   const [purchasing, setPurchasing] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,13 +107,6 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
   }, []);
 
-  useEffect(() => {
-    loadTheme(entry.id)
-      .then((manifest) => {
-        setQualityModes(manifest.quality ? "High / Performance" : "Standard");
-      })
-      .catch(() => {});
-  }, [entry.id]);
 
   const showToast = () => {
     setToast(true);
@@ -226,11 +215,6 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
             <div className="w-full lg:w-[380px] shrink-0 space-y-5">
               {/* Badges */}
               <div className="flex gap-2">
-                {details.renderer.includes("3D") && (
-                  <span className="rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-400">
-                    {t("theme.badge3d")}
-                  </span>
-                )}
                 {isFree ? (
                   <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
                     {t("theme.filter.free")}
@@ -289,11 +273,9 @@ function ThemeDetailContent({ entry, details }: { entry: ThemeEntry; details: Th
                 </h3>
                 <div className="grid grid-cols-2 gap-2.5">
                   {[
-                    { icon: Monitor, label: t("theme.spec.renderer"), value: details.renderer },
                     { icon: Clapperboard, label: t("theme.spec.animations"), value: String(details.animationCount) },
                     { icon: Maximize, label: t("theme.spec.roomSize"), value: details.roomSize },
                     { icon: Tag, label: t("theme.spec.version"), value: details.version },
-                    { icon: Sparkles, label: t("theme.spec.qualityModes"), value: qualityModes },
                   ].map((spec) => (
                     <div key={spec.label} className="rounded-[10px] bg-white/[0.03] border border-white/[0.04] p-3">
                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1">
@@ -474,7 +456,7 @@ function ThemeDetailInner({ themeId }: { themeId: string }) {
         rating: 0,
         reviewCount: 0,
         userCount: 0,
-        renderer: entry.renderer ?? "PixiJS 2D",
+        renderer: "Iframe",
         animationCount: 0,
         roomSize: `${entry.maxAgents} ${entry.maxAgents === 1 ? "agent" : "agents"}`,
         version: entry.version ?? "v1.0",
