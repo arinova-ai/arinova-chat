@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { get, post, put, del } from "../client.js";
+import { get, post, put, patch, del } from "../client.js";
 import { printResult, printError, printSuccess, table } from "../output.js";
 
 export function registerSpace(program: Command): void {
@@ -67,6 +67,30 @@ export function registerSpace(program: Command): void {
       try {
         await del(`/api/spaces/${id}`);
         printSuccess(`Space ${id} deleted.`);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  space
+    .command("publish <id>")
+    .description("Publish a space")
+    .action(async (id: string) => {
+      try {
+        const data = await patch(`/api/spaces/${id}`, { status: "published" });
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  space
+    .command("unpublish <id>")
+    .description("Unpublish a space")
+    .action(async (id: string) => {
+      try {
+        const data = await patch(`/api/spaces/${id}`, { status: "draft" });
+        printResult(data);
       } catch (err) {
         printError(err);
       }

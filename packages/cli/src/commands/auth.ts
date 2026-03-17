@@ -1,9 +1,86 @@
 import { Command } from "commander";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { loadConfig, saveConfig, getApiKey, getEndpoint } from "../config.js";
 import { printResult, printError, printSuccess } from "../output.js";
 
 export function registerAuth(program: Command): void {
   const auth = program.command("auth").description("Authentication commands");
+
+  auth
+    .command("login")
+    .description("Log in via browser (opens Arinova to generate a CLI key)")
+    .option("-p, --port <port>", "Local callback port", "9876")
+    .action(async (opts: { port: string }) => {
+      const port = parseInt(opts.port, 10);
+      const endpoint = getEndpoint();
+
+      console.log("Opening browser for authentication...");
+      console.log(`Waiting for callback on http://localhost:${port} ...\n`);
+
+      const keyPromise = new Promise<string>((resolve, reject) => {
+        const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+          const url = new URL(req.url || "/", `http://localhost:${port}`);
+          if (url.pathname === "/callback") {
+            const key = url.searchParams.get("key");
+            if (key && key.startsWith("ari_cli_")) {
+              res.writeHead(200, { "Content-Type": "text/html" });
+              res.end("<html><body><h2>Authentication successful!</h2><p>You can close this tab.</p></body></html>");
+              server.close();
+              resolve(key);
+            } else {
+              res.writeHead(400, { "Content-Type": "text/html" });
+              res.end("<html><body><h2>Invalid key</h2></body></html>");
+              server.close();
+              reject(new Error("Received invalid key from browser"));
+            }
+          } else {
+            res.writeHead(404);
+            res.end("Not found");
+          }
+        });
+
+        server.listen(port, () => {
+          const loginUrl = `${endpoint}/creator/cli-auth?callback=http://localhost:${port}/callback`;
+          // Open browser
+          const open =
+            process.platform === "darwin" ? "open" :
+            process.platform === "win32" ? "start" : "xdg-open";
+          import("node:child_process").then(({ exec }) => {
+            exec(`${open} "${loginUrl}"`);
+          });
+          console.log(`If the browser didn't open, visit:\n  ${loginUrl}\n`);
+        });
+
+        setTimeout(() => {
+          server.close();
+          reject(new Error("Login timed out after 120 seconds"));
+        }, 120_000);
+      });
+
+      try {
+        const key = await keyPromise;
+        const config = loadConfig();
+        config.apiKey = key;
+        saveConfig(config);
+        printSuccess(`Logged in! API key saved (prefix: ${key.slice(0, 12)}...)`);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  auth
+    .command("logout")
+    .description("Remove stored API key")
+    .action(() => {
+      const config = loadConfig();
+      if (!config.apiKey) {
+        console.log("No API key configured. Already logged out.");
+        return;
+      }
+      delete config.apiKey;
+      saveConfig(config);
+      printSuccess("Logged out. API key removed.");
+    });
 
   auth
     .command("set-key <key>")
@@ -26,7 +103,7 @@ export function registerAuth(program: Command): void {
       try {
         const key = getApiKey();
         if (!key) {
-          printError(new Error("No API key configured. Run: arinova-cli auth set-key <key>"));
+          printError(new Error("No API key configured. Run: arinova-cli auth login"));
           return;
         }
         const res = await fetch(`${getEndpoint()}/api/creator/api-keys/whoami`, {

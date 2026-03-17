@@ -124,4 +124,34 @@ export function registerCommunity(program: Command): void {
         printError(err);
       }
     });
+
+  // ── Club / Lounge shortcuts ─────────────────────────────────
+
+  const club = program.command("club").description("Club management");
+
+  club
+    .command("unpublish <id>")
+    .description("Unpublish a club")
+    .action(async (id: string) => {
+      try {
+        const data = await patch(`/api/communities/${id}`, { status: "draft" });
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  const lounge = program.command("lounge").description("Lounge management");
+
+  lounge
+    .command("unpublish <id>")
+    .description("Unpublish a lounge")
+    .action(async (id: string) => {
+      try {
+        const data = await patch(`/api/communities/${id}`, { status: "draft" });
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
 }

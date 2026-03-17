@@ -8,6 +8,7 @@ import { registerTheme } from "./commands/theme.js";
 import { registerCommunity } from "./commands/community.js";
 import { registerSpace } from "./commands/space.js";
 import { registerStats } from "./commands/stats.js";
+import { registerList } from "./commands/list.js";
 
 const program = new Command();
 
@@ -30,5 +31,6 @@ registerTheme(program);
 registerCommunity(program);
 registerSpace(program);
 registerStats(program);
+registerList(program);
 
 program.parse();

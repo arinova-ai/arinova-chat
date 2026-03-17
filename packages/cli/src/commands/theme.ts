@@ -121,6 +121,18 @@ export function registerTheme(program: Command): void {
       }
     });
 
+  theme
+    .command("info <id>")
+    .description("Show detailed info about a theme")
+    .action(async (id: string) => {
+      try {
+        const data = await get(`/api/themes/${id}`);
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
   // ── New SDK v2 commands ───────────────────────────────────
 
   theme

@@ -112,4 +112,28 @@ export function registerSticker(program: Command): void {
         printError(err);
       }
     });
+
+  sticker
+    .command("publish <id>")
+    .description("Publish a sticker pack")
+    .action(async (id: string) => {
+      try {
+        const data = await patch(`/api/creator/stickers/${id}`, { status: "published" });
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  sticker
+    .command("unpublish <id>")
+    .description("Unpublish a sticker pack")
+    .action(async (id: string) => {
+      try {
+        const data = await patch(`/api/creator/stickers/${id}`, { status: "draft" });
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
 }
