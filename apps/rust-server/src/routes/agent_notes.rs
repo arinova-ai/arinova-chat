@@ -492,11 +492,6 @@ async fn agent_create_note(
                 );
             }
 
-            // #prd tag → auto-create Kanban card in Backlog
-            if tags.iter().any(|t| normalize_tag(t) == "prd") {
-                crate::routes::notes::auto_create_prd_card(&state.db, &agent.owner_id, note_id, title).await;
-            }
-
             (StatusCode::CREATED, Json(note_json)).into_response()
         }
         Err(e) => (
@@ -664,11 +659,6 @@ async fn agent_update_note(
                             }),
                             &state.redis,
                         );
-                    }
-
-                    // #prd tag → auto-create Kanban card in Backlog
-                    if note.tags.iter().any(|t| normalize_tag(t) == "prd") {
-                        crate::routes::notes::auto_create_prd_card(&state.db, &agent.owner_id, note_id, &note.title).await;
                     }
 
                     Json(note_json).into_response()
