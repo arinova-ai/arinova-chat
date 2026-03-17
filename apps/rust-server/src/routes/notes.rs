@@ -2967,7 +2967,7 @@ async fn get_board_preference(
         Ok(None) => {
             // Return first non-archived board as default
             let default_board = sqlx::query_scalar::<_, Uuid>(
-                "SELECT id FROM kanban_boards WHERE owner_id = $1 AND is_archived = false ORDER BY created_at ASC LIMIT 1",
+                "SELECT id FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at ASC LIMIT 1",
             )
             .bind(&user.id)
             .fetch_optional(&state.db)
@@ -3016,7 +3016,7 @@ async fn set_board_preference(
     let has_access = sqlx::query_scalar::<_, bool>(
         r#"SELECT EXISTS(
             SELECT 1 FROM kanban_boards b
-            WHERE b.id = $1 AND b.is_archived = false
+            WHERE b.id = $1 AND b.archived = false
               AND (b.owner_id = $2 OR EXISTS(SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.user_id = $2))
         )"#,
     )
