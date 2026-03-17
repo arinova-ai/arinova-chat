@@ -54,6 +54,7 @@ struct AppRow {
     external_url: Option<String>,
     category: String,
     status: String,
+    is_public: bool,
     created_at: Option<NaiveDateTime>,
 }
 
@@ -65,6 +66,7 @@ struct CreateAppBody {
     category: Option<String>,
     external_url: Option<String>,
     icon_url: Option<String>,
+    is_public: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -75,6 +77,7 @@ struct UpdateAppBody {
     category: Option<String>,
     external_url: Option<String>,
     icon_url: Option<String>,
+    is_public: Option<bool>,
 }
 
 fn generate_client_id(name: &str) -> String {
@@ -105,6 +108,7 @@ fn app_json(r: &AppRow) -> Value {
         "externalUrl": r.external_url.as_deref().unwrap_or(&r.redirect_uri),
         "iconUrl": r.icon_url,
         "status": r.status,
+        "isPublic": r.is_public,
     })
 }
 
@@ -153,10 +157,12 @@ async fn create_dev_app(
     let category = body.category.as_deref().unwrap_or("other");
     let redirect_uri = body.external_url.as_deref().unwrap_or("https://example.com/callback");
 
+    let is_public = body.is_public.unwrap_or(false);
+
     let result = sqlx::query_as::<_, AppRow>(
-        r#"INSERT INTO oauth_apps (client_id, client_secret, name, redirect_uri, description, icon_url, created_by, category, external_url, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft')
-           RETURNING id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, created_at"#,
+        r#"INSERT INTO oauth_apps (client_id, client_secret, name, redirect_uri, description, icon_url, created_by, category, external_url, status, is_public)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft', $10)
+           RETURNING id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, is_public, created_at"#,
     )
     .bind(&client_id)
     .bind(&client_secret)
@@ -167,6 +173,7 @@ async fn create_dev_app(
     .bind(&user.id)
     .bind(category)
     .bind(body.external_url.as_deref())
+    .bind(is_public)
     .fetch_one(&state.db)
     .await;
 
@@ -193,7 +200,7 @@ async fn list_dev_apps(
     user: AuthUser,
 ) -> Response {
     let rows = sqlx::query_as::<_, AppRow>(
-        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, created_at
+        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, is_public, created_at
            FROM oauth_apps WHERE created_by = $1 ORDER BY created_at DESC"#,
     )
     .bind(&user.id)
@@ -219,7 +226,7 @@ async fn get_dev_app(
     }
 
     let row = sqlx::query_as::<_, AppRow>(
-        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, created_at
+        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, is_public, created_at
            FROM oauth_apps WHERE id = $1"#,
     )
     .bind(id)
@@ -255,6 +262,7 @@ async fn update_dev_app(
               external_url = COALESCE($5, external_url),
               redirect_uri = COALESCE($5, redirect_uri),
               icon_url = COALESCE($6, icon_url),
+              is_public = COALESCE($7, is_public),
               updated_at = NOW()
            WHERE id = $1"#,
     )
@@ -264,6 +272,7 @@ async fn update_dev_app(
     .bind(body.category.as_deref())
     .bind(body.external_url.as_deref())
     .bind(body.icon_url.as_deref())
+    .bind(body.is_public)
     .execute(&state.db)
     .await;
 
@@ -431,7 +440,7 @@ async fn list_apps(
     _user: AuthUser,
 ) -> Response {
     let rows = sqlx::query_as::<_, AppRow>(
-        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, created_at
+        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, is_public, created_at
            FROM oauth_apps WHERE status = 'published' ORDER BY created_at DESC"#,
     )
     .fetch_all(&state.db)
@@ -448,7 +457,7 @@ async fn get_app(
     Path(id): Path<Uuid>,
 ) -> Response {
     let row = sqlx::query_as::<_, AppRow>(
-        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, created_at
+        r#"SELECT id, client_id, name, description, icon_url, redirect_uri, external_url, category, status, is_public, created_at
            FROM oauth_apps WHERE id = $1 AND status = 'published'"#,
     )
     .bind(id)

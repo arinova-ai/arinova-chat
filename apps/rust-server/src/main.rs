@@ -416,6 +416,9 @@ async fn main() {
         ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'other';
         ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS external_url TEXT;
         ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
+        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE oauth_codes ADD COLUMN IF NOT EXISTS code_challenge TEXT;
+        ALTER TABLE oauth_codes ADD COLUMN IF NOT EXISTS code_challenge_method TEXT;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

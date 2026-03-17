@@ -34,12 +34,14 @@ export function registerApp(program: Command): void {
     .option("--redirect-uri <uri>", "Redirect URI")
     .option("--description <desc>", "Description")
     .option("--category <cat>", "Category (game, tool, social, etc.)", "other")
+    .option("--public", "Create as public client (SPA, uses PKCE instead of client_secret)")
     .action(
       async (opts: {
         name: string;
         redirectUri?: string;
         description?: string;
         category: string;
+        public?: boolean;
       }) => {
         try {
           const data = await post("/api/developer/apps", {
@@ -47,14 +49,19 @@ export function registerApp(program: Command): void {
             description: opts.description,
             category: opts.category,
             externalUrl: opts.redirectUri,
+            isPublic: opts.public ?? false,
           });
           printResult(data);
           const d = data as Record<string, unknown>;
-          if (d.clientId && d.clientSecret) {
+          if (d.clientId) {
+            console.log(`\n  Client ID:     ${d.clientId}`);
+          }
+          if (d.isPublic) {
+            console.log("  Type:          Public (PKCE) — no client_secret needed");
+          } else if (d.clientSecret) {
             console.log(
-              "\nSave these credentials — the secret will not be shown again:"
+              "\nSave the secret — it will not be shown again:"
             );
-            console.log(`  Client ID:     ${d.clientId}`);
             console.log(`  Client Secret: ${d.clientSecret}`);
           }
         } catch (err) {
