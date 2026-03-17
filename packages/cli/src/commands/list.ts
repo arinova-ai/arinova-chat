@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { get } from "../client.js";
 import { printResult, printError, table } from "../output.js";
 
-const VALID_TYPES = ["theme", "agent", "sticker", "lounge", "club", "space"] as const;
+const VALID_TYPES = ["theme", "agent", "sticker", "lounge", "community", "space"] as const;
 type ListType = (typeof VALID_TYPES)[number];
 
 interface TypeConfig {
@@ -51,12 +51,13 @@ const TYPE_MAP: Record<ListType, TypeConfig> = {
       { key: "status", label: "Status" },
     ],
   },
-  club: {
-    endpoint: "/api/creator/community?type=club",
+  community: {
+    endpoint: "/api/creator/community",
     extractKey: "communities",
     columns: [
       { key: "id", label: "ID" },
       { key: "name", label: "Name" },
+      { key: "type", label: "Type" },
       { key: "member_count", label: "Members" },
     ],
   },

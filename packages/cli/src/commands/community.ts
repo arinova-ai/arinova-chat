@@ -125,13 +125,9 @@ export function registerCommunity(program: Command): void {
       }
     });
 
-  // ── Club / Lounge shortcuts ─────────────────────────────────
-
-  const club = program.command("club").description("Club management");
-
-  club
+  community
     .command("unpublish <id>")
-    .description("Unpublish a club")
+    .description("Unpublish a community")
     .action(async (id: string) => {
       try {
         const data = await patch(`/api/communities/${id}`, { status: "draft" });
@@ -140,6 +136,8 @@ export function registerCommunity(program: Command): void {
         printError(err);
       }
     });
+
+  // ── Lounge shortcut ──────────────────────────────────────────
 
   const lounge = program.command("lounge").description("Lounge management");
 
