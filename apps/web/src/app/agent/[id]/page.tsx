@@ -209,10 +209,10 @@ function AgentProfileContent() {
     if (!agent || !session?.user?.id || session.user.id !== agent.ownerId) return;
     if (skillsLoaded) return;
     let cancelled = false;
-    api<InstalledSkill[]>(`/api/skills/installed?agentId=${agentId}`, { silent: true })
+    api<{ skills: InstalledSkill[] }>(`/api/skills/installed?agentId=${agentId}`, { silent: true })
       .then((res) => {
         if (!cancelled) {
-          setSkills(Array.isArray(res) ? res : []);
+          setSkills(res.skills ?? []);
           setSkillsLoaded(true);
         }
       })

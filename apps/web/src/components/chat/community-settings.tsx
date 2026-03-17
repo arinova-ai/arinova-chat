@@ -311,20 +311,20 @@ export function CommunitySettingsSheet({
       const compressed = await compressImage(file, { maxWidth: 512, maxHeight: 512, quality: 0.9 });
       const formData = new FormData();
       formData.append("file", compressed, "avatar.jpg");
-      const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
+      const res = await fetch(`${BACKEND_URL}/api/conversations/${conversationId}/settings/upload`, {
         method: "POST",
         credentials: "include",
         body: formData,
       });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
-      setIdentityAvatar(data.imageUrl);
+      setIdentityAvatar(data.url);
     } catch {
       // silently fail
     } finally {
       setAvatarUploading(false);
     }
-  }, []);
+  }, [conversationId]);
 
   // ── Member Management ──
   const handleUpdateRole = useCallback(
