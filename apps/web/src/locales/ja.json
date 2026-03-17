@@ -1223,6 +1223,8 @@
   "notebooks.linkedToCapsule": "カプセルにリンク済み",
   "notebooks.manageAgents": "エージェントアクセス管理",
   "notebooks.noAgents": "エージェントがありません",
+  "notebooks.archivedNotes": "アーカイブ済みノート",
+  "notebooks.noArchivedNotes": "アーカイブ済みのノートはありません",
   "notebooks.allAgentsDefault": "未選択 = 全エージェントがアクセス可能",
   "skills.title": "Skills",
   "skills.subtitle": "スキルを探してエージェントにインストール",

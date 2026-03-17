@@ -51,6 +51,8 @@ interface NotebookSheetProps {
   notebookId?: string;
   /** External search query to filter notes by title/content */
   searchQuery?: string;
+  /** Hide the Active/Archived tab toggle (used when parent manages archived notes) */
+  hideArchivedTab?: boolean;
 }
 
 const EMPTY_NOTES: Note[] = [];
@@ -249,7 +251,7 @@ function SwipeableNoteItem({
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery, hideArchivedTab }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -656,6 +658,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
             </div>
 
             {/* Tabs: Active / Archived */}
+            {!hideArchivedTab && (
             <div className={cn("flex items-center gap-1 border-b border-border shrink-0", isMobile ? "px-2 pb-1" : "px-4 pb-1")}>
               <button
                 type="button"
@@ -673,6 +676,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                 {t("chat.notebook.archived")}
               </button>
             </div>
+            )}
 
             {/* Tag statistics panel */}
             {allTags.length > 0 && (

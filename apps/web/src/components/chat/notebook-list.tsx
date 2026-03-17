@@ -612,36 +612,46 @@ function NotebookNotes({
 
   const toolbarBtnClass = "rounded-md px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors flex items-center gap-1";
 
+  const [archivedNotes, setArchivedNotes] = useState<{ id: string; title: string; conversationId: string }[]>([]);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+
+  const loadArchivedNotes = useCallback(async () => {
+    setArchivedLoading(true);
+    try {
+      const data = await api<{ notes: { id: string; title: string; conversationId: string }[] }>(
+        `/api/notebooks/${notebook.id}/notes?archived=true`,
+        { silent: true },
+      );
+      setArchivedNotes(data.notes || []);
+    } catch {
+      setArchivedNotes([]);
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, [notebook.id]);
+
+  const handleUnarchiveFromPopover = useCallback(async (noteId: string) => {
+    try {
+      await api(`/api/conversations/${conversationId}/notes/${noteId}/unarchive`, { method: "POST" });
+      setArchivedNotes((prev) => prev.filter((n) => n.id !== noteId));
+      onRefresh();
+    } catch {}
+  }, [conversationId, onRefresh]);
+
   const content = (
     <div className="flex flex-col h-full">
-      {/* Breadcrumb header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border shrink-0">
+      {/* Breadcrumb header with inline toolbar */}
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
         <button
           type="button"
           onClick={onBack}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors shrink-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <span className="text-xs text-muted-foreground">{t("notebooks.title")}</span>
-        <span className="text-xs text-muted-foreground">/</span>
-        <span className="text-sm font-semibold truncate flex-1">{notebook.name}</span>
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors ml-auto"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border shrink-0">
-        {/* Search */}
         {searchOpen ? (
-          <div className="flex items-center gap-1 flex-1">
+          <div className="flex items-center gap-1 flex-1 min-w-0">
             <Input
               autoFocus
               value={searchQuery}
@@ -655,14 +665,14 @@ function NotebookNotes({
             </button>
           </div>
         ) : (
-          <button type="button" onClick={() => setSearchOpen(true)} className={toolbarBtnClass}>
-            <Search className="h-3.5 w-3.5" />
-          </button>
-        )}
-
-        {!searchOpen && (
           <>
-            {/* Share (placeholder) */}
+            <span className="text-sm font-semibold truncate flex-1 min-w-0">{notebook.name}</span>
+
+            {/* Toolbar icons */}
+            <button type="button" onClick={() => setSearchOpen(true)} className={toolbarBtnClass}>
+              <Search className="h-3.5 w-3.5" />
+            </button>
+
             <button
               type="button"
               className={toolbarBtnClass}
@@ -746,14 +756,47 @@ function NotebookNotes({
               </PopoverContent>
             </Popover>
 
-            {/* Archive/Delete */}
-            {!notebook.isDefault && (
+            {/* Archive popover — show archived notes */}
+            <Popover open={archivedOpen} onOpenChange={(o) => { setArchivedOpen(o); if (o) loadArchivedNotes(); }}>
+              <PopoverTrigger asChild>
+                <button type="button" className={toolbarBtnClass}>
+                  <Archive className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-60 p-1" align="end" side="bottom">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b border-border mb-1">
+                  {t("notebooks.archivedNotes")}
+                </div>
+                {archivedLoading ? (
+                  <div className="flex justify-center py-3"><Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /></div>
+                ) : archivedNotes.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">{t("notebooks.noArchivedNotes")}</div>
+                ) : (
+                  <div className="max-h-48 overflow-y-auto">
+                    {archivedNotes.map((note) => (
+                      <div key={note.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors">
+                        <span className="truncate flex-1">{note.title || t("chat.notebook.untitled")}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 text-brand hover:text-brand/80 text-[10px] font-medium"
+                          onClick={() => handleUnarchiveFromPopover(note.id)}
+                        >
+                          {t("chat.notebook.unarchive")}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            {onClose && (
               <button
                 type="button"
-                className={cn(toolbarBtnClass, "text-destructive hover:text-destructive")}
-                onClick={() => { onDelete(notebook.id); onBack(); }}
+                onClick={onClose}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
               >
-                <Archive className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
               </button>
             )}
           </>
@@ -765,6 +808,7 @@ function NotebookNotes({
         <NotebookSheet
           inline
           open
+          hideArchivedTab
           onOpenChange={onClose ? () => onClose() : () => {}}
           conversationId={conversationId}
           notebookId={notebook.id}

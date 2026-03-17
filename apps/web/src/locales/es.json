@@ -1223,6 +1223,8 @@
   "notebooks.linkedToCapsule": "Vinculado a cápsula",
   "notebooks.manageAgents": "Gestionar acceso de agentes",
   "notebooks.noAgents": "Sin agentes aún",
+  "notebooks.archivedNotes": "Notas archivadas",
+  "notebooks.noArchivedNotes": "Sin notas archivadas",
   "notebooks.allAgentsDefault": "Sin selección = todos los agentes tienen acceso",
   "skills.title": "Skills",
   "skills.subtitle": "Descubre e instala skills para tus agentes",

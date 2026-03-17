@@ -1227,6 +1227,8 @@
   "notebooks.linkedToCapsule": "已连结胶囊",
   "notebooks.manageAgents": "管理 Agent 访问",
   "notebooks.noAgents": "暂无 Agent",
+  "notebooks.archivedNotes": "已归档笔记",
+  "notebooks.noArchivedNotes": "没有已归档的笔记",
   "notebooks.allAgentsDefault": "未选择 = 所有 Agent 均可访问",
   "skills.title": "Skills",
   "skills.subtitle": "发现并安装 Skills 到你的 Agent",

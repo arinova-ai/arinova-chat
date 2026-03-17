@@ -1223,6 +1223,8 @@
   "notebooks.linkedToCapsule": "Dipautkan ke kapsul",
   "notebooks.manageAgents": "Urus akses ejen",
   "notebooks.noAgents": "Tiada ejen lagi",
+  "notebooks.archivedNotes": "Nota Diarkibkan",
+  "notebooks.noArchivedNotes": "Tiada nota diarkibkan",
   "notebooks.allAgentsDefault": "Tiada pilihan = semua ejen boleh akses",
   "skills.title": "Skills",
   "skills.subtitle": "Temui dan pasang skills untuk ejen anda",

@@ -1223,6 +1223,8 @@
   "notebooks.linkedToCapsule": "캡슐에 연결됨",
   "notebooks.manageAgents": "에이전트 접근 관리",
   "notebooks.noAgents": "에이전트가 없습니다",
+  "notebooks.archivedNotes": "보관된 노트",
+  "notebooks.noArchivedNotes": "보관된 노트 없음",
   "notebooks.allAgentsDefault": "미선택 = 모든 에이전트 접근 가능",
   "skills.title": "Skills",
   "skills.subtitle": "에이전트에 스킬 탐색 및 설치",
