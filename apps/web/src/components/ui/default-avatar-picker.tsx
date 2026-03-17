@@ -3,12 +3,8 @@
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/lib/i18n";
 
-/**
- * 20 placeholder default avatars. URLs will be replaced with actual assets later.
- * Using DiceBear Adventurer style as placeholders.
- */
 const DEFAULT_AVATARS = Array.from({ length: 20 }, (_, i) =>
-  `https://api.dicebear.com/9.x/adventurer/svg?seed=avatar${i + 1}`
+  `/assets/avatars/avatar_${String(i + 1).padStart(2, "0")}.png`
 );
 
 interface DefaultAvatarPickerProps {
