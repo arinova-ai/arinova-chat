@@ -38,6 +38,8 @@ pub struct Config {
     pub turn_secret: Option<String>,
     /// TURN server host (default: turn.arinova.ai).
     pub turn_host: String,
+    /// Frontend URL for OAuth redirects (avoids relying on CORS_ORIGIN).
+    pub frontend_url: Option<String>,
 }
 
 impl Config {
@@ -86,6 +88,7 @@ impl Config {
             settings_encryption_key: env::var("SETTINGS_ENCRYPTION_KEY").ok().filter(|s| !s.is_empty()),
             turn_secret: env::var("TURN_SECRET").ok().filter(|s| !s.is_empty()),
             turn_host: env::var("TURN_HOST").unwrap_or_else(|_| "turn.arinova.ai".into()),
+            frontend_url: env::var("FRONTEND_URL").ok().filter(|s| !s.is_empty()),
         }
     }
 

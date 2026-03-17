@@ -146,9 +146,12 @@ async fn authorize(
     // Redirect to the frontend consent page
     let frontend_url = state
         .config
-        .cors_origins()
-        .first()
-        .cloned()
+        .frontend_url
+        .clone()
+        .or_else(|| {
+            state.config.cors_origins().into_iter()
+                .find(|o| o != "*")
+        })
         .unwrap_or_else(|| "http://localhost:21000".to_string());
 
     let scope = q.scope.unwrap_or_else(|| "profile".to_string());

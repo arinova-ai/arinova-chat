@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post, put, delete},
     Router,
 };
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -55,7 +55,7 @@ struct AppRow {
     category: String,
     status: String,
     is_public: bool,
-    created_at: Option<NaiveDateTime>,
+    created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize)]
