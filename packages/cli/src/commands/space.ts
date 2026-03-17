@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { get, post, put, patch, del } from "../client.js";
+import { get, post, put, del } from "../client.js";
 import { printResult, printError, printSuccess, table } from "../output.js";
 
 export function registerSpace(program: Command): void {
@@ -31,12 +31,17 @@ export function registerSpace(program: Command): void {
     .description("Create a new space")
     .requiredOption("--name <name>", "Space name")
     .option("--description <desc>", "Description")
-    .action(async (opts: { name: string; description?: string }) => {
+    .option("--url <iframe-url>", "Iframe URL (required for 'Play Now' button)")
+    .action(async (opts: { name: string; description?: string; url?: string }) => {
       try {
-        const data = await post("/api/spaces", {
+        const body: Record<string, unknown> = {
           name: opts.name,
           description: opts.description ?? "",
-        });
+        };
+        if (opts.url) {
+          body.definition = { iframeUrl: opts.url };
+        }
+        const data = await post("/api/spaces", body);
         printResult(data);
       } catch (err) {
         printError(err);
@@ -48,12 +53,26 @@ export function registerSpace(program: Command): void {
     .description("Update a space")
     .option("--name <name>", "New name")
     .option("--description <desc>", "New description")
-    .action(async (id: string, opts: { name?: string; description?: string }) => {
+    .option("--url <iframe-url>", "Iframe URL (required for 'Play Now' button)")
+    .action(async (id: string, opts: { name?: string; description?: string; url?: string }) => {
       try {
         const body: Record<string, unknown> = {};
         if (opts.name) body.name = opts.name;
         if (opts.description) body.description = opts.description;
+        if (opts.url) body.definition = { iframeUrl: opts.url };
         const data = await put(`/api/spaces/${id}`, body);
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  space
+    .command("show <id>")
+    .description("Show space details")
+    .action(async (id: string) => {
+      try {
+        const data = await get(`/api/spaces/${id}`);
         printResult(data);
       } catch (err) {
         printError(err);
@@ -77,7 +96,7 @@ export function registerSpace(program: Command): void {
     .description("Publish a space")
     .action(async (id: string) => {
       try {
-        const data = await patch(`/api/spaces/${id}`, { status: "published" });
+        const data = await put(`/api/spaces/${id}`, { isPublic: true });
         printResult(data);
       } catch (err) {
         printError(err);
@@ -89,7 +108,7 @@ export function registerSpace(program: Command): void {
     .description("Unpublish a space")
     .action(async (id: string) => {
       try {
-        const data = await patch(`/api/spaces/${id}`, { status: "draft" });
+        const data = await put(`/api/spaces/${id}`, { isPublic: false });
         printResult(data);
       } catch (err) {
         printError(err);

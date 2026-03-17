@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { setJsonMode } from "./output.js";
+import { getStagingEndpoint } from "./config.js";
 import { registerAuth } from "./commands/auth.js";
 import { registerSticker } from "./commands/sticker.js";
 import { registerAgent } from "./commands/agent.js";
@@ -17,10 +18,14 @@ program
   .description("Arinova Creator Console CLI")
   .version("0.0.1")
   .option("--json", "Output as JSON")
+  .option("--staging", "Use staging endpoint")
   .hook("preAction", (thisCommand) => {
     const opts = thisCommand.optsWithGlobals();
     if (opts.json) {
       setJsonMode(true);
+    }
+    if (opts.staging) {
+      process.env.ARINOVA_ENDPOINT = getStagingEndpoint();
     }
   });
 

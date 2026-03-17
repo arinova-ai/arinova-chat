@@ -22,7 +22,7 @@ export function registerAuth(program: Command): void {
           const url = new URL(req.url || "/", `http://localhost:${port}`);
           if (url.pathname === "/callback") {
             const key = url.searchParams.get("key");
-            if (key && key.startsWith("ari_cli_")) {
+            if (key && key.startsWith("ari_")) {
               res.writeHead(200, { "Content-Type": "text/html" });
               res.end("<html><body><h2>Authentication successful!</h2><p>You can close this tab.</p></body></html>");
               server.close();
@@ -86,8 +86,8 @@ export function registerAuth(program: Command): void {
     .command("set-key <key>")
     .description("Set your API key")
     .action((key: string) => {
-      if (!key.startsWith("ari_cli_")) {
-        printError(new Error("Invalid key format. Expected: ari_cli_<hex>"));
+      if (!key.startsWith("ari_")) {
+        printError(new Error("Invalid key format. Expected key starting with ari_"));
         return;
       }
       const config = loadConfig();
