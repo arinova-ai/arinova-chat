@@ -89,6 +89,7 @@ function AgentProfileContent() {
   }
   const [memories, setMemories] = useState<AgentMemory[]>([]);
   const [memoriesLoaded, setMemoriesLoaded] = useState(false);
+  const [memoryCount, setMemoryCount] = useState<number | null>(null);
   const [showMemories, setShowMemories] = useState(false);
   const [addingMemory, setAddingMemory] = useState(false);
   const [newCategory, setNewCategory] = useState("knowledge");
@@ -188,15 +189,32 @@ function AgentProfileContent() {
     return () => { cancelled = true; };
   }, [agent, agentId, session?.user?.id, agent?.ownerId]);
 
-  // Load agent memories (owner only)
+  // Pre-fetch memory count (owner only — on mount)
   useEffect(() => {
-    if (!agent || !session?.user?.id || session.user.id !== agent.ownerId || !showMemories) return;
-    if (memoriesLoaded) return;
+    if (!agent || !session?.user?.id || session.user.id !== agent.ownerId) return;
     let cancelled = false;
     api<{ memories: AgentMemory[] }>(`/api/agent/memories?agent_id=${agentId}`, { silent: true })
       .then((res) => {
         if (!cancelled) {
           setMemories(res.memories);
+          setMemoryCount(res.memories.length);
+          setMemoriesLoaded(true);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [agent, agentId, session?.user?.id, agent?.ownerId]);
+
+  // Reload agent memories when toggled (after add/delete/extract)
+  useEffect(() => {
+    if (!showMemories || memoriesLoaded) return;
+    if (!agent || !session?.user?.id || session.user.id !== agent.ownerId) return;
+    let cancelled = false;
+    api<{ memories: AgentMemory[] }>(`/api/agent/memories?agent_id=${agentId}`, { silent: true })
+      .then((res) => {
+        if (!cancelled) {
+          setMemories(res.memories);
+          setMemoryCount(res.memories.length);
           setMemoriesLoaded(true);
         }
       })
@@ -233,6 +251,7 @@ function AgentProfileContent() {
         }),
       });
       setMemories((prev) => [m, ...prev]);
+      setMemoryCount((c) => (c ?? 0) + 1);
       setNewSummary("");
       setNewDetail("");
       setAddingMemory(false);
@@ -243,6 +262,7 @@ function AgentProfileContent() {
     try {
       await api(`/api/agent/memories/${memoryId}`, { method: "DELETE" });
       setMemories((prev) => prev.filter((m) => m.id !== memoryId));
+      setMemoryCount((c) => Math.max(0, (c ?? 1) - 1));
     } catch { /* toast handled by api() */ }
   }, []);
 
@@ -763,7 +783,7 @@ function AgentProfileContent() {
                                 >
                                   {showMemories ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                                   <Lightbulb className="h-3 w-3 text-amber-500" />
-                                  {t("agentMemories.title")} ({memories.length})
+                                  {t("agentMemories.title")} ({memoryCount ?? memories.length})
                                 </button>
 
                                 {showMemories && (
