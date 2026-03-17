@@ -10,7 +10,7 @@ import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import { ArrowLeft, Brain, MessageSquare, Phone, Radio, Plus, Trash2, Sparkles, BookOpen, AlertTriangle, Heart, Lightbulb, X } from "lucide-react";
+import { ArrowLeft, Brain, MessageSquare, Phone, Radio, Plus, Trash2, Sparkles, BookOpen, AlertTriangle, Heart, Lightbulb, X, Puzzle, ChevronDown, ChevronRight } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
@@ -96,6 +96,19 @@ function AgentProfileContent() {
   const [newDetail, setNewDetail] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [extractResult, setExtractResult] = useState<string | null>(null);
+
+  // Installed skills state (owner only)
+  interface InstalledSkill {
+    id: string;
+    name: string;
+    slug: string;
+    description: string;
+    category: string;
+    iconUrl: string | null;
+    isEnabled: boolean;
+  }
+  const [skills, setSkills] = useState<InstalledSkill[]>([]);
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
 
   // Listen mode state (group context only)
   const [groupMembers, setGroupMembers] = useState<GroupMembers | null>(null);
@@ -190,6 +203,22 @@ function AgentProfileContent() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [agent, agentId, session?.user?.id, agent?.ownerId, showMemories, memoriesLoaded]);
+
+  // Load installed skills (owner only)
+  useEffect(() => {
+    if (!agent || !session?.user?.id || session.user.id !== agent.ownerId) return;
+    if (skillsLoaded) return;
+    let cancelled = false;
+    api<InstalledSkill[]>(`/api/skills/installed?agentId=${agentId}`, { silent: true })
+      .then((res) => {
+        if (!cancelled) {
+          setSkills(Array.isArray(res) ? res : []);
+          setSkillsLoaded(true);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [agent, agentId, session?.user?.id, agent?.ownerId, skillsLoaded]);
 
   const handleAddMemory = useCallback(async () => {
     if (!newSummary.trim()) return;
@@ -688,145 +717,157 @@ function AgentProfileContent() {
                   </div>
                 )}
 
-                {/* Agent Memories (owner only) */}
+                {/* Skills (owner only) */}
                 {isOwner && (
                   <div className="mt-6 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() => setShowMemories(!showMemories)}
-                        className="flex items-center gap-2 hover:opacity-80"
-                      >
-                        <Lightbulb className="h-4 w-4 text-amber-500" />
-                        <h3 className="text-sm font-semibold">
-                          {t("agentMemories.title")}
-                        </h3>
-                        <span className="text-xs text-muted-foreground">
-                          ({memories.length})
-                        </span>
-                      </button>
-                      {showMemories && (
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1.5 text-xs"
-                            onClick={handleExtractMemories}
-                            disabled={extracting}
-                          >
-                            <Sparkles className="h-3 w-3" />
-                            {extracting ? t("agentMemories.extracting") : t("agentMemories.extract")}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 gap-1.5 text-xs"
-                            onClick={() => setAddingMemory(true)}
-                          >
-                            <Plus className="h-3 w-3" />
-                            {t("agentMemories.add")}
-                          </Button>
-                        </div>
-                      )}
+                    <div className="flex items-center gap-2">
+                      <Puzzle className="h-4 w-4 text-brand" />
+                      <h3 className="text-sm font-semibold">Skills</h3>
+                      <span className="text-xs text-muted-foreground">({skills.length})</span>
                     </div>
 
-                    {showMemories && (
-                      <>
-                        <p className="text-xs text-muted-foreground">
-                          {t("agentMemories.desc")}
-                        </p>
-
-                        {extractResult && (
-                          <p className="text-xs text-brand-text">{extractResult}</p>
-                        )}
-
-                        {/* Add memory form */}
-                        {addingMemory && (
-                          <div className="rounded-lg border border-border p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <select
-                                value={newCategory}
-                                onChange={(e) => setNewCategory(e.target.value)}
-                                className="rounded border bg-background px-2 py-1 text-xs outline-none"
-                              >
-                                <option value="correction">{t("agentMemories.correction")}</option>
-                                <option value="preference">{t("agentMemories.preference")}</option>
-                                <option value="knowledge">{t("agentMemories.knowledge")}</option>
-                                <option value="error">{t("agentMemories.error")}</option>
-                              </select>
-                              <Button variant="ghost" size="icon-xs" onClick={() => setAddingMemory(false)}>
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                            <input
-                              type="text"
-                              value={newSummary}
-                              onChange={(e) => setNewSummary(e.target.value)}
-                              placeholder={t("agentMemories.summary")}
-                              className="w-full rounded border bg-background px-2 py-1.5 text-sm outline-none focus:border-brand"
-                            />
-                            <textarea
-                              value={newDetail}
-                              onChange={(e) => setNewDetail(e.target.value)}
-                              placeholder={t("agentMemories.detail")}
-                              rows={2}
-                              className="w-full resize-none rounded border bg-background px-2 py-1.5 text-sm outline-none focus:border-brand"
-                            />
-                            <Button size="sm" onClick={handleAddMemory} disabled={!newSummary.trim()}>
-                              {t("agentMemories.add")}
-                            </Button>
-                          </div>
-                        )}
-
-                        {/* Memory list */}
-                        {memories.length === 0 && memoriesLoaded && (
-                          <p className="text-xs text-muted-foreground text-center py-4">
-                            {t("agentMemories.empty")}
-                          </p>
-                        )}
-
-                        <div className="space-y-1.5">
-                          {memories.map((mem) => {
-                            const catIcon =
-                              mem.category === "correction" ? <AlertTriangle className="h-3.5 w-3.5 text-orange-500" /> :
-                              mem.category === "preference" ? <Heart className="h-3.5 w-3.5 text-pink-500" /> :
-                              mem.category === "error" ? <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> :
-                              <BookOpen className="h-3.5 w-3.5 text-blue-500" />;
-
-                            return (
-                              <div
-                                key={mem.id}
-                                className="group flex items-start gap-2.5 rounded-lg bg-secondary/60 px-3 py-2.5"
-                              >
-                                <div className="mt-0.5 shrink-0">{catIcon}</div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm">{mem.summary}</p>
-                                  {mem.detail && (
-                                    <p className="text-xs text-muted-foreground mt-0.5">{mem.detail}</p>
-                                  )}
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[10px] text-muted-foreground capitalize">{t(`agentMemories.${mem.category}`)}</span>
-                                    {mem.hitCount > 1 && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        {mem.hitCount} {t("agentMemories.hits")}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  className="opacity-0 group-hover:opacity-100 shrink-0"
-                                  onClick={() => handleDeleteMemory(mem.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                </Button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </>
+                    {skills.length === 0 && skillsLoaded && (
+                      <p className="text-xs text-muted-foreground text-center py-4">
+                        {t("agentProfile.noSkills")}
+                      </p>
                     )}
+
+                    <div className="space-y-1.5">
+                      {skills.map((skill) => {
+                        const isSelfImprovement = skill.slug === "self-improvement" || skill.name.toLowerCase().includes("self-improvement") || skill.name.includes("自我進化");
+                        return (
+                          <div key={skill.id} className="rounded-lg bg-secondary/60 px-3 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              {skill.iconUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={skill.iconUrl} alt="" className="h-5 w-5 rounded shrink-0" />
+                              ) : (
+                                <Puzzle className="h-4 w-4 text-muted-foreground shrink-0" />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium">{skill.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">{skill.description}</p>
+                              </div>
+                              <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", skill.isEnabled ? "bg-green-500/10 text-green-600" : "bg-muted text-muted-foreground")}>
+                                {skill.isEnabled ? t("agentProfile.skillEnabled") : t("agentProfile.skillDisabled")}
+                              </span>
+                            </div>
+
+                            {/* Self-Improvement skill: show "View Memories" expandable */}
+                            {isSelfImprovement && (
+                              <div className="mt-2 border-t border-border/50 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowMemories(!showMemories)}
+                                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  {showMemories ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                  <Lightbulb className="h-3 w-3 text-amber-500" />
+                                  {t("agentMemories.title")} ({memories.length})
+                                </button>
+
+                                {showMemories && (
+                                  <div className="mt-2 space-y-2">
+                                    <div className="flex items-center justify-end">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 gap-1.5 text-xs"
+                                        onClick={() => setAddingMemory(true)}
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                        {t("agentMemories.add")}
+                                      </Button>
+                                    </div>
+
+                                    {/* Add memory form */}
+                                    {addingMemory && (
+                                      <div className="rounded-lg border border-border p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <select
+                                            value={newCategory}
+                                            onChange={(e) => setNewCategory(e.target.value)}
+                                            className="rounded border bg-background px-2 py-1 text-xs outline-none"
+                                          >
+                                            <option value="correction">{t("agentMemories.correction")}</option>
+                                            <option value="preference">{t("agentMemories.preference")}</option>
+                                            <option value="knowledge">{t("agentMemories.knowledge")}</option>
+                                            <option value="error">{t("agentMemories.error")}</option>
+                                          </select>
+                                          <Button variant="ghost" size="icon-xs" onClick={() => setAddingMemory(false)}>
+                                            <X className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
+                                        <input
+                                          type="text"
+                                          value={newSummary}
+                                          onChange={(e) => setNewSummary(e.target.value)}
+                                          placeholder={t("agentMemories.summary")}
+                                          className="w-full rounded border bg-background px-2 py-1.5 text-sm outline-none focus:border-brand"
+                                        />
+                                        <textarea
+                                          value={newDetail}
+                                          onChange={(e) => setNewDetail(e.target.value)}
+                                          placeholder={t("agentMemories.detail")}
+                                          rows={2}
+                                          className="w-full resize-none rounded border bg-background px-2 py-1.5 text-sm outline-none focus:border-brand"
+                                        />
+                                        <Button size="sm" onClick={handleAddMemory} disabled={!newSummary.trim()}>
+                                          {t("agentMemories.add")}
+                                        </Button>
+                                      </div>
+                                    )}
+
+                                    {memories.length === 0 && memoriesLoaded && (
+                                      <p className="text-xs text-muted-foreground text-center py-3">
+                                        {t("agentMemories.empty")}
+                                      </p>
+                                    )}
+
+                                    <div className="space-y-1.5">
+                                      {memories.map((mem) => {
+                                        const catIcon =
+                                          mem.category === "correction" ? <AlertTriangle className="h-3.5 w-3.5 text-orange-500" /> :
+                                          mem.category === "preference" ? <Heart className="h-3.5 w-3.5 text-pink-500" /> :
+                                          mem.category === "error" ? <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> :
+                                          <BookOpen className="h-3.5 w-3.5 text-blue-500" />;
+                                        return (
+                                          <div key={mem.id} className="group flex items-start gap-2.5 rounded-lg bg-background/60 px-3 py-2">
+                                            <div className="mt-0.5 shrink-0">{catIcon}</div>
+                                            <div className="min-w-0 flex-1">
+                                              <p className="text-sm">{mem.summary}</p>
+                                              {mem.detail && (
+                                                <p className="text-xs text-muted-foreground mt-0.5">{mem.detail}</p>
+                                              )}
+                                              <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-[10px] text-muted-foreground capitalize">{t(`agentMemories.${mem.category}`)}</span>
+                                                {mem.hitCount > 1 && (
+                                                  <span className="text-[10px] text-muted-foreground">
+                                                    {mem.hitCount} {t("agentMemories.hits")}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon-xs"
+                                              className="opacity-0 group-hover:opacity-100 shrink-0"
+                                              onClick={() => handleDeleteMemory(mem.id)}
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </Button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </>

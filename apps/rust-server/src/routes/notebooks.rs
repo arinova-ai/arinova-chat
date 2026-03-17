@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{get, patch, put},
@@ -378,10 +378,17 @@ async fn delete_notebook(
 }
 
 /// GET /api/notebooks/:id/notes — list notes in a notebook
+#[derive(Deserialize)]
+struct ListNotebookNotesQuery {
+    #[serde(default)]
+    archived: Option<bool>,
+}
+
 async fn list_notebook_notes(
     State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
+    Query(query): Query<ListNotebookNotesQuery>,
 ) -> Response {
     // Verify ownership
     let owner: Option<(String,)> =
@@ -422,15 +429,27 @@ async fn list_notebook_notes(
         updated_at: DateTime<Utc>,
     }
 
+    let show_archived = query.archived.unwrap_or(false);
     let rows = sqlx::query_as::<_, NoteListRow>(
-        r#"
-        SELECT id, conversation_id, title, tags,
-               COALESCE(is_pinned, false) AS is_pinned,
-               archived_at, created_at, updated_at
-        FROM conversation_notes
-        WHERE notebook_id = $1 AND archived_at IS NULL
-        ORDER BY is_pinned DESC, updated_at DESC
-        "#,
+        if show_archived {
+            r#"
+            SELECT id, conversation_id, title, tags,
+                   COALESCE(is_pinned, false) AS is_pinned,
+                   archived_at, created_at, updated_at
+            FROM conversation_notes
+            WHERE notebook_id = $1 AND archived_at IS NOT NULL
+            ORDER BY archived_at DESC
+            "#
+        } else {
+            r#"
+            SELECT id, conversation_id, title, tags,
+                   COALESCE(is_pinned, false) AS is_pinned,
+                   archived_at, created_at, updated_at
+            FROM conversation_notes
+            WHERE notebook_id = $1 AND archived_at IS NULL
+            ORDER BY is_pinned DESC, updated_at DESC
+            "#
+        },
     )
     .bind(id)
     .fetch_all(&state.db)

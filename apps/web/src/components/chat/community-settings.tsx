@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
+import { assetUrl, AGENT_DEFAULT_AVATAR, BACKEND_URL } from "@/lib/config";
 import {
   Crown,
   Shield,
@@ -47,9 +47,12 @@ import {
   Bot,
   ClipboardCheck,
   Check,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
+import { compressImage } from "@/lib/image-compress";
 
 type Tab = "info" | "personal" | "permissions" | "invites" | "danger";
 
@@ -154,6 +157,8 @@ export function CommunitySettingsSheet({
   const [identityName, setIdentityName] = useState("");
   const [identityAvatar, setIdentityAvatar] = useState("");
   const [identitySaveState, setIdentitySaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Invite creation
   const [inviteMaxUses, setInviteMaxUses] = useState("");
@@ -298,6 +303,28 @@ export function CommunitySettingsSheet({
       setIdentitySaveState("idle");
     }
   }, [communityId, identityName, identityAvatar]);
+
+  const handleAvatarUpload = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setAvatarUploading(true);
+    try {
+      const compressed = await compressImage(file, { maxWidth: 512, maxHeight: 512, quality: 0.9 });
+      const formData = new FormData();
+      formData.append("file", compressed, "avatar.jpg");
+      const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setIdentityAvatar(data.imageUrl);
+    } catch {
+      // silently fail
+    } finally {
+      setAvatarUploading(false);
+    }
+  }, []);
 
   // ── Member Management ──
   const handleUpdateRole = useCallback(
@@ -590,11 +617,38 @@ export function CommunitySettingsSheet({
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">{t("community.identity.avatar")}</label>
-                    <Input
-                      value={identityAvatar}
-                      onChange={(e) => setIdentityAvatar(e.target.value)}
-                      placeholder={t("community.identity.avatarPlaceholder")}
-                    />
+                    <div className="flex items-center gap-3">
+                      {identityAvatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={assetUrl(identityAvatar)} alt="" className="h-12 w-12 rounded-full object-cover ring-1 ring-border" />
+                      ) : (
+                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                          <UserCircle2 className="h-6 w-6" />
+                        </div>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={avatarUploading}
+                        onClick={() => avatarInputRef.current?.click()}
+                      >
+                        {avatarUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                        {t("avatar.orUpload")}
+                      </Button>
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleAvatarUpload(f);
+                          e.target.value = "";
+                        }}
+                      />
+                    </div>
                     <DefaultAvatarPicker
                       onSelect={(url) => setIdentityAvatar(url)}
                       selected={identityAvatar}
