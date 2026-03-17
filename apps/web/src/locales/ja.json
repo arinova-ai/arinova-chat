@@ -821,6 +821,8 @@
   "communitySettings.leaveConfirm": "このコミュニティを退出しますか？",
   "communitySettings.delete": "コミュニティを削除",
   "communitySettings.deleteConfirm": "このコミュニティを削除しますか？この操作は元に戻せません。",
+  "communitySettings.deleting": "削除中...",
+  "communitySettings.deleteSuccess": "コミュニティを削除しました",
   "communitySettings.transfer": "所有権を譲渡",
   "communitySettings.transferTo": "譲渡先",
   "communitySettings.transferConfirm": "{{name}} に所有権を譲渡しますか？あなたは管理者になります。",

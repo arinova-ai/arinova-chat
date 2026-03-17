@@ -821,6 +821,8 @@
   "communitySettings.leaveConfirm": "이 커뮤니티를 나가시겠습니까?",
   "communitySettings.delete": "커뮤니티 삭제",
   "communitySettings.deleteConfirm": "이 커뮤니티를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+  "communitySettings.deleting": "삭제 중...",
+  "communitySettings.deleteSuccess": "커뮤니티가 삭제되었습니다",
   "communitySettings.transfer": "소유권 이전",
   "communitySettings.transferTo": "이전 대상",
   "communitySettings.transferConfirm": "{{name}}에게 소유권을 이전하시겠습니까? 관리자가 됩니다.",

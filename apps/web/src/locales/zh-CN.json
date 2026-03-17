@@ -818,6 +818,8 @@
   "communitySettings.leaveConfirm": "确定要离开此社区吗？",
   "communitySettings.delete": "删除社区",
   "communitySettings.deleteConfirm": "确定要删除此社区吗？此操作无法撤销。",
+  "communitySettings.deleting": "删除中...",
+  "communitySettings.deleteSuccess": "社区已删除",
   "communitySettings.transfer": "转移所有权",
   "communitySettings.transferTo": "转移给",
   "communitySettings.transferConfirm": "确定要将所有权转移给 {{name}} 吗？您将变为管理员。",

@@ -818,6 +818,8 @@
   "communitySettings.leaveConfirm": "Adakah anda pasti mahu meninggalkan komuniti ini?",
   "communitySettings.delete": "Padam komuniti",
   "communitySettings.deleteConfirm": "Adakah anda pasti mahu memadam komuniti ini? Tindakan ini tidak boleh dibatalkan.",
+  "communitySettings.deleting": "Memadamkan...",
+  "communitySettings.deleteSuccess": "Komuniti telah dipadam",
   "communitySettings.transfer": "Pindah hak milik",
   "communitySettings.transferTo": "Pindah kepada",
   "communitySettings.transferConfirm": "Adakah anda pasti mahu memindahkan hak milik kepada {{name}}? Anda akan menjadi admin.",

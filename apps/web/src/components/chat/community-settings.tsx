@@ -51,6 +51,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
+import { useToastStore } from "@/store/toast-store";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { compressImage } from "@/lib/image-compress";
 
@@ -148,6 +149,9 @@ export function CommunitySettingsSheet({
   const [allowAgents, setAllowAgents] = useState(true);
   const [agentJoinPolicy, setAgentJoinPolicy] = useState("owner_only");
   const [permSaveState, setPermSaveState] = useState<"idle" | "saving" | "saved">("idle");
+
+  // Delete state
+  const [deleting, setDeleting] = useState(false);
 
   // Personal settings
   const [notifPref, setNotifPref] = useState("all");
@@ -379,11 +383,20 @@ export function CommunitySettingsSheet({
 
   const handleDelete = useCallback(async () => {
     if (!confirm(t("communitySettings.deleteConfirm"))) return;
+    setDeleting(true);
     try {
       await api(`/api/communities/${communityId}`, { method: "DELETE" });
-      onClose();
-      useChatStore.getState().setActiveConversation(null);
-    } catch {}
+    } catch (err: unknown) {
+      // 404 means already deleted — treat as success
+      const status = (err as { status?: number })?.status;
+      if (status !== 404) {
+        setDeleting(false);
+        return;
+      }
+    }
+    useToastStore.getState().addToast(t("communitySettings.deleteSuccess"), "success");
+    onClose();
+    useChatStore.getState().setActiveConversation(null);
   }, [communityId, t, onClose]);
 
   const handleTransfer = useCallback(
@@ -924,9 +937,10 @@ export function CommunitySettingsSheet({
                         size="sm"
                         className="w-full justify-start gap-2"
                         onClick={handleDelete}
+                        disabled={deleting}
                       >
                         <Trash2 className="h-4 w-4" />
-                        {t("communitySettings.delete")}
+                        {deleting ? t("communitySettings.deleting") : t("communitySettings.delete")}
                       </Button>
                     </div>
                   </>

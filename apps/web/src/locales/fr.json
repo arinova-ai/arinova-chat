@@ -818,6 +818,8 @@
   "communitySettings.leaveConfirm": "Êtes-vous sûr de vouloir quitter cette communauté ?",
   "communitySettings.delete": "Supprimer la communauté",
   "communitySettings.deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette communauté ? Cette action est irréversible.",
+  "communitySettings.deleting": "Suppression...",
+  "communitySettings.deleteSuccess": "Communauté supprimée",
   "communitySettings.transfer": "Transférer la propriété",
   "communitySettings.transferTo": "Transférer à",
   "communitySettings.transferConfirm": "Êtes-vous sûr de vouloir transférer la propriété à {{name}} ? Vous deviendrez admin.",

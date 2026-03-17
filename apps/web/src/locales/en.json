@@ -839,6 +839,8 @@
   "communitySettings.leaveConfirm": "Are you sure you want to leave this community?",
   "communitySettings.delete": "Delete Community",
   "communitySettings.deleteConfirm": "Are you sure you want to delete this community? This cannot be undone.",
+  "communitySettings.deleting": "Deleting...",
+  "communitySettings.deleteSuccess": "Community deleted",
   "communitySettings.transfer": "Transfer Ownership",
   "communitySettings.transferTo": "Transfer to",
   "communitySettings.transferConfirm": "Are you sure you want to transfer ownership to {{name}}? You will become an admin.",
