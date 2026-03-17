@@ -13,6 +13,9 @@ use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
 use crate::services::push::{send_push_to_user, PushPayload};
 
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
+CRITICAL RULE: You MUST write ALL memory content in the SAME LANGUAGE as the conversation. \
+If the conversation is in Chinese, write Chinese memories. If English, write English. NEVER translate to another language. \
+\n\
 Extract key facts, preferences, and important information from this conversation. \
 Output each memory as a separate line with importance score and 1-3 tags. \
 Format: [importance:0.8][tag1][tag2] memory content here \
@@ -21,7 +24,7 @@ Focus on: user preferences, decisions made, important facts mentioned, action it
 Be concise — each line should be one self-contained memory. \
 Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details. \
 Do NOT use chain-of-thought or reasoning tags. Output strictly in the line-based tagged format above. \
-IMPORTANT: Extract memories in the SAME LANGUAGE as the original conversation. If the user speaks Chinese, write Chinese. If English, write English. Never translate.";
+REMINDER: The memory content after the tags MUST be in the SAME LANGUAGE as the original conversation. Never translate.";
 
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;

@@ -16,7 +16,7 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/accounts", post(create_account).get(list_accounts))
-        .route("/api/accounts/{id}", patch(update_account).delete(delete_account))
+        .route("/api/accounts/{id}", get(get_account).patch(update_account).delete(delete_account))
         .route("/api/accounts/{id}/conversations", get(list_account_conversations))
         .route("/api/accounts/{id}/broadcast", post(broadcast_message))
         .route("/api/accounts/{id}/subscribers", get(list_subscribers))
@@ -337,6 +337,124 @@ async fn list_accounts(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Database error" })),
             )
+        }
+    }
+}
+
+/// GET /api/accounts/:id — Get single account (verify owner)
+async fn get_account(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    #[derive(Debug, sqlx::FromRow)]
+    struct Row {
+        id: Uuid,
+        name: String,
+        #[sqlx(rename = "type")]
+        account_type: String,
+        avatar: Option<String>,
+        bio: Option<String>,
+        agent_id: Option<Uuid>,
+        proxy_user_id: Option<String>,
+        ai_mode: Option<String>,
+        system_prompt: Option<String>,
+        api_key: Option<String>,
+        model: Option<String>,
+        context_window: Option<i32>,
+        voice_sample_url: Option<String>,
+        voice_clone_id: Option<String>,
+        is_public: bool,
+        category: Option<String>,
+        welcome_enabled: bool,
+        welcome_message: Option<String>,
+        auto_reply_mode: Option<String>,
+        auto_reply_system_prompt: Option<String>,
+        auto_reply_webhook_url: Option<String>,
+        persona_catchphrase: Option<String>,
+        persona_tone: Option<String>,
+        persona_personality: Option<String>,
+        persona_template: Option<String>,
+        persona_age: Option<i32>,
+        persona_interests: Option<String>,
+        persona_backstory: Option<String>,
+        persona_intro: Option<String>,
+        persona_forbidden_topics: Option<String>,
+        pricing_mode: Option<String>,
+        pricing_amount: Option<i32>,
+        free_trial_messages: Option<i32>,
+        voice_model_status: Option<String>,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+    }
+
+    let row = sqlx::query_as::<_, Row>(
+        r#"SELECT id, name, type, avatar, bio, agent_id, proxy_user_id,
+                  ai_mode, system_prompt, api_key, model, context_window,
+                  voice_sample_url, voice_clone_id,
+                  is_public, category, welcome_enabled, welcome_message,
+                  auto_reply_mode, auto_reply_system_prompt, auto_reply_webhook_url,
+                  persona_catchphrase, persona_tone, persona_personality, persona_template,
+                  persona_age, persona_interests, persona_backstory, persona_intro,
+                  persona_forbidden_topics, pricing_mode, pricing_amount, free_trial_messages,
+                  voice_model_status,
+                  created_at, updated_at
+           FROM accounts
+           WHERE id = $1 AND owner_id = $2"#,
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(r)) => {
+            let masked_key = r.api_key.as_ref().map(|k| {
+                if k.len() > 4 { format!("****{}", &k[k.len() - 4..]) } else { "****".to_string() }
+            });
+            (StatusCode::OK, Json(json!({
+                "id": r.id,
+                "name": r.name,
+                "type": r.account_type,
+                "avatar": r.avatar,
+                "bio": r.bio,
+                "agentId": r.agent_id,
+                "proxyUserId": r.proxy_user_id,
+                "aiMode": r.ai_mode,
+                "systemPrompt": r.system_prompt,
+                "apiKey": masked_key,
+                "model": r.model,
+                "contextWindow": r.context_window,
+                "voiceSampleUrl": r.voice_sample_url,
+                "voiceCloneId": r.voice_clone_id,
+                "isPublic": r.is_public,
+                "category": r.category,
+                "welcomeEnabled": r.welcome_enabled,
+                "welcomeMessage": r.welcome_message,
+                "autoReplyMode": r.auto_reply_mode,
+                "autoReplySystemPrompt": r.auto_reply_system_prompt,
+                "autoReplyWebhookUrl": r.auto_reply_webhook_url,
+                "personaCatchphrase": r.persona_catchphrase,
+                "personaTone": r.persona_tone,
+                "personaPersonality": r.persona_personality,
+                "personaTemplate": r.persona_template,
+                "personaAge": r.persona_age,
+                "personaInterests": r.persona_interests,
+                "personaBackstory": r.persona_backstory,
+                "personaIntro": r.persona_intro,
+                "personaForbiddenTopics": r.persona_forbidden_topics,
+                "pricingMode": r.pricing_mode,
+                "pricingAmount": r.pricing_amount,
+                "freeTrialMessages": r.free_trial_messages,
+                "voiceModelStatus": r.voice_model_status,
+                "createdAt": r.created_at.to_rfc3339(),
+                "updatedAt": r.updated_at.to_rfc3339(),
+            })))
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "Account not found" }))),
+        Err(e) => {
+            tracing::error!("get_account failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })))
         }
     }
 }

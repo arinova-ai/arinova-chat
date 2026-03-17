@@ -2282,6 +2282,23 @@ async fn agent_create_card(
         if let Err(e) = verify_board_owner(&state.db, bid, &owner_id).await {
             return e;
         }
+        // Check agent has permission for this board
+        let has_perm = sqlx::query_scalar::<_, bool>(
+            r#"SELECT NOT EXISTS(SELECT 1 FROM board_agent_permissions WHERE board_id = $1)
+               OR EXISTS(SELECT 1 FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2)"#,
+        )
+        .bind(bid)
+        .bind(agent.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
+        if !has_perm {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Agent does not have permission for this board" })),
+            )
+                .into_response();
+        }
         bid
     } else {
         match ensure_default_board(&state.db, &owner_id).await {
