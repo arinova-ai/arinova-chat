@@ -11,6 +11,8 @@ import { useTheme } from "./theme-context";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { MessageCircle, X } from "lucide-react";
+import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import type { Agent } from "./types";
 
 
@@ -228,7 +230,97 @@ function OfficeViewInner() {
           />
         );
       })}
+
+      {/* Mobile FAB — chat entry point */}
+      {isMobile && floatWindows.length === 0 && (
+        <MobileChatFab
+          agents={slots.filter((a) => a.status !== "unbound")}
+          onOpenChat={openFloatWindow}
+        />
+      )}
     </div>
+  );
+}
+
+/* ─── Mobile FAB: visible entry point for float chat ─── */
+
+function MobileChatFab({ agents, onOpenChat }: { agents: Agent[]; onOpenChat: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+
+  if (agents.length === 0) return null;
+
+  // Single agent — tap FAB directly opens chat
+  if (agents.length === 1) {
+    return (
+      <button
+        type="button"
+        className="fixed z-40 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform"
+        style={{ right: 16, bottom: 96, width: 56, height: 56 }}
+        onClick={() => onOpenChat(agents[0].id)}
+      >
+        <MessageCircle className="h-6 w-6" />
+      </button>
+    );
+  }
+
+  // Multiple agents — expand to show list
+  return (
+    <>
+      {/* Backdrop */}
+      {open && (
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setOpen(false)} />
+      )}
+
+      {/* Agent list popover */}
+      {open && (
+        <div
+          className="fixed z-50 flex flex-col gap-1 rounded-2xl border border-border bg-background/95 backdrop-blur-sm shadow-2xl p-2 max-h-[60vh] overflow-y-auto"
+          style={{ right: 16, bottom: 160, width: 220 }}
+        >
+          {agents.map((agent) => (
+            <button
+              key={agent.id}
+              type="button"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-accent/60 active:bg-accent transition-colors"
+              onClick={() => {
+                setOpen(false);
+                onOpenChat(agent.id);
+              }}
+            >
+              <div className="h-8 w-8 shrink-0 rounded-full bg-accent flex items-center justify-center overflow-hidden">
+                {agent.emoji ? (
+                  <span className="text-base">{agent.emoji}</span>
+                ) : (
+                  <span className="text-xs font-medium">{agent.name.charAt(0)}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{agent.name}</p>
+                {agent.status && agent.status !== "unbound" && (
+                  <p className={cn(
+                    "text-[10px] truncate",
+                    agent.status === "idle" ? "text-muted-foreground" : "text-green-400",
+                  )}>
+                    {agent.status}
+                  </p>
+                )}
+              </div>
+              <MessageCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* FAB button */}
+      <button
+        type="button"
+        className="fixed z-50 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform"
+        style={{ right: 16, bottom: 96, width: 56, height: 56 }}
+        onClick={() => setOpen(!open)}
+      >
+        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+      </button>
+    </>
   );
 }
 

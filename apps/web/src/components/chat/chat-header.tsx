@@ -300,6 +300,7 @@ export function ChatHeader({
             convSearchOpen={convSearchOpen}
             isMuted={isMuted}
             isCommunity={type === "community"}
+            pendingCount={pendingCount}
             onAction={(actionId) => {
               switch (actionId) {
                 case "search": convSearchOpen ? closeConvSearch() : openConvSearch(); break;
@@ -611,6 +612,7 @@ interface GroupHeaderButtonsProps {
   convSearchOpen: boolean;
   isMuted: boolean;
   isCommunity?: boolean;
+  pendingCount?: number;
   onAction: (id: string) => void;
   onSettingsOpen: () => void;
   t: (key: string) => string;
@@ -624,6 +626,7 @@ function GroupHeaderButtons({
   convSearchOpen,
   isMuted,
   isCommunity,
+  pendingCount = 0,
   onAction,
   onSettingsOpen,
   t,
@@ -646,16 +649,22 @@ function GroupHeaderButtons({
       {pinned.map((btn) => {
         const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
         const activeColor = getActiveColor(btn.id);
+        const showBadge = btn.id === "members" && pendingCount > 0;
         return (
           <Button
             key={btn.id}
             variant="ghost"
             size="icon"
-            className={cn("h-8 w-8", activeColor)}
+            className={cn("h-8 w-8 relative", activeColor)}
             onClick={() => onAction(btn.id)}
             title={t(btn.labelKey)}
           >
             <Icon className="h-4 w-4" />
+            {showBadge && (
+              <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-0.5 rounded-full bg-red-500 text-white text-[9px] font-semibold leading-none">
+                {pendingCount > 99 ? "99+" : pendingCount}
+              </span>
+            )}
           </Button>
         );
       })}
@@ -675,6 +684,7 @@ function GroupHeaderButtons({
           {GROUP_HEADER_BUTTONS.map((btn) => {
             const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
             const isPinned = !isCommunity && groupPins.includes(btn.id);
+            const menuBadge = btn.id === "members" && pendingCount > 0;
             return (
               <DropdownMenuItem
                 key={btn.id}
@@ -682,6 +692,11 @@ function GroupHeaderButtons({
               >
                 <Icon className="h-4 w-4" />
                 <span className="flex-1">{t(btn.labelKey)}</span>
+                {menuBadge && (
+                  <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none">
+                    {pendingCount > 99 ? "99+" : pendingCount}
+                  </span>
+                )}
                 {isPinned && <Pin className="ml-2 h-3 w-3 text-muted-foreground" />}
               </DropdownMenuItem>
             );
