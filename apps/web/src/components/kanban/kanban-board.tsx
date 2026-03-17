@@ -192,13 +192,13 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
     }
   }, []);
 
-  const fetchBoard = useCallback(async (boardId?: string) => {
+  const fetchBoard = useCallback(async (boardId?: string, ignoreCurrentSelection?: boolean) => {
     try {
       const allBoards = await fetchBoards();
       if (allBoards.length === 0) { setLoading(false); return; }
 
       // If no explicit boardId, try loading persisted preference
-      let targetId = boardId || selectedBoardId;
+      let targetId = boardId || (ignoreCurrentSelection ? null : selectedBoardId);
       if (!targetId && conversationId) {
         // Load from per-conversation board preference
         try {
@@ -240,7 +240,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
     setSelectedBoardId(null);
     setBoard(null);
     setLoading(true);
-    fetchBoard();
+    fetchBoard(undefined, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
