@@ -395,7 +395,14 @@ async fn regenerate_secret(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "clientSecret": new_secret })).into_response(),
+        Ok(_) => {
+            // Revoke all existing tokens for this app (secret changed, old sessions invalid)
+            let _ = sqlx::query("DELETE FROM oauth_tokens WHERE app_id = $1")
+                .bind(id)
+                .execute(&state.db)
+                .await;
+            Json(json!({ "clientSecret": new_secret })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 }

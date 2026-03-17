@@ -936,12 +936,21 @@ async fn delete_community(
         }
     }
 
+    // Use a transaction for archive + conversation delete
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!("Delete community: begin tx failed: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
+        }
+    };
+
     // Fetch conversation_id before archiving
     let conv_id = sqlx::query_scalar::<_, Uuid>(
         "SELECT conversation_id FROM communities WHERE id = $1 AND conversation_id IS NOT NULL",
     )
     .bind(id)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await
     .ok()
     .flatten();
@@ -951,25 +960,33 @@ async fn delete_community(
            WHERE id = $1 AND status != 'archived'"#,
     )
     .bind(id)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await;
 
     match result {
-        Ok(r) if r.rows_affected() == 0 => (
-            StatusCode::NOT_FOUND,
-            Json(json!({ "error": "Community not found or already archived" })),
-        ),
+        Ok(r) if r.rows_affected() == 0 => {
+            let _ = tx.rollback().await;
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "Community not found or already archived" })),
+            )
+        }
         Ok(_) => {
-            // Delete the associated conversation
+            // Delete the associated conversation within the same transaction
             if let Some(cid) = conv_id {
                 let _ = sqlx::query("DELETE FROM conversations WHERE id = $1")
                     .bind(cid)
-                    .execute(&state.db)
+                    .execute(&mut *tx)
                     .await;
+            }
+            if let Err(e) = tx.commit().await {
+                tracing::error!("Delete community: commit failed: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Database error" })));
             }
             (StatusCode::OK, Json(json!({ "success": true })))
         }
         Err(e) => {
+            let _ = tx.rollback().await;
             tracing::error!("Delete community failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
