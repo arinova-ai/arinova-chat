@@ -568,7 +568,13 @@ function ProfilePanel() {
         throw new Error(body.error ?? "Upload failed");
       }
       const data = await res.json();
-      await authClient.updateUser({ image: data.imageUrl });
+      const updateRes = await fetch(`${BACKEND_URL}/api/auth/update-user`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: data.imageUrl }),
+      });
+      if (!updateRes.ok) throw new Error("Failed to update avatar");
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Avatar upload failed");
     } finally {
@@ -579,7 +585,13 @@ function ProfilePanel() {
   const handleDefaultAvatarSelect = async (url: string) => {
     setAvatarUploading(true);
     try {
-      await authClient.updateUser({ image: url });
+      const res = await fetch(`${BACKEND_URL}/api/auth/update-user`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: url }),
+      });
+      if (!res.ok) throw new Error("Failed to set avatar");
     } catch {
       setSaveError("Failed to set avatar");
     } finally {
