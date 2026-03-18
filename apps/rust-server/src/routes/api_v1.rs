@@ -116,8 +116,10 @@ async fn user_agents(
 #[serde(rename_all = "camelCase")]
 struct AgentChatBody {
     agent_id: String,
-    prompt: String,
+    prompt: Option<String>,
     system_prompt: Option<String>,
+    messages: Option<Vec<ChatMessage>>,
+    context: Option<serde_json::Value>,
 }
 
 /// Resolve agent, validate ownership, build LLM options. Returns (LlmCallOptions, agent_id_uuid).
@@ -167,14 +169,33 @@ async fn resolve_agent_llm(
         ).into_response());
     };
 
-    // Build messages
-    let mut messages = Vec::new();
-    let system_prompt = body.system_prompt.as_deref()
-        .or(db_system_prompt.as_deref());
-    if let Some(sp) = system_prompt {
-        messages.push(ChatMessage { role: "system".into(), content: sp.to_string() });
+    // Build system prompt (body.system_prompt overrides DB; append context if present)
+    let mut system_text = body.system_prompt.clone()
+        .or(db_system_prompt)
+        .unwrap_or_default();
+    if let Some(ref ctx) = body.context {
+        if !system_text.is_empty() {
+            system_text.push_str("\n\n");
+        }
+        system_text.push_str("[Context]\n");
+        system_text.push_str(&serde_json::to_string_pretty(ctx).unwrap_or_default());
     }
-    messages.push(ChatMessage { role: "user".into(), content: body.prompt.clone() });
+
+    // Build messages: prefer body.messages over body.prompt
+    let mut messages = Vec::new();
+    if !system_text.is_empty() {
+        messages.push(ChatMessage { role: "system".into(), content: system_text });
+    }
+    if let Some(ref msgs) = body.messages {
+        messages.extend(msgs.iter().filter(|m| m.role != "system").cloned());
+    } else if let Some(ref prompt) = body.prompt {
+        messages.push(ChatMessage { role: "user".into(), content: prompt.clone() });
+    } else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Either 'prompt' or 'messages' is required"})),
+        ).into_response());
+    }
 
     Ok(LlmCallOptions {
         provider,
