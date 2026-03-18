@@ -430,7 +430,7 @@ async fn main() {
         ALTER TABLE oauth_tokens ALTER COLUMN app_id DROP NOT NULL;
         CREATE EXTENSION IF NOT EXISTS vector;
         ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS embedding vector(1536);
-        CREATE INDEX IF NOT EXISTS idx_agent_memories_embedding ON agent_memories USING ivfflat (embedding vector_cosine_ops);
+        CREATE INDEX IF NOT EXISTS idx_agent_memories_embedding ON agent_memories USING hnsw (embedding vector_cosine_ops);
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

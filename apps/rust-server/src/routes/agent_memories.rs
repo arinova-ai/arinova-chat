@@ -919,7 +919,11 @@ pub async fn hybrid_search(
     // Vector score: 1 - cosine_distance (higher = more similar)
     // Keyword score: 0 or 1 based on ILIKE match
     // Final score: 0.7 * vector_score + 0.3 * keyword_score
-    let keyword_pattern = format!("%{}%", query_text.chars().take(100).collect::<String>().replace('%', "").replace('_', ""));
+    let escaped = query_text.chars().take(100).collect::<String>()
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let keyword_pattern = format!("%{}%", escaped);
 
     let rows = sqlx::query_as::<_, (Uuid, String, String, Option<String>, f64)>(
         r#"SELECT id, category, summary, detail,
