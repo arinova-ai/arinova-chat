@@ -33,11 +33,37 @@ export interface TokenResponse {
   };
 }
 
+export interface BalanceResponse {
+  balance: number;
+}
+
+export interface PurchaseResponse {
+  transactionId: string;
+  newBalance: number;
+}
+
+export interface TransactionRecord {
+  id: string;
+  type: string;
+  amount: number;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface TransactionsResponse {
+  transactions: TransactionRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export class Arinova {
   private appId: string;
   private endpoint: string;
   private redirectUri: string;
   private scope: string;
+  /** The access token from the most recent login/handleCallback. */
+  accessToken: string | null = null;
 
   constructor(config: ArinovaConfig) {
     this.appId = config.appId;
@@ -115,7 +141,10 @@ export class Arinova {
               return;
             }
 
-            this.exchangeCode(code, verifier).then(resolve).catch(reject);
+            this.exchangeCode(code, verifier).then((token) => {
+              this.accessToken = token.access_token;
+              resolve(token);
+            }).catch(reject);
           }
         } catch {
           // Cross-origin — popup is on a different domain, ignore
@@ -157,7 +186,73 @@ export class Arinova {
       throw new Error("No PKCE verifier found — did you start login()?");
     }
 
-    return this.exchangeCode(code, verifier);
+    const token = await this.exchangeCode(code, verifier);
+    this.accessToken = token.access_token;
+    return token;
+  }
+
+  // ── Economy Methods ───────────────────────────────────────────
+
+  private getToken(): string {
+    if (!this.accessToken) {
+      throw new Error("Not logged in — call login() or handleCallback() first");
+    }
+    return this.accessToken;
+  }
+
+  private async apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+    const token = this.getToken();
+    const res = await fetch(`${this.endpoint}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...init?.headers,
+      },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(
+        (body as Record<string, string>).error_description ??
+          (body as Record<string, string>).error ??
+          `API error (${res.status})`
+      );
+    }
+    return res.json() as Promise<T>;
+  }
+
+  /** Get the current user's coin balance. */
+  async balance(): Promise<BalanceResponse> {
+    return this.apiFetch<BalanceResponse>("/api/v1/economy/balance");
+  }
+
+  /**
+   * Purchase / charge coins from the user's balance.
+   * Requires the "economy" scope.
+   */
+  async purchase(
+    productId: string,
+    amount: number,
+    description?: string,
+  ): Promise<PurchaseResponse> {
+    return this.apiFetch<PurchaseResponse>("/api/v1/economy/purchase", {
+      method: "POST",
+      body: JSON.stringify({ productId, amount, description }),
+    });
+  }
+
+  /** Get the user's transaction history. */
+  async transactions(
+    limit?: number,
+    offset?: number,
+  ): Promise<TransactionsResponse> {
+    const params = new URLSearchParams();
+    if (limit != null) params.set("limit", String(limit));
+    if (offset != null) params.set("offset", String(offset));
+    const qs = params.toString();
+    return this.apiFetch<TransactionsResponse>(
+      `/api/v1/economy/transactions${qs ? `?${qs}` : ""}`,
+    );
   }
 
   private async exchangeCode(

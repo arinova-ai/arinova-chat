@@ -1,5 +1,5 @@
 use axum::{
-    extract::{FromRequestParts, State},
+    extract::{FromRequestParts, Query, State},
     http::{request::Parts, StatusCode},
     response::{IntoResponse, Json, Response},
     routing::{get, post},
@@ -25,6 +25,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/economy/charge", post(economy_charge))
         .route("/api/v1/economy/award", post(economy_award))
         .route("/api/v1/economy/balance", get(economy_balance))
+        // Step 5b: User-authorized economy (OAuth Bearer)
+        .route("/api/v1/economy/purchase", post(economy_purchase))
+        .route("/api/v1/economy/transactions", get(economy_transactions))
 }
 
 // ── Step 3: User Endpoints ──────────────────────────────────────
@@ -508,4 +511,195 @@ async fn economy_balance(
     .unwrap_or(0);
 
     Json(json!({ "balance": balance })).into_response()
+}
+
+// ── Step 5b: User-authorized economy (OAuth Bearer) ────────────
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PurchaseBody {
+    product_id: Option<String>,
+    amount: i32,
+    description: Option<String>,
+}
+
+/// POST /api/v1/economy/purchase — user-authorized charge via OAuth Bearer token
+async fn economy_purchase(
+    State(state): State<AppState>,
+    auth: AuthOAuthToken,
+    Json(body): Json<PurchaseBody>,
+) -> Response {
+    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "economy") {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "insufficient_scope", "error_description": "Scope 'economy' required"})),
+        )
+            .into_response();
+    }
+
+    if body.amount <= 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Amount must be positive"})),
+        )
+            .into_response();
+    }
+
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    // Ensure balance row exists
+    let _ = sqlx::query(
+        "INSERT INTO coin_balances (user_id, balance) VALUES ($1, 0) ON CONFLICT (user_id) DO NOTHING",
+    )
+    .bind(&auth.user_id)
+    .execute(&mut *tx)
+    .await;
+
+    // Check and deduct balance atomically
+    let updated = sqlx::query_scalar::<_, i32>(
+        r#"UPDATE coin_balances
+           SET balance = balance - $1, updated_at = NOW()
+           WHERE user_id = $2 AND balance >= $1
+           RETURNING balance"#,
+    )
+    .bind(body.amount)
+    .bind(&auth.user_id)
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let new_balance = match updated {
+        Ok(Some(b)) => b,
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "insufficient_balance"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    // Record transaction
+    let tx_id = Uuid::new_v4();
+    let desc = body.description.unwrap_or_else(|| {
+        match &body.product_id {
+            Some(pid) => format!("Purchase: {}", pid),
+            None => "Purchase".to_string(),
+        }
+    });
+    let _ = sqlx::query(
+        r#"INSERT INTO coin_transactions (id, user_id, type, amount, description)
+           VALUES ($1, $2, 'purchase', $3, $4)"#,
+    )
+    .bind(tx_id)
+    .bind(&auth.user_id)
+    .bind(-body.amount)
+    .bind(&desc)
+    .execute(&mut *tx)
+    .await;
+
+    if let Err(e) = tx.commit().await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response();
+    }
+
+    Json(json!({
+        "transactionId": tx_id,
+        "newBalance": new_balance,
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct TransactionsQuery {
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+/// GET /api/v1/economy/transactions — user's transaction history via OAuth Bearer token
+async fn economy_transactions(
+    State(state): State<AppState>,
+    auth: AuthOAuthToken,
+    Query(q): Query<TransactionsQuery>,
+) -> Response {
+    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "economy") {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "insufficient_scope", "error_description": "Scope 'economy' required"})),
+        )
+            .into_response();
+    }
+
+    let limit = q.limit.unwrap_or(20).min(100).max(1);
+    let offset = q.offset.unwrap_or(0).max(0);
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM coin_transactions WHERE user_id = $1",
+    )
+    .bind(&auth.user_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let rows = sqlx::query_as::<_, (Uuid, String, i32, Option<String>, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT id, type, amount, description, created_at
+           FROM coin_transactions
+           WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(&auth.user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let transactions: Vec<Value> = rows
+                .into_iter()
+                .map(|r| {
+                    json!({
+                        "id": r.0,
+                        "type": r.1,
+                        "amount": r.2,
+                        "description": r.3,
+                        "createdAt": r.4.to_rfc3339(),
+                    })
+                })
+                .collect();
+            Json(json!({
+                "transactions": transactions,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }))
+            .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }

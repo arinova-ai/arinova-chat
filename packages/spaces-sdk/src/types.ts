@@ -88,6 +88,32 @@ export interface BalanceResponse {
   balance: number;
 }
 
+export interface PurchaseOptions {
+  productId: string;
+  amount: number;
+  description?: string;
+}
+
+export interface PurchaseResponse {
+  transactionId: string;
+  newBalance: number;
+}
+
+export interface TransactionRecord {
+  id: string;
+  type: string;
+  amount: number;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface TransactionsResponse {
+  transactions: TransactionRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ===== SSE Event =====
 export interface SSEChunkEvent {
   type: "chunk";
