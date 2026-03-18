@@ -195,17 +195,19 @@ export function PipOverlay() {
   const oauthTokenRef = useRef<string | null>(null);
   const fetchingTokenRef = useRef(false);
 
-  // Fetch OAuth token for this app via internal-token endpoint
+  // Fetch OAuth token via internal-token endpoint (works with or without appId)
   const fetchOAuthToken = useCallback(async () => {
-    if (!pipAppId || fetchingTokenRef.current) return null;
+    if (fetchingTokenRef.current) return null;
     if (oauthTokenRef.current) return oauthTokenRef.current;
 
     fetchingTokenRef.current = true;
     try {
+      const body: Record<string, string> = {};
+      if (pipAppId) body.appId = pipAppId;
       const res = await fetch("/api/oauth/internal-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appId: pipAppId }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -226,14 +228,7 @@ export function PipOverlay() {
   const sendAuthToIframe = useCallback(async () => {
     if (!iframeRef.current?.contentWindow || !session?.user) return false;
 
-    // Get OAuth token if app has appId; fall back to session token
-    let accessToken: string;
-    if (pipAppId) {
-      const oauthToken = await fetchOAuthToken();
-      accessToken = oauthToken ?? "";
-    } else {
-      accessToken = session.session?.token ?? "";
-    }
+    const accessToken = (await fetchOAuthToken()) ?? "";
 
     iframeRef.current.contentWindow.postMessage(
       {
@@ -252,7 +247,7 @@ export function PipOverlay() {
       "*",
     );
     return true;
-  }, [session, agents, pipAppId, fetchOAuthToken]);
+  }, [session, agents, fetchOAuthToken]);
 
   // Keep sending auth every 500ms for 30s — iframe JS may not be ready on first sends
   useEffect(() => {

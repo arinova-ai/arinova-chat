@@ -520,58 +520,77 @@ async fn token_exchange(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct InternalTokenBody {
-    app_id: String,
+    app_id: Option<String>,
 }
 
 /// POST /api/oauth/internal-token
-/// Exchanges user session cookie for an OAuth access_token scoped to a specific app.
-/// Returns existing valid token if one exists; otherwise creates a new one.
+/// Exchanges user session cookie for an OAuth access_token.
+/// If appId is provided, token is scoped to that app.
+/// If omitted, creates a first-party token (app_id = NULL).
 async fn internal_token(
     State(state): State<AppState>,
     auth: AuthUser,
     Json(body): Json<InternalTokenBody>,
 ) -> Response {
-    // Verify the app exists
-    let app = sqlx::query_as::<_, (Uuid,)>(
-        "SELECT id FROM oauth_apps WHERE client_id = $1",
-    )
-    .bind(&body.app_id)
-    .fetch_optional(&state.db)
-    .await;
+    // Resolve app_id if provided
+    let app_id: Option<Uuid> = if let Some(ref client_id) = body.app_id {
+        let app = sqlx::query_as::<_, (Uuid,)>(
+            "SELECT id FROM oauth_apps WHERE client_id = $1",
+        )
+        .bind(client_id)
+        .fetch_optional(&state.db)
+        .await;
 
-    let app_id = match app {
-        Ok(Some(row)) => row.0,
-        Ok(None) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "invalid_app", "error_description": "App not found"})),
-            )
-                .into_response();
+        match app {
+            Ok(Some(row)) => Some(row.0),
+            Ok(None) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "invalid_app", "error_description": "App not found"})),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "server_error", "error_description": e.to_string()})),
+                )
+                    .into_response();
+            }
         }
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "server_error", "error_description": e.to_string()})),
-            )
-                .into_response();
-        }
+    } else {
+        None
     };
 
     let scope = "profile";
 
-    // Check for existing valid token
-    let existing = sqlx::query_as::<_, (String, i64)>(
-        r#"SELECT access_token,
-                  EXTRACT(EPOCH FROM (expires_at - NOW()))::BIGINT AS remaining
-           FROM oauth_tokens
-           WHERE user_id = $1 AND app_id = $2 AND expires_at > NOW() + INTERVAL '1 hour'
-           ORDER BY expires_at DESC
-           LIMIT 1"#,
-    )
-    .bind(&auth.id)
-    .bind(app_id)
-    .fetch_optional(&state.db)
-    .await;
+    // Check for existing valid token (match on app_id or IS NULL)
+    let existing = if let Some(aid) = app_id {
+        sqlx::query_as::<_, (String, i64)>(
+            r#"SELECT access_token,
+                      EXTRACT(EPOCH FROM (expires_at - NOW()))::BIGINT AS remaining
+               FROM oauth_tokens
+               WHERE user_id = $1 AND app_id = $2 AND expires_at > NOW() + INTERVAL '1 hour'
+               ORDER BY expires_at DESC
+               LIMIT 1"#,
+        )
+        .bind(&auth.id)
+        .bind(aid)
+        .fetch_optional(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, (String, i64)>(
+            r#"SELECT access_token,
+                      EXTRACT(EPOCH FROM (expires_at - NOW()))::BIGINT AS remaining
+               FROM oauth_tokens
+               WHERE user_id = $1 AND app_id IS NULL AND expires_at > NOW() + INTERVAL '1 hour'
+               ORDER BY expires_at DESC
+               LIMIT 1"#,
+        )
+        .bind(&auth.id)
+        .fetch_optional(&state.db)
+        .await
+    };
 
     if let Ok(Some(row)) = existing {
         return Json(json!({
