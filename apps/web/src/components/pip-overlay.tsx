@@ -5,6 +5,7 @@ import { X, Minimize2, Gamepad2 } from "lucide-react";
 import { useSpacesStore } from "@/store/spaces-store";
 import { useChatStore } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
+import { BACKEND_URL } from "@/lib/config";
 
 // ---------------------------------------------------------------------------
 // Shared draggable hook
@@ -204,8 +205,9 @@ export function PipOverlay() {
     try {
       const body: Record<string, string> = {};
       if (pipAppId) body.appId = pipAppId;
-      const res = await fetch("/api/oauth/internal-token", {
+      const res = await fetch(`${BACKEND_URL}/api/oauth/internal-token`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
