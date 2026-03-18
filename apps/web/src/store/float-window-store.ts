@@ -1,28 +1,38 @@
 import { create } from "zustand";
+import type { Agent } from "@/components/office/types";
+
+interface PipUser {
+  id: string;
+  name: string;
+  username: string;
+}
 
 interface OfficePipState {
   /** Whether PiP mode is active */
   active: boolean;
-  /** The iframe src URL to render in the PiP window */
-  iframeSrc: string | null;
   /** Theme ID for reference */
   themeId: string | null;
-  /** Enter PiP mode with the given iframe src */
-  enter: (src: string, themeId: string) => void;
+  /** Agents snapshot for ThemeIframe init */
+  agents: Agent[];
+  /** User snapshot for ThemeIframe init */
+  user: PipUser | null;
+  /** Enter PiP mode with theme + context data */
+  enter: (themeId: string, agents: Agent[], user: PipUser) => void;
   /** Exit PiP mode */
   exit: () => void;
 }
 
 export const useOfficePipStore = create<OfficePipState>((set) => ({
   active: false,
-  iframeSrc: null,
   themeId: null,
+  agents: [],
+  user: null,
 
-  enter: (src, themeId) => {
-    set({ active: true, iframeSrc: src, themeId });
+  enter: (themeId, agents, user) => {
+    set({ active: true, themeId, agents, user });
   },
 
   exit: () => {
-    set({ active: false, iframeSrc: null, themeId: null });
+    set({ active: false, themeId: null, agents: [], user: null });
   },
 }));

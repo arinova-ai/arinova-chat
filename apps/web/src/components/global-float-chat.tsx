@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useOfficePipStore } from "@/store/float-window-store";
+import { ThemeIframe } from "@/components/office/theme-iframe";
 import { X, Maximize2 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -11,7 +12,9 @@ const EDGE_MARGIN = 12;
 
 export function GlobalOfficePip() {
   const active = useOfficePipStore((s) => s.active);
-  const iframeSrc = useOfficePipStore((s) => s.iframeSrc);
+  const themeId = useOfficePipStore((s) => s.themeId);
+  const agents = useOfficePipStore((s) => s.agents);
+  const user = useOfficePipStore((s) => s.user);
   const exit = useOfficePipStore((s) => s.exit);
   const router = useRouter();
   const pathname = usePathname();
@@ -96,7 +99,7 @@ export function GlobalOfficePip() {
     router.push("/office");
   }, [exit, router]);
 
-  if (!active || !iframeSrc) return null;
+  if (!active || !themeId || !user) return null;
 
   return (
     <div
@@ -130,14 +133,17 @@ export function GlobalOfficePip() {
         </div>
       </div>
 
-      {/* Office iframe */}
-      <iframe
-        src={iframeSrc}
-        sandbox="allow-scripts allow-same-origin"
-        title="Office PiP"
-        className="h-full w-full border-0 pointer-events-none"
-        style={{ display: "block" }}
-      />
+      {/* Office ThemeIframe with full context — renders correctly */}
+      <div className="h-full w-full pointer-events-none">
+        <ThemeIframe
+          themeId={themeId}
+          agents={agents}
+          user={user}
+          width={PIP_WIDTH}
+          height={PIP_HEIGHT}
+          isMobile
+        />
+      </div>
     </div>
   );
 }

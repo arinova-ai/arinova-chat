@@ -11,19 +11,27 @@ import { OfficeTabs } from "@/components/office/office-tabs";
 import { useTranslation } from "@/lib/i18n";
 import { ThemeProvider, useTheme } from "@/components/office/theme-context";
 import { useOfficePipStore } from "@/store/float-window-store";
-import { THEME_RUNTIME_URL } from "@/lib/config";
+import { useOfficeStream } from "@/hooks/use-office-stream";
+import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 function OfficeLayoutInner({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { themeId } = useTheme();
   const enterPip = useOfficePipStore((s) => s.enter);
   const router = useRouter();
+  const stream = useOfficeStream();
+  const { data: session } = authClient.useSession();
 
   const handlePip = useCallback(() => {
-    const src = `${THEME_RUNTIME_URL}/runtime/${encodeURIComponent(themeId)}`;
-    enterPip(src, themeId);
+    const sessionUser = session?.user as { id?: string; name?: string; username?: string } | undefined;
+    const user = {
+      id: sessionUser?.id ?? "",
+      name: sessionUser?.name ?? "",
+      username: sessionUser?.username ?? "",
+    };
+    enterPip(themeId, stream.agents, user);
     router.push("/");
-  }, [themeId, enterPip, router]);
+  }, [themeId, enterPip, router, stream.agents, session]);
 
   return (
     <div className="app-dvh flex bg-background" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
