@@ -1013,10 +1013,40 @@ struct ByDateQuery {
 /// Returns the first message ID on the given date in this conversation.
 async fn messages_by_date(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(conversation_id): Path<Uuid>,
     Query(q): Query<ByDateQuery>,
 ) -> Response {
+    // Verify conversation access: user is owner OR member
+    let conv = sqlx::query_as::<_, ConvCheck>(
+        r#"SELECT id FROM conversations WHERE id = $1 AND (
+            user_id = $2
+            OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
+        )"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match conv {
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Conversation not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+        Ok(Some(_)) => {}
+    }
+
     // Parse date string
     let date = match chrono::NaiveDate::parse_from_str(&q.date, "%Y-%m-%d") {
         Ok(d) => d,
