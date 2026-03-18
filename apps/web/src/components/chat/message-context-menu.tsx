@@ -14,6 +14,7 @@ import {
   Flag,
   CheckSquare,
   Share2,
+  Forward,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
@@ -49,6 +50,7 @@ interface MessageContextMenuProps {
   onStartThread?: () => void;
   onReport?: () => void;
   onShare?: () => void;
+  onForward?: () => void;
   isInThread?: boolean;
   onSelect?: () => void;
 }
@@ -85,6 +87,7 @@ export function MessageContextMenu({
   onStartThread,
   onReport,
   onShare,
+  onForward,
   isInThread,
   onSelect,
 }: MessageContextMenuProps) {
@@ -346,6 +349,13 @@ export function MessageContextMenu({
               icon={<Share2 className="h-[18px] w-[18px]" />}
               label={t("chat.actions.share")}
               onClick={() => handle(onShare)}
+            />
+          )}
+          {onForward && (
+            <MenuButton
+              icon={<Forward className="h-[18px] w-[18px]" />}
+              label={t("chat.actions.forward") || "Forward"}
+              onClick={() => handle(onForward)}
             />
           )}
           {onReport && (

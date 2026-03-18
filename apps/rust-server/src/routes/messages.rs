@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get},
+    routing::{delete, get, post},
     Router,
 };
 use chrono::{Datelike, NaiveDateTime};
@@ -29,6 +29,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/conversations/{conversationId}/messages/{messageId}",
             delete(delete_message),
+        )
+        .route(
+            "/api/conversations/{conversationId}/messages/forward",
+            post(forward_message),
         )
         .route(
             "/api/conversations/{conversationId}/threads",
@@ -1493,6 +1497,139 @@ async fn get_thread_messages(
         "hasMore": has_more,
         "nextCursor": next_cursor,
         "threadId": thread_id,
+    }))
+    .into_response()
+}
+
+// ── Forward message ─────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ForwardBody {
+    message_id: Uuid,
+}
+
+/// POST /api/conversations/{conversationId}/messages/forward
+/// Forward a message from another conversation into this one.
+async fn forward_message(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(target_conversation_id): Path<Uuid>,
+    Json(body): Json<ForwardBody>,
+) -> Response {
+    // Verify access to target conversation
+    let conv = sqlx::query_as::<_, ConvCheck>(
+        r#"SELECT id FROM conversations WHERE id = $1 AND (
+            user_id = $2
+            OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
+        )"#,
+    )
+    .bind(target_conversation_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match conv {
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Target conversation not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Ok(Some(_)) => {}
+    }
+
+    // Fetch the original message
+    let original = sqlx::query_as::<_, (String, Option<String>, Option<String>, Option<String>)>(
+        r#"SELECT content,
+                  COALESCE(u.name, a.name, 'Unknown') AS sender_name,
+                  m.sender_user_id,
+                  m.sender_agent_id::text
+           FROM messages m
+           LEFT JOIN "user" u ON m.sender_user_id = u.id
+           LEFT JOIN agents a ON m.sender_agent_id = a.id
+           WHERE m.id = $1"#,
+    )
+    .bind(body.message_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (content, sender_name, _sender_uid, _sender_aid) = match original {
+        Ok(Some(r)) => r,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Original message not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let sender_name = sender_name.unwrap_or_else(|| "Unknown".to_string());
+
+    // Build forwarded content with attribution
+    let forwarded_content = format!("📨 *Forwarded from {}*\n\n{}", sender_name, content);
+
+    // Get next seq
+    let seq = crate::services::message_seq::next_seq(&state.db, &state.redis, target_conversation_id).await;
+
+    // Insert forwarded message
+    let msg_id = Uuid::new_v4();
+    let metadata = json!({"forwarded": true, "originalMessageId": body.message_id.to_string(), "originalSenderName": sender_name});
+
+    let insert = sqlx::query(
+        r#"INSERT INTO messages (id, conversation_id, role, content, status, sender_user_id, seq, metadata)
+           VALUES ($1, $2, 'user', $3, 'sent', $4, $5, $6)"#,
+    )
+    .bind(msg_id)
+    .bind(target_conversation_id)
+    .bind(&forwarded_content)
+    .bind(&user.id)
+    .bind(seq)
+    .bind(&metadata)
+    .execute(&state.db)
+    .await;
+
+    if let Err(e) = insert {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+    }
+
+    // Broadcast to conversation members
+    let member_ids = sqlx::query_as::<_, (String,)>(
+        "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+    )
+    .bind(target_conversation_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|(id,)| id)
+    .collect::<Vec<_>>();
+
+    if !member_ids.is_empty() {
+        state.ws.broadcast_to_members(
+            &member_ids,
+            &json!({
+                "type": "new_message",
+                "conversationId": target_conversation_id.to_string(),
+                "message": {
+                    "id": msg_id.to_string(),
+                    "conversationId": target_conversation_id.to_string(),
+                    "role": "user",
+                    "content": forwarded_content,
+                    "status": "sent",
+                    "senderUserId": user.id,
+                    "senderUserName": user.name,
+                    "seq": seq,
+                    "metadata": metadata,
+                    "createdAt": chrono::Utc::now().to_rfc3339(),
+                    "updatedAt": chrono::Utc::now().to_rfc3339(),
+                }
+            }),
+            &state.redis,
+        );
+    }
+
+    // Update conversation lastMessageAt
+    let _ = sqlx::query("UPDATE conversations SET last_message_at = NOW() WHERE id = $1")
+        .bind(target_conversation_id)
+        .execute(&state.db)
+        .await;
+
+    Json(json!({
+        "messageId": msg_id.to_string(),
+        "conversationId": target_conversation_id.to_string(),
     }))
     .into_response()
 }

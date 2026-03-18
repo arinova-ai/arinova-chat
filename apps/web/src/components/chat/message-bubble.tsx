@@ -44,6 +44,7 @@ import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
 import { MessageContextMenu } from "./message-context-menu";
 import { ShareSheet, type ShareContent } from "./share-sheet";
+import { ForwardDialog } from "./forward-dialog";
 import { LinkPreviewCards } from "./link-preview-card";
 import { NotePreviewCard } from "./note-preview-card";
 import { TaskPreviewCard } from "./task-preview-card";
@@ -627,6 +628,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
   const router = useRouter();
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reportDesc, setReportDesc] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
@@ -990,6 +992,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
           onStartThread={() => openThread(message.id)}
           onReport={() => setReportOpen(true)}
           onShare={handleShare}
+          onForward={() => setForwardOpen(true)}
           isInThread={isInThread}
           onSelect={handleSelect}
         />
@@ -1045,6 +1048,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
       </Dialog>
 
       <ShareSheet open={shareSheetOpen} onOpenChange={setShareSheetOpen} content={shareContent} />
+      <ForwardDialog open={forwardOpen} onOpenChange={setForwardOpen} messageId={message.id} />
     </div>
   );
 });
