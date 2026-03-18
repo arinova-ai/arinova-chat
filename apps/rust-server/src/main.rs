@@ -368,6 +368,15 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_conv_notes_notebook ON conversation_notes(notebook_id) WHERE notebook_id IS NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_conv_notes_parent ON conversation_notes(parent_id) WHERE parent_id IS NOT NULL;
 
+        -- Per-notebook agent access control
+        CREATE TABLE IF NOT EXISTS notebook_agent_permissions (
+            notebook_id UUID NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+            agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            granted_by TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (notebook_id, agent_id)
+        );
+
         -- Skills marketplace
         CREATE TABLE IF NOT EXISTS skills (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -412,10 +421,10 @@ async fn main() {
             PRIMARY KEY (user_id, skill_id)
         );
 
-        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'other';
+        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'other';
         ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS external_url TEXT;
-        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
-        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'draft';
+        ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE;
         ALTER TABLE oauth_codes ADD COLUMN IF NOT EXISTS code_challenge TEXT;
         ALTER TABLE oauth_codes ADD COLUMN IF NOT EXISTS code_challenge_method TEXT;
     "#;

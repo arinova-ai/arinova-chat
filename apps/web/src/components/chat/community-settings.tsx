@@ -163,6 +163,8 @@ export function CommunitySettingsSheet({
   const [identitySaveState, setIdentitySaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [communityAvatarUploading, setCommunityAvatarUploading] = useState(false);
+  const communityAvatarInputRef = useRef<HTMLInputElement>(null);
 
   // Invite creation
   const [inviteMaxUses, setInviteMaxUses] = useState("");
@@ -327,6 +329,28 @@ export function CommunitySettingsSheet({
       // silently fail
     } finally {
       setAvatarUploading(false);
+    }
+  }, [conversationId]);
+
+  const handleCommunityAvatarUpload = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setCommunityAvatarUploading(true);
+    try {
+      const compressed = await compressImage(file, { maxWidth: 512, maxHeight: 512, quality: 0.9 });
+      const formData = new FormData();
+      formData.append("file", compressed, "avatar.jpg");
+      const res = await fetch(`${BACKEND_URL}/api/conversations/${conversationId}/settings/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setAvatarUrl(data.url);
+    } catch {
+      // silently fail
+    } finally {
+      setCommunityAvatarUploading(false);
     }
   }, [conversationId]);
 
@@ -526,7 +550,48 @@ export function CommunitySettingsSheet({
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-muted-foreground">{t("communitySettings.avatar")}</label>
-                  <Input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} disabled={!canManage} />
+                  <div className="flex items-center gap-3">
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={assetUrl(avatarUrl)} alt="" className="h-12 w-12 rounded-full object-cover ring-1 ring-border" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                        <Users className="h-6 w-6" />
+                      </div>
+                    )}
+                    {canManage && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={communityAvatarUploading}
+                          onClick={() => communityAvatarInputRef.current?.click()}
+                        >
+                          {communityAvatarUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                          {t("avatar.orUpload")}
+                        </Button>
+                        <input
+                          ref={communityAvatarInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleCommunityAvatarUpload(f);
+                            e.target.value = "";
+                          }}
+                        />
+                      </>
+                    )}
+                  </div>
+                  {canManage && (
+                    <DefaultAvatarPicker
+                      onSelect={(url) => setAvatarUrl(url)}
+                      selected={avatarUrl}
+                    />
+                  )}
                 </div>
 
                 {canManage && (
