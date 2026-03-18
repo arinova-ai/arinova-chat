@@ -1,36 +1,28 @@
 import { create } from "zustand";
 
-export interface FloatWindowEntry {
-  agentId: string;
-  agentName?: string;
-  agentAvatar?: string | null;
+interface OfficePipState {
+  /** Whether PiP mode is active */
+  active: boolean;
+  /** The iframe src URL to render in the PiP window */
+  iframeSrc: string | null;
+  /** Theme ID for reference */
+  themeId: string | null;
+  /** Enter PiP mode with the given iframe src */
+  enter: (src: string, themeId: string) => void;
+  /** Exit PiP mode */
+  exit: () => void;
 }
 
-interface FloatWindowState {
-  /** Currently open float windows (ordered) */
-  windows: FloatWindowEntry[];
-  /** Open a float chat window for an agent (no-op if already open) */
-  open: (entry: FloatWindowEntry) => void;
-  /** Close a specific float window */
-  close: (agentId: string) => void;
-  /** Close all float windows */
-  closeAll: () => void;
-}
+export const useOfficePipStore = create<OfficePipState>((set) => ({
+  active: false,
+  iframeSrc: null,
+  themeId: null,
 
-export const useFloatWindowStore = create<FloatWindowState>((set, get) => ({
-  windows: [],
-
-  open: (entry) => {
-    const existing = get().windows;
-    if (existing.some((w) => w.agentId === entry.agentId)) return;
-    set({ windows: [...existing, entry] });
+  enter: (src, themeId) => {
+    set({ active: true, iframeSrc: src, themeId });
   },
 
-  close: (agentId) => {
-    set({ windows: get().windows.filter((w) => w.agentId !== agentId) });
-  },
-
-  closeAll: () => {
-    set({ windows: [] });
+  exit: () => {
+    set({ active: false, iframeSrc: null, themeId: null });
   },
 }));

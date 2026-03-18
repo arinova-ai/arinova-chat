@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
+import { FloatChatWindow } from "./float-chat-window";
 import { ThemeIframe } from "./theme-iframe";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useOfficeStream } from "@/hooks/use-office-stream";
@@ -10,7 +11,6 @@ import { useTheme } from "./theme-context";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { useFloatWindowStore } from "@/store/float-window-store";
 import type { Agent } from "./types";
 
 
@@ -49,7 +49,7 @@ function OfficeViewInner() {
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [characterModalSlot, setCharacterModalSlot] = useState<number | null>(null);
-  const openFloatWindow = useFloatWindowStore((s) => s.open);
+  const [floatWindows, setFloatWindows] = useState<string[]>([]);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
@@ -132,22 +132,25 @@ function OfficeViewInner() {
     ? bindings.find((b) => b.slotIndex === characterModalSlot)
     : undefined;
 
-  const openFloat = useCallback((agentId: string) => {
-    const agent = stream.agents.find((a) => a.id === agentId);
-    openFloatWindow({ agentId, agentName: agent?.name });
-  }, [stream.agents, openFloatWindow]);
+  const openFloatWindow = useCallback((agentId: string) => {
+    setFloatWindows((prev) => prev.includes(agentId) ? prev : [...prev, agentId]);
+  }, []);
+
+  const closeFloatWindow = useCallback((agentId: string) => {
+    setFloatWindows((prev) => prev.filter((id) => id !== agentId));
+  }, []);
 
   const selectAgent = useCallback((id: string | null) => {
     if (!id) return;
-    openFloat(id);
-  }, [openFloat]);
+    openFloatWindow(id);
+  }, [openFloatWindow]);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
   const handleOpenChat = useCallback((agentId: string) => {
     setCharacterModalSlot(null);
-    openFloat(agentId);
-  }, [openFloat]);
+    openFloatWindow(agentId);
+  }, [openFloatWindow]);
   useEffect(() => {
     const el = mapContainerRef.current;
     if (!el) return;
@@ -208,6 +211,21 @@ function OfficeViewInner() {
         onOpenChat={handleOpenChat}
       />
 
+      {/* Float chat windows */}
+      {floatWindows.map((fwAgentId, idx) => {
+        const agent = stream.agents.find((a) => a.id === fwAgentId);
+        return (
+          <FloatChatWindow
+            key={fwAgentId}
+            agentId={fwAgentId}
+            agentName={agent?.name}
+            agentAvatar={undefined}
+            onClose={() => closeFloatWindow(fwAgentId)}
+            offsetIndex={idx}
+            isMobile={isMobile}
+          />
+        );
+      })}
     </div>
   );
 }
