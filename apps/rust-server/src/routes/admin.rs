@@ -57,6 +57,20 @@ async fn review_app_action_stub(_admin: AuthAdmin) -> (StatusCode, Json<serde_js
     (StatusCode::NOT_IMPLEMENTED, Json(json!({ "error": "App review not yet implemented" })))
 }
 
+// ── Audit helper ──────────────────────────────────────────────────────
+
+async fn audit(db: &sqlx::PgPool, admin_email: &str, action: &str, target_id: Option<&str>, details: Option<serde_json::Value>) {
+    let _ = sqlx::query(
+        "INSERT INTO audit_logs (admin_email, action, target_id, details) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(admin_email)
+    .bind(action)
+    .bind(target_id)
+    .bind(details)
+    .execute(db)
+    .await;
+}
+
 // ── Broadcast ──────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -67,7 +81,7 @@ struct BroadcastBody {
 /// POST /api/admin/broadcast — Send announcement to all users via Arinova official account
 async fn broadcast(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Json(body): Json<BroadcastBody>,
 ) -> Response {
     if body.content.trim().is_empty() {
@@ -202,6 +216,8 @@ async fn broadcast(
         )
             .into_response();
     }
+
+    audit(&state.db, &admin.email, "broadcast", None, Some(json!({"sent": sent}))).await;
 
     Json(json!({
         "success": true,
@@ -370,7 +386,7 @@ struct SetVerifyBody {
 /// PATCH /api/admin/users/:id/verify — Toggle verified badge
 async fn set_verify(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Path(user_id): Path<String>,
     Json(body): Json<SetVerifyBody>,
 ) -> Response {
@@ -384,6 +400,7 @@ async fn set_verify(
 
     match result {
         Ok(r) if r.rows_affected() > 0 => {
+            audit(&state.db, &admin.email, if body.verified { "verify_user" } else { "unverify_user" }, Some(&user_id), None).await;
             Json(json!({"success": true, "isVerified": body.verified})).into_response()
         }
         Ok(_) => (
@@ -415,16 +432,20 @@ async fn ban_user(
         )
             .into_response();
     }
-    set_banned(&state, &user_id, true).await
+    let res = set_banned(&state, &user_id, true).await;
+    audit(&state.db, &admin.email, "ban_user", Some(&user_id), None).await;
+    res
 }
 
 /// POST /api/admin/users/:id/unban — Unban a user
 async fn unban_user(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Path(user_id): Path<String>,
 ) -> Response {
-    set_banned(&state, &user_id, false).await
+    let res = set_banned(&state, &user_id, false).await;
+    audit(&state.db, &admin.email, "unban_user", Some(&user_id), None).await;
+    res
 }
 
 async fn set_banned(state: &AppState, user_id: &str, banned: bool) -> Response {
@@ -684,12 +705,15 @@ async fn search_messages(
 /// DELETE /api/admin/messages/:id
 async fn delete_message_admin(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Path(id): Path<uuid::Uuid>,
 ) -> Response {
     let result = sqlx::query("DELETE FROM messages WHERE id = $1").bind(id).execute(&state.db).await;
     match result {
-        Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(r) if r.rows_affected() > 0 => {
+            audit(&state.db, &admin.email, "delete_message", Some(&id.to_string()), None).await;
+            StatusCode::NO_CONTENT.into_response()
+        }
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Message not found"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
@@ -737,7 +761,7 @@ struct MaintenanceBody {
 /// POST /api/admin/maintenance — toggle maintenance mode
 async fn toggle_maintenance(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Json(body): Json<MaintenanceBody>,
 ) -> Response {
     let _ = sqlx::query(
@@ -747,6 +771,8 @@ async fn toggle_maintenance(
     .bind(json!({"enabled": body.enabled, "message": body.message}))
     .execute(&state.db)
     .await;
+
+    audit(&state.db, &admin.email, "toggle_maintenance", None, Some(json!({"enabled": body.enabled}))).await;
 
     Json(json!({"enabled": body.enabled})).into_response()
 }
@@ -806,14 +832,16 @@ async fn list_agents(
 }
 
 /// POST /api/admin/agents/:id/ban
-async fn ban_agent(State(state): State<AppState>, _admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
+async fn ban_agent(State(state): State<AppState>, admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
     let _ = sqlx::query("UPDATE agents SET banned = true WHERE id = $1").bind(id).execute(&state.db).await;
+    audit(&state.db, &admin.email, "ban_agent", Some(&id.to_string()), None).await;
     Json(json!({"banned": true})).into_response()
 }
 
 /// POST /api/admin/agents/:id/unban
-async fn unban_agent(State(state): State<AppState>, _admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
+async fn unban_agent(State(state): State<AppState>, admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
     let _ = sqlx::query("UPDATE agents SET banned = false WHERE id = $1").bind(id).execute(&state.db).await;
+    audit(&state.db, &admin.email, "unban_agent", Some(&id.to_string()), None).await;
     Json(json!({"banned": false})).into_response()
 }
 
@@ -1002,13 +1030,14 @@ struct ReplyBody {
 /// POST /api/admin/support-tickets/:id/reply
 async fn reply_support_ticket(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Path(id): Path<uuid::Uuid>,
     Json(body): Json<ReplyBody>,
 ) -> Response {
     let _ = sqlx::query(
         "UPDATE support_tickets SET admin_reply = $1, status = 'resolved', updated_at = NOW() WHERE id = $2",
     ).bind(&body.reply).bind(id).execute(&state.db).await;
+    audit(&state.db, &admin.email, "reply_ticket", Some(&id.to_string()), None).await;
     Json(json!({"status": "resolved"})).into_response()
 }
 
@@ -1036,12 +1065,13 @@ async fn list_data_requests(
 /// POST /api/admin/data-requests/:id/approve
 async fn approve_data_request(
     State(state): State<AppState>,
-    _admin: AuthAdmin,
+    admin: AuthAdmin,
     Path(id): Path<uuid::Uuid>,
 ) -> Response {
     let _ = sqlx::query(
         "UPDATE data_requests SET status = 'approved', updated_at = NOW() WHERE id = $1",
     ).bind(id).execute(&state.db).await;
+    audit(&state.db, &admin.email, "approve_data_request", Some(&id.to_string()), None).await;
     Json(json!({"status": "approved"})).into_response()
 }
 
