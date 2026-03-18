@@ -477,21 +477,25 @@ function MessageCheckmarks({ message }: { message: Message }) {
 
   if (message.status === "pending" || message.status === "error") return null;
 
+  // Must have a valid seq > 0 to check read status
+  const seq = message.seq;
+  if (!seq || seq <= 0) {
+    // No seq — just show single check for completed
+    if (message.status === "completed") return <Check className="h-2.5 w-2.5 text-muted-foreground/60" />;
+    return null;
+  }
+
   // Check if any other user has read up to this message's seq
-  const seq = message.seq ?? 0;
-  const hasReaders = readReceipts && Object.values(readReceipts).some((readSeq) => readSeq >= seq);
+  const hasReaders = readReceipts && Object.entries(readReceipts).some(
+    ([, readSeq]) => readSeq >= seq
+  );
 
   if (hasReaders) {
-    // Double check blue = read
     return <CheckCheck className="h-2.5 w-2.5 text-blue-400" />;
   }
 
-  if (message.status === "completed") {
-    // Single check = sent/delivered
-    return <Check className="h-2.5 w-2.5 text-muted-foreground/60" />;
-  }
-
-  return null;
+  // Single check = sent to server
+  return <Check className="h-2.5 w-2.5 text-muted-foreground/60" />;
 }
 
 function MessageActions({
