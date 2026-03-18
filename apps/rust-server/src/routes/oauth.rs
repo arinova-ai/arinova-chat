@@ -557,7 +557,7 @@ async fn internal_token(
         }
     };
 
-    let scope = "profile economy";
+    let scope = "profile";
 
     // Check for existing valid token
     let existing = sqlx::query_as::<_, (String, i64)>(
