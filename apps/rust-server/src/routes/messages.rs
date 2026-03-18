@@ -1543,7 +1543,33 @@ async fn delete_message(
     .await;
 
     match deleted {
-        Ok(result) if result.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(result) if result.rows_affected() > 0 => {
+            // Broadcast deletion to all conversation members via WebSocket
+            let member_ids = sqlx::query_as::<_, (String,)>(
+                "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+            )
+            .bind(conversation_id)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(id,)| id)
+            .collect::<Vec<_>>();
+
+            if !member_ids.is_empty() {
+                state.ws.broadcast_to_members(
+                    &member_ids,
+                    &json!({
+                        "type": "message_deleted",
+                        "conversationId": conversation_id.to_string(),
+                        "messageId": message_id.to_string(),
+                    }),
+                    &state.redis,
+                );
+            }
+
+            StatusCode::NO_CONTENT.into_response()
+        }
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error": "Message not found"})),

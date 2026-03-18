@@ -2678,6 +2678,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    if (event.type === "message_deleted") {
+      const { conversationId, messageId } = event;
+      const msgs = get().messagesByConversation[conversationId];
+      if (msgs) {
+        set({
+          messagesByConversation: {
+            ...get().messagesByConversation,
+            [conversationId]: msgs.filter((m) => m.id !== messageId),
+          },
+        });
+      }
+      return;
+    }
+
     if (event.type === "link_previews_ready") {
       const { conversationId, messageId, linkPreviews } = event;
       const msgs = get().messagesByConversation[conversationId];
