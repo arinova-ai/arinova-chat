@@ -161,6 +161,44 @@ export class Arinova {
   }
 
   /**
+   * Connect to Arinova — auto-detects iframe vs standalone.
+   * In iframe: listens for postMessage from parent (Arinova Chat).
+   * Standalone: falls back to PKCE login popup.
+   */
+  async connect(options?: { timeout?: number }): Promise<{ user: TokenResponse["user"]; accessToken: string; agents: { id: string; name: string; description: string | null; avatarUrl: string | null }[] }> {
+    const timeout = options?.timeout ?? 5000;
+    const inIframe = typeof window !== "undefined" && window.self !== window.top;
+
+    if (!inIframe) {
+      const token = await this.login();
+      return { user: token.user, accessToken: token.access_token, agents: [] };
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          window.removeEventListener("message", handler);
+          reject(new Error("connect timeout"));
+        }
+      }, timeout);
+
+      const handler = (event: MessageEvent) => {
+        if (event.data?.type !== "arinova:auth") return;
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        window.removeEventListener("message", handler);
+        const payload = event.data.payload as { user: TokenResponse["user"]; accessToken: string; agents: { id: string; name: string; description: string | null; avatarUrl: string | null }[] };
+        this.accessToken = payload.accessToken;
+        resolve(payload);
+      };
+      window.addEventListener("message", handler);
+    });
+  }
+
+  /**
    * Handle the OAuth callback (call this on your redirect_uri page).
    * Reads code and state from URL, exchanges for token.
    */
