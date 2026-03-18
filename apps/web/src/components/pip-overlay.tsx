@@ -193,6 +193,7 @@ export function PipOverlay() {
   const authSentRef = useRef(false);
 
   const sendAuthToIframe = useCallback(() => {
+    console.log("[PIP-AUTH] sendAuthToIframe called", { hasContentWindow: !!iframeRef.current?.contentWindow, hasSession: !!session?.user, userId: session?.user?.id });
     if (!iframeRef.current?.contentWindow || !session?.user) return false;
 
     // Read session token from cookies
@@ -200,6 +201,7 @@ export function PipOverlay() {
     const sessionCookie = cookies.find((c) => c.startsWith("better-auth.session_token="));
     const sessionToken = sessionCookie?.split("=").slice(1).join("=") ?? "";
 
+    console.log("[PIP-AUTH] Sending postMessage to iframe", { iframeUrl });
     iframeRef.current.contentWindow.postMessage(
       {
         type: "arinova:auth",
