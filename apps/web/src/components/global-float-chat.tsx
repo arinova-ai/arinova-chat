@@ -16,11 +16,22 @@ export function GlobalOfficePip() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Auto-exit PiP when navigating back to /office
+  // Track whether PiP was just activated — skip the first /office pathname
+  // check so the auto-exit doesn't fire before navigation completes.
+  const justEnteredRef = useRef(false);
   useEffect(() => {
-    if (active && pathname?.startsWith("/office")) {
-      exit();
+    if (active) justEnteredRef.current = true;
+  }, [active]);
+
+  // Auto-exit PiP when user navigates back to /office
+  useEffect(() => {
+    if (!active || !pathname?.startsWith("/office")) return;
+    // Skip if we just entered (still on /office, navigation pending)
+    if (justEnteredRef.current) {
+      justEnteredRef.current = false;
+      return;
     }
+    exit();
   }, [active, pathname, exit]);
 
   // Drag state
