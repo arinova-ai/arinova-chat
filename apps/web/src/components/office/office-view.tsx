@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentModal } from "./agent-modal";
 import { CharacterModal } from "./character-modal";
-import { FloatChatWindow } from "./float-chat-window";
 import { ThemeIframe } from "./theme-iframe";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useOfficeStream } from "@/hooks/use-office-stream";
@@ -11,8 +10,7 @@ import { useTheme } from "./theme-context";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { MessageCircle, X } from "lucide-react";
-import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
+import { useFloatWindowStore } from "@/store/float-window-store";
 import type { Agent } from "./types";
 
 
@@ -51,8 +49,7 @@ function OfficeViewInner() {
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [characterModalSlot, setCharacterModalSlot] = useState<number | null>(null);
-  // Float window state: multiple simultaneous chat windows
-  const [floatWindows, setFloatWindows] = useState<string[]>([]);
+  const openFloatWindow = useFloatWindowStore((s) => s.open);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
 
@@ -135,26 +132,22 @@ function OfficeViewInner() {
     ? bindings.find((b) => b.slotIndex === characterModalSlot)
     : undefined;
 
-  const openFloatWindow = useCallback((agentId: string) => {
-    setFloatWindows((prev) => prev.includes(agentId) ? prev : [...prev, agentId]);
-  }, []);
-
-  const closeFloatWindow = useCallback((agentId: string) => {
-    setFloatWindows((prev) => prev.filter((id) => id !== agentId));
-  }, []);
+  const openFloat = useCallback((agentId: string) => {
+    const agent = stream.agents.find((a) => a.id === agentId);
+    openFloatWindow({ agentId, agentName: agent?.name });
+  }, [stream.agents, openFloatWindow]);
 
   const selectAgent = useCallback((id: string | null) => {
     if (!id) return;
-    // All themes use iframe — open float window directly
-    openFloatWindow(id);
-  }, [openFloatWindow]);
+    openFloat(id);
+  }, [openFloat]);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
   const handleOpenChat = useCallback((agentId: string) => {
     setCharacterModalSlot(null);
-    openFloatWindow(agentId);
-  }, [openFloatWindow]);
+    openFloat(agentId);
+  }, [openFloat]);
   useEffect(() => {
     const el = mapContainerRef.current;
     if (!el) return;
@@ -178,7 +171,7 @@ function OfficeViewInner() {
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
       {/* Office map area — always takes full remaining space; ref must always mount for ResizeObserver */}
-      <div ref={mapContainerRef} className={cn("flex-1 min-h-0", isMobile && floatWindows.length > 0 && "pointer-events-none overflow-hidden")}>
+      <div ref={mapContainerRef} className="flex-1 min-h-0">
         {!themeReady ? (
           <div className="flex h-full items-center justify-center">
             <ArinovaSpinner />
@@ -215,112 +208,7 @@ function OfficeViewInner() {
         onOpenChat={handleOpenChat}
       />
 
-      {/* Float chat windows */}
-      {floatWindows.map((fwAgentId, idx) => {
-        const agent = stream.agents.find((a) => a.id === fwAgentId);
-        return (
-          <FloatChatWindow
-            key={fwAgentId}
-            agentId={fwAgentId}
-            agentName={agent?.name}
-            agentAvatar={undefined}
-            onClose={() => closeFloatWindow(fwAgentId)}
-            offsetIndex={idx}
-            isMobile={isMobile}
-          />
-        );
-      })}
-
-      {/* Mobile FAB — chat entry point */}
-      {isMobile && floatWindows.length === 0 && (
-        <MobileChatFab
-          agents={slots.filter((a) => a.status !== "unbound")}
-          onOpenChat={openFloatWindow}
-        />
-      )}
     </div>
-  );
-}
-
-/* ─── Mobile FAB: visible entry point for float chat ─── */
-
-function MobileChatFab({ agents, onOpenChat }: { agents: Agent[]; onOpenChat: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-
-  if (agents.length === 0) return null;
-
-  // Single agent — tap FAB directly opens chat
-  if (agents.length === 1) {
-    return (
-      <button
-        type="button"
-        className="fixed z-40 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform"
-        style={{ right: 16, bottom: 96, width: 56, height: 56 }}
-        onClick={() => onOpenChat(agents[0].id)}
-      >
-        <MessageCircle className="h-6 w-6" />
-      </button>
-    );
-  }
-
-  // Multiple agents — expand to show list
-  return (
-    <>
-      {/* Backdrop */}
-      {open && (
-        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setOpen(false)} />
-      )}
-
-      {/* Agent list popover */}
-      {open && (
-        <div
-          className="fixed z-50 flex flex-col gap-1 rounded-2xl border border-border bg-background/95 backdrop-blur-sm shadow-2xl p-2 max-h-[60vh] overflow-y-auto"
-          style={{ right: 16, bottom: 160, width: 220 }}
-        >
-          {agents.map((agent) => (
-            <button
-              key={agent.id}
-              type="button"
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-accent/60 active:bg-accent transition-colors"
-              onClick={() => {
-                setOpen(false);
-                onOpenChat(agent.id);
-              }}
-            >
-              <div className="h-8 w-8 shrink-0 rounded-full bg-accent flex items-center justify-center overflow-hidden">
-                {agent.emoji ? (
-                  <span className="text-base">{agent.emoji}</span>
-                ) : (
-                  <span className="text-xs font-medium">{agent.name.charAt(0)}</span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{agent.name}</p>
-                {agent.status && agent.status !== "unbound" && (
-                  <p className={cn(
-                    "text-[10px] truncate",
-                    agent.status === "idle" ? "text-muted-foreground" : "text-green-400",
-                  )}>
-                    {agent.status}
-                  </p>
-                )}
-              </div>
-              <MessageCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* FAB button */}
-      <button
-        type="button"
-        className="fixed z-50 flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform"
-        style={{ right: 16, bottom: 96, width: 56, height: 56 }}
-        onClick={() => setOpen(!open)}
-      >
-        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
-      </button>
-    </>
   );
 }
 
