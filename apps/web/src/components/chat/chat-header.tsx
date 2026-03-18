@@ -492,13 +492,44 @@ interface DirectHeaderButtonsProps {
 
 /* ─── Date Jump Button ─── */
 
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function fmtMonth(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function DateJumpButton({ conversationId }: { conversationId: string }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
+  const [loadingDates, setLoadingDates] = useState(false);
+  const [displayMonth, setDisplayMonth] = useState(new Date());
+
+  const fetchActiveDates = useCallback(async (month: Date) => {
+    setLoadingDates(true);
+    try {
+      const data = await api<{ dates: string[] }>(
+        `/api/conversations/${conversationId}/messages/dates?month=${fmtMonth(month)}`,
+        { silent: true },
+      );
+      setActiveDates(new Set(data.dates));
+    } catch {
+      setActiveDates(new Set());
+    } finally {
+      setLoadingDates(false);
+    }
+  }, [conversationId]);
+
+  // Fetch active dates when popover opens or month changes
+  useEffect(() => {
+    if (open) fetchActiveDates(displayMonth);
+  }, [open, displayMonth, fetchActiveDates]);
 
   const handleDateSelect = useCallback(async (day: Date | undefined) => {
     if (!day || !conversationId) return;
-    const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    const dateStr = fmtDate(day);
     setLoading(true);
     try {
       const data = await api<{ messageId: string }>(
@@ -550,8 +581,12 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
           captionLayout="dropdown"
           fromYear={2024}
           toYear={new Date().getFullYear()}
+          month={displayMonth}
+          onMonthChange={setDisplayMonth}
           onSelect={handleDateSelect}
-          disabled={(date) => date > new Date() || loading}
+          disabled={(date) =>
+            date > new Date() || loading || loadingDates || !activeDates.has(fmtDate(date))
+          }
           initialFocus
         />
       </PopoverContent>

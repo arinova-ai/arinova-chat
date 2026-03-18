@@ -23,6 +23,10 @@ pub fn router() -> Router<AppState> {
             get(messages_by_date),
         )
         .route(
+            "/api/conversations/{id}/messages/dates",
+            get(messages_dates),
+        )
+        .route(
             "/api/conversations/{conversationId}/messages/{messageId}",
             delete(delete_message),
         )
@@ -1084,6 +1088,79 @@ async fn messages_by_date(
             Json(json!({"error": e.to_string()})),
         )
             .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct DatesQuery {
+    month: String, // YYYY-MM
+}
+
+/// GET /api/conversations/{id}/messages/dates?month=2026-03
+/// Returns distinct dates that have messages in the given month.
+async fn messages_dates(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+    Query(q): Query<DatesQuery>,
+) -> Response {
+    // Verify conversation access
+    let conv = sqlx::query_as::<_, ConvCheck>(
+        r#"SELECT id FROM conversations WHERE id = $1 AND (
+            user_id = $2
+            OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = $1 AND cum.user_id = $2)
+        )"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match conv {
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Conversation not found"}))).into_response();
+        }
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response();
+        }
+        Ok(Some(_)) => {}
+    }
+
+    // Parse month string (YYYY-MM)
+    let month_start = match chrono::NaiveDate::parse_from_str(&format!("{}-01", q.month), "%Y-%m-%d") {
+        Ok(d) => d,
+        Err(_) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid month format, expected YYYY-MM"}))).into_response();
+        }
+    };
+
+    let next_month = if month_start.month() == 12 {
+        chrono::NaiveDate::from_ymd_opt(month_start.year() + 1, 1, 1)
+    } else {
+        chrono::NaiveDate::from_ymd_opt(month_start.year(), month_start.month() + 1, 1)
+    }
+    .unwrap_or(month_start);
+
+    let rows = sqlx::query_as::<_, (chrono::NaiveDate,)>(
+        r#"SELECT DISTINCT DATE(created_at)
+           FROM messages
+           WHERE conversation_id = $1
+             AND created_at >= $2
+             AND created_at < $3
+           ORDER BY 1"#,
+    )
+    .bind(conversation_id)
+    .bind(month_start)
+    .bind(next_month)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let dates: Vec<String> = rows.into_iter().map(|r| r.0.format("%Y-%m-%d").to_string()).collect();
+            Json(json!({"dates": dates})).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 }
 
