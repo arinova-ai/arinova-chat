@@ -30,6 +30,13 @@ interface UserItem {
   createdAt: string;
 }
 
+interface UserDetail extends UserItem {
+  bio: string | null;
+  conversationCount: number;
+  messageCount: number;
+  agentCount: number;
+}
+
 interface UsersResponse {
   users: UserItem[];
   total: number;
@@ -44,6 +51,8 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [banningId, setBanningId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const limit = 20;
 
   const fetchUsers = useCallback(async () => {
@@ -116,6 +125,15 @@ export default function AdminUsersPage() {
     }
   };
 
+  const openDetail = async (userId: string) => {
+    if (selectedUser?.id === userId) { setSelectedUser(null); return; }
+    setDetailLoading(true);
+    try {
+      const detail = await api<UserDetail>(`/api/admin/users/${userId}`);
+      setSelectedUser(detail);
+    } catch {} finally { setDetailLoading(false); }
+  };
+
   const totalPages = data ? Math.ceil(data.total / limit) : 0;
 
   return (
@@ -158,7 +176,8 @@ export default function AdminUsersPage() {
                 {data.users.map((user) => (
                   <div
                     key={user.id}
-                    className="flex items-center gap-3 px-4 py-3"
+                    className={`flex flex-wrap items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors ${selectedUser?.id === user.id ? "bg-muted/30" : ""}`}
+                    onClick={() => openDetail(user.id)}
                   >
                     <Avatar className="h-10 w-10 shrink-0">
                       {user.image ? (
@@ -236,6 +255,14 @@ export default function AdminUsersPage() {
                         </>
                       )}
                     </Button>
+                    {selectedUser?.id === user.id && (
+                      <div className="w-full mt-2 pt-2 border-t border-border grid grid-cols-3 gap-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.messageCount}</p><p className="text-[10px] text-muted-foreground">Messages</p></div>
+                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.conversationCount}</p><p className="text-[10px] text-muted-foreground">Conversations</p></div>
+                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.agentCount}</p><p className="text-[10px] text-muted-foreground">Agents</p></div>
+                        {selectedUser.bio && <p className="col-span-3 text-xs text-muted-foreground text-left">{selectedUser.bio}</p>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
