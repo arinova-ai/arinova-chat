@@ -23,6 +23,7 @@ import {
   ArrowRightLeft,
   Brain,
   Phone,
+  X,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useVoiceCallStore } from "@/store/voice-call-store";
@@ -378,32 +379,45 @@ export function ChatHeader({
     {/* Conversation search bar */}
     {convSearchOpen && (
       <div className="flex items-center gap-2 border-t border-border/50 px-4 py-2">
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={localSearchQuery}
-          onChange={(e) => setLocalSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              if (e.shiftKey) {
-                // Shift+Enter: go to previous result
-                if (convSearchIndex > 0) setConvSearchIndex(convSearchIndex - 1);
-              } else {
-                if (convSearchResults.length > 0 && localSearchQuery.trim() === useChatStore.getState().convSearchQuery) {
-                  // Already searched, go to next result
-                  setConvSearchIndex((convSearchIndex + 1) % convSearchResults.length);
+        <div className="relative min-w-0 flex-1 flex items-center">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={localSearchQuery}
+            onChange={(e) => setLocalSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (e.shiftKey) {
+                  if (convSearchIndex > 0) setConvSearchIndex(convSearchIndex - 1);
                 } else {
-                  handleSearchSubmit();
+                  if (convSearchResults.length > 0 && localSearchQuery.trim() === useChatStore.getState().convSearchQuery) {
+                    setConvSearchIndex((convSearchIndex + 1) % convSearchResults.length);
+                  } else {
+                    handleSearchSubmit();
+                  }
                 }
+              } else if (e.key === "Escape") {
+                closeConvSearch();
               }
-            } else if (e.key === "Escape") {
-              closeConvSearch();
-            }
-          }}
-          placeholder={t("chat.search.inConversation")}
-          className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-        />
+            }}
+            placeholder={t("chat.search.inConversation")}
+            className="min-w-0 w-full rounded-md border border-border bg-background pl-3 pr-16 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+          />
+          <div className="absolute right-1 flex items-center gap-0.5">
+            {localSearchQuery && (
+              <button
+                type="button"
+                className="h-6 w-6 flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => { setLocalSearchQuery(""); searchInputRef.current?.focus(); }}
+                title="Clear"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {conversationId && <DateJumpButton conversationId={conversationId} />}
+          </div>
+        </div>
         {convSearchLoading ? (
           <span className="text-xs text-muted-foreground animate-pulse">...</span>
         ) : convSearchResults.length > 0 ? (
@@ -571,7 +585,7 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8" title="Jump to date">
+        <Button variant="ghost" size="icon" className="h-6 w-6" title="Jump to date">
           <CalendarSearch className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
@@ -671,9 +685,6 @@ function DirectHeaderButtons({
           </Button>
         );
       })}
-
-      {/* Date jump */}
-      {conversationId && <DateJumpButton conversationId={conversationId} />}
 
       {/* Hamburger menu */}
       <DropdownMenu>
