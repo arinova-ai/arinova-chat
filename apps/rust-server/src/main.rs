@@ -438,6 +438,34 @@ async fn main() {
             PRIMARY KEY (message_id, user_id)
         );
         CREATE INDEX IF NOT EXISTS idx_message_read_receipts_conv ON message_read_receipts (message_id);
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            admin_email TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target_id TEXT,
+            details JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value JSONB NOT NULL DEFAULT '{}',
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        ALTER TABLE agents ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT FALSE;
+        CREATE TABLE IF NOT EXISTS content_filter_rules (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            pattern TEXT NOT NULL,
+            action TEXT NOT NULL DEFAULT 'block',
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS feature_flags (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT UNIQUE NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            description TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

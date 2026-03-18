@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use serde::Deserialize;
@@ -21,6 +21,21 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/users/{id}/ban", post(ban_user))
         .route("/api/admin/users/{id}/unban", post(unban_user))
         .route("/api/admin/backfill-embeddings", post(backfill_embeddings))
+        .route("/api/admin/users/{id}", get(get_user_detail))
+        .route("/api/admin/stats/trends", get(stats_trends))
+        .route("/api/admin/messages", get(search_messages))
+        .route("/api/admin/messages/{id}", delete(delete_message_admin))
+        .route("/api/admin/audit-logs", get(list_audit_logs))
+        .route("/api/admin/maintenance", post(toggle_maintenance))
+        .route("/api/admin/maintenance", get(get_maintenance))
+        .route("/api/admin/agents", get(list_agents))
+        .route("/api/admin/agents/{id}/ban", post(ban_agent))
+        .route("/api/admin/agents/{id}/unban", post(unban_agent))
+        .route("/api/admin/content-filters", get(list_content_filters).post(create_content_filter))
+        .route("/api/admin/content-filters/{id}", delete(delete_content_filter))
+        .route("/api/admin/feature-flags", get(list_feature_flags).post(upsert_feature_flag))
+        .route("/api/admin/health", get(server_health))
+        .route("/api/admin/stats/revenue", get(stats_revenue))
         // App review stubs (planned feature)
         .route("/api/admin/review/apps", get(review_apps_stub))
         .route("/api/admin/review/apps/{id}/{action}", post(review_app_action_stub))
@@ -524,4 +539,420 @@ async fn backfill_embeddings(
     }
 
     Json(json!({"processed": updated, "total": total})).into_response()
+}
+
+// ── User detail ───────────────────────────────────────────────────────
+
+/// GET /api/admin/users/:id — Full user detail
+async fn get_user_detail(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Path(id): Path<String>,
+) -> Response {
+    let row = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, Option<String>, chrono::NaiveDateTime)>(
+        r#"SELECT id, name, email, username, image, is_verified, banned, bio, created_at FROM "user" WHERE id = $1"#,
+    )
+    .bind(&id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(u)) => {
+            let conv_count = sqlx::query_as::<_, (i64,)>(
+                "SELECT COUNT(*) FROM conversation_user_members WHERE user_id = $1",
+            ).bind(&id).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+            let msg_count = sqlx::query_as::<_, (i64,)>(
+                "SELECT COUNT(*) FROM messages WHERE sender_user_id = $1",
+            ).bind(&id).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+            let agent_count = sqlx::query_as::<_, (i64,)>(
+                "SELECT COUNT(*) FROM agents WHERE owner_id = $1",
+            ).bind(&id).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+            Json(json!({
+                "id": u.0, "name": u.1, "email": u.2, "username": u.3, "image": u.4,
+                "isVerified": u.5, "isBanned": u.6, "bio": u.7, "createdAt": u.8.to_string(),
+                "conversationCount": conv_count, "messageCount": msg_count, "agentCount": agent_count,
+            })).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "User not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+// ── Stats trends (DAU/MAU) ────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct TrendsQuery {
+    days: Option<i32>,
+}
+
+/// GET /api/admin/stats/trends?days=30 — Daily active users trend
+async fn stats_trends(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Query(q): Query<TrendsQuery>,
+) -> Response {
+    let days = q.days.unwrap_or(30).min(90).max(1);
+
+    let rows = sqlx::query_as::<_, (chrono::NaiveDate, i64)>(
+        r#"SELECT DATE(created_at) as day, COUNT(DISTINCT sender_user_id) as dau
+           FROM messages
+           WHERE created_at > NOW() - ($1 || ' days')::interval
+             AND sender_user_id IS NOT NULL
+           GROUP BY DATE(created_at)
+           ORDER BY day"#,
+    )
+    .bind(days)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let data: Vec<serde_json::Value> = rows.iter().map(|(day, dau)| json!({"date": day.to_string(), "dau": dau})).collect();
+
+    let mau = sqlx::query_as::<_, (i64,)>(
+        "SELECT COUNT(DISTINCT sender_user_id) FROM messages WHERE created_at > NOW() - INTERVAL '30 days' AND sender_user_id IS NOT NULL",
+    ).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    Json(json!({"trend": data, "mau": mau})).into_response()
+}
+
+// ── Message search + delete (moderation) ──────────────────────────────
+
+#[derive(Deserialize)]
+struct SearchMessagesQuery {
+    q: Option<String>,
+    page: Option<i64>,
+    limit: Option<i64>,
+}
+
+/// GET /api/admin/messages?q=keyword&page=1&limit=20
+async fn search_messages(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Query(params): Query<SearchMessagesQuery>,
+) -> Response {
+    let page = params.page.unwrap_or(1).max(1);
+    let limit = params.limit.unwrap_or(20).min(100);
+    let offset = (page - 1) * limit;
+
+    let (rows, total) = if let Some(ref q) = params.q {
+        let pattern = format!("%{}%", q);
+        let rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, Option<String>, Option<String>, chrono::NaiveDateTime)>(
+            r#"SELECT m.id, m.conversation_id, m.content,
+                      COALESCE(u.name, 'Agent') as sender_name,
+                      m.sender_user_id,
+                      m.created_at
+               FROM messages m
+               LEFT JOIN "user" u ON m.sender_user_id = u.id
+               WHERE m.content ILIKE $1
+               ORDER BY m.created_at DESC LIMIT $2 OFFSET $3"#,
+        ).bind(&pattern).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default();
+        let total = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM messages WHERE content ILIKE $1").bind(&pattern).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+        (rows, total)
+    } else {
+        let rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, Option<String>, Option<String>, chrono::NaiveDateTime)>(
+            r#"SELECT m.id, m.conversation_id, m.content,
+                      COALESCE(u.name, 'Agent') as sender_name,
+                      m.sender_user_id,
+                      m.created_at
+               FROM messages m
+               LEFT JOIN "user" u ON m.sender_user_id = u.id
+               ORDER BY m.created_at DESC LIMIT $1 OFFSET $2"#,
+        ).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default();
+        let total = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM messages").fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+        (rows, total)
+    };
+
+    let messages: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "conversationId": r.1, "content": r.2,
+        "senderName": r.3, "senderUserId": r.4, "createdAt": r.5.to_string(),
+    })).collect();
+
+    Json(json!({"messages": messages, "total": total, "page": page, "limit": limit})).into_response()
+}
+
+/// DELETE /api/admin/messages/:id
+async fn delete_message_admin(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Path(id): Path<uuid::Uuid>,
+) -> Response {
+    let result = sqlx::query("DELETE FROM messages WHERE id = $1").bind(id).execute(&state.db).await;
+    match result {
+        Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Message not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+// ── Audit logs ────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct AuditQuery {
+    page: Option<i64>,
+    limit: Option<i64>,
+}
+
+/// GET /api/admin/audit-logs
+async fn list_audit_logs(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Query(q): Query<AuditQuery>,
+) -> Response {
+    let page = q.page.unwrap_or(1).max(1);
+    let limit = q.limit.unwrap_or(50).min(100);
+    let offset = (page - 1) * limit;
+
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>, Option<serde_json::Value>, chrono::NaiveDateTime)>(
+        "SELECT id, admin_email, action, target_id, details, created_at FROM audit_logs ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+    ).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default();
+
+    let total = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM audit_logs").fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    let logs: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "adminEmail": r.1, "action": r.2, "targetId": r.3, "details": r.4, "createdAt": r.5.to_string(),
+    })).collect();
+
+    Json(json!({"logs": logs, "total": total, "page": page, "limit": limit})).into_response()
+}
+
+// ── Maintenance mode ──────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct MaintenanceBody {
+    enabled: bool,
+    message: Option<String>,
+}
+
+/// POST /api/admin/maintenance — toggle maintenance mode
+async fn toggle_maintenance(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Json(body): Json<MaintenanceBody>,
+) -> Response {
+    let _ = sqlx::query(
+        r#"INSERT INTO system_settings (key, value) VALUES ('maintenance', $1)
+           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()"#,
+    )
+    .bind(json!({"enabled": body.enabled, "message": body.message}))
+    .execute(&state.db)
+    .await;
+
+    Json(json!({"enabled": body.enabled})).into_response()
+}
+
+/// GET /api/admin/maintenance — get maintenance status
+async fn get_maintenance(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let row = sqlx::query_as::<_, (serde_json::Value,)>(
+        "SELECT value FROM system_settings WHERE key = 'maintenance'",
+    ).fetch_optional(&state.db).await;
+
+    match row {
+        Ok(Some(r)) => Json(r.0).into_response(),
+        _ => Json(json!({"enabled": false})).into_response(),
+    }
+}
+
+// ── Agent management ──────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct AgentListQuery {
+    page: Option<i64>,
+    limit: Option<i64>,
+    search: Option<String>,
+}
+
+/// GET /api/admin/agents
+async fn list_agents(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Query(params): Query<AgentListQuery>,
+) -> Response {
+    let page = params.page.unwrap_or(1).max(1);
+    let limit = params.limit.unwrap_or(20).min(100);
+    let offset = (page - 1) * limit;
+
+    let rows = if let Some(ref s) = params.search {
+        let pattern = format!("%{}%", s.to_lowercase());
+        sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, String, bool, chrono::NaiveDateTime)>(
+            r#"SELECT a.id, a.name, a.description, a.owner_id, COALESCE(a.banned, false), a.created_at
+               FROM agents a WHERE LOWER(a.name) LIKE $1 ORDER BY a.created_at DESC LIMIT $2 OFFSET $3"#,
+        ).bind(&pattern).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default()
+    } else {
+        sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, String, bool, chrono::NaiveDateTime)>(
+            r#"SELECT a.id, a.name, a.description, a.owner_id, COALESCE(a.banned, false), a.created_at
+               FROM agents a ORDER BY a.created_at DESC LIMIT $1 OFFSET $2"#,
+        ).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default()
+    };
+
+    let agents: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "name": r.1, "description": r.2, "ownerId": r.3, "isBanned": r.4, "createdAt": r.5.to_string(),
+    })).collect();
+
+    Json(json!({"agents": agents, "page": page, "limit": limit})).into_response()
+}
+
+/// POST /api/admin/agents/:id/ban
+async fn ban_agent(State(state): State<AppState>, _admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
+    let _ = sqlx::query("UPDATE agents SET banned = true WHERE id = $1").bind(id).execute(&state.db).await;
+    Json(json!({"banned": true})).into_response()
+}
+
+/// POST /api/admin/agents/:id/unban
+async fn unban_agent(State(state): State<AppState>, _admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
+    let _ = sqlx::query("UPDATE agents SET banned = false WHERE id = $1").bind(id).execute(&state.db).await;
+    Json(json!({"banned": false})).into_response()
+}
+
+// ── Content filters ───────────────────────────────────────────────────
+
+/// GET /api/admin/content-filters
+async fn list_content_filters(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, bool, chrono::NaiveDateTime)>(
+        "SELECT id, pattern, action, enabled, created_at FROM content_filter_rules ORDER BY created_at DESC",
+    ).fetch_all(&state.db).await.unwrap_or_default();
+
+    let rules: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "pattern": r.1, "action": r.2, "enabled": r.3, "createdAt": r.4.to_string(),
+    })).collect();
+
+    Json(json!({"rules": rules})).into_response()
+}
+
+#[derive(Deserialize)]
+struct CreateFilterBody {
+    pattern: String,
+    action: Option<String>,
+}
+
+/// POST /api/admin/content-filters
+async fn create_content_filter(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Json(body): Json<CreateFilterBody>,
+) -> Response {
+    let action = body.action.unwrap_or_else(|| "block".to_string());
+    let id = uuid::Uuid::new_v4();
+    let _ = sqlx::query("INSERT INTO content_filter_rules (id, pattern, action, enabled) VALUES ($1, $2, $3, true)")
+        .bind(id).bind(&body.pattern).bind(&action).execute(&state.db).await;
+    Json(json!({"id": id, "pattern": body.pattern, "action": action})).into_response()
+}
+
+/// DELETE /api/admin/content-filters/:id
+async fn delete_content_filter(State(state): State<AppState>, _admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
+    let _ = sqlx::query("DELETE FROM content_filter_rules WHERE id = $1").bind(id).execute(&state.db).await;
+    StatusCode::NO_CONTENT.into_response()
+}
+
+// ── Feature flags ─────────────────────────────────────────────────────
+
+/// GET /api/admin/feature-flags
+async fn list_feature_flags(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, bool, Option<String>, chrono::NaiveDateTime)>(
+        "SELECT id, name, enabled, description, updated_at FROM feature_flags ORDER BY name",
+    ).fetch_all(&state.db).await.unwrap_or_default();
+
+    let flags: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "name": r.1, "enabled": r.2, "description": r.3, "updatedAt": r.4.to_string(),
+    })).collect();
+
+    Json(json!({"flags": flags})).into_response()
+}
+
+#[derive(Deserialize)]
+struct UpsertFlagBody {
+    name: String,
+    enabled: bool,
+    description: Option<String>,
+}
+
+/// POST /api/admin/feature-flags — create or update
+async fn upsert_feature_flag(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Json(body): Json<UpsertFlagBody>,
+) -> Response {
+    let _ = sqlx::query(
+        r#"INSERT INTO feature_flags (id, name, enabled, description) VALUES (gen_random_uuid(), $1, $2, $3)
+           ON CONFLICT (name) DO UPDATE SET enabled = $2, description = $3, updated_at = NOW()"#,
+    ).bind(&body.name).bind(body.enabled).bind(&body.description).execute(&state.db).await;
+
+    Json(json!({"name": body.name, "enabled": body.enabled})).into_response()
+}
+
+// ── Server health ─────────────────────────────────────────────────────
+
+/// GET /api/admin/health — Server monitoring
+async fn server_health(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let online_users = state.ws.user_connections.len();
+    let active_streams = state.ws.active_streams.len();
+
+    let db_ok = sqlx::query("SELECT 1").execute(&state.db).await.is_ok();
+
+    let msg_1h = sqlx::query_as::<_, (i64,)>(
+        "SELECT COUNT(*) FROM messages WHERE created_at > NOW() - INTERVAL '1 hour'",
+    ).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    Json(json!({
+        "status": if db_ok { "ok" } else { "degraded" },
+        "onlineUsers": online_users,
+        "activeStreams": active_streams,
+        "messagesLastHour": msg_1h,
+        "dbConnected": db_ok,
+    })).into_response()
+}
+
+// ── Revenue analytics ─────────────────────────────────────────────────
+
+/// GET /api/admin/stats/revenue — Revenue analytics
+async fn stats_revenue(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let total_revenue = sqlx::query_as::<_, (i64,)>(
+        "SELECT COALESCE(SUM(amount), 0) FROM coin_transactions WHERE type = 'topup'",
+    ).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    let total_purchases = sqlx::query_as::<_, (i64,)>(
+        "SELECT COALESCE(ABS(SUM(amount)), 0) FROM coin_transactions WHERE type = 'purchase'",
+    ).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    let platform_fees = sqlx::query_as::<_, (i64,)>(
+        "SELECT COALESCE(ABS(SUM(amount)), 0) FROM coin_transactions WHERE type = 'platform_fee'",
+    ).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    let daily = sqlx::query_as::<_, (chrono::NaiveDate, i64, i64)>(
+        r#"SELECT DATE(created_at),
+                  COALESCE(SUM(CASE WHEN type = 'topup' THEN amount ELSE 0 END), 0),
+                  COALESCE(ABS(SUM(CASE WHEN type IN ('purchase', 'charge') THEN amount ELSE 0 END)), 0)
+           FROM coin_transactions
+           WHERE created_at > NOW() - INTERVAL '30 days'
+           GROUP BY DATE(created_at)
+           ORDER BY 1"#,
+    ).fetch_all(&state.db).await.unwrap_or_default();
+
+    let trend: Vec<serde_json::Value> = daily.iter().map(|(d, topup, spend)| json!({
+        "date": d.to_string(), "topup": topup, "spend": spend,
+    })).collect();
+
+    Json(json!({
+        "totalRevenue": total_revenue,
+        "totalPurchases": total_purchases,
+        "platformFees": platform_fees,
+        "trend": trend,
+    })).into_response()
 }
