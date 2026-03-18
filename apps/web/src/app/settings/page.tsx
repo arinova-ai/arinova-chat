@@ -487,6 +487,9 @@ function ProfilePanel() {
   const [saveError, setSaveError] = useState("");
 
   const [avatarUploading, setAvatarUploading] = useState(false);
+  // Local override for avatar — updated immediately on selection, before session refetch
+  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
+  const displayAvatar = localAvatar ?? session?.user?.image ?? null;
   const [coverUploading, setCoverUploading] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [coverCropFile, setCoverCropFile] = useState<File | null>(null);
@@ -575,7 +578,8 @@ function ProfilePanel() {
         body: JSON.stringify({ image: data.imageUrl }),
       });
       if (!updateRes.ok) throw new Error("Failed to update avatar");
-      await authClient.getSession();
+      setLocalAvatar(data.imageUrl);
+      authClient.getSession();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Avatar upload failed");
     } finally {
@@ -593,7 +597,8 @@ function ProfilePanel() {
         body: JSON.stringify({ image: url }),
       });
       if (!res.ok) throw new Error("Failed to set avatar");
-      await authClient.getSession();
+      setLocalAvatar(url);
+      authClient.getSession();
     } catch {
       setSaveError("Failed to set avatar");
     } finally {
@@ -731,8 +736,8 @@ function ProfilePanel() {
                 disabled={avatarUploading}
               >
                 <Avatar className="h-20 w-20 ring-4 ring-background">
-                  {session?.user?.image ? (
-                    <AvatarImage src={assetUrl(session.user.image)} alt={session?.user?.name ?? ""} />
+                  {displayAvatar ? (
+                    <AvatarImage src={assetUrl(displayAvatar)} alt={session?.user?.name ?? ""} />
                   ) : null}
                   <AvatarFallback className="bg-secondary text-2xl">
                     {sessionPending ? "" : (session?.user?.name ?? "?").charAt(0).toUpperCase()}
@@ -765,7 +770,7 @@ function ProfilePanel() {
             {/* Default avatar picker */}
             <DefaultAvatarPicker
               onSelect={handleDefaultAvatarSelect}
-              selected={session?.user?.image}
+              selected={displayAvatar}
               className="mt-3"
             />
 
