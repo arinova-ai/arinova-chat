@@ -790,9 +790,6 @@ function GroupHeaderButtons({
         );
       })}
 
-      {/* Date jump */}
-      {conversationId && <DateJumpButton conversationId={conversationId} />}
-
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
