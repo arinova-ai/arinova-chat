@@ -39,8 +39,9 @@ export class IframeRenderer implements OfficeRenderer {
     const entry = manifest?.entry ?? "theme.js";
 
     // The iframe loads a small HTML wrapper that includes the bridge + theme entry
-    const bridgeUrl = `${base}/${tid}/bridge.js`;
-    const entryUrl = `${base}/${tid}/${entry}`;
+    const cacheBust = `?v=${Date.now()}`;
+    const bridgeUrl = `${base}/${tid}/bridge.js${cacheBust}`;
+    const entryUrl = `${base}/${tid}/${entry}${cacheBust}`;
 
     const html = `<!DOCTYPE html>
 <html><head>
