@@ -43,6 +43,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/email-templates", get(list_email_templates).post(upsert_email_template))
         .route("/api/admin/ip-blacklist", get(list_ip_blacklist).post(add_ip_blacklist))
         .route("/api/admin/ip-blacklist/{id}", delete(delete_ip_blacklist))
+        .route("/api/admin/2fa-policy", get(get_2fa_policy).post(set_2fa_policy))
         // App review stubs (planned feature)
         .route("/api/admin/review/apps", get(review_apps_stub))
         .route("/api/admin/review/apps/{id}/{action}", post(review_app_action_stub))
@@ -1123,4 +1124,53 @@ async fn add_ip_blacklist(
 async fn delete_ip_blacklist(State(state): State<AppState>, _admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
     let _ = sqlx::query("DELETE FROM ip_blacklist WHERE id = $1").bind(id).execute(&state.db).await;
     StatusCode::NO_CONTENT.into_response()
+}
+
+// ── 2FA Policy ────────────────────────────────────────────────────────
+
+/// GET /api/admin/2fa-policy
+async fn get_2fa_policy(State(state): State<AppState>, _admin: AuthAdmin) -> Response {
+    let row = sqlx::query_as::<_, (serde_json::Value,)>(
+        "SELECT value FROM system_settings WHERE key = '2fa_policy'",
+    ).fetch_optional(&state.db).await;
+
+    let enrolled = sqlx::query_as::<_, (i64,)>(
+        r#"SELECT COUNT(*) FROM "user" WHERE totp_secret IS NOT NULL"#,
+    ).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    let total = sqlx::query_as::<_, (i64,)>(
+        r#"SELECT COUNT(*) FROM "user""#,
+    ).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    match row {
+        Ok(Some(r)) => {
+            let mut val = r.0;
+            val["enrolledUsers"] = json!(enrolled);
+            val["totalUsers"] = json!(total);
+            Json(val).into_response()
+        }
+        _ => Json(json!({"enforced": false, "enrolledUsers": enrolled, "totalUsers": total})).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct TwoFaPolicyBody {
+    enforced: bool,
+}
+
+/// POST /api/admin/2fa-policy — toggle 2FA enforcement
+async fn set_2fa_policy(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Json(body): Json<TwoFaPolicyBody>,
+) -> Response {
+    let _ = sqlx::query(
+        r#"INSERT INTO system_settings (key, value) VALUES ('2fa_policy', $1)
+           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()"#,
+    )
+    .bind(json!({"enforced": body.enforced}))
+    .execute(&state.db)
+    .await;
+
+    Json(json!({"enforced": body.enforced})).into_response()
 }

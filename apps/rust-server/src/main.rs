@@ -497,6 +497,7 @@ async fn main() {
             reason TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+        ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_secret TEXT;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

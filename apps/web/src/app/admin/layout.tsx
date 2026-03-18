@@ -46,6 +46,7 @@ const NAV_ITEMS = [
   { href: "/admin/data-requests", label: "GDPR", icon: Database },
   { href: "/admin/email-templates", label: "Emails", icon: Mail },
   { href: "/admin/ip-blacklist", label: "IP Block", icon: Globe },
+  { href: "/admin/2fa", label: "2FA", icon: Lock },
   { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/admin/review", label: "Review", icon: Shield },
   { href: "/admin/sticker-review", label: "Stickers", icon: Sticker },
