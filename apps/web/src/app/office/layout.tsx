@@ -34,7 +34,7 @@ function OfficeLayoutInner({ children }: { children: ReactNode }) {
   }, [themeId, enterPip, router, stream.agents, session]);
 
   return (
-    <div className="app-dvh flex bg-background" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
+    <div className="app-dvh flex bg-background">
       {/* Desktop Icon Rail */}
       <div className="hidden h-full md:block">
         <IconRail />
