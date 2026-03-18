@@ -17,6 +17,8 @@ function OAuthConsentContent() {
   const scope = searchParams.get("scope") ?? "profile";
   const state = searchParams.get("state");
   const appName = searchParams.get("app_name") ?? clientId;
+  const codeChallenge = searchParams.get("code_challenge");
+  const codeChallengeMethod = searchParams.get("code_challenge_method");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,6 +45,8 @@ function OAuthConsentContent() {
           redirect_uri: redirectUri,
           scope,
           state,
+          code_challenge: codeChallenge,
+          code_challenge_method: codeChallengeMethod,
         }),
       });
 
