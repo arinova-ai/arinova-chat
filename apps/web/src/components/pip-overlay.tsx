@@ -196,10 +196,8 @@ export function PipOverlay() {
     console.log("[PIP-AUTH] sendAuthToIframe called", { hasContentWindow: !!iframeRef.current?.contentWindow, hasSession: !!session?.user, userId: session?.user?.id });
     if (!iframeRef.current?.contentWindow || !session?.user) return false;
 
-    // Read session token from cookies
-    const cookies = document.cookie.split("; ");
-    const sessionCookie = cookies.find((c) => c.startsWith("better-auth.session_token="));
-    const sessionToken = sessionCookie?.split("=").slice(1).join("=") ?? "";
+    // Use session token from better-auth session object
+    const sessionToken = session.session?.token ?? "";
 
     console.log("[PIP-AUTH] Sending postMessage to iframe", { iframeUrl });
     iframeRef.current.contentWindow.postMessage(
