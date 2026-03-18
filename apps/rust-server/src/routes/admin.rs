@@ -36,6 +36,13 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/feature-flags", get(list_feature_flags).post(upsert_feature_flag))
         .route("/api/admin/health", get(server_health))
         .route("/api/admin/stats/revenue", get(stats_revenue))
+        .route("/api/admin/support-tickets", get(list_support_tickets))
+        .route("/api/admin/support-tickets/{id}/reply", post(reply_support_ticket))
+        .route("/api/admin/data-requests", get(list_data_requests))
+        .route("/api/admin/data-requests/{id}/approve", post(approve_data_request))
+        .route("/api/admin/email-templates", get(list_email_templates).post(upsert_email_template))
+        .route("/api/admin/ip-blacklist", get(list_ip_blacklist).post(add_ip_blacklist))
+        .route("/api/admin/ip-blacklist/{id}", delete(delete_ip_blacklist))
         // App review stubs (planned feature)
         .route("/api/admin/review/apps", get(review_apps_stub))
         .route("/api/admin/review/apps/{id}/{action}", post(review_app_action_stub))
@@ -955,4 +962,165 @@ async fn stats_revenue(
         "platformFees": platform_fees,
         "trend": trend,
     })).into_response()
+}
+
+// ── Support tickets ───────────────────────────────────────────────────
+
+/// GET /api/admin/support-tickets
+async fn list_support_tickets(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Query(q): Query<AuditQuery>,
+) -> Response {
+    let page = q.page.unwrap_or(1).max(1);
+    let limit = q.limit.unwrap_or(20).min(100);
+    let offset = (page - 1) * limit;
+
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, String, Option<String>, chrono::NaiveDateTime)>(
+        r#"SELECT t.id, t.user_id, COALESCE(u.name, 'Unknown'), t.subject, t.status, t.admin_reply, t.created_at
+           FROM support_tickets t LEFT JOIN "user" u ON t.user_id = u.id
+           ORDER BY t.created_at DESC LIMIT $1 OFFSET $2"#,
+    ).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default();
+
+    let total = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM support_tickets")
+        .fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
+
+    let tickets: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "userId": r.1, "userName": r.2, "subject": r.3,
+        "status": r.4, "adminReply": r.5, "createdAt": r.6.to_string(),
+    })).collect();
+
+    Json(json!({"tickets": tickets, "total": total, "page": page})).into_response()
+}
+
+#[derive(Deserialize)]
+struct ReplyBody {
+    reply: String,
+}
+
+/// POST /api/admin/support-tickets/:id/reply
+async fn reply_support_ticket(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Path(id): Path<uuid::Uuid>,
+    Json(body): Json<ReplyBody>,
+) -> Response {
+    let _ = sqlx::query(
+        "UPDATE support_tickets SET admin_reply = $1, status = 'resolved', updated_at = NOW() WHERE id = $2",
+    ).bind(&body.reply).bind(id).execute(&state.db).await;
+    Json(json!({"status": "resolved"})).into_response()
+}
+
+// ── GDPR data requests ────────────────────────────────────────────────
+
+/// GET /api/admin/data-requests
+async fn list_data_requests(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, chrono::NaiveDateTime)>(
+        r#"SELECT dr.id, dr.user_id, COALESCE(u.name, 'Unknown'), dr.request_type, dr.created_at
+           FROM data_requests dr LEFT JOIN "user" u ON dr.user_id = u.id
+           WHERE dr.status = 'pending'
+           ORDER BY dr.created_at"#,
+    ).fetch_all(&state.db).await.unwrap_or_default();
+
+    let requests: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "userId": r.1, "userName": r.2, "type": r.3, "createdAt": r.4.to_string(),
+    })).collect();
+
+    Json(json!({"requests": requests})).into_response()
+}
+
+/// POST /api/admin/data-requests/:id/approve
+async fn approve_data_request(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Path(id): Path<uuid::Uuid>,
+) -> Response {
+    let _ = sqlx::query(
+        "UPDATE data_requests SET status = 'approved', updated_at = NOW() WHERE id = $1",
+    ).bind(id).execute(&state.db).await;
+    Json(json!({"status": "approved"})).into_response()
+}
+
+// ── Email templates ───────────────────────────────────────────────────
+
+/// GET /api/admin/email-templates
+async fn list_email_templates(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, chrono::NaiveDateTime)>(
+        "SELECT id, name, subject, body_html, updated_at FROM email_templates ORDER BY name",
+    ).fetch_all(&state.db).await.unwrap_or_default();
+
+    let templates: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "name": r.1, "subject": r.2, "bodyHtml": r.3, "updatedAt": r.4.to_string(),
+    })).collect();
+
+    Json(json!({"templates": templates})).into_response()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EmailTemplateBody {
+    name: String,
+    subject: String,
+    body_html: String,
+}
+
+/// POST /api/admin/email-templates — create or update
+async fn upsert_email_template(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Json(body): Json<EmailTemplateBody>,
+) -> Response {
+    let _ = sqlx::query(
+        r#"INSERT INTO email_templates (id, name, subject, body_html) VALUES (gen_random_uuid(), $1, $2, $3)
+           ON CONFLICT (name) DO UPDATE SET subject = $2, body_html = $3, updated_at = NOW()"#,
+    ).bind(&body.name).bind(&body.subject).bind(&body.body_html).execute(&state.db).await;
+    Json(json!({"name": body.name})).into_response()
+}
+
+// ── IP blacklist ──────────────────────────────────────────────────────
+
+/// GET /api/admin/ip-blacklist
+async fn list_ip_blacklist(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, chrono::NaiveDateTime)>(
+        "SELECT id, ip, reason, created_at FROM ip_blacklist ORDER BY created_at DESC",
+    ).fetch_all(&state.db).await.unwrap_or_default();
+
+    let ips: Vec<serde_json::Value> = rows.iter().map(|r| json!({
+        "id": r.0, "ip": r.1, "reason": r.2, "createdAt": r.3.to_string(),
+    })).collect();
+
+    Json(json!({"entries": ips})).into_response()
+}
+
+#[derive(Deserialize)]
+struct IpBlacklistBody {
+    ip: String,
+    reason: Option<String>,
+}
+
+/// POST /api/admin/ip-blacklist
+async fn add_ip_blacklist(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+    Json(body): Json<IpBlacklistBody>,
+) -> Response {
+    let id = uuid::Uuid::new_v4();
+    let _ = sqlx::query("INSERT INTO ip_blacklist (id, ip, reason) VALUES ($1, $2, $3)")
+        .bind(id).bind(&body.ip).bind(&body.reason).execute(&state.db).await;
+    Json(json!({"id": id, "ip": body.ip})).into_response()
+}
+
+/// DELETE /api/admin/ip-blacklist/:id
+async fn delete_ip_blacklist(State(state): State<AppState>, _admin: AuthAdmin, Path(id): Path<uuid::Uuid>) -> Response {
+    let _ = sqlx::query("DELETE FROM ip_blacklist WHERE id = $1").bind(id).execute(&state.db).await;
+    StatusCode::NO_CONTENT.into_response()
 }

@@ -23,6 +23,11 @@ import {
   Heart,
   DollarSign,
   Activity,
+  Ticket,
+  Database,
+  Mail,
+  Globe,
+  Lock,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -37,6 +42,10 @@ const NAV_ITEMS = [
   { href: "/admin/health", label: "Health", icon: Activity },
   { href: "/admin/revenue", label: "Revenue", icon: DollarSign },
   { href: "/admin/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/admin/support-tickets", label: "Tickets", icon: Ticket },
+  { href: "/admin/data-requests", label: "GDPR", icon: Database },
+  { href: "/admin/email-templates", label: "Emails", icon: Mail },
+  { href: "/admin/ip-blacklist", label: "IP Block", icon: Globe },
   { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/admin/review", label: "Review", icon: Shield },
   { href: "/admin/sticker-review", label: "Stickers", icon: Sticker },
