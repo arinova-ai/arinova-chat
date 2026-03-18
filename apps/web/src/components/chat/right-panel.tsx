@@ -10,6 +10,7 @@ import {
   UsersRound,
   MessagesSquare,
   PanelRightClose,
+  Settings,
 } from "lucide-react";
 import { useRightPanelStore } from "@/store/right-panel-store";
 import { useChatStore } from "@/store/chat-store";
@@ -21,6 +22,7 @@ import { ThreadListContent } from "./thread-list-sheet";
 import { GroupMembersPanel } from "./group-members-panel";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
 import { WikiPanel } from "./wiki-panel";
+import { ChatHeaderSettingsInline } from "./chat-header-settings";
 
 const TABS = [
   { id: "notes" as const, icon: BookOpen },
@@ -30,6 +32,7 @@ const TABS = [
   { id: "memory" as const, icon: Brain },
   { id: "members" as const, icon: UsersRound },
   { id: "chat" as const, icon: MessagesSquare },
+  { id: "settings" as const, icon: Settings },
 ] as const;
 
 const TAB_LABELS: Record<string, string> = {
@@ -40,6 +43,7 @@ const TAB_LABELS: Record<string, string> = {
   memory: "rightPanel.memory",
   members: "rightPanel.members",
   chat: "rightPanel.chat",
+  settings: "rightPanel.settings",
 };
 
 export function RightPanel() {
@@ -224,6 +228,8 @@ function TabContent({ tab }: { tab: string }) {
       return sideChatConversationId ? (
         <div className="flex h-full items-center justify-center text-muted-foreground text-sm">Side chat: {sideChatConversationId}</div>
       ) : null;
+    case "settings":
+      return <ChatHeaderSettingsInline conversationId={activeConversationId} />;
     default:
       return null;
   }

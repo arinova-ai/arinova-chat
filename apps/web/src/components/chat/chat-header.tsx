@@ -324,6 +324,8 @@ export function ChatHeader({
               if (type === "community" && officialCommunityId) {
                 setCommunitySettingsTab(undefined);
                 setCommunitySettingsOpen(true);
+              } else if (window.matchMedia("(min-width: 1280px)").matches) {
+                useRightPanelStore.getState().setActiveTab("settings");
               } else {
                 setSettingsOpen(true);
               }
@@ -366,6 +368,8 @@ export function ChatHeader({
               if (type === "community" || type === "official" || type === "lounge") {
                 setCommunitySettingsTab(undefined);
                 setCommunitySettingsOpen(true);
+              } else if (window.matchMedia("(min-width: 1280px)").matches) {
+                useRightPanelStore.getState().setActiveTab("settings");
               } else {
                 setSettingsOpen(true);
               }

@@ -70,9 +70,11 @@ interface ChatHeaderSettingsProps {
   groupTitle?: string;
   groupAvatarUrl?: string | null;
   onGroupTitleSave?: (title: string) => void;
+  /** Render inline (no overlay) for right panel use */
+  inline?: boolean;
 }
 
-export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = "direct", groupTitle, groupAvatarUrl, onGroupTitleSave }: ChatHeaderSettingsProps) {
+export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = "direct", groupTitle, groupAvatarUrl, onGroupTitleSave, inline }: ChatHeaderSettingsProps) {
   const { t } = useTranslation();
   const directPinnedIds = useHeaderPinStore((s) => s.pinnedIds);
   const directTogglePin = useHeaderPinStore((s) => s.togglePin);
@@ -146,14 +148,16 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-lg font-semibold">{t("chat.header.settings")}</h1>
-      </div>
+    <div className={inline ? "flex flex-col h-full" : "fixed inset-0 z-50 flex flex-col bg-background"}>
+      {/* Top bar (hidden in inline mode — right panel has its own header) */}
+      {!inline && (
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-lg font-semibold">{t("chat.header.settings")}</h1>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-border">
@@ -411,5 +415,18 @@ function GroupGeneralTab({
         </div>
       </div>
     </div>
+  );
+}
+
+/* ─── Inline version for right panel (no overlay) ─── */
+
+export function ChatHeaderSettingsInline({ conversationId }: { conversationId: string }) {
+  return (
+    <ChatHeaderSettings
+      open
+      onOpenChange={() => {}}
+      conversationId={conversationId}
+      inline
+    />
   );
 }
