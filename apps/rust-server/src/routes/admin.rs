@@ -20,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/users/{id}/verify", patch(set_verify))
         .route("/api/admin/users/{id}/ban", post(ban_user))
         .route("/api/admin/users/{id}/unban", post(unban_user))
+        .route("/api/admin/backfill-embeddings", post(backfill_embeddings))
         // App review stubs (planned feature)
         .route("/api/admin/review/apps", get(review_apps_stub))
         .route("/api/admin/review/apps/{id}/{action}", post(review_app_action_stub))
@@ -427,4 +428,100 @@ async fn set_banned(state: &AppState, user_id: &str, banned: bool) -> Response {
         )
             .into_response(),
     }
+}
+
+// ── Backfill agent memory embeddings ──────────────────────────────────
+
+/// POST /api/admin/backfill-embeddings
+/// Generate embeddings for all agent_memories rows with embedding IS NULL.
+async fn backfill_embeddings(
+    State(state): State<AppState>,
+    _admin: AuthAdmin,
+) -> Response {
+    let api_key = match state.config.openai_api_key.as_deref() {
+        Some(k) if !k.is_empty() => k.to_string(),
+        _ => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": "OPENAI_API_KEY not configured"})),
+            )
+                .into_response();
+        }
+    };
+
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>)>(
+        "SELECT id, summary, detail FROM agent_memories WHERE embedding IS NULL ORDER BY created_at",
+    )
+    .fetch_all(&state.db)
+    .await;
+
+    let rows = match rows {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    if rows.is_empty() {
+        return Json(json!({"processed": 0, "message": "No memories need embedding"})).into_response();
+    }
+
+    let total = rows.len();
+    let texts: Vec<String> = rows
+        .iter()
+        .map(|(_, summary, detail)| match detail {
+            Some(d) if !d.is_empty() => format!("{}\n{}", summary, d),
+            _ => summary.clone(),
+        })
+        .collect();
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .unwrap_or_default();
+
+    let mut updated = 0usize;
+    for batch_start in (0..texts.len()).step_by(100) {
+        let batch_end = (batch_start + 100).min(texts.len());
+        let batch: Vec<String> = texts[batch_start..batch_end].to_vec();
+
+        let embeddings = match crate::services::embedding::generate_embeddings(
+            &client,
+            &api_key,
+            &batch,
+            crate::services::embedding::EMBEDDING_MODEL,
+        )
+        .await
+        {
+            Ok(e) => e,
+            Err(e) => {
+                return Json(json!({
+                    "processed": updated,
+                    "total": total,
+                    "error": format!("Embedding API failed at batch {}: {}", batch_start / 100, e),
+                }))
+                .into_response();
+            }
+        };
+
+        for (i, emb) in embeddings.into_iter().enumerate() {
+            let mem_id = rows[batch_start + i].0;
+            let vec = pgvector::Vector::from(emb);
+            if sqlx::query("UPDATE agent_memories SET embedding = $1::vector WHERE id = $2")
+                .bind(vec)
+                .bind(mem_id)
+                .execute(&state.db)
+                .await
+                .is_ok()
+            {
+                updated += 1;
+            }
+        }
+    }
+
+    Json(json!({"processed": updated, "total": total})).into_response()
 }
