@@ -41,6 +41,7 @@ import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Pin, CalendarSearch } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import type { Message } from "@arinova/shared/types";
 
 interface ChatHeaderProps {
@@ -495,14 +496,14 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleDateSelect = useCallback(async (dateStr: string) => {
-    if (!dateStr || !conversationId) return;
+  const handleDateSelect = useCallback(async (day: Date | undefined) => {
+    if (!day || !conversationId) return;
+    const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
     setLoading(true);
     try {
       const data = await api<{ messageId: string }>(
         `/api/conversations/${conversationId}/messages/by-date?date=${dateStr}`,
       );
-      // Jump to message using the same pattern as pinned-messages-bar
       const state = useChatStore.getState();
       const currentMsgs = state.messagesByConversation[conversationId] ?? [];
       const found = currentMsgs.some((m) => m.id === data.messageId);
@@ -543,15 +544,12 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
           <CalendarSearch className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-3" align="end">
-        <input
-          type="date"
-          max={new Date().toISOString().split("T")[0]}
-          disabled={loading}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onChange={(e) => {
-            if (e.target.value) handleDateSelect(e.target.value);
-          }}
+      <PopoverContent className="w-auto p-0" align="end">
+        <Calendar
+          mode="single"
+          onSelect={handleDateSelect}
+          disabled={(date) => date > new Date() || loading}
+          initialFocus
         />
       </PopoverContent>
     </Popover>
