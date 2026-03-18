@@ -25,8 +25,8 @@ export function DefaultAvatarPicker({ onSelect, selected, className }: DefaultAv
             type="button"
             onClick={() => onSelect(url)}
             className={cn(
-              "relative rounded-full overflow-hidden border-2 transition-all hover:scale-105",
-              selected === url ? "border-brand ring-2 ring-brand/30" : "border-transparent hover:border-muted-foreground/30"
+              "relative rounded-full overflow-hidden border-2 transition-all hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-brand/50",
+              selected?.endsWith(url) || url.endsWith(selected ?? "\0") ? "border-brand ring-2 ring-brand/30" : "border-transparent hover:border-muted-foreground/30"
             )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
