@@ -10,7 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, Crown, Phone, ShieldCheck } from "lucide-react";
+import { Bot, Crown, Phone, ShieldCheck, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
@@ -107,6 +107,31 @@ export function UserProfileSheet({
     ? { id: groupUser.userId, name: groupUser.name, image: groupUser.image, username: groupUser.username, role: groupUser.role, isVerified: groupUser.isVerified }
     : apiUser;
 
+  // Block state
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || isSelf) return;
+    api<{ users: { id: string }[] }>("/api/users/blocked", { silent: true })
+      .then((d) => setIsBlocked(d.users.some((u) => u.id === userId)))
+      .catch(() => {});
+  }, [open, userId, isSelf]);
+
+  const handleToggleBlock = async () => {
+    setBlockLoading(true);
+    try {
+      if (isBlocked) {
+        await api(`/api/users/${userId}/block`, { method: "DELETE" });
+        setIsBlocked(false);
+      } else {
+        await api(`/api/users/${userId}/block`, { method: "POST" });
+        setIsBlocked(true);
+      }
+    } catch {}
+    setBlockLoading(false);
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -173,6 +198,20 @@ export function UserProfileSheet({
                 </Button>
               )}
             </div>
+
+            {/* Block button */}
+            {!isSelf && user && (
+              <Button
+                variant={isBlocked ? "outline" : "destructive"}
+                size="sm"
+                className="mt-3 w-full gap-2"
+                onClick={handleToggleBlock}
+                disabled={blockLoading}
+              >
+                <Ban className="h-4 w-4" />
+                {isBlocked ? (t("userProfile.unblock") || "Unblock") : (t("userProfile.block") || "Block")}
+              </Button>
+            )}
 
             {/* Agents section (group context only) */}
             {userAgents.length > 0 && (
