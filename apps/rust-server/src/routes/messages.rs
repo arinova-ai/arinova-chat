@@ -19,6 +19,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/messages/search", get(search_messages))
         .route("/api/conversations/{id}/messages", get(get_messages))
         .route(
+            "/api/conversations/{id}/messages/by-date",
+            get(messages_by_date),
+        )
+        .route(
             "/api/conversations/{conversationId}/messages/{messageId}",
             delete(delete_message),
         )
@@ -996,6 +1000,61 @@ struct ThreadListRow {
     original_agent_name: Option<String>,
     // Last reply preview
     last_reply_content: Option<String>,
+}
+
+// ── Date jump ────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct ByDateQuery {
+    date: String, // YYYY-MM-DD
+}
+
+/// GET /api/conversations/{id}/messages/by-date?date=2026-03-18
+/// Returns the first message ID on the given date in this conversation.
+async fn messages_by_date(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+    Query(q): Query<ByDateQuery>,
+) -> Response {
+    // Parse date string
+    let date = match chrono::NaiveDate::parse_from_str(&q.date, "%Y-%m-%d") {
+        Ok(d) => d,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Invalid date format, expected YYYY-MM-DD"})),
+            )
+                .into_response();
+        }
+    };
+
+    let row = sqlx::query_as::<_, (Uuid,)>(
+        r#"SELECT id FROM messages
+           WHERE conversation_id = $1
+             AND created_at >= $2::date
+             AND created_at < ($2::date + interval '1 day')
+           ORDER BY created_at ASC
+           LIMIT 1"#,
+    )
+    .bind(conversation_id)
+    .bind(date)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some(r)) => Json(json!({"messageId": r.0})).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "No messages on this date"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }
 
 async fn get_threads(

@@ -39,7 +39,9 @@ import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
 import { CommunitySettingsSheet } from "./community-settings";
 import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Pin } from "lucide-react";
+import { Pin, CalendarSearch } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { Message } from "@arinova/shared/types";
 
 interface ChatHeaderProps {
   agentName: string;
@@ -487,6 +489,75 @@ interface DirectHeaderButtonsProps {
   t: (key: string) => string;
 }
 
+/* ─── Date Jump Button ─── */
+
+function DateJumpButton({ conversationId }: { conversationId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleDateSelect = useCallback(async (dateStr: string) => {
+    if (!dateStr || !conversationId) return;
+    setLoading(true);
+    try {
+      const data = await api<{ messageId: string }>(
+        `/api/conversations/${conversationId}/messages/by-date?date=${dateStr}`,
+      );
+      // Jump to message using the same pattern as pinned-messages-bar
+      const state = useChatStore.getState();
+      const currentMsgs = state.messagesByConversation[conversationId] ?? [];
+      const found = currentMsgs.some((m) => m.id === data.messageId);
+      if (!found) {
+        const around = await api<{
+          messages: Message[];
+          hasMoreUp: boolean;
+          hasMoreDown: boolean;
+        }>(`/api/conversations/${conversationId}/messages?around=${data.messageId}&limit=50`);
+        useChatStore.setState({
+          highlightMessageId: data.messageId,
+          jumpPagination: { hasMoreUp: around.hasMoreUp, hasMoreDown: around.hasMoreDown },
+          messagesByConversation: {
+            ...useChatStore.getState().messagesByConversation,
+            [conversationId]: around.messages,
+          },
+        });
+      } else {
+        useChatStore.setState({ highlightMessageId: data.messageId });
+      }
+      setTimeout(() => {
+        if (useChatStore.getState().highlightMessageId === data.messageId) {
+          useChatStore.setState({ highlightMessageId: null });
+        }
+      }, 1000);
+      setOpen(false);
+    } catch {
+      // No messages on that date — silently ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8" title="Jump to date">
+          <CalendarSearch className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="end">
+        <input
+          type="date"
+          max={new Date().toISOString().split("T")[0]}
+          disabled={loading}
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onChange={(e) => {
+            if (e.target.value) handleDateSelect(e.target.value);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function DirectHeaderButtons({
   type,
   pinnedIds,
@@ -564,6 +635,9 @@ function DirectHeaderButtons({
           </Button>
         );
       })}
+
+      {/* Date jump */}
+      {conversationId && <DateJumpButton conversationId={conversationId} />}
 
       {/* Hamburger menu */}
       <DropdownMenu>
@@ -668,6 +742,9 @@ function GroupHeaderButtons({
           </Button>
         );
       })}
+
+      {/* Date jump */}
+      {conversationId && <DateJumpButton conversationId={conversationId} />}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
