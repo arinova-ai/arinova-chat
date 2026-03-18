@@ -575,6 +575,7 @@ function ProfilePanel() {
         body: JSON.stringify({ image: data.imageUrl }),
       });
       if (!updateRes.ok) throw new Error("Failed to update avatar");
+      await authClient.getSession();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Avatar upload failed");
     } finally {
@@ -592,6 +593,7 @@ function ProfilePanel() {
         body: JSON.stringify({ image: url }),
       });
       if (!res.ok) throw new Error("Failed to set avatar");
+      await authClient.getSession();
     } catch {
       setSaveError("Failed to set avatar");
     } finally {
