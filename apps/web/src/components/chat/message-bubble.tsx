@@ -25,6 +25,7 @@ import {
   User,
   Copy,
   Check,
+  CheckCheck,
   Trash2,
   RotateCcw,
   AlertCircle,
@@ -470,6 +471,29 @@ interface MessageActionsProps {
 }
 
 /** Hover action toolbar (copy, react, reply, thread, delete, retry). */
+/** Read receipt checkmarks: ✓ sent, ✓✓ grey delivered, ✓✓ blue read */
+function MessageCheckmarks({ message }: { message: Message }) {
+  const readReceipts = useChatStore((s) => s.readReceipts[message.conversationId]);
+
+  if (message.status === "pending" || message.status === "error") return null;
+
+  // Check if any other user has read up to this message's seq
+  const seq = message.seq ?? 0;
+  const hasReaders = readReceipts && Object.values(readReceipts).some((readSeq) => readSeq >= seq);
+
+  if (hasReaders) {
+    // Double check blue = read
+    return <CheckCheck className="h-2.5 w-2.5 text-blue-400" />;
+  }
+
+  if (message.status === "completed") {
+    // Single check = sent/delivered
+    return <Check className="h-2.5 w-2.5 text-muted-foreground/60" />;
+  }
+
+  return null;
+}
+
 function MessageActions({
   message,
   isOwn,
@@ -934,8 +958,8 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
               isUser ? "justify-end" : "justify-start"
             )}>
               {formatTimestamp(message.createdAt)}
-              {isUser && message.status === "completed" && !message.id.startsWith("temp-") && (
-                <Check className="h-2.5 w-2.5 text-blue-400" />
+              {isUser && !message.id.startsWith("temp-") && (
+                <MessageCheckmarks message={message} />
               )}
             </p>
           )}

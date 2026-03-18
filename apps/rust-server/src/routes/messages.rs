@@ -1562,7 +1562,9 @@ async fn forward_message(
     let forwarded_content = format!("📨 *Forwarded from {}*\n\n{}", sender_name, content);
 
     // Get next seq
-    let seq = crate::services::message_seq::next_seq(&state.db, &state.redis, target_conversation_id).await;
+    let seq = crate::services::message_seq::get_next_seq(&state.db, &target_conversation_id.to_string())
+        .await
+        .unwrap_or(1);
 
     // Insert forwarded message
     let msg_id = Uuid::new_v4();

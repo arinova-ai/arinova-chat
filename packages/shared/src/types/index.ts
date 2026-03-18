@@ -528,6 +528,7 @@ export type WSServerEvent =
   | { type: "note:deleted"; conversationId: string; noteId: string }
   | { type: "link_previews_ready"; conversationId: string; messageId: string; linkPreviews: LinkPreview[] }
   | { type: "message_deleted"; conversationId: string; messageId: string }
+  | { type: "read_receipt"; conversationId: string; userId: string; seq: number }
   | { type: "voice_incoming_call"; sessionId: string; callerId: string; callerName: string; callerAvatarUrl: string | null; conversationId: string; sdp: string }
   | { type: "voice_call_end"; sessionId: string; reason?: string }
   | { type: "pong" };

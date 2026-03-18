@@ -133,6 +133,8 @@ interface ChatState {
   mutedConversations: Record<string, boolean>;
   ttsEnabled: boolean;
   reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
+  /** Per-conversation max read seq by other users: convId → { userId → seq } */
+  readReceipts: Record<string, Record<string, number>>;
   conversationMembers: Record<string, { agentId: string; agentName: string; type?: "agent" | "user" }[]>;
   groupMembersData: Record<string, GroupMembers>;
   thinkingAgents: Record<string, ThinkingAgent[]>;
@@ -317,6 +319,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ? localStorage.getItem("arinova_tts") === "true"
       : false,
   reactionsByMessage: {},
+  readReceipts: {},
   conversationMembers: {},
   groupMembersData: {},
   thinkingAgents: {},
@@ -2686,6 +2689,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messagesByConversation: {
             ...get().messagesByConversation,
             [conversationId]: msgs.filter((m) => m.id !== messageId),
+          },
+        });
+      }
+      return;
+    }
+
+    if (event.type === "read_receipt") {
+      const { conversationId, userId, seq } = event;
+      const current = get().readReceipts[conversationId] ?? {};
+      const existing = current[userId] ?? 0;
+      if (seq > existing) {
+        set({
+          readReceipts: {
+            ...get().readReceipts,
+            [conversationId]: { ...current, [userId]: seq },
           },
         });
       }

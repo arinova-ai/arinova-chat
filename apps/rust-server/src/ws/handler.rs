@@ -506,7 +506,7 @@ async fn handle_message(
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
             let seq = event.get("seq").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             if !conversation_id.is_empty() {
-                handle_mark_read(user_id, conversation_id, seq, db).await;
+                handle_mark_read(user_id, conversation_id, seq, db, ws_state, redis).await;
             }
         }
         "typing" => {
@@ -858,8 +858,15 @@ async fn handle_sync(
     }
 }
 
-/// Handle mark_read: upsert lastReadSeq for user's conversation.
-async fn handle_mark_read(user_id: &str, conversation_id: &str, seq: i32, db: &PgPool) {
+/// Handle mark_read: upsert lastReadSeq + record per-message receipts + broadcast.
+async fn handle_mark_read(
+    user_id: &str,
+    conversation_id: &str,
+    seq: i32,
+    db: &PgPool,
+    ws_state: &crate::ws::state::WsState,
+    redis: &deadpool_redis::Pool,
+) {
     let _ = sqlx::query(
         r#"INSERT INTO conversation_reads (id, user_id, conversation_id, last_read_seq, updated_at)
            VALUES (gen_random_uuid(), $1, $2::uuid, $3, NOW())
@@ -873,6 +880,32 @@ async fn handle_mark_read(user_id: &str, conversation_id: &str, seq: i32, db: &P
     .bind(seq)
     .execute(db)
     .await;
+
+    // Record per-message read receipts for unread messages up to this seq
+    let _ = sqlx::query(
+        r#"INSERT INTO message_read_receipts (message_id, user_id)
+           SELECT id, $1 FROM messages
+           WHERE conversation_id = $2::uuid AND seq <= $3 AND sender_user_id != $1
+           ON CONFLICT (message_id, user_id) DO NOTHING"#,
+    )
+    .bind(user_id)
+    .bind(conversation_id)
+    .bind(seq)
+    .execute(db)
+    .await;
+
+    // Broadcast read_receipt to conversation members so senders see checkmarks update
+    let member_ids = get_conv_member_ids(ws_state, db, conversation_id, user_id).await;
+    ws_state.broadcast_to_members(
+        &member_ids,
+        &json!({
+            "type": "read_receipt",
+            "conversationId": conversation_id,
+            "userId": user_id,
+            "seq": seq,
+        }),
+        redis,
+    );
 }
 
 /// Update thread_summaries when a message is posted to a thread.

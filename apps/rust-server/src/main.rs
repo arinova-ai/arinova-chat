@@ -431,6 +431,13 @@ async fn main() {
         CREATE EXTENSION IF NOT EXISTS vector;
         ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS embedding vector(1536);
         CREATE INDEX IF NOT EXISTS idx_agent_memories_embedding ON agent_memories USING hnsw (embedding vector_cosine_ops);
+        CREATE TABLE IF NOT EXISTS message_read_receipts (
+            message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (message_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_message_read_receipts_conv ON message_read_receipts (message_id);
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
