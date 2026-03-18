@@ -221,23 +221,19 @@ export function PipOverlay() {
     return true;
   }, [session, agents]);
 
-  // Retry sending auth every 200ms until successful (covers both late session load and late iframe JS init)
+  // Keep sending auth every 500ms for 30s — iframe JS may not be ready on first sends
   useEffect(() => {
     if (!pipMode || !iframeUrl) {
       authSentRef.current = false;
       return;
     }
-    if (authSentRef.current) return;
 
     const interval = setInterval(() => {
-      if (sendAuthToIframe()) {
-        authSentRef.current = true;
-        clearInterval(interval);
-      }
-    }, 200);
+      sendAuthToIframe();
+    }, 500);
 
-    // Stop retrying after 15s
-    const timeout = setTimeout(() => clearInterval(interval), 15000);
+    // Stop retrying after 30s
+    const timeout = setTimeout(() => clearInterval(interval), 30000);
 
     return () => {
       clearInterval(interval);
