@@ -73,8 +73,11 @@ export default {
         ctx.drawImage(bgImg, 0, 0, CANVAS_W, CANVAS_H);
       }
 
-      // Mascot animation
-      if (mascotLoaded && currentAgent) {
+      // Only render mascot for bound agents (skip empty/unbound slots)
+      var isBound = currentAgent && currentAgent.status !== "unbound"
+        && currentAgent.id && !currentAgent.id.startsWith("empty-");
+
+      if (mascotLoaded && isBound) {
         if (now - lastFrameTime >= ANIM_INTERVAL) {
           lastFrameTime = now;
           frameIdx = (frameIdx + 1) % TOTAL_FRAMES;
@@ -107,19 +110,6 @@ export default {
         ctx.fillText(name, tagX + tagW / 2, tagY + tagH / 2);
       }
 
-      // Status text
-      ctx.font = "22px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(232, 232, 208, 0.8)";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      var statusStr = "Waiting for agent...";
-      if (currentAgent) {
-        var status = currentAgent.status || "idle";
-        var task = currentAgent.currentTask ? (currentAgent.currentTask.title || currentAgent.currentTask) : "";
-        statusStr = task ? status + " — " + task : status;
-      }
-      ctx.fillText(statusStr, 40, 30);
-
       ctx.restore();
 
       self._raf = requestAnimationFrame(draw);
@@ -143,7 +133,7 @@ export default {
 
     // Click handler
     canvas.addEventListener("click", function (e) {
-      if (!currentAgent) return;
+      if (!currentAgent || currentAgent.status === "unbound" || (currentAgent.id && currentAgent.id.startsWith("empty-"))) return;
       var rect = canvas.getBoundingClientRect();
       var scale = getScale();
       var ox = (canvas.width - CANVAS_W * scale) / 2;
