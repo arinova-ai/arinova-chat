@@ -562,7 +562,7 @@ async fn internal_token(
         None
     };
 
-    let scope = "profile";
+    let scope = "profile agents";
 
     // Check for existing valid token (match on app_id or IS NULL)
     let existing = if let Some(aid) = app_id {
