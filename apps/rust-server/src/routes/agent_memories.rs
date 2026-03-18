@@ -583,7 +583,7 @@ pub async fn should_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversa
 
 /// Auto-extract memories in the background after an agent reply completes.
 /// Uses per-conversation watermarks; only updates watermark on success.
-pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversation_id: Uuid) {
+pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversation_id: Uuid, openai_api_key: Option<String>) {
     const THROTTLE_MINUTES: i64 = 30;
 
     // Read per-conversation watermark
@@ -735,6 +735,11 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
         }
     }
 
+    // Generate embeddings for memories that don't have one yet
+    if let Some(ref api_key) = openai_api_key {
+        backfill_embeddings(db, agent_id, api_key).await;
+    }
+
     // Only update watermark AFTER successful extraction
     let _ = sqlx::query(
         r#"INSERT INTO agent_memory_watermarks (agent_id, conversation_id, last_extracted_at)
@@ -820,4 +825,131 @@ async fn call_claude_extract(conv_text: &str) -> anyhow::Result<String> {
         }
     }
     unreachable!()
+}
+
+// ── Embedding + Hybrid Search ─────────────────────────────────────────────
+
+/// Backfill embeddings for agent memories that don't have one yet.
+async fn backfill_embeddings(db: &sqlx::PgPool, agent_id: Uuid, api_key: &str) {
+    let rows = sqlx::query_as::<_, (Uuid, String, Option<String>)>(
+        "SELECT id, summary, detail FROM agent_memories WHERE agent_id = $1 AND embedding IS NULL",
+    )
+    .bind(agent_id)
+    .fetch_all(db)
+    .await;
+
+    let rows = match rows {
+        Ok(r) if !r.is_empty() => r,
+        _ => return,
+    };
+
+    let texts: Vec<String> = rows
+        .iter()
+        .map(|(_, summary, detail)| {
+            match detail {
+                Some(d) if !d.is_empty() => format!("{}\n{}", summary, d),
+                _ => summary.clone(),
+            }
+        })
+        .collect();
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .unwrap_or_default();
+
+    // Batch in groups of 100
+    for batch_start in (0..texts.len()).step_by(100) {
+        let batch_end = (batch_start + 100).min(texts.len());
+        let batch: Vec<String> = texts[batch_start..batch_end].to_vec();
+
+        let embeddings = match crate::services::embedding::generate_embeddings(
+            &client,
+            api_key,
+            &batch,
+            crate::services::embedding::EMBEDDING_MODEL,
+        )
+        .await
+        {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::error!("backfill_embeddings: embedding API error: {e}");
+                return;
+            }
+        };
+
+        for (i, emb) in embeddings.into_iter().enumerate() {
+            let idx = batch_start + i;
+            let mem_id = rows[idx].0;
+            let vec = pgvector::Vector::from(emb);
+            let _ = sqlx::query(
+                "UPDATE agent_memories SET embedding = $1::vector WHERE id = $2",
+            )
+            .bind(vec)
+            .bind(mem_id)
+            .execute(db)
+            .await;
+        }
+    }
+
+    tracing::info!("backfill_embeddings: updated {} memories for agent {}", rows.len(), agent_id);
+}
+
+/// Result row from hybrid search.
+pub struct AgentMemorySearchResult {
+    pub id: Uuid,
+    pub category: String,
+    pub summary: String,
+    pub detail: Option<String>,
+    pub score: f64,
+}
+
+/// Hybrid search: combine vector similarity + BM25 keyword matching.
+/// Returns top-K agent memories most relevant to the query.
+pub async fn hybrid_search(
+    db: &sqlx::PgPool,
+    agent_id: Uuid,
+    query_embedding: Vec<f32>,
+    query_text: &str,
+    top_k: i32,
+) -> anyhow::Result<Vec<AgentMemorySearchResult>> {
+    let query_vec = pgvector::Vector::from(query_embedding);
+
+    // Combine vector similarity and keyword match in a single query.
+    // Vector score: 1 - cosine_distance (higher = more similar)
+    // Keyword score: 0 or 1 based on ILIKE match
+    // Final score: 0.7 * vector_score + 0.3 * keyword_score
+    let keyword_pattern = format!("%{}%", query_text.chars().take(100).collect::<String>().replace('%', "").replace('_', ""));
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<String>, f64)>(
+        r#"SELECT id, category, summary, detail,
+                  CASE WHEN embedding IS NOT NULL
+                       THEN 0.7 * (1.0 - (embedding <=> $2::vector)) +
+                            0.3 * CASE WHEN (summary ILIKE $3 OR COALESCE(detail, '') ILIKE $3) THEN 1.0 ELSE 0.0 END
+                       ELSE CASE WHEN (summary ILIKE $3 OR COALESCE(detail, '') ILIKE $3) THEN 0.5 ELSE 0.0 END
+                  END AS score
+           FROM agent_memories
+           WHERE agent_id = $1
+             AND (embedding IS NOT NULL OR summary ILIKE $3 OR COALESCE(detail, '') ILIKE $3)
+           ORDER BY score DESC
+           LIMIT $4"#,
+    )
+    .bind(agent_id)
+    .bind(query_vec)
+    .bind(&keyword_pattern)
+    .bind(top_k)
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter(|r| r.4 > 0.0)
+        .map(|(id, category, summary, detail, score)| AgentMemorySearchResult {
+            id,
+            category,
+            summary,
+            detail,
+            score,
+        })
+        .collect())
 }

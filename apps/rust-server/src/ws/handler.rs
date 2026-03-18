@@ -1911,6 +1911,40 @@ pub(crate) async fn do_trigger_agent_response(
         }
     }
 
+    // Inject agent memories via hybrid search (vector + keyword)
+    if let Some(ref openai_key) = config.openai_api_key {
+        let embed_client = reqwest::Client::new();
+        if let Ok(embeddings) = crate::services::embedding::generate_embeddings(
+            &embed_client,
+            openai_key,
+            &[content.to_string()],
+            crate::services::embedding::EMBEDDING_MODEL,
+        ).await {
+            if let Some(query_emb) = embeddings.into_iter().next() {
+                if let Ok(results) = crate::routes::agent_memories::hybrid_search(
+                    db,
+                    uuid::Uuid::parse_str(agent_id).unwrap_or_default(),
+                    query_emb,
+                    content,
+                    20,
+                ).await {
+                    if !results.is_empty() {
+                        let agent_mems: Vec<serde_json::Value> = results
+                            .into_iter()
+                            .map(|r| json!({
+                                "category": r.category,
+                                "summary": r.summary,
+                                "detail": r.detail,
+                                "relevance": (r.score * 100.0).round() / 100.0,
+                            }))
+                            .collect();
+                        task_payload["agentMemories"] = json!(agent_mems);
+                    }
+                }
+            }
+        }
+    }
+
     // Inject available skills for semantic triggering
     let installed_skills = sqlx::query_as::<_, (String, String, Option<String>, String)>(
         r#"SELECT s.slug, s.name, s.slash_command, s.description
@@ -2107,6 +2141,7 @@ pub(crate) async fn do_trigger_agent_response(
                                     let db4 = db.clone();
                                     let aid = agent_id.clone();
                                     let cid4 = conversation_id.clone();
+                                    let oai_key = config.openai_api_key.clone();
                                     if let (Ok(aid_uuid), Ok(cid_uuid)) = (
                                         uuid::Uuid::parse_str(&aid),
                                         uuid::Uuid::parse_str(&cid4),
@@ -2114,7 +2149,7 @@ pub(crate) async fn do_trigger_agent_response(
                                         // Pre-spawn throttle check avoids unnecessary task creation
                                         if crate::routes::agent_memories::should_extract_memories(&db4, aid_uuid, cid_uuid).await {
                                             tokio::spawn(async move {
-                                                crate::routes::agent_memories::maybe_extract_memories(&db4, aid_uuid, cid_uuid).await;
+                                                crate::routes::agent_memories::maybe_extract_memories(&db4, aid_uuid, cid_uuid, oai_key).await;
                                             });
                                         }
                                     }
