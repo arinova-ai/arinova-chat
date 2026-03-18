@@ -547,6 +547,9 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
       <PopoverContent className="w-auto p-0" align="end">
         <Calendar
           mode="single"
+          captionLayout="dropdown"
+          fromYear={2024}
+          toYear={new Date().getFullYear()}
           onSelect={handleDateSelect}
           disabled={(date) => date > new Date() || loading}
           initialFocus
