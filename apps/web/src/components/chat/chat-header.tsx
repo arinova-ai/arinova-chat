@@ -520,12 +520,13 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
   const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
   const [loadingDates, setLoadingDates] = useState(false);
   const [displayMonth, setDisplayMonth] = useState(new Date());
+  const tzOffset = new Date().getTimezoneOffset(); // e.g. -480 for UTC+8
 
   const fetchActiveDates = useCallback(async (month: Date) => {
     setLoadingDates(true);
     try {
       const data = await api<{ dates: string[] }>(
-        `/api/conversations/${conversationId}/messages/dates?month=${fmtMonth(month)}`,
+        `/api/conversations/${conversationId}/messages/dates?month=${fmtMonth(month)}&tz=${tzOffset}`,
         { silent: true },
       );
       setActiveDates(new Set(data.dates));
@@ -547,7 +548,7 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
     setLoading(true);
     try {
       const data = await api<{ messageId: string }>(
-        `/api/conversations/${conversationId}/messages/by-date?date=${dateStr}`,
+        `/api/conversations/${conversationId}/messages/by-date?date=${dateStr}&tz=${tzOffset}`,
       );
       const state = useChatStore.getState();
       const currentMsgs = state.messagesByConversation[conversationId] ?? [];

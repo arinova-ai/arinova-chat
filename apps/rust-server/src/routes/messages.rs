@@ -1011,6 +1011,7 @@ struct ThreadListRow {
 #[derive(Deserialize)]
 struct ByDateQuery {
     date: String, // YYYY-MM-DD
+    tz: Option<i32>, // timezone offset in minutes (e.g. -480 for UTC+8)
 }
 
 /// GET /api/conversations/{id}/messages/by-date?date=2026-03-18
@@ -1063,16 +1064,19 @@ async fn messages_by_date(
         }
     };
 
+    // Convert tz offset: getTimezoneOffset() returns -480 for UTC+8, so negate to get +480 minutes
+    let tz_minutes = -(q.tz.unwrap_or(0));
+
     let row = sqlx::query_as::<_, (Uuid,)>(
         r#"SELECT id FROM messages
            WHERE conversation_id = $1
-             AND created_at >= $2::date
-             AND created_at < ($2::date + interval '1 day')
+             AND DATE(created_at + $3 * interval '1 minute') = $2
            ORDER BY created_at ASC
            LIMIT 1"#,
     )
     .bind(conversation_id)
     .bind(date)
+    .bind(tz_minutes)
     .fetch_optional(&state.db)
     .await;
 
@@ -1094,6 +1098,7 @@ async fn messages_by_date(
 #[derive(Deserialize)]
 struct DatesQuery {
     month: String, // YYYY-MM
+    tz: Option<i32>, // timezone offset in minutes
 }
 
 /// GET /api/conversations/{id}/messages/dates?month=2026-03
@@ -1141,17 +1146,20 @@ async fn messages_dates(
     }
     .unwrap_or(month_start);
 
+    let tz_minutes = -(q.tz.unwrap_or(0));
+
     let rows = sqlx::query_as::<_, (chrono::NaiveDate,)>(
-        r#"SELECT DISTINCT DATE(created_at)
+        r#"SELECT DISTINCT DATE(created_at + $4 * interval '1 minute')
            FROM messages
            WHERE conversation_id = $1
-             AND created_at >= $2
-             AND created_at < $3
+             AND DATE(created_at + $4 * interval '1 minute') >= $2
+             AND DATE(created_at + $4 * interval '1 minute') < $3
            ORDER BY 1"#,
     )
     .bind(conversation_id)
     .bind(month_start)
     .bind(next_month)
+    .bind(tz_minutes)
     .fetch_all(&state.db)
     .await;
 
