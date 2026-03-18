@@ -10,7 +10,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::auth::middleware::FromRef;
+use crate::auth::middleware::{AuthUser, FromRef};
 use crate::auth::session::validate_session;
 use crate::AppState;
 
@@ -19,6 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/oauth/authorize", get(authorize))
         .route("/oauth/authorize/consent", post(authorize_consent))
         .route("/oauth/token", post(token_exchange))
+        .route("/api/oauth/internal-token", post(internal_token))
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -510,6 +511,102 @@ async fn token_exchange(
         "expires_in": expires_in,
         "scope": scope,
         "user": user_json,
+    }))
+    .into_response()
+}
+
+// ── Internal Token (session → OAuth token for PiP iframes) ──────
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InternalTokenBody {
+    app_id: String,
+}
+
+/// POST /api/oauth/internal-token
+/// Exchanges user session cookie for an OAuth access_token scoped to a specific app.
+/// Returns existing valid token if one exists; otherwise creates a new one.
+async fn internal_token(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(body): Json<InternalTokenBody>,
+) -> Response {
+    // Verify the app exists
+    let app = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM oauth_apps WHERE client_id = $1",
+    )
+    .bind(&body.app_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let app_id = match app {
+        Ok(Some(row)) => row.0,
+        Ok(None) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "invalid_app", "error_description": "App not found"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "server_error", "error_description": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+
+    let scope = "profile economy";
+
+    // Check for existing valid token
+    let existing = sqlx::query_as::<_, (String, i64)>(
+        r#"SELECT access_token,
+                  EXTRACT(EPOCH FROM (expires_at - NOW()))::BIGINT AS remaining
+           FROM oauth_tokens
+           WHERE user_id = $1 AND app_id = $2 AND expires_at > NOW() + INTERVAL '1 hour'
+           ORDER BY expires_at DESC
+           LIMIT 1"#,
+    )
+    .bind(&auth.id)
+    .bind(app_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    if let Ok(Some(row)) = existing {
+        return Json(json!({
+            "accessToken": row.0,
+            "expiresIn": row.1,
+        }))
+        .into_response();
+    }
+
+    // Generate new token (7 days)
+    let access_token = Uuid::new_v4().to_string();
+    let expires_in: i64 = 604800;
+
+    let insert = sqlx::query(
+        r#"INSERT INTO oauth_tokens (user_id, app_id, access_token, scope, expires_at)
+           VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')"#,
+    )
+    .bind(&auth.id)
+    .bind(app_id)
+    .bind(&access_token)
+    .bind(scope)
+    .execute(&state.db)
+    .await;
+
+    if let Err(e) = insert {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "server_error", "error_description": e.to_string()})),
+        )
+            .into_response();
+    }
+
+    Json(json!({
+        "accessToken": access_token,
+        "expiresIn": expires_in,
     }))
     .into_response()
 }

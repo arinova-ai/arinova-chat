@@ -183,6 +183,7 @@ export function PipOverlay() {
   const pipMode = useSpacesStore((s) => s.pipMode);
   const iframeUrl = useSpacesStore((s) => s.pipIframeUrl);
   const gameName = useSpacesStore((s) => s.pipGameName);
+  const pipAppId = useSpacesStore((s) => s.pipAppId);
   const togglePipMode = useSpacesStore((s) => s.togglePipMode);
   const closePip = useSpacesStore((s) => s.closePip);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -191,15 +192,49 @@ export function PipOverlay() {
   const loadAgents = useChatStore((s) => s.loadAgents);
 
   const authSentRef = useRef(false);
+  const oauthTokenRef = useRef<string | null>(null);
+  const fetchingTokenRef = useRef(false);
 
-  const sendAuthToIframe = useCallback(() => {
-    console.log("[PIP-AUTH] sendAuthToIframe called", { hasContentWindow: !!iframeRef.current?.contentWindow, hasSession: !!session?.user, userId: session?.user?.id });
+  // Fetch OAuth token for this app via internal-token endpoint
+  const fetchOAuthToken = useCallback(async () => {
+    if (!pipAppId || fetchingTokenRef.current) return null;
+    if (oauthTokenRef.current) return oauthTokenRef.current;
+
+    fetchingTokenRef.current = true;
+    try {
+      const res = await fetch("/api/oauth/internal-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appId: pipAppId }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      oauthTokenRef.current = data.accessToken;
+      return data.accessToken as string;
+    } catch {
+      return null;
+    } finally {
+      fetchingTokenRef.current = false;
+    }
+  }, [pipAppId]);
+
+  // Reset token when app changes
+  useEffect(() => {
+    oauthTokenRef.current = null;
+  }, [pipAppId]);
+
+  const sendAuthToIframe = useCallback(async () => {
     if (!iframeRef.current?.contentWindow || !session?.user) return false;
 
-    // Use session token from better-auth session object
-    const sessionToken = session.session?.token ?? "";
+    // Get OAuth token if app has appId; fall back to session token
+    let accessToken: string;
+    if (pipAppId) {
+      const oauthToken = await fetchOAuthToken();
+      accessToken = oauthToken ?? "";
+    } else {
+      accessToken = session.session?.token ?? "";
+    }
 
-    console.log("[PIP-AUTH] Sending postMessage to iframe", { iframeUrl });
     iframeRef.current.contentWindow.postMessage(
       {
         type: "arinova:auth",
@@ -210,14 +245,14 @@ export function PipOverlay() {
             email: session.user.email,
             image: session.user.image ?? null,
           },
-          accessToken: sessionToken,
+          accessToken,
           agents: agents.map((a) => ({ id: a.id, name: a.name, description: a.description, avatarUrl: a.avatarUrl })),
         },
       },
       "*",
     );
     return true;
-  }, [session, agents]);
+  }, [session, agents, pipAppId, fetchOAuthToken]);
 
   // Keep sending auth every 500ms for 30s — iframe JS may not be ready on first sends
   useEffect(() => {

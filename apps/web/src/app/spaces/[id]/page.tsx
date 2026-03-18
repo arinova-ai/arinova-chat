@@ -63,6 +63,7 @@ function SpaceDetailContent({ id }: { id: string }) {
   const space = currentSpace;
   const catClass = CATEGORY_COLORS[space.category] ?? "bg-gray-500/15 text-gray-400";
   const iframeUrl = space.definition?.iframeUrl as string | undefined;
+  const appId = space.definition?.appId as string | undefined;
 
   return (
     <div className="app-dvh flex bg-background">
@@ -107,7 +108,7 @@ function SpaceDetailContent({ id }: { id: string }) {
                     <div className="mt-4">
                       <Button
                         className="brand-gradient-btn gap-2"
-                        onClick={() => openPip(space.id, space.name, iframeUrl)}
+                        onClick={() => openPip(space.id, space.name, iframeUrl, appId)}
                       >
                         <Play className="h-4 w-4" />
                         {t("spaces.playNow")}

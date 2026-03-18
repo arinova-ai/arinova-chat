@@ -40,6 +40,7 @@ interface SpacesState {
   pipIframeUrl: string | null;
   pipGameId: string | null;
   pipGameName: string | null;
+  pipAppId: string | null;
   pipBtnPos: { x: number; y: number } | null;
 
   // Actions
@@ -64,7 +65,7 @@ interface SpacesState {
   leaveSession: (spaceId: string, sessionId: string) => Promise<void>;
 
   // PIP Actions
-  openPip: (gameId: string, gameName: string, iframeUrl: string) => void;
+  openPip: (gameId: string, gameName: string, iframeUrl: string, appId?: string) => void;
   closePip: () => void;
   setPipMode: (mode: PipMode) => void;
   togglePipMode: () => void;
@@ -87,6 +88,7 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
   pipIframeUrl: null,
   pipGameId: null,
   pipGameName: null,
+  pipAppId: null,
   pipBtnPos: null,
 
   fetchSpaces: async () => {
@@ -185,12 +187,13 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
   },
 
   // PIP Actions
-  openPip: (gameId, gameName, iframeUrl) => {
+  openPip: (gameId, gameName, iframeUrl, appId) => {
     set({
       pipMode: "fullscreen",
       pipGameId: gameId,
       pipGameName: gameName,
       pipIframeUrl: iframeUrl,
+      pipAppId: appId ?? null,
     });
   },
 
@@ -200,6 +203,7 @@ export const useSpacesStore = create<SpacesState>((set, get) => ({
       pipGameId: null,
       pipGameName: null,
       pipIframeUrl: null,
+      pipAppId: null,
       pipBtnPos: null,
     });
   },
