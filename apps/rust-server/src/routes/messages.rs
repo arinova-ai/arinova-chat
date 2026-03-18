@@ -1535,6 +1535,29 @@ async fn forward_message(
         Ok(Some(_)) => {}
     }
 
+    // Verify user has access to the source message's conversation
+    let source_access = sqlx::query_as::<_, (Uuid,)>(
+        r#"SELECT m.conversation_id FROM messages m
+           WHERE m.id = $1
+             AND EXISTS (
+               SELECT 1 FROM conversations c
+               WHERE c.id = m.conversation_id AND (
+                 c.user_id = $2
+                 OR EXISTS (SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $2)
+               )
+             )"#,
+    )
+    .bind(body.message_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match source_access {
+        Ok(None) => return (StatusCode::FORBIDDEN, Json(json!({"error": "No access to source message"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+        Ok(Some(_)) => {}
+    }
+
     // Fetch the original message
     let original = sqlx::query_as::<_, (String, Option<String>, Option<String>, Option<String>)>(
         r#"SELECT content,
