@@ -33,5 +33,7 @@ export const AGENT_DEFAULT_AVATAR = "/assets/branding/agent-default-avatar.png";
 /** Resolve a URL that may be absolute (R2) or relative (/uploads/...) */
 export function assetUrl(url: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  // /assets/ files are served by Next.js (public dir), not the API server
+  if (url.startsWith("/assets/")) return url;
   return `${BACKEND_URL}${url}`;
 }

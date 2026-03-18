@@ -737,7 +737,7 @@ function ProfilePanel() {
               >
                 <Avatar className="h-20 w-20 ring-4 ring-background">
                   {displayAvatar ? (
-                    <AvatarImage src={displayAvatar.startsWith("/assets/") ? displayAvatar : assetUrl(displayAvatar)} alt={session?.user?.name ?? ""} />
+                    <AvatarImage src={assetUrl(displayAvatar)} alt={session?.user?.name ?? ""} />
                   ) : null}
                   <AvatarFallback className="bg-secondary text-2xl">
                     {sessionPending ? "" : (session?.user?.name ?? "?").charAt(0).toUpperCase()}
