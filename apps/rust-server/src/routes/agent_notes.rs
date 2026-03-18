@@ -541,6 +541,14 @@ async fn agent_update_note(
             .into_response();
     }
 
+    if !agent_notes_allowed(&state.db, conv_id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Note access is disabled by conversation owner"})),
+        )
+            .into_response();
+    }
+
     // Only the agent that created the note can edit it
     let note = sqlx::query_as::<_, (Option<Uuid>,)>(
         "SELECT agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
@@ -701,6 +709,14 @@ async fn agent_delete_note(
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "Agent does not belong to this conversation"})),
+        )
+            .into_response();
+    }
+
+    if !agent_notes_allowed(&state.db, conv_id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Note access is disabled by conversation owner"})),
         )
             .into_response();
     }
