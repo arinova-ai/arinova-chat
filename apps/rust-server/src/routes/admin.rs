@@ -296,7 +296,7 @@ async fn list_users(
 
     let (rows, total) = if let Some(ref search) = params.search {
         let pattern = format!("%{}%", search.to_lowercase());
-        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, chrono::NaiveDateTime)>(
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, chrono::DateTime<chrono::Utc>)>(
             r#"SELECT id, name, email, username, image, is_verified, banned, created_at
                FROM "user"
                WHERE LOWER(name) LIKE $1 OR LOWER(email) LIKE $1 OR LOWER(username) LIKE $1
@@ -321,7 +321,7 @@ async fn list_users(
 
         (rows, total)
     } else {
-        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, chrono::NaiveDateTime)>(
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, chrono::DateTime<chrono::Utc>)>(
             r#"SELECT id, name, email, username, image, is_verified, banned, created_at
                FROM "user"
                ORDER BY created_at DESC
@@ -354,7 +354,7 @@ async fn list_users(
                         "image": image,
                         "isVerified": is_verified,
                         "isBanned": banned,
-                        "createdAt": created_at.and_utc().to_rfc3339(),
+                        "createdAt": created_at.to_rfc3339(),
                     })
                 })
                 .collect();
@@ -577,7 +577,7 @@ async fn get_user_detail(
     _admin: AuthAdmin,
     Path(id): Path<String>,
 ) -> Response {
-    let row = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, Option<String>, chrono::NaiveDateTime)>(
+    let row = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>, bool, bool, Option<String>, chrono::DateTime<chrono::Utc>)>(
         r#"SELECT id, name, email, username, image, is_verified, banned, bio, created_at FROM "user" WHERE id = $1"#,
     )
     .bind(&id)
@@ -667,7 +667,7 @@ async fn search_messages(
 
     let (rows, total) = if let Some(ref q) = params.q {
         let pattern = format!("%{}%", q);
-        let rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, Option<String>, Option<String>, chrono::NaiveDateTime)>(
+        let rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, Option<String>, Option<String>, chrono::DateTime<chrono::Utc>)>(
             r#"SELECT m.id, m.conversation_id, m.content,
                       COALESCE(u.name, 'Agent') as sender_name,
                       m.sender_user_id,
@@ -680,7 +680,7 @@ async fn search_messages(
         let total = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM messages WHERE content ILIKE $1").bind(&pattern).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(0);
         (rows, total)
     } else {
-        let rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, Option<String>, Option<String>, chrono::NaiveDateTime)>(
+        let rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, Option<String>, Option<String>, chrono::DateTime<chrono::Utc>)>(
             r#"SELECT m.id, m.conversation_id, m.content,
                       COALESCE(u.name, 'Agent') as sender_name,
                       m.sender_user_id,
@@ -736,7 +736,7 @@ async fn list_audit_logs(
     let limit = q.limit.unwrap_or(50).min(100);
     let offset = (page - 1) * limit;
 
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>, Option<serde_json::Value>, chrono::NaiveDateTime)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>, Option<serde_json::Value>, chrono::DateTime<chrono::Utc>)>(
         "SELECT id, admin_email, action, target_id, details, created_at FROM audit_logs ORDER BY created_at DESC LIMIT $1 OFFSET $2",
     ).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default();
 
@@ -812,12 +812,12 @@ async fn list_agents(
 
     let rows = if let Some(ref s) = params.search {
         let pattern = format!("%{}%", s.to_lowercase());
-        sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, String, bool, chrono::NaiveDateTime)>(
+        sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, String, bool, chrono::DateTime<chrono::Utc>)>(
             r#"SELECT a.id, a.name, a.description, a.owner_id, COALESCE(a.banned, false), a.created_at
                FROM agents a WHERE LOWER(a.name) LIKE $1 ORDER BY a.created_at DESC LIMIT $2 OFFSET $3"#,
         ).bind(&pattern).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default()
     } else {
-        sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, String, bool, chrono::NaiveDateTime)>(
+        sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, String, bool, chrono::DateTime<chrono::Utc>)>(
             r#"SELECT a.id, a.name, a.description, a.owner_id, COALESCE(a.banned, false), a.created_at
                FROM agents a ORDER BY a.created_at DESC LIMIT $1 OFFSET $2"#,
         ).bind(limit).bind(offset).fetch_all(&state.db).await.unwrap_or_default()
@@ -851,7 +851,7 @@ async fn list_content_filters(
     State(state): State<AppState>,
     _admin: AuthAdmin,
 ) -> Response {
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, bool, chrono::NaiveDateTime)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, bool, chrono::DateTime<chrono::Utc>)>(
         "SELECT id, pattern, action, enabled, created_at FROM content_filter_rules ORDER BY created_at DESC",
     ).fetch_all(&state.db).await.unwrap_or_default();
 
@@ -894,7 +894,7 @@ async fn list_feature_flags(
     State(state): State<AppState>,
     _admin: AuthAdmin,
 ) -> Response {
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, bool, Option<String>, chrono::NaiveDateTime)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, bool, Option<String>, chrono::DateTime<chrono::Utc>)>(
         "SELECT id, name, enabled, description, updated_at FROM feature_flags ORDER BY name",
     ).fetch_all(&state.db).await.unwrap_or_default();
 
@@ -1004,7 +1004,7 @@ async fn list_support_tickets(
     let limit = q.limit.unwrap_or(20).min(100);
     let offset = (page - 1) * limit;
 
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, String, Option<String>, chrono::NaiveDateTime)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, String, Option<String>, chrono::DateTime<chrono::Utc>)>(
         r#"SELECT t.id, t.user_id, COALESCE(u.name, 'Unknown'), t.subject, t.status, t.admin_reply, t.created_at
            FROM support_tickets t LEFT JOIN "user" u ON t.user_id = u.id
            ORDER BY t.created_at DESC LIMIT $1 OFFSET $2"#,
@@ -1047,7 +1047,7 @@ async fn list_data_requests(
     State(state): State<AppState>,
     _admin: AuthAdmin,
 ) -> Response {
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, chrono::NaiveDateTime)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, chrono::DateTime<chrono::Utc>)>(
         r#"SELECT dr.id, dr.user_id, COALESCE(u.name, 'Unknown'), dr.request_type, dr.created_at
            FROM data_requests dr LEFT JOIN "user" u ON dr.user_id = u.id
            WHERE dr.status = 'pending'
@@ -1081,7 +1081,7 @@ async fn list_email_templates(
     State(state): State<AppState>,
     _admin: AuthAdmin,
 ) -> Response {
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, chrono::NaiveDateTime)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, String, chrono::DateTime<chrono::Utc>)>(
         "SELECT id, name, subject, body_html, updated_at FROM email_templates ORDER BY name",
     ).fetch_all(&state.db).await.unwrap_or_default();
 
@@ -1120,7 +1120,7 @@ async fn list_ip_blacklist(
     State(state): State<AppState>,
     _admin: AuthAdmin,
 ) -> Response {
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, chrono::NaiveDateTime)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>)>(
         "SELECT id, ip, reason, created_at FROM ip_blacklist ORDER BY created_at DESC",
     ).fetch_all(&state.db).await.unwrap_or_default();
 
