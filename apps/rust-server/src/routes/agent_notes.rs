@@ -159,6 +159,14 @@ async fn agent_get_note(
             .into_response();
     }
 
+    if !agent_notes_allowed(&state.db, conv_id).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "Note access is disabled by conversation owner"})),
+        )
+            .into_response();
+    }
+
     let row = sqlx::query_as::<_, NoteRow>(&format!(
         "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE n.id = $1 AND ncl.conversation_id = $2",
         NOTE_QUERY_BASE
@@ -775,6 +783,10 @@ async fn agent_share_note(
 ) -> Response {
     if !agent_is_member(&state.db, conv_id, agent.id).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Agent does not belong to this conversation"}))).into_response();
+    }
+
+    if !agent_notes_allowed(&state.db, conv_id).await {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Note access is disabled by conversation owner"}))).into_response();
     }
 
     let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
