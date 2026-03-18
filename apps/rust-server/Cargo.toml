@@ -63,6 +63,7 @@ dashmap = "6"
 parking_lot = "0.12"
 
 # Utilities
+async-stream = "0.3"
 futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = "0.7"

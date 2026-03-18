@@ -1,16 +1,19 @@
 use axum::{
+    body::Body,
     extract::{FromRequestParts, Query, State},
     http::{request::Parts, StatusCode},
     response::{IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
+use futures::StreamExt;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::auth::middleware::FromRef;
 use crate::routes::oauth::AuthOAuthToken;
+use crate::services::llm::{self, ChatMessage, LlmCallOptions, LlmProvider};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
@@ -107,133 +110,201 @@ async fn user_agents(
     }
 }
 
-// ── Step 4: Agent Proxy (placeholder) ───────────────────────────
+// ── Step 4: Agent Chat Proxy ─────────────────────────────────────
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct AgentChatBody {
     agent_id: String,
     prompt: String,
     system_prompt: Option<String>,
 }
 
+/// Resolve agent, validate ownership, build LLM options. Returns (LlmCallOptions, agent_id_uuid).
+async fn resolve_agent_llm(
+    state: &AppState,
+    auth: &AuthOAuthToken,
+    body: &AgentChatBody,
+) -> Result<LlmCallOptions, Response> {
+    // Scope check
+    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "agents") {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "insufficient_scope", "error_description": "Scope 'agents' required"})),
+        ).into_response());
+    }
+
+    let agent_id = Uuid::parse_str(&body.agent_id).map_err(|_| {
+        (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid agentId"}))).into_response()
+    })?;
+
+    // Fetch agent with system_prompt (and verify ownership)
+    let agent = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT name, system_prompt FROM agents WHERE id = $1 AND owner_id = $2",
+    )
+    .bind(agent_id)
+    .bind(&auth.user_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+    })?
+    .ok_or_else(|| {
+        (StatusCode::NOT_FOUND, Json(json!({"error": "Agent not found or not owned by user"}))).into_response()
+    })?;
+
+    let (_agent_name, db_system_prompt) = agent;
+
+    // Determine LLM provider + API key from server config
+    let (provider, api_key, model) = if let Some(ref key) = state.config.openai_api_key {
+        (LlmProvider::OpenAI, key.clone(), "gpt-4o-mini".to_string())
+    } else if let Some(ref key) = state.config.anthropic_api_key {
+        (LlmProvider::Anthropic, key.clone(), "claude-haiku-4-5-20251001".to_string())
+    } else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error": "No LLM provider configured"})),
+        ).into_response());
+    };
+
+    // Build messages
+    let mut messages = Vec::new();
+    let system_prompt = body.system_prompt.as_deref()
+        .or(db_system_prompt.as_deref());
+    if let Some(sp) = system_prompt {
+        messages.push(ChatMessage { role: "system".into(), content: sp.to_string() });
+    }
+    messages.push(ChatMessage { role: "user".into(), content: body.prompt.clone() });
+
+    Ok(LlmCallOptions {
+        provider,
+        model,
+        api_key,
+        messages,
+        max_tokens: Some(4096),
+        temperature: Some(0.7),
+    })
+}
+
+/// POST /api/v1/agent/chat — non-streaming agent chat
 async fn agent_chat(
     State(state): State<AppState>,
     auth: AuthOAuthToken,
     Json(body): Json<AgentChatBody>,
 ) -> Response {
-    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "agents") {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "insufficient_scope", "error_description": "Scope 'agents' required"})),
-        )
-            .into_response();
-    }
+    let opts = match resolve_agent_llm(&state, &auth, &body).await {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
 
-    // Verify agent belongs to user
-    let agent_id = match Uuid::parse_str(&body.agent_id) {
-        Ok(id) => id,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Invalid agentId"})),
-            )
-                .into_response();
+    // Call LLM streaming and collect full response
+    let sse_stream = match llm::call_llm_stream(&opts).await {
+        Ok(s) => s,
+        Err(e) => {
+            return (StatusCode::BAD_GATEWAY, Json(json!({"error": e}))).into_response();
         }
     };
 
-    let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM agents WHERE id = $1 AND owner_id = $2)",
-    )
-    .bind(agent_id)
-    .bind(&auth.user_id)
-    .fetch_one(&state.db)
-    .await;
+    let parser = match opts.provider {
+        LlmProvider::OpenAI => llm::parse_openai_chunk,
+        LlmProvider::Anthropic => llm::parse_anthropic_chunk,
+    };
 
-    match exists {
-        Ok(true) => {}
-        Ok(false) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Agent not found or not owned by user"})),
-            )
-                .into_response();
-        }
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response();
+    let mut content = String::new();
+    let mut stream = sse_stream;
+    let mut buf = String::new();
+
+    while let Some(chunk_result) = stream.next().await {
+        let bytes = match chunk_result {
+            Ok(b) => b,
+            Err(_) => break,
+        };
+        buf.push_str(&String::from_utf8_lossy(&bytes));
+
+        // Process complete SSE lines
+        while let Some(pos) = buf.find('\n') {
+            let line = buf[..pos].trim().to_string();
+            buf = buf[pos + 1..].to_string();
+            if let Some(data) = line.strip_prefix("data: ") {
+                if let Some(text) = parser(data) {
+                    content.push_str(&text);
+                }
+            }
         }
     }
 
-    // Placeholder v1 response
     Json(json!({
-        "response": format!("Agent proxy coming soon - agentId: {}", body.agent_id),
+        "response": content,
         "agentId": body.agent_id,
     }))
     .into_response()
 }
 
+/// POST /api/v1/agent/chat/stream — SSE streaming agent chat
 async fn agent_chat_stream(
     State(state): State<AppState>,
     auth: AuthOAuthToken,
     Json(body): Json<AgentChatBody>,
 ) -> Response {
-    if !auth.scope.split(|c: char| c == ',' || c == ' ').any(|s| !s.is_empty() && s.trim() == "agents") {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "insufficient_scope", "error_description": "Scope 'agents' required"})),
-        )
-            .into_response();
-    }
+    let opts = match resolve_agent_llm(&state, &auth, &body).await {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
 
-    let agent_id = match Uuid::parse_str(&body.agent_id) {
-        Ok(id) => id,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Invalid agentId"})),
-            )
-                .into_response();
+    let provider = opts.provider.clone();
+    let agent_id = body.agent_id.clone();
+
+    let sse_stream = match llm::call_llm_stream(&opts).await {
+        Ok(s) => s,
+        Err(e) => {
+            return (StatusCode::BAD_GATEWAY, Json(json!({"error": e}))).into_response();
         }
     };
 
-    let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM agents WHERE id = $1 AND owner_id = $2)",
-    )
-    .bind(agent_id)
-    .bind(&auth.user_id)
-    .fetch_one(&state.db)
-    .await;
+    let parser = match provider {
+        LlmProvider::OpenAI => llm::parse_openai_chunk,
+        LlmProvider::Anthropic => llm::parse_anthropic_chunk,
+    };
 
-    match exists {
-        Ok(true) => {}
-        Ok(false) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"error": "Agent not found or not owned by user"})),
-            )
-                .into_response();
-        }
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": e.to_string()})),
-            )
-                .into_response();
-        }
-    }
+    // Transform LLM SSE stream into our SSE format
+    let output_stream = async_stream::stream! {
+        let mut buf = String::new();
+        let mut stream = sse_stream;
+        let mut full_content = String::new();
 
-    // Placeholder v1 — return SSE-style JSON for now
-    Json(json!({
-        "response": format!("Agent streaming proxy coming soon - agentId: {}", body.agent_id),
-        "agentId": body.agent_id,
-        "stream": false,
-    }))
-    .into_response()
+        while let Some(chunk_result) = stream.next().await {
+            let bytes = match chunk_result {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+            buf.push_str(&String::from_utf8_lossy(&bytes));
+
+            while let Some(pos) = buf.find('\n') {
+                let line = buf[..pos].trim().to_string();
+                buf = buf[pos + 1..].to_string();
+                if let Some(data) = line.strip_prefix("data: ") {
+                    if let Some(text) = parser(data) {
+                        full_content.push_str(&text);
+                        let event = json!({"type": "chunk", "content": text});
+                        yield Ok::<_, std::convert::Infallible>(
+                            format!("data: {}\n\n", event)
+                        );
+                    }
+                }
+            }
+        }
+
+        let done = json!({"type": "done", "content": full_content, "agentId": agent_id});
+        yield Ok(format!("data: {}\n\n", done));
+    };
+
+    Response::builder()
+        .status(200)
+        .header("Content-Type", "text/event-stream")
+        .header("Cache-Control", "no-cache")
+        .header("Connection", "keep-alive")
+        .body(Body::from_stream(output_stream))
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
 // ── Step 5: Economy ─────────────────────────────────────────────
