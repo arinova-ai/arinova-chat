@@ -26,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/notes/{noteId}/unarchive", post(unarchive_note_standalone))
         .route("/api/notes/{noteId}/auto-tag", post(auto_tag_note_standalone))
         .route("/api/notes/{noteId}/ask-ai", post(ask_ai_standalone))
+        .route("/api/notes/{noteId}/related-memories", get(get_note_related_memories))
         .route("/api/notes/upload", post(upload_note_image_standalone))
         .route("/api/users/me/notes", get(list_user_notes))
         .route(
@@ -384,10 +385,8 @@ async fn get_note_by_id(
             let mut j = note_to_json(&note);
             let backlinks = get_backlinks(&state.db, note.id).await;
             let linked_cards = get_linked_cards(&state.db, note.id).await;
-            let related_capsules = get_related_capsules_with_key(&state.db, &user.id, &note.content, state.config.openai_api_key.as_deref()).await;
             j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
             j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
-            j.as_object_mut().unwrap().insert("relatedCapsules".into(), json!(related_capsules));
             Json(j).into_response()
         }
         Ok(None) => (
@@ -401,6 +400,53 @@ async fn get_note_by_id(
         )
             .into_response(),
     }
+}
+
+/// GET /api/notes/:noteId/related-memories — async endpoint for related memory capsules
+async fn get_note_related_memories(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    // Check Redis cache first
+    let cache_key = format!("related_memories:{}:{}", user.id, note_id);
+    if let Ok(mut conn) = state.redis.get().await {
+        if let Ok(cached) = deadpool_redis::redis::cmd("GET").arg(&cache_key).query_async::<String>(&mut conn).await {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&cached) {
+                return Json(parsed).into_response();
+            }
+        }
+    }
+
+    let content = sqlx::query_scalar::<_, String>(
+        "SELECT content FROM conversation_notes WHERE id = $1",
+    )
+    .bind(note_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_default();
+
+    let capsules = get_related_capsules_with_key(
+        &state.db, &user.id, &content,
+        state.config.openai_api_key.as_deref(),
+    ).await;
+
+    let result = json!({ "relatedCapsules": capsules });
+
+    // Cache in Redis for 1 day
+    if let Ok(mut conn) = state.redis.get().await {
+        let _ = deadpool_redis::redis::cmd("SET")
+            .arg(&cache_key)
+            .arg(result.to_string())
+            .arg("EX")
+            .arg(86400)
+            .query_async::<()>(&mut conn)
+            .await;
+    }
+
+    Json(result).into_response()
 }
 
 // ===== Gemini helper =====

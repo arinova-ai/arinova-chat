@@ -361,9 +361,19 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (note) {
       setSelectedNote(note);
       setViewMode("detail");
-      // Fetch full note
+      // Fetch full note (fast), then related memories (async)
       api(`/api/notes/${note.id}`)
-        .then((full) => setSelectedNote(full as Note))
+        .then((full) => {
+          setSelectedNote(full as Note);
+          api(`/api/notes/${note.id}/related-memories`)
+            .then((data) => {
+              const d = data as { relatedCapsules?: Note["relatedCapsules"] };
+              if (d.relatedCapsules) {
+                setSelectedNote((prev) => prev && prev.id === note.id ? { ...prev, relatedCapsules: d.relatedCapsules } : prev);
+              }
+            })
+            .catch(() => {});
+        })
         .catch(() => {});
     }
     useChatStore.setState({ pendingNoteId: null });
@@ -372,10 +382,19 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   const handleOpenNote = useCallback(async (note: Note) => {
     setSelectedNote(note);
     setViewMode("detail");
-    // Fetch full note to get backlinks and linkedCards
+    // Fetch full note (fast — no related memories)
     try {
       const full = await api(`/api/notes/${note.id}`) as Note;
       setSelectedNote(full);
+      // Async load related memories (slow — embedding search)
+      api(`/api/notes/${note.id}/related-memories`)
+        .then((data) => {
+          const d = data as { relatedCapsules?: Note["relatedCapsules"] };
+          if (d.relatedCapsules) {
+            setSelectedNote((prev) => prev && prev.id === note.id ? { ...prev, relatedCapsules: d.relatedCapsules } : prev);
+          }
+        })
+        .catch(() => {});
     } catch { /* keep list data if fetch fails */ }
   }, []);
 
