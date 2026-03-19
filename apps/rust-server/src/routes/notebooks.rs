@@ -419,7 +419,7 @@ async fn list_notebook_notes(
     Path(id): Path<Uuid>,
     Query(query): Query<ListNotebookNotesQuery>,
 ) -> Response {
-    // Verify ownership
+    // Verify ownership or membership
     let owner: Option<(String,)> =
         sqlx::query_as("SELECT owner_id FROM notebooks WHERE id = $1")
             .bind(id)
@@ -436,11 +436,23 @@ async fn list_notebook_notes(
                 .into_response()
         }
         Some((oid,)) if oid != user.id => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "Not authorized"})),
+            // Not owner — check if shared member
+            let is_member = sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM notebook_members WHERE notebook_id = $1 AND user_id = $2)",
             )
-                .into_response()
+            .bind(id)
+            .bind(&user.id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(false);
+
+            if !is_member {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({"error": "Not authorized"})),
+                )
+                    .into_response();
+            }
         }
         _ => {}
     }
