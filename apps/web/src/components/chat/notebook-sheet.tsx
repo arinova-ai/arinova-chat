@@ -5,12 +5,6 @@ import type { Note } from "@arinova/shared/types";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
 import dynamic from "next/dynamic";
 const NotebookEditor = dynamic(() => import("./notebook-editor").then((m) => m.NotebookEditor), { ssr: false });
 import {
@@ -20,7 +14,6 @@ import {
   Pencil,
   Trash2,
   Loader2,
-  Settings,
   X,
   Pin,
   Share2,
