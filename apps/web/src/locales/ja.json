@@ -1466,6 +1466,7 @@
   "tips.noteSharing": "ノートアイコンでエージェントとノートを共有",
   "tips.useSkills": "// と入力してエージェントスキルを使用",
   "tips.agentNotesTask": "エージェントがノート作成やタスク管理をサポート",
+  "tips.agentListenMode": "グループやコミュニティでエージェントのリスニングモードを制御",
   "tips.shortcuts": "Ctrl+K でコマンドパレットを開く",
   "tips.tapSend": "送信ボタンをタップしてメッセージを送信",
   "tips.longPressReact": "メッセージを長押しして絵文字でリアクション",

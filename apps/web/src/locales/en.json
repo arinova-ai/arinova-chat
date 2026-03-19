@@ -1498,6 +1498,7 @@
   "tips.noteSharing": "Share notes with agents using the note icon",
   "tips.useSkills": "Type // to use agent skills",
   "tips.agentNotesTask": "Agents can write notes and manage tasks for you",
+  "tips.agentListenMode": "Control your agent's listening mode in groups and communities",
   "tips.shortcuts": "Press Ctrl+K to open the command palette",
   "tips.tapSend": "Tap the send button to send your message",
   "tips.longPressReact": "Long press a message to react with emoji",
