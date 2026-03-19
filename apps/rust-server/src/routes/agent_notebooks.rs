@@ -155,12 +155,7 @@ async fn list_notebooks(
                (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count
         FROM notebooks n
         WHERE n.owner_id = $1
-          AND (
-            -- No permission rows = open to all agents (backward compatible)
-            NOT EXISTS (SELECT 1 FROM notebook_agent_permissions WHERE notebook_id = n.id)
-            -- Or this agent is explicitly granted
-            OR EXISTS (SELECT 1 FROM notebook_agent_permissions WHERE notebook_id = n.id AND agent_id = $2)
-          )
+          AND EXISTS (SELECT 1 FROM notebook_agent_permissions WHERE notebook_id = n.id AND agent_id = $2)
         ORDER BY n.sort_order, n.created_at
         "#,
     )
