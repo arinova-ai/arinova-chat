@@ -26,6 +26,7 @@ import { MentionPopup, type MentionItem } from "./mention-popup";
 import { wsManager } from "@/lib/ws";
 import { playSendSound } from "@/lib/sounds";
 import { useInputHistory } from "@/hooks/use-input-history";
+import { ChatTooltip } from "./chat-tooltip";
 
 // ---------- Popup item types ----------
 
@@ -1375,6 +1376,8 @@ case "tts": {
               rows={1}
               className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
+
+            <ChatTooltip />
 
             {value.trim() || pendingFiles.length > 0 || attachedCard ? (
               <Button
