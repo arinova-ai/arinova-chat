@@ -526,6 +526,7 @@ async fn main() {
         ALTER TABLE board_members DROP CONSTRAINT IF EXISTS board_members_permission_check;
         ALTER TABLE board_members ADD CONSTRAINT board_members_permission_check CHECK (permission IN ('view', 'edit', 'admin'));
         ALTER TABLE "user" ADD COLUMN IF NOT EXISTS office_visits_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE conversation_notes ALTER COLUMN conversation_id DROP NOT NULL;
         ALTER TABLE "user" ADD COLUMN IF NOT EXISTS office_theme_id TEXT;
         CREATE TABLE IF NOT EXISTS notebook_members (
             notebook_id UUID NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,

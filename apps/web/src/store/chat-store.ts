@@ -1622,18 +1622,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   updateNote: async (conversationId, noteId, updates) => {
-    let updated: Note;
-    if (conversationId) {
-      updated = await api<Note>(
-        `/api/conversations/${conversationId}/notes/${noteId}`,
-        { method: "PATCH", body: JSON.stringify(updates) }
-      );
-    } else {
-      updated = await api<Note>(
-        `/api/notes/${noteId}`,
-        { method: "PATCH", body: JSON.stringify(updates) }
-      );
-    }
+    // Always use standalone endpoint
+    const updated = await api<Note>(
+      `/api/notes/${noteId}`,
+      { method: "PATCH", body: JSON.stringify(updates) }
+    );
     const key = conversationId || "__standalone__";
     const current = get().notesByConversation[key] ?? [];
     set({
@@ -1645,11 +1638,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   deleteNote: async (conversationId, noteId) => {
-    if (conversationId) {
-      await api(`/api/conversations/${conversationId}/notes/${noteId}`, { method: "DELETE" });
-    } else {
-      await api(`/api/notes/${noteId}`, { method: "DELETE" });
-    }
+    await api(`/api/notes/${noteId}`, { method: "DELETE" });
     const key = conversationId || "__standalone__";
     const current = get().notesByConversation[key] ?? [];
     set({
@@ -1661,11 +1650,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   archiveNote: async (conversationId, noteId) => {
-    if (conversationId) {
-      await api(`/api/conversations/${conversationId}/notes/${noteId}/archive`, { method: "POST" });
-    } else {
-      await api(`/api/notes/${noteId}/archive`, { method: "POST" });
-    }
+    await api(`/api/notes/${noteId}/archive`, { method: "POST" });
     const key = conversationId || "__standalone__";
     const current = get().notesByConversation[key] ?? [];
     set({
@@ -1677,11 +1662,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   unarchiveNote: async (conversationId, noteId) => {
-    if (conversationId) {
-      await api(`/api/conversations/${conversationId}/notes/${noteId}/unarchive`, { method: "POST" });
-    } else {
-      await api(`/api/notes/${noteId}/unarchive`, { method: "POST" });
-    }
+    await api(`/api/notes/${noteId}/unarchive`, { method: "POST" });
     const key = conversationId || "__standalone__";
     const current = get().notesByConversation[key] ?? [];
     set({

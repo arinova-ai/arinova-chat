@@ -57,6 +57,9 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/notes/{noteId}/archive", post(archive_note_standalone))
         .route("/api/notes/{noteId}/unarchive", post(unarchive_note_standalone))
+        .route("/api/notes/{noteId}/auto-tag", post(auto_tag_note_standalone))
+        .route("/api/notes/{noteId}/ask-ai", post(ask_ai_standalone))
+        .route("/api/notes/upload", post(upload_note_image_standalone))
         .route("/api/users/me/notes", get(list_user_notes))
         .route(
             "/api/notes/{noteId}/links",
@@ -3103,4 +3106,153 @@ async fn unarchive_note_standalone(
     let _ = sqlx::query("UPDATE conversation_notes SET archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL")
         .bind(note_id).execute(&state.db).await;
     Json(json!({"archived": false})).into_response()
+}
+
+/// POST /api/notes/:noteId/auto-tag — auto-tag without conversation
+async fn auto_tag_note_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
+        "SELECT title, content, tags FROM conversation_notes WHERE id = $1 AND creator_id = $2",
+    )
+    .bind(note_id).bind(&user.id).fetch_optional(&state.db).await;
+
+    let (title, content, existing_tags) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if content.trim().len() < 20 && title.trim().len() < 5 {
+        return Json(json!({"tags": existing_tags})).into_response();
+    }
+
+    let content_end = content.char_indices().nth(200).map(|(i, _)| i).unwrap_or(content.len());
+    let query_text = format!("{} {}", title, &content[..content_end]);
+    let tsquery = query_text.split_whitespace().take(8)
+        .map(|w| w.replace('\'', "")).filter(|w| w.len() > 2).collect::<Vec<_>>().join(" | ");
+
+    if tsquery.is_empty() {
+        return Json(json!({"tags": existing_tags})).into_response();
+    }
+
+    let memory_tags: Vec<Vec<String>> = sqlx::query_scalar(
+        r#"SELECT tags FROM conversation_notes
+           WHERE owner_id = $1 AND id != $2 AND array_length(tags, 1) > 0
+           AND to_tsvector('simple', title || ' ' || content) @@ to_tsquery('simple', $3)
+           LIMIT 5"#,
+    )
+    .bind(&user.id).bind(note_id).bind(&tsquery).fetch_all(&state.db).await.unwrap_or_default();
+
+    let mut tag_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for tags in &memory_tags {
+        for tag in tags {
+            let normalized = tag.trim().to_lowercase();
+            if !normalized.is_empty() && !existing_tags.iter().any(|t| t.to_lowercase() == normalized) {
+                *tag_counts.entry(normalized).or_insert(0) += 1;
+            }
+        }
+    }
+
+    let mut ranked: Vec<_> = tag_counts.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1));
+    let suggested: Vec<String> = ranked.into_iter().take(5).map(|(t, _)| t).collect();
+    Json(json!({"tags": existing_tags, "suggestedTags": suggested})).into_response()
+}
+
+/// POST /api/notes/:noteId/ask-ai — ask AI without conversation
+async fn ask_ai_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+    Json(body): Json<AskAiBody>,
+) -> Response {
+    let question = body.question.trim();
+    if question.is_empty() || question.len() > 2000 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Question is required (max 2000 chars)"}))).into_response();
+    }
+
+    let gemini_key = match sqlx::query_scalar::<_, Option<String>>(
+        "SELECT gemini_api_key FROM user_settings WHERE user_id = $1",
+    ).bind(&user.id).fetch_optional(&state.db).await {
+        Ok(Some(Some(k))) if !k.is_empty() => crate::routes::user_settings::decrypt_api_key(&state.config, &k),
+        _ => return (StatusCode::PAYMENT_REQUIRED, Json(json!({"error": "Please set your Gemini API key in Settings to use Ask AI."}))).into_response(),
+    };
+
+    if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
+        return resp;
+    }
+
+    let note = sqlx::query_as::<_, (String, String)>(
+        "SELECT title, content FROM conversation_notes WHERE id = $1 AND creator_id = $2",
+    ).bind(note_id).bind(&user.id).fetch_optional(&state.db).await;
+
+    let (title, content) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let system = "You are a helpful AI assistant. The user will provide a note and ask a question about it. \
+                  Answer concisely based on the note content. If the answer is not in the note, say so.";
+    let prompt = format!("# Note: {}\n\n{}\n\n---\nQuestion: {}", title, content, question);
+
+    match call_gemini(&gemini_key, system, &prompt, 1024).await {
+        Ok(answer) => Json(json!({ "answer": answer })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response(),
+    }
+}
+
+/// POST /api/notes/upload — upload note image without conversation
+async fn upload_note_image_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    mut multipart: Multipart,
+) -> Response {
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() != Some("file") { continue; }
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response(),
+        };
+        if data.len() > 5 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Image must be under 5MB"}))).into_response();
+        }
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.starts_with(&[0x47, 0x49, 0x46]) {
+            ("gif", "image/gif")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Only PNG, JPEG, GIF, and WebP images are allowed"}))).into_response();
+        };
+
+        let stored = format!("note_{}_{}.{}", &user.id[..8], chrono::Utc::now().timestamp_millis(), ext);
+        let r2_key = format!("notes/standalone/{}", stored);
+
+        let url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(s3, &state.config.r2_bucket, &r2_key, data.to_vec(), content_type, &state.config.r2_public_url).await {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("notes");
+                    let _ = tokio::fs::create_dir_all(&dir).await;
+                    let _ = tokio::fs::write(dir.join(&stored), &data).await;
+                    format!("/uploads/notes/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("notes");
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            let _ = tokio::fs::write(dir.join(&stored), &data).await;
+            format!("/uploads/notes/{}", stored)
+        };
+
+        return Json(json!({"url": url})).into_response();
+    }
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file field"}))).into_response()
 }

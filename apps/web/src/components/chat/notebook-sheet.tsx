@@ -520,7 +520,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     setAutoTagging(true);
     try {
       const res = await api<{ tags: string[] }>(
-        `/api/conversations/${conversationId}/notes/${selectedNote.id}/auto-tag`,
+        `/api/notes/${selectedNote.id}/auto-tag`,
         { method: "POST" }
       );
       if (res.tags?.length) {
@@ -549,7 +549,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     setAskAiLoading(true);
     setAskAiAnswer("");
     try {
-      const res = await api<{ answer: string }>(`/api/conversations/${conversationId}/notes/${selectedNote.id}/ask-ai`, {
+      const res = await api<{ answer: string }>(`/api/notes/${selectedNote.id}/ask-ai`, {
         method: "POST",
         body: JSON.stringify({ question: askAiQuestion.trim() }),
       });

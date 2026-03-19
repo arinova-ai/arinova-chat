@@ -147,7 +147,7 @@ export function NotebookEditor({
     formData.append("file", file);
     try {
       const res = await fetch(
-        `${BACKEND_URL}/api/conversations/${conversationId}/notes/upload`,
+        `${BACKEND_URL}/api/notes/upload`,
         { method: "POST", body: formData, credentials: "include" }
       );
       if (!res.ok) {

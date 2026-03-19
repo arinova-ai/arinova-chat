@@ -807,7 +807,7 @@ function NotebookNotes({
 
   const handleUnarchiveFromPopover = useCallback(async (noteId: string) => {
     try {
-      await api(`/api/conversations/${conversationId}/notes/${noteId}/unarchive`, { method: "POST" });
+      await api(`/api/notes/${noteId}/unarchive`, { method: "POST" });
       setArchivedNotes((prev) => prev.filter((n) => n.id !== noteId));
       onRefresh();
     } catch {}
