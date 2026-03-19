@@ -350,10 +350,8 @@ function UserProfileContent() {
                         className="gap-1.5"
                         onClick={async () => {
                           try {
-                            const data = await api<{ userId: string; readOnly: boolean }>(`/api/user/${userId}/office-visit`);
-                            if (data.userId) {
-                              window.location.href = `/office?visit=${userId}`;
-                            }
+                            await api<{ userId: string; readOnly: boolean }>(`/api/user/${userId}/office-visit`);
+                            window.location.href = `/visit-office/${userId}`;
                           } catch {
                             // toast handled by api
                           }
