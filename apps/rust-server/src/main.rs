@@ -499,6 +499,7 @@ async fn main() {
         );
         ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_secret TEXT;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS history_limit INTEGER NOT NULL DEFAULT 5;
+        UPDATE notebooks SET name = 'My Notebook' WHERE name = 'My Notes' AND is_default = true;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

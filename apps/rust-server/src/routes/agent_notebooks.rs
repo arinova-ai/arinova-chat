@@ -73,7 +73,7 @@ fn notebook_to_json(row: &NotebookRow) -> serde_json::Value {
 /// Ensure the user has a default notebook
 async fn ensure_default_notebook(db: &sqlx::PgPool, user_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO notebooks (owner_id, name, is_default, sort_order) VALUES ($1, 'My Notes', true, 0) ON CONFLICT DO NOTHING",
+        "INSERT INTO notebooks (owner_id, name, is_default, sort_order) VALUES ($1, 'My Notebook', true, 0) ON CONFLICT DO NOTHING",
     )
     .bind(user_id)
     .execute(db)
