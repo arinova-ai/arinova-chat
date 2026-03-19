@@ -417,33 +417,46 @@ async fn handle_message(
                 return;
             }
 
-            // Block check: reject message if any member of this conversation has blocked the sender
-            let blocked_in_conv = sqlx::query_scalar::<_, bool>(
-                r#"SELECT EXISTS(
-                    SELECT 1 FROM friendships f
-                    JOIN conversation_user_members cum ON cum.conversation_id = $1::uuid AND cum.user_id = f.requester_id
-                    WHERE f.addressee_id = $2 AND f.status = 'blocked'
-                ) OR EXISTS(
-                    SELECT 1 FROM conversations c
-                    WHERE c.id = $1::uuid AND c.user_id != $2
-                    AND EXISTS(SELECT 1 FROM friendships WHERE requester_id = c.user_id AND addressee_id = $2 AND status = 'blocked')
-                )"#,
+            // Block check (1-on-1 only): reject if the other party has blocked sender
+            let conv_type = sqlx::query_scalar::<_, String>(
+                "SELECT type::text FROM conversations WHERE id = $1::uuid",
             )
             .bind(conversation_id)
-            .bind(user_id)
-            .fetch_one(db)
+            .fetch_optional(db)
             .await
-            .unwrap_or(false);
+            .ok()
+            .flatten()
+            .unwrap_or_default();
 
-            if blocked_in_conv {
-                send_event(tx, &json!({
-                    "type": "stream_error",
-                    "conversationId": conversation_id,
-                    "messageId": "",
-                    "seq": 0,
-                    "error": "You cannot send messages to this conversation"
-                }));
-                return;
+            if conv_type == "h2h" || conv_type == "h2a" || conv_type == "direct" {
+                let blocked_in_conv = sqlx::query_scalar::<_, bool>(
+                    r#"SELECT EXISTS(
+                        SELECT 1 FROM friendships f
+                        JOIN conversation_user_members cum ON cum.conversation_id = $1::uuid AND cum.user_id = f.requester_id
+                        WHERE f.addressee_id = $2 AND f.status = 'blocked'
+                    ) OR EXISTS(
+                        SELECT 1 FROM conversations c
+                        WHERE c.id = $1::uuid AND c.user_id != $2
+                        AND EXISTS(SELECT 1 FROM friendships WHERE requester_id = c.user_id AND addressee_id = $2 AND status = 'blocked')
+                    )"#,
+                )
+                .bind(conversation_id)
+                .bind(user_id)
+                .fetch_one(db)
+                .await
+                .unwrap_or(false);
+
+                if blocked_in_conv {
+                    send_event(tx, &json!({
+                        "type": "stream_error",
+                        "conversationId": conversation_id,
+                        "messageId": "",
+                        "seq": 0,
+                        "code": "blocked",
+                        "error": "You have been blocked by this user"
+                    }));
+                    return;
+                }
             }
 
             // Auto-resolve @name patterns from content and merge with client mentions

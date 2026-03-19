@@ -6,6 +6,7 @@ import { wsManager } from "@/lib/ws";
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 import { isGroupLike } from "@/lib/utils";
 import { useNotificationStore } from "@/store/notification-store";
+import { useToastStore } from "@/store/toast-store";
 import { playReceiveSound } from "@/lib/sounds";
 import {
   getCachedMessages,
@@ -2574,6 +2575,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "stream_error") {
       const { conversationId, messageId, error } = event;
       const threadId = event.threadId;
+
+      // Show toast for block errors
+      if ((event as Record<string, unknown>).code === "blocked") {
+        useToastStore.getState().addToast(error || "You have been blocked by this user", "error");
+        return;
+      }
 
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];
