@@ -207,7 +207,7 @@ function OfficeViewInner({ visitUserId }: { visitUserId?: string }) {
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [visitLoading]);
 
   const themeReady = !loading && !!manifest;
 
