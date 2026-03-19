@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/lib/i18n";
 import { Bot, Loader2, Play } from "lucide-react";
 
 interface JoinDialogProps {
@@ -25,6 +26,7 @@ export function JoinDialog({
   spaceId,
   sessionId,
 }: JoinDialogProps) {
+  const { t } = useTranslation();
   const agents = useChatStore((s) => s.agents);
   const loadAgents = useChatStore((s) => s.loadAgents);
   const joinSession = useSpacesStore((s) => s.joinSession);
@@ -53,12 +55,12 @@ export function JoinDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Join Session</DialogTitle>
+          <DialogTitle>{t("spaces.joinSession")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Optionally select an agent to bring into this session.
+            {t("spaces.selectAgentHint")}
           </p>
 
           <div className="max-h-60 space-y-2 overflow-y-auto">
@@ -75,9 +77,9 @@ export function JoinDialog({
                 <Play className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-sm font-medium">Join without agent</p>
+                <p className="text-sm font-medium">{t("spaces.joinWithoutAgent")}</p>
                 <p className="text-xs text-muted-foreground">
-                  Participate as yourself
+                  {t("spaces.participateAsYourself")}
                 </p>
               </div>
             </button>
@@ -125,7 +127,7 @@ export function JoinDialog({
             ) : (
               <Play className="h-4 w-4" />
             )}
-            Join Session
+            {t("spaces.joinSession")}
           </Button>
         </div>
       </DialogContent>

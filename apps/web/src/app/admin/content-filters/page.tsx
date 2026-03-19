@@ -4,10 +4,12 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Rule { id: string; pattern: string; action: string; enabled: boolean; createdAt: string }
 
 export default function AdminContentFiltersPage() {
+  const { t } = useTranslation();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [newPattern, setNewPattern] = useState("");
@@ -31,10 +33,10 @@ export default function AdminContentFiltersPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h2 className="text-xl font-bold">Content Filter Rules</h2>
+      <h2 className="text-xl font-bold">{t("admin.contentFilters.title")}</h2>
       <div className="flex gap-2">
-        <Input value={newPattern} onChange={(e) => setNewPattern(e.target.value)} placeholder="Add filter pattern (regex or text)..." className="flex-1" />
-        <Button onClick={handleCreate} disabled={creating || !newPattern.trim()}><Plus className="h-4 w-4 mr-1" />Add</Button>
+        <Input value={newPattern} onChange={(e) => setNewPattern(e.target.value)} placeholder={t("admin.contentFilters.placeholder")} className="flex-1" />
+        <Button onClick={handleCreate} disabled={creating || !newPattern.trim()}><Plus className="h-4 w-4 mr-1" />{t("admin.contentFilters.add")}</Button>
       </div>
       {loading ? <Loader2 className="h-6 w-6 animate-spin mx-auto" /> : (
         <div className="space-y-2">
@@ -45,7 +47,7 @@ export default function AdminContentFiltersPage() {
               <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(r.id)}><Trash2 className="h-4 w-4" /></Button>
             </div>
           ))}
-          {rules.length === 0 && <p className="text-center text-muted-foreground py-8">No filter rules</p>}
+          {rules.length === 0 && <p className="text-center text-muted-foreground py-8">{t("admin.contentFilters.noRules")}</p>}
         </div>
       )}
     </div>

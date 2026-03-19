@@ -799,13 +799,13 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             className="gap-2"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add Board
+            {t("kanban.addBoard")}
           </DropdownMenuItem>
           {archivedBoards.length > 0 && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                Archived
+                {t("kanban.archived")}
               </DropdownMenuLabel>
               {archivedBoards.map((b) => (
                 <DropdownMenuItem
@@ -842,7 +842,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
           <Input
             value={newColumnName}
             onChange={(e) => setNewColumnName(e.target.value)}
-            placeholder="Column name"
+            placeholder={t("kanban.columnName")}
             className="h-8 text-sm"
             autoFocus
             onKeyDown={(e) => {
@@ -852,10 +852,10 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
           />
           <div className="flex gap-1">
             <Button size="sm" className="h-7 text-xs flex-1" onClick={handleCreateColumn}>
-              Add
+              {t("common.add")}
             </Button>
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingColumn(false); setNewColumnName(""); }}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </div>
@@ -866,7 +866,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
           className="flex items-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
-          Add Column
+          {t("kanban.addColumn")}
         </button>
       )}
     </div>
@@ -885,10 +885,10 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   const emptyState = !board ? (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
       <p className="text-sm text-muted-foreground">
-        {"Failed to load board."}
+{t("kanban.failedToLoad")}
       </p>
       <button type="button" onClick={() => fetchBoard()} className="text-sm text-brand-text hover:underline">
-        Retry
+        {t("common.retry")}
       </button>
     </div>
   ) : null;
@@ -941,21 +941,21 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       <Dialog open={creatingBoard} onOpenChange={setCreatingBoard}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Board</DialogTitle>
+            <DialogTitle>{t("kanban.createBoard")}</DialogTitle>
             <DialogDescription>
-              Enter a name for the new board.
+              {t("kanban.createBoardDesc")}
             </DialogDescription>
           </DialogHeader>
           <Input
             value={newBoardName}
             onChange={(e) => setNewBoardName(e.target.value)}
-            placeholder="Board name"
+            placeholder={t("kanban.boardName")}
             autoFocus
             onKeyDown={(e) => { if (e.key === "Enter") handleCreateBoard(); }}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setCreatingBoard(false); setNewBoardName(""); }}>Cancel</Button>
-            <Button onClick={handleCreateBoard} disabled={!newBoardName.trim()}>Create</Button>
+            <Button variant="outline" onClick={() => { setCreatingBoard(false); setNewBoardName(""); }}>{t("common.cancel")}</Button>
+            <Button onClick={handleCreateBoard} disabled={!newBoardName.trim()}>{t("kanban.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -964,7 +964,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       <Dialog open={renamingBoard} onOpenChange={setRenamingBoard}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Board</DialogTitle>
+            <DialogTitle>{t("kanban.renameBoard")}</DialogTitle>
           </DialogHeader>
           <Input
             value={renameBoardName}
@@ -973,8 +973,8 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             onKeyDown={(e) => { if (e.key === "Enter") handleRenameBoard(); }}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenamingBoard(false)}>Cancel</Button>
-            <Button onClick={handleRenameBoard} disabled={!renameBoardName.trim()}>Save</Button>
+            <Button variant="outline" onClick={() => setRenamingBoard(false)}>{t("common.cancel")}</Button>
+            <Button onClick={handleRenameBoard} disabled={!renameBoardName.trim()}>{t("common.save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -983,15 +983,15 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       <Dialog open={archiveBoardConfirm} onOpenChange={setArchiveBoardConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Archive Board</DialogTitle>
+            <DialogTitle>{t("kanban.archiveBoard")}</DialogTitle>
             <DialogDescription>
-              This will archive the board. It can be restored later.
+              {t("kanban.archiveBoardDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setArchiveBoardConfirm(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setArchiveBoardConfirm(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleArchiveBoard}>
-              Archive
+              {t("kanban.archive")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1001,8 +1001,8 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       <Dialog open={membersOpen} onOpenChange={setMembersOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Board Members</DialogTitle>
-            <DialogDescription>Share this board with other users.</DialogDescription>
+            <DialogTitle>{t("kanban.boardMembers")}</DialogTitle>
+            <DialogDescription>{t("kanban.boardMembersDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {/* Invite form */}
@@ -1010,7 +1010,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
               <Input
                 value={inviteUsername}
                 onChange={(e) => setInviteUsername(e.target.value)}
-                placeholder="Username"
+                placeholder={t("kanban.username")}
                 className="flex-1"
                 onKeyDown={(e) => { if (e.key === "Enter") handleInviteMember(); }}
               />
@@ -1019,10 +1019,10 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 onChange={(e) => setInvitePermission(e.target.value)}
                 className="rounded-md border border-input bg-background px-2 py-1 text-sm"
               >
-                <option value="view">View</option>
-                <option value="edit">Edit</option>
+                <option value="view">{t("kanban.permView")}</option>
+                <option value="edit">{t("kanban.permEdit")}</option>
               </select>
-              <Button size="sm" onClick={handleInviteMember} disabled={!inviteUsername.trim()}>Invite</Button>
+              <Button size="sm" onClick={handleInviteMember} disabled={!inviteUsername.trim()}>{t("kanban.invite")}</Button>
             </div>
 
             {/* Owner */}
@@ -1030,7 +1030,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
               <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
                 <div>
                   <span className="text-sm font-medium">{boardOwner.username}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">Owner</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{t("kanban.owner")}</span>
                 </div>
               </div>
             )}
@@ -1039,7 +1039,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             {membersLoading ? (
               <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
             ) : boardMembers.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-2">No members yet</p>
+              <p className="text-sm text-muted-foreground text-center py-2">{t("kanban.noMembers")}</p>
             ) : (
               <div className="space-y-1">
                 {boardMembers.map((m) => (
@@ -1051,8 +1051,8 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                         onChange={(e) => handleUpdateMemberPermission(m.userId, e.target.value)}
                         className="rounded border border-input bg-background px-1.5 py-0.5 text-xs"
                       >
-                        <option value="view">View</option>
-                        <option value="edit">Edit</option>
+                        <option value="view">{t("kanban.permView")}</option>
+                        <option value="edit">{t("kanban.permEdit")}</option>
                       </select>
                       <button
                         type="button"
@@ -1120,7 +1120,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Users className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">Members</span>
+                <span className="hidden md:inline">{t("kanban.members")}</span>
               </button>
               <Popover open={agentPermsOpen} onOpenChange={setAgentPermsOpen}>
                 <PopoverTrigger asChild>
@@ -1171,7 +1171,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Archive className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">Archived</span>
+                <span className="hidden md:inline">{t("kanban.archived")}</span>
               </button>
             </div>
           </div>

@@ -65,7 +65,7 @@ export function TypingIndicator({ conversationId }: { conversationId: string }) 
       )}
       {activeTypingUsers.length > 0 && (
         <div className="flex items-center gap-1 px-4 py-1 text-xs text-muted-foreground">
-          <span>{activeTypingUsers.map((u) => u.userName).join(", ")} is typing</span>
+          <span>{activeTypingUsers.map((u) => u.userName).join(", ")} {t("chat.isTyping")}</span>
           <span className="animate-pulse">...</span>
         </div>
       )}

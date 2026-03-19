@@ -27,6 +27,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,13 +62,14 @@ interface RevenueData {
 // Constants
 // ---------------------------------------------------------------------------
 
-const SOURCE_DEFS = [
-  { key: "sticker", label: "Sticker Shop", color: "#a855f7" },
-  { key: "agent", label: "Agent Hub", color: "#3b82f6" },
-  { key: "theme", label: "Theme", color: "#06b6d4" },
-  { key: "community", label: "Community", color: "#f97316" },
-  { key: "spaces", label: "Spaces", color: "#22c55e" },
-];
+const SOURCE_KEYS = ["sticker", "agent", "theme", "community", "spaces"] as const;
+const SOURCE_COLORS: Record<string, string> = {
+  sticker: "#a855f7",
+  agent: "#3b82f6",
+  theme: "#06b6d4",
+  community: "#f97316",
+  spaces: "#22c55e",
+};
 
 const SOURCE_ICONS: Record<string, typeof Coins> = {
   sticker: Smile,
@@ -98,12 +100,7 @@ const SOURCE_TEXT: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 type Period = "year" | "month" | "week" | "day";
-const PERIOD_TABS: { key: Period; label: string }[] = [
-  { key: "year", label: "Year" },
-  { key: "month", label: "Month" },
-  { key: "week", label: "Week" },
-  { key: "day", label: "Day" },
-];
+const PERIOD_KEYS: Period[] = ["year", "month", "week", "day"];
 
 function addLabel(data: DailyRevenue[]): DailyRevenue[] {
   return data.map((d) => {
@@ -190,6 +187,7 @@ function ChartTooltip({
 // ---------------------------------------------------------------------------
 
 function RevenueContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("month");
   const [data, setData] = useState<RevenueData | null>(null);
@@ -204,9 +202,13 @@ function RevenueContent() {
   }, []);
 
   const sources = useMemo(() => {
-    if (!data) return SOURCE_DEFS.map((s) => ({ ...s, total: 0 }));
-    return SOURCE_DEFS.map((s) => ({ ...s, total: data.sources[s.key] ?? 0 }));
-  }, [data]);
+    return SOURCE_KEYS.map((key) => ({
+      key,
+      label: t(`creator.revenue.source.${key}`),
+      color: SOURCE_COLORS[key],
+      total: data?.sources[key] ?? 0,
+    }));
+  }, [data, t]);
 
   const chartData = useMemo(() => getChartData(data?.dailyData ?? [], period), [data, period]);
 
@@ -231,8 +233,8 @@ function RevenueContent() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex-1">
-              <h1 className="text-lg font-bold">Revenue Dashboard</h1>
-              <p className="text-xs text-muted-foreground">Last 30 days</p>
+              <h1 className="text-lg font-bold">{t("creator.revenue.title")}</h1>
+              <p className="text-xs text-muted-foreground">{t("creator.revenue.last30days")}</p>
             </div>
           </div>
         </div>
@@ -241,7 +243,7 @@ function RevenueContent() {
           <div className="mx-auto max-w-5xl space-y-6">
             {/* Mobile hero */}
             <div className="md:hidden rounded-xl border border-border bg-card p-4 text-center">
-              <p className="text-xs text-muted-foreground">Total Revenue</p>
+              <p className="text-xs text-muted-foreground">{t("creator.revenue.totalRevenue")}</p>
               <p className="mt-1 text-3xl font-bold">{(data?.total ?? 0).toLocaleString()}</p>
             </div>
 
@@ -264,17 +266,17 @@ function RevenueContent() {
             {/* Stacked Bar Chart */}
             <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
               <div className="mb-4 flex gap-1">
-                {PERIOD_TABS.map((tab) => (
-                  <button key={tab.key} onClick={() => setPeriod(tab.key)}
+                {PERIOD_KEYS.map((key) => (
+                  <button key={key} onClick={() => setPeriod(key)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                      period === tab.key ? "bg-brand/15 text-brand-text" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    }`}>{tab.label}</button>
+                      period === key ? "bg-brand/15 text-brand-text" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}>{t(`creator.revenue.period.${key}`)}</button>
                 ))}
               </div>
               <div className="h-64 sm:h-80">
                 {chartData.length === 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    No revenue data yet
+                    {t("creator.revenue.noData")}
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -284,9 +286,9 @@ function RevenueContent() {
                       <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0.02 260)" }} axisLine={false} tickLine={false} />
                       <Tooltip content={<ChartTooltip />} cursor={{ fill: "oklch(0.4 0.04 250 / 0.08)" }} />
                       <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                      {SOURCE_DEFS.map((src, i) => (
+                      {sources.map((src, i) => (
                         <Bar key={src.key} dataKey={src.key} name={src.label} stackId="revenue" fill={src.color}
-                          radius={i === SOURCE_DEFS.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+                          radius={i === sources.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
                       ))}
                     </BarChart>
                   </ResponsiveContainer>
@@ -297,11 +299,11 @@ function RevenueContent() {
             {/* Recent Transactions */}
             <div className="rounded-xl border border-border bg-card">
               <div className="border-b border-border px-4 py-3 sm:px-5">
-                <h2 className="text-sm font-semibold">Recent Transactions</h2>
+                <h2 className="text-sm font-semibold">{t("creator.revenue.recentTransactions")}</h2>
               </div>
               {(data?.transactions.length ?? 0) === 0 ? (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No transactions yet
+                  {t("creator.revenue.noTransactions")}
                 </div>
               ) : (
                 <div className="divide-y divide-border">

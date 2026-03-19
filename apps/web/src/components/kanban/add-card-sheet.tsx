@@ -8,6 +8,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { useTranslation } from "@/lib/i18n";
 import { PRIORITY_CONFIG } from "./types";
 
 interface AddCardSheetProps {
@@ -18,6 +19,7 @@ interface AddCardSheetProps {
 }
 
 export function AddCardSheet({ open, onClose, onSubmit, streamAgents }: AddCardSheetProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
@@ -45,18 +47,18 @@ export function AddCardSheet({ open, onClose, onSubmit, streamAgents }: AddCardS
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <SheetContent side="right" className="w-80 sm:w-96 border-border bg-background">
         <SheetHeader>
-          <SheetTitle>New Card</SheetTitle>
+          <SheetTitle>{t("kanban.newCard")}</SheetTitle>
           <SheetDescription className="sr-only">Create a new kanban card</SheetDescription>
         </SheetHeader>
         <div className="mt-4 space-y-4 px-1">
           {/* Title */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Title *</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("kanban.titleRequired")}</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Task title..."
+              placeholder={t("kanban.taskTitlePlaceholder")}
               className="mt-1 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand"
               autoFocus
               onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
@@ -65,11 +67,11 @@ export function AddCardSheet({ open, onClose, onSubmit, streamAgents }: AddCardS
 
           {/* Description */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Description</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("common.description")}</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional details..."
+              placeholder={t("kanban.optionalDetails")}
               rows={3}
               className="mt-1 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-brand resize-none"
             />
@@ -77,7 +79,7 @@ export function AddCardSheet({ open, onClose, onSubmit, streamAgents }: AddCardS
 
           {/* Priority */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Priority</label>
+            <label className="text-xs font-medium text-muted-foreground">{t("kanban.priority")}</label>
             <div className="mt-1 flex gap-1.5">
               {(["low", "medium", "high", "urgent"] as const).map((p) => {
                 const cfg = PRIORITY_CONFIG[p];
@@ -102,7 +104,7 @@ export function AddCardSheet({ open, onClose, onSubmit, streamAgents }: AddCardS
           {/* Assign Agents */}
           {streamAgents.length > 0 && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Assign Agents</label>
+              <label className="text-xs font-medium text-muted-foreground">{t("kanban.assignAgents")}</label>
               <div className="mt-1 space-y-1">
                 {streamAgents.filter((a) => a.id && !a.id.startsWith("empty-")).map((a) => (
                   <button
@@ -131,7 +133,7 @@ export function AddCardSheet({ open, onClose, onSubmit, streamAgents }: AddCardS
             disabled={!title.trim()}
             className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create Card
+            {t("kanban.createCard")}
           </button>
         </div>
       </SheetContent>

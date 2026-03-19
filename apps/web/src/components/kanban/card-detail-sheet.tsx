@@ -400,7 +400,7 @@ export function CardDetailSheet({
     <Sheet open={card !== null} onOpenChange={(v) => { if (!v) onClose(); }}>
       <SheetContent side="right" className="w-full sm:w-96 border-border bg-background flex flex-col overflow-hidden pt-[max(1rem,env(safe-area-inset-top))]">
         <SheetHeader>
-          <SheetTitle>{editing ? "Edit Card" : "Card Details"}</SheetTitle>
+          <SheetTitle>{editing ? t("kanban.editCard") : t("kanban.cardDetails")}</SheetTitle>
           <SheetDescription className="sr-only">View and edit kanban card details</SheetDescription>
         </SheetHeader>
 
@@ -410,7 +410,7 @@ export function CardDetailSheet({
               <>
                 {/* Editable title */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Title *</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t("kanban.titleRequired")}</label>
                   <input
                     type="text"
                     value={title}
@@ -422,7 +422,7 @@ export function CardDetailSheet({
 
                 {/* Editable description */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Description</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t("common.description")}</label>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -433,7 +433,7 @@ export function CardDetailSheet({
 
                 {/* Editable priority */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Priority</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t("kanban.priority")}</label>
                   <div className="mt-1 flex gap-1.5">
                     {(["low", "medium", "high", "urgent"] as const).map((p) => {
                       const cfg = PRIORITY_CONFIG[p];
@@ -463,7 +463,7 @@ export function CardDetailSheet({
                     disabled={!title.trim() || saving}
                     className="flex-1 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand/90 disabled:opacity-50"
                   >
-                    {saving ? "Saving..." : "Save"}
+                    {saving ? t("common.saving") : t("common.save")}
                   </button>
                   <button
                     type="button"
@@ -475,7 +475,7 @@ export function CardDetailSheet({
                     }}
                     className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </button>
                 </div>
               </>
@@ -488,7 +488,7 @@ export function CardDetailSheet({
 
                 {/* Priority */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Priority</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t("kanban.priority")}</label>
                   <div className="mt-1">
                     <PriorityBadge priority={card.priority} />
                   </div>
@@ -497,13 +497,13 @@ export function CardDetailSheet({
                 {/* Labels */}
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground">Labels</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t("kanban.labels")}</label>
                     <button
                       type="button"
                       onClick={() => setLabelPickerOpen(!labelPickerOpen)}
                       className="text-xs text-brand hover:text-brand/80"
                     >
-                      {labelPickerOpen ? "Cancel" : "+ Add Label"}
+                      {labelPickerOpen ? t("common.cancel") : t("kanban.addLabel")}
                     </button>
                   </div>
                   {labelPickerOpen && (
@@ -539,7 +539,7 @@ export function CardDetailSheet({
                           className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs text-brand hover:bg-accent transition-colors border-t border-border"
                         >
                           <Plus className="h-3 w-3" />
-                          <span>Create new label</span>
+                          <span>{t("kanban.createNewLabel")}</span>
                         </button>
                       ) : (
                         <div className="border-t border-border p-2 space-y-2">
@@ -547,7 +547,7 @@ export function CardDetailSheet({
                             type="text"
                             value={newLabelName}
                             onChange={(e) => setNewLabelName(e.target.value)}
-                            placeholder="Label name"
+                            placeholder={t("kanban.labelName")}
                             className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
                             autoFocus
                             onKeyDown={(e) => {
@@ -572,7 +572,7 @@ export function CardDetailSheet({
                               onClick={() => { setCreatingLabel(false); setNewLabelName(""); }}
                               className="flex-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
                             >
-                              Cancel
+                              {t("common.cancel")}
                             </button>
                             <button
                               type="button"
@@ -580,7 +580,7 @@ export function CardDetailSheet({
                               disabled={!newLabelName.trim()}
                               className="flex-1 rounded-md bg-brand px-2 py-1 text-xs text-white hover:bg-brand/90 disabled:opacity-50"
                             >
-                              Create
+                              {t("kanban.create")}
                             </button>
                           </div>
                         </div>
@@ -607,26 +607,26 @@ export function CardDetailSheet({
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">No labels.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("kanban.noLabels")}</p>
                   )}
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Description</label>
+                  <label className="text-xs font-medium text-muted-foreground">{t("common.description")}</label>
                   {card.description ? (
                     <div className="mt-1 text-sm text-foreground prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-code:text-foreground prose-pre:bg-muted">
                       <ReactMarkdown>{card.description}</ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">No description.</p>
+                    <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{t("kanban.noDescription")}</p>
                   )}
                 </div>
 
                 {/* Assigned agents */}
                 {cardAgents.length > 0 && (
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Assigned Agents</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t("kanban.assignedAgents")}</label>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {cardAgents.map((aid) => (
                         <span
@@ -644,13 +644,13 @@ export function CardDetailSheet({
                 {/* Linked Notes */}
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground">Linked Notes</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t("kanban.linkedNotes")}</label>
                     <button
                       type="button"
                       onClick={() => setLinkingNote(!linkingNote)}
                       className="text-xs text-brand hover:text-brand/80"
                     >
-                      {linkingNote ? "Cancel" : "+ Link Note"}
+                      {linkingNote ? t("common.cancel") : t("kanban.linkNote")}
                     </button>
                   </div>
                   {linkingNote && (
@@ -659,7 +659,7 @@ export function CardDetailSheet({
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                         <input
                           type="text"
-                          placeholder="Search notes..."
+                          placeholder={t("kanban.searchNotes")}
                           value={noteSearchQuery}
                           onChange={(e) => setNoteSearchQuery(e.target.value)}
                           className="w-full rounded-lg border border-border bg-muted/50 pl-7 pr-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
@@ -672,7 +672,7 @@ export function CardDetailSheet({
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                           </div>
                         ) : availableNotes.length === 0 ? (
-                          <p className="py-3 text-center text-[11px] text-muted-foreground">No notes found</p>
+                          <p className="py-3 text-center text-[11px] text-muted-foreground">{t("kanban.noNotesFound")}</p>
                         ) : (
                           availableNotes
                             .filter((n) => !cardNotes.some((cn) => cn.noteId === n.id))
@@ -713,27 +713,27 @@ export function CardDetailSheet({
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">No linked notes.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("kanban.noLinkedNotes")}</p>
                   )}
                 </div>
 
                 {/* Commits */}
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground">Commits</label>
+                    <label className="text-xs font-medium text-muted-foreground">{t("kanban.commits")}</label>
                     <button
                       type="button"
                       onClick={() => setAddingCommit(!addingCommit)}
                       className="text-xs text-brand hover:text-brand/80"
                     >
-                      {addingCommit ? "Cancel" : "+ Add Commit"}
+                      {addingCommit ? t("common.cancel") : t("kanban.addCommit")}
                     </button>
                   </div>
                   {addingCommit && (
                     <div className="mt-1.5 space-y-1.5">
                       <input
                         type="text"
-                        placeholder="Commit hash..."
+                        placeholder={t("kanban.commitHashPlaceholder")}
                         value={commitHash}
                         onChange={(e) => setCommitHash(e.target.value)}
                         className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
@@ -742,7 +742,7 @@ export function CardDetailSheet({
                       />
                       <input
                         type="text"
-                        placeholder="Message (optional)..."
+                        placeholder={t("kanban.commitMessagePlaceholder")}
                         value={commitMessage}
                         onChange={(e) => setCommitMessage(e.target.value)}
                         className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
@@ -755,7 +755,7 @@ export function CardDetailSheet({
                         className="flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-50"
                       >
                         {commitSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                        Add
+                        {t("common.add")}
                       </button>
                     </div>
                   )}
@@ -798,7 +798,7 @@ export function CardDetailSheet({
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">No linked commits.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("kanban.noLinkedCommits")}</p>
                   )}
                 </div>
 
@@ -806,12 +806,12 @@ export function CardDetailSheet({
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
-                    <span>Created: {formatTime(card.createdAt)}</span>
+                    <span>{t("kanban.created")}: {formatTime(card.createdAt)}</span>
                   </div>
                   {card.updatedAt && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      <span>Updated: {formatTime(card.updatedAt)}</span>
+                      <span>{t("kanban.updated")}: {formatTime(card.updatedAt)}</span>
                     </div>
                   )}
                 </div>
@@ -861,7 +861,7 @@ export function CardDetailSheet({
                     onClick={() => setEditing(true)}
                     className="flex-1 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand/90"
                   >
-                    Edit Card
+                    {t("kanban.editCard")}
                   </button>
                   <button
                     type="button"

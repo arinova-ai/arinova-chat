@@ -90,14 +90,14 @@ export default function AdminVerificationPage() {
             </div>
 
             {req.businessName && (
-              <p className="text-xs"><span className="text-muted-foreground">Business:</span> {req.businessName}</p>
+              <p className="text-xs"><span className="text-muted-foreground">{t("admin.verification.business")}:</span> {req.businessName}</p>
             )}
             {req.businessRegistration && (
-              <p className="text-xs"><span className="text-muted-foreground">Registration:</span> {req.businessRegistration}</p>
+              <p className="text-xs"><span className="text-muted-foreground">{t("admin.verification.registration")}:</span> {req.businessRegistration}</p>
             )}
             {req.documentsUrl && (
               <a href={req.documentsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-400 hover:underline">
-                <ExternalLink className="h-3 w-3" /> Documents
+                <ExternalLink className="h-3 w-3" /> {t("admin.verification.documents")}
               </a>
             )}
 
@@ -106,23 +106,23 @@ export default function AdminVerificationPage() {
                 <textarea
                   value={reviewNotes[req.id] ?? ""}
                   onChange={(e) => setReviewNotes((n) => ({ ...n, [req.id]: e.target.value }))}
-                  placeholder="Review notes (optional)"
+                  placeholder={t("admin.verification.reviewNotesPlaceholder")}
                   rows={2}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-ring resize-none"
                 />
                 <div className="flex gap-2">
                   <Button size="sm" className="gap-1" onClick={() => handleReview(req.id, "approved")}>
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {t("admin.verification.approve")}
                   </Button>
                   <Button size="sm" variant="destructive" className="gap-1" onClick={() => handleReview(req.id, "rejected")}>
-                    <XCircle className="h-3.5 w-3.5" /> Reject
+                    <XCircle className="h-3.5 w-3.5" /> {t("admin.verification.reject")}
                   </Button>
                 </div>
               </div>
             )}
 
             {req.reviewerNotes && req.status !== "pending" && (
-              <p className="text-xs text-muted-foreground italic">Notes: {req.reviewerNotes}</p>
+              <p className="text-xs text-muted-foreground italic">{t("admin.verification.notes")}: {req.reviewerNotes}</p>
             )}
           </div>
         ))}

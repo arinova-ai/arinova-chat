@@ -4,10 +4,12 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Shield } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Policy { enforced: boolean; enrolledUsers: number; totalUsers: number }
 
 export default function Admin2FAPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<Policy | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,15 +30,15 @@ export default function Admin2FAPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-lg">
-      <h2 className="text-xl font-bold">Two-Factor Authentication</h2>
+      <h2 className="text-xl font-bold">{t("admin.twoFA.title")}</h2>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Enrolled Users</p>
+          <p className="text-sm text-muted-foreground">{t("admin.twoFA.enrolledUsers")}</p>
           <p className="text-2xl font-bold">{data?.enrolledUsers ?? 0}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Users</p>
+          <p className="text-sm text-muted-foreground">{t("admin.twoFA.totalUsers")}</p>
           <p className="text-2xl font-bold">{data?.totalUsers ?? 0}</p>
         </div>
       </div>
@@ -44,11 +46,10 @@ export default function Admin2FAPage() {
       <div className="rounded-lg border border-border bg-card p-4 space-y-3">
         <div className="flex items-center gap-3">
           <Shield className="h-5 w-5 text-muted-foreground" />
-          <h3 className="font-medium">Enforce 2FA for all users</h3>
+          <h3 className="font-medium">{t("admin.twoFA.enforceTitle")}</h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          When enabled, users must set up Google Authenticator (TOTP) before they can access the platform.
-          Users without 2FA will be redirected to a setup page on login.
+          {t("admin.twoFA.enforceDescription")}
         </p>
         <div className="flex items-center gap-3">
           <Switch
@@ -56,12 +57,12 @@ export default function Admin2FAPage() {
             onCheckedChange={handleToggle}
             disabled={saving}
           />
-          <span className="text-sm">{data?.enforced ? "Enforced" : "Not enforced"}</span>
+          <span className="text-sm">{data?.enforced ? t("admin.twoFA.enforced") : t("admin.twoFA.notEnforced")}</span>
         </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="font-medium mb-2">Enrollment Rate</h3>
+        <h3 className="font-medium mb-2">{t("admin.twoFA.enrollmentRate")}</h3>
         <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-brand rounded-full transition-all"

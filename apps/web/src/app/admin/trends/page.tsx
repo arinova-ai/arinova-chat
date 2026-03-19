@@ -2,11 +2,13 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface TrendPoint { date: string; dau: number }
 interface TrendsData { trend: TrendPoint[]; mau: number }
 
 export default function AdminTrendsPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<TrendsData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -21,19 +23,19 @@ export default function AdminTrendsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h2 className="text-xl font-bold">User Activity Trends</h2>
+      <h2 className="text-xl font-bold">{t("admin.trends.title")}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">MAU (30d)</p>
+          <p className="text-sm text-muted-foreground">{t("admin.trends.mau")}</p>
           <p className="text-2xl font-bold">{data?.mau ?? 0}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Avg DAU</p>
+          <p className="text-sm text-muted-foreground">{t("admin.trends.avgDau")}</p>
           <p className="text-2xl font-bold">{data?.trend.length ? Math.round(data.trend.reduce((s, d) => s + d.dau, 0) / data.trend.length) : 0}</p>
         </div>
       </div>
       <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="text-sm font-medium mb-4">Daily Active Users (30 days)</h3>
+        <h3 className="text-sm font-medium mb-4">{t("admin.trends.dauChart")}</h3>
         <div className="flex items-end gap-1 h-40">
           {data?.trend.map((d) => {
             const max = Math.max(...(data?.trend.map((t) => t.dau) ?? [1]));

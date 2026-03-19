@@ -29,28 +29,29 @@ import {
   Globe,
   Lock,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 const NAV_ITEMS = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/users", label: "Users", icon: Users },
-  { href: "/admin/trends", label: "Trends", icon: TrendingUp },
-  { href: "/admin/messages", label: "Messages", icon: MessageSquare },
-  { href: "/admin/agents", label: "Agents", icon: Bot },
-  { href: "/admin/audit-logs", label: "Audit Logs", icon: FileText },
-  { href: "/admin/content-filters", label: "Filters", icon: Filter },
-  { href: "/admin/feature-flags", label: "Flags", icon: Flag },
-  { href: "/admin/health", label: "Health", icon: Activity },
-  { href: "/admin/revenue", label: "Revenue", icon: DollarSign },
-  { href: "/admin/maintenance", label: "Maintenance", icon: Wrench },
-  { href: "/admin/support-tickets", label: "Tickets", icon: Ticket },
-  { href: "/admin/data-requests", label: "GDPR", icon: Database },
-  { href: "/admin/email-templates", label: "Emails", icon: Mail },
-  { href: "/admin/ip-blacklist", label: "IP Block", icon: Globe },
-  { href: "/admin/2fa", label: "2FA", icon: Lock },
-  { href: "/admin/broadcast", label: "Broadcast", icon: Megaphone },
-  { href: "/admin/review", label: "Review", icon: Shield },
-  { href: "/admin/sticker-review", label: "Stickers", icon: Sticker },
-  { href: "/admin/reports", label: "Reports", icon: AlertTriangle },
+  { href: "/admin", labelKey: "admin.nav.dashboard", icon: LayoutDashboard },
+  { href: "/admin/users", labelKey: "admin.nav.users", icon: Users },
+  { href: "/admin/trends", labelKey: "admin.nav.trends", icon: TrendingUp },
+  { href: "/admin/messages", labelKey: "admin.nav.messages", icon: MessageSquare },
+  { href: "/admin/agents", labelKey: "admin.nav.agents", icon: Bot },
+  { href: "/admin/audit-logs", labelKey: "admin.nav.auditLogs", icon: FileText },
+  { href: "/admin/content-filters", labelKey: "admin.nav.filters", icon: Filter },
+  { href: "/admin/feature-flags", labelKey: "admin.nav.flags", icon: Flag },
+  { href: "/admin/health", labelKey: "admin.nav.health", icon: Activity },
+  { href: "/admin/revenue", labelKey: "admin.nav.revenue", icon: DollarSign },
+  { href: "/admin/maintenance", labelKey: "admin.nav.maintenance", icon: Wrench },
+  { href: "/admin/support-tickets", labelKey: "admin.nav.tickets", icon: Ticket },
+  { href: "/admin/data-requests", labelKey: "admin.nav.gdpr", icon: Database },
+  { href: "/admin/email-templates", labelKey: "admin.nav.emails", icon: Mail },
+  { href: "/admin/ip-blacklist", labelKey: "admin.nav.ipBlock", icon: Globe },
+  { href: "/admin/2fa", labelKey: "admin.nav.twoFA", icon: Lock },
+  { href: "/admin/broadcast", labelKey: "admin.nav.broadcast", icon: Megaphone },
+  { href: "/admin/review", labelKey: "admin.nav.review", icon: Shield },
+  { href: "/admin/sticker-review", labelKey: "admin.nav.stickers", icon: Sticker },
+  { href: "/admin/reports", labelKey: "admin.nav.reports", icon: AlertTriangle },
 ];
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
@@ -85,6 +86,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 
 function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   return (
     <AdminGuard>
@@ -108,7 +110,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
                   }`}
                 >
                   <item.icon className="h-4 w-4" />
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
               );
             })}
@@ -132,7 +134,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
                   }`}
                 >
                   <item.icon className="h-4 w-4" />
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
               );
             })}

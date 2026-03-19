@@ -3,10 +3,12 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/lib/i18n";
 
 interface Health { status: string; onlineUsers: number; activeStreams: number; messagesLastHour: number; dbConnected: boolean }
 
 export default function AdminHealthPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<Health | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,16 +22,16 @@ export default function AdminHealthPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center gap-3">
-        <h2 className="text-xl font-bold">Server Health</h2>
-        <Button variant="outline" size="sm" onClick={fetch_} disabled={loading}><RefreshCw className="h-3.5 w-3.5 mr-1" />Refresh</Button>
+        <h2 className="text-xl font-bold">{t("admin.health.title")}</h2>
+        <Button variant="outline" size="sm" onClick={fetch_} disabled={loading}><RefreshCw className="h-3.5 w-3.5 mr-1" />{t("admin.health.refresh")}</Button>
       </div>
       {loading && !data ? <Loader2 className="h-6 w-6 animate-spin mx-auto" /> : data && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <Card label="Status" value={data.status} color={data.status === "ok" ? "text-green-400" : "text-red-400"} />
-          <Card label="Online Users" value={String(data.onlineUsers)} />
-          <Card label="Active Streams" value={String(data.activeStreams)} />
-          <Card label="Messages (1h)" value={String(data.messagesLastHour)} />
-          <Card label="DB Connected" value={data.dbConnected ? "Yes" : "No"} color={data.dbConnected ? "text-green-400" : "text-red-400"} />
+          <Card label={t("admin.health.status")} value={data.status} color={data.status === "ok" ? "text-green-400" : "text-red-400"} />
+          <Card label={t("admin.health.onlineUsers")} value={String(data.onlineUsers)} />
+          <Card label={t("admin.health.activeStreams")} value={String(data.activeStreams)} />
+          <Card label={t("admin.health.messagesLastHour")} value={String(data.messagesLastHour)} />
+          <Card label={t("admin.health.dbConnected")} value={data.dbConnected ? t("admin.health.yes") : t("admin.health.no")} color={data.dbConnected ? "text-green-400" : "text-red-400"} />
         </div>
       )}
     </div>

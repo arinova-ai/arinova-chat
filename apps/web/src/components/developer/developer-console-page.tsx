@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 import {
   ArrowLeft,
   Plus,
@@ -87,6 +88,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 /* ------------------------------------------------------------------ */
 
 export function DeveloperConsolePage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [apps, setApps] = useState<DevApp[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,11 +125,11 @@ export function DeveloperConsolePage() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-lg font-semibold">Developer Console</h1>
+        <h1 className="text-lg font-semibold">{t("developer.title")}</h1>
         <div className="flex-1" />
         <Button className="gap-2" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
-          Create App
+          {t("developer.createApp")}
         </Button>
       </div>
 
@@ -140,13 +142,13 @@ export function DeveloperConsolePage() {
         ) : apps.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-4 text-muted-foreground">
             <Package className="h-12 w-12" />
-            <p className="text-lg font-medium">Create your first app</p>
+            <p className="text-lg font-medium">{t("developer.createFirstApp")}</p>
             <p className="text-sm">
-              Build and publish apps for the Arinova platform.
+              {t("developer.createFirstAppDesc")}
             </p>
             <Button className="gap-2" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" />
-              Create App
+              {t("developer.createApp")}
             </Button>
           </div>
         ) : (
@@ -242,6 +244,7 @@ function CreateAppDialog({
   onOpenChange: (v: boolean) => void;
   onCreated: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("game");
@@ -290,38 +293,38 @@ function CreateAppDialog({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create App</DialogTitle>
+          <DialogTitle>{t("developer.createApp")}</DialogTitle>
           <DialogDescription>
-            Fill in the details to create a new app.
+            {t("developer.createAppDesc")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Name *
+              {t("developer.name")} *
             </label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Awesome App"
+              placeholder={t("developer.namePlaceholder")}
               className="bg-neutral-800 border-none"
             />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Description
+              {t("common.description")}
             </label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="A short description of your app"
+              placeholder={t("developer.descPlaceholder")}
               className="bg-neutral-800 border-none"
             />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Category *
+              {t("common.category")} *
             </label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-full bg-neutral-800 border-none">
@@ -338,7 +341,7 @@ function CreateAppDialog({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              External URL *
+              {t("developer.externalUrl")} *
             </label>
             <Input
               value={externalUrl}
@@ -349,7 +352,7 @@ function CreateAppDialog({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Icon URL
+              {t("developer.iconUrl")}
             </label>
             <Input
               value={iconUrl}
@@ -366,14 +369,14 @@ function CreateAppDialog({
             onClick={() => onOpenChange(false)}
             disabled={saving}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={handleCreate}
             disabled={saving || !name.trim() || !externalUrl.trim()}
           >
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create
+            {t("kanban.create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -398,6 +401,7 @@ function AppDetailDialog({
   onUpdated: () => void;
   onDeleted: () => void;
 }) {
+  const { t } = useTranslation();
   // Edit form state
   const [name, setName] = useState(app.name);
   const [description, setDescription] = useState(app.description ?? "");
@@ -545,9 +549,9 @@ function AppDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>App Settings</DialogTitle>
+          <DialogTitle>{t("developer.appSettings")}</DialogTitle>
           <DialogDescription>
-            Manage your app configuration, credentials, and publishing.
+            {t("developer.appSettingsDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -555,7 +559,7 @@ function AppDetailDialog({
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Name
+              {t("developer.name")}
             </label>
             <Input
               value={name}
@@ -565,7 +569,7 @@ function AppDetailDialog({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Description
+              {t("common.description")}
             </label>
             <Input
               value={description}
@@ -575,7 +579,7 @@ function AppDetailDialog({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Category
+              {t("common.category")}
             </label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger className="w-full bg-neutral-800 border-none">
@@ -592,7 +596,7 @@ function AppDetailDialog({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              External URL
+              {t("developer.externalUrl")}
             </label>
             <Input
               value={externalUrl}
@@ -602,7 +606,7 @@ function AppDetailDialog({
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Icon URL
+              {t("developer.iconUrl")}
             </label>
             <Input
               value={iconUrl}
@@ -616,7 +620,7 @@ function AppDetailDialog({
             className="w-full"
           >
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Changes
+            {t("common.save")}
           </Button>
         </div>
 
@@ -624,7 +628,7 @@ function AppDetailDialog({
 
         {/* ---- Credentials ---- */}
         <div>
-          <h3 className="mb-3 text-sm font-semibold">Credentials</h3>
+          <h3 className="mb-3 text-sm font-semibold">{t("developer.credentials")}</h3>
           {loadingCreds ? (
             <div className="flex h-16 items-center justify-center">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -634,7 +638,7 @@ function AppDetailDialog({
               {/* Client ID */}
               <div>
                 <label className="mb-1 block text-xs text-muted-foreground">
-                  Client ID
+                  {t("developer.clientId")}
                 </label>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 truncate rounded bg-neutral-800 px-2 py-1.5 text-xs">
@@ -660,11 +664,11 @@ function AppDetailDialog({
               {/* Redirect URIs */}
               <div>
                 <label className="mb-1 block text-xs text-muted-foreground">
-                  Redirect URIs
+                  {t("developer.redirectUris")}
                 </label>
                 {credentials.redirectUris.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    No redirect URIs configured.
+                    {t("developer.noRedirectUris")}
                   </p>
                 ) : (
                   <div className="space-y-1">
@@ -694,12 +698,12 @@ function AppDetailDialog({
                   ) : (
                     <RefreshCw className="h-3 w-3" />
                   )}
-                  Regenerate Secret
+                  {t("developer.regenerateSecret")}
                 </Button>
                 {newSecret && (
                   <div className="mt-2 rounded border border-yellow-500/30 bg-yellow-500/10 p-2">
                     <p className="mb-1 text-[10px] font-semibold uppercase text-yellow-400">
-                      Save this secret -- it will not be shown again
+                      {t("developer.saveSecretWarning")}
                     </p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 truncate text-xs">
@@ -740,7 +744,7 @@ function AppDetailDialog({
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Could not load credentials.
+              {t("developer.credentialsLoadFailed")}
             </p>
           )}
         </div>
@@ -749,7 +753,7 @@ function AppDetailDialog({
 
         {/* ---- Stats ---- */}
         <div>
-          <h3 className="mb-3 text-sm font-semibold">Usage Stats</h3>
+          <h3 className="mb-3 text-sm font-semibold">{t("developer.usageStats")}</h3>
           {loadingStats ? (
             <div className="flex h-16 items-center justify-center">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -758,28 +762,28 @@ function AppDetailDialog({
             <div className="grid grid-cols-2 gap-3">
               <StatCard
                 icon={<Zap className="h-4 w-4 text-blue-400" />}
-                label="API Calls"
+                label={t("developer.apiCalls")}
                 value={stats.apiCalls.toLocaleString()}
               />
               <StatCard
                 icon={<Users className="h-4 w-4 text-green-400" />}
-                label="Unique Users"
+                label={t("developer.uniqueUsers")}
                 value={stats.uniqueUsers.toLocaleString()}
               />
               <StatCard
                 icon={<BarChart3 className="h-4 w-4 text-purple-400" />}
-                label="Transactions"
+                label={t("developer.transactions")}
                 value={stats.transactions.toLocaleString()}
               />
               <StatCard
                 icon={<DollarSign className="h-4 w-4 text-amber-400" />}
-                label="Total Amount"
+                label={t("developer.totalAmount")}
                 value={`$${stats.totalTransactionAmount.toLocaleString()}`}
               />
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Could not load stats.
+              {t("developer.statsLoadFailed")}
             </p>
           )}
         </div>
@@ -795,7 +799,7 @@ function AppDetailDialog({
             disabled={publishing}
           >
             {publishing && <Loader2 className="h-4 w-4 animate-spin" />}
-            {app.status === "published" ? "Unpublish" : "Publish"}
+            {app.status === "published" ? t("developer.unpublish") : t("developer.publish")}
           </Button>
 
           {!confirmDelete ? (
@@ -805,7 +809,7 @@ function AppDetailDialog({
               onClick={() => setConfirmDelete(true)}
             >
               <Trash2 className="h-4 w-4" />
-              Delete
+              {t("common.delete")}
             </Button>
           ) : (
             <Button
@@ -819,7 +823,7 @@ function AppDetailDialog({
               ) : (
                 <Trash2 className="h-4 w-4" />
               )}
-              Confirm Delete
+              {t("developer.confirmDelete")}
             </Button>
           )}
         </div>

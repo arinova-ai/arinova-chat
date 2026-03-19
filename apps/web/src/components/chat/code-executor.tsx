@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { Play, Loader2, X, Clock } from "lucide-react";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 
 interface ExecutionResult {
   output: string;
@@ -16,6 +17,7 @@ interface CodeExecutorProps {
 }
 
 export function CodeExecutor({ code, children }: CodeExecutorProps) {
+  const { t } = useTranslation();
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
@@ -58,12 +60,12 @@ export function CodeExecutor({ code, children }: CodeExecutorProps) {
         {isRunning ? (
           <>
             <Loader2 className="h-3 w-3 animate-spin" />
-            <span>Running</span>
+            <span>{t("chat.codeExecutor.running")}</span>
           </>
         ) : (
           <>
             <Play className="h-3 w-3" />
-            <span>Run</span>
+            <span>{t("chat.codeExecutor.run")}</span>
           </>
         )}
       </button>
@@ -73,7 +75,7 @@ export function CodeExecutor({ code, children }: CodeExecutorProps) {
         <div className="mt-1 rounded-lg border border-border bg-card">
           <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Output</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("chat.codeExecutor.output")}</span>
               {result.executionTimeMs > 0 && (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
@@ -103,7 +105,7 @@ export function CodeExecutor({ code, children }: CodeExecutorProps) {
             )}
             {!result.output && !result.error && (
               <span className="text-xs italic text-muted-foreground">
-                No output
+                {t("chat.codeExecutor.noOutput")}
               </span>
             )}
           </div>

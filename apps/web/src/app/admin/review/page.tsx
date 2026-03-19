@@ -21,6 +21,7 @@ import {
   User,
   Clock,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ReviewApp {
   id: string;
@@ -50,6 +51,7 @@ interface ReviewApp {
 }
 
 function AdminReviewContent() {
+  const { t } = useTranslation();
   const [apps, setApps] = useState<ReviewApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -70,7 +72,7 @@ function AdminReviewContent() {
       const data = await api<{ apps: ReviewApp[] }>("/api/admin/review/apps");
       setApps(data.apps);
     } catch {
-      setError("Failed to load review queue. You may not have admin access.");
+      setError(t("admin.review.loadError"));
     } finally {
       setLoading(false);
     }
@@ -116,9 +118,9 @@ function AdminReviewContent() {
       <div className="mx-auto max-w-3xl">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-foreground">App Review</h2>
+          <h2 className="text-xl font-bold text-foreground">{t("admin.review.title")}</h2>
           <span className="rounded-full bg-orange-500/20 px-3 py-1 text-sm font-medium text-orange-400">
-            {apps.length} pending
+            {apps.length} {t("admin.review.pending")}
           </span>
         </div>
 
@@ -140,8 +142,8 @@ function AdminReviewContent() {
         {!loading && !error && apps.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <CheckCircle className="mb-4 h-12 w-12" />
-            <p className="text-lg font-medium">All clear</p>
-            <p className="text-sm">No apps pending review.</p>
+            <p className="text-lg font-medium">{t("admin.review.allClear")}</p>
+            <p className="text-sm">{t("admin.review.noApps")}</p>
           </div>
         )}
 
@@ -206,7 +208,7 @@ function AdminReviewContent() {
                       <div>
                         <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-orange-400">
                           <Globe className="h-4 w-4" />
-                          Network Whitelist (requires review)
+                          {t("admin.review.networkWhitelist")}
                         </h4>
                         <div className="flex flex-wrap gap-2">
                           {app.version.manifestJson.network.allowed.map(
@@ -228,7 +230,7 @@ function AdminReviewContent() {
                     app.version.manifestJson.permissions.length > 0 && (
                       <div>
                         <h4 className="mb-2 text-sm font-semibold text-muted-foreground">
-                          Permissions
+                          {t("admin.review.permissions")}
                         </h4>
                         <div className="flex flex-wrap gap-2">
                           {app.version.manifestJson.permissions.map((perm) => (
@@ -246,7 +248,7 @@ function AdminReviewContent() {
                   {/* Developer contact */}
                   <div>
                     <h4 className="mb-1 text-sm font-semibold text-muted-foreground">
-                      Developer Contact
+                      {t("admin.review.developerContact")}
                     </h4>
                     <p className="text-sm">
                       {app.developer.displayName} &mdash;{" "}
@@ -262,7 +264,7 @@ function AdminReviewContent() {
                   {/* Manifest preview */}
                   <details>
                     <summary className="cursor-pointer text-sm font-semibold text-muted-foreground hover:text-foreground">
-                      Full Manifest
+                      {t("admin.review.fullManifest")}
                     </summary>
                     <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-neutral-900 p-3 text-xs">
                       {JSON.stringify(app.version.manifestJson, null, 2)}
@@ -276,7 +278,7 @@ function AdminReviewContent() {
                       onClick={() => openDialog(app, "approve")}
                     >
                       <CheckCircle className="h-4 w-4" />
-                      Approve & Publish
+                      {t("admin.review.approvePublish")}
                     </Button>
                     <Button
                       variant="destructive"
@@ -284,7 +286,7 @@ function AdminReviewContent() {
                       onClick={() => openDialog(app, "reject")}
                     >
                       <XCircle className="h-4 w-4" />
-                      Reject
+                      {t("admin.review.reject")}
                     </Button>
                   </div>
                 </div>
@@ -298,20 +300,20 @@ function AdminReviewContent() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {actionType === "approve" ? "Approve App" : "Reject App"}
+              {actionType === "approve" ? t("admin.review.approveApp") : t("admin.review.rejectApp")}
             </DialogTitle>
             <DialogDescription>
               {actionType === "approve"
-                ? `"${actionApp?.name}" will be published to Agent Hub.`
-                : `"${actionApp?.name}" will be rejected. A reason is required.`}
+                ? t("admin.review.approveDesc", { name: actionApp?.name ?? "" })
+                : t("admin.review.rejectDesc", { name: actionApp?.name ?? "" })}
             </DialogDescription>
           </DialogHeader>
 
           <Textarea
             placeholder={
               actionType === "approve"
-                ? "Optional approval notes..."
-                : "Rejection reason (required)..."
+                ? t("admin.review.approvalNotesPlaceholder")
+                : t("admin.review.rejectionReasonPlaceholder")
             }
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -321,7 +323,7 @@ function AdminReviewContent() {
 
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               className={
@@ -339,7 +341,7 @@ function AdminReviewContent() {
               {actionLoading && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              {actionType === "approve" ? "Approve & Publish" : "Reject"}
+              {actionType === "approve" ? t("admin.review.approvePublish") : t("admin.review.reject")}
             </Button>
           </DialogFooter>
         </DialogContent>

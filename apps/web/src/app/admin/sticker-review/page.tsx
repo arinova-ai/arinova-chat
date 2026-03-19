@@ -21,6 +21,7 @@ import {
   Clock,
   DollarSign,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,6 +68,7 @@ function packDir(coverImage: string | null): string {
 // ---------------------------------------------------------------------------
 
 function StickerReviewContent() {
+  const { t } = useTranslation();
   const [packs, setPacks] = useState<PendingPack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -87,7 +89,7 @@ function StickerReviewContent() {
       const data = await api<{ packs: PendingPack[] }>("/api/admin/stickers/pending");
       setPacks(data.packs);
     } catch {
-      setError("Failed to load pending sticker packs.");
+      setError(t("admin.stickerReview.loadError"));
     } finally {
       setLoading(false);
     }
@@ -138,10 +140,10 @@ function StickerReviewContent() {
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Sparkles className="h-5 w-5 text-blue-400" />
-            <h2 className="text-xl font-bold text-foreground">Sticker Review</h2>
+            <h2 className="text-xl font-bold text-foreground">{t("admin.stickerReview.title")}</h2>
           </div>
           <span className="rounded-full bg-orange-500/20 px-3 py-1 text-sm font-medium text-orange-400">
-            {packs.length} pending
+            {packs.length} {t("admin.stickerReview.pending")}
           </span>
         </div>
 
@@ -163,8 +165,8 @@ function StickerReviewContent() {
         {!loading && !error && packs.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <CheckCircle className="mb-4 h-12 w-12" />
-            <p className="text-lg font-medium">All clear</p>
-            <p className="text-sm">No sticker packs pending review.</p>
+            <p className="text-lg font-medium">{t("admin.stickerReview.allClear")}</p>
+            <p className="text-sm">{t("admin.stickerReview.noPacks")}</p>
           </div>
         )}
 
@@ -242,8 +244,7 @@ function StickerReviewContent() {
                     {/* Review checklist reminder */}
                     <div className="rounded-lg bg-orange-500/10 border border-orange-500/20 px-3 py-2">
                       <p className="text-xs text-orange-400">
-                        Review each sticker's agent_prompt for: prompt injection attempts,
-                        inappropriate content, and prompt-visual mismatch.
+                        {t("admin.stickerReview.reviewChecklist")}
                       </p>
                     </div>
 
@@ -271,7 +272,7 @@ function StickerReviewContent() {
                               </p>
                             ) : (
                               <p className="text-xs text-destructive italic">
-                                Missing agent_prompt
+                                {t("admin.stickerReview.missingPrompt")}
                               </p>
                             )}
                           </div>
@@ -286,7 +287,7 @@ function StickerReviewContent() {
                         onClick={() => openDialog(pack, "approve")}
                       >
                         <CheckCircle className="h-4 w-4" />
-                        Approve
+                        {t("admin.stickerReview.approve")}
                       </Button>
                       <Button
                         variant="destructive"
@@ -294,7 +295,7 @@ function StickerReviewContent() {
                         onClick={() => openDialog(pack, "reject")}
                       >
                         <XCircle className="h-4 w-4" />
-                        Reject
+                        {t("admin.stickerReview.reject")}
                       </Button>
                     </div>
                   </div>
@@ -310,20 +311,20 @@ function StickerReviewContent() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {actionType === "approve" ? "Approve Sticker Pack" : "Reject Sticker Pack"}
+              {actionType === "approve" ? t("admin.stickerReview.approvePack") : t("admin.stickerReview.rejectPack")}
             </DialogTitle>
             <DialogDescription>
               {actionType === "approve"
-                ? `"${actionPack?.name}" will be published to the Sticker Shop.`
-                : `"${actionPack?.name}" will be rejected. A reason is required.`}
+                ? t("admin.stickerReview.approveDesc", { name: actionPack?.name ?? "" })
+                : t("admin.stickerReview.rejectDesc", { name: actionPack?.name ?? "" })}
             </DialogDescription>
           </DialogHeader>
 
           <Textarea
             placeholder={
               actionType === "approve"
-                ? "Optional approval notes..."
-                : "Rejection reason (required)..."
+                ? t("admin.stickerReview.approvalNotesPlaceholder")
+                : t("admin.stickerReview.rejectionReasonPlaceholder")
             }
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -333,7 +334,7 @@ function StickerReviewContent() {
 
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               className={
@@ -351,7 +352,7 @@ function StickerReviewContent() {
               {actionLoading && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              {actionType === "approve" ? "Approve" : "Reject"}
+              {actionType === "approve" ? t("admin.stickerReview.approve") : t("admin.stickerReview.reject")}
             </Button>
           </DialogFooter>
         </DialogContent>

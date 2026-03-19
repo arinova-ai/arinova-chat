@@ -178,11 +178,11 @@ export function FullColumn({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => { setRenameValue(column.name); setRenaming(true); }}>
                   <Pencil className="h-3.5 w-3.5 mr-2" />
-                  Rename
+                  {t("kanban.rename")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
                   <Trash2 className="h-3.5 w-3.5 mr-2" />
-                  Delete
+                  {t("kanban.delete")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -245,7 +245,7 @@ export function FullColumn({
           ))}
         </SortableContext>
         {sortedCards.length === 0 && (
-          <p className="py-6 text-center text-xs text-muted-foreground/60">No cards</p>
+          <p className="py-6 text-center text-xs text-muted-foreground/60">{t("kanban.noCards")}</p>
         )}
       </div>
 
@@ -253,17 +253,17 @@ export function FullColumn({
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete column &quot;{column.name}&quot;</DialogTitle>
+            <DialogTitle>{t("kanban.deleteColumnTitle")} &quot;{column.name}&quot;</DialogTitle>
             <DialogDescription>
               {hasCards
-                ? "This column has cards. Move or archive all cards before deleting."
-                : "This column has no cards and will be deleted."}
+                ? t("kanban.deleteColumnHasCards")
+                : t("kanban.deleteColumnEmpty")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>{t("common.cancel")}</Button>
             <Button variant="destructive" onClick={handleDeleteConfirm} disabled={hasCards}>
-              Delete column
+              {t("kanban.deleteColumn")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -13,6 +13,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Loader2, Send, CheckCircle } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface BroadcastResult {
   success: boolean;
@@ -21,6 +22,7 @@ interface BroadcastResult {
 }
 
 export default function AdminBroadcastPage() {
+  const { t } = useTranslation();
   const [content, setContent] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sending, setSending] = useState(false);
@@ -46,7 +48,7 @@ export default function AdminBroadcastPage() {
   return (
     <div className="p-6">
       <h2 className="mb-6 text-xl font-bold text-foreground">
-        Broadcast Announcement
+        {t("admin.broadcast.title")}
       </h2>
 
       {/* Success result */}
@@ -54,25 +56,24 @@ export default function AdminBroadcastPage() {
         <div className="mb-6 flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
           <CheckCircle className="h-5 w-5 shrink-0 text-green-400" />
           <p className="text-sm text-green-300">
-            Broadcast sent to {result.sent} / {result.totalUsers} users.
+            {t("admin.broadcast.sentResult", { sent: result.sent, total: result.totalUsers })}
           </p>
           <button
             className="ml-auto text-xs text-muted-foreground hover:text-foreground"
             onClick={() => setResult(null)}
           >
-            Dismiss
+            {t("admin.broadcast.dismiss")}
           </button>
         </div>
       )}
 
       <div className="mx-auto max-w-2xl space-y-4">
         <p className="text-sm text-muted-foreground">
-          This will send a direct message from the Arinova official account to
-          every user on the platform.
+          {t("admin.broadcast.description")}
         </p>
 
         <Textarea
-          placeholder="Write your announcement..."
+          placeholder={t("admin.broadcast.placeholder")}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={6}
@@ -81,7 +82,7 @@ export default function AdminBroadcastPage() {
 
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">
-            {content.trim().length} characters
+            {content.trim().length} {t("admin.broadcast.characters")}
           </span>
           <Button
             disabled={!content.trim()}
@@ -89,7 +90,7 @@ export default function AdminBroadcastPage() {
             className="gap-2"
           >
             <Send className="h-4 w-4" />
-            Send Broadcast
+            {t("admin.broadcast.sendBroadcast")}
           </Button>
         </div>
       </div>
@@ -98,10 +99,9 @@ export default function AdminBroadcastPage() {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Broadcast</DialogTitle>
+            <DialogTitle>{t("admin.broadcast.confirmTitle")}</DialogTitle>
             <DialogDescription>
-              This will send the following message to all users. This action
-              cannot be undone.
+              {t("admin.broadcast.confirmDescription")}
             </DialogDescription>
           </DialogHeader>
 
@@ -115,7 +115,7 @@ export default function AdminBroadcastPage() {
               onClick={() => setConfirmOpen(false)}
               disabled={sending}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button onClick={handleSend} disabled={sending} className="gap-2">
               {sending ? (
@@ -123,7 +123,7 @@ export default function AdminBroadcastPage() {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-              {sending ? "Sending..." : "Confirm & Send"}
+              {sending ? t("admin.broadcast.sending") : t("admin.broadcast.confirmSend")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -4,10 +4,12 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Entry { id: string; ip: string; reason: string | null; createdAt: string }
 
 export default function AdminIpBlacklistPage() {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [ip, setIp] = useState("");
@@ -32,11 +34,11 @@ export default function AdminIpBlacklistPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h2 className="text-xl font-bold">IP Blacklist</h2>
+      <h2 className="text-xl font-bold">{t("admin.ipBlacklist.title")}</h2>
       <div className="flex gap-2">
-        <Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="IP address or CIDR" className="w-48" />
-        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)" className="flex-1" />
-        <Button onClick={handleAdd} disabled={creating || !ip.trim()}><Plus className="h-4 w-4 mr-1" />Add</Button>
+        <Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder={t("admin.ipBlacklist.ipPlaceholder")} className="w-48" />
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("admin.ipBlacklist.reasonPlaceholder")} className="flex-1" />
+        <Button onClick={handleAdd} disabled={creating || !ip.trim()}><Plus className="h-4 w-4 mr-1" />{t("admin.ipBlacklist.add")}</Button>
       </div>
       {loading ? <Loader2 className="h-6 w-6 animate-spin mx-auto" /> : (
         <div className="space-y-2">
@@ -48,7 +50,7 @@ export default function AdminIpBlacklistPage() {
               <Button variant="ghost" size="icon" className="text-destructive shrink-0" onClick={() => handleDelete(e.id)}><Trash2 className="h-4 w-4" /></Button>
             </div>
           ))}
-          {entries.length === 0 && <p className="text-center text-muted-foreground py-8">No blocked IPs</p>}
+          {entries.length === 0 && <p className="text-center text-muted-foreground py-8">{t("admin.ipBlacklist.noEntries")}</p>}
         </div>
       )}
     </div>

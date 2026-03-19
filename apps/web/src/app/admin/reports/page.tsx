@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Bot } from "lucide-react";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
+import { useTranslation } from "@/lib/i18n";
 
 interface Report {
   id: string;
@@ -72,6 +73,7 @@ function SenderDisplay({ report }: { report: Report }) {
 }
 
 export default function AdminReportsPage() {
+  const { t } = useTranslation();
   const [reports, setReports] = useState<Report[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -116,7 +118,7 @@ export default function AdminReportsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-bold">Reports</h1>
+      <h1 className="text-2xl font-bold">{t("admin.reports.title")}</h1>
       <div className="flex gap-2">
         {["pending", "reviewing", "resolved", "dismissed"].map((s) => (
           <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => { setStatusFilter(s); setPage(1); }}>
@@ -124,7 +126,7 @@ export default function AdminReportsPage() {
           </Button>
         ))}
       </div>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : reports.length === 0 ? <p className="text-muted-foreground">No reports</p> : (
+      {loading ? <p className="text-muted-foreground">{t("common.loading")}</p> : reports.length === 0 ? <p className="text-muted-foreground">{t("admin.reports.noReports")}</p> : (
         <div className="space-y-3">
           {reports.map((r) => (
             <div key={r.id} className="rounded-lg border p-4 cursor-pointer hover:bg-accent/50" onClick={() => { setSelected(r); setNotes(r.adminNotes ?? ""); }}>
@@ -138,47 +140,47 @@ export default function AdminReportsPage() {
               <p className="mt-2 text-sm text-muted-foreground truncate">{r.messageContent}</p>
               <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
                 <span>
-                  Reported by:{" "}
+                  {t("admin.reports.reportedBy")}{" "}
                   <UserLink userId={r.reporterUserId} name={r.reporterName} username={r.reporterUsername} />
                 </span>
                 <span className="flex items-center gap-1">
-                  Message by:{" "}
+                  {t("admin.reports.messageBy")}{" "}
                   <SenderDisplay report={r} />
                 </span>
               </div>
             </div>
           ))}
           <div className="flex justify-between">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-            <span className="text-sm text-muted-foreground">{total} total</span>
-            <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage(page + 1)}>Next</Button>
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>{t("common.previous")}</Button>
+            <span className="text-sm text-muted-foreground">{total} {t("admin.reports.total")}</span>
+            <Button variant="outline" size="sm" disabled={page * 20 >= total} onClick={() => setPage(page + 1)}>{t("common.next")}</Button>
           </div>
         </div>
       )}
       <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Report Details</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("admin.reports.details")}</DialogTitle></DialogHeader>
           {selected && (
             <div className="space-y-3">
-              <div><span className="text-sm font-medium">Reason:</span> <span className="text-sm">{selected.reason}</span></div>
-              {selected.description && <div><span className="text-sm font-medium">Description:</span> <p className="text-sm text-muted-foreground">{selected.description}</p></div>}
-              <div><span className="text-sm font-medium">Message:</span> <p className="text-sm bg-accent rounded p-2 mt-1">{selected.messageContent}</p></div>
+              <div><span className="text-sm font-medium">{t("admin.reports.reason")}:</span> <span className="text-sm">{selected.reason}</span></div>
+              {selected.description && <div><span className="text-sm font-medium">{t("admin.reports.description")}:</span> <p className="text-sm text-muted-foreground">{selected.description}</p></div>}
+              <div><span className="text-sm font-medium">{t("admin.reports.message")}:</span> <p className="text-sm bg-accent rounded p-2 mt-1">{selected.messageContent}</p></div>
               <div className="flex flex-col gap-1">
                 <div className="text-sm">
-                  <span className="font-medium">Reported by:</span>{" "}
+                  <span className="font-medium">{t("admin.reports.reportedBy")}</span>{" "}
                   <UserLink userId={selected.reporterUserId} name={selected.reporterName} username={selected.reporterUsername} />
                 </div>
                 <div className="text-sm flex items-center gap-1">
-                  <span className="font-medium">Message by:</span>{" "}
+                  <span className="font-medium">{t("admin.reports.messageBy")}</span>{" "}
                   <SenderDisplay report={selected} />
                 </div>
               </div>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Admin notes..." className="w-full rounded-md border bg-background px-3 py-2 text-sm" rows={2} />
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("admin.reports.adminNotesPlaceholder")} className="w-full rounded-md border bg-background px-3 py-2 text-sm" rows={2} />
             </div>
           )}
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => selected && handleUpdate(selected.id, "dismissed")} disabled={updating}>Dismiss</Button>
-            <Button variant="default" onClick={() => selected && handleUpdate(selected.id, "resolved")} disabled={updating}>Resolve</Button>
+            <Button variant="outline" onClick={() => selected && handleUpdate(selected.id, "dismissed")} disabled={updating}>{t("admin.reports.dismiss")}</Button>
+            <Button variant="default" onClick={() => selected && handleUpdate(selected.id, "resolved")} disabled={updating}>{t("admin.reports.resolve")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

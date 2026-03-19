@@ -21,6 +21,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 
 type PackStatus = "active" | "under_review" | "draft";
 type ReviewStatus = "none" | "pending_review" | "approved" | "rejected";
@@ -52,21 +53,21 @@ interface CreatorStickerPack {
 // Status badge
 // ---------------------------------------------------------------------------
 
-function statusBadge(status: PackStatus) {
+function statusBadge(status: PackStatus, t: (k: string) => string) {
   const map: Record<PackStatus, { cls: string; label: string }> = {
-    active: { cls: "bg-green-500/15 text-green-400", label: "Active" },
-    under_review: { cls: "bg-blue-500/15 text-blue-400", label: "Under Review" },
-    draft: { cls: "bg-yellow-500/15 text-yellow-400", label: "Draft" },
+    active: { cls: "bg-green-500/15 text-green-400", label: t("creator.stickers.statusActive") },
+    under_review: { cls: "bg-blue-500/15 text-blue-400", label: t("creator.stickers.statusUnderReview") },
+    draft: { cls: "bg-yellow-500/15 text-yellow-400", label: t("creator.stickers.statusDraft") },
   };
   return map[status];
 }
 
-function reviewStatusBadge(status: ReviewStatus): { cls: string; label: string } | null {
+function reviewStatusBadge(status: ReviewStatus, t: (k: string) => string): { cls: string; label: string } | null {
   const map: Record<ReviewStatus, { cls: string; label: string } | null> = {
     none: null,
-    pending_review: { cls: "bg-yellow-500/15 text-yellow-400", label: "Pending Review" },
-    approved: { cls: "bg-green-500/15 text-green-400", label: "Approved" },
-    rejected: { cls: "bg-red-500/15 text-red-400", label: "Rejected" },
+    pending_review: { cls: "bg-yellow-500/15 text-yellow-400", label: t("creator.stickers.reviewPending") },
+    approved: { cls: "bg-green-500/15 text-green-400", label: t("creator.stickers.reviewApproved") },
+    rejected: { cls: "bg-red-500/15 text-red-400", label: t("creator.stickers.reviewRejected") },
   };
   return map[status];
 }
@@ -76,12 +77,7 @@ function reviewStatusBadge(status: ReviewStatus): { cls: string; label: string }
 // ---------------------------------------------------------------------------
 
 type Filter = "all" | PackStatus;
-const FILTER_TABS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "active", label: "Active" },
-  { key: "under_review", label: "Under Review" },
-  { key: "draft", label: "Draft" },
-];
+const FILTER_KEYS: Filter[] = ["all", "active", "under_review", "draft"];
 
 // ---------------------------------------------------------------------------
 // Sticker Upload Preview
@@ -109,12 +105,13 @@ function StickerUploader({
   onPromptChange?: (id: string, prompt: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">
-          Stickers ({stickers.length})
+          {t("creator.stickers.stickersCount")} ({stickers.length})
         </p>
         <Button
           size="sm"
@@ -123,7 +120,7 @@ function StickerUploader({
           onClick={() => inputRef.current?.click()}
         >
           <Upload className="h-3.5 w-3.5" />
-          Upload
+          {t("common.upload")}
         </Button>
         <input
           ref={inputRef}
@@ -162,7 +159,7 @@ function StickerUploader({
                 </div>
                 <div className="flex-1 min-w-0 space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">
-                    Agent Prompt
+                    {t("creator.stickers.agentPrompt")}
                   </label>
                   <input
                     type="text"
@@ -206,7 +203,7 @@ function StickerUploader({
       ) : (
         <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border py-8 text-muted-foreground">
           <ImageIcon className="h-8 w-8 mb-2 opacity-40" />
-          <p className="text-sm">Drop images here or click Upload</p>
+          <p className="text-sm">{t("creator.stickers.dropOrUpload")}</p>
           <p className="mt-1.5 text-[11px] text-muted-foreground/60">
             Recommended: 256×256 px · PNG with transparent background
           </p>
@@ -229,6 +226,7 @@ function PackEditor({
   onClose: () => void;
   onSave: (data: CreatorStickerPack) => void;
 }) {
+  const { t } = useTranslation();
   const isNew = !pack;
   const [name, setName] = useState(pack?.name ?? "");
   const [description, setDescription] = useState(pack?.description ?? "");
@@ -310,7 +308,7 @@ function PackEditor({
       <div className="mx-4 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 space-y-5">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">
-            {isNew ? "New Sticker Pack" : "Edit Sticker Pack"}
+            {isNew ? t("creator.stickers.newPack") : t("creator.stickers.editPack")}
           </h3>
           <button
             onClick={onClose}
@@ -323,7 +321,7 @@ function PackEditor({
         <div className="space-y-4">
           {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Pack Name</label>
+            <label className="text-sm font-medium">{t("creator.stickers.packName")}</label>
             <input
               type="text"
               value={name}
@@ -335,11 +333,11 @@ function PackEditor({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Description</label>
+            <label className="text-sm font-medium">{t("common.description")}</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe your sticker pack..."
+              placeholder={t("creator.stickers.descPlaceholder")}
               rows={3}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
             />
@@ -350,7 +348,7 @@ function PackEditor({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bot className="h-4 w-4 text-brand-text" />
-                <label className="text-sm font-medium">Agent Compatible</label>
+                <label className="text-sm font-medium">{t("creator.stickers.agentCompatible")}</label>
               </div>
               <button
                 type="button"
@@ -372,7 +370,7 @@ function PackEditor({
               <div className="flex items-start gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-3 py-2">
                 <Info className="h-3.5 w-3.5 text-yellow-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-yellow-400">
-                  Agent Compatible packs require review before publishing
+                  {t("creator.stickers.agentReviewNote")}
                 </p>
               </div>
             )}
@@ -381,7 +379,7 @@ function PackEditor({
           {/* Price */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
-              Price (coins, 0 = free)
+              {t("creator.stickers.price")}
             </label>
             <input
               type="number"
@@ -402,14 +400,14 @@ function PackEditor({
           />
           {agentCompatible && uploadedStickers.length > 0 && !agentPromptsValid && (
             <p className="text-xs text-red-400">
-              All stickers must have an Agent Prompt when Agent Compatible is enabled
+              {t("creator.stickers.agentPromptRequired")}
             </p>
           )}
         </div>
 
         <div className="flex gap-3 pt-2">
           <Button variant="secondary" className="flex-1" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             className="brand-gradient-btn flex-1"
@@ -419,9 +417,9 @@ function PackEditor({
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : isNew ? (
-              "Create Pack"
+              t("creator.stickers.createPack")
             ) : (
-              "Save Changes"
+              t("common.save")
             )}
           </Button>
         </div>
@@ -435,6 +433,7 @@ function PackEditor({
 // ---------------------------------------------------------------------------
 
 function StickerManagementContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [packs, setPacks] = useState<CreatorStickerPack[]>([]);
@@ -528,9 +527,9 @@ function StickerManagementContent() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex-1">
-              <h1 className="text-lg font-bold">Sticker Management</h1>
+              <h1 className="text-lg font-bold">{t("creator.stickers.title")}</h1>
               <p className="text-xs text-muted-foreground">
-                Create and manage your sticker packs
+                {t("creator.stickers.subtitle")}
               </p>
             </div>
             <Button
@@ -542,26 +541,26 @@ function StickerManagementContent() {
               }}
             >
               <Plus className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">New Pack</span>
+              <span className="hidden sm:inline">{t("creator.stickers.newPack")}</span>
             </Button>
           </div>
 
           {/* Filter tabs */}
           <div className="mt-4 flex gap-1">
-            {FILTER_TABS.map((tab) => (
+            {FILTER_KEYS.map((key) => (
               <button
-                key={tab.key}
-                onClick={() => setFilter(tab.key)}
+                key={key}
+                onClick={() => setFilter(key)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  filter === tab.key
+                  filter === key
                     ? "bg-brand/15 text-brand-text"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
-                {tab.label}
-                {tab.key !== "all" && (
+                {t(`creator.stickers.filter.${key}`)}
+                {key !== "all" && (
                   <span className="ml-1 opacity-60">
-                    ({packs.filter((p) => p.status === tab.key).length})
+                    ({packs.filter((p) => p.status === key).length})
                   </span>
                 )}
               </button>
@@ -576,12 +575,12 @@ function StickerManagementContent() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Sticker className="h-12 w-12 text-muted-foreground opacity-30 mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  No sticker packs found
+                  {t("creator.stickers.noPacks")}
                 </p>
               </div>
             ) : (
               filtered.map((pack) => {
-                const badge = statusBadge(pack.status);
+                const badge = statusBadge(pack.status, t);
                 return (
                   <div
                     key={pack.id}
@@ -622,7 +621,7 @@ function StickerManagementContent() {
                             </span>
                           )}
                           {pack.agentCompatible && pack.reviewStatus && pack.reviewStatus !== "none" && (() => {
-                            const rb = reviewStatusBadge(pack.reviewStatus);
+                            const rb = reviewStatusBadge(pack.reviewStatus, t);
                             return rb ? (
                               <span
                                 className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${rb.cls}`}
@@ -639,20 +638,20 @@ function StickerManagementContent() {
                           <div className="mt-1 flex items-start gap-1.5 rounded-md bg-red-500/10 border border-red-500/20 px-2 py-1.5">
                             <Info className="h-3 w-3 text-red-400 mt-0.5 shrink-0" />
                             <p className="text-[11px] text-red-400">
-                              <span className="font-medium">Rejected:</span> {pack.reviewNote}
+                              <span className="font-medium">{t("creator.stickers.reviewRejected")}:</span> {pack.reviewNote}
                             </p>
                           </div>
                         )}
                         <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                          <span>{pack.stickers.length} stickers</span>
+                          <span>{pack.stickers.length} {t("creator.stickers.stickersLabel")}</span>
                           <span>
                             {pack.price === 0
-                              ? "Free"
-                              : `${pack.price} coins`}
+                              ? t("common.free")
+                              : `${pack.price} ${t("creator.stickers.coins")}`}
                           </span>
                           {pack.downloads > 0 && (
                             <span>
-                              {pack.downloads.toLocaleString()} downloads
+                              {pack.downloads.toLocaleString()} {t("creator.stickers.downloads")}
                             </span>
                           )}
                           <span>{pack.createdAt}</span>
@@ -675,7 +674,7 @@ function StickerManagementContent() {
                               <>
                                 <Send className="h-3.5 w-3.5" />
                                 <span className="hidden sm:inline">
-                                  {pack.reviewStatus === "rejected" ? "Resubmit" : "Submit"}
+                                  {pack.reviewStatus === "rejected" ? t("creator.stickers.resubmit") : t("creator.stickers.submit")}
                                 </span>
                               </>
                             )}

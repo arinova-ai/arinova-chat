@@ -18,6 +18,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "@/lib/i18n";
 
 interface UserItem {
   id: string;
@@ -45,6 +46,7 @@ interface UsersResponse {
 }
 
 export default function AdminUsersPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<UsersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -138,21 +140,21 @@ export default function AdminUsersPage() {
 
   return (
     <div className="p-6">
-      <h2 className="mb-6 text-xl font-bold text-foreground">User Management</h2>
+      <h2 className="mb-6 text-xl font-bold text-foreground">{t("admin.users.title")}</h2>
 
       {/* Search */}
       <form onSubmit={handleSearch} className="mb-4 flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by name, email or username..."
+            placeholder={t("admin.users.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
         <Button type="submit" variant="secondary">
-          Search
+          {t("admin.users.search")}
         </Button>
       </form>
 
@@ -169,7 +171,7 @@ export default function AdminUsersPage() {
           <div className="rounded-lg border border-border bg-card overflow-hidden">
             {data.users.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                No users found.
+                {t("admin.users.noUsers")}
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -199,7 +201,7 @@ export default function AdminUsersPage() {
                         {user.isVerified && <VerifiedBadge />}
                         {user.isBanned && (
                           <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                            Banned
+                            {t("admin.users.banned")}
                           </Badge>
                         )}
                       </div>
@@ -225,12 +227,12 @@ export default function AdminUsersPage() {
                       ) : user.isBanned ? (
                         <>
                           <ShieldCheck className="h-4 w-4" />
-                          <span className="hidden sm:inline">Unban</span>
+                          <span className="hidden sm:inline">{t("admin.users.unban")}</span>
                         </>
                       ) : (
                         <>
                           <Ban className="h-4 w-4" />
-                          <span className="hidden sm:inline">Ban</span>
+                          <span className="hidden sm:inline">{t("admin.users.ban")}</span>
                         </>
                       )}
                     </Button>
@@ -246,20 +248,20 @@ export default function AdminUsersPage() {
                       ) : user.isVerified ? (
                         <>
                           <BadgeMinus className="h-4 w-4" />
-                          <span className="hidden sm:inline">Unverify</span>
+                          <span className="hidden sm:inline">{t("admin.users.unverify")}</span>
                         </>
                       ) : (
                         <>
                           <BadgeCheck className="h-4 w-4" />
-                          <span className="hidden sm:inline">Verify</span>
+                          <span className="hidden sm:inline">{t("admin.users.verify")}</span>
                         </>
                       )}
                     </Button>
                     {selectedUser?.id === user.id && (
                       <div className="w-full mt-2 pt-2 border-t border-border grid grid-cols-3 gap-3 text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.messageCount}</p><p className="text-[10px] text-muted-foreground">Messages</p></div>
-                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.conversationCount}</p><p className="text-[10px] text-muted-foreground">Conversations</p></div>
-                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.agentCount}</p><p className="text-[10px] text-muted-foreground">Agents</p></div>
+                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.messageCount}</p><p className="text-[10px] text-muted-foreground">{t("admin.users.messages")}</p></div>
+                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.conversationCount}</p><p className="text-[10px] text-muted-foreground">{t("admin.users.conversations")}</p></div>
+                        <div className="rounded bg-muted/50 p-2"><p className="text-lg font-bold">{selectedUser.agentCount}</p><p className="text-[10px] text-muted-foreground">{t("admin.users.agents")}</p></div>
                         {selectedUser.bio && <p className="col-span-3 text-xs text-muted-foreground text-left">{selectedUser.bio}</p>}
                       </div>
                     )}
@@ -273,7 +275,7 @@ export default function AdminUsersPage() {
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                {data.total} users total
+                {data.total} {t("admin.users.usersTotal")}
               </p>
               <div className="flex items-center gap-2">
                 <Button

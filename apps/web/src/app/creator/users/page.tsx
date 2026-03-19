@@ -11,6 +11,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { useTranslation } from "@/lib/i18n";
 
 interface DailyUsers {
   date: string;
@@ -27,12 +28,7 @@ interface UsersData {
 }
 
 type Period = "year" | "month" | "week" | "day";
-const PERIOD_TABS: { key: Period; label: string }[] = [
-  { key: "year", label: "Year" },
-  { key: "month", label: "Month" },
-  { key: "week", label: "Week" },
-  { key: "day", label: "Day" },
-];
+const PERIOD_KEYS: Period[] = ["year", "month", "week", "day"];
 
 function addLabel(data: DailyUsers[]): DailyUsers[] {
   return data.map((d) => {
@@ -101,6 +97,7 @@ function ChartTooltip({ active, payload, label }: {
 }
 
 function UsersContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("month");
   const [data, setData] = useState<UsersData | null>(null);
@@ -141,8 +138,8 @@ function UsersContent() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex-1">
-              <h1 className="text-lg font-bold">Users Dashboard</h1>
-              <p className="text-xs text-muted-foreground">Last 30 days</p>
+              <h1 className="text-lg font-bold">{t("creator.users.title")}</h1>
+              <p className="text-xs text-muted-foreground">{t("creator.users.last30days")}</p>
             </div>
           </div>
         </div>
@@ -151,7 +148,7 @@ function UsersContent() {
           <div className="mx-auto max-w-5xl space-y-6">
             {/* Mobile hero */}
             <div className="md:hidden rounded-xl border border-border bg-card p-4 text-center">
-              <p className="text-xs text-muted-foreground">Total Users</p>
+              <p className="text-xs text-muted-foreground">{t("creator.users.totalUsers")}</p>
               <p className="mt-1 text-3xl font-bold">{totalUsers.toLocaleString()}</p>
             </div>
 
@@ -160,21 +157,21 @@ function UsersContent() {
               <div className="rounded-xl border-2 border-green-500/40 bg-card p-4">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-green-400" />
-                  <span className="text-xs text-muted-foreground">Total Users</span>
+                  <span className="text-xs text-muted-foreground">{t("creator.users.totalUsers")}</span>
                 </div>
                 <p className="mt-1 text-xl font-bold">{totalUsers.toLocaleString()}</p>
               </div>
               <div className="rounded-xl border-2 border-blue-500/40 bg-card p-4">
                 <div className="flex items-center gap-2">
                   <UserPlus className="h-4 w-4 text-blue-400" />
-                  <span className="text-xs text-muted-foreground">New Users (30d)</span>
+                  <span className="text-xs text-muted-foreground">{t("creator.users.newUsers")}</span>
                 </div>
                 <p className="mt-1 text-xl font-bold">{newUsers.toLocaleString()}</p>
               </div>
               <div className="rounded-xl border-2 border-purple-500/40 bg-card p-4">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-purple-400" />
-                  <span className="text-xs text-muted-foreground">Returning (30d)</span>
+                  <span className="text-xs text-muted-foreground">{t("creator.users.returning")}</span>
                 </div>
                 <p className="mt-1 text-xl font-bold">{returning.toLocaleString()}</p>
               </div>
@@ -183,17 +180,17 @@ function UsersContent() {
             {/* Chart */}
             <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
               <div className="mb-4 flex gap-1">
-                {PERIOD_TABS.map((tab) => (
-                  <button key={tab.key} onClick={() => setPeriod(tab.key)}
+                {PERIOD_KEYS.map((key) => (
+                  <button key={key} onClick={() => setPeriod(key)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                      period === tab.key ? "bg-brand/15 text-brand-text" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    }`}>{tab.label}</button>
+                      period === key ? "bg-brand/15 text-brand-text" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}>{t(`creator.users.period.${key}`)}</button>
                 ))}
               </div>
               <div className="h-64 sm:h-80">
                 {chartData.length === 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    No user data yet
+                    {t("creator.users.noData")}
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -203,8 +200,8 @@ function UsersContent() {
                       <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0.02 260)" }} axisLine={false} tickLine={false} />
                       <Tooltip content={<ChartTooltip />} cursor={{ fill: "oklch(0.4 0.04 250 / 0.08)" }} />
                       <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="newUsers" name="New Users" stackId="users" fill="#3b82f6" />
-                      <Bar dataKey="returning" name="Returning" stackId="users" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="newUsers" name={t("creator.users.newUsersChart")} stackId="users" fill="#3b82f6" />
+                      <Bar dataKey="returning" name={t("creator.users.returningChart")} stackId="users" fill="#a855f7" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

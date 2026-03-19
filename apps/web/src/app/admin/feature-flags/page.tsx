@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Plus } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Flag { id: string; name: string; enabled: boolean; description: string | null; updatedAt: string }
 
 export default function AdminFeatureFlagsPage() {
+  const { t } = useTranslation();
   const [flags, setFlags] = useState<Flag[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
@@ -31,11 +33,11 @@ export default function AdminFeatureFlagsPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h2 className="text-xl font-bold">Feature Flags</h2>
+      <h2 className="text-xl font-bold">{t("admin.featureFlags.title")}</h2>
       <div className="flex gap-2">
-        <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Flag name" className="flex-1" />
-        <Input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Description (optional)" className="flex-1" />
-        <Button onClick={handleCreate} disabled={!newName.trim()}><Plus className="h-4 w-4 mr-1" />Add</Button>
+        <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("admin.featureFlags.namePlaceholder")} className="flex-1" />
+        <Input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder={t("admin.featureFlags.descPlaceholder")} className="flex-1" />
+        <Button onClick={handleCreate} disabled={!newName.trim()}><Plus className="h-4 w-4 mr-1" />{t("admin.featureFlags.add")}</Button>
       </div>
       {loading ? <Loader2 className="h-6 w-6 animate-spin mx-auto" /> : (
         <div className="space-y-2">
@@ -48,7 +50,7 @@ export default function AdminFeatureFlagsPage() {
               <Switch checked={f.enabled} onCheckedChange={(v) => handleToggle(f.name, v)} />
             </div>
           ))}
-          {flags.length === 0 && <p className="text-center text-muted-foreground py-8">No feature flags</p>}
+          {flags.length === 0 && <p className="text-center text-muted-foreground py-8">{t("admin.featureFlags.noFlags")}</p>}
         </div>
       )}
     </div>

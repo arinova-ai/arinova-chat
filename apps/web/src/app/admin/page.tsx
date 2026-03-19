@@ -10,6 +10,7 @@ import {
   UserPlus,
   Loader2,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface Stats {
   totalUsers: number;
@@ -20,14 +21,15 @@ interface Stats {
 }
 
 const STAT_CARDS = [
-  { key: "totalUsers" as const, label: "Total Users", icon: Users },
-  { key: "totalConversations" as const, label: "Conversations", icon: MessagesSquare },
-  { key: "totalMessages" as const, label: "Messages", icon: MessageSquare },
-  { key: "totalAgents" as const, label: "Agents", icon: Bot },
-  { key: "recentUsers" as const, label: "New Users (7d)", icon: UserPlus },
+  { key: "totalUsers" as const, labelKey: "admin.dashboard.totalUsers", icon: Users },
+  { key: "totalConversations" as const, labelKey: "admin.dashboard.conversations", icon: MessagesSquare },
+  { key: "totalMessages" as const, labelKey: "admin.dashboard.messages", icon: MessageSquare },
+  { key: "totalAgents" as const, labelKey: "admin.dashboard.agents", icon: Bot },
+  { key: "recentUsers" as const, labelKey: "admin.dashboard.newUsers7d", icon: UserPlus },
 ];
 
 export default function AdminDashboardPage() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,14 +51,14 @@ export default function AdminDashboardPage() {
   if (!stats) {
     return (
       <div className="p-6 text-center text-muted-foreground">
-        Failed to load stats.
+        {t("admin.dashboard.failedToLoad")}
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <h2 className="mb-6 text-xl font-bold text-foreground">Dashboard</h2>
+      <h2 className="mb-6 text-xl font-bold text-foreground">{t("admin.dashboard.title")}</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {STAT_CARDS.map((card) => (
           <div
@@ -68,7 +70,7 @@ export default function AdminDashboardPage() {
                 <card.icon className="h-5 w-5 text-foreground" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{card.label}</p>
+                <p className="text-sm text-muted-foreground">{t(card.labelKey)}</p>
                 <p className="text-2xl font-bold text-foreground">
                   {stats[card.key].toLocaleString()}
                 </p>
