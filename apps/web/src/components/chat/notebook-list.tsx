@@ -731,11 +731,6 @@ function NotebookNotes({
 
   const toolbarBtnClass = "rounded-md px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors flex items-center gap-1";
 
-  const isOwner = notebook.ownerId === currentUserId;
-  const perm = notebook.permission ?? "owner";
-  const canEdit = isOwner || perm === "edit" || perm === "admin";
-  const canManage = isOwner || perm === "admin";
-
   // Members sharing state
   const [membersOpen, setMembersOpen] = useState(false);
   const [members, setMembers] = useState<{ userId: string; username: string; permission: string }[]>([]);
@@ -743,6 +738,11 @@ function NotebookNotes({
   const [inviteUser, setInviteUser] = useState("");
   const [invitePerm, setInvitePerm] = useState("view");
   const currentUserId = useChatStore((s) => s.currentUserId);
+
+  const isOwner = notebook.ownerId === currentUserId;
+  const perm = notebook.permission ?? "owner";
+  const canEdit = isOwner || perm === "edit" || perm === "admin";
+  const canManage = isOwner || perm === "admin";
 
   const fetchMembers = useCallback(async () => {
     try {
