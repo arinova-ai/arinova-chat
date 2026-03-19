@@ -1367,15 +1367,20 @@ case "tts": {
               </Button>
             )}
 
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              rows={1}
-              className="flex-1 resize-none rounded-xl border border-input bg-secondary px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <div className="relative flex-1">
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={handleInput}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                rows={1}
+                className="w-full resize-none rounded-xl border border-input bg-secondary px-4 py-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+                <ChatTooltip />
+              </div>
+            </div>
 
             {value.trim() || pendingFiles.length > 0 || attachedCard ? (
               <Button
@@ -1397,7 +1402,6 @@ case "tts": {
                 <Mic className="h-5 w-5" />
               </Button>
             )}
-            <ChatTooltip />
           </div>
         )}
       </div>
