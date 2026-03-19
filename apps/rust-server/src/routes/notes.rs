@@ -384,7 +384,7 @@ async fn get_note_by_id(
             let mut j = note_to_json(&note);
             let backlinks = get_backlinks(&state.db, note.id).await;
             let linked_cards = get_linked_cards(&state.db, note.id).await;
-            let related_capsules = get_related_capsules(&state.db, &user.id, &note.content).await;
+            let related_capsules = get_related_capsules_with_key(&state.db, &user.id, &note.content, state.config.openai_api_key.as_deref()).await;
             j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
             j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
             j.as_object_mut().unwrap().insert("relatedCapsules".into(), json!(related_capsules));
@@ -643,11 +643,31 @@ async fn extract_capsule_from_note(
     .into_response()
 }
 
-/// Get related memory capsule entries for a note.
+/// Get related memory capsule entries for a note using embedding similarity.
+/// Falls back to BM25 full-text search if no OpenAI key or embedding fails.
 pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> Vec<serde_json::Value> {
+    get_related_capsules_inner(db, user_id, content, None).await
+}
+
+pub async fn get_related_capsules_with_key(db: &PgPool, user_id: &str, content: &str, openai_key: Option<&str>) -> Vec<serde_json::Value> {
+    get_related_capsules_inner(db, user_id, content, openai_key).await
+}
+
+async fn get_related_capsules_inner(db: &PgPool, user_id: &str, content: &str, openai_key: Option<&str>) -> Vec<serde_json::Value> {
     if content.trim().len() < 20 {
         return vec![];
     }
+
+    // Try embedding search first
+    if let Some(api_key) = openai_key {
+        if let Some(results) = embedding_search(db, user_id, content, api_key).await {
+            if !results.is_empty() {
+                return results;
+            }
+        }
+    }
+
+    // Fallback: BM25 full-text search with score threshold
     let end = content.char_indices().nth(200).map(|(i, _)| i).unwrap_or(content.len());
     let query_text = &content[..end];
     let tsquery = query_text
@@ -662,14 +682,16 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
         return vec![];
     }
 
-    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>)> = sqlx::query_as(
+    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, f32)> = sqlx::query_as(
         r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name,
-                  me.source_start, me.source_end
+                  me.source_start, me.source_end,
+                  ts_rank(me.search_vector, to_tsquery('english', $2)) AS rank
            FROM memory_entries me
            JOIN memory_capsules mc ON mc.id = me.capsule_id
            WHERE mc.owner_id = $1
              AND me.search_vector @@ to_tsquery('english', $2)
-           ORDER BY ts_rank(me.search_vector, to_tsquery('english', $2)) DESC
+             AND ts_rank(me.search_vector, to_tsquery('english', $2)) > 0.05
+           ORDER BY rank DESC
            LIMIT 5"#,
     )
     .bind(user_id)
@@ -679,7 +701,7 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
     .unwrap_or_default();
 
     rows.iter()
-        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end)| {
+        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end, _rank)| {
             json!({
                 "id": id,
                 "content": content,
@@ -691,6 +713,57 @@ pub async fn get_related_capsules(db: &PgPool, user_id: &str, content: &str) -> 
             })
         })
         .collect()
+}
+
+/// Embedding-based similarity search using pgvector cosine distance.
+async fn embedding_search(db: &PgPool, user_id: &str, content: &str, api_key: &str) -> Option<Vec<serde_json::Value>> {
+    use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
+    use pgvector::Vector;
+
+    // Truncate content for embedding (max ~500 chars)
+    let end = content.char_indices().nth(500).map(|(i, _)| i).unwrap_or(content.len());
+    let query_text = content[..end].to_string();
+
+    let client = reqwest::Client::new();
+    let embeddings = generate_embeddings(&client, api_key, &[query_text], EMBEDDING_MODEL).await.ok()?;
+    let query_embedding = embeddings.into_iter().next()?;
+    let query_vec = Vector::from(query_embedding);
+
+    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, f64)> = sqlx::query_as(
+        r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name,
+                  me.source_start, me.source_end,
+                  1 - (me.embedding <=> $2::vector) AS similarity
+           FROM memory_entries me
+           JOIN memory_capsules mc ON mc.id = me.capsule_id
+           WHERE mc.owner_id = $1
+             AND me.embedding IS NOT NULL
+           ORDER BY me.embedding <=> $2::vector
+           LIMIT 5"#,
+    )
+    .bind(user_id)
+    .bind(&query_vec)
+    .fetch_all(db)
+    .await
+    .ok()?;
+
+    // Filter by similarity threshold (>= 0.3)
+    let results: Vec<_> = rows.iter()
+        .filter(|r| r.7 >= 0.3)
+        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end, similarity)| {
+            json!({
+                "id": id,
+                "content": content,
+                "importance": importance,
+                "capsuleId": capsule_id,
+                "capsuleName": capsule_name,
+                "sourceStart": source_start.map(|t| t.to_rfc3339()),
+                "sourceEnd": source_end.map(|t| t.to_rfc3339()),
+                "similarity": similarity,
+            })
+        })
+        .collect();
+
+    Some(results)
 }
 
 // ===== Task 4: AI tag suggestions =====
