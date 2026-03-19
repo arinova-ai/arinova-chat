@@ -485,9 +485,11 @@ function MessageCheckmarks({ message }: { message: Message }) {
     return null;
   }
 
-  // Check if any other user has read up to this message's seq
+  // Check if any OTHER user has read up to this message's seq
+  // Exclude the sender (current user) — their own mark_read doesn't count
+  const senderId = message.senderUserId;
   const hasReaders = readReceipts && Object.entries(readReceipts).some(
-    ([, readSeq]) => readSeq >= seq
+    ([userId, readSeq]) => userId !== senderId && readSeq >= seq
   );
 
   if (hasReaders) {
