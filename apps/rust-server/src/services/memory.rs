@@ -20,11 +20,13 @@ Rules:\n\
 2. Each line MUST start with [importance:X.X] followed by [tag1][tag2] then the memory content\n\
 3. Skip trivial messages like greetings, acknowledgments, status updates with no substance\n\
 4. Skip markdown formatting artifacts (```, **, |---|, emoji-only lines, etc.)\n\
-5. Focus on: decisions, preferences, facts, action items, technical choices\n\
-6. Each memory must be a complete, meaningful sentence\n\
-7. Output NOTHING except memory lines. No preamble, no summary, no code fences.\n\
-8. Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details\n\
-9. Tags should be short lowercase words (e.g. preference, decision, fact, action, relationship, technical, workflow, goal)";
+5. Skip code snippets, debug output, console logs, variable assignments, API responses, stack traces\n\
+6. Focus on: decisions, preferences, facts, action items, technical choices\n\
+7. Each memory must be a complete, meaningful sentence that would be useful to recall later\n\
+8. Output NOTHING except memory lines. No preamble, no summary, no code fences.\n\
+9. Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details\n\
+10. Tags should be short lowercase words (e.g. preference, decision, fact, action, relationship, technical, workflow, goal)\n\
+11. If the conversation is mostly code/debug with no meaningful human decisions or facts, output NOTHING";
 
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;
