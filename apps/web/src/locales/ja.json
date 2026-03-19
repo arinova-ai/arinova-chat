@@ -1464,6 +1464,8 @@
   "tips.blockUser": "相手のプロフィールページからユーザーをブロックできます",
   "tips.muteConversation": "会話をミュートして通知を停止",
   "tips.noteSharing": "ノートアイコンでエージェントとノートを共有",
+  "tips.useSkills": "// と入力してエージェントスキルを使用",
+  "tips.agentNotesTask": "エージェントがノート作成やタスク管理をサポート",
   "tips.shortcuts": "Ctrl+K でコマンドパレットを開く",
   "tips.tapSend": "送信ボタンをタップしてメッセージを送信",
   "tips.longPressReact": "メッセージを長押しして絵文字でリアクション",

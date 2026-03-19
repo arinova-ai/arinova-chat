@@ -1438,6 +1438,8 @@
   "tips.blockUser": "Puedes bloquear usuarios desde su pagina de perfil",
   "tips.muteConversation": "Silencia conversaciones para dejar de recibir notificaciones",
   "tips.noteSharing": "Comparte notas con los agentes usando el icono de nota",
+  "tips.useSkills": "Escribe // para usar habilidades del agente",
+  "tips.agentNotesTask": "Los agentes pueden escribir notas y gestionar tareas por ti",
   "tips.shortcuts": "Pulsa Ctrl+K para abrir la paleta de comandos",
   "tips.tapSend": "Toca el boton de enviar para enviar tu mensaje",
   "tips.longPressReact": "Manten presionado un mensaje para reaccionar con un emoji",

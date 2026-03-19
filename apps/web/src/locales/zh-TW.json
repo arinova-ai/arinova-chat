@@ -1492,6 +1492,8 @@
   "tips.blockUser": "你可以從對方的個人檔案頁面封鎖使用者",
   "tips.muteConversation": "將對話靜音以停止通知",
   "tips.noteSharing": "使用筆記圖示與代理分享筆記",
+  "tips.useSkills": "輸入 // 使用 Agent 技能",
+  "tips.agentNotesTask": "Agent 可以幫你寫筆記和管理任務",
   "tips.shortcuts": "按 Ctrl+K 開啟指令面板",
   "tips.tapSend": "點擊傳送按鈕以傳送你的訊息",
   "tips.longPressReact": "長按訊息以使用表情符號回應",

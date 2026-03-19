@@ -13,17 +13,14 @@ const ROTATE_INTERVAL = 8000; // 8 seconds
 const TIPS_DESKTOP = [
   "tips.slashCommands",
   "tips.mentionAgent",
+  "tips.useSkills",
+  "tips.agentNotesTask",
   "tips.dragFiles",
   "tips.markdown",
-  "tips.enterSend",
-  "tips.searchMessages",
   "tips.pinMessages",
-  "tips.voiceMessage",
   "tips.reactions",
   "tips.threads",
   "tips.dateJump",
-  "tips.blockUser",
-  "tips.muteConversation",
   "tips.noteSharing",
   "tips.shortcuts",
 ] as const;
@@ -31,19 +28,15 @@ const TIPS_DESKTOP = [
 const TIPS_MOBILE = [
   "tips.slashCommands",
   "tips.mentionAgent",
-  "tips.tapSend",
+  "tips.useSkills",
+  "tips.agentNotesTask",
   "tips.longPressReact",
   "tips.swipeReply",
-  "tips.voiceMessage",
-  "tips.searchMessages",
   "tips.pinMessages",
   "tips.reactions",
   "tips.threads",
   "tips.dateJump",
-  "tips.blockUser",
-  "tips.muteConversation",
   "tips.noteSharing",
-  "tips.pullRefresh",
 ] as const;
 
 export function ChatTooltip() {

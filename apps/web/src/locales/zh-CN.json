@@ -1442,6 +1442,8 @@
   "tips.blockUser": "你可以从对方的个人资料页面屏蔽用户",
   "tips.muteConversation": "将对话静音以停止通知",
   "tips.noteSharing": "使用笔记图标与代理分享笔记",
+  "tips.useSkills": "输入 // 使用 Agent 技能",
+  "tips.agentNotesTask": "Agent 可以帮你写笔记和管理任务",
   "tips.shortcuts": "按 Ctrl+K 打开命令面板",
   "tips.tapSend": "点击发送按钮以发送你的消息",
   "tips.longPressReact": "长按消息以使用表情回应",

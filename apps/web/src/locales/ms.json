@@ -1438,6 +1438,8 @@
   "tips.blockUser": "Anda boleh menyekat pengguna dari halaman profil mereka",
   "tips.muteConversation": "Bisukan perbualan untuk menghentikan pemberitahuan",
   "tips.noteSharing": "Kongsi nota dengan ejen menggunakan ikon nota",
+  "tips.useSkills": "Taip // untuk menggunakan kemahiran ejen",
+  "tips.agentNotesTask": "Ejen boleh menulis nota dan mengurus tugas untuk anda",
   "tips.shortcuts": "Tekan Ctrl+K untuk membuka palet arahan",
   "tips.tapSend": "Ketik butang hantar untuk menghantar mesej anda",
   "tips.longPressReact": "Tekan lama pada mesej untuk memberi reaksi dengan emoji",

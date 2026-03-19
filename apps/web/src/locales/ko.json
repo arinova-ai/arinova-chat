@@ -1438,6 +1438,8 @@
   "tips.blockUser": "상대방의 프로필 페이지에서 사용자를 차단할 수 있습니다",
   "tips.muteConversation": "대화를 음소거하여 알림을 중지하세요",
   "tips.noteSharing": "노트 아이콘을 사용하여 에이전트와 노트를 공유하세요",
+  "tips.useSkills": "//을 입력하여 에이전트 스킬 사용",
+  "tips.agentNotesTask": "에이전트가 노트 작성과 작업 관리를 도와줍니다",
   "tips.shortcuts": "Ctrl+K를 눌러 명령 팔레트를 여세요",
   "tips.tapSend": "전송 버튼을 탭하여 메시지를 보내세요",
   "tips.longPressReact": "메시지를 길게 눌러 이모지로 반응하세요",
