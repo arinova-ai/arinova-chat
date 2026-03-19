@@ -199,40 +199,38 @@ export function UserProfileSheet({
               )}
             </div>
 
-            {/* Visit Office button */}
+            {/* Action buttons */}
             {!isSelf && user && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3 w-full gap-2"
-                onClick={async () => {
-                  try {
-                    const data = await api<{ userId: string; readOnly: boolean }>(`/api/user/${userId}/office-visit`);
-                    if (data.userId) {
-                      window.location.href = `/office?visit=${userId}`;
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={async () => {
+                    try {
+                      const data = await api<{ userId: string; readOnly: boolean }>(`/api/user/${userId}/office-visit`);
+                      if (data.userId) {
+                        window.location.href = `/office?visit=${userId}`;
+                      }
+                    } catch {
+                      // toast handled by api
                     }
-                  } catch {
-                    // toast handled by api
-                  }
-                }}
-              >
-                <Monitor className="h-4 w-4" />
-                {t("userProfile.visitOffice")}
-              </Button>
-            )}
-
-            {/* Block button */}
-            {!isSelf && user && (
-              <Button
-                variant={isBlocked ? "outline" : "destructive"}
-                size="sm"
-                className="mt-3 w-full gap-2"
-                onClick={handleToggleBlock}
-                disabled={blockLoading}
-              >
-                <Ban className="h-4 w-4" />
-                {isBlocked ? (t("userProfile.unblock") || "Unblock") : (t("userProfile.block") || "Block")}
-              </Button>
+                  }}
+                >
+                  <Monitor className="h-4 w-4" />
+                  {t("userProfile.visitOffice")}
+                </Button>
+                <Button
+                  variant={isBlocked ? "outline" : "destructive"}
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={handleToggleBlock}
+                  disabled={blockLoading}
+                >
+                  <Ban className="h-4 w-4" />
+                  {isBlocked ? (t("userProfile.unblock") || "Unblock") : (t("userProfile.block") || "Block")}
+                </Button>
+              </div>
             )}
 
             {/* Agents section (group context only) */}
