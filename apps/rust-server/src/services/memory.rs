@@ -386,11 +386,12 @@ async fn do_extraction(
                 let entries: Vec<(String, f64, Vec<String>, usize)> = text
                     .lines()
                     .map(|l| l.trim())
-                    .filter(|l| !l.is_empty())
+                    .filter(|l| !l.is_empty() && l.starts_with("[importance:"))
                     .map(|line| {
                         let (content, importance, tags) = parse_tagged_line(line);
                         (content, importance, tags, chunk_idx)
                     })
+                    .filter(|(content, _, _, _)| content.len() >= 10)
                     .collect();
                 tracing::info!(
                     "Chunk {}/{}: extracted {} entries",
