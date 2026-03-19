@@ -261,6 +261,11 @@ function ExploreTab({ agents }: { agents: { id: string; name: string }[] }) {
       setShowInstallDialog(false);
       setSelectedAgentIds([]);
       fetchSkills(1);
+      // Invalidate cached slash commands so chat input picks up new skills
+      const current = useChatStore.getState().agentSkills;
+      const cleared = { ...current };
+      for (const aid of selectedAgentIds) delete cleared[aid];
+      useChatStore.setState({ agentSkills: cleared });
     } catch {
       // auto-handled
     } finally {
@@ -573,6 +578,11 @@ function InstalledTab({ agents }: { agents: { id: string; name: string }[] }) {
           s.id === skillId ? { ...s, isEnabled: !currentEnabled } : s,
         ),
       }));
+      // Invalidate cached slash commands
+      const current = useChatStore.getState().agentSkills;
+      const cleared = { ...current };
+      delete cleared[agentId];
+      useChatStore.setState({ agentSkills: cleared });
     } catch {
       // auto-handled
     }
@@ -585,6 +595,11 @@ function InstalledTab({ agents }: { agents: { id: string; name: string }[] }) {
         ...prev,
         [agentId]: prev[agentId].filter((s) => s.id !== skillId),
       }));
+      // Invalidate cached slash commands
+      const current = useChatStore.getState().agentSkills;
+      const cleared = { ...current };
+      delete cleared[agentId];
+      useChatStore.setState({ agentSkills: cleared });
     } catch {
       // auto-handled
     }
