@@ -491,6 +491,8 @@
   "settings.notifications.to": "To",
   "settings.notifications.chatSounds": "Chat sounds",
   "settings.notifications.chatSoundsDesc": "Play sounds when sending and receiving messages",
+  "settings.notifications.chatTips": "Show chat tips",
+  "settings.notifications.chatTipsDesc": "Display helpful tips in the chat input area",
   "settings.privacy.title": "Privacy",
   "settings.privacy.subtitle": "Manage blocked users and privacy settings.",
   "settings.privacy.blockedUsers": "Blocked Users",

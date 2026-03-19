@@ -486,6 +486,8 @@
   "settings.notifications.to": "Hasta",
   "settings.notifications.chatSounds": "Sonidos de chat",
   "settings.notifications.chatSoundsDesc": "Reproducir sonidos al enviar y recibir mensajes",
+  "settings.notifications.chatTips": "Mostrar consejos de chat",
+  "settings.notifications.chatTipsDesc": "Mostrar consejos útiles en el área de entrada del chat",
   "settings.privacy.title": "Privacidad",
   "settings.privacy.subtitle": "Administra usuarios bloqueados y configuracion de privacidad.",
   "settings.privacy.blockedUsers": "Usuarios Bloqueados",

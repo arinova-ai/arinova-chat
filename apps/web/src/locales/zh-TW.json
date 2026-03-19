@@ -492,6 +492,8 @@
   "settings.notifications.to": "到",
   "settings.notifications.chatSounds": "聊天音效",
   "settings.notifications.chatSoundsDesc": "傳送和接收訊息時播放音效",
+  "settings.notifications.chatTips": "顯示聊天提示",
+  "settings.notifications.chatTipsDesc": "在聊天輸入區域顯示實用提示",
   "settings.privacy.title": "隱私",
   "settings.privacy.subtitle": "管理封鎖的使用者與隱私設定。",
   "settings.privacy.blockedUsers": "已封鎖的使用者",

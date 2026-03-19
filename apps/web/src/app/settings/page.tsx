@@ -32,6 +32,7 @@ import {
   Plus,
   Trash2,
   CreditCard,
+  Info,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { compressImage } from "@/lib/image-compress";
@@ -1224,7 +1225,39 @@ function NotificationPanel() {
         <Separator />
 
         <SoundToggle />
+
+        <Separator />
+
+        <ChatTipsToggle />
       </div>
+    </div>
+  );
+}
+
+function ChatTipsToggle() {
+  const { t } = useTranslation();
+  const TIPS_KEY = "arinova_tooltip_dismissed";
+  const [enabled, setEnabled] = useState(() => localStorage.getItem(TIPS_KEY) !== "true");
+
+  const handleToggle = (checked: boolean) => {
+    setEnabled(checked);
+    if (checked) {
+      localStorage.removeItem(TIPS_KEY);
+    } else {
+      localStorage.setItem(TIPS_KEY, "true");
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Info className="h-4 w-4 text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium">{t("settings.notifications.chatTips")}</p>
+          <p className="text-xs text-muted-foreground">{t("settings.notifications.chatTipsDesc")}</p>
+        </div>
+      </div>
+      <Switch checked={enabled} onCheckedChange={handleToggle} />
     </div>
   );
 }

@@ -486,6 +486,8 @@
   "settings.notifications.to": "Hingga",
   "settings.notifications.chatSounds": "Bunyi sembang",
   "settings.notifications.chatSoundsDesc": "Mainkan bunyi semasa menghantar dan menerima mesej",
+  "settings.notifications.chatTips": "Tunjukkan tip sembang",
+  "settings.notifications.chatTipsDesc": "Paparkan tip berguna di kawasan input sembang",
   "settings.privacy.title": "Privasi",
   "settings.privacy.subtitle": "Urus pengguna yang disekat dan tetapan privasi.",
   "settings.privacy.blockedUsers": "Pengguna Disekat",

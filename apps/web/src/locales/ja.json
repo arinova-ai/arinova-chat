@@ -489,6 +489,8 @@
   "settings.notifications.to": "終了",
   "settings.notifications.chatSounds": "チャット音",
   "settings.notifications.chatSoundsDesc": "メッセージの送受信時にサウンドを再生",
+  "settings.notifications.chatTips": "チャットのヒントを表示",
+  "settings.notifications.chatTipsDesc": "チャット入力エリアにヒントを表示",
   "settings.privacy.title": "プライバシー",
   "settings.privacy.subtitle": "ブロックしたユーザーとプライバシー設定を管理します。",
   "settings.privacy.blockedUsers": "ブロックしたユーザー",

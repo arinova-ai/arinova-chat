@@ -486,6 +486,8 @@
   "settings.notifications.to": "À",
   "settings.notifications.chatSounds": "Sons de chat",
   "settings.notifications.chatSoundsDesc": "Jouer des sons lors de l'envoi et de la réception de messages",
+  "settings.notifications.chatTips": "Afficher les astuces de chat",
+  "settings.notifications.chatTipsDesc": "Afficher des astuces utiles dans la zone de saisie",
   "settings.privacy.title": "Confidentialité",
   "settings.privacy.subtitle": "Gérez les utilisateurs bloqués et les paramètres de confidentialité.",
   "settings.privacy.blockedUsers": "Utilisateurs bloqués",
