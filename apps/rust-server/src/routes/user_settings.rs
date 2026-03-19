@@ -628,14 +628,17 @@ async fn get_office_visit(
 
     let (target_name, target_image, target_theme_id) = target.unwrap_or_default();
 
+    let effective_theme = target_theme_id.as_deref().unwrap_or("cozy-studio-v2");
+
     let agents = sqlx::query_as::<_, (Uuid, String, Option<String>, i32)>(
-        r#"SELECT a.id, a.name, a.avatar_url, os.slot_index
-           FROM office_slots os
-           JOIN agents a ON a.id = os.agent_id
-           WHERE os.user_id = $1
-           ORDER BY os.slot_index"#,
+        r#"SELECT a.id, a.name, a.avatar_url, osb.slot_index
+           FROM office_slot_bindings osb
+           JOIN agents a ON a.id = osb.agent_id
+           WHERE osb.user_id = $1 AND osb.theme_id = $2
+           ORDER BY osb.slot_index"#,
     )
     .bind(&target_user_id)
+    .bind(effective_theme)
     .fetch_all(&state.db)
     .await
     .unwrap_or_default();
