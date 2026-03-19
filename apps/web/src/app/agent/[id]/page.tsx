@@ -535,12 +535,12 @@ function AgentProfileContent() {
                         {!isOwner && (
                           <Button
                             variant={isBlocked ? "destructive" : "outline"}
-                            size="icon"
+                            className="gap-2"
                             onClick={handleToggleBlock}
                             disabled={blockLoading}
-                            title={isBlocked ? t("profilePage.unblock") : t("profilePage.block")}
                           >
                             <ShieldBan className="h-4 w-4" />
+                            {isBlocked ? t("profilePage.unblock") : t("profilePage.block")}
                           </Button>
                         )}
                       </div>
