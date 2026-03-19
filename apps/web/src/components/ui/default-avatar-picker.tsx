@@ -25,12 +25,14 @@ export function DefaultAvatarPicker({ onSelect, selected, className }: DefaultAv
             type="button"
             onClick={() => onSelect(url)}
             className={cn(
-              "relative rounded-full overflow-hidden border-2 transition-all hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-brand/50",
-              selected?.endsWith(url) || url.endsWith(selected ?? "\0") ? "border-brand ring-2 ring-brand/30" : "border-transparent hover:border-muted-foreground/30"
+              "relative h-10 w-10 shrink-0 rounded-full overflow-hidden transition-all hover:scale-105 active:scale-95 focus-visible:outline-none",
+              selected?.endsWith(url) || url.endsWith(selected ?? "\0")
+                ? "ring-2 ring-brand ring-offset-2 ring-offset-background"
+                : "hover:ring-1 hover:ring-muted-foreground/30"
             )}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt="" className="h-10 w-10 rounded-full object-cover" />
+            <img src={url} alt="" className="h-full w-full rounded-full object-cover" />
           </button>
         ))}
       </div>
