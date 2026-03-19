@@ -393,11 +393,27 @@ async fn get_note(
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
     if !is_member(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
+        // Not a conversation member — check if user has access via notebook membership
+        let has_notebook_access = sqlx::query_scalar::<_, bool>(
+            r#"SELECT EXISTS(
+                SELECT 1 FROM conversation_notes cn
+                JOIN notebook_members nm ON nm.notebook_id = cn.notebook_id
+                WHERE cn.id = $1 AND nm.user_id = $2
+            )"#,
         )
-            .into_response();
+        .bind(note_id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false);
+
+        if !has_notebook_access {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({"error": "Not a member of this conversation"})),
+            )
+                .into_response();
+        }
     }
 
     let row = sqlx::query_as::<_, NoteRow>(&format!(
