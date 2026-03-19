@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
-import { ArrowLeft, CalendarDays, Phone, Settings, X, ShieldBan, VolumeX, Loader2, UserPlus, UserMinus, Clock } from "lucide-react";
+import { ArrowLeft, CalendarDays, Phone, Settings, X, ShieldBan, VolumeX, Loader2, UserPlus, UserMinus, Clock, Monitor } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useVoiceCallStore } from "@/store/voice-call-store";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
@@ -302,7 +302,7 @@ function UserProfileContent() {
 
                   {/* Friend / Block / Mute / Call actions (not shown on own profile) */}
                   {!isOwnProfile && (
-                    <div className="mt-4 flex gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       {directConv && (
                         <Button
                           variant="outline"
@@ -343,6 +343,24 @@ function UserProfileContent() {
                             : friendStatus === "pending_incoming"
                               ? t("userProfile.acceptRequest")
                               : t("userProfile.addFriend")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={async () => {
+                          try {
+                            const data = await api<{ userId: string; readOnly: boolean }>(`/api/user/${userId}/office-visit`);
+                            if (data.userId) {
+                              window.location.href = `/office?visit=${userId}`;
+                            }
+                          } catch {
+                            // toast handled by api
+                          }
+                        }}
+                      >
+                        <Monitor className="h-3.5 w-3.5" />
+                        {t("userProfile.visitOffice")}
                       </Button>
                       <Button
                         variant="outline"
