@@ -163,6 +163,29 @@ async fn get_conv_member_ids(db: &PgPool, conv_id: Uuid) -> Vec<String> {
     }
 }
 
+/// Get all user IDs who should receive note WS events:
+/// conversation members + notebook members (if the note has a notebook_id)
+async fn get_note_broadcast_ids(db: &PgPool, conv_id: Uuid, notebook_id: Option<Uuid>) -> Vec<String> {
+    let mut ids = get_conv_member_ids(db, conv_id).await;
+    if let Some(nb_id) = notebook_id {
+        let nb_members: Vec<(String,)> = sqlx::query_as(
+            r#"SELECT owner_id FROM notebooks WHERE id = $1
+               UNION
+               SELECT user_id FROM notebook_members WHERE notebook_id = $1"#,
+        )
+        .bind(nb_id)
+        .fetch_all(db)
+        .await
+        .unwrap_or_default();
+        for (uid,) in nb_members {
+            if !ids.contains(&uid) {
+                ids.push(uid);
+            }
+        }
+    }
+    ids
+}
+
 fn note_to_json(n: &NoteRow) -> serde_json::Value {
     json!({
         "id": n.id,
@@ -743,8 +766,8 @@ async fn create_note(
                 "updatedAt": now.to_rfc3339(),
             });
 
-            // Broadcast to conversation members
-            let member_ids = get_conv_member_ids(&state.db, conv_id).await;
+            // Broadcast to conversation + notebook members
+            let member_ids = get_note_broadcast_ids(&state.db, conv_id, notebook_id).await;
             state.ws.broadcast_to_members(
                 &member_ids,
                 &json!({
@@ -1003,7 +1026,8 @@ async fn update_note(
 
                     let note_json = note_to_json(&note);
 
-                    let member_ids = get_conv_member_ids(&state.db, conv_id).await;
+                    let nb_id = sqlx::query_scalar::<_, Uuid>("SELECT notebook_id FROM conversation_notes WHERE id = $1").bind(note_id).fetch_optional(&state.db).await.ok().flatten();
+                    let member_ids = get_note_broadcast_ids(&state.db, conv_id, nb_id).await;
                     state.ws.broadcast_to_members(
                         &member_ids,
                         &json!({
@@ -1078,16 +1102,16 @@ async fn delete_note(
             .into_response();
     }
 
-    // Fetch note metadata
-    let note = sqlx::query_as::<_, (String, String, Option<Uuid>)>(
-        "SELECT creator_id, creator_type, agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+    // Fetch note metadata (including notebook_id for broadcast)
+    let note = sqlx::query_as::<_, (String, String, Option<Uuid>, Option<Uuid>)>(
+        "SELECT creator_id, creator_type, agent_id, notebook_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
     .bind(note_id)
     .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
-    let (note_creator_id, note_creator_type, note_agent_id) = match note {
+    let (note_creator_id, note_creator_type, note_agent_id, note_notebook_id) = match note {
         Ok(Some(n)) => n,
         Ok(None) => {
             return (
@@ -1128,8 +1152,8 @@ async fn delete_note(
 
     match result {
         Ok(r) if r.rows_affected() > 0 => {
-            // Broadcast deletion
-            let member_ids = get_conv_member_ids(&state.db, conv_id).await;
+            // Broadcast deletion to conversation + notebook members
+            let member_ids = get_note_broadcast_ids(&state.db, conv_id, note_notebook_id).await;
             state.ws.broadcast_to_members(
                 &member_ids,
                 &json!({
