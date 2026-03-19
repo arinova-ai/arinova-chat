@@ -11,8 +11,17 @@ import { useTheme } from "./theme-context";
 import { authClient } from "@/lib/auth-client";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { ArrowLeft } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 import type { Agent } from "./types";
 
+interface VisitData {
+  userId: string;
+  name: string;
+  image: string | null;
+  agents: { id: string; name: string; avatarUrl: string | null; slotIndex: number }[];
+  readOnly: boolean;
+}
 
 interface BindingRow {
   slotIndex: number;
@@ -33,9 +42,25 @@ function makeEmptySlot(index: number): Agent {
   };
 }
 
-function OfficeViewInner() {
+function OfficeViewInner({ visitUserId }: { visitUserId?: string }) {
+  const { t } = useTranslation();
   const stream = useOfficeStream();
   const { manifest, loading, themeId, themes } = useTheme();
+
+  // ── Visit mode state ──────────────────────────────────
+  const [visitData, setVisitData] = useState<VisitData | null>(null);
+  const [visitLoading, setVisitLoading] = useState(!!visitUserId);
+  const [visitError, setVisitError] = useState<string | null>(null);
+  const isVisitMode = !!visitUserId;
+
+  useEffect(() => {
+    if (!visitUserId) return;
+    setVisitLoading(true);
+    api<VisitData>(`/api/user/${visitUserId}/office-visit`)
+      .then(setVisitData)
+      .catch((e) => setVisitError(e instanceof Error ? e.message : "Failed to load"))
+      .finally(() => setVisitLoading(false));
+  }, [visitUserId]);
   const themeEntry = themes.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
 
@@ -68,36 +93,51 @@ function OfficeViewInner() {
   }, [themeId]);
 
   useEffect(() => {
-    fetchBindings();
-  }, [fetchBindings]);
+    if (!isVisitMode) fetchBindings();
+  }, [fetchBindings, isVisitMode]);
 
   // Build slot-based agent array
   const displayAgents = stream.agents.slice(0, maxAgents);
 
-  const slots: Agent[] = Array.from({ length: maxAgents }, (_, i) => {
-    const binding = bindings.find((b) => b.slotIndex === i);
-    if (binding) {
-      const agent = stream.agents.find((a) => a.id === binding.agentId);
-      if (agent) return agent;
-      // Agent bound but not streaming — show fallback with idle status
-      if (binding.agentName) {
-        return {
-          id: binding.agentId,
-          name: binding.agentName,
-          role: "",
-          emoji: "\u{1F916}",
-          color: "#64748b",
-          status: "idle" as const,
-          recentActivity: [],
-        };
-      }
-    }
-    return makeEmptySlot(i);
-  });
+  const slots: Agent[] = isVisitMode && visitData
+    ? Array.from({ length: maxAgents }, (_, i) => {
+        const va = visitData.agents.find((a) => a.slotIndex === i);
+        if (va) {
+          return {
+            id: va.id,
+            name: va.name,
+            role: "",
+            emoji: "\u{1F916}",
+            color: "#64748b",
+            status: "idle" as const,
+            recentActivity: [],
+          };
+        }
+        return makeEmptySlot(i);
+      })
+    : Array.from({ length: maxAgents }, (_, i) => {
+        const binding = bindings.find((b) => b.slotIndex === i);
+        if (binding) {
+          const agent = stream.agents.find((a) => a.id === binding.agentId);
+          if (agent) return agent;
+          if (binding.agentName) {
+            return {
+              id: binding.agentId,
+              name: binding.agentName,
+              role: "",
+              emoji: "\u{1F916}",
+              color: "#64748b",
+              status: "idle" as const,
+              recentActivity: [],
+            };
+          }
+        }
+        return makeEmptySlot(i);
+      });
 
-  // Auto-bind unbound agents to empty slots
+  // Auto-bind unbound agents to empty slots (skip in visit mode)
   useEffect(() => {
-    if (displayAgents.length === 0 || autoBindAttempted.current) return;
+    if (isVisitMode || displayAgents.length === 0 || autoBindAttempted.current) return;
     const boundAgentIds = new Set(bindings.map((b) => b.agentId));
     const boundSlots = new Set(bindings.map((b) => b.slotIndex));
     const unboundAgents = displayAgents.filter((a) => !boundAgentIds.has(a.id));
@@ -121,7 +161,7 @@ function OfficeViewInner() {
       fetchBindings();
     };
     bindAll();
-  }, [bindings, displayAgents, themeId, maxAgents, fetchBindings]);
+  }, [bindings, displayAgents, themeId, maxAgents, fetchBindings, isVisitMode]);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const selectedAgent = displayAgents.find((a) => a.id === selectedAgentId) ?? null;
@@ -171,9 +211,37 @@ function OfficeViewInner() {
 
   const themeReady = !loading && !!manifest;
 
+  // Visit mode: loading/error states
+  if (isVisitMode && visitLoading) {
+    return <div className="flex h-full items-center justify-center"><ArinovaSpinner /></div>;
+  }
+  if (isVisitMode && visitError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+        <p className="text-sm">{visitError}</p>
+        <button type="button" onClick={() => window.history.back()} className="text-xs text-brand hover:underline">{t("common.back")}</button>
+      </div>
+    );
+  }
+
+  const noop = () => {};
+
   return (
     <div className="flex h-full flex-col text-white overflow-hidden">
-      {/* Office map area — always takes full remaining space; ref must always mount for ResizeObserver */}
+      {/* Visit mode banner */}
+      {isVisitMode && visitData && (
+        <div className="shrink-0 flex items-center gap-2 bg-brand/10 border-b border-brand/20 px-4 py-2">
+          <button type="button" onClick={() => window.history.back()} className="rounded-md p-1 hover:bg-brand/20 text-brand transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <span className="text-sm font-medium text-brand">
+            {t("office.visiting", { name: visitData.name })}
+          </span>
+          <span className="text-xs text-muted-foreground ml-auto">{t("office.readOnly")}</span>
+        </div>
+      )}
+
+      {/* Office map area */}
       <div ref={mapContainerRef} className="flex-1 min-h-0">
         {!themeReady ? (
           <div className="flex h-full items-center justify-center">
@@ -188,48 +256,50 @@ function OfficeViewInner() {
               width={mapSize.width}
               height={mapSize.height}
               isMobile={isMobile}
-              onSelectAgent={(id) => selectAgent(id)}
-              onOpenChat={handleOpenChat}
+              onSelectAgent={isVisitMode ? noop : (id) => selectAgent(id)}
+              onOpenChat={isVisitMode ? noop : handleOpenChat}
             />
           )
         )}
       </div>
 
-      {/* Agent detail modal (non-iframe themes — multi-agent click) */}
-      <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
+      {/* Interactive features — hidden in visit mode */}
+      {!isVisitMode && (
+        <>
+          <AgentModal agent={selectedAgent} agents={displayAgents} onClose={closeModal} />
 
-      {/* Character modal (any slot — bind/unbind/switch) */}
-      <CharacterModal
-        isOpen={characterModalSlot !== null}
-        onClose={closeCharacterModal}
-        agent={characterSlotAgent?.status !== "unbound" ? characterSlotAgent : null}
-        agents={displayAgents}
-        themeId={themeId}
-        slotIndex={characterModalSlot ?? 0}
-        boundAgentId={characterSlotBinding?.agentId ?? null}
-        onBindingChange={fetchBindings}
-        onOpenChat={handleOpenChat}
-      />
-
-      {/* Float chat windows */}
-      {floatWindows.map((fwAgentId, idx) => {
-        const agent = stream.agents.find((a) => a.id === fwAgentId);
-        return (
-          <FloatChatWindow
-            key={fwAgentId}
-            agentId={fwAgentId}
-            agentName={agent?.name}
-            agentAvatar={undefined}
-            onClose={() => closeFloatWindow(fwAgentId)}
-            offsetIndex={idx}
-            isMobile={isMobile}
+          <CharacterModal
+            isOpen={characterModalSlot !== null}
+            onClose={closeCharacterModal}
+            agent={characterSlotAgent?.status !== "unbound" ? characterSlotAgent : null}
+            agents={displayAgents}
+            themeId={themeId}
+            slotIndex={characterModalSlot ?? 0}
+            boundAgentId={characterSlotBinding?.agentId ?? null}
+            onBindingChange={fetchBindings}
+            onOpenChat={handleOpenChat}
           />
-        );
-      })}
+
+          {floatWindows.map((fwAgentId, idx) => {
+            const agent = stream.agents.find((a) => a.id === fwAgentId);
+            return (
+              <FloatChatWindow
+                key={fwAgentId}
+                agentId={fwAgentId}
+                agentName={agent?.name}
+                agentAvatar={undefined}
+                onClose={() => closeFloatWindow(fwAgentId)}
+                offsetIndex={idx}
+                isMobile={isMobile}
+              />
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
 
-export function OfficeView() {
-  return <OfficeViewInner />;
+export function OfficeView({ visitUserId }: { visitUserId?: string }) {
+  return <OfficeViewInner visitUserId={visitUserId} />;
 }
