@@ -48,7 +48,7 @@ interface Notebook {
 }
 
 interface NotebookListProps {
-  conversationId: string;
+  conversationId?: string;
   inline?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -712,7 +712,7 @@ function NotebookNotes({
   onRefresh,
 }: {
   notebook: Notebook;
-  conversationId: string;
+  conversationId?: string;
   inline?: boolean;
   onBack: () => void;
   onClose?: () => void;

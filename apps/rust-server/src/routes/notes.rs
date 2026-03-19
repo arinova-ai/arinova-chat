@@ -49,8 +49,14 @@ pub fn router() -> Router<AppState> {
             "/api/conversations/{id}/notes/{noteId}/auto-tag",
             post(auto_tag_note),
         )
-        // User-level note endpoints
-        .route("/api/notes/{noteId}", get(get_note_by_id))
+        // Conversation-independent note CRUD
+        .route("/api/notes", post(create_note_standalone))
+        .route(
+            "/api/notes/{noteId}",
+            get(get_note_by_id).patch(update_note_standalone).delete(delete_note_standalone),
+        )
+        .route("/api/notes/{noteId}/archive", post(archive_note_standalone))
+        .route("/api/notes/{noteId}/unarchive", post(unarchive_note_standalone))
         .route("/api/users/me/notes", get(list_user_notes))
         .route(
             "/api/notes/{noteId}/links",
@@ -2906,4 +2912,195 @@ async fn set_board_preference(
         )
             .into_response(),
     }
+}
+
+// ===== Conversation-independent note CRUD =====
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateNoteStandaloneBody {
+    notebook_id: String,
+    title: String,
+    #[serde(default)]
+    content: String,
+    #[serde(default)]
+    tags: Vec<String>,
+}
+
+/// POST /api/notes — create note without conversation
+async fn create_note_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<CreateNoteStandaloneBody>,
+) -> Response {
+    let title = body.title.trim();
+    if title.is_empty() || title.len() > 200 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Title required (max 200)"}))).into_response();
+    }
+    let notebook_id = match Uuid::parse_str(&body.notebook_id) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid notebookId"}))).into_response(),
+    };
+    // Verify notebook access (owner or edit/admin member)
+    let has_access = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM notebooks WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT 1 FROM notebook_members WHERE notebook_id = $1 AND user_id = $2 AND permission IN ('edit', 'admin')
+        )"#,
+    )
+    .bind(notebook_id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
+    if !has_access {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "No edit access to this notebook"}))).into_response();
+    }
+
+    let note_id = Uuid::new_v4();
+    let now = Utc::now();
+    let tags: Vec<String> = body.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
+
+    let result = sqlx::query(
+        r#"INSERT INTO conversation_notes (id, creator_id, creator_type, owner_id, notebook_id, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, 'user', $2, $3, $4, $5, $6, $7, $7)"#,
+    )
+    .bind(note_id).bind(&user.id).bind(notebook_id).bind(title).bind(&body.content).bind(&tags).bind(now)
+    .execute(&state.db).await;
+
+    match result {
+        Ok(_) => {
+            let row = sqlx::query_as::<_, NoteRow>(&format!("{} WHERE n.id = $1", NOTE_QUERY_BASE))
+                .bind(note_id).fetch_optional(&state.db).await;
+            match row {
+                Ok(Some(n)) => {
+                    let note_json = note_to_json(&n);
+                    let member_ids = get_note_broadcast_ids(&state.db, Uuid::nil(), Some(notebook_id)).await;
+                    state.ws.broadcast_to_members(&member_ids, &json!({"type": "note:created", "note": &note_json}), &state.redis);
+                    (StatusCode::CREATED, Json(note_json)).into_response()
+                }
+                _ => (StatusCode::CREATED, Json(json!({"id": note_id}))).into_response(),
+            }
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// PATCH /api/notes/:noteId — update note without conversation
+async fn update_note_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    let note_owner = sqlx::query_scalar::<_, String>(
+        "SELECT creator_id FROM conversation_notes WHERE id = $1",
+    ).bind(note_id).fetch_optional(&state.db).await;
+
+    match note_owner {
+        Ok(Some(ref owner)) if owner == &user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the note creator"}))).into_response(),
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+
+    if let Some(title) = body.get("title").and_then(|v| v.as_str()) {
+        sqlx::query("UPDATE conversation_notes SET title = $1, updated_at = NOW() WHERE id = $2")
+            .bind(title).bind(note_id).execute(&state.db).await.ok();
+    }
+    if let Some(content) = body.get("content").and_then(|v| v.as_str()) {
+        sqlx::query("UPDATE conversation_notes SET content = $1, updated_at = NOW() WHERE id = $2")
+            .bind(content).bind(note_id).execute(&state.db).await.ok();
+    }
+    if let Some(tags) = body.get("tags").and_then(|v| v.as_array()) {
+        let tag_strs: Vec<String> = tags.iter().filter_map(|t| t.as_str().map(|s| s.to_string())).collect();
+        sqlx::query("UPDATE conversation_notes SET tags = $1, updated_at = NOW() WHERE id = $2")
+            .bind(&tag_strs).bind(note_id).execute(&state.db).await.ok();
+    }
+
+    let row = sqlx::query_as::<_, NoteRow>(&format!("{} WHERE n.id = $1", NOTE_QUERY_BASE))
+        .bind(note_id).fetch_optional(&state.db).await;
+
+    match row {
+        Ok(Some(n)) => {
+            let note_json = note_to_json(&n);
+            let nb_id = sqlx::query_scalar::<_, Uuid>("SELECT notebook_id FROM conversation_notes WHERE id = $1")
+                .bind(note_id).fetch_optional(&state.db).await.ok().flatten();
+            let member_ids = get_note_broadcast_ids(&state.db, Uuid::nil(), nb_id).await;
+            state.ws.broadcast_to_members(&member_ids, &json!({"type": "note:updated", "note": &note_json}), &state.redis);
+            Json(note_json).into_response()
+        }
+        _ => (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+    }
+}
+
+/// DELETE /api/notes/:noteId — delete note without conversation
+async fn delete_note_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    let note_info = sqlx::query_as::<_, (String, Option<Uuid>)>(
+        "SELECT creator_id, notebook_id FROM conversation_notes WHERE id = $1",
+    ).bind(note_id).fetch_optional(&state.db).await;
+
+    let (creator_id, notebook_id) = match note_info {
+        Ok(Some(info)) => info,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    let is_creator = creator_id == user.id;
+    let is_nb_owner = if let Some(nb_id) = notebook_id {
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM notebooks WHERE id = $1 AND owner_id = $2)")
+            .bind(nb_id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false)
+    } else { false };
+
+    if !is_creator && !is_nb_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not authorized"}))).into_response();
+    }
+
+    let result = sqlx::query("DELETE FROM conversation_notes WHERE id = $1").bind(note_id).execute(&state.db).await;
+    match result {
+        Ok(r) if r.rows_affected() > 0 => {
+            let member_ids = get_note_broadcast_ids(&state.db, Uuid::nil(), notebook_id).await;
+            state.ws.broadcast_to_members(&member_ids, &json!({"type": "note:deleted", "noteId": note_id.to_string()}), &state.redis);
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/notes/:noteId/archive
+async fn archive_note_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    let creator = sqlx::query_scalar::<_, String>("SELECT creator_id FROM conversation_notes WHERE id = $1")
+        .bind(note_id).fetch_optional(&state.db).await;
+    match creator {
+        Ok(Some(ref id)) if id == &user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the creator"}))).into_response(),
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+    }
+    let _ = sqlx::query("UPDATE conversation_notes SET archived_at = NOW() WHERE id = $1")
+        .bind(note_id).execute(&state.db).await;
+    Json(json!({"archived": true})).into_response()
+}
+
+/// POST /api/notes/:noteId/unarchive
+async fn unarchive_note_standalone(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    let creator = sqlx::query_scalar::<_, String>("SELECT creator_id FROM conversation_notes WHERE id = $1")
+        .bind(note_id).fetch_optional(&state.db).await;
+    match creator {
+        Ok(Some(ref id)) if id == &user.id => {}
+        Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the creator"}))).into_response(),
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+    }
+    let _ = sqlx::query("UPDATE conversation_notes SET archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL")
+        .bind(note_id).execute(&state.db).await;
+    Json(json!({"archived": false})).into_response()
 }

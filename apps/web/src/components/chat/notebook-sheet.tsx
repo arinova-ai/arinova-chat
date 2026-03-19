@@ -38,7 +38,7 @@ import { Input } from "@/components/ui/input";
 interface NotebookSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  conversationId: string;
+  conversationId?: string;
   inline?: boolean;
   /** When provided, load notes from /api/notebooks/:id/notes instead of conversation notes */
   notebookId?: string;
@@ -254,7 +254,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   useEffect(() => setMounted(true), []);
   const isMobileRaw = useIsMobile();
   const isMobile = mounted ? isMobileRaw : false;
-  const storeNotes = useChatStore((s) => s.notesByConversation[conversationId] ?? EMPTY_NOTES);
+  const storeNotes = useChatStore((s) => s.notesByConversation[conversationId || "__standalone__"] ?? EMPTY_NOTES);
   const loadStoreNotes = useChatStore((s) => s.loadNotes);
   const [notebookNotes, setNotebookNotes] = useState<Note[]>([]);
   const rawNotes = notebookId ? notebookNotes : storeNotes;
@@ -264,7 +264,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
         return (n.title?.toLowerCase().includes(q)) || (n.content?.toLowerCase().includes(q));
       })
     : rawNotes;
-  const loadNotes = useCallback(async (cid: string, opts?: { archived?: boolean; tags?: string[] }) => {
+  const loadNotes = useCallback(async (cid: string | undefined, opts?: { archived?: boolean; tags?: string[] }) => {
     if (notebookId) {
       // Load from notebook API
       const data = await api<{ notes: Array<{ id: string; conversationId: string; title: string; tags: string[]; isPinned: boolean; createdAt: string; updatedAt: string }> }>(
@@ -510,7 +510,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (!target) return;
     setLoading(true);
     try {
-      await shareNoteApi(conversationId, target.id);
+      if (conversationId) await shareNoteApi(conversationId, target.id);
     } catch { /* api shows toast */ }
     setLoading(false);
   }, [selectedNote, conversationId, shareNoteApi]);
