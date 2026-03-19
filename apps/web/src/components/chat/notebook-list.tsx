@@ -20,6 +20,7 @@ import {
   Loader2,
   FolderOpen,
   X,
+  Users,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
@@ -729,6 +730,48 @@ function NotebookNotes({
 
   const toolbarBtnClass = "rounded-md px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors flex items-center gap-1";
 
+  // Members sharing state
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [members, setMembers] = useState<{ userId: string; username: string; permission: string }[]>([]);
+  const [friends, setFriends] = useState<{ id: string; name: string; username: string | null }[]>([]);
+  const [inviteUser, setInviteUser] = useState("");
+  const [invitePerm, setInvitePerm] = useState("view");
+  const currentUserId = useChatStore((s) => s.currentUserId);
+
+  const fetchMembers = useCallback(async () => {
+    try {
+      const [data, friendsList] = await Promise.all([
+        api<{ owner: unknown; members: { userId: string; username: string; permission: string }[] }>(`/api/notebooks/${notebook.id}/members`),
+        api<{ id: string; name: string; username: string | null }[]>("/api/friends").catch(() => []),
+      ]);
+      setMembers(data.members);
+      setFriends(friendsList as { id: string; name: string; username: string | null }[]);
+    } catch { /* */ }
+  }, [notebook.id]);
+
+  const handleInvite = useCallback(async () => {
+    if (!inviteUser.trim()) return;
+    try {
+      await api(`/api/notebooks/${notebook.id}/members`, { method: "POST", body: JSON.stringify({ username: inviteUser, permission: invitePerm }) });
+      setInviteUser("");
+      fetchMembers();
+    } catch { /* */ }
+  }, [inviteUser, invitePerm, notebook.id, fetchMembers]);
+
+  const handleRemoveMember = useCallback(async (userId: string) => {
+    try {
+      await api(`/api/notebooks/${notebook.id}/members/${userId}`, { method: "DELETE" });
+      setMembers((prev) => prev.filter((m) => m.userId !== userId));
+    } catch { /* */ }
+  }, [notebook.id]);
+
+  const handleUpdatePerm = useCallback(async (userId: string, perm: string) => {
+    try {
+      await api(`/api/notebooks/${notebook.id}/members/${userId}`, { method: "PATCH", body: JSON.stringify({ permission: perm }) });
+      setMembers((prev) => prev.map((m) => m.userId === userId ? { ...m, permission: perm } : m));
+    } catch { /* */ }
+  }, [notebook.id]);
+
   const [archivedNotes, setArchivedNotes] = useState<{ id: string; title: string; conversationId: string }[]>([]);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [archivedLoading, setArchivedLoading] = useState(false);
@@ -801,6 +844,13 @@ function NotebookNotes({
             >
               <Share2 className="h-3.5 w-3.5" />
             </button>
+
+            {/* Members */}
+            {notebook.ownerId === currentUserId && (
+              <button type="button" className={toolbarBtnClass} onClick={() => { setMembersOpen(true); fetchMembers(); }}>
+                <Users className="h-3.5 w-3.5" />
+              </button>
+            )}
 
             {/* Agent Permissions */}
             <Popover open={agentSelectorId === notebook.id} onOpenChange={(o) => { if (!o) setAgentSelectorId(null); }}>
@@ -933,8 +983,54 @@ function NotebookNotes({
     </div>
   );
 
+  const membersDialog = membersOpen ? (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setMembersOpen(false)}>
+      <div className="bg-background border border-border rounded-lg w-[380px] max-h-[400px] overflow-y-auto p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{t("kanban.boardMembers")}</h3>
+          <button type="button" onClick={() => setMembersOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        </div>
+        {(() => {
+          const memberIds = new Set(members.map((m) => m.userId));
+          const available = friends.filter((f) => !memberIds.has(f.id) && f.id !== currentUserId);
+          return available.length > 0 ? (
+            <div className="flex gap-2">
+              <select value={inviteUser} onChange={(e) => setInviteUser(e.target.value)} className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs">
+                <option value="">{t("kanban.selectFriend")}</option>
+                {available.map((f) => <option key={f.id} value={f.username ?? f.name}>{f.name}{f.username ? ` (@${f.username})` : ""}</option>)}
+              </select>
+              <select value={invitePerm} onChange={(e) => setInvitePerm(e.target.value)} className="rounded-md border border-input bg-background px-2 py-1 text-xs">
+                <option value="view">{t("kanban.permView")}</option>
+                <option value="edit">{t("kanban.permEdit")}</option>
+                <option value="admin">{t("kanban.permAdmin")}</option>
+              </select>
+              <button type="button" onClick={handleInvite} disabled={!inviteUser.trim()} className="rounded-md bg-brand px-2 py-1 text-xs text-white hover:bg-brand/90 disabled:opacity-50">{t("kanban.invite")}</button>
+            </div>
+          ) : <p className="text-xs text-muted-foreground">{t("kanban.noFriendsToInvite")}</p>;
+        })()}
+        {members.length > 0 && (
+          <div className="space-y-1">
+            {members.map((m) => (
+              <div key={m.userId} className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50">
+                <span className="text-xs font-medium">{m.username}</span>
+                <div className="flex items-center gap-1.5">
+                  <select value={m.permission} onChange={(e) => handleUpdatePerm(m.userId, e.target.value)} className="rounded border border-input bg-background px-1 py-0.5 text-[10px]">
+                    <option value="view">{t("kanban.permView")}</option>
+                    <option value="edit">{t("kanban.permEdit")}</option>
+                    <option value="admin">{t("kanban.permAdmin")}</option>
+                  </select>
+                  <button type="button" onClick={() => handleRemoveMember(m.userId)} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-3 w-3" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   // Inline mode (right panel)
-  if (inline) return content;
+  if (inline) return <>{content}{membersDialog}</>;
 
   // Mobile portal overlay
   return createPortal(
@@ -948,6 +1044,7 @@ function NotebookNotes({
       }}
     >
       {content}
+      {membersDialog}
     </div>,
     document.body,
   );
