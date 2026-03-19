@@ -362,19 +362,19 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
       setSelectedNote(note);
       setViewMode("detail");
       // Fetch full note
-      api(`/api/conversations/${conversationId}/notes/${note.id}`)
+      api(`/api/notes/${note.id}`)
         .then((full) => setSelectedNote(full as Note))
         .catch(() => {});
     }
     useChatStore.setState({ pendingNoteId: null });
-  }, [pendingNoteId, notesLoaded, notes, conversationId]);
+  }, [pendingNoteId, notesLoaded, notes]);
 
   const handleOpenNote = useCallback(async (note: Note) => {
     setSelectedNote(note);
     setViewMode("detail");
     // Fetch full note to get backlinks and linkedCards
     try {
-      const full = await api(`/api/conversations/${note.conversationId}/notes/${note.id}`) as Note;
+      const full = await api(`/api/notes/${note.id}`) as Note;
       setSelectedNote(full);
     } catch { /* keep list data if fetch fails */ }
   }, []);

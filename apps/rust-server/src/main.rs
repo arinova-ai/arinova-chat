@@ -536,6 +536,7 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (notebook_id, user_id)
         );
+        DROP TABLE IF EXISTS note_conversation_links;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

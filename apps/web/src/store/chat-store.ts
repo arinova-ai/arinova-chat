@@ -1576,9 +1576,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (opts?.archived) qs.set("archived", "true");
       if (opts?.tags?.length) qs.set("tags", opts.tags.join(","));
       const qStr = qs.toString();
-      const url = conversationId
-        ? `/api/conversations/${conversationId}/notes${qStr ? "?" + qStr : ""}`
-        : `/api/users/me/notes${qStr ? "?" + qStr : ""}`;
+      const url = `/api/users/me/notes${qStr ? "?" + qStr : ""}`;
       const res = await api<{ notes: Note[]; hasMore: boolean; nextCursor: string | null }>(url);
       set({
         notesByConversation: {
@@ -1592,22 +1590,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   createNote: async (conversationId, title, content, tags, notebookId) => {
-    let note: Note;
-    if (conversationId) {
-      note = await api<Note>(
-        `/api/conversations/${conversationId}/notes`,
-        {
-          method: "POST",
-          body: JSON.stringify({ title, content, tags: tags ?? [], ...(notebookId ? { notebookId } : {}) }),
-        }
-      );
-    } else {
-      // Standalone creation (no conversation)
-      note = await api<Note>("/api/notes", {
-        method: "POST",
-        body: JSON.stringify({ notebookId, title, content, tags: tags ?? [] }),
-      });
-    }
+    // Always use standalone endpoint
+    const note = await api<Note>("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ notebookId, title, content, tags: tags ?? [] }),
+    });
     const key = conversationId || "__standalone__";
     const current = get().notesByConversation[key] ?? [];
     if (!current.some((n) => n.id === note.id)) {
@@ -1673,11 +1660,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
-  shareNote: async (conversationId, noteId) => {
-    await api(
-      `/api/conversations/${conversationId}/notes/${noteId}/share`,
-      { method: "POST" }
-    );
+  shareNote: async (_conversationId, _noteId) => {
+    // Note sharing to chat removed in Phase 2 cleanup
   },
 
   shareKanbanCard: async (cardId, conversationId) => {
@@ -1687,31 +1671,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     );
   },
 
-  toggleAgentNotesEnabled: async (conversationId, enabled) => {
-    // Optimistic update
-    set({
-      agentNotesEnabledByConversation: {
-        ...get().agentNotesEnabledByConversation,
-        [conversationId]: enabled,
-      },
-    });
-    try {
-      await api(
-        `/api/conversations/${conversationId}/notes/settings`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ agentNotesEnabled: enabled }),
-        }
-      );
-    } catch {
-      // Revert on error
-      set({
-        agentNotesEnabledByConversation: {
-          ...get().agentNotesEnabledByConversation,
-          [conversationId]: !enabled,
-        },
-      });
-    }
+  toggleAgentNotesEnabled: async (_conversationId, _enabled) => {
+    // Agent notes toggle removed — permissions now managed per-notebook
   },
 
   handleWSEvent: (event) => {
