@@ -22,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/user/subscription", get(get_subscription))
         .route("/api/plans", get(list_plans))
         .route("/api/user/office-visits", patch(toggle_office_visits))
+        .route("/api/user/office-theme", patch(set_office_theme))
         .route("/api/user/{userId}/office-visit", get(get_office_visit))
 }
 
@@ -541,6 +542,37 @@ async fn toggle_office_visits(
     }
 }
 
+/// PATCH /api/user/office-theme — save active theme
+#[derive(Deserialize)]
+struct SetOfficeThemeBody {
+    #[serde(rename = "themeId")]
+    theme_id: String,
+}
+
+async fn set_office_theme(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<SetOfficeThemeBody>,
+) -> Response {
+    let theme_id = body.theme_id.trim();
+    if theme_id.is_empty() || theme_id.len() > 100 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid themeId"}))).into_response();
+    }
+
+    let result = sqlx::query(
+        r#"UPDATE "user" SET office_theme_id = $1 WHERE id = $2"#,
+    )
+    .bind(theme_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "themeId": theme_id })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
 /// GET /api/user/:userId/office-visit — get visit info (must be friends + enabled)
 async fn get_office_visit(
     State(state): State<AppState>,
@@ -584,9 +616,9 @@ async fn get_office_visit(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "office_visits_disabled", "message": "This user has not enabled office visits"}))).into_response();
     }
 
-    // Get target user info and their office agents
-    let target = sqlx::query_as::<_, (String, Option<String>)>(
-        r#"SELECT name, image FROM "user" WHERE id = $1"#,
+    // Get target user info (including theme) and their office agents
+    let target = sqlx::query_as::<_, (String, Option<String>, Option<String>)>(
+        r#"SELECT name, image, office_theme_id FROM "user" WHERE id = $1"#,
     )
     .bind(&target_user_id)
     .fetch_optional(&state.db)
@@ -594,7 +626,7 @@ async fn get_office_visit(
     .ok()
     .flatten();
 
-    let (target_name, target_image) = target.unwrap_or_default();
+    let (target_name, target_image, target_theme_id) = target.unwrap_or_default();
 
     let agents = sqlx::query_as::<_, (Uuid, String, Option<String>, i32)>(
         r#"SELECT a.id, a.name, a.avatar_url, os.slot_index
@@ -612,6 +644,7 @@ async fn get_office_visit(
         "userId": target_user_id,
         "name": target_name,
         "image": target_image,
+        "themeId": target_theme_id,
         "agents": agents.iter().map(|(id, name, avatar, slot)| json!({
             "id": id,
             "name": name,

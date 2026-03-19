@@ -19,6 +19,7 @@ interface VisitData {
   userId: string;
   name: string;
   image: string | null;
+  themeId: string | null;
   agents: { id: string; name: string; avatarUrl: string | null; slotIndex: number }[];
   readOnly: boolean;
 }
@@ -45,7 +46,7 @@ function makeEmptySlot(index: number): Agent {
 function OfficeViewInner({ visitUserId }: { visitUserId?: string }) {
   const { t } = useTranslation();
   const stream = useOfficeStream();
-  const { manifest, loading, themeId, themes } = useTheme();
+  const { manifest, loading, themeId: ownThemeId, themes } = useTheme();
 
   // ── Visit mode state ──────────────────────────────────
   const [visitData, setVisitData] = useState<VisitData | null>(null);
@@ -61,6 +62,9 @@ function OfficeViewInner({ visitUserId }: { visitUserId?: string }) {
       .catch((e) => setVisitError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setVisitLoading(false));
   }, [visitUserId]);
+
+  // In visit mode, use the target user's theme; fallback to own theme
+  const themeId = isVisitMode && visitData?.themeId ? visitData.themeId : ownThemeId;
   const themeEntry = themes.find((t) => t.id === themeId);
   const maxAgents = themeEntry?.maxAgents ?? 6;
 

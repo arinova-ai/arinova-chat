@@ -201,6 +201,7 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
     if (newId === DEFAULT_THEME_ID) {
       saveThemeId(DEFAULT_THEME_ID);
       setThemeId(DEFAULT_THEME_ID);
+      api("/api/user/office-theme", { method: "PATCH", body: JSON.stringify({ themeId: DEFAULT_THEME_ID }), silent: true }).catch(() => {});
       return;
     }
     if (!isKnownTheme(newId, themes)) {
@@ -217,6 +218,7 @@ export function ThemeProvider({ children, initialThemeId }: ThemeProviderProps) 
     }
     saveThemeId(newId);
     setThemeId(newId);
+    api("/api/user/office-theme", { method: "PATCH", body: JSON.stringify({ themeId: newId }), silent: true }).catch(() => {});
   }, [themeId, ownedThemes, themes, downloadedThemes]);
 
   const uninstallTheme = useCallback((id: string) => {
