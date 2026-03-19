@@ -677,7 +677,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // ── Fetch fresh data from API ──
     try {
-      const data = await api<{ messages: Message[]; hasMore: boolean }>(
+      const data = await api<{ messages: Message[]; hasMore: boolean; readReceipts?: Record<string, number> }>(
         `/api/conversations/${conversationId}/messages`
       );
       // Compute unread divider position before updating messages
@@ -698,6 +698,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       // Persist fresh messages to IDB cache
       setCachedMessages(conversationId, data.messages).catch(() => {});
+
+      // Populate read receipts from API response (ensures checkmarks survive refresh)
+      if (data.readReceipts && typeof data.readReceipts === "object") {
+        const current = get().readReceipts[conversationId] ?? {};
+        const merged = { ...current };
+        for (const [uid, seq] of Object.entries(data.readReceipts)) {
+          const s = typeof seq === "number" ? seq : 0;
+          if (s > (merged[uid] ?? 0)) merged[uid] = s;
+        }
+        set({
+          readReceipts: { ...get().readReceipts, [conversationId]: merged },
+        });
+      }
 
       // Send mark_read with max seq from loaded messages
       if (get().activeConversationId === conversationId) {

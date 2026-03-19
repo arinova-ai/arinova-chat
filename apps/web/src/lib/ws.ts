@@ -91,6 +91,7 @@ class WebSocketManager {
               this.updateLastSeq(msg.conversationId, msg.seq);
             }
             this.setStatus("connected");
+            this.flushPendingQueue();
           }
 
           for (const handler of this.handlers) {
@@ -140,8 +141,23 @@ class WebSocketManager {
     }
   }
 
+  private pendingQueue: WSClientEvent[] = [];
+
   send(event: WSClientEvent) {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(event));
+    } else {
+      // Queue critical events so they aren't silently dropped
+      if (event.type === "mark_read" || event.type === "send_message") {
+        this.pendingQueue.push(event);
+      }
+    }
+  }
+
+  private flushPendingQueue() {
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    const queued = this.pendingQueue.splice(0);
+    for (const event of queued) {
       this.ws.send(JSON.stringify(event));
     }
   }

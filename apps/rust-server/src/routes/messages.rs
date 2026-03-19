@@ -980,10 +980,25 @@ async fn load_default_messages(
     let messages_enriched =
         enrich_streaming(&state.redis, &state.ws, messages_with_atts).await;
 
+    // Include read receipts so the frontend can render checkmarks on initial load
+    let read_receipts = sqlx::query_as::<_, (String, i32)>(
+        "SELECT user_id, last_read_seq FROM conversation_reads WHERE conversation_id = $1",
+    )
+    .bind(conversation_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let receipts_map: serde_json::Map<String, serde_json::Value> = read_receipts
+        .into_iter()
+        .map(|(uid, seq)| (uid, json!(seq)))
+        .collect();
+
     Json(json!({
         "messages": messages_enriched,
         "hasMore": has_more,
         "nextCursor": next_cursor,
+        "readReceipts": receipts_map,
     }))
     .into_response()
 }
