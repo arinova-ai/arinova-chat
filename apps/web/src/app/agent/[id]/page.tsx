@@ -10,7 +10,7 @@ import { api } from "@/lib/api";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { useChatStore, type GroupMembers } from "@/store/chat-store";
 import { authClient } from "@/lib/auth-client";
-import { ArrowLeft, Brain, MessageSquare, Phone, Radio, Plus, Trash2, Sparkles, BookOpen, AlertTriangle, Heart, Lightbulb, X, Puzzle, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, Brain, MessageSquare, Phone, Radio, Plus, Trash2, Sparkles, BookOpen, AlertTriangle, Heart, Lightbulb, X, Puzzle, ChevronDown, ChevronRight, ShieldBan } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { useTranslation } from "@/lib/i18n";
@@ -122,6 +122,32 @@ function AgentProfileContent() {
     agent?.ownerId &&
     session.user.id === agent.ownerId
   );
+
+  // Block state (for non-owners blocking the agent's owner)
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+
+  useEffect(() => {
+    if (!agent?.ownerId || isOwner) return;
+    api<{ users: { id: string }[] }>("/api/users/blocked", { silent: true })
+      .then((d) => setIsBlocked(d.users.some((u) => u.id === agent.ownerId)))
+      .catch(() => {});
+  }, [agent?.ownerId, isOwner]);
+
+  const handleToggleBlock = async () => {
+    if (!agent?.ownerId) return;
+    setBlockLoading(true);
+    try {
+      if (isBlocked) {
+        await api(`/api/users/${agent.ownerId}/block`, { method: "DELETE" });
+        setIsBlocked(false);
+      } else {
+        await api(`/api/users/${agent.ownerId}/block`, { method: "POST" });
+        setIsBlocked(true);
+      }
+    } catch {}
+    setBlockLoading(false);
+  };
 
   // Fetch agent profile (public endpoint — works for any authenticated user)
   useEffect(() => {
@@ -504,6 +530,17 @@ function AgentProfileContent() {
                             title={isInCall ? t("voice.inCall") : t("voice.startCall")}
                           >
                             <Phone className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {!isOwner && (
+                          <Button
+                            variant={isBlocked ? "destructive" : "outline"}
+                            size="icon"
+                            onClick={handleToggleBlock}
+                            disabled={blockLoading}
+                            title={isBlocked ? t("profilePage.unblock") : t("profilePage.block")}
+                          >
+                            <ShieldBan className="h-4 w-4" />
                           </Button>
                         )}
                       </div>
