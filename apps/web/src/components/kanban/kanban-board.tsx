@@ -128,6 +128,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   const [inviteUsername, setInviteUsername] = useState("");
   const [invitePermission, setInvitePermission] = useState("view");
   const [membersLoading, setMembersLoading] = useState(false);
+  const [friendsList, setFriendsList] = useState<{ id: string; name: string; username: string | null; image: string | null }[]>([]);
 
   // Agent permissions state
   const [agentPermsOpen, setAgentPermsOpen] = useState(false);
@@ -318,11 +319,15 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
     if (!selectedBoardId) return;
     setMembersLoading(true);
     try {
-      const data = await api<{ owner: { userId: string; username: string } | null; members: { userId: string; username: string; permission: string }[] }>(
-        `/api/kanban/boards/${selectedBoardId}/members`
-      );
+      const [data, friends] = await Promise.all([
+        api<{ owner: { userId: string; username: string } | null; members: { userId: string; username: string; permission: string }[] }>(
+          `/api/kanban/boards/${selectedBoardId}/members`
+        ),
+        api<{ id: string; name: string; username: string | null; image: string | null }[]>("/api/friends").catch(() => [] as { id: string; name: string; username: string | null; image: string | null }[]),
+      ]);
       setBoardOwner(data.owner);
       setBoardMembers(data.members);
+      setFriendsList(friends);
     } catch { /* */ }
     setMembersLoading(false);
   }, [selectedBoardId]);
@@ -1022,25 +1027,37 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             <DialogDescription>{t("kanban.boardMembersDesc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Invite form */}
-            <div className="flex gap-2">
-              <Input
-                value={inviteUsername}
-                onChange={(e) => setInviteUsername(e.target.value)}
-                placeholder={t("kanban.username")}
-                className="flex-1"
-                onKeyDown={(e) => { if (e.key === "Enter") handleInviteMember(); }}
-              />
-              <select
-                value={invitePermission}
-                onChange={(e) => setInvitePermission(e.target.value)}
-                className="rounded-md border border-input bg-background px-2 py-1 text-sm"
-              >
-                <option value="view">{t("kanban.permView")}</option>
-                <option value="edit">{t("kanban.permEdit")}</option>
-              </select>
-              <Button size="sm" onClick={handleInviteMember} disabled={!inviteUsername.trim()}>{t("kanban.invite")}</Button>
-            </div>
+            {/* Invite from friends */}
+            {(() => {
+              const memberIds = new Set([boardOwner?.userId, ...boardMembers.map((m) => m.userId)]);
+              const available = friendsList.filter((f) => !memberIds.has(f.id));
+              return available.length > 0 ? (
+                <div className="flex gap-2">
+                  <select
+                    value={inviteUsername}
+                    onChange={(e) => setInviteUsername(e.target.value)}
+                    className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  >
+                    <option value="">{t("kanban.selectFriend")}</option>
+                    {available.map((f) => (
+                      <option key={f.id} value={f.username ?? f.name}>{f.name}{f.username ? ` (@${f.username})` : ""}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={invitePermission}
+                    onChange={(e) => setInvitePermission(e.target.value)}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  >
+                    <option value="view">{t("kanban.permView")}</option>
+                    <option value="edit">{t("kanban.permEdit")}</option>
+                    <option value="admin">{t("kanban.permAdmin")}</option>
+                  </select>
+                  <Button size="sm" onClick={handleInviteMember} disabled={!inviteUsername.trim()}>{t("kanban.invite")}</Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("kanban.noFriendsToInvite")}</p>
+              );
+            })()}
 
             {/* Owner */}
             {boardOwner && (
@@ -1070,6 +1087,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                       >
                         <option value="view">{t("kanban.permView")}</option>
                         <option value="edit">{t("kanban.permEdit")}</option>
+                        <option value="admin">{t("kanban.permAdmin")}</option>
                       </select>
                       <button
                         type="button"

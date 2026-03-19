@@ -240,7 +240,7 @@ async fn main() {
         CREATE TABLE IF NOT EXISTS board_members (
             board_id UUID NOT NULL REFERENCES kanban_boards(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL,
-            permission TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view', 'edit')),
+            permission TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view', 'edit', 'admin')),
             invited_by TEXT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (board_id, user_id)
@@ -523,6 +523,8 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(user_id)
         );
+        ALTER TABLE board_members DROP CONSTRAINT IF EXISTS board_members_permission_check;
+        ALTER TABLE board_members ADD CONSTRAINT board_members_permission_check CHECK (permission IN ('view', 'edit', 'admin'));
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

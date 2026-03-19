@@ -305,7 +305,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   const [tagInputValue, setTagInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
-  // settingsOpen removed — agent notes toggle removed
   const [shareContent, setShareContent] = useState<ShareContent | null>(null);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -339,7 +338,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
       setContentInput("");
       setTagsInput([]);
       setTagInputValue("");
-      // setSettingsOpen removed
       setShowArchived(false);
       setFilterTags([]);
       setSuggestedTags([]);

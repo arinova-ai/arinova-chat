@@ -1513,14 +1513,14 @@ async fn list_board_members(
     }
 }
 
-/// POST /api/kanban/boards/:id/members — only board owner can invite
+/// POST /api/kanban/boards/:id/members — owner or admin can invite
 async fn add_board_member(
     State(state): State<AppState>,
     user: AuthUser,
     Path(board_id): Path<Uuid>,
     Json(body): Json<AddBoardMemberBody>,
 ) -> Response {
-    // Only board owner can invite members
+    // Owner or admin can invite members
     let is_owner = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM kanban_boards WHERE id = $1 AND owner_id = $2)",
     )
@@ -1530,12 +1530,30 @@ async fn add_board_member(
     .await
     .unwrap_or(false);
 
-    if !is_owner {
-        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Only the board owner can invite members" }))).into_response();
+    let is_admin = if !is_owner {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2 AND permission = 'admin')",
+        )
+        .bind(board_id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false)
+    } else {
+        false
+    };
+
+    if !is_owner && !is_admin {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Only the board owner or admin can invite members" }))).into_response();
     }
 
-    if body.permission != "view" && body.permission != "edit" {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Permission must be 'view' or 'edit'" }))).into_response();
+    if !["view", "edit", "admin"].contains(&body.permission.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Permission must be 'view', 'edit', or 'admin'" }))).into_response();
+    }
+
+    // Admin cannot grant admin permission (only owner can)
+    if body.permission == "admin" && !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "Only the board owner can grant admin permission" }))).into_response();
     }
 
     // Look up user by username
@@ -1601,8 +1619,8 @@ async fn update_board_member(
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "Only the board owner can change permissions" }))).into_response();
     }
 
-    if body.permission != "view" && body.permission != "edit" {
-        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Permission must be 'view' or 'edit'" }))).into_response();
+    if !["view", "edit", "admin"].contains(&body.permission.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Permission must be 'view', 'edit', or 'admin'" }))).into_response();
     }
 
     let result = sqlx::query(
