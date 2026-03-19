@@ -1499,6 +1499,7 @@
   "tips.useSkills": "Type // to use agent skills",
   "tips.agentNotesTask": "Agents can write notes and manage tasks for you",
   "tips.agentListenMode": "Control your agent's listening mode in groups and communities",
+  "tips.memoryCapsule": "Ask your agent to recall memories anytime using memory capsules",
   "tips.shortcuts": "Press Ctrl+K to open the command palette",
   "tips.tapSend": "Tap the send button to send your message",
   "tips.longPressReact": "Long press a message to react with emoji",

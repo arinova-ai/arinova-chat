@@ -1445,6 +1445,7 @@
   "tips.useSkills": "输入 // 使用 Agent 技能",
   "tips.agentNotesTask": "Agent 可以帮你写笔记和管理任务",
   "tips.agentListenMode": "在群组与社区中控制你的 Agent 聆听模式",
+  "tips.memoryCapsule": "随时都可以要求 Agent 通过记忆胶囊来回忆",
   "tips.shortcuts": "按 Ctrl+K 打开命令面板",
   "tips.tapSend": "点击发送按钮以发送你的消息",
   "tips.longPressReact": "长按消息以使用表情回应",
