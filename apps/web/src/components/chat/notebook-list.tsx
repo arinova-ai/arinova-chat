@@ -109,7 +109,15 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
 
   // Load conversation notebook preference from API
   useEffect(() => {
-    if (!conversationId || notebooks.length === 0) return;
+    if (notebooks.length === 0) return;
+    if (!conversationId) {
+      // No conversation context (e.g. Office notes) — auto-select default notebook
+      if (!selectedNotebook && !userDismissedRef.current) {
+        setSelectedNotebook(notebooks.find((n) => n.isDefault) ?? notebooks[0]);
+      }
+      setPreferenceLoaded(true);
+      return;
+    }
     // Skip auto-selection if user just dismissed (clicked back)
     if (userDismissedRef.current) {
       setPreferenceLoaded(true);
