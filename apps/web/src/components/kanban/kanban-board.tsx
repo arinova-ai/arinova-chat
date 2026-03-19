@@ -1145,9 +1145,6 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                     <div className="px-2 py-2 text-xs text-muted-foreground">{t("kanban.noAgents")}</div>
                   ) : (
                     <>
-                      {selectedAgentIds.length === 0 && (
-                        <div className="px-2 py-1 text-[10px] text-muted-foreground">{t("kanban.allAgentsDefault")}</div>
-                      )}
                       {allAgents.map((ag) => (
                         <button
                           key={ag.id}

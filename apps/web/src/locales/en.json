@@ -415,7 +415,6 @@
   "kanban.agentAccess": "Agents",
   "kanban.manageAgentAccess": "Manage Agent Access",
   "kanban.noAgents": "No agents yet",
-  "kanban.allAgentsDefault": "None selected = all agents can access",
   "rightPanel.kanban.expand": "Expand",
   "rightPanel.kanban.collapse": "Collapse",
   "noteDetail.title": "Note Details",
@@ -1222,7 +1221,6 @@
   "notebooks.noAgents": "No agents yet",
   "notebooks.archivedNotes": "Archived Notes",
   "notebooks.noArchivedNotes": "No archived notes",
-  "notebooks.allAgentsDefault": "None selected = all agents can access",
   "skills.title": "Skills",
   "skills.subtitle": "Discover and install skills for your agents",
   "skills.tab.explore": "Explore",
@@ -1489,7 +1487,6 @@
   "tips.longPressReact": "Long press a message to react with emoji",
   "tips.swipeReply": "Swipe right on a message to reply",
   "tips.pullRefresh": "Pull down to refresh and check for new messages",
-
   "admin.nav.dashboard": "Dashboard",
   "admin.nav.users": "Users",
   "admin.nav.trends": "Trends",
@@ -1510,7 +1507,6 @@
   "admin.nav.review": "Review",
   "admin.nav.stickers": "Stickers",
   "admin.nav.reports": "Reports",
-
   "admin.dashboard.title": "Dashboard",
   "admin.dashboard.totalUsers": "Total Users",
   "admin.dashboard.conversations": "Conversations",
@@ -1518,17 +1514,14 @@
   "admin.dashboard.agents": "Agents",
   "admin.dashboard.newUsers7d": "New Users (7d)",
   "admin.dashboard.failedToLoad": "Failed to load stats.",
-
   "admin.trends.title": "User Activity Trends",
   "admin.trends.mau": "MAU (30d)",
   "admin.trends.avgDau": "Avg DAU",
   "admin.trends.dauChart": "Daily Active Users (30 days)",
-
   "admin.messages.title": "Message Moderation",
   "admin.messages.searchPlaceholder": "Search messages...",
   "admin.messages.search": "Search",
   "admin.messages.noMessages": "No messages found",
-
   "admin.agents.title": "Agent Management",
   "admin.agents.searchPlaceholder": "Search agents...",
   "admin.agents.search": "Search",
@@ -1537,24 +1530,20 @@
   "admin.agents.owner": "Owner:",
   "admin.agents.unban": "Unban",
   "admin.agents.ban": "Ban",
-
   "admin.auditLogs.title": "Audit Logs",
   "admin.auditLogs.time": "Time",
   "admin.auditLogs.admin": "Admin",
   "admin.auditLogs.action": "Action",
   "admin.auditLogs.target": "Target",
-
   "admin.contentFilters.title": "Content Filter Rules",
   "admin.contentFilters.placeholder": "Add filter pattern (regex or text)...",
   "admin.contentFilters.add": "Add",
   "admin.contentFilters.noRules": "No filter rules",
-
   "admin.featureFlags.title": "Feature Flags",
   "admin.featureFlags.namePlaceholder": "Flag name",
   "admin.featureFlags.descPlaceholder": "Description (optional)",
   "admin.featureFlags.add": "Add",
   "admin.featureFlags.noFlags": "No feature flags",
-
   "admin.health.title": "Server Health",
   "admin.health.refresh": "Refresh",
   "admin.health.status": "Status",
@@ -1564,7 +1553,6 @@
   "admin.health.dbConnected": "DB Connected",
   "admin.health.yes": "Yes",
   "admin.health.no": "No",
-
   "admin.revenue.title": "Revenue Analytics",
   "admin.revenue.totalTopups": "Total Top-ups",
   "admin.revenue.totalPurchases": "Total Purchases",
@@ -1572,25 +1560,21 @@
   "admin.revenue.trendChart": "30-Day Revenue Trend",
   "admin.revenue.topup": "Top-up",
   "admin.revenue.spend": "Spend",
-
   "admin.maintenance.title": "Maintenance Mode",
   "admin.maintenance.on": "Maintenance ON",
   "admin.maintenance.off": "Maintenance OFF",
   "admin.maintenance.messageLabel": "Message (shown to users)",
   "admin.maintenance.messagePlaceholder": "System is under maintenance...",
-
   "admin.supportTickets.title": "Support Tickets",
   "admin.supportTickets.replyLabel": "Reply:",
   "admin.supportTickets.replyPlaceholder": "Type reply...",
   "admin.supportTickets.reply": "Reply",
   "admin.supportTickets.noTickets": "No tickets",
-
   "admin.dataRequests.title": "GDPR Data Requests",
   "admin.dataRequests.subtitle": "Pending data export and deletion requests.",
   "admin.dataRequests.type": "Type:",
   "admin.dataRequests.approve": "Approve",
   "admin.dataRequests.noRequests": "No pending requests",
-
   "admin.emailTemplates.title": "Email Templates",
   "admin.emailTemplates.new": "New",
   "admin.emailTemplates.namePlaceholder": "Template name",
@@ -1599,13 +1583,11 @@
   "admin.emailTemplates.edit": "Edit",
   "admin.emailTemplates.preview": "Preview",
   "admin.emailTemplates.noTemplates": "No templates",
-
   "admin.ipBlacklist.title": "IP Blacklist",
   "admin.ipBlacklist.ipPlaceholder": "IP address or CIDR",
   "admin.ipBlacklist.reasonPlaceholder": "Reason (optional)",
   "admin.ipBlacklist.add": "Add",
   "admin.ipBlacklist.noEntries": "No blocked IPs",
-
   "admin.twoFA.title": "Two-Factor Authentication",
   "admin.twoFA.enrolledUsers": "Enrolled Users",
   "admin.twoFA.totalUsers": "Total Users",
@@ -1614,7 +1596,6 @@
   "admin.twoFA.enforced": "Enforced",
   "admin.twoFA.notEnforced": "Not enforced",
   "admin.twoFA.enrollmentRate": "Enrollment Rate",
-
   "admin.users.title": "User Management",
   "admin.users.searchPlaceholder": "Search by name, email or username...",
   "admin.users.search": "Search",
@@ -1628,7 +1609,6 @@
   "admin.users.conversations": "Conversations",
   "admin.users.agents": "Agents",
   "admin.users.usersTotal": "users total",
-
   "admin.broadcast.title": "Broadcast Announcement",
   "admin.broadcast.sentResult": "Broadcast sent to {{sent}} / {{total}} users.",
   "admin.broadcast.dismiss": "Dismiss",
@@ -1640,7 +1620,6 @@
   "admin.broadcast.confirmDescription": "This will send the following message to all users. This action cannot be undone.",
   "admin.broadcast.sending": "Sending...",
   "admin.broadcast.confirmSend": "Confirm & Send",
-
   "admin.review.title": "App Review",
   "admin.review.pending": "pending",
   "admin.review.loadError": "Failed to load review queue. You may not have admin access.",
@@ -1658,7 +1637,6 @@
   "admin.review.rejectDesc": "\"{{name}}\" will be rejected. A reason is required.",
   "admin.review.approvalNotesPlaceholder": "Optional approval notes...",
   "admin.review.rejectionReasonPlaceholder": "Rejection reason (required)...",
-
   "admin.stickerReview.title": "Sticker Review",
   "admin.stickerReview.pending": "pending",
   "admin.stickerReview.loadError": "Failed to load pending sticker packs.",
@@ -1674,7 +1652,6 @@
   "admin.stickerReview.rejectDesc": "\"{{name}}\" will be rejected. A reason is required.",
   "admin.stickerReview.approvalNotesPlaceholder": "Optional approval notes...",
   "admin.stickerReview.rejectionReasonPlaceholder": "Rejection reason (required)...",
-
   "admin.reports.title": "Reports",
   "admin.reports.noReports": "No reports",
   "admin.reports.reportedBy": "Reported by:",
@@ -1687,7 +1664,6 @@
   "admin.reports.adminNotesPlaceholder": "Admin notes...",
   "admin.reports.dismiss": "Dismiss",
   "admin.reports.resolve": "Resolve",
-
   "admin.verification.business": "Business",
   "admin.verification.registration": "Registration",
   "admin.verification.documents": "Documents",
@@ -1695,7 +1671,6 @@
   "admin.verification.approve": "Approve",
   "admin.verification.reject": "Reject",
   "admin.verification.notes": "Notes",
-
   "creator.stickers.title": "Sticker Management",
   "creator.stickers.subtitle": "Create and manage your sticker packs",
   "creator.stickers.statusActive": "Active",
@@ -1726,7 +1701,6 @@
   "creator.stickers.downloads": "downloads",
   "creator.stickers.submit": "Submit",
   "creator.stickers.resubmit": "Resubmit",
-
   "creator.users.title": "Users Dashboard",
   "creator.users.last30days": "Last 30 days",
   "creator.users.totalUsers": "Total Users",
@@ -1739,7 +1713,6 @@
   "creator.users.noData": "No user data yet",
   "creator.users.newUsersChart": "New Users",
   "creator.users.returningChart": "Returning",
-
   "creator.revenue.title": "Revenue Dashboard",
   "creator.revenue.last30days": "Last 30 days",
   "creator.revenue.totalRevenue": "Total Revenue",
@@ -1755,7 +1728,6 @@
   "creator.revenue.noData": "No revenue data yet",
   "creator.revenue.recentTransactions": "Recent Transactions",
   "creator.revenue.noTransactions": "No transactions yet",
-
   "kanban.addBoard": "Add Board",
   "kanban.archived": "Archived",
   "kanban.columnName": "Column name",
@@ -1813,13 +1785,11 @@
   "kanban.deleteColumnHasCards": "This column has cards. Move or archive all cards before deleting.",
   "kanban.deleteColumnEmpty": "This column has no cards and will be deleted.",
   "kanban.deleteColumn": "Delete column",
-
   "chat.isTyping": "is typing",
   "chat.codeExecutor.running": "Running",
   "chat.codeExecutor.run": "Run",
   "chat.codeExecutor.output": "Output",
   "chat.codeExecutor.noOutput": "No output",
-
   "developer.title": "Developer Console",
   "developer.createApp": "Create App",
   "developer.createFirstApp": "Create your first app",
@@ -1848,7 +1818,6 @@
   "developer.publish": "Publish",
   "developer.unpublish": "Unpublish",
   "developer.confirmDelete": "Confirm Delete",
-
   "notifications.iosTitle": "Add to Home Screen for Notifications",
   "notifications.iosStep1": "1. Tap the Share button in Safari",
   "notifications.iosStep2": "2. Scroll down and tap Add to Home Screen",
@@ -1857,7 +1826,6 @@
   "notifications.enable": "Enable",
   "notifications.enabling": "Enabling…",
   "notifications.later": "Later",
-
   "spaces.joinSession": "Join Session",
   "spaces.selectAgentHint": "Optionally select an agent to bring into this session.",
   "spaces.joinWithoutAgent": "Join without agent",
