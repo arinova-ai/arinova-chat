@@ -417,6 +417,35 @@ async fn handle_message(
                 return;
             }
 
+            // Block check: reject message if any member of this conversation has blocked the sender
+            let blocked_in_conv = sqlx::query_scalar::<_, bool>(
+                r#"SELECT EXISTS(
+                    SELECT 1 FROM friendships f
+                    JOIN conversation_user_members cum ON cum.conversation_id = $1::uuid AND cum.user_id = f.requester_id
+                    WHERE f.addressee_id = $2 AND f.status = 'blocked'
+                ) OR EXISTS(
+                    SELECT 1 FROM conversations c
+                    WHERE c.id = $1::uuid AND c.user_id != $2
+                    AND EXISTS(SELECT 1 FROM friendships WHERE requester_id = c.user_id AND addressee_id = $2 AND status = 'blocked')
+                )"#,
+            )
+            .bind(conversation_id)
+            .bind(user_id)
+            .fetch_one(db)
+            .await
+            .unwrap_or(false);
+
+            if blocked_in_conv {
+                send_event(tx, &json!({
+                    "type": "stream_error",
+                    "conversationId": conversation_id,
+                    "messageId": "",
+                    "seq": 0,
+                    "error": "You cannot send messages to this conversation"
+                }));
+                return;
+            }
+
             // Auto-resolve @name patterns from content and merge with client mentions
             let resolved = crate::services::mention::resolve_mentions_from_content(
                 db, conversation_id, content, None,
