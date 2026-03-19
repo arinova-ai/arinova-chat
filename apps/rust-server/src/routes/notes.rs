@@ -392,29 +392,6 @@ async fn get_note(
     user: AuthUser,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        // Not a conversation member — check if user has access via notebook membership
-        let has_notebook_access = sqlx::query_scalar::<_, bool>(
-            r#"SELECT EXISTS(
-                SELECT 1 FROM conversation_notes cn
-                JOIN notebook_members nm ON nm.notebook_id = cn.notebook_id
-                WHERE cn.id = $1 AND nm.user_id = $2
-            )"#,
-        )
-        .bind(note_id)
-        .bind(&user.id)
-        .fetch_one(&state.db)
-        .await
-        .unwrap_or(false);
-
-        if !has_notebook_access {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"error": "Not a member of this conversation"})),
-            )
-                .into_response();
-        }
-    }
 
     let row = sqlx::query_as::<_, NoteRow>(&format!(
         "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE n.id = $1 AND ncl.conversation_id = $2",
@@ -515,14 +492,6 @@ async fn list_notes(
     Path(conv_id): Path<Uuid>,
     Query(query): Query<ListNotesQuery>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
-        )
-            .into_response();
-    }
-
     let limit: i64 = query
         .limit
         .as_deref()
@@ -694,14 +663,6 @@ async fn create_note(
             .into_response();
     }
 
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
-        )
-            .into_response();
-    }
-
     let note_id = Uuid::new_v4();
     let now = Utc::now();
     let tags: Vec<String> = body.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
@@ -854,14 +815,6 @@ async fn update_note(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Nothing to update"})),
-        )
-            .into_response();
-    }
-
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
         )
             .into_response();
     }
@@ -1110,14 +1063,6 @@ async fn delete_note(
     user: AuthUser,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
-        )
-            .into_response();
-    }
-
     // Fetch note metadata (including notebook_id for broadcast)
     let note = sqlx::query_as::<_, (String, String, Option<Uuid>, Option<Uuid>)>(
         "SELECT creator_id, creator_type, agent_id, notebook_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
@@ -1208,14 +1153,6 @@ async fn update_notes_settings(
     Path(conv_id): Path<Uuid>,
     Json(body): Json<UpdateNotesSettingsBody>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"error": "Not a member of this conversation"})),
-        )
-            .into_response();
-    }
-
     // Use upsert: the conversation owner may pass is_member via the fallback
     // path (conversations.user_id) without having a row in conversation_user_members.
     let result = sqlx::query(
@@ -1248,10 +1185,6 @@ async fn archive_note(
     user: AuthUser,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
-    }
-
     // Check permission
     let note = sqlx::query_as::<_, (String, String, Option<Uuid>)>(
         "SELECT creator_id, creator_type, agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
@@ -1302,10 +1235,6 @@ async fn unarchive_note(
     user: AuthUser,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
-    }
-
     let note = sqlx::query_as::<_, (String, String, Option<Uuid>)>(
         "SELECT creator_id, creator_type, agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
@@ -1355,10 +1284,6 @@ async fn share_note(
     user: AuthUser,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
-    }
-
     // Fetch the note
     let note = sqlx::query_as::<_, (String, String, Vec<String>, Option<String>)>(
         "SELECT title, content, tags, summary FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
@@ -1737,10 +1662,6 @@ async fn ask_ai(
         return (StatusCode::BAD_REQUEST, Json(json!({"error": "Question is required (max 2000 chars)"}))).into_response();
     }
 
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
-    }
-
     // Use user's own Gemini API key
     let gemini_key = match sqlx::query_scalar::<_, Option<String>>(
         "SELECT gemini_api_key FROM user_settings WHERE user_id = $1",
@@ -1814,10 +1735,6 @@ async fn extract_capsule_from_note(
     user: AuthUser,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
-    }
-
     let gemini_key = match &state.config.gemini_api_key {
         Some(k) => k.clone(),
         None => return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "AI features not configured"}))).into_response(),
@@ -1994,10 +1911,6 @@ async fn auto_tag_note(
     user: AuthUser,
     Path((conv_id, note_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
-    if !is_member(&state.db, conv_id, &user.id).await {
-        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
-    }
-
     let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
         "SELECT title, content, tags FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
     )
