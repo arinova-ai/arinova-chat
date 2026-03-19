@@ -323,14 +323,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   const [askAiLoading, setAskAiLoading] = useState(false);
 
   useEffect(() => {
-    if (open && conversationId) {
+    if (open && (conversationId || notebookId)) {
       setLoading(true);
       loadNotes(conversationId, { archived: showArchived, tags: filterTags.length ? filterTags : undefined }).finally(() => {
         setLoading(false);
         setNotesLoaded(true);
       });
     }
-  }, [open, conversationId, loadNotes, showArchived, filterTags]);
+  }, [open, conversationId, notebookId, loadNotes, showArchived, filterTags]);
 
   useEffect(() => {
     if (!open) {
