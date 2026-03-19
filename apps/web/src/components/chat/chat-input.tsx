@@ -1367,7 +1367,7 @@ case "tts": {
               </Button>
             )}
 
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-0">
               <textarea
                 ref={textareaRef}
                 value={value}
@@ -1375,9 +1375,9 @@ case "tts": {
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 rows={1}
-                className="w-full resize-none rounded-xl border border-input bg-secondary px-4 py-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="block w-full resize-none rounded-xl border border-input bg-secondary px-4 py-3 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+              <div className="absolute right-2 bottom-3">
                 <ChatTooltip />
               </div>
             </div>
