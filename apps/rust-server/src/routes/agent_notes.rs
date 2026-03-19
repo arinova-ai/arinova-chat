@@ -101,20 +101,24 @@ async fn agent_is_member(db: &sqlx::PgPool, conv_id: Uuid, agent_id: Uuid) -> bo
     .unwrap_or(false)
 }
 
-/// Check if the user who owns the conversation has agent_notes_enabled
-async fn agent_notes_allowed(db: &sqlx::PgPool, conv_id: Uuid) -> bool {
-    // Check conversation_user_members for the owner — if all members have it enabled, allow
-    // For simplicity: if ANY member has it disabled, deny
-    let disabled = sqlx::query_as::<_, (i64,)>(
-        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1 AND agent_notes_enabled = false",
+/// Check if the agent has notebook permission for this conversation's default notebook.
+/// No permission row = denied (default closed).
+async fn agent_notes_allowed(db: &sqlx::PgPool, conv_id: Uuid, agent_id: Uuid) -> bool {
+    // Find the conversation owner's default notebook, then check if agent has permission
+    let has_perm = sqlx::query_as::<_, (i64,)>(
+        r#"SELECT COUNT(*) FROM notebook_agent_permissions nap
+           JOIN notebooks n ON n.id = nap.notebook_id
+           JOIN conversations c ON c.user_id = n.owner_id
+           WHERE c.id = $1 AND n.is_default = true AND nap.agent_id = $2"#,
     )
     .bind(conv_id)
+    .bind(agent_id)
     .fetch_one(db)
     .await
     .map(|(c,)| c)
     .unwrap_or(0);
 
-    disabled == 0
+    has_perm > 0
 }
 
 /// Get user member IDs for WS broadcast
@@ -159,7 +163,7 @@ async fn agent_get_note(
             .into_response();
     }
 
-    if !agent_notes_allowed(&state.db, conv_id).await {
+    if !agent_notes_allowed(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "Note access is disabled by conversation owner"})),
@@ -221,7 +225,7 @@ async fn agent_list_notes(
             .into_response();
     }
 
-    if !agent_notes_allowed(&state.db, conv_id).await {
+    if !agent_notes_allowed(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "Note access is disabled by conversation owner"})),
@@ -366,7 +370,7 @@ async fn agent_create_note(
             .into_response();
     }
 
-    if !agent_notes_allowed(&state.db, conv_id).await {
+    if !agent_notes_allowed(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "Note access is disabled by conversation owner"})),
@@ -541,7 +545,7 @@ async fn agent_update_note(
             .into_response();
     }
 
-    if !agent_notes_allowed(&state.db, conv_id).await {
+    if !agent_notes_allowed(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "Note access is disabled by conversation owner"})),
@@ -713,7 +717,7 @@ async fn agent_delete_note(
             .into_response();
     }
 
-    if !agent_notes_allowed(&state.db, conv_id).await {
+    if !agent_notes_allowed(&state.db, conv_id, agent.id).await {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({"error": "Note access is disabled by conversation owner"})),
@@ -801,7 +805,7 @@ async fn agent_share_note(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Agent does not belong to this conversation"}))).into_response();
     }
 
-    if !agent_notes_allowed(&state.db, conv_id).await {
+    if !agent_notes_allowed(&state.db, conv_id, agent.id).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Note access is disabled by conversation owner"}))).into_response();
     }
 

@@ -301,10 +301,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   const unarchiveNote = useChatStore((s) => s.unarchiveNote);
   const shareNoteApi = useChatStore((s) => s.shareNote);
   const currentUserId = useChatStore((s) => s.currentUserId);
-  const agentNotesEnabled = useChatStore(
-    (s) => s.agentNotesEnabledByConversation[conversationId] ?? true
-  );
-  const toggleAgentNotesEnabled = useChatStore((s) => s.toggleAgentNotesEnabled);
+  // agent_notes_enabled toggle removed — permissions now managed per-agent via notebook_agent_permissions
   const pendingNoteId = useChatStore((s) => s.pendingNoteId);
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -315,7 +312,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   const [tagInputValue, setTagInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // settingsOpen removed — agent notes toggle removed
   const [shareContent, setShareContent] = useState<ShareContent | null>(null);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -349,7 +346,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
       setContentInput("");
       setTagsInput([]);
       setTagInputValue("");
-      setSettingsOpen(false);
+      // setSettingsOpen removed
       setShowArchived(false);
       setFilterTags([]);
       setSuggestedTags([]);
@@ -601,13 +598,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   }, [notes]);
   const allTags = Array.from(tagCounts.keys());
 
-  const handleToggleAgentNotes = useCallback(
-    (checked: boolean) => {
-      toggleAgentNotesEnabled(conversationId, checked);
-    },
-    [conversationId, toggleAgentNotesEnabled]
-  );
-
   const canEdit = selectedNote && selectedNote.creatorId === currentUserId;
 
   if (!open) return null;
@@ -637,21 +627,6 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                   {t("chat.notebook.title")}
                 </h3>
                 <div className="flex items-center gap-1">
-                  <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title={t("chat.notebook.settings")}>
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-64 p-3" side={isMobile ? "top" : "left"}>
-                      <div className="flex items-center justify-between gap-3">
-                        <label htmlFor="agent-notes-toggle" className="text-xs font-medium leading-tight cursor-pointer select-none flex-1">
-                          {t("chat.notebook.agentAccess")}
-                        </label>
-                        <Switch id="agent-notes-toggle" checked={agentNotesEnabled} onCheckedChange={handleToggleAgentNotes} />
-                      </div>
-                    </PopoverContent>
-                  </Popover>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartCreate} title={t("chat.notebook.create")}>
                     <Plus className="h-4 w-4" />
                   </Button>

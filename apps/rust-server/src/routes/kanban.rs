@@ -1699,10 +1699,7 @@ async fn agent_list_boards(
     let _ = ensure_default_board(&state.db, &owner_id).await;
 
     let include_archived = query.include_archived.unwrap_or(false);
-    let perm_filter = r#"AND (
-            NOT EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = kb.id)
-            OR EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = kb.id AND agent_id = $2)
-          )"#;
+    let perm_filter = r#"AND EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = kb.id AND agent_id = $2)"#;
     let boards = if include_archived {
         sqlx::query_as::<_, BoardRow>(
             &format!("SELECT kb.id, kb.name, kb.created_at, kb.archived FROM kanban_boards kb WHERE kb.owner_id = $1 {} ORDER BY kb.created_at", perm_filter),
@@ -1929,32 +1926,20 @@ async fn agent_list_columns(
         return e;
     }
 
-    // Check board-level agent permissions
-    let has_perms = match sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM board_agent_permissions WHERE board_id = $1",
+    // Check board-level agent permissions — no row = denied (default closed)
+    let granted = match sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2",
     )
     .bind(board_id)
+    .bind(agent.id)
     .fetch_one(&state.db)
     .await
     {
         Ok(c) => c,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     };
-    if has_perms > 0 {
-        let granted = match sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2",
-        )
-        .bind(board_id)
-        .bind(agent.id)
-        .fetch_one(&state.db)
-        .await
-        {
-            Ok(c) => c,
-            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
-        };
-        if granted == 0 {
-            return (StatusCode::FORBIDDEN, Json(json!({"error": "Agent does not have access to this board"}))).into_response();
-        }
+    if granted == 0 {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Agent does not have access to this board"}))).into_response();
     }
 
     let cols = sqlx::query_as::<_, ColumnRow>(
@@ -2211,10 +2196,7 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
            LEFT JOIN kanban_card_labels cl ON cl.card_id = c.id
            LEFT JOIN kanban_labels l ON l.id = cl.label_id
            WHERE b.owner_id = $1 AND c.archived = FALSE
-             AND (
-               NOT EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = b.id)
-               OR EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = b.id AND agent_id = $2)
-             )
+             AND EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = b.id AND agent_id = $2)
            ORDER BY c.sort_order, c.id"#,
     )
     .bind(&owner_id)
@@ -2284,8 +2266,7 @@ async fn agent_create_card(
         }
         // Check agent has permission for this board
         let has_perm = sqlx::query_scalar::<_, bool>(
-            r#"SELECT NOT EXISTS(SELECT 1 FROM board_agent_permissions WHERE board_id = $1)
-               OR EXISTS(SELECT 1 FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2)"#,
+            r#"SELECT EXISTS(SELECT 1 FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2)"#,
         )
         .bind(bid)
         .bind(agent.id)
