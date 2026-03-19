@@ -1777,5 +1777,18 @@
   "spaces.joinSession": "加入场次",
   "spaces.selectAgentHint": "可选择一个 Agent 带入此场次。",
   "spaces.joinWithoutAgent": "不带 Agent 加入",
-  "spaces.participateAsYourself": "以本人身份参与"
+  "spaces.participateAsYourself": "以本人身份参与",
+  "common.close": "关闭",
+  "common.status": "状态",
+  "common.unmute": "取消静音",
+  "chat.actions.forward": "转发",
+  "chat.notebook.untitled": "未命名",
+  "chat.search.placeholder": "搜索消息...",
+  "lounge.dashboard.noConversations": "暂无对话",
+  "profilePage.block": "屏蔽",
+  "profilePage.unblock": "取消屏蔽",
+  "userProfile.block": "屏蔽",
+  "userProfile.unblock": "取消屏蔽",
+  "voice.expand": "展开",
+  "voice.minimize": "最小化"
 }

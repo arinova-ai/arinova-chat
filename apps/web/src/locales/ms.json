@@ -1796,5 +1796,18 @@
   "spaces.joinSession": "Sertai sesi",
   "spaces.selectAgentHint": "Pilih ejen untuk dibawa ke sesi ini (pilihan).",
   "spaces.joinWithoutAgent": "Sertai tanpa ejen",
-  "spaces.participateAsYourself": "Sertai sebagai diri sendiri"
+  "spaces.participateAsYourself": "Sertai sebagai diri sendiri",
+  "common.close": "Tutup",
+  "common.status": "Status",
+  "common.unmute": "Nyahbisu",
+  "chat.actions.forward": "Majukan",
+  "chat.notebook.untitled": "Tanpa tajuk",
+  "chat.search.placeholder": "Cari mesej...",
+  "lounge.dashboard.noConversations": "Tiada perbualan lagi",
+  "profilePage.block": "Sekat",
+  "profilePage.unblock": "Nyahsekat",
+  "userProfile.block": "Sekat",
+  "userProfile.unblock": "Nyahsekat",
+  "voice.expand": "Kembang",
+  "voice.minimize": "Minimumkan"
 }

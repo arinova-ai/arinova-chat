@@ -1796,5 +1796,18 @@
   "spaces.joinSession": "세션 참가",
   "spaces.selectAgentHint": "이 세션에 데려갈 에이전트를 선택할 수 있습니다.",
   "spaces.joinWithoutAgent": "에이전트 없이 참가",
-  "spaces.participateAsYourself": "본인으로 참가"
+  "spaces.participateAsYourself": "본인으로 참가",
+  "common.close": "닫기",
+  "common.status": "상태",
+  "common.unmute": "음소거 해제",
+  "chat.actions.forward": "전달",
+  "chat.notebook.untitled": "제목 없음",
+  "chat.search.placeholder": "메시지 검색...",
+  "lounge.dashboard.noConversations": "아직 대화가 없습니다",
+  "profilePage.block": "차단",
+  "profilePage.unblock": "차단 해제",
+  "userProfile.block": "차단",
+  "userProfile.unblock": "차단 해제",
+  "voice.expand": "펼치기",
+  "voice.minimize": "최소화"
 }

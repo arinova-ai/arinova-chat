@@ -1861,5 +1861,18 @@
   "spaces.joinSession": "Join Session",
   "spaces.selectAgentHint": "Optionally select an agent to bring into this session.",
   "spaces.joinWithoutAgent": "Join without agent",
-  "spaces.participateAsYourself": "Participate as yourself"
+  "spaces.participateAsYourself": "Participate as yourself",
+  "common.close": "Close",
+  "common.status": "Status",
+  "common.unmute": "Unmute",
+  "chat.actions.forward": "Forward",
+  "chat.notebook.untitled": "Untitled",
+  "chat.search.placeholder": "Search messages...",
+  "lounge.dashboard.noConversations": "No conversations yet",
+  "profilePage.block": "Block",
+  "profilePage.unblock": "Unblock",
+  "userProfile.block": "Block",
+  "userProfile.unblock": "Unblock",
+  "voice.expand": "Expand",
+  "voice.minimize": "Minimize"
 }

@@ -1799,5 +1799,18 @@
   "spaces.joinSession": "セッションに参加",
   "spaces.selectAgentHint": "このセッションに連れていくエージェントを選択できます。",
   "spaces.joinWithoutAgent": "エージェントなしで参加",
-  "spaces.participateAsYourself": "自分自身として参加"
+  "spaces.participateAsYourself": "自分自身として参加",
+  "common.close": "閉じる",
+  "common.status": "ステータス",
+  "common.unmute": "ミュート解除",
+  "chat.actions.forward": "転送",
+  "chat.notebook.untitled": "無題",
+  "chat.search.placeholder": "メッセージを検索...",
+  "lounge.dashboard.noConversations": "まだ会話がありません",
+  "profilePage.block": "ブロック",
+  "profilePage.unblock": "ブロック解除",
+  "userProfile.block": "ブロック",
+  "userProfile.unblock": "ブロック解除",
+  "voice.expand": "展開",
+  "voice.minimize": "最小化"
 }
