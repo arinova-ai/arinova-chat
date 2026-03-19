@@ -75,6 +75,8 @@ interface BoardInfo {
   name: string;
   createdAt?: string;
   archived?: boolean;
+  ownerId?: string;
+  ownerUsername?: string | null;
 }
 
 // ── Props ───────────────────────────────────────────────────
@@ -751,17 +753,31 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             className="flex items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold hover:bg-muted transition-colors"
           >
             {currentBoard?.name ?? "Board"}
+            {(() => {
+              const uid = useChatStore.getState().currentUserId;
+              return currentBoard?.ownerId && currentBoard.ownerId !== uid && currentBoard.ownerUsername
+                ? <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground font-normal">@{currentBoard.ownerUsername}</span>
+                : null;
+            })()}
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          {boards.map((b) => (
+          {boards.map((b) => {
+            const currentUserId = useChatStore.getState().currentUserId;
+            const isShared = b.ownerId && b.ownerId !== currentUserId;
+            return (
             <DropdownMenuItem
               key={b.id}
               onClick={() => handleSwitchBoard(b.id)}
               className={`flex items-center justify-between gap-2 ${b.id === selectedBoardId ? "bg-accent" : ""}`}
             >
-              <span className="truncate">{b.name}</span>
+              <span className="truncate flex items-center gap-1.5">
+                {b.name}
+                {isShared && b.ownerUsername && (
+                  <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">@{b.ownerUsername}</span>
+                )}
+              </span>
               <span className="flex shrink-0 items-center gap-0.5">
                 <button
                   type="button"
@@ -793,7 +809,8 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 </button>
               </span>
             </DropdownMenuItem>
-          ))}
+          );
+          })}
           <DropdownMenuItem
             onClick={() => setCreatingBoard(true)}
             className="gap-2"

@@ -147,6 +147,8 @@ struct BoardRow {
     name: String,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     archived: bool,
+    owner_id: Option<String>,
+    owner_username: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -633,9 +635,16 @@ async fn list_boards(
     let include_archived = query.include_archived.unwrap_or(false);
     let boards = if include_archived {
         sqlx::query_as::<_, BoardRow>(
-            r#"SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1
+            r#"SELECT kb.id, kb.name, kb.created_at, kb.archived, kb.owner_id, u.username AS owner_username
+               FROM kanban_boards kb
+               JOIN "user" u ON u.id = kb.owner_id
+               WHERE kb.owner_id = $1
                UNION
-               SELECT b.id, b.name, b.created_at, b.archived FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1
+               SELECT b.id, b.name, b.created_at, b.archived, b.owner_id, u.username AS owner_username
+               FROM kanban_boards b
+               JOIN board_members bm ON bm.board_id = b.id
+               JOIN "user" u ON u.id = b.owner_id
+               WHERE bm.user_id = $1
                ORDER BY created_at"#,
         )
         .bind(&user.id)
@@ -643,9 +652,16 @@ async fn list_boards(
         .await
     } else {
         sqlx::query_as::<_, BoardRow>(
-            r#"SELECT id, name, created_at, archived FROM kanban_boards WHERE owner_id = $1 AND archived = false
+            r#"SELECT kb.id, kb.name, kb.created_at, kb.archived, kb.owner_id, u.username AS owner_username
+               FROM kanban_boards kb
+               JOIN "user" u ON u.id = kb.owner_id
+               WHERE kb.owner_id = $1 AND kb.archived = false
                UNION
-               SELECT b.id, b.name, b.created_at, b.archived FROM kanban_boards b JOIN board_members bm ON bm.board_id = b.id WHERE bm.user_id = $1 AND b.archived = false
+               SELECT b.id, b.name, b.created_at, b.archived, b.owner_id, u.username AS owner_username
+               FROM kanban_boards b
+               JOIN board_members bm ON bm.board_id = b.id
+               JOIN "user" u ON u.id = b.owner_id
+               WHERE bm.user_id = $1 AND b.archived = false
                ORDER BY created_at"#,
         )
         .bind(&user.id)
@@ -1711,7 +1727,7 @@ async fn agent_list_boards(
     let perm_filter = r#"AND EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = kb.id AND agent_id = $2)"#;
     let boards = if include_archived {
         sqlx::query_as::<_, BoardRow>(
-            &format!("SELECT kb.id, kb.name, kb.created_at, kb.archived FROM kanban_boards kb WHERE kb.owner_id = $1 {} ORDER BY kb.created_at", perm_filter),
+            &format!("SELECT kb.id, kb.name, kb.created_at, kb.archived, kb.owner_id, u.username AS owner_username FROM kanban_boards kb JOIN \"user\" u ON u.id = kb.owner_id WHERE kb.owner_id = $1 {} ORDER BY kb.created_at", perm_filter),
         )
         .bind(&owner_id)
         .bind(agent.id)
@@ -1719,7 +1735,7 @@ async fn agent_list_boards(
         .await
     } else {
         sqlx::query_as::<_, BoardRow>(
-            &format!("SELECT kb.id, kb.name, kb.created_at, kb.archived FROM kanban_boards kb WHERE kb.owner_id = $1 AND kb.archived = false {} ORDER BY kb.created_at", perm_filter),
+            &format!("SELECT kb.id, kb.name, kb.created_at, kb.archived, kb.owner_id, u.username AS owner_username FROM kanban_boards kb JOIN \"user\" u ON u.id = kb.owner_id WHERE kb.owner_id = $1 AND kb.archived = false {} ORDER BY kb.created_at", perm_filter),
         )
         .bind(&owner_id)
         .bind(agent.id)
