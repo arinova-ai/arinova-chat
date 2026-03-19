@@ -1444,7 +1444,48 @@ function PrivacyPanel() {
             ))}
           </div>
         )}
+
+        <Separator />
+
+        <OfficeVisitsToggle />
       </div>
+    </div>
+  );
+}
+
+function OfficeVisitsToggle() {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api<{ officeVisitsEnabled?: boolean }>("/api/user/settings", { silent: true })
+      .then((data) => setEnabled(data.officeVisitsEnabled ?? false))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleToggle = async (checked: boolean) => {
+    setEnabled(checked);
+    try {
+      await api("/api/user/office-visits", { method: "PATCH", body: JSON.stringify({ enabled: checked }) });
+    } catch {
+      setEnabled(!checked);
+    }
+  };
+
+  if (loading) return null;
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Monitor className="h-4 w-4 text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium">{t("settings.privacy.officeVisits")}</p>
+          <p className="text-xs text-muted-foreground">{t("settings.privacy.officeVisitsDesc")}</p>
+        </div>
+      </div>
+      <Switch checked={enabled} onCheckedChange={handleToggle} />
     </div>
   );
 }

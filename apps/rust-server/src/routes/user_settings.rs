@@ -21,6 +21,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/settings/agent-connections", get(get_agent_connections))
         .route("/api/user/subscription", get(get_subscription))
         .route("/api/plans", get(list_plans))
+        .route("/api/user/office-visits", patch(toggle_office_visits))
+        .route("/api/user/{userId}/office-visit", get(get_office_visit))
 }
 
 /// GET /api/user/settings — get current user's settings (never returns the actual key)
@@ -32,12 +34,24 @@ async fn get_settings(State(state): State<AppState>, user: AuthUser) -> Response
     .fetch_optional(&state.db)
     .await;
 
+    let office_visits = sqlx::query_scalar::<_, bool>(
+        r#"SELECT office_visits_enabled FROM "user" WHERE id = $1"#,
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(false);
+
     match row {
         Ok(Some((key,))) => Json(json!({
             "hasGeminiKey": key.is_some(),
+            "officeVisitsEnabled": office_visits,
         })).into_response(),
         Ok(None) => Json(json!({
             "hasGeminiKey": false,
+            "officeVisitsEnabled": office_visits,
         })).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
@@ -498,4 +512,112 @@ fn decrypt_value(hex_key: &str, stored: &str) -> Result<String, String> {
 
     let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|e| e.to_string())?;
     String::from_utf8(plaintext).map_err(|e| e.to_string())
+}
+
+// ===== Office Visits =====
+
+#[derive(Deserialize)]
+struct ToggleOfficeVisitsBody {
+    enabled: bool,
+}
+
+/// PATCH /api/user/office-visits — toggle office visit setting
+async fn toggle_office_visits(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<ToggleOfficeVisitsBody>,
+) -> Response {
+    let result = sqlx::query(
+        r#"UPDATE "user" SET office_visits_enabled = $1 WHERE id = $2"#,
+    )
+    .bind(body.enabled)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => Json(json!({ "officeVisitsEnabled": body.enabled })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// GET /api/user/:userId/office-visit — get visit info (must be friends + enabled)
+async fn get_office_visit(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(target_user_id): Path<String>,
+) -> Response {
+    if user.id == target_user_id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Cannot visit your own office"}))).into_response();
+    }
+
+    // Check friendship
+    let are_friends = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM friendships
+            WHERE status = 'accepted'
+            AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
+        )"#,
+    )
+    .bind(&user.id)
+    .bind(&target_user_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !are_friends {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Must be friends to visit office"}))).into_response();
+    }
+
+    // Check if target has visits enabled
+    let enabled = sqlx::query_scalar::<_, bool>(
+        r#"SELECT office_visits_enabled FROM "user" WHERE id = $1"#,
+    )
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(false);
+
+    if !enabled {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "office_visits_disabled", "message": "This user has not enabled office visits"}))).into_response();
+    }
+
+    // Get target user info and their office agents
+    let target = sqlx::query_as::<_, (String, Option<String>)>(
+        r#"SELECT name, image FROM "user" WHERE id = $1"#,
+    )
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let (target_name, target_image) = target.unwrap_or_default();
+
+    let agents = sqlx::query_as::<_, (Uuid, String, Option<String>, i32)>(
+        r#"SELECT a.id, a.name, a.avatar_url, os.slot_index
+           FROM office_slots os
+           JOIN agents a ON a.id = os.agent_id
+           WHERE os.user_id = $1
+           ORDER BY os.slot_index"#,
+    )
+    .bind(&target_user_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    Json(json!({
+        "userId": target_user_id,
+        "name": target_name,
+        "image": target_image,
+        "agents": agents.iter().map(|(id, name, avatar, slot)| json!({
+            "id": id,
+            "name": name,
+            "avatarUrl": avatar,
+            "slotIndex": slot,
+        })).collect::<Vec<_>>(),
+        "readOnly": true,
+    })).into_response()
 }

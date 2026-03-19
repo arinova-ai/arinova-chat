@@ -10,7 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, Crown, Phone, ShieldCheck, Ban } from "lucide-react";
+import { Bot, Crown, Phone, ShieldCheck, Ban, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
@@ -198,6 +198,28 @@ export function UserProfileSheet({
                 </Button>
               )}
             </div>
+
+            {/* Visit Office button */}
+            {!isSelf && user && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full gap-2"
+                onClick={async () => {
+                  try {
+                    const data = await api<{ userId: string; readOnly: boolean }>(`/api/user/${userId}/office-visit`);
+                    if (data.userId) {
+                      window.location.href = `/office?visit=${userId}`;
+                    }
+                  } catch {
+                    // toast handled by api
+                  }
+                }}
+              >
+                <Monitor className="h-4 w-4" />
+                {t("userProfile.visitOffice")}
+              </Button>
+            )}
 
             {/* Block button */}
             {!isSelf && user && (
