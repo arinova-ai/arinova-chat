@@ -166,6 +166,15 @@ async fn create_notebook(
     user: AuthUser,
     Json(body): Json<CreateNotebookBody>,
 ) -> Response {
+    // Check plan limit
+    if !super::user_settings::can_create_notebook(&state.db, &user.id).await.unwrap_or(false) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "plan_limit", "message": "Upgrade your plan to create more notebooks"})),
+        )
+            .into_response();
+    }
+
     let name = body.name.trim();
     if name.is_empty() || name.len() > 255 {
         return (

@@ -772,6 +772,15 @@ async fn create_board(
     user: AuthUser,
     Json(body): Json<CreateBoardBody>,
 ) -> Response {
+    // Check plan limit
+    if !super::user_settings::can_create_board(&state.db, &user.id).await.unwrap_or(false) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "plan_limit", "message": "Upgrade your plan to create more boards"})),
+        )
+            .into_response();
+    }
+
     let board_id = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, $2) RETURNING id",
     )

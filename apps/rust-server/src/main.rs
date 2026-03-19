@@ -500,6 +500,29 @@ async fn main() {
         ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_secret TEXT;
         ALTER TABLE conversations ADD COLUMN IF NOT EXISTS history_limit INTEGER NOT NULL DEFAULT 5;
         UPDATE notebooks SET name = 'My Notebook' WHERE name = 'My Notes' AND is_default = true;
+        CREATE TABLE IF NOT EXISTS plans (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            max_notebooks INTEGER NOT NULL DEFAULT 1,
+            max_boards INTEGER NOT NULL DEFAULT 1,
+            price_cents INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        INSERT INTO plans (id, name, max_notebooks, max_boards, price_cents) VALUES
+            ('free', 'Free', 1, 1, 0),
+            ('hobby', 'Hobby', 5, 5, 499),
+            ('pro', 'Pro', -1, -1, 1499)
+        ON CONFLICT (id) DO NOTHING;
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id TEXT NOT NULL REFERENCES "user"(id),
+            plan_id TEXT NOT NULL REFERENCES plans(id),
+            status TEXT NOT NULL DEFAULT 'active',
+            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id)
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

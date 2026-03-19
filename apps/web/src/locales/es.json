@@ -1809,5 +1809,17 @@
   "userProfile.block": "Bloquear",
   "userProfile.unblock": "Desbloquear",
   "voice.expand": "Expandir",
-  "voice.minimize": "Minimizar"
+  "voice.minimize": "Minimizar",
+  "settings.nav.subscription": "Suscripción",
+  "settings.subscription.title": "Suscripción",
+  "settings.subscription.currentPlan": "Plan actual",
+  "settings.subscription.expiresIn": "Expira en",
+  "settings.subscription.days": "días",
+  "settings.subscription.notebooks": "Cuadernos",
+  "settings.subscription.boards": "Tableros",
+  "settings.subscription.free": "Gratis",
+  "settings.subscription.month": "mes",
+  "settings.subscription.unlimited": "Ilimitado",
+  "settings.subscription.current": "Plan actual",
+  "settings.subscription.comingSoon": "Próximamente"
 }

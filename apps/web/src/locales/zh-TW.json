@@ -1840,5 +1840,17 @@
   "userProfile.block": "封鎖",
   "userProfile.unblock": "解除封鎖",
   "voice.expand": "展開",
-  "voice.minimize": "最小化"
+  "voice.minimize": "最小化",
+  "settings.nav.subscription": "訂閱",
+  "settings.subscription.title": "訂閱",
+  "settings.subscription.currentPlan": "目前方案",
+  "settings.subscription.expiresIn": "到期倒數",
+  "settings.subscription.days": "天",
+  "settings.subscription.notebooks": "筆記本",
+  "settings.subscription.boards": "看板",
+  "settings.subscription.free": "免費",
+  "settings.subscription.month": "月",
+  "settings.subscription.unlimited": "無限制",
+  "settings.subscription.current": "目前方案",
+  "settings.subscription.comingSoon": "即將推出"
 }

@@ -1809,5 +1809,17 @@
   "userProfile.block": "Sekat",
   "userProfile.unblock": "Nyahsekat",
   "voice.expand": "Kembang",
-  "voice.minimize": "Minimumkan"
+  "voice.minimize": "Minimumkan",
+  "settings.nav.subscription": "Langganan",
+  "settings.subscription.title": "Langganan",
+  "settings.subscription.currentPlan": "Pelan semasa",
+  "settings.subscription.expiresIn": "Tamat tempoh dalam",
+  "settings.subscription.days": "hari",
+  "settings.subscription.notebooks": "Buku nota",
+  "settings.subscription.boards": "Papan",
+  "settings.subscription.free": "Percuma",
+  "settings.subscription.month": "bulan",
+  "settings.subscription.unlimited": "Tanpa had",
+  "settings.subscription.current": "Pelan semasa",
+  "settings.subscription.comingSoon": "Akan datang"
 }

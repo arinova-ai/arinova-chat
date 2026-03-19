@@ -1809,5 +1809,17 @@
   "userProfile.block": "차단",
   "userProfile.unblock": "차단 해제",
   "voice.expand": "펼치기",
-  "voice.minimize": "최소화"
+  "voice.minimize": "최소화",
+  "settings.nav.subscription": "구독",
+  "settings.subscription.title": "구독",
+  "settings.subscription.currentPlan": "현재 플랜",
+  "settings.subscription.expiresIn": "만료까지",
+  "settings.subscription.days": "일",
+  "settings.subscription.notebooks": "노트북",
+  "settings.subscription.boards": "보드",
+  "settings.subscription.free": "무료",
+  "settings.subscription.month": "월",
+  "settings.subscription.unlimited": "무제한",
+  "settings.subscription.current": "현재 플랜",
+  "settings.subscription.comingSoon": "출시 예정"
 }

@@ -19,6 +19,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/settings/ip-whitelist/{id}", delete(delete_ip_whitelist))
         .route("/api/settings/ip-whitelist/toggle", patch(toggle_ip_whitelist))
         .route("/api/settings/agent-connections", get(get_agent_connections))
+        .route("/api/user/subscription", get(get_subscription))
+        .route("/api/plans", get(list_plans))
 }
 
 /// GET /api/user/settings — get current user's settings (never returns the actual key)
@@ -331,6 +333,108 @@ fn ip_matches(entry: &str, client: std::net::IpAddr) -> bool {
         // Exact IP match
         entry.parse::<std::net::IpAddr>().map(|e| e == client).unwrap_or(false)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Subscription endpoints
+// ---------------------------------------------------------------------------
+
+/// GET /api/user/subscription — current user's subscription + plan details
+async fn get_subscription(State(state): State<AppState>, user: AuthUser) -> Response {
+    let sub = sqlx::query_as::<_, (String, String, Option<chrono::DateTime<chrono::Utc>>)>(
+        r#"SELECT us.plan_id, us.status, us.expires_at
+           FROM user_subscriptions us WHERE us.user_id = $1"#,
+    )
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let (plan_id, status, expires_at) = sub.unwrap_or(("free".to_string(), "active".to_string(), None));
+
+    let plan = sqlx::query_as::<_, (String, String, i32, i32, i32)>(
+        "SELECT id, name, max_notebooks, max_boards, price_cents FROM plans WHERE id = $1",
+    )
+    .bind(&plan_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let (pid, pname, max_nb, max_bd, price) = plan.unwrap_or(("free".to_string(), "Free".to_string(), 1, 1, 0));
+
+    // Count current usage
+    let notebook_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM notebooks WHERE owner_id = $1")
+        .bind(&user.id).fetch_one(&state.db).await.unwrap_or(0);
+    let board_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM kanban_boards WHERE owner_id = $1 AND archived = false")
+        .bind(&user.id).fetch_one(&state.db).await.unwrap_or(0);
+
+    Json(json!({
+        "planId": pid,
+        "planName": pname,
+        "status": status,
+        "expiresAt": expires_at.map(|e| e.to_rfc3339()),
+        "maxNotebooks": max_nb,
+        "maxBoards": max_bd,
+        "priceCents": price,
+        "currentNotebooks": notebook_count,
+        "currentBoards": board_count,
+    })).into_response()
+}
+
+/// GET /api/plans — list all available plans
+async fn list_plans(State(state): State<AppState>) -> Response {
+    let rows = sqlx::query_as::<_, (String, String, i32, i32, i32)>(
+        "SELECT id, name, max_notebooks, max_boards, price_cents FROM plans ORDER BY price_cents",
+    )
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let plans: Vec<serde_json::Value> = rows.into_iter().map(|(id, name, max_nb, max_bd, price)| {
+        json!({
+            "id": id,
+            "name": name,
+            "maxNotebooks": max_nb,
+            "maxBoards": max_bd,
+            "priceCents": price,
+        })
+    }).collect();
+
+    Json(json!({ "plans": plans })).into_response()
+}
+
+/// Check if user can create a new notebook (returns true if under limit).
+pub async fn can_create_notebook(db: &sqlx::PgPool, user_id: &str) -> Result<bool, ()> {
+    let max = get_plan_limit(db, user_id, "max_notebooks").await;
+    if max < 0 { return Ok(true); } // -1 = unlimited
+    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM notebooks WHERE owner_id = $1")
+        .bind(user_id).fetch_one(db).await.map_err(|_| ())?;
+    Ok(count < max as i64)
+}
+
+/// Check if user can create a new board (returns true if under limit).
+pub async fn can_create_board(db: &sqlx::PgPool, user_id: &str) -> Result<bool, ()> {
+    let max = get_plan_limit(db, user_id, "max_boards").await;
+    if max < 0 { return Ok(true); } // -1 = unlimited
+    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM kanban_boards WHERE owner_id = $1 AND archived = false")
+        .bind(user_id).fetch_one(db).await.map_err(|_| ())?;
+    Ok(count < max as i64)
+}
+
+async fn get_plan_limit(db: &sqlx::PgPool, user_id: &str, column: &str) -> i32 {
+    let query = format!(
+        "SELECT p.{} FROM plans p JOIN user_subscriptions us ON us.plan_id = p.id WHERE us.user_id = $1 AND us.status = 'active'",
+        column
+    );
+    sqlx::query_scalar::<_, i32>(&query)
+        .bind(user_id)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(1) // Default to free plan limits
 }
 
 /// Decrypt a user's Gemini API key from DB. Used by other routes (e.g. notes ask_ai).

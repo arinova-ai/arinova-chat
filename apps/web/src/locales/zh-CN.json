@@ -1790,5 +1790,17 @@
   "userProfile.block": "屏蔽",
   "userProfile.unblock": "取消屏蔽",
   "voice.expand": "展开",
-  "voice.minimize": "最小化"
+  "voice.minimize": "最小化",
+  "settings.nav.subscription": "订阅",
+  "settings.subscription.title": "订阅",
+  "settings.subscription.currentPlan": "当前方案",
+  "settings.subscription.expiresIn": "到期倒数",
+  "settings.subscription.days": "天",
+  "settings.subscription.notebooks": "笔记本",
+  "settings.subscription.boards": "看板",
+  "settings.subscription.free": "免费",
+  "settings.subscription.month": "月",
+  "settings.subscription.unlimited": "无限制",
+  "settings.subscription.current": "当前方案",
+  "settings.subscription.comingSoon": "即将推出"
 }

@@ -31,6 +31,7 @@ import {
   VolumeX,
   Plus,
   Trash2,
+  CreditCard,
 } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { compressImage } from "@/lib/image-compress";
@@ -48,7 +49,7 @@ import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 // ───── Types ─────
 
-type SettingsSection = "profile" | "language" | "notifications" | "privacy" | "ai" | "security";
+type SettingsSection = "profile" | "language" | "notifications" | "privacy" | "ai" | "security" | "subscription";
 
 interface NotificationPrefs {
   globalEnabled: boolean;
@@ -82,6 +83,7 @@ const NAV_ITEMS: { id: SettingsSection; labelKey: string; icon: React.ReactNode 
   { id: "privacy", labelKey: "settings.nav.privacy", icon: <ShieldBan className="h-4 w-4" /> },
   { id: "ai", labelKey: "settings.nav.ai", icon: <Zap className="h-4 w-4" /> },
   { id: "security", labelKey: "settings.nav.security", icon: <Shield className="h-4 w-4" /> },
+  { id: "subscription", labelKey: "settings.nav.subscription", icon: <CreditCard className="h-4 w-4" /> },
 ];
 
 // ───── Avatar Crop Dialog ─────
@@ -1689,6 +1691,110 @@ function SecurityPanel() {
   );
 }
 
+// ───── Subscription Panel ─────
+
+interface PlanData {
+  id: string;
+  name: string;
+  maxNotebooks: number;
+  maxBoards: number;
+  priceCents: number;
+}
+
+interface SubData {
+  planId: string;
+  planName: string;
+  status: string;
+  expiresAt: string | null;
+  maxNotebooks: number;
+  maxBoards: number;
+  priceCents: number;
+  currentNotebooks: number;
+  currentBoards: number;
+}
+
+function SubscriptionPanel() {
+  const { t } = useTranslation();
+  const [sub, setSub] = useState<SubData | null>(null);
+  const [plans, setPlans] = useState<PlanData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api<SubData>("/api/user/subscription"),
+      api<{ plans: PlanData[] }>("/api/plans"),
+    ]).then(([subData, plansData]) => {
+      setSub(subData);
+      setPlans(plansData.plans);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  if (!sub) return null;
+
+  const daysLeft = sub.expiresAt
+    ? Math.max(0, Math.ceil((new Date(sub.expiresAt).getTime() - Date.now()) / 86400000))
+    : null;
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold">{t("settings.subscription.title")}</h2>
+
+      {/* Current plan */}
+      <div className="rounded-lg border p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">{t("settings.subscription.currentPlan")}</span>
+          <span className="text-sm font-bold">{sub.planName}</span>
+        </div>
+        {daysLeft !== null && (
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>{t("settings.subscription.expiresIn")}</span>
+            <span>{daysLeft} {t("settings.subscription.days")}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>{t("settings.subscription.notebooks")}</span>
+          <span>{sub.currentNotebooks} / {sub.maxNotebooks < 0 ? "∞" : sub.maxNotebooks}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>{t("settings.subscription.boards")}</span>
+          <span>{sub.currentBoards} / {sub.maxBoards < 0 ? "∞" : sub.maxBoards}</span>
+        </div>
+      </div>
+
+      {/* Plan comparison */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {plans.map((plan) => {
+          const isCurrent = plan.id === sub.planId;
+          return (
+            <div
+              key={plan.id}
+              className={`rounded-lg border p-4 space-y-3 ${isCurrent ? "border-primary ring-1 ring-primary" : ""}`}
+            >
+              <h3 className="font-semibold">{plan.name}</h3>
+              <p className="text-2xl font-bold">
+                {plan.priceCents === 0 ? t("settings.subscription.free") : `$${(plan.priceCents / 100).toFixed(2)}`}
+                {plan.priceCents > 0 && <span className="text-sm font-normal text-muted-foreground">/{t("settings.subscription.month")}</span>}
+              </p>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li>{plan.maxNotebooks < 0 ? t("settings.subscription.unlimited") : plan.maxNotebooks} {t("settings.subscription.notebooks")}</li>
+                <li>{plan.maxBoards < 0 ? t("settings.subscription.unlimited") : plan.maxBoards} {t("settings.subscription.boards")}</li>
+              </ul>
+              {isCurrent ? (
+                <Button variant="outline" className="w-full" disabled>{t("settings.subscription.current")}</Button>
+              ) : (
+                <Button variant="default" className="w-full" disabled>
+                  {t("settings.subscription.comingSoon")}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ───── Settings Layout ─────
 
 function SettingsContent() {
@@ -1715,6 +1821,7 @@ function SettingsContent() {
       case "privacy": return <PrivacyPanel />;
       case "ai": return <AiPanel />;
       case "security": return <SecurityPanel />;
+      case "subscription": return <SubscriptionPanel />;
     }
   };
 

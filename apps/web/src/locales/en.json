@@ -1874,5 +1874,17 @@
   "userProfile.block": "Block",
   "userProfile.unblock": "Unblock",
   "voice.expand": "Expand",
-  "voice.minimize": "Minimize"
+  "voice.minimize": "Minimize",
+  "settings.nav.subscription": "Subscription",
+  "settings.subscription.title": "Subscription",
+  "settings.subscription.currentPlan": "Current Plan",
+  "settings.subscription.expiresIn": "Expires in",
+  "settings.subscription.days": "days",
+  "settings.subscription.notebooks": "Notebooks",
+  "settings.subscription.boards": "Boards",
+  "settings.subscription.free": "Free",
+  "settings.subscription.month": "mo",
+  "settings.subscription.unlimited": "Unlimited",
+  "settings.subscription.current": "Current Plan",
+  "settings.subscription.comingSoon": "Coming Soon"
 }

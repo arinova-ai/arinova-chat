@@ -1812,5 +1812,17 @@
   "userProfile.block": "ブロック",
   "userProfile.unblock": "ブロック解除",
   "voice.expand": "展開",
-  "voice.minimize": "最小化"
+  "voice.minimize": "最小化",
+  "settings.nav.subscription": "サブスクリプション",
+  "settings.subscription.title": "サブスクリプション",
+  "settings.subscription.currentPlan": "現在のプラン",
+  "settings.subscription.expiresIn": "有効期限まで",
+  "settings.subscription.days": "日",
+  "settings.subscription.notebooks": "ノートブック",
+  "settings.subscription.boards": "ボード",
+  "settings.subscription.free": "無料",
+  "settings.subscription.month": "月",
+  "settings.subscription.unlimited": "無制限",
+  "settings.subscription.current": "現在のプラン",
+  "settings.subscription.comingSoon": "近日公開"
 }
