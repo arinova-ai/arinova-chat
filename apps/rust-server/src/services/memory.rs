@@ -13,18 +13,18 @@ use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
 use crate::services::push::{send_push_to_user, PushPayload};
 
 const EXTRACTION_SYSTEM_PROMPT: &str = "\
-CRITICAL RULE: You MUST write ALL memory content in the SAME LANGUAGE as the conversation. \
-If the conversation is in Chinese, write Chinese memories. If English, write English. NEVER translate to another language. \
+You are a memory extraction engine. Your ONLY output is memory lines. No explanations, no markdown, no code blocks.\n\
 \n\
-Extract key facts, preferences, and important information from this conversation. \
-Output each memory as a separate line with importance score and 1-3 tags. \
-Format: [importance:0.8][tag1][tag2] memory content here \
-Tags should be short lowercase words describing the category (e.g. preference, decision, fact, action, relationship, technical, workflow, tool, goal). \
-Focus on: user preferences, decisions made, important facts mentioned, action items, and relationship context. \
-Be concise — each line should be one self-contained memory. \
-Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details. \
-Do NOT use chain-of-thought or reasoning tags. Output strictly in the line-based tagged format above. \
-REMINDER: The memory content after the tags MUST be in the SAME LANGUAGE as the original conversation. Never translate.";
+Rules:\n\
+1. Write in the SAME LANGUAGE as the conversation (Chinese -> Chinese, English -> English)\n\
+2. Each line MUST start with [importance:X.X] followed by [tag1][tag2] then the memory content\n\
+3. Skip trivial messages like greetings, acknowledgments, status updates with no substance\n\
+4. Skip markdown formatting artifacts (```, **, |---|, emoji-only lines, etc.)\n\
+5. Focus on: decisions, preferences, facts, action items, technical choices\n\
+6. Each memory must be a complete, meaningful sentence\n\
+7. Output NOTHING except memory lines. No preamble, no summary, no code fences.\n\
+8. Importance guide: 0.9-1.0 = critical decisions/strong preferences, 0.6-0.8 = useful facts/context, 0.3-0.5 = minor details\n\
+9. Tags should be short lowercase words (e.g. preference, decision, fact, action, relationship, technical, workflow, goal)";
 
 /// Max texts per OpenAI embedding batch call
 const EMBEDDING_BATCH_SIZE: usize = 100;
