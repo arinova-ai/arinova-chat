@@ -231,27 +231,25 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
               />
             )}
 
-            {/* History limit slider */}
+            {/* History limit */}
             <div>
               <label className="text-sm font-medium text-foreground">
                 {t("chat.settings.historyLimit") || "Message History"}
               </label>
               <p className="mt-1 text-xs text-muted-foreground">
-                {t("chat.settings.historyLimitDesc") || "Number of recent messages sent as context to the agent"}
+                {t("chat.settings.historyLimitDesc") || "Number of recent messages sent as context to the agent (0-50)"}
               </p>
-              <div className="mt-3 flex items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={50}
-                  value={historyLimit}
-                  onChange={(e) => handleHistoryLimitChange(parseInt(e.target.value, 10))}
-                  className="flex-1 accent-primary"
-                />
-                <span className="w-8 text-center text-sm font-mono text-foreground">
-                  {historyLimitSaving ? "…" : historyLimit}
-                </span>
-              </div>
+              <input
+                type="number"
+                min={0}
+                max={50}
+                value={historyLimit}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v)) handleHistoryLimitChange(Math.min(50, Math.max(0, v)));
+                }}
+                className="mt-2 w-20 rounded-md border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
             </div>
           </div>
         )}

@@ -302,7 +302,7 @@ async fn update_general(
     }
 
     if let Some(limit) = body.history_limit {
-        let clamped = limit.clamp(1, 50);
+        let clamped = limit.clamp(0, 50);
         let result = sqlx::query(
             "UPDATE conversations SET history_limit = $1 WHERE id = $2",
         )
