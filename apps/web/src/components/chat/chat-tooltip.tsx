@@ -63,7 +63,10 @@ export function ChatTooltip() {
     setIndex(savedIdx % tips.length);
   }, [tips.length]);
 
-  // Auto-rotate when open
+  // Reset key — incremented on manual Next to restart the auto-rotate timer
+  const [rotateReset, setRotateReset] = useState(0);
+
+  // Auto-rotate when open (resets on manual Next)
   useEffect(() => {
     if (!open) return;
     const timer = setInterval(() => {
@@ -74,7 +77,7 @@ export function ChatTooltip() {
       });
     }, ROTATE_INTERVAL);
     return () => clearInterval(timer);
-  }, [open, tips.length]);
+  }, [open, tips.length, rotateReset]);
 
   const handleDismissForever = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, "true");
@@ -126,6 +129,7 @@ export function ChatTooltip() {
                   const next = (index + 1) % tips.length;
                   setIndex(next);
                   localStorage.setItem(STORAGE_INDEX_KEY, String(next));
+                  setRotateReset((r) => r + 1);
                 }}
                 className="text-[10px] text-primary hover:underline font-medium"
               >
