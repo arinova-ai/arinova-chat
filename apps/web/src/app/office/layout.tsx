@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AuthGuard } from "@/components/auth-guard";
-import { Building2, PictureInPicture2 } from "lucide-react";
+import { Building2, DoorOpen, DoorClosed, PictureInPicture2 } from "lucide-react";
+import { api } from "@/lib/api";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { PageTitle } from "@/components/ui/page-title";
@@ -21,6 +22,21 @@ function OfficeLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const stream = useOfficeStream();
   const { data: session } = authClient.useSession();
+
+  // Office visit toggle
+  const [visitsEnabled, setVisitsEnabled] = useState(false);
+  useEffect(() => {
+    api<{ officeVisitsEnabled?: boolean }>("/api/user/settings", { silent: true })
+      .then((d) => setVisitsEnabled(d.officeVisitsEnabled ?? false))
+      .catch(() => {});
+  }, []);
+  const handleToggleVisits = useCallback(async () => {
+    const next = !visitsEnabled;
+    setVisitsEnabled(next);
+    try {
+      await api("/api/user/office-visits", { method: "PATCH", body: JSON.stringify({ enabled: next }) });
+    } catch { setVisitsEnabled(!next); }
+  }, [visitsEnabled]);
 
   const handlePip = useCallback(() => {
     const sessionUser = session?.user as { id?: string; name?: string; username?: string } | undefined;
@@ -51,6 +67,14 @@ function OfficeLayoutInner({ children }: { children: ReactNode }) {
               icon={Building2}
               className="flex-1 min-w-0"
             />
+            <button
+              type="button"
+              onClick={handleToggleVisits}
+              className={`shrink-0 flex items-center justify-center h-8 w-8 rounded-lg hover:bg-accent transition-colors ${visitsEnabled ? "text-brand" : "text-muted-foreground hover:text-foreground"}`}
+              title={visitsEnabled ? t("office.visitsEnabled") : t("office.visitsDisabled")}
+            >
+              {visitsEnabled ? <DoorOpen className="h-4 w-4" /> : <DoorClosed className="h-4 w-4" />}
+            </button>
             <button
               type="button"
               onClick={handlePip}
