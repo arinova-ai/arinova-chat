@@ -119,15 +119,26 @@ export function ChatTooltip() {
           </div>
           <div className="mt-2 flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">{progress}</span>
-            <button
-              type="button"
-              onClick={handleDismissForever}
-              className={cn(
-                "text-[10px] text-muted-foreground hover:text-foreground underline",
-              )}
-            >
-              {t("tips.dontShowAgain") || "Don't show again"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = (index + 1) % tips.length;
+                  setIndex(next);
+                  localStorage.setItem(STORAGE_INDEX_KEY, String(next));
+                }}
+                className="text-[10px] text-primary hover:underline font-medium"
+              >
+                {t("tips.next") || "Next"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDismissForever}
+                className="text-[10px] text-muted-foreground hover:text-foreground underline"
+              >
+                {t("tips.dontShowAgain") || "Don't show again"}
+              </button>
+            </div>
           </div>
         </div>
       )}

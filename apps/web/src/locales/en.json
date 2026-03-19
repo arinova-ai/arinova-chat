@@ -1469,6 +1469,7 @@
   "community.identity.joinDesc": "Pick a nickname for this community. Your real identity will be hidden from other members.",
   "tips.title": "Tips",
   "tips.dontShowAgain": "Don't show again",
+  "tips.next": "Next",
   "tips.slashCommands": "Type / to see available slash commands for this agent",
   "tips.mentionAgent": "Type @ to mention an agent or member in group chats",
   "tips.dragFiles": "Drag & drop files or images directly into the chat",
