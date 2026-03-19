@@ -381,7 +381,13 @@ async fn get_note_by_id(
                         .into_response();
                 }
             }
-            let j = note_to_json(&note);
+            let mut j = note_to_json(&note);
+            let backlinks = get_backlinks(&state.db, note.id).await;
+            let linked_cards = get_linked_cards(&state.db, note.id).await;
+            let related_capsules = get_related_capsules(&state.db, &user.id, &note.content).await;
+            j.as_object_mut().unwrap().insert("backlinks".into(), json!(backlinks));
+            j.as_object_mut().unwrap().insert("linkedCards".into(), json!(linked_cards));
+            j.as_object_mut().unwrap().insert("relatedCapsules".into(), json!(related_capsules));
             Json(j).into_response()
         }
         Ok(None) => (
