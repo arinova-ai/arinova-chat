@@ -48,6 +48,8 @@ interface NotebookSheetProps {
   hideArchivedTab?: boolean;
   /** Whether the notebook has memory capsule association enabled */
   includeInCapsule?: boolean;
+  /** When true, hide all edit/delete actions (for view-only shared members) */
+  readOnly?: boolean;
 }
 
 const EMPTY_NOTES: Note[] = [];
@@ -246,7 +248,7 @@ function SwipeableNoteItem({
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery, hideArchivedTab, includeInCapsule }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery, hideArchivedTab, includeInCapsule, readOnly }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -589,7 +591,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   }, [notes]);
   const allTags = Array.from(tagCounts.keys());
 
-  const canEdit = selectedNote && selectedNote.creatorId === currentUserId;
+  const canEdit = !readOnly && selectedNote && selectedNote.creatorId === currentUserId;
 
   if (!open) return null;
 
@@ -723,7 +725,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                           note={note}
                           isMobile={isMobile}
                           onOpen={handleOpenNote}
-                          onDelete={handleDelete}
+                          onDelete={readOnly ? () => {} : handleDelete}
                           onShare={handleShareNote}
                           onAttach={(n) => {
                             useChatStore.getState().setAttachedCard({
@@ -906,10 +908,10 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
             </div>
             {/* Bottom Toolbar */}
             <div className={cn("border-t border-border flex items-center gap-1 shrink-0", isMobile ? "px-3 py-2" : "px-4 py-2")}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleArchiveNote()} disabled={loading}>
+              {!readOnly && <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleArchiveNote()} disabled={loading}>
                 <Archive className="h-3.5 w-3.5" />
                 {t("chat.notebook.archive")}
-              </Button>
+              </Button>}
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => selectedNote && handleShareNote(selectedNote)} disabled={loading}>
                 <Share2 className="h-3.5 w-3.5" />
                 {t("share.title")}

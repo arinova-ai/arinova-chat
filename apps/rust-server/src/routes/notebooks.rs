@@ -54,6 +54,7 @@ struct NotebookRow {
     updated_at: DateTime<Utc>,
     note_count: Option<i64>,
     owner_username: Option<String>,
+    permission: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -126,6 +127,7 @@ fn notebook_to_json(row: &NotebookRow) -> serde_json::Value {
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
         "ownerUsername": row.owner_username,
+        "permission": row.permission.as_deref().unwrap_or("owner"),
     })
 }
 
@@ -148,14 +150,16 @@ async fn list_notebooks(
         r#"
         SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, n.created_at, n.updated_at,
                (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count,
-               u.username AS owner_username
+               u.username AS owner_username,
+               'owner'::text AS permission
         FROM notebooks n
         JOIN "user" u ON u.id = n.owner_id
         WHERE n.owner_id = $1
         UNION ALL
         SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, n.created_at, n.updated_at,
                (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count,
-               u.username AS owner_username
+               u.username AS owner_username,
+               nm.permission
         FROM notebooks n
         JOIN notebook_members nm ON nm.notebook_id = n.id
         JOIN "user" u ON u.id = n.owner_id
@@ -219,7 +223,7 @@ async fn create_notebook(
         r#"
         INSERT INTO notebooks (owner_id, name, sort_order)
         VALUES ($1, $2, $3)
-        RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count
+        RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count, NULL::text AS owner_username, 'owner'::text AS permission
         "#,
     )
     .bind(&user.id)
@@ -308,7 +312,7 @@ async fn update_notebook(
     }
 
     let sql = format!(
-        "UPDATE notebooks SET {} WHERE id = ${} RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count",
+        "UPDATE notebooks SET {} WHERE id = ${} RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count, NULL::text AS owner_username, 'owner'::text AS permission",
         sets.join(", "),
         idx
     );

@@ -44,6 +44,7 @@ interface Notebook {
   createdAt: string;
   updatedAt: string;
   ownerUsername?: string | null;
+  permission?: string;
 }
 
 interface NotebookListProps {
@@ -730,6 +731,11 @@ function NotebookNotes({
 
   const toolbarBtnClass = "rounded-md px-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors flex items-center gap-1";
 
+  const isOwner = notebook.ownerId === currentUserId;
+  const perm = notebook.permission ?? "owner";
+  const canEdit = isOwner || perm === "edit" || perm === "admin";
+  const canManage = isOwner || perm === "admin";
+
   // Members sharing state
   const [membersOpen, setMembersOpen] = useState(false);
   const [members, setMembers] = useState<{ userId: string; username: string; permission: string }[]>([]);
@@ -846,14 +852,14 @@ function NotebookNotes({
             </button>
 
             {/* Members */}
-            {notebook.ownerId === currentUserId && (
+            {canManage && (
               <button type="button" className={toolbarBtnClass} onClick={() => { setMembersOpen(true); fetchMembers(); }}>
                 <Users className="h-3.5 w-3.5" />
               </button>
             )}
 
-            {/* Agent Permissions */}
-            <Popover open={agentSelectorId === notebook.id} onOpenChange={(o) => { if (!o) setAgentSelectorId(null); }}>
+            {/* Agent Permissions — owner/admin only */}
+            {canManage && <Popover open={agentSelectorId === notebook.id} onOpenChange={(o) => { if (!o) setAgentSelectorId(null); }}>
               <PopoverTrigger asChild>
                 <button type="button" className={toolbarBtnClass} onClick={() => onManageAgents(notebook.id)}>
                   <Bot className="h-3.5 w-3.5" />
@@ -885,10 +891,10 @@ function NotebookNotes({
                   </>
                 )}
               </PopoverContent>
-            </Popover>
+            </Popover>}
 
-            {/* Capsule Links */}
-            <Popover open={capsuleSelectorId === notebook.id} onOpenChange={(o) => { if (!o) setCapsuleSelectorId(null); }}>
+            {/* Capsule Links — owner/admin only */}
+            {canManage && <Popover open={capsuleSelectorId === notebook.id} onOpenChange={(o) => { if (!o) setCapsuleSelectorId(null); }}>
               <PopoverTrigger asChild>
                 <button type="button" className={toolbarBtnClass} onClick={() => onManageCapsules(notebook.id)}>
                   <Brain className={cn("h-3.5 w-3.5", notebook.includeInCapsule && "text-brand")} />
@@ -918,7 +924,7 @@ function NotebookNotes({
                   ))
                 )}
               </PopoverContent>
-            </Popover>
+            </Popover>}
 
             {/* Archive popover — show archived notes */}
             <Popover open={archivedOpen} onOpenChange={(o) => { setArchivedOpen(o); if (o) loadArchivedNotes(); }}>
@@ -978,6 +984,7 @@ function NotebookNotes({
           notebookId={notebook.id}
           searchQuery={searchQuery}
           includeInCapsule={notebook.includeInCapsule}
+          readOnly={!canEdit}
         />
       </div>
     </div>
