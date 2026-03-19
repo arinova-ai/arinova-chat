@@ -1212,6 +1212,7 @@
   "notebooks.default": "default",
   "notebooks.noteCount": "notes",
   "notebooks.rename": "Rename",
+  "notebooks.share": "Share",
   "notebooks.delete": "Delete",
   "notebooks.save": "Save",
   "notebooks.includeInCapsule": "Include in Capsule",

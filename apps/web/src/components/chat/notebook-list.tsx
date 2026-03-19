@@ -24,6 +24,7 @@ import {
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { NotebookSheet } from "./notebook-sheet";
+import { useChatStore } from "@/store/chat-store";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -41,6 +42,7 @@ interface Notebook {
   noteCount: number;
   createdAt: string;
   updatedAt: string;
+  ownerUsername?: string | null;
 }
 
 interface NotebookListProps {
@@ -53,6 +55,7 @@ interface NotebookListProps {
 export function NotebookList({ conversationId, inline, open, onOpenChange }: NotebookListProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const currentUserId = useChatStore((s) => s.currentUserId);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNotebook, setSelectedNotebook] = useState<Notebook | null>(null);
@@ -62,6 +65,11 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [shareNotebookId, setShareNotebookId] = useState<string | null>(null);
+  const [shareMembers, setShareMembers] = useState<{ userId: string; username: string; permission: string }[]>([]);
+  const [shareFriends, setShareFriends] = useState<{ id: string; name: string; username: string | null }[]>([]);
+  const [shareInviteUser, setShareInviteUser] = useState("");
+  const [shareInvitePerm, setShareInvitePerm] = useState("view");
   const [capsuleSelectorId, setCapsuleSelectorId] = useState<string | null>(null);
   const [allCapsules, setAllCapsules] = useState<{ id: string; name: string }[]>([]);
   const [selectedCapsuleIds, setSelectedCapsuleIds] = useState<string[]>([]);
@@ -186,6 +194,54 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
     }
   };
 
+  // Share notebook handlers
+  useEffect(() => {
+    if (!shareNotebookId) return;
+    (async () => {
+      try {
+        const [membersData, friends] = await Promise.all([
+          api<{ owner: unknown; members: { userId: string; username: string; permission: string }[] }>(`/api/notebooks/${shareNotebookId}/members`),
+          api<{ id: string; name: string; username: string | null }[]>("/api/friends").catch(() => []),
+        ]);
+        setShareMembers(membersData.members);
+        setShareFriends(friends as { id: string; name: string; username: string | null }[]);
+      } catch { /* */ }
+    })();
+  }, [shareNotebookId]);
+
+  const handleShareInvite = async () => {
+    if (!shareNotebookId || !shareInviteUser.trim()) return;
+    try {
+      await api(`/api/notebooks/${shareNotebookId}/members`, {
+        method: "POST",
+        body: JSON.stringify({ username: shareInviteUser, permission: shareInvitePerm }),
+      });
+      setShareInviteUser("");
+      // Refetch members
+      const data = await api<{ owner: unknown; members: { userId: string; username: string; permission: string }[] }>(`/api/notebooks/${shareNotebookId}/members`);
+      setShareMembers(data.members);
+    } catch { /* */ }
+  };
+
+  const handleShareRemove = async (userId: string) => {
+    if (!shareNotebookId) return;
+    try {
+      await api(`/api/notebooks/${shareNotebookId}/members/${userId}`, { method: "DELETE" });
+      setShareMembers((prev) => prev.filter((m) => m.userId !== userId));
+    } catch { /* */ }
+  };
+
+  const handleShareUpdatePerm = async (userId: string, perm: string) => {
+    if (!shareNotebookId) return;
+    try {
+      await api(`/api/notebooks/${shareNotebookId}/members/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ permission: perm }),
+      });
+      setShareMembers((prev) => prev.map((m) => m.userId === userId ? { ...m, permission: perm } : m));
+    } catch { /* */ }
+  };
+
   const handleManageCapsules = async (notebookId: string) => {
     setCapsuleSelectorId(notebookId);
     setCapsuleLoading(true);
@@ -256,11 +312,57 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
     }
   };
 
+  // Share dialog
+  const shareDialog = shareNotebookId ? (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setShareNotebookId(null)}>
+      <div className="bg-background border border-border rounded-lg w-[380px] max-h-[400px] overflow-y-auto p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{t("notebooks.share")}</h3>
+          <button type="button" onClick={() => setShareNotebookId(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        </div>
+        {(() => {
+          const memberIds = new Set(shareMembers.map((m) => m.userId));
+          const available = shareFriends.filter((f) => !memberIds.has(f.id) && f.id !== currentUserId);
+          return available.length > 0 ? (
+            <div className="flex gap-2">
+              <select value={shareInviteUser} onChange={(e) => setShareInviteUser(e.target.value)} className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs">
+                <option value="">{t("kanban.selectFriend")}</option>
+                {available.map((f) => <option key={f.id} value={f.username ?? f.name}>{f.name}{f.username ? ` (@${f.username})` : ""}</option>)}
+              </select>
+              <select value={shareInvitePerm} onChange={(e) => setShareInvitePerm(e.target.value)} className="rounded-md border border-input bg-background px-2 py-1 text-xs">
+                <option value="view">{t("kanban.permView")}</option>
+                <option value="edit">{t("kanban.permEdit")}</option>
+                <option value="admin">{t("kanban.permAdmin")}</option>
+              </select>
+              <button type="button" onClick={handleShareInvite} disabled={!shareInviteUser.trim()} className="rounded-md bg-brand px-2 py-1 text-xs text-white hover:bg-brand/90 disabled:opacity-50">{t("kanban.invite")}</button>
+            </div>
+          ) : <p className="text-xs text-muted-foreground">{t("kanban.noFriendsToInvite")}</p>;
+        })()}
+        {shareMembers.length > 0 && (
+          <div className="space-y-1">
+            {shareMembers.map((m) => (
+              <div key={m.userId} className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50">
+                <span className="text-xs font-medium">{m.username}</span>
+                <div className="flex items-center gap-1.5">
+                  <select value={m.permission} onChange={(e) => handleShareUpdatePerm(m.userId, e.target.value)} className="rounded border border-input bg-background px-1 py-0.5 text-[10px]">
+                    <option value="view">{t("kanban.permView")}</option>
+                    <option value="edit">{t("kanban.permEdit")}</option>
+                    <option value="admin">{t("kanban.permAdmin")}</option>
+                  </select>
+                  <button type="button" onClick={() => handleShareRemove(m.userId)} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-3 w-3" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   // If a notebook is selected, show notes for that notebook
   if (selectedNotebook) {
     if (!inline && !open) return null;
-    return (
-      <NotebookNotes
+    return (<>{shareDialog}<NotebookNotes
         notebook={selectedNotebook}
         conversationId={conversationId}
         inline={inline}
@@ -287,7 +389,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
         onDelete={handleDelete}
         onRefresh={fetchNotebooks}
       />
-    );
+    </>);
   }
 
   const content = (
@@ -381,12 +483,15 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                 >
                   <BookOpen className="h-4 w-4 text-muted-foreground mr-2.5 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
+                    <div className="text-sm font-medium truncate flex items-center gap-1">
                       {nb.name}
                       {nb.isDefault && (
-                        <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">
+                        <span className="text-[10px] text-muted-foreground font-normal">
                           ({t("notebooks.default")})
                         </span>
+                      )}
+                      {nb.ownerUsername && nb.ownerId !== currentUserId && (
+                        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground font-normal">@{nb.ownerUsername}</span>
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -496,6 +601,20 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                           <Bot className="h-3 w-3 text-muted-foreground" />
                           {t("notebooks.manageAgents")}
                         </button>
+                        {nb.ownerId === currentUserId && (
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShareNotebookId(nb.id);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            <Share2 className="h-3 w-3 text-muted-foreground" />
+                            {t("notebooks.share")}
+                          </button>
+                        )}
                         </>
                       )}
                       {!nb.isDefault && (
@@ -537,7 +656,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   );
 
   // Inline mode (right panel)
-  if (inline) return content;
+  if (inline) return <>{content}{shareDialog}</>;
 
   // Mobile portal overlay
   if (!open) return null;
@@ -552,6 +671,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
       }}
     >
       {content}
+      {shareDialog}
     </div>,
     document.body,
   );

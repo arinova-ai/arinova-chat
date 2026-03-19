@@ -30,6 +30,14 @@ pub fn router() -> Router<AppState> {
             "/api/notebooks/{id}/agent-permissions",
             get(get_agent_permissions).put(set_agent_permissions),
         )
+        .route(
+            "/api/notebooks/{id}/members",
+            get(list_notebook_members).post(add_notebook_member),
+        )
+        .route(
+            "/api/notebooks/{notebookId}/members/{userId}",
+            patch(update_notebook_member).delete(remove_notebook_member),
+        )
 }
 
 // ===== Types =====
@@ -45,6 +53,7 @@ struct NotebookRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     note_count: Option<i64>,
+    owner_username: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -116,6 +125,7 @@ fn notebook_to_json(row: &NotebookRow) -> serde_json::Value {
         "noteCount": row.note_count.unwrap_or(0),
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
+        "ownerUsername": row.owner_username,
     })
 }
 
@@ -137,10 +147,20 @@ async fn list_notebooks(
     let rows = sqlx::query_as::<_, NotebookRow>(
         r#"
         SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, n.created_at, n.updated_at,
-               (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count
+               (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count,
+               u.username AS owner_username
         FROM notebooks n
+        JOIN "user" u ON u.id = n.owner_id
         WHERE n.owner_id = $1
-        ORDER BY n.sort_order, n.created_at
+        UNION ALL
+        SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, n.created_at, n.updated_at,
+               (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count,
+               u.username AS owner_username
+        FROM notebooks n
+        JOIN notebook_members nm ON nm.notebook_id = n.id
+        JOIN "user" u ON u.id = n.owner_id
+        WHERE nm.user_id = $1
+        ORDER BY sort_order, created_at
         "#,
     )
     .bind(&user.id)
@@ -725,4 +745,230 @@ async fn set_agent_permissions(
 
     let agent_ids: Vec<String> = body.agent_ids.iter().map(|a| a.to_string()).collect();
     Json(json!({ "agentIds": agent_ids })).into_response()
+}
+
+// ===== Notebook Members (Sharing) =====
+
+#[derive(Deserialize)]
+struct AddNotebookMemberBody {
+    username: String,
+    #[serde(default = "default_view_perm")]
+    permission: String,
+}
+fn default_view_perm() -> String { "view".to_string() }
+
+#[derive(Deserialize)]
+struct UpdateNotebookMemberBody {
+    permission: String,
+}
+
+/// GET /api/notebooks/:id/members
+async fn list_notebook_members(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(notebook_id): Path<Uuid>,
+) -> Response {
+    // Verify access (owner or member)
+    let has_access = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM notebooks WHERE id = $1 AND owner_id = $2
+            UNION ALL
+            SELECT 1 FROM notebook_members WHERE notebook_id = $1 AND user_id = $2
+        )"#,
+    )
+    .bind(notebook_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !has_access {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Access denied"}))).into_response();
+    }
+
+    let members = sqlx::query_as::<_, (String, Option<String>, String, DateTime<Utc>)>(
+        r#"SELECT nm.user_id, u.username, nm.permission, nm.created_at
+           FROM notebook_members nm
+           JOIN "user" u ON u.id = nm.user_id
+           WHERE nm.notebook_id = $1
+           ORDER BY nm.created_at"#,
+    )
+    .bind(notebook_id)
+    .fetch_all(&state.db)
+    .await;
+
+    let owner = sqlx::query_as::<_, (String, Option<String>)>(
+        r#"SELECT n.owner_id, u.username FROM notebooks n JOIN "user" u ON u.id = n.owner_id WHERE n.id = $1"#,
+    )
+    .bind(notebook_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match members {
+        Ok(rows) => {
+            let items: Vec<_> = rows.iter().map(|(uid, uname, perm, created)| json!({
+                "userId": uid,
+                "username": uname,
+                "permission": perm,
+                "createdAt": created.to_rfc3339(),
+            })).collect();
+            Json(json!({
+                "owner": owner.map(|(uid, uname)| json!({"userId": uid, "username": uname})),
+                "members": items,
+            })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/notebooks/:id/members — owner or admin can invite
+async fn add_notebook_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(notebook_id): Path<Uuid>,
+    Json(body): Json<AddNotebookMemberBody>,
+) -> Response {
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM notebooks WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(notebook_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    let is_admin = if !is_owner {
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM notebook_members WHERE notebook_id = $1 AND user_id = $2 AND permission = 'admin')",
+        )
+        .bind(notebook_id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(false)
+    } else { false };
+
+    if !is_owner && !is_admin {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only owner or admin can invite"}))).into_response();
+    }
+
+    if !["view", "edit", "admin"].contains(&body.permission.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid permission"}))).into_response();
+    }
+
+    if body.permission == "admin" && !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only owner can grant admin"}))).into_response();
+    }
+
+    let target_id = sqlx::query_scalar::<_, String>(
+        r#"SELECT id FROM "user" WHERE username = $1"#,
+    )
+    .bind(&body.username)
+    .fetch_optional(&state.db)
+    .await;
+
+    let target_id = match target_id {
+        Ok(Some(id)) => id,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "User not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if target_id == user.id {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Cannot add yourself"}))).into_response();
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO notebook_members (notebook_id, user_id, permission, invited_by) VALUES ($1, $2, $3, $4) ON CONFLICT (notebook_id, user_id) DO UPDATE SET permission = $3",
+    )
+    .bind(notebook_id)
+    .bind(&target_id)
+    .bind(&body.permission)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::CREATED, Json(json!({
+            "userId": target_id,
+            "username": body.username,
+            "permission": body.permission,
+        }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// PATCH /api/notebooks/:notebookId/members/:userId
+async fn update_notebook_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((notebook_id, target_user_id)): Path<(Uuid, String)>,
+    Json(body): Json<UpdateNotebookMemberBody>,
+) -> Response {
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM notebooks WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(notebook_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only owner can change permissions"}))).into_response();
+    }
+
+    if !["view", "edit", "admin"].contains(&body.permission.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid permission"}))).into_response();
+    }
+
+    let result = sqlx::query(
+        "UPDATE notebook_members SET permission = $1 WHERE notebook_id = $2 AND user_id = $3",
+    )
+    .bind(&body.permission)
+    .bind(notebook_id)
+    .bind(&target_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => Json(json!({"ok": true})).into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Member not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// DELETE /api/notebooks/:notebookId/members/:userId
+async fn remove_notebook_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((notebook_id, target_user_id)): Path<(Uuid, String)>,
+) -> Response {
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM notebooks WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(notebook_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner && user.id != target_user_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only owner can remove members"}))).into_response();
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM notebook_members WHERE notebook_id = $1 AND user_id = $2",
+    )
+    .bind(notebook_id)
+    .bind(&target_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Member not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
 }

@@ -525,6 +525,14 @@ async fn main() {
         );
         ALTER TABLE board_members DROP CONSTRAINT IF EXISTS board_members_permission_check;
         ALTER TABLE board_members ADD CONSTRAINT board_members_permission_check CHECK (permission IN ('view', 'edit', 'admin'));
+        CREATE TABLE IF NOT EXISTS notebook_members (
+            notebook_id UUID NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            permission TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view', 'edit', 'admin')),
+            invited_by TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (notebook_id, user_id)
+        );
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),
