@@ -471,33 +471,39 @@ interface MessageActionsProps {
 }
 
 /** Hover action toolbar (copy, react, reply, thread, delete, retry). */
-/** Read receipt checkmarks: ✓ sent, ✓✓ grey delivered, ✓✓ blue read */
+/**
+ * Read receipt checkmarks (3 stages):
+ *   Grey ✓  — sending (optimistic, no server confirmation yet)
+ *   Blue ✓  — server confirmed (has real id + seq)
+ *   Blue ✓✓ — read by other party (WS read_receipt, excludes sender)
+ */
 function MessageCheckmarks({ message }: { message: Message }) {
   const readReceipts = useChatStore((s) => s.readReceipts[message.conversationId]);
 
-  if (message.status === "pending" || message.status === "error") return null;
+  // Error — no checkmark
+  if (message.status === "error") return null;
 
-  // Must have a valid seq > 0 to check read status
+  // Stage 1: Grey check — still sending (pending / optimistic)
+  if (message.status === "pending" || message.id.startsWith("temp-")) {
+    return <Check className="h-2.5 w-2.5 text-muted-foreground/40" />;
+  }
+
+  // Stage 2/3: Server confirmed — check read receipts
   const seq = message.seq;
-  if (!seq || seq <= 0) {
-    // No seq — just show single check for completed
-    if (message.status === "completed") return <Check className="h-2.5 w-2.5 text-muted-foreground/60" />;
-    return null;
+  if (seq && seq > 0) {
+    const senderId = message.senderUserId;
+    const hasReaders = readReceipts && Object.entries(readReceipts).some(
+      ([userId, readSeq]) => userId !== senderId && readSeq >= seq
+    );
+
+    if (hasReaders) {
+      // Stage 3: Blue double check — read by other party
+      return <CheckCheck className="h-2.5 w-2.5 text-blue-400" />;
+    }
   }
 
-  // Check if any OTHER user has read up to this message's seq
-  // Exclude the sender (current user) — their own mark_read doesn't count
-  const senderId = message.senderUserId;
-  const hasReaders = readReceipts && Object.entries(readReceipts).some(
-    ([userId, readSeq]) => userId !== senderId && readSeq >= seq
-  );
-
-  if (hasReaders) {
-    return <CheckCheck className="h-2.5 w-2.5 text-blue-400" />;
-  }
-
-  // Single check = sent to server
-  return <Check className="h-2.5 w-2.5 text-muted-foreground/60" />;
+  // Stage 2: Blue single check — server confirmed
+  return <Check className="h-2.5 w-2.5 text-blue-400" />;
 }
 
 function MessageActions({
@@ -964,7 +970,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
               isUser ? "justify-end" : "justify-start"
             )}>
               {formatTimestamp(message.createdAt)}
-              {isUser && !message.id.startsWith("temp-") && (
+              {isUser && (
                 <MessageCheckmarks message={message} />
               )}
             </p>
