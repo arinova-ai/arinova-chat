@@ -498,6 +498,7 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+        ALTER TABLE conversations ADD COLUMN IF NOT EXISTS history_limit INTEGER NOT NULL DEFAULT 5;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

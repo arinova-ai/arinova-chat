@@ -1855,7 +1855,18 @@ pub(crate) async fn do_trigger_agent_response(
         }
     }
 
-    // Fetch recent conversation history (last 5 completed messages before current)
+    // Fetch conversation history_limit (default 5)
+    let history_limit = sqlx::query_scalar::<_, i32>(
+        "SELECT COALESCE(history_limit, 5) FROM conversations WHERE id = $1::uuid",
+    )
+    .bind(conversation_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(5);
+
+    // Fetch recent conversation history
     let history_rows = sqlx::query_as::<_, (String, String, String, Option<String>, chrono::NaiveDateTime)>(
         r#"SELECT role::text, content,
                   COALESCE(status::text, 'completed') as status,
@@ -1866,10 +1877,11 @@ pub(crate) async fn do_trigger_agent_response(
              AND m.status IN ('completed', 'error', 'cancelled')
              AND m.id != $2::uuid
            ORDER BY m.seq DESC
-           LIMIT 5"#,
+           LIMIT $3"#,
     )
     .bind(conversation_id)
     .bind(&agent_msg_id)
+    .bind(history_limit)
     .fetch_all(db)
     .await
     .unwrap_or_default();

@@ -178,6 +178,8 @@
   "chat.settings.customImage": "Custom Image",
   "chat.settings.removeBg": "Remove Background",
   "chat.settings.general": "General",
+  "chat.settings.historyLimit": "Message History",
+  "chat.settings.historyLimitDesc": "Number of recent messages sent as context to the agent (1-50)",
   "chat.settings.groupName": "Group Name",
   "chat.settings.save": "Save",
   "chat.settings.tapToChangeAvatar": "Tap to change avatar",

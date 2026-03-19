@@ -22,6 +22,10 @@ pub fn router() -> Router<AppState> {
             "/api/conversations/{conversationId}/settings/upload",
             post(upload_settings_image),
         )
+        .route(
+            "/api/conversations/{conversationId}/general",
+            get(get_general).patch(update_general),
+        )
 }
 
 #[derive(Serialize)]
@@ -233,4 +237,87 @@ async fn upload_settings_image(
     }
 
     (StatusCode::BAD_REQUEST, Json(json!({"error": "No file uploaded"}))).into_response()
+}
+
+// ── General (conversation-level) settings ────────────────────────────
+
+/// GET /api/conversations/{conversationId}/general
+async fn get_general(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+) -> Response {
+    // Verify ownership / membership
+    let row = sqlx::query_as::<_, (i32,)>(
+        r#"SELECT COALESCE(history_limit, 5)
+           FROM conversations
+           WHERE id = $1 AND (
+             user_id = $2
+             OR EXISTS (SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2)
+           )"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some((history_limit,))) => {
+            Json(json!({ "historyLimit": history_limit })).into_response()
+        }
+        Ok(None) => {
+            (StatusCode::NOT_FOUND, Json(json!({"error": "Conversation not found"}))).into_response()
+        }
+        Err(e) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateGeneralBody {
+    history_limit: Option<i32>,
+}
+
+/// PATCH /api/conversations/{conversationId}/general
+async fn update_general(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+    Json(body): Json<UpdateGeneralBody>,
+) -> Response {
+    // Only owner can update
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2)",
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only conversation owner can update"}))).into_response();
+    }
+
+    if let Some(limit) = body.history_limit {
+        let clamped = limit.clamp(1, 50);
+        let result = sqlx::query(
+            "UPDATE conversations SET history_limit = $1 WHERE id = $2",
+        )
+        .bind(clamped)
+        .bind(conversation_id)
+        .execute(&state.db)
+        .await;
+
+        match result {
+            Ok(_) => Json(json!({ "historyLimit": clamped })).into_response(),
+            Err(e) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response()
+            }
+        }
+    } else {
+        (StatusCode::BAD_REQUEST, Json(json!({"error": "No fields to update"}))).into_response()
+    }
 }

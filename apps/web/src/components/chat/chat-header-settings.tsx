@@ -97,11 +97,35 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
     }
   };
 
-  const [activeTab, setActiveTab] = useState<"general" | "pins" | "appearance">(isGroup ? "general" : "pins");
+  const [activeTab, setActiveTab] = useState<"general" | "pins" | "appearance">("general");
 
   // Background state
   const [chatBgUrl, setChatBgUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // History limit state
+  const [historyLimit, setHistoryLimit] = useState(5);
+  const [historyLimitSaving, setHistoryLimitSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || !conversationId) return;
+    api<{ historyLimit: number }>(`/api/conversations/${conversationId}/general`, { silent: true })
+      .then((d) => setHistoryLimit(d.historyLimit))
+      .catch(() => {});
+  }, [open, conversationId]);
+
+  const handleHistoryLimitChange = useCallback(async (value: number) => {
+    setHistoryLimit(value);
+    if (!conversationId) return;
+    setHistoryLimitSaving(true);
+    try {
+      await api(`/api/conversations/${conversationId}/general`, {
+        method: "PATCH",
+        body: JSON.stringify({ historyLimit: value }),
+      });
+    } catch {}
+    setHistoryLimitSaving(false);
+  }, [conversationId]);
 
   // Load current bg settings
   useEffect(() => {
@@ -161,18 +185,16 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
 
       {/* Tabs */}
       <div className="flex border-b border-border">
-        {isGroup && (
-          <button
-            type="button"
-            className={cn(
-              "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
-              activeTab === "general" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
-            )}
-            onClick={() => setActiveTab("general")}
-          >
-            {t("chat.settings.general")}
-          </button>
-        )}
+        <button
+          type="button"
+          className={cn(
+            "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
+            activeTab === "general" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => setActiveTab("general")}
+        >
+          {t("chat.settings.general")}
+        </button>
         <button
           type="button"
           className={cn(
@@ -197,14 +219,41 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === "general" && isGroup && (
-          <GroupGeneralTab
-            title={groupTitle ?? ""}
-            avatarUrl={groupAvatarUrl}
-            conversationId={conversationId}
-            onTitleSave={onGroupTitleSave}
-            t={t}
-          />
+        {activeTab === "general" && (
+          <div className="space-y-6">
+            {isGroup && (
+              <GroupGeneralTab
+                title={groupTitle ?? ""}
+                avatarUrl={groupAvatarUrl}
+                conversationId={conversationId}
+                onTitleSave={onGroupTitleSave}
+                t={t}
+              />
+            )}
+
+            {/* History limit slider */}
+            <div>
+              <label className="text-sm font-medium text-foreground">
+                {t("chat.settings.historyLimit") || "Message History"}
+              </label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("chat.settings.historyLimitDesc") || "Number of recent messages sent as context to the agent"}
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={50}
+                  value={historyLimit}
+                  onChange={(e) => handleHistoryLimitChange(parseInt(e.target.value, 10))}
+                  className="flex-1 accent-primary"
+                />
+                <span className="w-8 text-center text-sm font-mono text-foreground">
+                  {historyLimitSaving ? "…" : historyLimit}
+                </span>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === "pins" && (
