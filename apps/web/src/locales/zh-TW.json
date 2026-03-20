@@ -1872,5 +1872,20 @@
   "settings.subscription.month": "月",
   "settings.subscription.unlimited": "無限制",
   "settings.subscription.current": "目前方案",
-  "settings.subscription.comingSoon": "即將推出"
+  "settings.subscription.comingSoon": "即將推出",
+  "expertHub.title": "專家中心",
+  "expertHub.subtitle": "向真人專家提問，由精選知識庫驅動",
+  "expertHub.searchPlaceholder": "搜尋專家...",
+  "expertHub.allCategories": "全部",
+  "expertHub.sortPopular": "熱門",
+  "expertHub.sortNewest": "最新",
+  "expertHub.empty": "找不到專家",
+  "expertHub.detail": "專家詳情",
+  "expertHub.notFound": "找不到此專家",
+  "expertHub.by": "由",
+  "expertHub.coinPerAsk": "Coin / 次",
+  "expertHub.asks": "次提問",
+  "expertHub.freeTrial": "{count} 次免費試用",
+  "expertHub.askButton": "向這位專家提問",
+  "expertHub.exampleQA": "範例問答"
 }

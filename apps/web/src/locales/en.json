@@ -1876,5 +1876,20 @@
   "settings.subscription.month": "mo",
   "settings.subscription.unlimited": "Unlimited",
   "settings.subscription.current": "Current Plan",
-  "settings.subscription.comingSoon": "Coming Soon"
+  "settings.subscription.comingSoon": "Coming Soon",
+  "expertHub.title": "Expert Hub",
+  "expertHub.subtitle": "Ask real experts, powered by curated knowledge",
+  "expertHub.searchPlaceholder": "Search experts...",
+  "expertHub.allCategories": "All",
+  "expertHub.sortPopular": "Popular",
+  "expertHub.sortNewest": "Newest",
+  "expertHub.empty": "No experts found",
+  "expertHub.detail": "Expert Detail",
+  "expertHub.notFound": "Expert not found",
+  "expertHub.by": "by",
+  "expertHub.coinPerAsk": "Coin / ask",
+  "expertHub.asks": "asks",
+  "expertHub.freeTrial": "{count} free trial asks",
+  "expertHub.askButton": "Ask this Expert",
+  "expertHub.exampleQA": "Example Q&A"
 }
