@@ -13,7 +13,7 @@ use uuid::Uuid;
 use pgvector::Vector;
 
 use crate::auth::middleware::AuthUser;
-use crate::services::embedding::{generate_embeddings, EMBEDDING_MODEL};
+use crate::services::embedding::{chunk_text, generate_embeddings, EMBEDDING_MODEL};
 use crate::services::llm::{self, ChatMessage, LlmCallOptions, LlmProvider};
 use crate::AppState;
 
@@ -114,7 +114,7 @@ async fn list_experts(
 
 // ─── get_expert ──────────────────────────────────────────────────────────────
 
-async fn get_expert(State(state): State<AppState>, _user: AuthUser, Path(id): Path<Uuid>) -> Response {
+async fn get_expert(State(state): State<AppState>, user: AuthUser, Path(id): Path<Uuid>) -> Response {
     let expert = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>, String, i32, String, Option<String>, bool, i32, i32, i32, Option<f64>, chrono::DateTime<chrono::Utc>)>(
         r#"SELECT e.id, e.owner_id, e.name, e.description, e.avatar_url, e.category, e.price_per_ask, e.mode, e.webhook_url, e.is_published, e.free_trial_count, e.total_asks, e.total_revenue, e.avg_rating, e.created_at
            FROM experts e WHERE e.id = $1"#
@@ -122,12 +122,16 @@ async fn get_expert(State(state): State<AppState>, _user: AuthUser, Path(id): Pa
 
     match expert {
         Ok(Some(e)) => {
-            // Fetch examples
+            let is_owner = e.1 == user.id;
+            // Non-owner can only see published experts
+            if !is_owner && !e.9 {
+                return (StatusCode::NOT_FOUND, Json(json!({"error": "Expert not found"}))).into_response();
+            }
+
             let examples = sqlx::query_as::<_, (Uuid, String, String, i32)>(
                 "SELECT id, question, answer, sort_order FROM expert_examples WHERE expert_id = $1 ORDER BY sort_order"
             ).bind(id).fetch_all(&state.db).await.unwrap_or_default();
 
-            // Owner info
             let owner = sqlx::query_as::<_, (String, Option<String>, Option<String>)>(
                 r#"SELECT name, image, username FROM "user" WHERE id = $1"#
             ).bind(&e.1).fetch_optional(&state.db).await.ok().flatten();
@@ -141,11 +145,11 @@ async fn get_expert(State(state): State<AppState>, _user: AuthUser, Path(id): Pa
                 "category": e.5,
                 "pricePerAsk": e.6,
                 "mode": e.7,
-                "webhookUrl": e.8,
+                "webhookUrl": if is_owner { e.8.clone() } else { None },
                 "isPublished": e.9,
                 "freeTrialCount": e.10,
                 "totalAsks": e.11,
-                "totalRevenue": e.12,
+                "totalRevenue": if is_owner { e.12 } else { 0 },
                 "avgRating": e.13,
                 "createdAt": e.14.to_rfc3339(),
                 "owner": owner.map(|(name, image, username)| json!({"name": name, "image": image, "username": username})),
@@ -299,25 +303,20 @@ async fn add_knowledge(State(state): State<AppState>, user: AuthUser, Path(id): 
         };
     }
 
-    // Chunk the content (simple ~500 char chunks)
-    let chunks: Vec<&str> = content.as_bytes()
-        .chunks(500)
-        .map(|c| std::str::from_utf8(c).unwrap_or(""))
-        .filter(|s| !s.is_empty())
-        .collect();
+    // Chunk using char-boundary-safe helper (500 chars, 50 char overlap)
+    let chunk_strings = chunk_text(content, 500, 50);
 
     let client = reqwest::Client::new();
-    let chunk_strings: Vec<String> = chunks.iter().map(|s| s.to_string()).collect();
     let embeddings = generate_embeddings(&client, api_key, &chunk_strings, EMBEDDING_MODEL).await;
 
     match embeddings {
         Ok(embs) => {
             let mut ids = vec![];
-            for (i, (chunk, emb)) in chunks.iter().zip(embs.iter()).enumerate() {
+            for (i, (chunk, emb)) in chunk_strings.iter().zip(embs.iter()).enumerate() {
                 let vec = Vector::from(emb.clone());
                 let row = sqlx::query_as::<_, (Uuid,)>(
                     "INSERT INTO expert_knowledge (expert_id, raw_content, embedding, chunk_index) VALUES ($1, $2, $3, $4) RETURNING id"
-                ).bind(id).bind(*chunk).bind(vec).bind(i as i32).fetch_one(&state.db).await;
+                ).bind(id).bind(chunk).bind(vec).bind(i as i32).fetch_one(&state.db).await;
                 if let Ok((kid,)) = row { ids.push(kid); }
             }
             (StatusCode::CREATED, Json(json!({"chunks": ids.len(), "embedded": true}))).into_response()
@@ -386,9 +385,7 @@ async fn rebuild_knowledge(State(state): State<AppState>, user: AuthUser, Path(i
         return Json(json!({"rebuilt": 1, "embedded": false})).into_response();
     }
 
-    let chunks: Vec<String> = all_content.as_bytes().chunks(500)
-        .map(|c| String::from_utf8_lossy(c).to_string())
-        .filter(|s| !s.is_empty()).collect();
+    let chunks = chunk_text(&all_content, 500, 50);
 
     let client = reqwest::Client::new();
     match generate_embeddings(&client, api_key, &chunks, EMBEDDING_MODEL).await {
@@ -432,21 +429,14 @@ async fn ask_expert(State(state): State<AppState>, user: AuthUser, Path(id): Pat
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     };
 
-    // Check and deduct balance
+    // Pre-check balance (don't deduct yet — deduct after successful LLM response)
     if price > 0 {
-        let deducted = sqlx::query_scalar::<_, i32>(
-            "UPDATE coin_balances SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND balance >= $1 RETURNING balance"
-        ).bind(price).bind(&user.id).fetch_optional(&state.db).await;
+        let balance = sqlx::query_scalar::<_, i32>(
+            "SELECT COALESCE(balance, 0) FROM coin_balances WHERE user_id = $1"
+        ).bind(&user.id).fetch_optional(&state.db).await.ok().flatten().unwrap_or(0);
 
-        match deducted {
-            Ok(None) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "insufficient_balance"}))).into_response(),
-            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
-            Ok(Some(_)) => {
-                // Record transaction
-                let _ = sqlx::query(
-                    "INSERT INTO coin_transactions (id, user_id, type, amount, description) VALUES ($1, $2, 'expert_ask', $3, $4)"
-                ).bind(Uuid::new_v4()).bind(&user.id).bind(-price).bind(format!("Expert: {}", expert_name)).execute(&state.db).await;
-            }
+        if balance < price {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "insufficient_balance"}))).into_response();
         }
     }
 
@@ -542,6 +532,7 @@ async fn ask_expert(State(state): State<AppState>, user: AuthUser, Path(id): Pat
     let user_id = user.id.clone();
     let expert_id = id;
     let q = question.to_string();
+    let expert_name_clone = format!("Expert: {}", expert_name);
 
     let output_stream = async_stream::stream! {
         let mut buf = String::new();
@@ -568,15 +559,27 @@ async fn ask_expert(State(state): State<AppState>, user: AuthUser, Path(id): Pat
             }
         }
 
+        // Deduct balance AFTER successful LLM response
+        if price > 0 && !full_content.is_empty() {
+            let _ = sqlx::query(
+                "UPDATE coin_balances SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND balance >= $1"
+            ).bind(price).bind(&user_id).execute(&db).await;
+            let _ = sqlx::query(
+                "INSERT INTO coin_transactions (id, user_id, type, amount, description) VALUES ($1, $2, 'expert_ask', $3, $4)"
+            ).bind(Uuid::new_v4()).bind(&user_id).bind(-price).bind(&expert_name_clone).execute(&db).await;
+        }
+
         // Save ask record
         let _ = sqlx::query(
             "INSERT INTO expert_asks (id, expert_id, user_id, question, answer, cost) VALUES ($1, $2, $3, $4, $5, $6)"
-        ).bind(ask_id).bind(expert_id).bind(&user_id).bind(&q).bind(&full_content).bind(price).execute(&db).await;
+        ).bind(ask_id).bind(expert_id).bind(&user_id).bind(&q).bind(&full_content).bind(if full_content.is_empty() { 0 } else { price }).execute(&db).await;
 
         // Update stats
-        let _ = sqlx::query(
-            "UPDATE experts SET total_asks = total_asks + 1, total_revenue = total_revenue + $1, updated_at = NOW() WHERE id = $2"
-        ).bind(price).bind(expert_id).execute(&db).await;
+        if !full_content.is_empty() {
+            let _ = sqlx::query(
+                "UPDATE experts SET total_asks = total_asks + 1, total_revenue = total_revenue + $1, updated_at = NOW() WHERE id = $2"
+            ).bind(price).bind(expert_id).execute(&db).await;
+        }
 
         let done = serde_json::json!({"type": "done", "content": full_content, "askId": ask_id});
         yield Ok(format!("data: {}\n\n", done));
