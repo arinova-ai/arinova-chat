@@ -571,7 +571,6 @@ export type AgentWSServerEvent =
 // ===== Conversation Note =====
 export interface Note {
   id: string;
-  conversationId: string;
   creatorId: string;
   creatorType: "user" | "agent";
   agentId: string | null;

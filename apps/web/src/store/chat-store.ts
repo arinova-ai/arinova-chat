@@ -159,7 +159,7 @@ interface ChatState {
   pinnedMessageIds: Record<string, Set<string>>; // conversationId → set of pinned message IDs
 
   // Notebook state
-  notesByConversation: Record<string, Note[]>;
+  notesByKey: Record<string, Note[]>;
   notebookOpen: boolean;
   kanbanSidebarOpen: boolean;
   kanbanFullscreen: boolean;
@@ -277,13 +277,13 @@ interface ChatState {
   openKanbanSidebar: () => void;
   closeKanbanSidebar: () => void;
   toggleKanbanFullscreen: () => void;
-  loadNotes: (conversationId: string | undefined, opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
-  createNote: (conversationId: string | undefined, title: string, content: string, tags?: string[], notebookId?: string) => Promise<Note>;
-  updateNote: (conversationId: string | undefined, noteId: string, updates: { title?: string; content?: string; tags?: string[]; isPinned?: boolean }) => Promise<void>;
-  deleteNote: (conversationId: string | undefined, noteId: string) => Promise<void>;
-  archiveNote: (conversationId: string | undefined, noteId: string) => Promise<void>;
-  unarchiveNote: (conversationId: string | undefined, noteId: string) => Promise<void>;
-  shareNote: (conversationId: string, noteId: string) => Promise<void>;
+  loadNotes: (opts?: { archived?: boolean; tags?: string[] }) => Promise<void>;
+  createNote: (title: string, content: string, tags?: string[], notebookId?: string) => Promise<Note>;
+  updateNote: (noteId: string, updates: { title?: string; content?: string; tags?: string[]; isPinned?: boolean }) => Promise<void>;
+  deleteNote: (noteId: string) => Promise<void>;
+  archiveNote: (noteId: string) => Promise<void>;
+  unarchiveNote: (noteId: string) => Promise<void>;
+  shareNote: (noteId: string) => Promise<void>;
   shareKanbanCard: (cardId: string, conversationId: string) => Promise<void>;
   setAttachedCard: (card: ChatState["attachedCard"]) => void;
   clearAttachedCard: () => void;
@@ -336,7 +336,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   threadLoading: false,
   threadListItems: {},
   pinnedMessageIds: {},
-  notesByConversation: {},
+  notesByKey: {},
   notebookOpen: false,
   kanbanSidebarOpen: false,
   kanbanFullscreen: false,
@@ -1569,8 +1569,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setAttachedCard: (card) => set({ attachedCard: card }),
   clearAttachedCard: () => set({ attachedCard: null }),
 
-  loadNotes: async (conversationId, opts) => {
-    const key = conversationId || "__standalone__";
+  loadNotes: async (opts) => {
     try {
       const qs = new URLSearchParams();
       if (opts?.archived) qs.set("archived", "true");
@@ -1579,9 +1578,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const url = `/api/users/me/notes${qStr ? "?" + qStr : ""}`;
       const res = await api<{ notes: Note[]; hasMore: boolean; nextCursor: string | null }>(url);
       set({
-        notesByConversation: {
-          ...get().notesByConversation,
-          [key]: res.notes,
+        notesByKey: {
+          ...get().notesByKey,
+          __all__: res.notes,
         },
       });
     } catch {
@@ -1589,18 +1588,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  createNote: async (conversationId, title, content, tags, notebookId) => {
-    // Always use standalone endpoint
+  createNote: async (title, content, tags, notebookId) => {
     const note = await api<Note>("/api/notes", {
       method: "POST",
       body: JSON.stringify({ notebookId, title, content, tags: tags ?? [] }),
     });
-    const key = conversationId || "__standalone__";
-    const current = get().notesByConversation[key] ?? [];
+    const key = "__all__";
+    const current = get().notesByKey[key] ?? [];
     if (!current.some((n) => n.id === note.id)) {
       set({
-        notesByConversation: {
-          ...get().notesByConversation,
+        notesByKey: {
+          ...get().notesByKey,
           [key]: [note, ...current],
         },
       });
@@ -1608,60 +1606,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return note;
   },
 
-  updateNote: async (conversationId, noteId, updates) => {
-    // Always use standalone endpoint
+  updateNote: async (noteId, updates) => {
     const updated = await api<Note>(
       `/api/notes/${noteId}`,
       { method: "PATCH", body: JSON.stringify(updates) }
     );
-    const key = conversationId || "__standalone__";
-    const current = get().notesByConversation[key] ?? [];
+    const current = get().notesByKey.__all__ ?? [];
     set({
-      notesByConversation: {
-        ...get().notesByConversation,
-        [key]: current.map((n) => n.id === noteId ? updated : n),
+      notesByKey: {
+        ...get().notesByKey,
+        __all__: current.map((n) => n.id === noteId ? updated : n),
       },
     });
   },
 
-  deleteNote: async (conversationId, noteId) => {
+  deleteNote: async (noteId) => {
     await api(`/api/notes/${noteId}`, { method: "DELETE" });
-    const key = conversationId || "__standalone__";
-    const current = get().notesByConversation[key] ?? [];
+    const current = get().notesByKey.__all__ ?? [];
     set({
-      notesByConversation: {
-        ...get().notesByConversation,
-        [key]: current.filter((n) => n.id !== noteId),
-      },
+      notesByKey: { ...get().notesByKey, __all__: current.filter((n) => n.id !== noteId) },
     });
   },
 
-  archiveNote: async (conversationId, noteId) => {
+  archiveNote: async (noteId) => {
     await api(`/api/notes/${noteId}/archive`, { method: "POST" });
-    const key = conversationId || "__standalone__";
-    const current = get().notesByConversation[key] ?? [];
+    const current = get().notesByKey.__all__ ?? [];
     set({
-      notesByConversation: {
-        ...get().notesByConversation,
-        [key]: current.filter((n) => n.id !== noteId),
-      },
+      notesByKey: { ...get().notesByKey, __all__: current.filter((n) => n.id !== noteId) },
     });
   },
 
-  unarchiveNote: async (conversationId, noteId) => {
+  unarchiveNote: async (noteId) => {
     await api(`/api/notes/${noteId}/unarchive`, { method: "POST" });
-    const key = conversationId || "__standalone__";
-    const current = get().notesByConversation[key] ?? [];
+    const current = get().notesByKey.__all__ ?? [];
     set({
-      notesByConversation: {
-        ...get().notesByConversation,
-        [key]: current.filter((n) => n.id !== noteId),
-      },
+      notesByKey: { ...get().notesByKey, __all__: current.filter((n) => n.id !== noteId) },
     });
   },
 
-  shareNote: async (_conversationId, _noteId) => {
-    // Note sharing to chat removed in Phase 2 cleanup
+  shareNote: async (_noteId) => {
+    // Note sharing removed in Phase 2 cleanup
   },
 
   shareKanbanCard: async (cardId, conversationId) => {
@@ -2723,42 +2707,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     if (event.type === "note:created") {
-      const { conversationId, note } = event;
-      const current = get().notesByConversation[conversationId] ?? [];
-      // Don't add duplicate
+      const { note } = event;
+      const current = get().notesByKey.__all__ ?? [];
       if (!current.some((n) => n.id === note.id)) {
         set({
-          notesByConversation: {
-            ...get().notesByConversation,
-            [conversationId]: [note, ...current],
-          },
+          notesByKey: { ...get().notesByKey, __all__: [note, ...current] },
         });
       }
       return;
     }
 
     if (event.type === "note:updated") {
-      const { conversationId, note } = event;
-      const current = get().notesByConversation[conversationId] ?? [];
+      const { note } = event;
+      const current = get().notesByKey.__all__ ?? [];
       set({
-        notesByConversation: {
-          ...get().notesByConversation,
-          [conversationId]: current.map((n) =>
-            n.id === note.id ? note : n
-          ),
-        },
+        notesByKey: { ...get().notesByKey, __all__: current.map((n) => n.id === note.id ? note : n) },
       });
       return;
     }
 
     if (event.type === "note:deleted") {
-      const { conversationId, noteId } = event;
-      const current = get().notesByConversation[conversationId] ?? [];
+      const { noteId } = event;
+      const current = get().notesByKey.__all__ ?? [];
       set({
-        notesByConversation: {
-          ...get().notesByConversation,
-          [conversationId]: current.filter((n) => n.id !== noteId),
-        },
+        notesByKey: { ...get().notesByKey, __all__: current.filter((n) => n.id !== noteId) },
       });
       return;
     }

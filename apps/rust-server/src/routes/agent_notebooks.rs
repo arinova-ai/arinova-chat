@@ -87,7 +87,7 @@ async fn ensure_default_notebook(db: &sqlx::PgPool, user_id: &str) -> Result<(),
     .await?;
 
     sqlx::query(
-        "UPDATE conversation_notes SET notebook_id = $1 WHERE owner_id = $2 AND notebook_id IS NULL",
+        "UPDATE notes SET notebook_id = $1 WHERE owner_id = $2 AND notebook_id IS NULL",
     )
     .bind(default_id.0)
     .bind(user_id)
@@ -152,7 +152,7 @@ async fn list_notebooks(
     let rows = sqlx::query_as::<_, NotebookRow>(
         r#"
         SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.created_at, n.updated_at,
-               (SELECT COUNT(*) FROM conversation_notes cn WHERE cn.notebook_id = n.id) AS note_count
+               (SELECT COUNT(*) FROM notes cn WHERE cn.notebook_id = n.id) AS note_count
         FROM notebooks n
         WHERE n.owner_id = $1
           AND EXISTS (SELECT 1 FROM notebook_agent_permissions WHERE notebook_id = n.id AND agent_id = $2)
@@ -373,7 +373,7 @@ async fn delete_notebook(
 
     if let Some((default_id,)) = default_id {
         let _ = sqlx::query(
-            "UPDATE conversation_notes SET notebook_id = $1 WHERE notebook_id = $2",
+            "UPDATE notes SET notebook_id = $1 WHERE notebook_id = $2",
         )
         .bind(default_id)
         .bind(id)
@@ -464,7 +464,6 @@ async fn list_notebook_notes(
     #[derive(FromRow)]
     struct NoteListRow {
         id: Uuid,
-        conversation_id: Option<Uuid>,
         title: String,
         tags: Vec<String>,
         is_pinned: bool,
@@ -474,10 +473,10 @@ async fn list_notebook_notes(
 
     let rows = sqlx::query_as::<_, NoteListRow>(
         r#"
-        SELECT id, conversation_id, title, tags,
+        SELECT id, title, tags,
                COALESCE(is_pinned, false) AS is_pinned,
                created_at, updated_at
-        FROM conversation_notes
+        FROM notes
         WHERE notebook_id = $1 AND archived_at IS NULL
         ORDER BY is_pinned DESC, updated_at DESC
         "#,
@@ -493,7 +492,6 @@ async fn list_notebook_notes(
                 .map(|n| {
                     json!({
                         "id": n.id.to_string(),
-                        "conversationId": n.conversation_id.map(|id| id.to_string()),
                         "title": &n.title,
                         "tags": &n.tags,
                         "isPinned": n.is_pinned,

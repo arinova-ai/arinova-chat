@@ -61,7 +61,8 @@ async fn main() {
         ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
         ALTER TABLE community_members ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
 
-        CREATE TABLE IF NOT EXISTS conversation_notes (
+        ALTER TABLE IF EXISTS conversation_notes RENAME TO notes;
+        CREATE TABLE IF NOT EXISTS notes (
             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             conversation_id UUID NOT NULL,
             creator_id      TEXT NOT NULL,
@@ -72,11 +73,11 @@ async fn main() {
             created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
         );
-        CREATE INDEX IF NOT EXISTS idx_conv_notes_conversation ON conversation_notes(conversation_id, created_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_conv_notes_creator ON conversation_notes(creator_id);
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_conversation ON notes(conversation_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_creator ON notes(creator_id);
 
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ DEFAULT NULL;
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ DEFAULT NULL;
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
 
         ALTER TABLE conversation_user_members ADD COLUMN IF NOT EXISTS agent_notes_enabled BOOLEAN NOT NULL DEFAULT true;
 
@@ -248,19 +249,19 @@ async fn main() {
 
         CREATE TABLE IF NOT EXISTS kanban_card_notes (
             card_id UUID NOT NULL REFERENCES kanban_cards(id) ON DELETE CASCADE,
-            note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (card_id, note_id)
         );
 
         CREATE TABLE IF NOT EXISTS note_links (
-            source_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
-            target_note_id UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            source_note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+            target_note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             PRIMARY KEY (source_note_id, target_note_id)
         );
 
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS summary TEXT DEFAULT NULL;
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS summary TEXT DEFAULT NULL;
 
         -- Add tags column to memory_entries
         ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
@@ -284,18 +285,18 @@ async fn main() {
         );
 
         -- Note user-level ownership
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES "user"(id) ON DELETE SET NULL;
-        CREATE INDEX IF NOT EXISTS idx_conv_notes_owner ON conversation_notes(owner_id, created_at DESC);
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES "user"(id) ON DELETE SET NULL;
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_owner ON notes(owner_id, created_at DESC);
 
         -- Backfill owner_id for user-created notes
-        UPDATE conversation_notes SET owner_id = creator_id WHERE creator_type = 'user' AND owner_id IS NULL;
+        UPDATE notes SET owner_id = creator_id WHERE creator_type = 'user' AND owner_id IS NULL;
         -- Backfill owner_id for agent-created notes
-        UPDATE conversation_notes n SET owner_id = c.user_id FROM conversations c WHERE n.conversation_id = c.id AND n.creator_type = 'agent' AND n.owner_id IS NULL;
+        UPDATE notes n SET owner_id = c.user_id FROM conversations c WHERE n.conversation_id = c.id AND n.creator_type = 'agent' AND n.owner_id IS NULL;
 
         -- Note-conversation linking table
         CREATE TABLE IF NOT EXISTS note_conversation_links (
             id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            note_id         UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
+            note_id         UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
             conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
             linked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(note_id, conversation_id)
@@ -305,14 +306,14 @@ async fn main() {
 
         -- Backfill links for existing notes
         INSERT INTO note_conversation_links (note_id, conversation_id)
-        SELECT id, conversation_id FROM conversation_notes
+        SELECT id, conversation_id FROM notes
         ON CONFLICT (note_id, conversation_id) DO NOTHING;
 
         ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_start TIMESTAMPTZ;
         ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_end TIMESTAMPTZ;
 
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
 
         ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE;
         ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE;
@@ -361,12 +362,12 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_notebooks_owner ON notebooks(owner_id, sort_order);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_notebooks_owner_default ON notebooks (owner_id) WHERE is_default = true;
 
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS notebook_id UUID REFERENCES notebooks(id) ON DELETE SET NULL;
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES conversation_notes(id) ON DELETE SET NULL;
-        ALTER TABLE conversation_notes ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS notebook_id UUID REFERENCES notebooks(id) ON DELETE SET NULL;
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES notes(id) ON DELETE SET NULL;
+        ALTER TABLE notes ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT false;
 
-        CREATE INDEX IF NOT EXISTS idx_conv_notes_notebook ON conversation_notes(notebook_id) WHERE notebook_id IS NOT NULL;
-        CREATE INDEX IF NOT EXISTS idx_conv_notes_parent ON conversation_notes(parent_id) WHERE parent_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_notebook ON notes(notebook_id) WHERE notebook_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_conv_notes_parent ON notes(parent_id) WHERE parent_id IS NOT NULL;
 
         -- Per-notebook agent access control
         CREATE TABLE IF NOT EXISTS notebook_agent_permissions (
@@ -526,7 +527,7 @@ async fn main() {
         ALTER TABLE board_members DROP CONSTRAINT IF EXISTS board_members_permission_check;
         ALTER TABLE board_members ADD CONSTRAINT board_members_permission_check CHECK (permission IN ('view', 'edit', 'admin'));
         ALTER TABLE "user" ADD COLUMN IF NOT EXISTS office_visits_enabled BOOLEAN NOT NULL DEFAULT FALSE;
-        ALTER TABLE conversation_notes ALTER COLUMN conversation_id DROP NOT NULL;
+        ALTER TABLE notes ALTER COLUMN conversation_id DROP NOT NULL;
         ALTER TABLE "user" ADD COLUMN IF NOT EXISTS office_theme_id TEXT;
         CREATE TABLE IF NOT EXISTS notebook_members (
             notebook_id UUID NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
@@ -537,6 +538,7 @@ async fn main() {
             PRIMARY KEY (notebook_id, user_id)
         );
         DROP TABLE IF EXISTS note_conversation_links;
+        ALTER TABLE notes DROP COLUMN IF EXISTS conversation_id;
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

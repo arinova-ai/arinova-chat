@@ -988,7 +988,6 @@ function NotebookNotes({
           open
           hideArchivedTab
           onOpenChange={onClose ? () => onClose() : () => {}}
-          conversationId={conversationId}
           notebookId={notebook.id}
           searchQuery={searchQuery}
           includeInCapsule={notebook.includeInCapsule}

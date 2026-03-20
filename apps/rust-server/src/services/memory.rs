@@ -82,7 +82,7 @@ pub async fn extract_capsule(
         Ok((count, msg_count, first_msg_time, new_watermark, new_notes_watermark)) => {
             // Update note_count from linked conversation notes
             let note_count = sqlx::query_scalar::<_, i64>(
-                r#"SELECT COUNT(*) FROM conversation_notes n
+                r#"SELECT COUNT(*) FROM notes n
                    JOIN note_conversation_links ncl ON ncl.note_id = n.id
                    LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                    LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $2
@@ -225,7 +225,7 @@ async fn do_extraction(
     let notes: Vec<(String, String, chrono::NaiveDateTime)> = if let Some(nw) = notes_extracted_through {
         sqlx::query_as(
             r#"SELECT n.title, n.content, n.created_at
-               FROM conversation_notes n
+               FROM notes n
                JOIN note_conversation_links ncl ON ncl.note_id = n.id
                LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $3
@@ -246,7 +246,7 @@ async fn do_extraction(
     } else {
         sqlx::query_as(
             r#"SELECT n.title, n.content, n.created_at
-               FROM conversation_notes n
+               FROM notes n
                JOIN note_conversation_links ncl ON ncl.note_id = n.id
                LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $2

@@ -723,7 +723,7 @@ async fn get_board(
     let card_notes = sqlx::query_as::<_, CardNoteRow>(
         r#"SELECT cn.card_id, n.id AS note_id, n.title AS note_title
            FROM kanban_card_notes cn
-           JOIN conversation_notes n ON n.id = cn.note_id
+           JOIN notes n ON n.id = cn.note_id
            JOIN kanban_cards c ON c.id = cn.card_id
            JOIN kanban_columns col ON col.id = c.column_id
            WHERE col.board_id = $1
@@ -1243,7 +1243,7 @@ async fn get_card(
     let notes = sqlx::query_as::<_, CardNoteRow>(
         r#"SELECT cn.card_id, n.id AS note_id, n.title AS note_title
            FROM kanban_card_notes cn
-           JOIN conversation_notes n ON n.id = cn.note_id
+           JOIN notes n ON n.id = cn.note_id
            WHERE cn.card_id = $1
            ORDER BY cn.created_at"#,
     )
@@ -2776,7 +2776,7 @@ async fn link_note_to_card(
 
     // Verify the note exists
     let note_exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM conversation_notes WHERE id = $1)",
+        "SELECT EXISTS(SELECT 1 FROM notes WHERE id = $1)",
     )
     .bind(body.note_id)
     .fetch_one(&state.db)
@@ -2839,7 +2839,7 @@ async fn list_card_notes(
 
     let notes = sqlx::query_as::<_, LinkedNoteRow>(
         r#"SELECT n.id, n.title, n.tags, n.created_at
-           FROM conversation_notes n
+           FROM notes n
            JOIN kanban_card_notes cn ON cn.note_id = n.id
            WHERE cn.card_id = $1
            ORDER BY cn.created_at DESC"#,
@@ -3076,7 +3076,7 @@ async fn list_owner_notes(
     let notes = if search.is_empty() {
         sqlx::query_as::<_, LinkedNoteRow>(
             r#"SELECT id, title, tags, created_at
-               FROM conversation_notes
+               FROM notes
                WHERE creator_id = $1 AND archived_at IS NULL
                ORDER BY updated_at DESC
                LIMIT $2"#,
@@ -3088,7 +3088,7 @@ async fn list_owner_notes(
     } else {
         sqlx::query_as::<_, LinkedNoteRow>(
             r#"SELECT id, title, tags, created_at
-               FROM conversation_notes
+               FROM notes
                WHERE creator_id = $1 AND archived_at IS NULL
                  AND LOWER(title) LIKE '%' || LOWER($2) || '%'
                ORDER BY updated_at DESC
@@ -3281,7 +3281,7 @@ async fn agent_link_note_to_card(
     }
 
     let note_exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM conversation_notes WHERE id = $1)",
+        "SELECT EXISTS(SELECT 1 FROM notes WHERE id = $1)",
     )
     .bind(body.note_id)
     .fetch_one(&state.db)
@@ -3352,7 +3352,7 @@ async fn agent_list_card_notes(
 
     let notes = sqlx::query_as::<_, LinkedNoteRow>(
         r#"SELECT n.id, n.title, n.tags, n.created_at
-           FROM conversation_notes n
+           FROM notes n
            JOIN kanban_card_notes cn ON cn.note_id = n.id
            WHERE cn.card_id = $1
            ORDER BY cn.created_at DESC"#,

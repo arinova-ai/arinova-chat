@@ -46,7 +46,6 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, FromRow)]
 struct NoteRow {
     id: Uuid,
-    conversation_id: Option<Uuid>,
     creator_id: String,
     creator_type: String,
     agent_id: Option<Uuid>,
@@ -61,11 +60,11 @@ struct NoteRow {
 }
 
 const NOTE_QUERY_BASE: &str = r#"
-    SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
+    SELECT n.id, n.creator_id, n.creator_type, n.agent_id,
            n.title, n.content, n.tags, n.archived_at, n.created_at, n.updated_at,
            COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
            a.name AS agent_name
-    FROM conversation_notes n
+    FROM notes n
     LEFT JOIN "user" u ON u.id = n.creator_id
     LEFT JOIN agents a ON a.id = n.agent_id
 "#;
@@ -73,7 +72,6 @@ const NOTE_QUERY_BASE: &str = r#"
 fn note_to_json(n: &NoteRow) -> serde_json::Value {
     json!({
         "id": n.id,
-        "conversationId": n.conversation_id,
         "creatorId": n.creator_id,
         "creatorType": n.creator_type,
         "creatorName": n.creator_name,
@@ -297,7 +295,7 @@ async fn agent_list_notes(
             }
         };
         sqlx::query_as::<_, (DateTime<Utc>,)>(
-            "SELECT created_at FROM conversation_notes WHERE id = $1",
+            "SELECT created_at FROM notes WHERE id = $1",
         )
         .bind(before_uuid)
         .fetch_optional(&state.db)
@@ -468,11 +466,10 @@ async fn agent_create_note(
     };
 
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, conversation_id, creator_id, creator_type, agent_id, owner_id, notebook_id, title, content, tags, created_at, updated_at)
-           VALUES ($1, $2, $3, 'agent', $4, $5, $6, $7, $8, $9, $10, $10)"#,
+        r#"INSERT INTO notes (id, creator_id, creator_type, agent_id, owner_id, notebook_id, title, content, tags, created_at, updated_at)
+           VALUES ($1, $2, 'agent', $3, $4, $5, $6, $7, $8, $9, $9)"#,
     )
     .bind(note_id)
-    .bind(conv_id)
     .bind(&creator_id)
     .bind(agent.id)
     .bind(&conv_owner_id)
@@ -593,10 +590,9 @@ async fn agent_update_note(
 
     // Only the agent that created the note can edit it
     let note = sqlx::query_as::<_, (Option<Uuid>,)>(
-        "SELECT agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+        "SELECT agent_id FROM notes WHERE id = $1",
     )
     .bind(note_id)
-    .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
@@ -660,17 +656,16 @@ async fn agent_update_note(
     }
 
     let sql = format!(
-        "UPDATE conversation_notes SET {} WHERE id = ${} AND conversation_id = ${}",
+        "UPDATE notes SET {} WHERE id = ${}",
         set_clauses.join(", "),
-        param_idx,
-        param_idx + 1
+        param_idx
     );
 
     let mut q = sqlx::query(&sql);
     if let Some(ref title) = title_val { q = q.bind(title); }
     if let Some(ref content) = content_val { q = q.bind(content); }
     if let Some(ref tags) = tags_val { q = q.bind(tags); }
-    q = q.bind(note_id).bind(conv_id);
+    q = q.bind(note_id);
 
     let updated = q.execute(&state.db).await;
 
@@ -765,10 +760,9 @@ async fn agent_delete_note(
 
     // Only the agent that created the note can delete it
     let note = sqlx::query_as::<_, (Option<Uuid>,)>(
-        "SELECT agent_id FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+        "SELECT agent_id FROM notes WHERE id = $1",
     )
     .bind(note_id)
-    .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
@@ -798,10 +792,9 @@ async fn agent_delete_note(
     }
 
     let result = sqlx::query(
-        "DELETE FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+        "DELETE FROM notes WHERE id = $1",
     )
     .bind(note_id)
-    .bind(conv_id)
     .execute(&state.db)
     .await;
 
@@ -848,10 +841,9 @@ async fn agent_share_note(
     }
 
     let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
-        "SELECT title, content, tags FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+        "SELECT title, content, tags FROM notes WHERE id = $1",
     )
     .bind(note_id)
-    .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
@@ -958,7 +950,7 @@ async fn agent_list_notes_standalone(
             Ok(u) => u,
             Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid cursor"}))).into_response(),
         };
-        sqlx::query_as::<_, (DateTime<Utc>,)>("SELECT created_at FROM conversation_notes WHERE id = $1")
+        sqlx::query_as::<_, (DateTime<Utc>,)>("SELECT created_at FROM notes WHERE id = $1")
             .bind(before_uuid).fetch_optional(&state.db).await.ok().flatten().map(|(ts,)| ts)
     } else { None };
 
@@ -1042,7 +1034,7 @@ async fn agent_create_note_standalone(
         .bind(notebook_id).fetch_optional(&state.db).await.ok().flatten().unwrap_or_else(|| owner_id.clone());
 
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, creator_id, creator_type, agent_id, owner_id, notebook_id, title, content, tags, created_at, updated_at)
+        r#"INSERT INTO notes (id, creator_id, creator_type, agent_id, owner_id, notebook_id, title, content, tags, created_at, updated_at)
            VALUES ($1, $2, 'agent', $3, $4, $5, $6, $7, $8, $9, $9)"#,
     )
     .bind(note_id).bind(&owner_id).bind(agent.id).bind(&nb_owner_id).bind(notebook_id)
@@ -1085,7 +1077,7 @@ async fn agent_get_note_standalone(
         Ok(Some(note)) => {
             // Verify agent has permission on the note's notebook
             if let Some(nb_id) = sqlx::query_scalar::<_, Uuid>(
-                "SELECT notebook_id FROM conversation_notes WHERE id = $1",
+                "SELECT notebook_id FROM notes WHERE id = $1",
             ).bind(note_id).fetch_optional(&state.db).await.ok().flatten() {
                 if !agent_has_notebook_permission(&state.db, agent.id, nb_id).await {
                     return (StatusCode::FORBIDDEN, Json(json!({"error": "No permission on this notebook"}))).into_response();
@@ -1119,7 +1111,7 @@ async fn agent_update_note_standalone(
 
     // Verify agent has permission on the note's notebook and is the creator
     let note = sqlx::query_as::<_, (Option<Uuid>, Option<Uuid>)>(
-        "SELECT agent_id, notebook_id FROM conversation_notes WHERE id = $1",
+        "SELECT agent_id, notebook_id FROM notes WHERE id = $1",
     ).bind(note_id).fetch_optional(&state.db).await;
 
     match note {
@@ -1155,7 +1147,7 @@ async fn agent_update_note_standalone(
     if content_val.is_some() { set_clauses.push(format!("content = ${param_idx}")); param_idx += 1; }
     if tags_val.is_some() { set_clauses.push(format!("tags = ${param_idx}")); param_idx += 1; }
 
-    let sql = format!("UPDATE conversation_notes SET {} WHERE id = ${}", set_clauses.join(", "), param_idx);
+    let sql = format!("UPDATE notes SET {} WHERE id = ${}", set_clauses.join(", "), param_idx);
 
     let mut q = sqlx::query(&sql);
     if let Some(ref title) = title_val { q = q.bind(title); }
@@ -1190,7 +1182,7 @@ async fn agent_delete_note_standalone(
 ) -> Response {
     // Verify agent created the note and has notebook permission
     let note = sqlx::query_as::<_, (Option<Uuid>, Option<Uuid>)>(
-        "SELECT agent_id, notebook_id FROM conversation_notes WHERE id = $1",
+        "SELECT agent_id, notebook_id FROM notes WHERE id = $1",
     ).bind(note_id).fetch_optional(&state.db).await;
 
     match note {
@@ -1208,7 +1200,7 @@ async fn agent_delete_note_standalone(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 
-    let result = sqlx::query("DELETE FROM conversation_notes WHERE id = $1")
+    let result = sqlx::query("DELETE FROM notes WHERE id = $1")
         .bind(note_id).execute(&state.db).await;
 
     match result {

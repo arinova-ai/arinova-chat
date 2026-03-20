@@ -239,7 +239,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
           placeholder={t("wiki.titlePlaceholder")}
           className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
         />
-        <NotebookEditor content={editContent} onChange={setEditContent} editable placeholder={t("wiki.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
+        <NotebookEditor content={editContent} onChange={setEditContent} editable placeholder={t("wiki.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background"  />
       </div>
     </div>
   );
@@ -287,7 +287,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
           placeholder={t("wiki.titlePlaceholder")}
           className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
         />
-        <NotebookEditor content={newContent} onChange={setNewContent} editable placeholder={t("wiki.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
+        <NotebookEditor content={newContent} onChange={setNewContent} editable placeholder={t("wiki.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background"  />
       </div>
     </div>
   );

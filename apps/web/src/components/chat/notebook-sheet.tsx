@@ -38,7 +38,6 @@ import { Input } from "@/components/ui/input";
 interface NotebookSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  conversationId?: string;
   inline?: boolean;
   /** When provided, load notes from /api/notebooks/:id/notes instead of conversation notes */
   notebookId?: string;
@@ -248,13 +247,13 @@ function SwipeableNoteItem({
   );
 }
 
-export function NotebookSheet({ open, onOpenChange, conversationId, inline, notebookId, searchQuery, hideArchivedTab, includeInCapsule, readOnly }: NotebookSheetProps) {
+export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQuery, hideArchivedTab, includeInCapsule, readOnly }: NotebookSheetProps) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const isMobileRaw = useIsMobile();
   const isMobile = mounted ? isMobileRaw : false;
-  const storeNotes = useChatStore((s) => s.notesByConversation[conversationId || "__standalone__"] ?? EMPTY_NOTES);
+  const storeNotes = useChatStore((s) => s.notesByKey.__all__ ?? EMPTY_NOTES);
   const loadStoreNotes = useChatStore((s) => s.loadNotes);
   const [notebookNotes, setNotebookNotes] = useState<Note[]>([]);
   const rawNotes = notebookId ? notebookNotes : storeNotes;
@@ -264,15 +263,13 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
         return (n.title?.toLowerCase().includes(q)) || (n.content?.toLowerCase().includes(q));
       })
     : rawNotes;
-  const loadNotes = useCallback(async (cid: string | undefined, opts?: { archived?: boolean; tags?: string[] }) => {
+  const loadNotes = useCallback(async (opts?: { archived?: boolean; tags?: string[] }) => {
     if (notebookId) {
-      // Load from notebook API
-      const data = await api<{ notes: Array<{ id: string; conversationId: string; title: string; tags: string[]; isPinned: boolean; createdAt: string; updatedAt: string }> }>(
+      const data = await api<{ notes: Array<{ id: string; title: string; tags: string[]; isPinned: boolean; createdAt: string; updatedAt: string }> }>(
         `/api/notebooks/${notebookId}/notes`
       );
       setNotebookNotes(data.notes.map((n) => ({
         id: n.id,
-        conversationId: n.conversationId,
         title: n.title,
         content: "",
         tags: n.tags,
@@ -286,7 +283,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
         archivedAt: null,
       } satisfies Note)));
     } else {
-      await loadStoreNotes(cid, opts);
+      await loadStoreNotes(opts);
     }
   }, [notebookId, loadStoreNotes]);
   const createNote = useChatStore((s) => s.createNote);
@@ -323,14 +320,14 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
   const [askAiLoading, setAskAiLoading] = useState(false);
 
   useEffect(() => {
-    if (open && (conversationId || notebookId)) {
+    if (open) {
       setLoading(true);
-      loadNotes(conversationId, { archived: showArchived, tags: filterTags.length ? filterTags : undefined }).finally(() => {
+      loadNotes({ archived: showArchived, tags: filterTags.length ? filterTags : undefined }).finally(() => {
         setLoading(false);
         setNotesLoaded(true);
       });
     }
-  }, [open, conversationId, notebookId, loadNotes, showArchived, filterTags]);
+  }, [open, notebookId, loadNotes, showArchived, filterTags]);
 
   useEffect(() => {
     if (!open) {
@@ -352,7 +349,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
 
   useEffect(() => {
     setNotesLoaded(false);
-  }, [conversationId]);
+  }, []);
 
   // Navigate to a specific note when pendingNoteId is set
   useEffect(() => {
@@ -432,7 +429,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (!titleInput.trim()) return;
     setLoading(true);
     try {
-      let note = await createNote(conversationId, titleInput.trim(), contentInput, tagsInput, notebookId ?? undefined);
+      let note = await createNote(titleInput.trim(), contentInput, tagsInput, notebookId ?? undefined);
       if (notebookId) {
         setNotebookNotes((prev) => [note, ...prev]);
       }
@@ -446,13 +443,13 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     } finally {
       setLoading(false);
     }
-  }, [conversationId, notebookId, titleInput, contentInput, tagsInput, createNote]);
+  }, [notebookId, titleInput, contentInput, tagsInput, createNote]);
 
   const handleSave = useCallback(async () => {
     if (!selectedNote || !titleInput.trim()) return;
     setLoading(true);
     try {
-      await updateNote(conversationId, selectedNote.id, {
+      await updateNote(selectedNote.id, {
         title: titleInput.trim(),
         content: contentInput,
         tags: tagsInput,
@@ -470,7 +467,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     } finally {
       setLoading(false);
     }
-  }, [selectedNote, conversationId, titleInput, contentInput, tagsInput, updateNote]);
+  }, [selectedNote, titleInput, contentInput, tagsInput, updateNote]);
 
   const handleDelete = useCallback(async (note?: Note) => {
     const target = note || selectedNote;
@@ -478,19 +475,19 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (!window.confirm(t("chat.notebook.confirmDelete"))) return;
     setLoading(true);
     try {
-      await deleteNote(target.conversationId || conversationId, target.id);
+      await deleteNote(target.id);
       if (selectedNote?.id === target.id) {
         setSelectedNote(null);
         setViewMode("list");
       }
       // Re-fetch to ensure list is in sync with server
-      await loadNotes(conversationId, { archived: showArchived, tags: filterTags.length ? filterTags : undefined });
+      await loadNotes({ archived: showArchived, tags: filterTags.length ? filterTags : undefined });
     } catch {
       // Error toast handled by api()
     } finally {
       setLoading(false);
     }
-  }, [selectedNote, conversationId, deleteNote, loadNotes, showArchived, filterTags, t]);
+  }, [selectedNote, deleteNote, loadNotes, showArchived, filterTags, t]);
 
   const handleShareNote = useCallback((note: Note) => {
     setShareContent({
@@ -507,32 +504,32 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
     if (!target) return;
     setLoading(true);
     try {
-      await archiveNote(conversationId, target.id);
+      await archiveNote(target.id);
       if (selectedNote?.id === target.id) {
         setSelectedNote(null);
         setViewMode("list");
       }
     } catch { /* api shows toast */ }
     setLoading(false);
-  }, [selectedNote, conversationId, archiveNote]);
+  }, [selectedNote, archiveNote]);
 
   const handleUnarchiveNote = useCallback(async (note: Note) => {
     setLoading(true);
     try {
-      await unarchiveNote(conversationId, note.id);
+      await unarchiveNote(note.id);
     } catch { /* api shows toast */ }
     setLoading(false);
-  }, [conversationId, unarchiveNote]);
+  }, [unarchiveNote]);
 
   const handleShareNoteToChat = useCallback(async (note?: Note) => {
     const target = note || selectedNote;
     if (!target) return;
     setLoading(true);
     try {
-      if (conversationId) await shareNoteApi(conversationId, target.id);
+      await shareNoteApi(target.id);
     } catch { /* api shows toast */ }
     setLoading(false);
-  }, [selectedNote, conversationId, shareNoteApi]);
+  }, [selectedNote, shareNoteApi]);
 
   const handleAutoTag = useCallback(async () => {
     if (!selectedNote) return;
@@ -547,17 +544,17 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
       }
     } catch { /* api shows toast */ }
     setAutoTagging(false);
-  }, [selectedNote, conversationId]);
+  }, [selectedNote]);
 
   const handleAcceptSuggestedTag = useCallback(async (tag: string) => {
     if (!selectedNote) return;
     const newTags = [...(selectedNote.tags ?? []), tag];
     setSuggestedTags((prev) => prev.filter((t) => t !== tag));
     try {
-      await updateNote(conversationId, selectedNote.id, { tags: newTags });
+      await updateNote(selectedNote.id, { tags: newTags });
       setSelectedNote({ ...selectedNote, tags: newTags });
     } catch { /* api shows toast */ }
-  }, [selectedNote, conversationId, updateNote]);
+  }, [selectedNote, updateNote]);
 
   const handleDismissSuggestedTags = useCallback(() => {
     setSuggestedTags([]);
@@ -819,7 +816,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                 </div>
               )}
               {selectedNote.content ? (
-                <NotebookEditor content={selectedNote.content} editable={false} conversationId={conversationId} />
+                <NotebookEditor content={selectedNote.content} editable={false} />
               ) : (
                 <p className="text-sm text-muted-foreground italic">{t("chat.notebook.noContent")}</p>
               )}
@@ -1003,7 +1000,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                   className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                 />
               </div>
-              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
+              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={handleCreate} disabled={loading || !titleInput.trim()}>
@@ -1047,7 +1044,7 @@ export function NotebookSheet({ open, onOpenChange, conversationId, inline, note
                   className="flex-1 min-w-[60px] bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                 />
               </div>
-              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" conversationId={conversationId} />
+              <NotebookEditor content={contentInput} onChange={setContentInput} editable placeholder={t("chat.notebook.contentPlaceholder")} className="flex-1 min-h-0 rounded-md border border-border bg-background" />
               <div className="flex gap-2 justify-end">
                 <Button variant="ghost" size="sm" onClick={handleBack}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={handleSave} disabled={loading || !titleInput.trim()}>

@@ -51,7 +51,6 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, FromRow)]
 struct NoteRow {
     id: Uuid,
-    conversation_id: Option<Uuid>,
     creator_id: String,
     creator_type: String,
     agent_id: Option<Uuid>,
@@ -150,7 +149,6 @@ async fn get_note_broadcast_ids(db: &PgPool, conv_id: Uuid, notebook_id: Option<
 fn note_to_json(n: &NoteRow) -> serde_json::Value {
     json!({
         "id": n.id,
-        "conversationId": n.conversation_id.map(|id| json!(id)).unwrap_or(serde_json::Value::Null),
         "creatorId": n.creator_id,
         "creatorType": n.creator_type,
         "creatorName": n.creator_name,
@@ -253,7 +251,7 @@ pub fn parse_note_links(content: &str) -> Vec<String> {
 }
 
 /// Sync note_links table for a given source note based on parsed [[]] references.
-pub async fn sync_note_links(db: &PgPool, source_note_id: Uuid, conv_id: Uuid, content: &str) {
+pub async fn sync_note_links(db: &PgPool, source_note_id: Uuid, _conv_id: Uuid, content: &str) {
     let titles = parse_note_links(content);
 
     // Delete old links from this source
@@ -266,12 +264,14 @@ pub async fn sync_note_links(db: &PgPool, source_note_id: Uuid, conv_id: Uuid, c
         return;
     }
 
-    // Find target notes by title within the same conversation
+    // Find target notes by title (scoped to same owner via notebook)
     for title in &titles {
         let target = sqlx::query_as::<_, (Uuid,)>(
-            "SELECT id FROM conversation_notes WHERE conversation_id = $1 AND LOWER(title) = LOWER($2) AND id != $3 LIMIT 1",
+            r#"SELECT n.id FROM notes n
+               WHERE LOWER(n.title) = LOWER($1) AND n.id != $2
+                 AND n.notebook_id = (SELECT notebook_id FROM notes WHERE id = $2)
+               LIMIT 1"#,
         )
-        .bind(conv_id)
         .bind(title)
         .bind(source_note_id)
         .fetch_optional(db)
@@ -300,7 +300,7 @@ pub async fn get_backlinks(db: &PgPool, note_id: Uuid) -> Vec<serde_json::Value>
     let rows = sqlx::query_as::<_, BacklinkRow>(
         r#"SELECT n.id, n.title
            FROM note_links nl
-           JOIN conversation_notes n ON n.id = nl.source_note_id
+           JOIN notes n ON n.id = nl.source_note_id
            WHERE nl.target_note_id = $1
            ORDER BY n.title"#,
     )
@@ -334,13 +334,13 @@ pub async fn get_linked_cards(db: &PgPool, note_id: Uuid) -> Vec<serde_json::Val
 }
 
 const NOTE_QUERY_BASE: &str = r#"
-    SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
+    SELECT n.id, n.creator_id, n.creator_type, n.agent_id,
            n.title, n.content, n.tags, n.archived_at, n.summary,
            n.created_at, n.updated_at,
            COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
            a.name AS agent_name,
            n.share_token, COALESCE(n.is_public, false) AS is_public
-    FROM conversation_notes n
+    FROM notes n
     LEFT JOIN "user" u ON u.id = n.creator_id
     LEFT JOIN agents a ON a.id = n.agent_id
 "#;
@@ -363,24 +363,13 @@ async fn get_note_by_id(
 
     match row {
         Ok(Some(note)) => {
-            // Verify the user is a member of the note's conversation (if it has one)
-            if let Some(cid) = note.conversation_id {
-                if !is_member(&state.db, cid, &user.id).await {
-                    return (
-                        StatusCode::FORBIDDEN,
-                        Json(json!({"error": "Not a member of this conversation"})),
-                    )
-                        .into_response();
-                }
-            } else {
-                // No conversation — check note ownership
-                if note.creator_id != user.id {
-                    return (
-                        StatusCode::FORBIDDEN,
-                        Json(json!({"error": "Not authorized"})),
-                    )
-                        .into_response();
-                }
+            // Check note ownership
+            if note.creator_id != user.id {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({"error": "Not authorized"})),
+                )
+                    .into_response();
             }
             let mut j = note_to_json(&note);
             let backlinks = get_backlinks(&state.db, note.id).await;
@@ -419,7 +408,7 @@ async fn get_note_related_memories(
     }
 
     let content = sqlx::query_scalar::<_, String>(
-        "SELECT content FROM conversation_notes WHERE id = $1",
+        "SELECT content FROM notes WHERE id = $1",
     )
     .bind(note_id)
     .fetch_optional(&state.db)
@@ -574,7 +563,7 @@ pub fn spawn_summary_if_needed(db: PgPool, gemini_key: String, note_id: Uuid, co
         let system = "Summarize the following note in 1-2 concise sentences. Output only the summary, nothing else.";
         match call_gemini(&gemini_key, system, &content, 256).await {
             Ok(summary) => {
-                let _ = sqlx::query("UPDATE conversation_notes SET summary = $1 WHERE id = $2")
+                let _ = sqlx::query("UPDATE notes SET summary = $1 WHERE id = $2")
                     .bind(summary.trim())
                     .bind(note_id)
                     .execute(&db)
@@ -606,10 +595,9 @@ async fn extract_capsule_from_note(
     }
 
     let note = sqlx::query_as::<_, (String, String)>(
-        "SELECT title, content FROM conversation_notes WHERE id = $1 AND conversation_id = $2",
+        "SELECT title, content FROM notes WHERE id = $1",
     )
     .bind(note_id)
-    .bind(conv_id)
     .fetch_optional(&state.db)
     .await;
 
@@ -886,7 +874,7 @@ async fn list_user_notes(
             }
         };
         sqlx::query_as::<_, (DateTime<Utc>,)>(
-            "SELECT created_at FROM conversation_notes WHERE id = $1",
+            "SELECT created_at FROM notes WHERE id = $1",
         )
         .bind(before_uuid)
         .fetch_optional(&state.db)
@@ -953,13 +941,13 @@ async fn list_user_notes(
     }
 
     let q = format!(
-        r#"SELECT n.id, n.conversation_id, n.creator_id, n.creator_type, n.agent_id,
+        r#"SELECT n.id, n.creator_id, n.creator_type, n.agent_id,
                   n.title, n.content, n.tags, n.archived_at, n.summary,
                   n.created_at, n.updated_at,
                   COALESCE(CASE WHEN n.creator_type = 'agent' THEN a.name END, u.name, 'Unknown') AS creator_name,
                   a.name AS agent_name,
                   n.share_token, COALESCE(n.is_public, false) AS is_public
-           FROM conversation_notes n
+           FROM notes n
            LEFT JOIN "user" u ON u.id = n.creator_id
            LEFT JOIN agents a ON a.id = n.agent_id
            WHERE {}
@@ -1125,7 +1113,7 @@ async fn create_public_share(
 ) -> Response {
     // Verify user owns the note
     let owner = sqlx::query_scalar::<_, String>(
-        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+        "SELECT owner_id FROM notes WHERE id = $1 AND owner_id IS NOT NULL",
     )
     .bind(note_id)
     .fetch_optional(&state.db)
@@ -1153,7 +1141,7 @@ async fn create_public_share(
     let token = Uuid::new_v4().to_string().replace("-", "");
 
     let result = sqlx::query(
-        "UPDATE conversation_notes SET share_token = $1, is_public = true WHERE id = $2 AND owner_id = $3",
+        "UPDATE notes SET share_token = $1, is_public = true WHERE id = $2 AND owner_id = $3",
     )
     .bind(&token)
     .bind(note_id)
@@ -1183,7 +1171,7 @@ async fn revoke_public_share(
 ) -> Response {
     // Verify user owns the note
     let owner = sqlx::query_scalar::<_, String>(
-        "SELECT owner_id FROM conversation_notes WHERE id = $1 AND owner_id IS NOT NULL",
+        "SELECT owner_id FROM notes WHERE id = $1 AND owner_id IS NOT NULL",
     )
     .bind(note_id)
     .fetch_optional(&state.db)
@@ -1208,7 +1196,7 @@ async fn revoke_public_share(
     }
 
     let result = sqlx::query(
-        "UPDATE conversation_notes SET share_token = NULL, is_public = false WHERE id = $1 AND owner_id = $2",
+        "UPDATE notes SET share_token = NULL, is_public = false WHERE id = $1 AND owner_id = $2",
     )
     .bind(note_id)
     .bind(&user.id)
@@ -1245,7 +1233,7 @@ async fn get_public_note(
         r#"SELECT n.title, n.content, n.tags, n.creator_type,
                   n.created_at, n.updated_at,
                   COALESCE(u.name, 'Unknown') AS creator_name
-           FROM conversation_notes n
+           FROM notes n
            LEFT JOIN "user" u ON u.id = n.creator_id
            WHERE n.share_token = $1 AND n.is_public = true"#,
     )
@@ -1582,7 +1570,7 @@ async fn create_note_standalone(
     let tags: Vec<String> = body.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
 
     let result = sqlx::query(
-        r#"INSERT INTO conversation_notes (id, creator_id, creator_type, owner_id, notebook_id, title, content, tags, created_at, updated_at)
+        r#"INSERT INTO notes (id, creator_id, creator_type, owner_id, notebook_id, title, content, tags, created_at, updated_at)
            VALUES ($1, $2, 'user', $2, $3, $4, $5, $6, $7, $7)"#,
     )
     .bind(note_id).bind(&user.id).bind(notebook_id).bind(title).bind(&body.content).bind(&tags).bind(now)
@@ -1614,7 +1602,7 @@ async fn update_note_standalone(
     Json(body): Json<serde_json::Value>,
 ) -> Response {
     let note_owner = sqlx::query_scalar::<_, String>(
-        "SELECT creator_id FROM conversation_notes WHERE id = $1",
+        "SELECT creator_id FROM notes WHERE id = $1",
     ).bind(note_id).fetch_optional(&state.db).await;
 
     match note_owner {
@@ -1625,16 +1613,16 @@ async fn update_note_standalone(
     }
 
     if let Some(title) = body.get("title").and_then(|v| v.as_str()) {
-        sqlx::query("UPDATE conversation_notes SET title = $1, updated_at = NOW() WHERE id = $2")
+        sqlx::query("UPDATE notes SET title = $1, updated_at = NOW() WHERE id = $2")
             .bind(title).bind(note_id).execute(&state.db).await.ok();
     }
     if let Some(content) = body.get("content").and_then(|v| v.as_str()) {
-        sqlx::query("UPDATE conversation_notes SET content = $1, updated_at = NOW() WHERE id = $2")
+        sqlx::query("UPDATE notes SET content = $1, updated_at = NOW() WHERE id = $2")
             .bind(content).bind(note_id).execute(&state.db).await.ok();
     }
     if let Some(tags) = body.get("tags").and_then(|v| v.as_array()) {
         let tag_strs: Vec<String> = tags.iter().filter_map(|t| t.as_str().map(|s| s.to_string())).collect();
-        sqlx::query("UPDATE conversation_notes SET tags = $1, updated_at = NOW() WHERE id = $2")
+        sqlx::query("UPDATE notes SET tags = $1, updated_at = NOW() WHERE id = $2")
             .bind(&tag_strs).bind(note_id).execute(&state.db).await.ok();
     }
 
@@ -1644,7 +1632,7 @@ async fn update_note_standalone(
     match row {
         Ok(Some(n)) => {
             let note_json = note_to_json(&n);
-            let nb_id = sqlx::query_scalar::<_, Uuid>("SELECT notebook_id FROM conversation_notes WHERE id = $1")
+            let nb_id = sqlx::query_scalar::<_, Uuid>("SELECT notebook_id FROM notes WHERE id = $1")
                 .bind(note_id).fetch_optional(&state.db).await.ok().flatten();
             let member_ids = get_note_broadcast_ids(&state.db, Uuid::nil(), nb_id).await;
             state.ws.broadcast_to_members(&member_ids, &json!({"type": "note:updated", "note": &note_json}), &state.redis);
@@ -1661,7 +1649,7 @@ async fn delete_note_standalone(
     Path(note_id): Path<Uuid>,
 ) -> Response {
     let note_info = sqlx::query_as::<_, (String, Option<Uuid>)>(
-        "SELECT creator_id, notebook_id FROM conversation_notes WHERE id = $1",
+        "SELECT creator_id, notebook_id FROM notes WHERE id = $1",
     ).bind(note_id).fetch_optional(&state.db).await;
 
     let (creator_id, notebook_id) = match note_info {
@@ -1680,7 +1668,7 @@ async fn delete_note_standalone(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not authorized"}))).into_response();
     }
 
-    let result = sqlx::query("DELETE FROM conversation_notes WHERE id = $1").bind(note_id).execute(&state.db).await;
+    let result = sqlx::query("DELETE FROM notes WHERE id = $1").bind(note_id).execute(&state.db).await;
     match result {
         Ok(r) if r.rows_affected() > 0 => {
             let member_ids = get_note_broadcast_ids(&state.db, Uuid::nil(), notebook_id).await;
@@ -1698,14 +1686,14 @@ async fn archive_note_standalone(
     user: AuthUser,
     Path(note_id): Path<Uuid>,
 ) -> Response {
-    let creator = sqlx::query_scalar::<_, String>("SELECT creator_id FROM conversation_notes WHERE id = $1")
+    let creator = sqlx::query_scalar::<_, String>("SELECT creator_id FROM notes WHERE id = $1")
         .bind(note_id).fetch_optional(&state.db).await;
     match creator {
         Ok(Some(ref id)) if id == &user.id => {}
         Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the creator"}))).into_response(),
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
     }
-    let _ = sqlx::query("UPDATE conversation_notes SET archived_at = NOW() WHERE id = $1")
+    let _ = sqlx::query("UPDATE notes SET archived_at = NOW() WHERE id = $1")
         .bind(note_id).execute(&state.db).await;
     Json(json!({"archived": true})).into_response()
 }
@@ -1716,14 +1704,14 @@ async fn unarchive_note_standalone(
     user: AuthUser,
     Path(note_id): Path<Uuid>,
 ) -> Response {
-    let creator = sqlx::query_scalar::<_, String>("SELECT creator_id FROM conversation_notes WHERE id = $1")
+    let creator = sqlx::query_scalar::<_, String>("SELECT creator_id FROM notes WHERE id = $1")
         .bind(note_id).fetch_optional(&state.db).await;
     match creator {
         Ok(Some(ref id)) if id == &user.id => {}
         Ok(Some(_)) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the creator"}))).into_response(),
         _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
     }
-    let _ = sqlx::query("UPDATE conversation_notes SET archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL")
+    let _ = sqlx::query("UPDATE notes SET archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL")
         .bind(note_id).execute(&state.db).await;
     Json(json!({"archived": false})).into_response()
 }
@@ -1735,7 +1723,7 @@ async fn auto_tag_note_standalone(
     Path(note_id): Path<Uuid>,
 ) -> Response {
     let note = sqlx::query_as::<_, (String, String, Vec<String>)>(
-        "SELECT title, content, tags FROM conversation_notes WHERE id = $1 AND creator_id = $2",
+        "SELECT title, content, tags FROM notes WHERE id = $1 AND creator_id = $2",
     )
     .bind(note_id).bind(&user.id).fetch_optional(&state.db).await;
 
@@ -1759,7 +1747,7 @@ async fn auto_tag_note_standalone(
     }
 
     let memory_tags: Vec<Vec<String>> = sqlx::query_scalar(
-        r#"SELECT tags FROM conversation_notes
+        r#"SELECT tags FROM notes
            WHERE owner_id = $1 AND id != $2 AND array_length(tags, 1) > 0
            AND to_tsvector('simple', title || ' ' || content) @@ to_tsquery('simple', $3)
            LIMIT 5"#,
@@ -1806,7 +1794,7 @@ async fn ask_ai_standalone(
     }
 
     let note = sqlx::query_as::<_, (String, String)>(
-        "SELECT title, content FROM conversation_notes WHERE id = $1 AND creator_id = $2",
+        "SELECT title, content FROM notes WHERE id = $1 AND creator_id = $2",
     ).bind(note_id).bind(&user.id).fetch_optional(&state.db).await;
 
     let (title, content) = match note {

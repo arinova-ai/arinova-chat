@@ -106,7 +106,6 @@ interface NotebookEditorProps {
   editable?: boolean;
   placeholder?: string;
   className?: string;
-  conversationId?: string;
 }
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -127,13 +126,11 @@ export function NotebookEditor({
   editable = true,
   placeholder = "Write something...",
   className,
-  conversationId,
 }: NotebookEditorProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadImage = useCallback(async (file: File): Promise<string | null> => {
-    if (!conversationId) return null;
     if (!file.type.startsWith("image/")) {
       useToastStore.getState().addToast(t("chat.unsupportedFileType"), "error");
       return null;
@@ -161,7 +158,7 @@ export function NotebookEditor({
       useToastStore.getState().addToast(t("chat.uploadFailed"), "error");
       return null;
     }
-  }, [conversationId, t]);
+  }, [t]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -188,7 +185,7 @@ export function NotebookEditor({
         class: `notebook-tiptap-content outline-none min-h-[200px] py-2 text-sm ${editable ? "pl-7 pr-3" : "px-3"}`,
       },
       handlePaste: (view, event) => {
-        if (!editable || !conversationId) return false;
+        if (!editable) return false;
         const items = event.clipboardData?.items;
         if (!items) return false;
         for (const item of items) {
@@ -210,7 +207,7 @@ export function NotebookEditor({
         return false;
       },
       handleDrop: (view, event) => {
-        if (!editable || !conversationId) return false;
+        if (!editable) return false;
         const files = event.dataTransfer?.files;
         if (!files || files.length === 0) return false;
         const file = files[0];
@@ -344,15 +341,13 @@ export function NotebookEditor({
           >
             <LinkIcon className="h-3.5 w-3.5" />
           </ToolbarButton>
-          {conversationId && (
-            <ToolbarButton
-              active={false}
-              onClick={() => fileInputRef.current?.click()}
-              title="Image"
-            >
-              <ImageIcon className="h-3.5 w-3.5" />
-            </ToolbarButton>
-          )}
+          <ToolbarButton
+            active={false}
+            onClick={() => fileInputRef.current?.click()}
+            title="Image"
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+          </ToolbarButton>
           <input
             ref={fileInputRef}
             type="file"
