@@ -38,6 +38,7 @@ import {
   MoreVertical,
   Eye,
   EyeOff,
+  Lightbulb,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -94,7 +95,7 @@ interface CreatorStickerPack {
 // Tabs
 // ---------------------------------------------------------------------------
 
-type Tab = "overview" | "stickers" | "agents" | "themes" | "community" | "spaces" | "apikeys";
+type Tab = "overview" | "stickers" | "agents" | "themes" | "community" | "spaces" | "apikeys" | "experts";
 
 const TAB_DEFS: { key: Tab; i18nKey: string; icon: typeof LayoutDashboard }[] = [
   { key: "overview", i18nKey: "creator.tab.overview", icon: LayoutDashboard },
@@ -104,6 +105,7 @@ const TAB_DEFS: { key: Tab; i18nKey: string; icon: typeof LayoutDashboard }[] = 
   { key: "community", i18nKey: "creator.tab.community", icon: Users },
   { key: "spaces", i18nKey: "creator.tab.spaces", icon: Gamepad2 },
   { key: "apikeys", i18nKey: "creator.tab.apikeys", icon: KeyRound },
+  { key: "experts", i18nKey: "creator.tab.experts", icon: Lightbulb },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1491,6 +1493,7 @@ function CreatorConsoleContent() {
             {tab === "community" && <CommunityTab t={t} />}
             {tab === "spaces" && <SpacesTab t={t} />}
             {tab === "apikeys" && <ApiKeysTab t={t} />}
+            {tab === "experts" && <ExpertsTab t={t} />}
           </div>
         </div>
 
@@ -1561,6 +1564,211 @@ function CreatorConsoleContent() {
             <p className="text-[10px] text-center text-muted-foreground">
               {t("creator.payoutNote")}
             </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Experts Tab
+// ---------------------------------------------------------------------------
+
+interface ExpertItem {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  pricePerAsk: number;
+  isPublished: boolean;
+  totalAsks: number;
+  totalRevenue: number;
+}
+
+function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | number>) => string }) {
+  const [experts, setExperts] = useState<ExpertItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createDesc, setCreateDesc] = useState("");
+  const [createCategory, setCreateCategory] = useState("general");
+  const [createPrice, setCreatePrice] = useState(10);
+  const [creating, setCreating] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [knowledgeInput, setKnowledgeInput] = useState("");
+  const [knowledgeChunks, setKnowledgeChunks] = useState<{ id: string; content: string; chunkIndex: number }[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+
+  const fetchExperts = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Get all published + own drafts via list endpoint
+      const data = await api<{ experts: ExpertItem[] }>("/api/expert-hub?sort=newest");
+      // Also get own unpublished
+      const own = await api<{ experts: ExpertItem[] }>("/api/expert-hub?sort=newest").catch(() => ({ experts: [] }));
+      // Merge (API returns published only, but owner can see own via get_expert)
+      setExperts(data.experts.length > 0 ? data.experts : own.experts);
+    } catch { /* */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchExperts(); }, [fetchExperts]);
+
+  const handleCreate = async () => {
+    if (!createName.trim()) return;
+    setCreating(true);
+    try {
+      await api("/api/expert-hub", {
+        method: "POST",
+        body: JSON.stringify({ name: createName.trim(), description: createDesc || null, category: createCategory, pricePerAsk: createPrice }),
+      });
+      setCreateOpen(false);
+      setCreateName("");
+      setCreateDesc("");
+      setCreatePrice(10);
+      fetchExperts();
+    } catch { /* */ }
+    setCreating(false);
+  };
+
+  const handleTogglePublish = async (expert: ExpertItem) => {
+    try {
+      await api(`/api/expert-hub/${expert.id}`, { method: "PATCH", body: JSON.stringify({ isPublished: !expert.isPublished }) });
+      fetchExperts();
+    } catch { /* */ }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm(t("common.confirmDelete"))) return;
+    try {
+      await api(`/api/expert-hub/${id}`, { method: "DELETE" });
+      fetchExperts();
+    } catch { /* */ }
+  };
+
+  const handleLoadKnowledge = async (id: string) => {
+    setSelectedId(id);
+    setKnowledgeLoading(true);
+    try {
+      const data = await api<{ chunks: { id: string; content: string; chunkIndex: number }[] }>(`/api/expert-hub/${id}/knowledge`);
+      setKnowledgeChunks(data.chunks);
+    } catch { setKnowledgeChunks([]); }
+    setKnowledgeLoading(false);
+  };
+
+  const handleAddKnowledge = async () => {
+    if (!selectedId || !knowledgeInput.trim()) return;
+    setKnowledgeLoading(true);
+    try {
+      await api(`/api/expert-hub/${selectedId}/knowledge`, {
+        method: "POST",
+        body: JSON.stringify({ content: knowledgeInput.trim() }),
+      });
+      setKnowledgeInput("");
+      handleLoadKnowledge(selectedId);
+    } catch { /* */ }
+    setKnowledgeLoading(false);
+  };
+
+  const handleRebuild = async () => {
+    if (!selectedId) return;
+    setKnowledgeLoading(true);
+    try {
+      await api(`/api/expert-hub/${selectedId}/knowledge/rebuild`, { method: "POST" });
+      handleLoadKnowledge(selectedId);
+    } catch { /* */ }
+    setKnowledgeLoading(false);
+  };
+
+  if (loading) return <div className="flex justify-center py-12"><ArinovaSpinner size="sm" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">{t("expertHub.creator.title")}</h3>
+        <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1"><Plus className="h-3.5 w-3.5" />{t("expertHub.creator.create")}</Button>
+      </div>
+
+      {experts.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4">{t("expertHub.creator.empty")}</p>
+      ) : (
+        <div className="space-y-2">
+          {experts.map((ex) => (
+            <div key={ex.id} className="rounded-lg border border-border bg-card p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-medium">{ex.name}</h4>
+                  <p className="text-xs text-muted-foreground">{ex.category} · {ex.pricePerAsk} Coin · {ex.totalAsks} asks · {ex.totalRevenue} revenue</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleTogglePublish(ex)}>
+                    {ex.isPublished ? <><EyeOff className="h-3 w-3 mr-1" />{t("expertHub.creator.unpublish")}</> : <><Eye className="h-3 w-3 mr-1" />{t("expertHub.creator.publish")}</>}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleLoadKnowledge(ex.id)}>
+                    {t("expertHub.creator.knowledge")}
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => handleDelete(ex.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Knowledge panel */}
+              {selectedId === ex.id && (
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  <div className="flex gap-2">
+                    <textarea
+                      value={knowledgeInput}
+                      onChange={(e) => setKnowledgeInput(e.target.value)}
+                      placeholder={t("expertHub.creator.knowledgePlaceholder")}
+                      rows={3}
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
+                    />
+                    <div className="flex flex-col gap-1">
+                      <Button size="sm" className="text-xs h-7" onClick={handleAddKnowledge} disabled={!knowledgeInput.trim() || knowledgeLoading}>
+                        <Upload className="h-3 w-3 mr-1" />{t("expertHub.creator.upload")}
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={handleRebuild} disabled={knowledgeLoading}>
+                        {t("expertHub.creator.rebuild")}
+                      </Button>
+                    </div>
+                  </div>
+                  {knowledgeLoading ? (
+                    <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                  ) : knowledgeChunks.length > 0 ? (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {knowledgeChunks.map((c) => (
+                        <div key={c.id} className="rounded bg-secondary px-2 py-1 text-xs text-muted-foreground line-clamp-2">{c.content}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{t("expertHub.creator.noKnowledge")}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create dialog */}
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setCreateOpen(false)}>
+          <div className="bg-background border border-border rounded-lg w-[400px] p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold">{t("expertHub.creator.create")}</h3>
+            <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder={t("expertHub.creator.namePlaceholder")} />
+            <textarea value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder={t("expertHub.creator.descPlaceholder")} rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" />
+            <div className="flex gap-2">
+              <select value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm">
+                {["general", "tech", "business", "creative", "education", "health", "legal", "finance"].map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <Input type="number" min={0} value={createPrice} onChange={(e) => setCreatePrice(Number(e.target.value))} className="w-24" placeholder="Price" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button>
+              <Button size="sm" onClick={handleCreate} disabled={!createName.trim() || creating}>{creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}{t("expertHub.creator.create")}</Button>
+            </div>
           </div>
         </div>
       )}
