@@ -539,6 +539,56 @@ async fn main() {
         );
         DROP TABLE IF EXISTS note_conversation_links;
         ALTER TABLE notes DROP COLUMN IF EXISTS conversation_id;
+
+        CREATE TABLE IF NOT EXISTS experts (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          owner_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          avatar_url TEXT,
+          category TEXT NOT NULL DEFAULT 'general',
+          price_per_ask INT NOT NULL DEFAULT 10,
+          mode TEXT NOT NULL DEFAULT 'managed' CHECK (mode IN ('managed', 'webhook')),
+          webhook_url TEXT,
+          is_published BOOLEAN NOT NULL DEFAULT FALSE,
+          free_trial_count INT NOT NULL DEFAULT 0,
+          total_asks INT NOT NULL DEFAULT 0,
+          total_revenue INT NOT NULL DEFAULT 0,
+          avg_rating FLOAT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS expert_knowledge (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          expert_id UUID NOT NULL REFERENCES experts(id) ON DELETE CASCADE,
+          raw_content TEXT NOT NULL,
+          processed_content TEXT,
+          embedding vector(1536),
+          chunk_index INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS expert_asks (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          expert_id UUID NOT NULL REFERENCES experts(id),
+          user_id TEXT NOT NULL,
+          question TEXT NOT NULL,
+          answer TEXT,
+          cost INT NOT NULL,
+          rating INT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS expert_examples (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          expert_id UUID NOT NULL REFERENCES experts(id) ON DELETE CASCADE,
+          question TEXT NOT NULL,
+          answer TEXT NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_experts_owner ON experts(owner_id);
+        CREATE INDEX IF NOT EXISTS idx_experts_published ON experts(is_published);
+        CREATE INDEX IF NOT EXISTS idx_expert_knowledge_expert ON expert_knowledge(expert_id);
+        CREATE INDEX IF NOT EXISTS idx_expert_asks_expert ON expert_asks(expert_id);
+        CREATE INDEX IF NOT EXISTS idx_expert_asks_user ON expert_asks(user_id);
     "#;
     match sqlx::raw_sql(startup_migration).execute(&db).await {
         Ok(_) => tracing::info!("Startup migration completed"),

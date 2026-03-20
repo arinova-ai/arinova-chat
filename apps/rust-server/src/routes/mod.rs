@@ -56,6 +56,7 @@ pub mod wiki;
 pub mod docs;
 pub mod agent_memories;
 pub mod developer;
+pub mod expert_hub;
 
 use axum::Router;
 use crate::AppState;
@@ -122,6 +123,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(docs::router())
         .merge(agent_memories::router())
         .merge(developer::router())
+        .merge(expert_hub::router())
 }
 
 /// Legacy wrapper — kept for backward compatibility.
