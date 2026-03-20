@@ -77,7 +77,7 @@ export function MobileBottomNav() {
     { id: "spaces", icon: Globe, label: t("nav.spaces"), href: "/spaces" },
     { id: "stickers", icon: Smile, label: t("nav.stickers"), href: "/stickers" },
     { id: "creator", icon: PenTool, label: t("nav.creator"), href: "/creator" },
-    { id: "agent-hub", icon: Store, label: t("nav.agentHub"), href: "/agent-hub" },
+    { id: "expert-hub", icon: Store, label: t("nav.expertHub"), href: "/expert-hub" },
     { id: "community", icon: Users, label: t("nav.community"), href: "/community" },
     { id: "wallet", icon: Wallet, label: t("nav.wallet"), href: "/wallet" },
     { id: "office-theme", icon: Palette, label: t("nav.themeStore"), href: "/office/themes" },
