@@ -3692,19 +3692,47 @@ async fn join_by_invite(
 
 // ===== Hidden Users =====
 
+/// Resolve a UUID that might be a community_id or conversation_id to a community_id.
+async fn resolve_community_id(db: &sqlx::PgPool, id: Uuid) -> Option<Uuid> {
+    // Try as community_id first
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM communities WHERE id = $1)",
+    )
+    .bind(id)
+    .fetch_one(db)
+    .await
+    .unwrap_or(false);
+    if exists { return Some(id); }
+
+    // Try as conversation_id
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM communities WHERE conversation_id = $1",
+    )
+    .bind(id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct HideUserBody {
     user_id: String,
 }
 
-/// POST /api/communities/:id/hidden-users
+/// POST /api/communities/:id/hidden-users (id can be community_id or conversation_id)
 async fn hide_user(
     State(state): State<AppState>,
     user: AuthUser,
-    Path(community_id): Path<Uuid>,
+    Path(id): Path<Uuid>,
     Json(body): Json<HideUserBody>,
 ) -> (StatusCode, Json<Value>) {
+    let community_id = match resolve_community_id(&state.db, id).await {
+        Some(cid) => cid,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Community not found"}))),
+    };
+
     let result = sqlx::query(
         "INSERT INTO community_hidden_users (community_id, user_id, hidden_user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
     )
@@ -3720,12 +3748,17 @@ async fn hide_user(
     }
 }
 
-/// GET /api/communities/:id/hidden-users
+/// GET /api/communities/:id/hidden-users (id can be community_id or conversation_id)
 async fn list_hidden_users(
     State(state): State<AppState>,
     user: AuthUser,
-    Path(community_id): Path<Uuid>,
+    Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
+    let community_id = match resolve_community_id(&state.db, id).await {
+        Some(cid) => cid,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Community not found"}))),
+    };
+
     let rows = sqlx::query_as::<_, (String, Option<String>, Option<String>)>(
         r#"SELECT chu.hidden_user_id, u.name, u.image
            FROM community_hidden_users chu
@@ -3748,12 +3781,17 @@ async fn list_hidden_users(
     }
 }
 
-/// DELETE /api/communities/:id/hidden-users/:userId
+/// DELETE /api/communities/:id/hidden-users/:userId (id can be community_id or conversation_id)
 async fn unhide_user(
     State(state): State<AppState>,
     user: AuthUser,
-    Path((community_id, hidden_user_id)): Path<(Uuid, String)>,
+    Path((id, hidden_user_id)): Path<(Uuid, String)>,
 ) -> (StatusCode, Json<Value>) {
+    let community_id = match resolve_community_id(&state.db, id).await {
+        Some(cid) => cid,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Community not found"}))),
+    };
+
     let result = sqlx::query(
         "DELETE FROM community_hidden_users WHERE community_id = $1 AND user_id = $2 AND hidden_user_id = $3",
     )
