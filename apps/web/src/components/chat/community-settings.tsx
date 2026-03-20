@@ -509,7 +509,7 @@ export function CommunitySettingsSheet({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="overflow-y-auto w-full sm:max-w-lg p-0">
+      <SheetContent className="overflow-y-auto w-full sm:max-w-lg p-0" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <SheetHeader className="px-4 pt-4 pb-0">
           <SheetTitle>{t("communitySettings.title")}</SheetTitle>
         </SheetHeader>
