@@ -226,7 +226,14 @@ interface MessageAvatarProps {
 function MessageAvatar({ message, isOwn, clickable, onClick, agentAvatarUrl }: MessageAvatarProps) {
   const isAgent = message.role !== "user";
   const { data: session } = authClient.useSession();
-  const ownImage = isOwn ? session?.user?.image : undefined;
+  // In community conversations, use the anonymous avatar from message data instead of session user image
+  const isCommunity = useChatStore((s) => {
+    const conv = s.conversations.find((c) => c.id === message.conversationId);
+    return conv?.type === "community";
+  });
+  const ownImage = isOwn
+    ? (isCommunity && message.senderUserImage ? message.senderUserImage : session?.user?.image)
+    : undefined;
   const agentSrc = agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR;
 
   const avatarContent = (
