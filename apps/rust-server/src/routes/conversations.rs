@@ -99,6 +99,8 @@ struct ConversationListRow {
     agent_owner_is_verified: Option<bool>,
     // Official community link
     official_community_id: Option<Uuid>,
+    // Community avatar
+    community_avatar_url: Option<String>,
 }
 
 /// Row for group agent member names batch fetch.
@@ -324,7 +326,8 @@ async fn list_conversations(
                 lm.sender_agent_id AS last_msg_sender_agent_id,
                 lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
-                COALESCE(oc.community_id, cm.id) AS official_community_id
+                COALESCE(oc.community_id, cm.id) AS official_community_id,
+                cm.avatar_url AS community_avatar_url
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
@@ -379,7 +382,8 @@ async fn list_conversations(
                 lm.sender_agent_id AS last_msg_sender_agent_id,
                 lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
-                COALESCE(oc.community_id, cm.id) AS official_community_id
+                COALESCE(oc.community_id, cm.id) AS official_community_id,
+                cm.avatar_url AS community_avatar_url
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
@@ -647,8 +651,10 @@ async fn list_conversations(
                 serde_json::Value::Null
             };
 
-            // For human DMs, use peer's avatar; otherwise use agent's
-            let avatar_url = if row.agent_id.is_none() {
+            // Avatar: community → community.avatar_url; human DM → peer avatar; agent → agent avatar
+            let avatar_url = if row.conv_type == "community" {
+                row.community_avatar_url.clone()
+            } else if row.agent_id.is_none() {
                 peer_user_names.get(&row.id).and_then(|(_, _, img, _)| img.clone())
             } else {
                 row.agent_avatar_url.clone()
