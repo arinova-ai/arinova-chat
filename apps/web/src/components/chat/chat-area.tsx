@@ -218,12 +218,12 @@ export function ChatArea() {
         mentionOnly={conversation.mentionOnly}
         title={conversation.title}
         memberCount={isGroupLike(conversation.type) ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
-        onClick={agent ? () => setManageOpen(true) : (conversation.type === "community" ? async () => {
+        onClick={conversation.type === "community" ? (async () => {
           try {
             const data = await api<{ id: string }>(`/api/communities/by-conversation/${conversation.id}`);
             router.push(`/community/${data.id}`);
           } catch { /* ignore */ }
-        } : undefined)}
+        }) : (agent ? () => setManageOpen(true) : undefined) as (() => void) | undefined}
         onMembersClick={isGroupLike(conversation.type) ? () => {
           if (window.matchMedia("(min-width: 1280px)").matches) {
             useRightPanelStore.getState().setActiveTab("members");
