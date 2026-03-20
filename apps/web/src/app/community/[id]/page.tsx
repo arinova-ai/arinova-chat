@@ -341,7 +341,7 @@ function CommunityDetailContent() {
           <div className="shrink-0 border-b border-border">
             <div className="flex min-h-14 items-center gap-3 px-4">
               <button
-                onClick={() => router.push("/community")}
+                onClick={() => router.back()}
                 className="text-muted-foreground hover:text-foreground transition-colors md:hidden"
               >
                 <ArrowLeft className="h-5 w-5" />
@@ -657,15 +657,47 @@ function CommunityDetailContent() {
                     type="button"
                     className="absolute bottom-3 right-3 rounded-full bg-background/80 px-3 py-1.5 text-xs font-medium hover:bg-background transition-colors"
                     onClick={() => {
-                      const url = prompt("Enter cover image URL:");
-                      if (url !== null) {
-                        api(`/api/communities/${community.id}`, {
-                          method: "PATCH",
-                          body: JSON.stringify({ coverImageUrl: url.trim() || null }),
-                        }).then(() => {
-                          setCommunity((prev) => prev ? { ...prev, coverImageUrl: url.trim() || null } : prev);
-                        });
-                      }
+                      const input = document.createElement("input");
+                      input.type = "file";
+                      input.accept = "image/*";
+                      input.onchange = async () => {
+                        const file = input.files?.[0];
+                        if (!file) return;
+                        try {
+                          const form = new FormData();
+                          form.append("file", file);
+                          const res = await fetch(`https://api.chat-staging.arinova.ai/api/communities/${community.id}/cover`, {
+                            method: "POST",
+                            body: form,
+                            credentials: "include",
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setCommunity((prev) => prev ? { ...prev, coverImageUrl: data.url || data.coverImageUrl } : prev);
+                          } else {
+                            // Fallback: use URL prompt
+                            const url = prompt("Upload failed. Enter cover image URL:");
+                            if (url) {
+                              await api(`/api/communities/${community.id}`, {
+                                method: "PATCH",
+                                body: JSON.stringify({ coverImageUrl: url.trim() }),
+                              });
+                              setCommunity((prev) => prev ? { ...prev, coverImageUrl: url.trim() } : prev);
+                            }
+                          }
+                        } catch {
+                          // Fallback to URL
+                          const url = prompt("Enter cover image URL:");
+                          if (url) {
+                            await api(`/api/communities/${community.id}`, {
+                              method: "PATCH",
+                              body: JSON.stringify({ coverImageUrl: url.trim() }),
+                            });
+                            setCommunity((prev) => prev ? { ...prev, coverImageUrl: url.trim() } : prev);
+                          }
+                        }
+                      };
+                      input.click();
                     }}
                   >
                     {t("community.detail.editCover")}
