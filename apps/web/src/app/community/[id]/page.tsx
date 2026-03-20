@@ -662,7 +662,9 @@ function CommunityDetailContent() {
                         api(`/api/communities/${community.id}`, {
                           method: "PATCH",
                           body: JSON.stringify({ coverImageUrl: url.trim() || null }),
-                        }).then(() => fetchCommunity());
+                        }).then(() => {
+                          setCommunity((prev) => prev ? { ...prev, coverImageUrl: url.trim() || null } : prev);
+                        });
                       }
                     }}
                   >
