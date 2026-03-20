@@ -367,7 +367,6 @@
   "office.subtitle": "Espacio de Trabajo Virtual",
   "office.visiting": "Visitando la oficina de {{name}}",
   "office.readOnly": "Solo lectura",
-  "common.back": "Volver",
   "office.tab.scene": "Escena",
   "office.tab.tasks": "Tareas",
   "office.tab.activity": "Actividad",
@@ -1822,5 +1821,8 @@
   "settings.subscription.month": "mes",
   "settings.subscription.unlimited": "Ilimitado",
   "settings.subscription.current": "Plan actual",
-  "settings.subscription.comingSoon": "Próximamente"
+  "settings.subscription.comingSoon": "Próximamente",
+  "community.detail.editCover": "Editar portada",
+  "community.detail.noDescription": "Sin descripción",
+  "community.detail.goToChat": "Ir al chat"
 }

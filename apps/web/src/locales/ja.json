@@ -370,7 +370,6 @@
   "office.subtitle": "バーチャルワークスペース",
   "office.visiting": "{{name}}のオフィスを訪問中",
   "office.readOnly": "読み取り専用",
-  "common.back": "戻る",
   "office.tab.scene": "シーン",
   "office.tab.tasks": "タスク",
   "office.tab.activity": "アクティビティ",
@@ -1848,5 +1847,8 @@
   "settings.subscription.month": "月",
   "settings.subscription.unlimited": "無制限",
   "settings.subscription.current": "現在のプラン",
-  "settings.subscription.comingSoon": "近日公開"
+  "settings.subscription.comingSoon": "近日公開",
+  "community.detail.editCover": "カバーを編集",
+  "community.detail.noDescription": "説明なし",
+  "community.detail.goToChat": "チャットへ"
 }

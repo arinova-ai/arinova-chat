@@ -370,7 +370,6 @@
   "office.subtitle": "가상 워크스페이스",
   "office.visiting": "{{name}}의 사무실 방문 중",
   "office.readOnly": "읽기 전용",
-  "common.back": "뒤로",
   "office.tab.scene": "씬",
   "office.tab.tasks": "작업",
   "office.tab.activity": "활동",
@@ -1822,5 +1821,8 @@
   "settings.subscription.month": "월",
   "settings.subscription.unlimited": "무제한",
   "settings.subscription.current": "현재 플랜",
-  "settings.subscription.comingSoon": "출시 예정"
+  "settings.subscription.comingSoon": "출시 예정",
+  "community.detail.editCover": "커버 편집",
+  "community.detail.noDescription": "설명 없음",
+  "community.detail.goToChat": "채팅으로 이동"
 }

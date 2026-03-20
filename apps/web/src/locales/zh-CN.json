@@ -367,7 +367,6 @@
   "office.subtitle": "虚拟工作空间",
   "office.visiting": "正在拜访 {{name}} 的办公室",
   "office.readOnly": "只读模式",
-  "common.back": "返回",
   "office.tab.scene": "场景",
   "office.tab.tasks": "任务",
   "office.tab.activity": "动态",
@@ -1826,5 +1825,8 @@
   "settings.subscription.month": "月",
   "settings.subscription.unlimited": "无限制",
   "settings.subscription.current": "当前方案",
-  "settings.subscription.comingSoon": "即将推出"
+  "settings.subscription.comingSoon": "即将推出",
+  "community.detail.editCover": "编辑背景",
+  "community.detail.noDescription": "暂无描述",
+  "community.detail.goToChat": "前往对话"
 }

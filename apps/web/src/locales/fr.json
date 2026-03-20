@@ -367,7 +367,6 @@
   "office.subtitle": "Espace de travail virtuel",
   "office.visiting": "Visite du bureau de {{name}}",
   "office.readOnly": "Lecture seule",
-  "common.back": "Retour",
   "office.tab.scene": "Scène",
   "office.tab.tasks": "Tâches",
   "office.tab.activity": "Activité",
@@ -1822,5 +1821,8 @@
   "settings.subscription.month": "mois",
   "settings.subscription.unlimited": "Illimité",
   "settings.subscription.current": "Plan actuel",
-  "settings.subscription.comingSoon": "Bientôt disponible"
+  "settings.subscription.comingSoon": "Bientôt disponible",
+  "community.detail.editCover": "Modifier la couverture",
+  "community.detail.noDescription": "Pas de description",
+  "community.detail.goToChat": "Aller au chat"
 }

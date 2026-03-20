@@ -373,7 +373,6 @@
   "office.subtitle": "虛擬工作空間",
   "office.visiting": "正在拜訪 {{name}} 的辦公室",
   "office.readOnly": "唯讀模式",
-  "common.back": "返回",
   "office.tab.scene": "場景",
   "office.tab.tasks": "任務",
   "office.tab.activity": "動態",
@@ -1921,5 +1920,8 @@
   "expertHub.examples.add": "新增範例",
   "expertHub.examples.question": "範例問題",
   "expertHub.examples.answer": "範例回答",
-  "creator.tab.experts": "專家"
+  "creator.tab.experts": "專家",
+  "community.detail.editCover": "編輯背景",
+  "community.detail.noDescription": "暫無描述",
+  "community.detail.goToChat": "前往對話"
 }

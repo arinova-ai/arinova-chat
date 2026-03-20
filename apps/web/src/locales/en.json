@@ -372,7 +372,6 @@
   "office.subtitle": "Virtual Workspace",
   "office.visiting": "Visiting {{name}}'s Office",
   "office.readOnly": "Read-only",
-  "common.back": "Back",
   "office.tab.scene": "Scene",
   "office.tab.tasks": "Tasks",
   "office.tab.activity": "Activity",
@@ -1925,5 +1924,8 @@
   "expertHub.examples.add": "Add Example",
   "expertHub.examples.question": "Example question",
   "expertHub.examples.answer": "Example answer",
-  "creator.tab.experts": "Experts"
+  "creator.tab.experts": "Experts",
+  "community.detail.editCover": "Edit Cover",
+  "community.detail.noDescription": "No description",
+  "community.detail.goToChat": "Go to Chat"
 }
