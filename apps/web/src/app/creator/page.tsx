@@ -1658,16 +1658,14 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
     setCreating(false);
   };
 
-  const handleTestWebhook = async (url: string) => {
-    if (!url.trim()) return;
+  const handleTestWebhook = async (expertId: string) => {
     setWebhookTesting(true);
     setWebhookTestResult(null);
     try {
-      await api("/api/expert-hub/webhook-test", {
+      const res = await api<{ ok: boolean }>(`/api/expert-hub/${expertId}/webhook/test`, {
         method: "POST",
-        body: JSON.stringify({ url: url.trim() }),
       });
-      setWebhookTestResult("success");
+      setWebhookTestResult(res.ok ? "success" : "failed");
     } catch {
       setWebhookTestResult("failed");
     }
@@ -1843,7 +1841,7 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                       variant="outline"
                       className="text-xs h-8 shrink-0"
                       disabled={webhookTesting || !ex.webhookUrl}
-                      onClick={() => handleTestWebhook(ex.webhookUrl ?? "")}
+                      onClick={() => handleTestWebhook(ex.id)}
                     >
                       {webhookTesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                       {t("expertHub.webhook.test")}
@@ -1938,8 +1936,9 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                     size="sm"
                     variant="outline"
                     className="text-xs h-7"
-                    disabled={webhookTesting || !createWebhookUrl.trim()}
-                    onClick={() => handleTestWebhook(createWebhookUrl)}
+                    disabled={true}
+                    title="Create expert first, then test webhook"
+                    onClick={() => {}}
                   >
                     {webhookTesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                     {t("expertHub.webhook.test")}
