@@ -900,18 +900,6 @@ function NotebookNotes({
               <Search className="h-3.5 w-3.5" />
             </button>
 
-            <button
-              type="button"
-              className={toolbarBtnClass}
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({ title: notebook.name, text: `Notebook: ${notebook.name}` }).catch(() => {});
-                }
-              }}
-            >
-              <Share2 className="h-3.5 w-3.5" />
-            </button>
-
             {/* Members */}
             {canManage && (
               <button type="button" className={toolbarBtnClass} onClick={() => { setMembersOpen(true); fetchMembers(); }}>
