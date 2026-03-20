@@ -3823,7 +3823,7 @@ async fn update_member_avatar(
     Json(body): Json<UpdateMemberAvatarBody>,
 ) -> (StatusCode, Json<Value>) {
     let result = sqlx::query(
-        "UPDATE community_members SET avatar_url = $1 WHERE community_id = $2 AND user_id = $3",
+        "UPDATE community_members SET member_avatar_url = $1 WHERE community_id = $2 AND user_id = $3",
     )
     .bind(&body.avatar_url)
     .bind(community_id)

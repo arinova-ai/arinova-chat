@@ -624,7 +624,8 @@ async fn main() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (community_id, user_id, hidden_user_id)
     )"#).execute(&db).await.ok();
-    sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS avatar_url TEXT").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS member_avatar_url TEXT").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)").execute(&db).await.ok();
 
     tracing::info!("Startup migrations completed");
 
