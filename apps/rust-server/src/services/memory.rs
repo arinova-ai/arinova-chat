@@ -524,8 +524,6 @@ async fn call_claude_cli_with_retry(
             .arg("claude-haiku-4-5-20251001")
             .arg("--output-format")
             .arg("text")
-            .arg("--resume")
-            .arg("false")
             .arg("--system-prompt")
             .arg(EXTRACTION_SYSTEM_PROMPT)
             .stdin(std::process::Stdio::piped())
