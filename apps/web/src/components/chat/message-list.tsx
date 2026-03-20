@@ -46,13 +46,16 @@ function MessageSkeleton() {
 }
 
 const START_INDEX = 100_000;
+const EMPTY_HIDDEN_USERS: string[] = [];
 
 export function MessageList({ messages: rawMessages, agentName, isGroupConversation }: MessageListProps) {
   const { t } = useTranslation();
   const loadingMessages = useChatStore((s) => s.loadingMessages);
 
   // Community hidden users filter
-  const communityHidden = useChatStore((s) => s.communityHiddenUsers[s.activeConversationId ?? ""] ?? []);
+  const activeConvId = useChatStore((s) => s.activeConversationId) ?? "";
+  const communityHiddenMap = useChatStore((s) => s.communityHiddenUsers);
+  const communityHidden = communityHiddenMap[activeConvId] ?? EMPTY_HIDDEN_USERS;
 
   // Filter out thread messages (they display in the thread panel only) + deduplicate + hidden users
   const messages = rawMessages
