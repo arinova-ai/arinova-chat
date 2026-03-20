@@ -644,7 +644,7 @@ function HamburgerMenu({
         <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
         {/* Panel slides from right */}
         <div
-          className="absolute top-0 right-0 h-full w-[85%] max-w-xs bg-background shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+          className="absolute inset-0 h-full w-full bg-background flex flex-col animate-in slide-in-from-right duration-200"
           style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           {/* Close button */}
