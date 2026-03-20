@@ -509,7 +509,7 @@ export function CommunitySettingsSheet({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="overflow-y-auto sm:max-w-lg p-0">
+      <SheetContent className="overflow-y-auto w-full sm:max-w-lg p-0">
         <SheetHeader className="px-4 pt-4 pb-0">
           <SheetTitle>{t("communitySettings.title")}</SheetTitle>
         </SheetHeader>
@@ -588,12 +588,6 @@ export function CommunitySettingsSheet({
                       </>
                     )}
                   </div>
-                  {canManage && (
-                    <DefaultAvatarPicker
-                      onSelect={(url) => setAvatarUrl(url)}
-                      selected={avatarUrl}
-                    />
-                  )}
                 </div>
 
                 {canManage && (

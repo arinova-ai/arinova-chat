@@ -103,6 +103,11 @@ pub fn router() -> Router<AppState> {
             "/api/communities/{id}/members/me/avatar",
             axum::routing::patch(update_member_avatar),
         )
+        // Lookup by conversation
+        .route(
+            "/api/communities/by-conversation/{conversationId}",
+            get(get_community_by_conversation),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -3834,6 +3839,26 @@ async fn update_member_avatar(
     match result {
         Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "avatarUrl": body.avatar_url}))),
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Not a member"}))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+    }
+}
+
+/// GET /api/communities/by-conversation/:conversationId — lookup community ID from conversation
+async fn get_community_by_conversation(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let community = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM communities WHERE conversation_id = $1",
+    )
+    .bind(conversation_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match community {
+        Ok(Some((id,))) => (StatusCode::OK, Json(json!({"id": id}))),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Community not found"}))),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
     }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useChatStore } from "@/store/chat-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
@@ -32,6 +33,7 @@ import { ChatNoteDetailSheet } from "./chat-note-detail-sheet";
 
 export function ChatArea() {
   const { t } = useTranslation();
+  const router = useRouter();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const searchActive = useChatStore((s) => s.searchActive);
   const conversations = useChatStore((s) => s.conversations);
@@ -216,7 +218,12 @@ export function ChatArea() {
         mentionOnly={conversation.mentionOnly}
         title={conversation.title}
         memberCount={isGroupLike(conversation.type) ? (conversationMembers[conversation.id]?.length ?? 0) : undefined}
-        onClick={agent ? () => setManageOpen(true) : undefined}
+        onClick={agent ? () => setManageOpen(true) : (conversation.type === "community" ? async () => {
+          try {
+            const data = await api<{ id: string }>(`/api/communities/by-conversation/${conversation.id}`);
+            router.push(`/community/${data.id}`);
+          } catch { /* ignore */ }
+        } : undefined)}
         onMembersClick={isGroupLike(conversation.type) ? () => {
           if (window.matchMedia("(min-width: 1280px)").matches) {
             useRightPanelStore.getState().setActiveTab("members");

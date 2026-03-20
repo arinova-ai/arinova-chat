@@ -21,6 +21,7 @@ const CATEGORIES = [
   "music",
   "education",
   "business",
+  "finance",
   "lifestyle",
   "other",
 ] as const;
@@ -73,6 +74,8 @@ function CreateCommunityContent() {
 
     setSaving(true);
     try {
+      // Auto-assign default avatar from category
+      const defaultAvatar = category ? `/assets/community-avatars/${category}.png` : undefined;
       const payload: Record<string, unknown> = {
         name: name.trim(),
         description: description.trim() || undefined,
@@ -81,6 +84,7 @@ function CreateCommunityContent() {
         monthlyFee: 0,
         agentCallFee: 0,
         category: category || undefined,
+        avatarUrl: defaultAvatar,
         coverImageUrl: coverImageUrl.trim() || undefined,
         requireApproval,
         approvalQuestions: requireApproval ? approvalQuestions.filter(q => q.trim()) : [],
