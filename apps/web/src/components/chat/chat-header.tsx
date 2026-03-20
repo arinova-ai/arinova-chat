@@ -211,7 +211,17 @@ export function ChatHeader({
   const router = useRouter();
 
   // For human DMs without an explicit onClick, navigate to the peer's profile
-  const effectiveOnClick = onClick ?? (peerUserId ? () => router.push(`/profile/${peerUserId}`) : undefined);
+  // For communities, navigate to community profile page
+  const effectiveOnClick = onClick ?? (
+    type === "community" && conversationId
+      ? async () => {
+          try {
+            const data = await api<{ id: string }>(`/api/communities/by-conversation/${conversationId}`);
+            router.push(`/community/${data.id}`);
+          } catch { /* ignore */ }
+        }
+      : peerUserId ? () => router.push(`/profile/${peerUserId}`) : undefined
+  );
 
   const handleMuteToggle = useCallback(async () => {
     if (!conversationId) return;
