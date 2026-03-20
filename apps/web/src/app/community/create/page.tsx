@@ -8,6 +8,9 @@ import { AuthGuard } from "@/components/auth-guard";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
 
 const CATEGORIES = [
@@ -38,6 +41,32 @@ function CreateCommunityContent() {
 
   const isValid = name.trim().length > 0 && name.trim().length <= 100;
 
+  // Profile setup after create
+  const [profileSetup, setProfileSetup] = useState(false);
+  const [createdCommunity, setCreatedCommunity] = useState<{ id: string; conversationId?: string } | null>(null);
+  const [profileNickname, setProfileNickname] = useState("");
+  const [profileAvatar, setProfileAvatar] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const handleProfileDone = async () => {
+    if (!createdCommunity || !profileNickname.trim()) return;
+    setProfileSaving(true);
+    try {
+      await api(`/api/communities/${createdCommunity.id}/identity`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          displayName: profileNickname.trim(),
+          avatarUrl: profileAvatar || null,
+        }),
+      });
+    } catch { /* continue anyway */ }
+    if (createdCommunity.conversationId) {
+      router.push(`/?c=${createdCommunity.conversationId}`);
+    } else {
+      router.push(`/community/${createdCommunity.id}`);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || saving) return;
@@ -61,11 +90,9 @@ function CreateCommunityContent() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      if (created.conversationId) {
-        router.push(`/?c=${created.conversationId}`);
-      } else {
-        router.push(`/community/${created.id}`);
-      }
+      // Show profile setup instead of navigating directly
+      setCreatedCommunity(created);
+      setProfileSetup(true);
     } catch {
       // auto-handled
     } finally {
@@ -301,6 +328,42 @@ function CreateCommunityContent() {
 
         <MobileBottomNav />
       </div>
+
+      {/* Profile setup dialog after create */}
+      <Dialog open={profileSetup} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>{t("community.identity.joinTitle")}</DialogTitle>
+            <DialogDescription>{t("community.identity.joinDesc")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">{t("community.identity.nickname")}</label>
+              <Input
+                value={profileNickname}
+                onChange={(e) => setProfileNickname(e.target.value)}
+                placeholder={t("community.identity.nicknamePlaceholder")}
+                maxLength={50}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">{t("community.identity.avatar")}</label>
+              <DefaultAvatarPicker
+                selected={profileAvatar}
+                onSelect={(url) => setProfileAvatar(url)}
+              />
+            </div>
+            <Button
+              className="brand-gradient-btn w-full"
+              onClick={handleProfileDone}
+              disabled={!profileNickname.trim() || profileSaving}
+            >
+              {profileSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : t("community.identity.create")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
