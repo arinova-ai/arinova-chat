@@ -247,13 +247,7 @@ function CommunityDetailContent() {
     };
   }, [id, currentUserId]);
 
-  // ------ Redirect members to main chat ------
-  useEffect(() => {
-    if (membershipChecked && isMember && community?.conversationId) {
-      useChatStore.getState().setActiveConversation(community.conversationId);
-      router.replace(`/?c=${community.conversationId}`);
-    }
-  }, [membershipChecked, isMember, community?.conversationId, router]);
+  // Members can view the community profile page (no auto-redirect)
 
   // ------ Join ------
 
