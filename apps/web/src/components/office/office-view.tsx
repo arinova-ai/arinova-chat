@@ -141,8 +141,12 @@ function OfficeViewInner() {
 
   const selectAgent = useCallback((id: string | null) => {
     if (!id) return;
-    openFloatWindow(id);
-  }, [openFloatWindow]);
+    // Find the slot index for this agent to open CharacterModal
+    const slotIdx = slots.findIndex((s) => s.id === id);
+    if (slotIdx >= 0) {
+      setCharacterModalSlot(slotIdx);
+    }
+  }, [slots]);
 
   const closeModal = useCallback(() => setSelectedAgentId(null), []);
   const closeCharacterModal = useCallback(() => setCharacterModalSlot(null), []);
