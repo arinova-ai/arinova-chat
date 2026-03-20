@@ -828,7 +828,7 @@
   "communitySettings.hiddenUsers": "已隐藏的用户",
   "communitySettings.noHiddenUsers": "没有隐藏的用户",
   "communitySettings.unhide": "取消隐藏",
-  "community.hideUser": "隐藏此用户",
+  "community.hideConversation": "隐藏对话",
   "communitySettings.dangerZone": "危险区域",
   "communitySettings.leave": "离开社区",
   "communitySettings.leaveConfirm": "确定要离开此社区吗？",

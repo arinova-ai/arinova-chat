@@ -831,7 +831,7 @@
   "communitySettings.hiddenUsers": "숨긴 사용자",
   "communitySettings.noHiddenUsers": "숨긴 사용자 없음",
   "communitySettings.unhide": "숨기기 해제",
-  "community.hideUser": "이 사용자 숨기기",
+  "community.hideConversation": "대화 숨기기",
   "communitySettings.dangerZone": "위험 구역",
   "communitySettings.leave": "커뮤니티 나가기",
   "communitySettings.leaveConfirm": "이 커뮤니티를 나가시겠습니까?",

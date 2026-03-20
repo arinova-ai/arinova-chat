@@ -852,7 +852,7 @@
   "communitySettings.hiddenUsers": "已隱藏的用戶",
   "communitySettings.noHiddenUsers": "沒有隱藏的用戶",
   "communitySettings.unhide": "取消隱藏",
-  "community.hideUser": "隱藏此用戶",
+  "community.hideConversation": "隱藏對話",
   "communitySettings.dangerZone": "危險區域",
   "communitySettings.leave": "離開社群",
   "communitySettings.leaveConfirm": "確定要離開此社群嗎？",

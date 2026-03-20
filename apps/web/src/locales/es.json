@@ -828,7 +828,7 @@
   "communitySettings.hiddenUsers": "Usuarios ocultos",
   "communitySettings.noHiddenUsers": "No hay usuarios ocultos",
   "communitySettings.unhide": "Mostrar",
-  "community.hideUser": "Ocultar este usuario",
+  "community.hideConversation": "Ocultar conversación",
   "communitySettings.dangerZone": "Zona de peligro",
   "communitySettings.leave": "Abandonar comunidad",
   "communitySettings.leaveConfirm": "¿Estás seguro de que quieres abandonar esta comunidad?",

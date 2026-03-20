@@ -52,10 +52,9 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const { t } = useTranslation();
   const loadingMessages = useChatStore((s) => s.loadingMessages);
 
-  // Community hidden users filter
+  // Community hidden users filter — select specific array to ensure re-render on change
   const activeConvId = useChatStore((s) => s.activeConversationId) ?? "";
-  const communityHiddenMap = useChatStore((s) => s.communityHiddenUsers);
-  const communityHidden = communityHiddenMap[activeConvId] ?? EMPTY_HIDDEN_USERS;
+  const communityHidden = useChatStore((s) => s.communityHiddenUsers[s.activeConversationId ?? ""] ?? EMPTY_HIDDEN_USERS);
 
   // Filter out thread messages (they display in the thread panel only) + deduplicate + hidden users
   const messages = rawMessages

@@ -855,7 +855,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
               }}
             >
               <EyeOff className="h-3.5 w-3.5" />
-              {t("community.hideUser")}
+              {t("community.hideConversation")}
             </button>
           </PopoverContent>
         </Popover>

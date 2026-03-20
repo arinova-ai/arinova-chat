@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -637,44 +638,61 @@ function HamburgerMenu({
   const [open, setOpen] = useState(false);
 
   if (isMobile) {
+    const overlay = open ? createPortal(
+      <div className="fixed inset-0 z-50 flex">
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+        {/* Panel slides from right */}
+        <div
+          className="absolute top-0 right-0 h-full w-[85%] max-w-xs bg-background shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+          style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          {/* Close button */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <span className="text-sm font-semibold">{t("chat.header.moreOptions")}</span>
+            <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 hover:bg-muted">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          {/* Menu items */}
+          <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+            {items.map((btn) => {
+              const Icon = btn.id === "mute" && getMuteIcon ? getMuteIcon() : btn.icon;
+              return (
+                <button
+                  key={btn.id}
+                  type="button"
+                  onClick={() => { setOpen(false); onAction(btn.id); }}
+                  disabled={btn.id === "call" && isInCall}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors disabled:opacity-40"
+                >
+                  <Icon className="h-5 w-5 text-muted-foreground" />
+                  <span className="flex-1 text-left">{t(btn.labelKey)}</span>
+                  {pinnedIds.includes(btn.id) && <Pin className="h-3.5 w-3.5 text-muted-foreground" />}
+                </button>
+              );
+            })}
+            <div className="my-1 border-t border-border" />
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onSettingsOpen(); }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors"
+            >
+              <Settings className="h-5 w-5 text-muted-foreground" />
+              <span>{t("chat.header.settings")}</span>
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    ) : null;
+
     return (
       <>
         <Button variant="ghost" size="icon" className="h-9 w-9" title={t("chat.header.moreOptions")} onClick={() => setOpen(true)}>
           <Menu className="h-4 w-4" />
         </Button>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="bottom" showCloseButton className="rounded-t-2xl border-t border-border bg-card px-4 pt-2 pb-6">
-            <SheetTitle className="sr-only">{t("chat.header.moreOptions")}</SheetTitle>
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
-            <div className="space-y-1">
-              {items.map((btn) => {
-                const Icon = btn.id === "mute" && getMuteIcon ? getMuteIcon() : btn.icon;
-                return (
-                  <button
-                    key={btn.id}
-                    type="button"
-                    onClick={() => { setOpen(false); onAction(btn.id); }}
-                    disabled={btn.id === "call" && isInCall}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors disabled:opacity-40"
-                  >
-                    <Icon className="h-5 w-5 text-muted-foreground" />
-                    <span className="flex-1 text-left">{t(btn.labelKey)}</span>
-                    {pinnedIds.includes(btn.id) && <Pin className="h-3.5 w-3.5 text-muted-foreground" />}
-                  </button>
-                );
-              })}
-              <div className="my-1 border-t border-border" />
-              <button
-                type="button"
-                onClick={() => { setOpen(false); onSettingsOpen(); }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors"
-              >
-                <Settings className="h-5 w-5 text-muted-foreground" />
-                <span>{t("chat.header.settings")}</span>
-              </button>
-            </div>
-          </SheetContent>
-        </Sheet>
+        {overlay}
       </>
     );
   }

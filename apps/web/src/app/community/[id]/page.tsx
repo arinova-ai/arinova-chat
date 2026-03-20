@@ -29,6 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CommunitySettingsSheet } from "@/components/chat/community-settings";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { WikiPanel } from "@/components/chat/wiki-panel";
 import { useChatStore } from "@/store/chat-store";
 import { cn } from "@/lib/utils";
@@ -681,10 +682,9 @@ function CommunityDetailContent() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-muted-foreground">{t("community.identity.avatar")}</label>
-                  <Input
-                    value={joinAvatarUrl}
-                    onChange={(e) => setJoinAvatarUrl(e.target.value)}
-                    placeholder={t("community.identity.avatarPlaceholder")}
+                  <DefaultAvatarPicker
+                    selected={joinAvatarUrl}
+                    onSelect={(url) => setJoinAvatarUrl(url)}
                   />
                 </div>
                 <Button

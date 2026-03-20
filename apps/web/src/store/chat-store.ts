@@ -427,8 +427,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
     get().loadMessages(id, savedUnread);
 
-    // Load conversation members for @mention support
+    // Load hidden users for community conversations
     const conv = get().conversations.find((c) => c.id === id);
+    if (conv?.type === "community" && !get().communityHiddenUsers[id]) {
+      api<{ users: { userId: string }[] }>(`/api/communities/${id}/hidden-users`, { silent: true })
+        .then((d) => {
+          set({
+            communityHiddenUsers: {
+              ...get().communityHiddenUsers,
+              [id]: d.users.map((u) => u.userId),
+            },
+          });
+        })
+        .catch(() => {});
+    }
+
+    // Load conversation members for @mention support
     if (conv && !get().conversationMembers[id]) {
       if (isGroupLike(conv.type)) {
         get()
