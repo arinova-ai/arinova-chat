@@ -39,7 +39,9 @@ import {
   Flag,
   Pin,
   PinOff,
+  EyeOff,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { assetUrl, AGENT_DEFAULT_AVATAR } from "@/lib/config";
 import { authClient } from "@/lib/auth-client";
 import { ReactionPicker, ReactionBadges } from "./reaction-picker";
@@ -710,7 +712,9 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
     () => isUser && !!currentUserId && !isCommunityConversation,
     [isUser, currentUserId, isCommunityConversation]
   );
-  const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile;
+  const showCommunityHide = isCommunityConversation && !isUser && message.role === "user" && !!message.senderUserId;
+  const showProfileClick = showUserProfile || showAgentProfile || showOwnProfile || showCommunityHide;
+  const [hidePopoverOpen, setHidePopoverOpen] = useState(false);
   const longPressHandlers = useLongPress(() => {
     if (!isStreaming && !selectionMode) setActionSheetOpen(true);
   });
@@ -813,22 +817,66 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
-      <MessageAvatar
-        message={message}
-        isOwn={isUser}
-        clickable={showProfileClick}
-        agentAvatarUrl={resolvedAgentAvatarUrl}
-        onClick={() => {
-          if (showOwnProfile && currentUserId) {
-            router.push(`/profile/${currentUserId}`);
-          } else if (showUserProfile && message.senderUserId) {
-            router.push(`/profile/${message.senderUserId}`);
-          } else if (showAgentProfile && resolvedAgentId) {
-            const suffix = isGroupLike(conversation?.type) ? `?convId=${message.conversationId}` : "";
-            router.push(`/agent/${resolvedAgentId}${suffix}`);
-          }
-        }}
-      />
+      {showCommunityHide ? (
+        <Popover open={hidePopoverOpen} onOpenChange={setHidePopoverOpen}>
+          <PopoverTrigger asChild>
+            <div>
+              <MessageAvatar
+                message={message}
+                isOwn={isUser}
+                clickable
+                agentAvatarUrl={resolvedAgentAvatarUrl}
+                onClick={() => setHidePopoverOpen(true)}
+              />
+            </div>
+          </PopoverTrigger>
+          <PopoverContent className="w-44 p-1" align="start" side="top">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors text-destructive"
+              onClick={async () => {
+                setHidePopoverOpen(false);
+                try {
+                  await api(`/api/communities/${message.conversationId}/hidden-users`, {
+                    method: "POST",
+                    body: JSON.stringify({ userId: message.senderUserId }),
+                  });
+                  // Add to local hidden set
+                  useChatStore.setState((s) => ({
+                    communityHiddenUsers: {
+                      ...s.communityHiddenUsers,
+                      [message.conversationId]: [
+                        ...(s.communityHiddenUsers[message.conversationId] ?? []),
+                        message.senderUserId!,
+                      ],
+                    },
+                  }));
+                } catch { /* toast handled */ }
+              }}
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+              {t("community.hideUser")}
+            </button>
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <MessageAvatar
+          message={message}
+          isOwn={isUser}
+          clickable={showProfileClick}
+          agentAvatarUrl={resolvedAgentAvatarUrl}
+          onClick={() => {
+            if (showOwnProfile && currentUserId) {
+              router.push(`/profile/${currentUserId}`);
+            } else if (showUserProfile && message.senderUserId) {
+              router.push(`/profile/${message.senderUserId}`);
+            } else if (showAgentProfile && resolvedAgentId) {
+              const suffix = isGroupLike(conversation?.type) ? `?convId=${message.conversationId}` : "";
+              router.push(`/agent/${resolvedAgentId}${suffix}`);
+            }
+          }}
+        />
+      )}
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
         <div

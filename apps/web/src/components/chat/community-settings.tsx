@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { assetUrl, AGENT_DEFAULT_AVATAR, BACKEND_URL } from "@/lib/config";
 import {
   Crown,
@@ -49,13 +49,14 @@ import {
   Check,
   Upload,
   Loader2,
+  EyeOff,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useToastStore } from "@/store/toast-store";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { compressImage } from "@/lib/image-compress";
 
-type Tab = "info" | "personal" | "permissions" | "invites" | "danger";
+type Tab = "info" | "personal" | "permissions" | "invites" | "hidden" | "danger";
 
 interface CommunitySettingsProps {
   open: boolean;
@@ -500,6 +501,7 @@ export function CommunitySettingsSheet({
     { id: "personal", label: t("communitySettings.personalSettings"), icon: <Bell className="h-4 w-4" /> },
     { id: "permissions", label: t("communitySettings.permissions"), icon: <Lock className="h-4 w-4" />, adminOnly: true },
     { id: "invites", label: t("communitySettings.invites"), icon: <Link2 className="h-4 w-4" />, adminOnly: true },
+    { id: "hidden", label: t("communitySettings.hiddenUsers"), icon: <EyeOff className="h-4 w-4" /> },
     { id: "danger", label: t("communitySettings.dangerZone"), icon: <Trash2 className="h-4 w-4" /> },
   ];
 
@@ -967,6 +969,11 @@ export function CommunitySettingsSheet({
               </div>
             )}
 
+            {/* ── Hidden Users Tab ── */}
+            {activeTab === "hidden" && (
+              <HiddenUsersTab communityId={communityId} />
+            )}
+
             {/* ── Danger Zone Tab ── */}
             {activeTab === "danger" && (
               <div className="space-y-4">
@@ -1021,5 +1028,62 @@ export function CommunitySettingsSheet({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Hidden users management sub-component */
+function HiddenUsersTab({ communityId }: { communityId: string }) {
+  const { t } = useTranslation();
+  const [users, setUsers] = useState<{ userId: string; name: string | null; image: string | null }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api<{ users: { userId: string; name: string | null; image: string | null }[] }>(
+      `/api/communities/${communityId}/hidden-users`
+    )
+      .then((d) => setUsers(d.users))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [communityId]);
+
+  const handleUnhide = async (userId: string) => {
+    try {
+      await api(`/api/communities/${communityId}/hidden-users/${userId}`, { method: "DELETE" });
+      setUsers((prev) => prev.filter((u) => u.userId !== userId));
+      // Remove from local filter
+      useChatStore.setState((s) => ({
+        communityHiddenUsers: {
+          ...s.communityHiddenUsers,
+          [communityId]: (s.communityHiddenUsers[communityId] ?? []).filter((id) => id !== userId),
+        },
+      }));
+    } catch { /* */ }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (users.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-4">{t("communitySettings.noHiddenUsers")}</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {users.map((u) => (
+        <div key={u.userId} className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-muted/50">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-8 w-8">
+              {u.image ? <AvatarImage src={assetUrl(u.image)} /> : null}
+              <AvatarFallback className="text-xs">{(u.name ?? "?").charAt(0).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <span className="text-sm font-medium">{u.name ?? t("common.unknown")}</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => handleUnhide(u.userId)}>
+            {t("communitySettings.unhide")}
+          </Button>
+        </div>
+      ))}
+    </div>
   );
 }

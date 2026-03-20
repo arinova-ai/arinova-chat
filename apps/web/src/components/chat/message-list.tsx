@@ -51,11 +51,15 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
   const { t } = useTranslation();
   const loadingMessages = useChatStore((s) => s.loadingMessages);
 
-  // Filter out thread messages (they display in the thread panel only) + deduplicate
+  // Community hidden users filter
+  const communityHidden = useChatStore((s) => s.communityHiddenUsers[s.activeConversationId ?? ""] ?? []);
+
+  // Filter out thread messages (they display in the thread panel only) + deduplicate + hidden users
   const messages = rawMessages
     .filter((m) => !m.threadId)
     .filter((m) => m.status === "streaming" || m.content?.trim() || m.attachments?.length)
-    .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
+    .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i)
+    .filter((m) => !communityHidden.length || !m.senderUserId || !communityHidden.includes(m.senderUserId));
 
   const lastMessage = messages[messages.length - 1];
   const activeConversationId = useChatStore((s) => s.activeConversationId);

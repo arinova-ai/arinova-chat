@@ -132,6 +132,7 @@ interface ChatState {
   >;
   agentSkills: Record<string, AgentSkill[]>;
   mutedConversations: Record<string, boolean>;
+  communityHiddenUsers: Record<string, string[]>;
   ttsEnabled: boolean;
   reactionsByMessage: Record<string, Record<string, ReactionInfo>>;
   /** Per-conversation max read seq by other users: convId → { userId → seq } */
@@ -315,6 +316,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     typeof window !== "undefined"
       ? JSON.parse(localStorage.getItem("arinova_muted") || "{}")
       : {},
+  communityHiddenUsers: {},
   ttsEnabled:
     typeof window !== "undefined"
       ? localStorage.getItem("arinova_tts") === "true"
