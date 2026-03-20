@@ -6,7 +6,7 @@
   "renderer": "iframe",
   "entry": "theme.js",
   "preview": "preview.png",
-  "maxAgents": 6,
+  "maxAgents": 1,
   "tags": ["default", "safe", "builtin"],
   "author": { "name": "Arinova Official", "id": "arinova-official" },
   "license": "standard"
