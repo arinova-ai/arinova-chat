@@ -89,6 +89,20 @@ pub fn router() -> Router<AppState> {
             axum::routing::delete(delete_invite),
         )
         .route("/api/communities/join-by-invite/{code}", post(join_by_invite))
+        // Hidden users
+        .route(
+            "/api/communities/{id}/hidden-users",
+            get(list_hidden_users).post(hide_user),
+        )
+        .route(
+            "/api/communities/{id}/hidden-users/{userId}",
+            axum::routing::delete(unhide_user),
+        )
+        // Member avatar
+        .route(
+            "/api/communities/{id}/members/me/avatar",
+            axum::routing::patch(update_member_avatar),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -3674,4 +3688,114 @@ async fn join_by_invite(
         StatusCode::OK,
         Json(json!({ "success": true, "communityId": community_id })),
     )
+}
+
+// ===== Hidden Users =====
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HideUserBody {
+    user_id: String,
+}
+
+/// POST /api/communities/:id/hidden-users
+async fn hide_user(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    Json(body): Json<HideUserBody>,
+) -> (StatusCode, Json<Value>) {
+    let result = sqlx::query(
+        "INSERT INTO community_hidden_users (community_id, user_id, hidden_user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .bind(&body.user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::OK, Json(json!({"ok": true}))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+    }
+}
+
+/// GET /api/communities/:id/hidden-users
+async fn list_hidden_users(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, (String, Option<String>, Option<String>)>(
+        r#"SELECT chu.hidden_user_id, u.name, u.image
+           FROM community_hidden_users chu
+           JOIN "user" u ON u.id = chu.hidden_user_id
+           WHERE chu.community_id = $1 AND chu.user_id = $2"#,
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let users: Vec<_> = rows.iter().map(|(id, name, image)| json!({
+                "userId": id, "name": name, "image": image,
+            })).collect();
+            (StatusCode::OK, Json(json!({"users": users})))
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+    }
+}
+
+/// DELETE /api/communities/:id/hidden-users/:userId
+async fn unhide_user(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((community_id, hidden_user_id)): Path<(Uuid, String)>,
+) -> (StatusCode, Json<Value>) {
+    let result = sqlx::query(
+        "DELETE FROM community_hidden_users WHERE community_id = $1 AND user_id = $2 AND hidden_user_id = $3",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .bind(&hidden_user_id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(_) => (StatusCode::OK, Json(json!({"ok": true}))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+    }
+}
+
+// ===== Member Avatar =====
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateMemberAvatarBody {
+    avatar_url: Option<String>,
+}
+
+/// PATCH /api/communities/:id/members/me/avatar
+async fn update_member_avatar(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    Json(body): Json<UpdateMemberAvatarBody>,
+) -> (StatusCode, Json<Value>) {
+    let result = sqlx::query(
+        "UPDATE community_members SET avatar_url = $1 WHERE community_id = $2 AND user_id = $3",
+    )
+    .bind(&body.avatar_url)
+    .bind(community_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true, "avatarUrl": body.avatar_url}))),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Not a member"}))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+    }
 }

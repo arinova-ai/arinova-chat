@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -613,6 +615,98 @@ function DateJumpButton({ conversationId }: { conversationId: string }) {
   );
 }
 
+/** Hamburger menu: Sheet on mobile, DropdownMenu on desktop */
+function HamburgerMenu({
+  items,
+  onAction,
+  onSettingsOpen,
+  pinnedIds,
+  getMuteIcon,
+  isInCall,
+  t,
+}: {
+  items: { id: string; icon: React.ComponentType<{ className?: string }>; labelKey: string }[];
+  onAction: (id: string) => void;
+  onSettingsOpen: () => void;
+  pinnedIds: string[];
+  getMuteIcon?: () => React.ComponentType<{ className?: string }>;
+  isInCall?: boolean;
+  t: (key: string) => string;
+}) {
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
+
+  if (isMobile) {
+    return (
+      <>
+        <Button variant="ghost" size="icon" className="h-9 w-9" title={t("chat.header.moreOptions")} onClick={() => setOpen(true)}>
+          <Menu className="h-4 w-4" />
+        </Button>
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent side="bottom" showCloseButton className="rounded-t-2xl border-t border-border bg-card px-4 pt-2 pb-6">
+            <SheetTitle className="sr-only">{t("chat.header.moreOptions")}</SheetTitle>
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
+            <div className="space-y-1">
+              {items.map((btn) => {
+                const Icon = btn.id === "mute" && getMuteIcon ? getMuteIcon() : btn.icon;
+                return (
+                  <button
+                    key={btn.id}
+                    type="button"
+                    onClick={() => { setOpen(false); onAction(btn.id); }}
+                    disabled={btn.id === "call" && isInCall}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors disabled:opacity-40"
+                  >
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                    <span className="flex-1 text-left">{t(btn.labelKey)}</span>
+                    {pinnedIds.includes(btn.id) && <Pin className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                );
+              })}
+              <div className="my-1 border-t border-border" />
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onSettingsOpen(); }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors"
+              >
+                <Settings className="h-5 w-5 text-muted-foreground" />
+                <span>{t("chat.header.settings")}</span>
+              </button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8" title={t("chat.header.moreOptions")}>
+          <Menu className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {items.map((btn) => {
+          const Icon = btn.id === "mute" && getMuteIcon ? getMuteIcon() : btn.icon;
+          return (
+            <DropdownMenuItem key={btn.id} onClick={() => onAction(btn.id)} disabled={btn.id === "call" && isInCall}>
+              <Icon className="h-4 w-4" />
+              <span className="flex-1">{t(btn.labelKey)}</span>
+              {pinnedIds.includes(btn.id) && <Pin className="ml-2 h-3 w-3 text-muted-foreground" />}
+            </DropdownMenuItem>
+          );
+        })}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onSettingsOpen}>
+          <Settings className="h-4 w-4" />
+          {t("chat.header.settings")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function DirectHeaderButtons({
   type,
   pinnedIds,
@@ -691,41 +785,15 @@ function DirectHeaderButtons({
         );
       })}
 
-      {/* Hamburger menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 md:h-8 md:w-8"
-            title={t("chat.header.moreOptions")}
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {available.map((btn) => {
-            const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
-            const isPinned = pinnedIds.includes(btn.id);
-            return (
-              <DropdownMenuItem
-                key={btn.id}
-                onClick={() => onAction(btn.id)}
-                disabled={btn.id === "call" && isInCall}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="flex-1">{t(btn.labelKey)}</span>
-                {isPinned && <Pin className="ml-2 h-3 w-3 text-muted-foreground" />}
-              </DropdownMenuItem>
-            );
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onSettingsOpen}>
-            <Settings className="h-4 w-4" />
-            {t("chat.header.settings")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <HamburgerMenu
+        items={available}
+        onAction={onAction}
+        onSettingsOpen={onSettingsOpen}
+        pinnedIds={pinnedIds}
+        getMuteIcon={getMuteIcon}
+        isInCall={isInCall}
+        t={t}
+      />
     </>
   );
 }
@@ -797,45 +865,14 @@ function GroupHeaderButtons({
         );
       })}
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 md:h-8 md:w-8"
-            title={t("chat.header.moreOptions")}
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {GROUP_HEADER_BUTTONS.map((btn) => {
-            const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
-            const isPinned = !isCommunity && groupPins.includes(btn.id);
-            const menuBadge = btn.id === "members" && pendingCount > 0;
-            return (
-              <DropdownMenuItem
-                key={btn.id}
-                onClick={() => onAction(btn.id)}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="flex-1">{t(btn.labelKey)}</span>
-                {menuBadge && (
-                  <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none">
-                    {pendingCount > 99 ? "99+" : pendingCount}
-                  </span>
-                )}
-                {isPinned && <Pin className="ml-2 h-3 w-3 text-muted-foreground" />}
-              </DropdownMenuItem>
-            );
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onSettingsOpen}>
-            <Settings className="h-4 w-4" />
-            {t("chat.header.settings")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <HamburgerMenu
+        items={GROUP_HEADER_BUTTONS}
+        onAction={onAction}
+        onSettingsOpen={onSettingsOpen}
+        pinnedIds={!isCommunity ? groupPins : []}
+        getMuteIcon={getMuteIcon}
+        t={t}
+      />
     </>
   );
 }

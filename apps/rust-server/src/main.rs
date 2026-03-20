@@ -616,6 +616,16 @@ async fn main() {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_expert_asks_expert ON expert_asks(expert_id)").execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_expert_asks_user ON expert_asks(user_id)").execute(&db).await.ok();
 
+    // Community hidden users + member avatar
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS community_hidden_users (
+        community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        hidden_user_id TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (community_id, user_id, hidden_user_id)
+    )"#).execute(&db).await.ok();
+    sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS avatar_url TEXT").execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards
