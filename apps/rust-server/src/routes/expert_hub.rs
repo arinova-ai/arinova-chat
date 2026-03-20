@@ -45,7 +45,7 @@ struct ListExpertsQuery {
 
 async fn list_experts(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Query(q): Query<ListExpertsQuery>,
 ) -> Response {
     let order = match q.sort.as_deref() {
@@ -53,9 +53,9 @@ async fn list_experts(
         _ => "e.created_at DESC",
     };
 
-    // Build dynamic query
-    let mut conditions = vec!["e.is_published = true".to_string()];
-    let mut binds: Vec<String> = vec![];
+    // Build dynamic query — show published OR owned by current user (drafts)
+    let mut binds: Vec<String> = vec![user.id.clone()];
+    let mut conditions = vec![format!("(e.is_published = true OR e.owner_id = $1)")];
 
     if let Some(ref search) = q.search {
         binds.push(format!("%{}%", search.to_lowercase()));
