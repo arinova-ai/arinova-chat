@@ -464,7 +464,7 @@ async fn list_notebook_notes(
     #[derive(FromRow)]
     struct NoteListRow {
         id: Uuid,
-        conversation_id: Uuid,
+        conversation_id: Option<Uuid>,
         title: String,
         tags: Vec<String>,
         is_pinned: bool,
@@ -493,7 +493,7 @@ async fn list_notebook_notes(
                 .map(|n| {
                     json!({
                         "id": n.id.to_string(),
-                        "conversationId": n.conversation_id.to_string(),
+                        "conversationId": n.conversation_id.map(|id| id.to_string()),
                         "title": &n.title,
                         "tags": &n.tags,
                         "isPinned": n.is_pinned,
