@@ -836,7 +836,8 @@ async fn create_board(
     }
 
     let board = sqlx::query_as::<_, BoardRow>(
-        "SELECT id, name, created_at, archived FROM kanban_boards WHERE id = $1",
+        r#"SELECT kb.id, kb.name, kb.created_at, kb.archived, kb.owner_id, u.username AS owner_username
+           FROM kanban_boards kb JOIN "user" u ON u.id = kb.owner_id WHERE kb.id = $1"#,
     )
     .bind(board_id)
     .fetch_one(&state.db)
@@ -1855,8 +1856,18 @@ async fn agent_create_board(
         }
     }
 
+    // Auto-grant agent permission to new board
+    let _ = sqlx::query(
+        "INSERT INTO board_agent_permissions (board_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    )
+    .bind(board_id)
+    .bind(agent.id)
+    .execute(&state.db)
+    .await;
+
     let board = sqlx::query_as::<_, BoardRow>(
-        "SELECT id, name, created_at, archived FROM kanban_boards WHERE id = $1",
+        r#"SELECT kb.id, kb.name, kb.created_at, kb.archived, kb.owner_id, u.username AS owner_username
+           FROM kanban_boards kb JOIN "user" u ON u.id = kb.owner_id WHERE kb.id = $1"#,
     )
     .bind(board_id)
     .fetch_one(&state.db)
@@ -2325,9 +2336,37 @@ async fn agent_create_card(
         }
         bid
     } else {
-        match ensure_default_board(&state.db, &owner_id).await {
-            Ok(id) => id,
-            Err(e) => return e,
+        // Find first board agent has permission for, or default board with auto-grant
+        let permitted_board = sqlx::query_scalar::<_, Uuid>(
+            r#"SELECT bap.board_id FROM board_agent_permissions bap
+               JOIN kanban_boards kb ON kb.id = bap.board_id
+               WHERE bap.agent_id = $1 AND kb.owner_id = $2 AND kb.archived = false
+               ORDER BY kb.created_at LIMIT 1"#,
+        )
+        .bind(agent.id)
+        .bind(&owner_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        match permitted_board {
+            Some(id) => id,
+            None => {
+                // No permitted board — use default and auto-grant permission
+                let default_id = match ensure_default_board(&state.db, &owner_id).await {
+                    Ok(id) => id,
+                    Err(e) => return e,
+                };
+                let _ = sqlx::query(
+                    "INSERT INTO board_agent_permissions (board_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                )
+                .bind(default_id)
+                .bind(agent.id)
+                .execute(&state.db)
+                .await;
+                default_id
+            }
         }
     };
 
