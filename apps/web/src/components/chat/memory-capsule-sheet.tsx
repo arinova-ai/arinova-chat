@@ -520,9 +520,16 @@ export function MemoryCapsuleSheet({
                         )}
                       </div>
                     ) : capsule.status === "failed" ? (
-                      <p className="text-xs text-destructive">
-                        {t("memoryCapsule.statusFailed")}
-                      </p>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-muted-foreground">
+                          {capsule.entryCount > 0
+                            ? `${capsule.entryCount} ${t("memoryCapsule.entries")} · ${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} ${t("memoryCapsule.notes")}` : ""}`
+                            : `${capsule.messageCount} ${t("memoryCapsule.messages")}${capsule.noteCount > 0 ? ` · ${capsule.noteCount} ${t("memoryCapsule.notes")}` : ""}`}
+                        </p>
+                        <p className="text-xs text-destructive">
+                          {t("memoryCapsule.statusFailed")}
+                        </p>
+                      </div>
                     ) : (
                       <div className="space-y-0.5">
                         <p className="text-xs text-muted-foreground">
