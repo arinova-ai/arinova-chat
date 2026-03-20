@@ -245,7 +245,12 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
                 max={50}
                 value={historyLimit}
                 onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
+                  const raw = e.target.value;
+                  if (raw === "") {
+                    handleHistoryLimitChange(0);
+                    return;
+                  }
+                  const v = parseInt(raw, 10);
                   if (!isNaN(v)) handleHistoryLimitChange(Math.min(50, Math.max(0, v)));
                 }}
                 className="mt-2 w-20 rounded-md border border-input bg-secondary px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
