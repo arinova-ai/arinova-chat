@@ -966,7 +966,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
           {/* Timestamp + Read receipt */}
           {message.createdAt && (
             <p suppressHydrationWarning className={cn(
-              "mt-1 text-[10px] text-muted-foreground/60 flex items-center gap-1",
+              "mt-1 text-[11px] text-muted-foreground/60 flex items-center gap-1",
               isUser ? "justify-end" : "justify-start"
             )}>
               {formatTimestamp(message.createdAt)}

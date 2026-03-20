@@ -681,7 +681,7 @@ function DirectHeaderButtons({
             key={btn.id}
             variant="ghost"
             size="icon"
-            className={cn("h-8 w-8", activeColor)}
+            className={cn("h-9 w-9 md:h-8 md:w-8", activeColor)}
             onClick={() => onAction(btn.id)}
             disabled={btn.id === "call" && isInCall}
             title={t(btn.labelKey)}
@@ -697,7 +697,7 @@ function DirectHeaderButtons({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-9 w-9 md:h-8 md:w-8"
             title={t("chat.header.moreOptions")}
           >
             <Menu className="h-4 w-4" />
@@ -776,12 +776,14 @@ function GroupHeaderButtons({
         const Icon = btn.id === "mute" ? getMuteIcon() : btn.icon;
         const activeColor = getActiveColor(btn.id);
         const showBadge = btn.id === "members" && pendingCount > 0;
+        // On mobile, only show search + members for community; hide mute/wiki/threads
+        const mobileHidden = isCommunity && !["search", "members"].includes(btn.id);
         return (
           <Button
             key={btn.id}
             variant="ghost"
             size="icon"
-            className={cn("h-8 w-8 relative", activeColor)}
+            className={cn("h-9 w-9 md:h-8 md:w-8 relative", activeColor, mobileHidden && "hidden md:inline-flex")}
             onClick={() => onAction(btn.id)}
             title={t(btn.labelKey)}
           >
@@ -800,7 +802,7 @@ function GroupHeaderButtons({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-9 w-9 md:h-8 md:w-8"
             title={t("chat.header.moreOptions")}
           >
             <Menu className="h-4 w-4" />

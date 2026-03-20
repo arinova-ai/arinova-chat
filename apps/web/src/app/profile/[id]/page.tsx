@@ -181,9 +181,9 @@ function UserProfileContent() {
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              size="icon-xs"
+              size="icon"
               onClick={() => router.back()}
-              className="shrink-0"
+              className="shrink-0 h-9 w-9"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>

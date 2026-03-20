@@ -151,16 +151,16 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
     <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
       {/* Tab bar — hidden when collapsed */}
       {!collapsed && (
-        <div className="shrink-0 grid grid-cols-4 gap-1 px-2 pb-2">
+        <div className="shrink-0 flex gap-1.5 overflow-x-auto scrollbar-none px-3 pb-2">
           {TABS.map((tb) => (
             <button
               key={tb}
               type="button"
               onClick={() => setTab(tb)}
               className={cn(
-                "truncate rounded-md px-1 py-0.5 text-[10px] font-medium text-center transition-colors",
+                "shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition-colors",
                 tab === tb
-                  ? "bg-blue-600 text-white"
+                  ? "bg-brand text-white"
                   : "bg-secondary text-muted-foreground hover:text-foreground"
               )}
             >

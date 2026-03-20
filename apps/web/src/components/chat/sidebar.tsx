@@ -83,7 +83,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
                   searchMessages(localQuery.trim());
                 }
               }}
-              className="h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-11 md:h-9 w-full rounded-lg border-none bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         </div>

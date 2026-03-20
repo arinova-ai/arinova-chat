@@ -305,7 +305,7 @@ export function MobileBottomNav() {
                 onClick={() => router.push("/friends")}
               />
               {pendingRequestCount > 0 && (
-                <span className="absolute -top-0.5 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-medium text-white">
+                <span className="absolute -top-0.5 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-medium text-white">
                   {pendingRequestCount}
                 </span>
               )}
@@ -347,7 +347,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center gap-1 px-3 py-1.5 min-w-[64px] text-[10px] transition-colors",
+        "flex flex-col items-center justify-center gap-1 px-3 py-2 min-w-[64px] text-[11px] transition-colors",
         active ? "text-brand-text" : "text-muted-foreground"
       )}
     >
