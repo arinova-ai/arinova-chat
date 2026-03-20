@@ -1907,5 +1907,15 @@
   "expertHub.creator.noKnowledge": "尚未新增知識",
   "expertHub.creator.namePlaceholder": "專家名稱",
   "expertHub.creator.descPlaceholder": "描述（選填）",
+  "expertHub.rating": "為此回答評分",
+  "expertHub.rated": "已評分",
+  "expertHub.webhook.url": "Webhook URL（A2A 端點）",
+  "expertHub.webhook.test": "測試連線",
+  "expertHub.webhook.success": "連線成功",
+  "expertHub.webhook.failed": "連線失敗",
+  "expertHub.examples.title": "範例問答",
+  "expertHub.examples.add": "新增範例",
+  "expertHub.examples.question": "範例問題",
+  "expertHub.examples.answer": "範例回答",
   "creator.tab.experts": "專家"
 }

@@ -11,7 +11,7 @@ import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Coins, Send, Loader2 } from "lucide-react";
+import { ArrowLeft, Coins, Send, Loader2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AskRecord {
@@ -181,6 +181,28 @@ function ExpertChatContent() {
                     <div className="flex justify-start">
                       <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-secondary px-4 py-2.5">
                         <p className="text-sm whitespace-pre-wrap">{h.answer}</p>
+                        {/* Rating */}
+                        {h.answer && !h.rating && (
+                          <div className="flex gap-1 mt-1">
+                            {[1,2,3,4,5].map(star => (
+                              <button key={star} type="button" className="text-muted-foreground hover:text-yellow-400 transition-colors"
+                                onClick={async () => {
+                                  await api(`/api/expert-hub/asks/${h.id}/rate`, { method: "PATCH", body: JSON.stringify({ rating: star }) });
+                                  setHistory(prev => prev.map(a => a.id === h.id ? { ...a, rating: star } : a));
+                                }}
+                              >
+                                <Star className="h-4 w-4" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {h.rating && (
+                          <div className="flex gap-0.5 mt-1">
+                            {[1,2,3,4,5].map(star => (
+                              <Star key={star} className={`h-3.5 w-3.5 ${star <= h.rating! ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground/30"}`} />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

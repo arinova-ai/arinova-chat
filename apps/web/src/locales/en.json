@@ -1911,5 +1911,15 @@
   "expertHub.creator.noKnowledge": "No knowledge added yet",
   "expertHub.creator.namePlaceholder": "Expert name",
   "expertHub.creator.descPlaceholder": "Description (optional)",
+  "expertHub.rating": "Rate this answer",
+  "expertHub.rated": "Rated",
+  "expertHub.webhook.url": "Webhook URL (A2A endpoint)",
+  "expertHub.webhook.test": "Test Connection",
+  "expertHub.webhook.success": "Connection successful",
+  "expertHub.webhook.failed": "Connection failed",
+  "expertHub.examples.title": "Example Q&A",
+  "expertHub.examples.add": "Add Example",
+  "expertHub.examples.question": "Example question",
+  "expertHub.examples.answer": "Example answer",
   "creator.tab.experts": "Experts"
 }

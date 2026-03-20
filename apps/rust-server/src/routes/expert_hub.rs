@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use futures::StreamExt;
@@ -32,6 +32,10 @@ pub fn router() -> Router<AppState> {
         // Examples
         .route("/api/expert-hub/{id}/examples", post(add_example))
         .route("/api/expert-hub/{expertId}/examples/{exampleId}", delete(delete_example))
+        // Rating
+        .route("/api/expert-hub/asks/{askId}/rate", patch(rate_ask))
+        // Webhook test
+        .route("/api/expert-hub/{id}/webhook/test", post(test_webhook))
 }
 
 // ─── list_experts ────────────────────────────────────────────────────────────
@@ -423,7 +427,7 @@ async fn ask_expert(State(state): State<AppState>, user: AuthUser, Path(id): Pat
         "SELECT name, price_per_ask, mode, webhook_url FROM experts WHERE id = $1 AND is_published = true"
     ).bind(id).fetch_optional(&state.db).await;
 
-    let (expert_name, price, mode, _webhook_url) = match expert {
+    let (expert_name, price, mode, webhook_url) = match expert {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Expert not found or not published"}))).into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
@@ -440,9 +444,82 @@ async fn ask_expert(State(state): State<AppState>, user: AuthUser, Path(id): Pat
         }
     }
 
+    // Webhook mode: forward to A2A endpoint
     if mode == "webhook" {
-        // TODO: webhook mode -- forward to external service
-        return (StatusCode::NOT_IMPLEMENTED, Json(json!({"error": "Webhook mode not yet implemented"}))).into_response();
+        let wh_url = match webhook_url {
+            Some(ref url) if !url.is_empty() => url.clone(),
+            _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Expert has no webhook URL configured"}))).into_response(),
+        };
+
+        let ask_id = Uuid::new_v4();
+        let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+        let a2a_result = crate::a2a::client::stream_a2a_response(
+            &wh_url, question, &ask_id.to_string(), cancel_rx,
+        ).await;
+
+        let (mut chunk_rx, handle) = match a2a_result {
+            Ok(r) => r,
+            Err(e) => return (StatusCode::BAD_GATEWAY, Json(json!({"error": e}))).into_response(),
+        };
+
+        let db = state.db.clone();
+        let user_id = user.id.clone();
+        let expert_id = id;
+        let q = question.to_string();
+        let expert_name_clone = format!("Expert: {}", expert_name);
+
+        let output_stream = async_stream::stream! {
+            let mut full_content = String::new();
+            while let Some(chunk) = chunk_rx.recv().await {
+                full_content.push_str(&chunk);
+                let event = serde_json::json!({"type": "chunk", "content": chunk});
+                yield Ok::<_, std::convert::Infallible>(format!("data: {}\n\n", event));
+            }
+
+            // Wait for completion
+            if let Ok(Ok(final_content)) = handle.await {
+                if final_content.len() > full_content.len() {
+                    let remaining = &final_content[full_content.len()..];
+                    if !remaining.is_empty() {
+                        full_content.push_str(remaining);
+                        let event = serde_json::json!({"type": "chunk", "content": remaining});
+                        yield Ok(format!("data: {}\n\n", event));
+                    }
+                }
+            }
+
+            // Deduct balance after successful response
+            if price > 0 && !full_content.is_empty() {
+                let _ = sqlx::query(
+                    "UPDATE coin_balances SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND balance >= $1"
+                ).bind(price).bind(&user_id).execute(&db).await;
+                let _ = sqlx::query(
+                    "INSERT INTO coin_transactions (id, user_id, type, amount, description) VALUES ($1, $2, 'expert_ask', $3, $4)"
+                ).bind(Uuid::new_v4()).bind(&user_id).bind(-price).bind(&expert_name_clone).execute(&db).await;
+            }
+
+            let _ = sqlx::query(
+                "INSERT INTO expert_asks (id, expert_id, user_id, question, answer, cost) VALUES ($1, $2, $3, $4, $5, $6)"
+            ).bind(ask_id).bind(expert_id).bind(&user_id).bind(&q).bind(&full_content).bind(if full_content.is_empty() { 0 } else { price }).execute(&db).await;
+
+            if !full_content.is_empty() {
+                let _ = sqlx::query(
+                    "UPDATE experts SET total_asks = total_asks + 1, total_revenue = total_revenue + $1, updated_at = NOW() WHERE id = $2"
+                ).bind(price).bind(expert_id).execute(&db).await;
+            }
+
+            let done = serde_json::json!({"type": "done", "content": full_content, "askId": ask_id});
+            yield Ok(format!("data: {}\n\n", done));
+        };
+
+        drop(cancel_tx);
+        return Response::builder()
+            .status(200)
+            .header("Content-Type", "text/event-stream")
+            .header("Cache-Control", "no-cache")
+            .header("Connection", "keep-alive")
+            .body(Body::from_stream(output_stream))
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
     }
 
     // RAG: embed question -> search knowledge -> build prompt
@@ -656,5 +733,87 @@ async fn delete_example(State(state): State<AppState>, user: AuthUser, Path((exp
         Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Example not found"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+// ─── rate_ask ────────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct RateAskBody {
+    rating: i32,
+}
+
+/// PATCH /api/expert-hub/asks/:askId/rate
+async fn rate_ask(State(state): State<AppState>, user: AuthUser, Path(ask_id): Path<Uuid>, Json(body): Json<RateAskBody>) -> Response {
+    if body.rating < 1 || body.rating > 5 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Rating must be 1-5"}))).into_response();
+    }
+
+    // Verify ask belongs to user
+    let ask = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT expert_id FROM expert_asks WHERE id = $1 AND user_id = $2"
+    ).bind(ask_id).bind(&user.id).fetch_optional(&state.db).await;
+
+    let expert_id = match ask {
+        Ok(Some((eid,))) => eid,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Ask not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    // Update rating
+    let _ = sqlx::query("UPDATE expert_asks SET rating = $1 WHERE id = $2")
+        .bind(body.rating).bind(ask_id).execute(&state.db).await;
+
+    // Recalculate expert avg_rating
+    let avg = sqlx::query_scalar::<_, f64>(
+        "SELECT AVG(rating)::float8 FROM expert_asks WHERE expert_id = $1 AND rating IS NOT NULL"
+    ).bind(expert_id).fetch_optional(&state.db).await.ok().flatten();
+
+    if let Some(avg_val) = avg {
+        let _ = sqlx::query("UPDATE experts SET avg_rating = $1, updated_at = NOW() WHERE id = $2")
+            .bind(avg_val).bind(expert_id).execute(&state.db).await;
+    }
+
+    Json(json!({"ok": true, "rating": body.rating})).into_response()
+}
+
+// ─── test_webhook ────────────────────────────────────────────────────────────
+
+/// POST /api/expert-hub/:id/webhook/test — test webhook connectivity
+async fn test_webhook(State(state): State<AppState>, user: AuthUser, Path(id): Path<Uuid>) -> Response {
+    // Owner only
+    let expert = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT owner_id, webhook_url FROM experts WHERE id = $1"
+    ).bind(id).fetch_optional(&state.db).await;
+
+    let (owner_id, webhook_url) = match expert {
+        Ok(Some(e)) => e,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Expert not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    if owner_id != user.id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the owner can test webhook"}))).into_response();
+    }
+
+    let url = match webhook_url {
+        Some(ref u) if !u.is_empty() => u.clone(),
+        _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "No webhook URL configured"}))).into_response(),
+    };
+
+    // Try to fetch the agent card
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).build().unwrap_or_default();
+    let resp = client.get(&url).header("Accept", "application/json").send().await;
+
+    match resp {
+        Ok(r) if r.status().is_success() => {
+            Json(json!({"ok": true, "status": r.status().as_u16(), "message": "Webhook endpoint is reachable"})).into_response()
+        }
+        Ok(r) => {
+            Json(json!({"ok": false, "status": r.status().as_u16(), "message": format!("Endpoint returned {}", r.status())})).into_response()
+        }
+        Err(e) => {
+            Json(json!({"ok": false, "message": format!("Connection failed: {}", e)})).into_response()
+        }
     }
 }

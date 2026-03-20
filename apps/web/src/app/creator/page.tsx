@@ -1580,10 +1580,18 @@ interface ExpertItem {
   name: string;
   description: string | null;
   category: string;
+  mode?: string;
+  webhookUrl?: string | null;
   pricePerAsk: number;
   isPublished: boolean;
   totalAsks: number;
   totalRevenue: number;
+}
+
+interface ExampleItem {
+  id: string;
+  question: string;
+  answer: string;
 }
 
 function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | number>) => string }) {
@@ -1599,6 +1607,15 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
   const [knowledgeInput, setKnowledgeInput] = useState("");
   const [knowledgeChunks, setKnowledgeChunks] = useState<{ id: string; content: string; chunkIndex: number }[]>([]);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [createMode, setCreateMode] = useState("rag");
+  const [createWebhookUrl, setCreateWebhookUrl] = useState("");
+  const [webhookTesting, setWebhookTesting] = useState(false);
+  const [webhookTestResult, setWebhookTestResult] = useState<"success" | "failed" | null>(null);
+  const [examples, setExamples] = useState<ExampleItem[]>([]);
+  const [examplesLoading, setExamplesLoading] = useState(false);
+  const [exampleQuestion, setExampleQuestion] = useState("");
+  const [exampleAnswer, setExampleAnswer] = useState("");
+  const [examplesOpen, setExamplesOpen] = useState<string | null>(null);
 
   const fetchExperts = useCallback(async () => {
     setLoading(true);
@@ -1621,15 +1638,74 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
     try {
       await api("/api/expert-hub", {
         method: "POST",
-        body: JSON.stringify({ name: createName.trim(), description: createDesc || null, category: createCategory, pricePerAsk: createPrice }),
+        body: JSON.stringify({
+          name: createName.trim(),
+          description: createDesc || null,
+          category: createCategory,
+          pricePerAsk: createPrice,
+          mode: createMode,
+          webhookUrl: createMode === "webhook" ? createWebhookUrl.trim() || null : null,
+        }),
       });
       setCreateOpen(false);
       setCreateName("");
       setCreateDesc("");
       setCreatePrice(10);
+      setCreateMode("rag");
+      setCreateWebhookUrl("");
       fetchExperts();
     } catch { /* */ }
     setCreating(false);
+  };
+
+  const handleTestWebhook = async (url: string) => {
+    if (!url.trim()) return;
+    setWebhookTesting(true);
+    setWebhookTestResult(null);
+    try {
+      await api("/api/expert-hub/webhook-test", {
+        method: "POST",
+        body: JSON.stringify({ url: url.trim() }),
+      });
+      setWebhookTestResult("success");
+    } catch {
+      setWebhookTestResult("failed");
+    }
+    setWebhookTesting(false);
+  };
+
+  const handleLoadExamples = async (id: string) => {
+    setExamplesOpen(id);
+    setExamplesLoading(true);
+    try {
+      const data = await api<{ examples: ExampleItem[] }>(`/api/expert-hub/${id}/examples`);
+      setExamples(data.examples);
+    } catch { setExamples([]); }
+    setExamplesLoading(false);
+  };
+
+  const handleAddExample = async () => {
+    if (!examplesOpen || !exampleQuestion.trim() || !exampleAnswer.trim()) return;
+    setExamplesLoading(true);
+    try {
+      await api(`/api/expert-hub/${examplesOpen}/examples`, {
+        method: "POST",
+        body: JSON.stringify({ question: exampleQuestion.trim(), answer: exampleAnswer.trim() }),
+      });
+      setExampleQuestion("");
+      setExampleAnswer("");
+      handleLoadExamples(examplesOpen);
+    } catch { /* */ }
+    setExamplesLoading(false);
+  };
+
+  const handleDeleteExample = async (expertId: string, exampleId: string) => {
+    setExamplesLoading(true);
+    try {
+      await api(`/api/expert-hub/${expertId}/examples/${exampleId}`, { method: "DELETE" });
+      handleLoadExamples(expertId);
+    } catch { /* */ }
+    setExamplesLoading(false);
   };
 
   const handleTogglePublish = async (expert: ExpertItem) => {
@@ -1708,6 +1784,9 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleLoadKnowledge(ex.id)}>
                     {t("expertHub.creator.knowledge")}
                   </Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleLoadExamples(ex.id)}>
+                    {t("expertHub.examples.title")}
+                  </Button>
                   <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => handleDelete(ex.id)}>
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -1747,6 +1826,80 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                   )}
                 </div>
               )}
+
+              {/* Webhook URL (shown inline if mode is webhook) */}
+              {ex.mode === "webhook" && (
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  <label className="text-xs font-medium">{t("expertHub.webhook.url")}</label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={ex.webhookUrl ?? ""}
+                      readOnly
+                      className="flex-1 text-xs bg-secondary border-border"
+                      placeholder={t("expertHub.webhook.url")}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-8 shrink-0"
+                      disabled={webhookTesting || !ex.webhookUrl}
+                      onClick={() => handleTestWebhook(ex.webhookUrl ?? "")}
+                    >
+                      {webhookTesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                      {t("expertHub.webhook.test")}
+                    </Button>
+                  </div>
+                  {webhookTestResult && (
+                    <p className={`text-xs ${webhookTestResult === "success" ? "text-green-400" : "text-red-400"}`}>
+                      {t(`expertHub.webhook.${webhookTestResult}`)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Examples panel */}
+              {examplesOpen === ex.id && (
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  <h5 className="text-xs font-medium">{t("expertHub.examples.title")}</h5>
+                  <div className="space-y-2">
+                    <Input
+                      value={exampleQuestion}
+                      onChange={(e) => setExampleQuestion(e.target.value)}
+                      placeholder={t("expertHub.examples.question")}
+                      className="text-xs bg-secondary border-border"
+                    />
+                    <textarea
+                      value={exampleAnswer}
+                      onChange={(e) => setExampleAnswer(e.target.value)}
+                      placeholder={t("expertHub.examples.answer")}
+                      rows={2}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
+                    />
+                    <Button size="sm" className="text-xs h-7" onClick={handleAddExample} disabled={!exampleQuestion.trim() || !exampleAnswer.trim() || examplesLoading}>
+                      <Plus className="h-3 w-3 mr-1" />{t("expertHub.examples.add")}
+                    </Button>
+                  </div>
+                  {examplesLoading ? (
+                    <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                  ) : examples.length > 0 ? (
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {examples.map((ex2) => (
+                        <div key={ex2.id} className="flex items-start gap-2 rounded bg-secondary px-2 py-1.5">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">Q: {ex2.question}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">A: {ex2.answer}</p>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-red-400" onClick={() => handleDeleteExample(ex.id, ex2.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{t("expertHub.creator.empty")}</p>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1765,6 +1918,40 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
               </select>
               <Input type="number" min={0} value={createPrice} onChange={(e) => setCreatePrice(Number(e.target.value))} className="w-24" placeholder="Price" />
             </div>
+            <div className="flex gap-2">
+              <select value={createMode} onChange={(e) => setCreateMode(e.target.value)} className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm">
+                <option value="rag">RAG</option>
+                <option value="webhook">Webhook</option>
+              </select>
+            </div>
+            {createMode === "webhook" && (
+              <div className="space-y-1.5">
+                <Input
+                  value={createWebhookUrl}
+                  onChange={(e) => setCreateWebhookUrl(e.target.value)}
+                  placeholder={t("expertHub.webhook.url")}
+                  className="text-sm"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7"
+                    disabled={webhookTesting || !createWebhookUrl.trim()}
+                    onClick={() => handleTestWebhook(createWebhookUrl)}
+                  >
+                    {webhookTesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                    {t("expertHub.webhook.test")}
+                  </Button>
+                  {webhookTestResult && (
+                    <span className={`text-xs ${webhookTestResult === "success" ? "text-green-400" : "text-red-400"}`}>
+                      {t(`expertHub.webhook.${webhookTestResult}`)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</Button>
               <Button size="sm" onClick={handleCreate} disabled={!createName.trim() || creating}>{creating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}{t("expertHub.creator.create")}</Button>
