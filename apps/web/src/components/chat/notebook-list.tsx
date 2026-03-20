@@ -32,6 +32,14 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 
 interface Notebook {
   id: string;
@@ -372,15 +380,36 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   // If a notebook is selected, show notes for that notebook
   if (selectedNotebook) {
     if (!inline && !open) return null;
-    return (<>{shareDialog}<NotebookNotes
+    // Create notebook inline dialog
+    const createDialog = creating ? (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => { setCreating(false); setNewName(""); }}>
+        <div className="bg-background border border-border rounded-lg w-[320px] p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-sm font-semibold">{t("notebooks.create")}</h3>
+          <Input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCreate();
+              if (e.key === "Escape") { setCreating(false); setNewName(""); }
+            }}
+            placeholder={t("notebooks.namePlaceholder")}
+            className="h-8 text-sm"
+          />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => { setCreating(false); setNewName(""); }} className="rounded-md px-3 py-1 text-xs text-muted-foreground hover:text-foreground">{t("common.cancel")}</button>
+            <button type="button" onClick={handleCreate} disabled={!newName.trim()} className="rounded-md px-3 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 disabled:opacity-50">{t("notebooks.add")}</button>
+          </div>
+        </div>
+      </div>
+    ) : null;
+
+    return (<>{shareDialog}{createDialog}<NotebookNotes
         notebook={selectedNotebook}
-        conversationId={conversationId}
+        notebooks={notebooks}
+        onSwitchNotebook={(nb) => { setSelectedNotebook(nb); }}
+        onCreateNotebook={() => setCreating(true)}
         inline={inline}
-        onBack={() => {
-          userDismissedRef.current = true;
-          setSelectedNotebook(null);
-          fetchNotebooks(); // refresh counts
-        }}
         onClose={!inline && onOpenChange ? () => onOpenChange(false) : undefined}
         onManageCapsules={handleManageCapsules}
         onManageAgents={handleManageAgents}
@@ -404,18 +433,10 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
 
   const content = (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Header — shown while loading/no selection */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border shrink-0">
         <BookOpen className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-semibold flex-1">{t("notebooks.title")}</span>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-          title={t("notebooks.create")}
-        >
-          <Plus className="h-4 w-4" />
-        </button>
         {!inline && onOpenChange && (
           <button
             type="button"
@@ -690,9 +711,10 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
 /** Notes list inside a specific notebook */
 function NotebookNotes({
   notebook,
-  conversationId,
+  notebooks,
+  onSwitchNotebook,
+  onCreateNotebook,
   inline,
-  onBack,
   onClose,
   onManageCapsules,
   onManageAgents,
@@ -712,9 +734,10 @@ function NotebookNotes({
   onRefresh,
 }: {
   notebook: Notebook;
-  conversationId?: string;
+  notebooks: Notebook[];
+  onSwitchNotebook: (nb: Notebook) => void;
+  onCreateNotebook: () => void;
   inline?: boolean;
-  onBack: () => void;
   onClose?: () => void;
   onManageCapsules: (id: string) => void;
   onManageAgents: (id: string) => void;
@@ -786,14 +809,14 @@ function NotebookNotes({
     } catch { /* */ }
   }, [notebook.id]);
 
-  const [archivedNotes, setArchivedNotes] = useState<{ id: string; title: string; conversationId: string }[]>([]);
+  const [archivedNotes, setArchivedNotes] = useState<{ id: string; title: string }[]>([]);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [archivedLoading, setArchivedLoading] = useState(false);
 
   const loadArchivedNotes = useCallback(async () => {
     setArchivedLoading(true);
     try {
-      const data = await api<{ notes: { id: string; title: string; conversationId: string }[] }>(
+      const data = await api<{ notes: { id: string; title: string }[] }>(
         `/api/notebooks/${notebook.id}/notes?archived=true`,
         { silent: true },
       );
@@ -811,19 +834,12 @@ function NotebookNotes({
       setArchivedNotes((prev) => prev.filter((n) => n.id !== noteId));
       onRefresh();
     } catch {}
-  }, [conversationId, onRefresh]);
+  }, [onRefresh]);
 
   const content = (
     <div className="flex flex-col h-full">
-      {/* Breadcrumb header with inline toolbar */}
+      {/* Header with notebook dropdown + toolbar */}
       <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border shrink-0">
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors shrink-0"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
         {searchOpen ? (
           <div className="flex items-center gap-1 flex-1 min-w-0">
             <Input
@@ -840,7 +856,44 @@ function NotebookNotes({
           </div>
         ) : (
           <>
-            <span className="text-sm font-semibold truncate flex-1 min-w-0">{notebook.name}</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-sm font-semibold hover:bg-muted transition-colors truncate min-w-0"
+                >
+                  <span className="truncate">{notebook.name}</span>
+                  {notebook.ownerUsername && notebook.ownerId !== currentUserId && (
+                    <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground font-normal">@{notebook.ownerUsername}</span>
+                  )}
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-w-[260px]">
+                {notebooks.map((nb) => (
+                  <DropdownMenuItem
+                    key={nb.id}
+                    onClick={() => onSwitchNotebook(nb)}
+                    className={cn("flex items-center gap-2", nb.id === notebook.id && "bg-accent")}
+                  >
+                    <span className="truncate flex-1">
+                      {nb.name}
+                      {nb.isDefault && <span className="ml-1 text-[10px] text-muted-foreground">({t("notebooks.default")})</span>}
+                    </span>
+                    {nb.ownerUsername && nb.ownerId !== currentUserId && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground">@{nb.ownerUsername}</span>
+                    )}
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{nb.noteCount}</span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onCreateNotebook}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  {t("notebooks.create")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="flex-1" />
 
             {/* Toolbar icons */}
             <button type="button" onClick={() => setSearchOpen(true)} className={toolbarBtnClass}>
