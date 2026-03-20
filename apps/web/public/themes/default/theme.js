@@ -106,7 +106,7 @@ export default {
           '.zz{position:absolute;font-family:"Comic Sans MS",cursive;font-weight:bold;color:rgba(255,255,255,.85);text-shadow:0 1px 4px rgba(0,0,0,.3);opacity:0;animation:zzF 3s ease-in-out infinite}' +
           '@keyframes zzF{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1;transform:translateY(-5px) scale(1)}70%{opacity:.8;transform:translateY(-20px) scale(1.05)}100%{opacity:0;transform:translateY(-35px) scale(.8)}}' +
           '</style>' +
-          '<div style="position:absolute;top:25.4%;left:35.6%;pointer-events:none">' +
+          '<div style="position:absolute;top:35%;left:35.6%;pointer-events:none">' +
           '<span class="zz" style="font-size:18px;left:0;top:0;animation-delay:0s">Z</span>' +
           '<span class="zz" style="font-size:24px;left:18px;top:-20px;animation-delay:.8s">Z</span>' +
           '<span class="zz" style="font-size:32px;left:40px;top:-48px;animation-delay:1.6s">Z</span>' +
@@ -120,7 +120,7 @@ export default {
           '@keyframes ryS{0%,100%{opacity:.6}33%{opacity:1}66%{opacity:.7}}' +
           '</style>' +
           '<div style="position:absolute;top:13%;left:61.8%;width:21.8%;height:52%;background:linear-gradient(160deg,rgba(255,180,80,.08) 0%,rgba(255,150,50,.04) 40%,transparent 70%);animation:ryS 6s ease-in-out infinite"></div>' +
-          '<div style="position:absolute;top:20.2%;left:60.7%;pointer-events:none">' +
+          '<div style="position:absolute;top:32%;left:58%;pointer-events:none">' +
           '<span class="mn" style="font-size:18px;left:0;top:0;animation-delay:0s">&#9834;</span>' +
           '<span class="mn" style="font-size:24px;left:20px;top:-15px;animation-delay:1s">&#9835;</span>' +
           '<span class="mn" style="font-size:16px;left:-10px;top:-8px;animation-delay:2s">&#9833;</span>' +
