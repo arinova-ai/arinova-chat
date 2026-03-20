@@ -642,9 +642,50 @@ function CommunityDetailContent() {
               );
             })()
           ) : community.conversationId ? (
-            /* ---------- Member: redirecting to main chat ---------- */
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            /* ---------- Member: community profile view ---------- */
+            <div className="flex-1 overflow-y-auto">
+              {/* Cover image */}
+              <div className="relative h-48 w-full bg-muted">
+                {community.coverImageUrl ? (
+                  <img src={community.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-brand/20 to-brand/5" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+                {currentUserId === community.creatorId && (
+                  <button
+                    type="button"
+                    className="absolute bottom-3 right-3 rounded-full bg-background/80 px-3 py-1.5 text-xs font-medium hover:bg-background transition-colors"
+                    onClick={() => {
+                      const url = prompt("Enter cover image URL:");
+                      if (url !== null) {
+                        api(`/api/communities/${community.id}`, {
+                          method: "PATCH",
+                          body: JSON.stringify({ coverImageUrl: url.trim() || null }),
+                        }).then(() => fetchCommunity());
+                      }
+                    }}
+                  >
+                    {t("community.detail.editCover")}
+                  </button>
+                )}
+              </div>
+              <div className="p-4 space-y-4">
+                <div className="text-center space-y-2">
+                  <p className="text-sm text-muted-foreground">{community.description || t("community.detail.noDescription")}</p>
+                  <p className="text-xs text-muted-foreground">{members.length} {t("community.detail.members")}</p>
+                </div>
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => {
+                    useChatStore.getState().setActiveConversation(community.conversationId!);
+                    router.push(`/?c=${community.conversationId}`);
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  {t("community.detail.goToChat")}
+                </Button>
+              </div>
             </div>
           ) : (
             /* ---------- Member: no conversation linked yet ---------- */
