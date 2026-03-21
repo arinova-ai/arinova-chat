@@ -41,6 +41,7 @@ import {
   EyeOff,
   Lightbulb,
   FileText,
+  ArrowLeft,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -1494,6 +1495,7 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
   const [exampleQuestion, setExampleQuestion] = useState("");
   const [exampleAnswer, setExampleAnswer] = useState("");
   const [examplesOpen, setExamplesOpen] = useState<string | null>(null);
+  const [selectedExpertId, setSelectedExpertId] = useState<string | null>(null);
 
   const fetchExperts = useCallback(async () => {
     setLoading(true);
@@ -1640,6 +1642,176 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
 
   if (loading) return <div className="flex justify-center py-12"><ArinovaSpinner size="sm" /></div>;
 
+  const selectedExpert = selectedExpertId ? experts.find(e => e.id === selectedExpertId) : null;
+
+  if (selectedExpert) {
+    return (
+      <div className="space-y-6">
+        {/* Header: back + name */}
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => { setSelectedExpertId(null); setSelectedId(null); setExamplesOpen(null); }} className="rounded-md p-1 hover:bg-muted">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h3 className="text-sm font-semibold flex-1">{selectedExpert.name}</h3>
+          <div className="flex items-center gap-1.5">
+            <Switch checked={selectedExpert.isPublished} onCheckedChange={() => handleTogglePublish(selectedExpert)} />
+            <span className={`text-[11px] ${selectedExpert.isPublished ? "text-green-400" : "text-muted-foreground"}`}>
+              {selectedExpert.isPublished ? t("expertHub.creator.published") : t("expertHub.creator.draft")}
+            </span>
+          </div>
+        </div>
+
+        {/* Basic info (read-only summary) */}
+        <div className="rounded-lg border border-border p-3 space-y-1">
+          <p className="text-xs text-muted-foreground">{selectedExpert.category} · {selectedExpert.pricePerAsk} Coin/ask · {selectedExpert.mode}</p>
+          {selectedExpert.description && <p className="text-xs">{selectedExpert.description}</p>}
+        </div>
+
+        {/* Knowledge section */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase text-muted-foreground">{t("expertHub.creator.knowledge")}</h4>
+          {selectedId === selectedExpert.id && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <textarea
+                  value={knowledgeInput}
+                  onChange={(e) => setKnowledgeInput(e.target.value)}
+                  placeholder={t("expertHub.creator.knowledgePlaceholder")}
+                  rows={3}
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
+                />
+                <div className="flex flex-col gap-1">
+                  <Button size="sm" className="text-xs h-7" onClick={handleAddKnowledge} disabled={!knowledgeInput.trim() || knowledgeLoading}>
+                    <Upload className="h-3 w-3 mr-1" />{t("expertHub.creator.addText")}
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => {
+                    const input = document.createElement("input");
+                    input.type = "file";
+                    input.accept = ".txt,.md,.pdf";
+                    input.onchange = async () => {
+                      const file = input.files?.[0];
+                      if (!file) return;
+                      setKnowledgeLoading(true);
+                      try {
+                        const form = new FormData();
+                        form.append("file", file);
+                        await fetch(`/api/expert-hub/${selectedExpert.id}/knowledge/upload`, {
+                          method: "POST",
+                          body: form,
+                          credentials: "include",
+                        });
+                        handleLoadKnowledge(selectedExpert.id);
+                      } catch { /* */ }
+                      setKnowledgeLoading(false);
+                    };
+                    input.click();
+                  }} disabled={knowledgeLoading}>
+                    <FileText className="h-3 w-3 mr-1" />{t("expertHub.creator.uploadFile")}
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={handleRebuild} disabled={knowledgeLoading}>
+                    {t("expertHub.creator.rebuild")}
+                  </Button>
+                </div>
+              </div>
+              {knowledgeLoading ? (
+                <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+              ) : knowledgeChunks.length > 0 ? (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {knowledgeChunks.map((c) => (
+                    <div key={c.id} className="rounded bg-secondary px-2 py-1 text-xs text-muted-foreground line-clamp-2">{c.content}</div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("expertHub.creator.noKnowledge")}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Webhook section if applicable */}
+        {selectedExpert.mode === "webhook" && (
+          <div className="space-y-2">
+            <label className="text-xs font-medium">{t("expertHub.webhook.url")}</label>
+            <div className="flex gap-2">
+              <Input
+                value={selectedExpert.webhookUrl ?? ""}
+                readOnly
+                className="flex-1 text-xs bg-secondary border-border"
+                placeholder={t("expertHub.webhook.url")}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-8 shrink-0"
+                disabled={webhookTesting || !selectedExpert.webhookUrl}
+                onClick={() => handleTestWebhook(selectedExpert.id)}
+              >
+                {webhookTesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                {t("expertHub.webhook.test")}
+              </Button>
+            </div>
+            {webhookTestResult && (
+              <p className={`text-xs ${webhookTestResult === "success" ? "text-green-400" : "text-red-400"}`}>
+                {t(`expertHub.webhook.${webhookTestResult}`)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Examples section */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase text-muted-foreground">{t("expertHub.examples.title")}</h4>
+          {examplesOpen === selectedExpert.id && (
+            <div className="space-y-2">
+              <div className="space-y-2">
+                <Input
+                  value={exampleQuestion}
+                  onChange={(e) => setExampleQuestion(e.target.value)}
+                  placeholder={t("expertHub.examples.question")}
+                  className="text-xs bg-secondary border-border"
+                />
+                <textarea
+                  value={exampleAnswer}
+                  onChange={(e) => setExampleAnswer(e.target.value)}
+                  placeholder={t("expertHub.examples.answer")}
+                  rows={2}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
+                />
+                <Button size="sm" className="text-xs h-7" onClick={handleAddExample} disabled={!exampleQuestion.trim() || !exampleAnswer.trim() || examplesLoading}>
+                  <Plus className="h-3 w-3 mr-1" />{t("expertHub.examples.add")}
+                </Button>
+              </div>
+              {examplesLoading ? (
+                <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+              ) : examples.length > 0 ? (
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {examples.map((ex2) => (
+                    <div key={ex2.id} className="flex items-start gap-2 rounded bg-secondary px-2 py-1.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">Q: {ex2.question}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">A: {ex2.answer}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-red-400" onClick={() => handleDeleteExample(selectedExpert.id, ex2.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("expertHub.creator.empty")}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Delete button at bottom */}
+        <Button variant="destructive" size="sm" className="w-full" onClick={() => { handleDelete(selectedExpert.id); setSelectedExpertId(null); }}>
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" />{t("common.delete")}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1652,162 +1824,19 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
       ) : (
         <div className="space-y-2">
           {experts.map((ex) => (
-            <div key={ex.id} className="rounded-lg border border-border bg-card p-3">
+            <div key={ex.id} className="rounded-lg border border-border bg-card p-3 cursor-pointer hover:bg-accent/30 transition-colors" onClick={() => { setSelectedExpertId(ex.id); handleLoadKnowledge(ex.id); handleLoadExamples(ex.id); }}>
               <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-medium">{ex.name}</h4>
-                  <p className="text-xs text-muted-foreground">{ex.category} · {ex.pricePerAsk} Coin · {ex.totalAsks} asks · {ex.totalRevenue} revenue</p>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium truncate">{ex.name}</h4>
+                  <p className="text-xs text-muted-foreground">{ex.category} · {ex.totalAsks} asks</p>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <Switch checked={ex.isPublished} onCheckedChange={() => handleTogglePublish(ex)} />
-                    <span className={`text-[11px] ${ex.isPublished ? "text-green-400" : "text-muted-foreground"}`}>
-                      {ex.isPublished ? t("expertHub.creator.published") : t("expertHub.creator.draft")}
-                    </span>
-                  </div>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleLoadKnowledge(ex.id)}>
-                    {t("expertHub.creator.knowledge")}
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleLoadExamples(ex.id)}>
-                    {t("expertHub.examples.title")}
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => handleDelete(ex.id)}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Switch checked={ex.isPublished} onCheckedChange={() => handleTogglePublish(ex)} />
+                  <span className={`text-[11px] ${ex.isPublished ? "text-green-400" : "text-muted-foreground"}`}>
+                    {ex.isPublished ? t("expertHub.creator.published") : t("expertHub.creator.draft")}
+                  </span>
                 </div>
               </div>
-
-              {/* Knowledge panel */}
-              {selectedId === ex.id && (
-                <div className="mt-3 pt-3 border-t border-border space-y-2">
-                  <div className="flex gap-2">
-                    <textarea
-                      value={knowledgeInput}
-                      onChange={(e) => setKnowledgeInput(e.target.value)}
-                      placeholder={t("expertHub.creator.knowledgePlaceholder")}
-                      rows={3}
-                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
-                    />
-                    <div className="flex flex-col gap-1">
-                      <Button size="sm" className="text-xs h-7" onClick={handleAddKnowledge} disabled={!knowledgeInput.trim() || knowledgeLoading}>
-                        <Upload className="h-3 w-3 mr-1" />{t("expertHub.creator.addText")}
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => {
-                        const input = document.createElement("input");
-                        input.type = "file";
-                        input.accept = ".txt,.md,.pdf";
-                        input.onchange = async () => {
-                          const file = input.files?.[0];
-                          if (!file) return;
-                          setKnowledgeLoading(true);
-                          try {
-                            const form = new FormData();
-                            form.append("file", file);
-                            await fetch(`/api/expert-hub/${ex.id}/knowledge/upload`, {
-                              method: "POST",
-                              body: form,
-                              credentials: "include",
-                            });
-                            handleLoadKnowledge(ex.id);
-                          } catch { /* */ }
-                          setKnowledgeLoading(false);
-                        };
-                        input.click();
-                      }} disabled={knowledgeLoading}>
-                        <FileText className="h-3 w-3 mr-1" />{t("expertHub.creator.uploadFile")}
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={handleRebuild} disabled={knowledgeLoading}>
-                        {t("expertHub.creator.rebuild")}
-                      </Button>
-                    </div>
-                  </div>
-                  {knowledgeLoading ? (
-                    <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                  ) : knowledgeChunks.length > 0 ? (
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                      {knowledgeChunks.map((c) => (
-                        <div key={c.id} className="rounded bg-secondary px-2 py-1 text-xs text-muted-foreground line-clamp-2">{c.content}</div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">{t("expertHub.creator.noKnowledge")}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Webhook URL (shown inline if mode is webhook) */}
-              {ex.mode === "webhook" && (
-                <div className="mt-3 pt-3 border-t border-border space-y-2">
-                  <label className="text-xs font-medium">{t("expertHub.webhook.url")}</label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={ex.webhookUrl ?? ""}
-                      readOnly
-                      className="flex-1 text-xs bg-secondary border-border"
-                      placeholder={t("expertHub.webhook.url")}
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs h-8 shrink-0"
-                      disabled={webhookTesting || !ex.webhookUrl}
-                      onClick={() => handleTestWebhook(ex.id)}
-                    >
-                      {webhookTesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                      {t("expertHub.webhook.test")}
-                    </Button>
-                  </div>
-                  {webhookTestResult && (
-                    <p className={`text-xs ${webhookTestResult === "success" ? "text-green-400" : "text-red-400"}`}>
-                      {t(`expertHub.webhook.${webhookTestResult}`)}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Examples panel */}
-              {examplesOpen === ex.id && (
-                <div className="mt-3 pt-3 border-t border-border space-y-2">
-                  <h5 className="text-xs font-medium">{t("expertHub.examples.title")}</h5>
-                  <div className="space-y-2">
-                    <Input
-                      value={exampleQuestion}
-                      onChange={(e) => setExampleQuestion(e.target.value)}
-                      placeholder={t("expertHub.examples.question")}
-                      className="text-xs bg-secondary border-border"
-                    />
-                    <textarea
-                      value={exampleAnswer}
-                      onChange={(e) => setExampleAnswer(e.target.value)}
-                      placeholder={t("expertHub.examples.answer")}
-                      rows={2}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
-                    />
-                    <Button size="sm" className="text-xs h-7" onClick={handleAddExample} disabled={!exampleQuestion.trim() || !exampleAnswer.trim() || examplesLoading}>
-                      <Plus className="h-3 w-3 mr-1" />{t("expertHub.examples.add")}
-                    </Button>
-                  </div>
-                  {examplesLoading ? (
-                    <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                  ) : examples.length > 0 ? (
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {examples.map((ex2) => (
-                        <div key={ex2.id} className="flex items-start gap-2 rounded bg-secondary px-2 py-1.5">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">Q: {ex2.question}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-2">A: {ex2.answer}</p>
-                          </div>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-red-400" onClick={() => handleDeleteExample(ex.id, ex2.id)}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">{t("expertHub.creator.empty")}</p>
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </div>
