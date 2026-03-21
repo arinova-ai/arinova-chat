@@ -509,13 +509,13 @@ export function CommunitySettingsSheet({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="overflow-y-auto w-full sm:max-w-lg p-0" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <SheetHeader className="px-4 pt-4 pb-0">
+      <SheetContent className="flex flex-col w-full sm:max-w-lg p-0 overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <SheetHeader className="px-4 pt-4 pb-0 shrink-0">
           <SheetTitle>{t("communitySettings.title")}</SheetTitle>
         </SheetHeader>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 px-4 py-2 overflow-x-auto border-b border-border">
+        <div className="flex gap-1 px-4 py-2 overflow-x-auto border-b border-border shrink-0">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}
@@ -533,6 +533,7 @@ export function CommunitySettingsSheet({
           ))}
         </div>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             {t("common.loading")}
@@ -1020,6 +1021,7 @@ export function CommunitySettingsSheet({
             )}
           </div>
         )}
+        </div>
       </SheetContent>
     </Sheet>
   );
