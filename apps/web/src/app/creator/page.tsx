@@ -1495,6 +1495,9 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
   const [exampleQuestion, setExampleQuestion] = useState("");
   const [exampleAnswer, setExampleAnswer] = useState("");
   const [examplesOpen, setExamplesOpen] = useState<string | null>(null);
+  const [editingExampleId, setEditingExampleId] = useState<string | null>(null);
+  const [editExQ, setEditExQ] = useState("");
+  const [editExA, setEditExA] = useState("");
   const [selectedExpertId, setSelectedExpertId] = useState<string | null>(null);
 
   const fetchExperts = useCallback(async () => {
@@ -1761,46 +1764,66 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
         {/* Examples section */}
         <div className="space-y-2">
           <h4 className="text-xs font-semibold uppercase text-muted-foreground">{t("expertHub.examples.title")}</h4>
-          {examplesOpen === selectedExpert.id && (
-            <div className="space-y-2">
-              <div className="space-y-2">
-                <Input
-                  value={exampleQuestion}
-                  onChange={(e) => setExampleQuestion(e.target.value)}
-                  placeholder={t("expertHub.examples.question")}
-                  className="text-xs bg-secondary border-border"
-                />
-                <textarea
-                  value={exampleAnswer}
-                  onChange={(e) => setExampleAnswer(e.target.value)}
-                  placeholder={t("expertHub.examples.answer")}
-                  rows={2}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
-                />
-                <Button size="sm" className="text-xs h-7" onClick={handleAddExample} disabled={!exampleQuestion.trim() || !exampleAnswer.trim() || examplesLoading}>
-                  <Plus className="h-3 w-3 mr-1" />{t("expertHub.examples.add")}
-                </Button>
-              </div>
-              {examplesLoading ? (
-                <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-              ) : examples.length > 0 ? (
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {examples.map((ex2) => (
-                    <div key={ex2.id} className="flex items-start gap-2 rounded bg-secondary px-2 py-1.5">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">Q: {ex2.question}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">A: {ex2.answer}</p>
+          {/* Add new example */}
+          <div className="space-y-2">
+            <Input
+              value={exampleQuestion}
+              onChange={(e) => setExampleQuestion(e.target.value)}
+              placeholder={t("expertHub.examples.question")}
+              className="text-xs bg-secondary border-border"
+            />
+            <textarea
+              value={exampleAnswer}
+              onChange={(e) => setExampleAnswer(e.target.value)}
+              placeholder={t("expertHub.examples.answer")}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs resize-none"
+            />
+            <Button size="sm" className="text-xs h-7" onClick={handleAddExample} disabled={!exampleQuestion.trim() || !exampleAnswer.trim() || examplesLoading}>
+              <Plus className="h-3 w-3 mr-1" />{t("expertHub.examples.add")}
+            </Button>
+          </div>
+          {/* Existing examples list */}
+          {examplesLoading ? (
+            <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+          ) : examples.length > 0 ? (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {examples.map((ex2) => (
+                <div key={ex2.id} className="rounded bg-secondary px-2.5 py-2 space-y-1">
+                  {editingExampleId === ex2.id ? (
+                    <div className="space-y-1.5">
+                      <Input value={editExQ} onChange={(e) => setEditExQ(e.target.value)} className="text-xs h-7" />
+                      <textarea value={editExA} onChange={(e) => setEditExA(e.target.value)} rows={2} className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs resize-none" />
+                      <div className="flex gap-1">
+                        <Button size="sm" className="text-xs h-6 px-2" onClick={async () => {
+                          await api(`/api/expert-hub/${selectedExpert.id}/examples/${ex2.id}`, { method: "PATCH", body: JSON.stringify({ question: editExQ, answer: editExA }) });
+                          setEditingExampleId(null);
+                          handleLoadExamples(selectedExpert.id);
+                        }}><Check className="h-2.5 w-2.5 mr-0.5" />{t("common.save")}</Button>
+                        <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={() => setEditingExampleId(null)}>{t("common.cancel")}</Button>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0 text-muted-foreground hover:text-red-400" onClick={() => handleDeleteExample(selectedExpert.id, ex2.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium">Q: {ex2.question}</p>
+                        <p className="text-xs text-muted-foreground">A: {ex2.answer}</p>
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button type="button" className="rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => { setEditingExampleId(ex2.id); setEditExQ(ex2.question); setEditExA(ex2.answer); }}>
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button type="button" className="rounded p-0.5 text-muted-foreground hover:text-red-400" onClick={() => handleDeleteExample(selectedExpert.id, ex2.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">{t("expertHub.creator.empty")}</p>
-              )}
+              ))}
             </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t("expertHub.creator.empty")}</p>
           )}
         </div>
 

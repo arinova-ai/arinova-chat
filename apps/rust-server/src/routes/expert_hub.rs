@@ -31,8 +31,8 @@ pub fn router() -> Router<AppState> {
         // History
         .route("/api/expert-hub/{id}/history", get(ask_history))
         // Examples
-        .route("/api/expert-hub/{id}/examples", post(add_example))
-        .route("/api/expert-hub/{expertId}/examples/{exampleId}", delete(delete_example))
+        .route("/api/expert-hub/{id}/examples", get(list_examples).post(add_example))
+        .route("/api/expert-hub/{expertId}/examples/{exampleId}", patch(update_example).delete(delete_example))
         // Rating
         .route("/api/expert-hub/asks/{askId}/rate", patch(rate_ask))
         // Webhook test
@@ -789,6 +789,20 @@ async fn ask_history(State(state): State<AppState>, user: AuthUser, Path(id): Pa
     }
 }
 
+// ─── list_examples ──────────────────────────────────────────────────────────
+
+async fn list_examples(State(state): State<AppState>, _user: AuthUser, Path(id): Path<Uuid>) -> Response {
+    let rows = sqlx::query_as::<_, (Uuid, String, String, i32)>(
+        "SELECT id, question, answer, sort_order FROM expert_examples WHERE expert_id = $1 ORDER BY sort_order"
+    ).bind(id).fetch_all(&state.db).await;
+    match rows {
+        Ok(items) => Json(json!({
+            "examples": items.iter().map(|(eid, q, a, so)| json!({"id": eid, "question": q, "answer": a, "sortOrder": so})).collect::<Vec<_>>()
+        })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
 // ─── add_example ─────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -831,6 +845,39 @@ async fn delete_example(State(state): State<AppState>, user: AuthUser, Path((exp
         .bind(example_id).bind(expert_id).execute(&state.db).await;
     match result {
         Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Example not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+// ─── update_example ─────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct UpdateExampleBody {
+    question: Option<String>,
+    answer: Option<String>,
+}
+
+async fn update_example(State(state): State<AppState>, user: AuthUser, Path((expert_id, example_id)): Path<(Uuid, Uuid)>, Json(body): Json<UpdateExampleBody>) -> Response {
+    let is_owner = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM experts WHERE id = $1 AND owner_id = $2)")
+        .bind(expert_id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the expert owner"}))).into_response();
+    }
+    let mut sets = Vec::new();
+    let mut idx = 3u32;
+    let mut binds: Vec<String> = Vec::new();
+    if let Some(ref q) = body.question { sets.push(format!("question = ${idx}")); binds.push(q.clone()); idx += 1; }
+    if let Some(ref a) = body.answer { sets.push(format!("answer = ${idx}")); binds.push(a.clone()); idx += 1; }
+    let _ = idx;
+    if sets.is_empty() {
+        return Json(json!({"ok": true})).into_response();
+    }
+    let sql = format!("UPDATE expert_examples SET {} WHERE id = $1 AND expert_id = $2", sets.join(", "));
+    let mut q = sqlx::query(&sql).bind(example_id).bind(expert_id);
+    for b in &binds { q = q.bind(b); }
+    match q.execute(&state.db).await {
+        Ok(r) if r.rows_affected() > 0 => Json(json!({"ok": true})).into_response(),
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Example not found"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
