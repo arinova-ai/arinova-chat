@@ -884,7 +884,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                         type="button"
                         className="rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-left transition-colors hover:bg-muted/60 hover:border-muted-foreground/30 group cursor-pointer"
                         onClick={async () => {
-                          const convId = (cap as Record<string, unknown>).sourceConversationId as string | undefined;
+                          const convId = cap.sourceConversationId;
                           if (!convId) return;
                           // Find the message nearest to sourceStart and jump to it
                           if (cap.sourceStart) {
@@ -893,11 +893,13 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                                 `/api/conversations/${convId}/messages/by-timestamp?ts=${encodeURIComponent(cap.sourceStart)}`
                               );
                               if (data.messageId) {
+                                onOpenChange(false);
                                 jumpToMessage(convId, data.messageId);
                                 return;
                               }
                             } catch { /* fallback to just switching conversation */ }
                           }
+                          onOpenChange(false);
                           setActiveConversation(convId);
                         }}
                       >
