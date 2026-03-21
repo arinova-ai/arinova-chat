@@ -95,12 +95,11 @@ interface CreatorStickerPack {
 // Tabs
 // ---------------------------------------------------------------------------
 
-type Tab = "overview" | "stickers" | "agents" | "themes" | "community" | "spaces" | "apikeys" | "experts";
+type Tab = "overview" | "stickers" | "themes" | "community" | "spaces" | "apikeys" | "experts";
 
 const TAB_DEFS: { key: Tab; i18nKey: string; icon: typeof LayoutDashboard }[] = [
   { key: "overview", i18nKey: "creator.tab.overview", icon: LayoutDashboard },
   { key: "stickers", i18nKey: "creator.tab.stickers", icon: Sticker },
-  { key: "agents", i18nKey: "creator.tab.agents", icon: Bot },
   { key: "themes", i18nKey: "creator.tab.themes", icon: Palette },
   { key: "community", i18nKey: "creator.tab.community", icon: Users },
   { key: "spaces", i18nKey: "creator.tab.spaces", icon: Gamepad2 },
@@ -320,126 +319,6 @@ function StickersTab({ t }: { t: (k: string) => string }) {
 // ---------------------------------------------------------------------------
 // Agents Tab (preserved from existing code)
 // ---------------------------------------------------------------------------
-
-function AgentsTab({
-  agents,
-  loading,
-  onArchive,
-  t,
-}: {
-  agents: AgentListing[];
-  loading: boolean;
-  onArchive: (id: string) => void;
-  t: (k: string) => string;
-}) {
-  const router = useRouter();
-
-  if (loading) {
-    return (
-      <div className="flex h-40 items-center justify-center">
-        <ArinovaSpinner size="sm" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          {t("creator.yourAgents")} ({agents.length})
-        </h2>
-        <Button
-          size="sm"
-          className="brand-gradient-btn gap-1"
-          onClick={() => router.push("/creator/new")}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t("creator.newAgent")}
-        </Button>
-      </div>
-      {agents.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
-          <MessageSquare className="mx-auto h-10 w-10 text-muted-foreground opacity-40" />
-          <p className="mt-2 text-sm text-muted-foreground">{t("creator.noAgents")}</p>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="mt-3 gap-1"
-            onClick={() => router.push("/creator/new")}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("creator.createFirstAgent")}
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
-            >
-              {agent.avatarUrl ? (
-                <img
-                  src={agent.avatarUrl}
-                  alt={agent.agentName}
-                  className="h-10 w-10 shrink-0 rounded-lg object-cover"
-                />
-              ) : (
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-sm font-bold text-brand-text">
-                  {agent.agentName[0]}
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold truncate">{agent.agentName}</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(agent.status)}`}>
-                    {t(`creator.status.${agent.status}`)}
-                  </span>
-                </div>
-                <div className="mt-0.5 flex items-center gap-3 text-[11px] text-muted-foreground">
-                  <span>{agent.salesCount} {t("creator.chats")}</span>
-                  <span>{agent.totalMessages} {t("creator.msgs")}</span>
-                  <span className="flex items-center gap-0.5">
-                    <Coins className="h-3 w-3 text-yellow-500" />
-                    {agent.totalRevenue}
-                  </span>
-                  {agent.avgRating !== null && (
-                    <span className="flex items-center gap-0.5">
-                      <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                      {agent.avgRating.toFixed(1)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => router.push(`/creator/${agent.id}/edit`)}
-                  title={t("creator.edit")}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                {agent.status !== "archived" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => onArchive(agent.id)}
-                    title={t("creator.archive")}
-                  >
-                    <Archive className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Themes Tab
@@ -1486,9 +1365,6 @@ function CreatorConsoleContent() {
           <div className="mx-auto max-w-4xl">
             {tab === "overview" && <OverviewTab stats={dashboardStats} t={t} />}
             {tab === "stickers" && <StickersTab t={t} />}
-            {tab === "agents" && (
-              <AgentsTab agents={agents} loading={loading} onArchive={handleArchive} t={t} />
-            )}
             {tab === "themes" && <ThemesTab t={t} />}
             {tab === "community" && <CommunityTab t={t} />}
             {tab === "spaces" && <SpacesTab t={t} />}
@@ -1607,7 +1483,7 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
   const [knowledgeInput, setKnowledgeInput] = useState("");
   const [knowledgeChunks, setKnowledgeChunks] = useState<{ id: string; content: string; chunkIndex: number }[]>([]);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
-  const [createMode, setCreateMode] = useState("rag");
+  const [createMode, setCreateMode] = useState("managed");
   const [createWebhookUrl, setCreateWebhookUrl] = useState("");
   const [webhookTesting, setWebhookTesting] = useState(false);
   const [webhookTestResult, setWebhookTestResult] = useState<"success" | "failed" | null>(null);
@@ -1651,7 +1527,7 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
       setCreateName("");
       setCreateDesc("");
       setCreatePrice(10);
-      setCreateMode("rag");
+      setCreateMode("managed");
       setCreateWebhookUrl("");
       fetchExperts();
     } catch { /* */ }
@@ -1908,19 +1784,34 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setCreateOpen(false)}>
           <div className="bg-background border border-border rounded-lg w-[400px] p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold">{t("expertHub.creator.create")}</h3>
-            <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder={t("expertHub.creator.namePlaceholder")} />
-            <textarea value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder={t("expertHub.creator.descPlaceholder")} rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" />
-            <div className="flex gap-2">
-              <select value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm">
-                {["general", "tech", "business", "creative", "education", "health", "legal", "finance"].map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <Input type="number" min={0} value={createPrice} onChange={(e) => setCreatePrice(Number(e.target.value))} className="w-24" placeholder="Price" />
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("expertHub.creator.nameLabel")}</label>
+              <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder={t("expertHub.creator.namePlaceholder")} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("expertHub.creator.descLabel")}</label>
+              <textarea value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder={t("expertHub.creator.descPlaceholder")} rows={3} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" />
             </div>
             <div className="flex gap-2">
-              <select value={createMode} onChange={(e) => setCreateMode(e.target.value)} className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm">
-                <option value="rag">RAG</option>
-                <option value="webhook">Webhook</option>
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("expertHub.creator.categoryLabel")}</label>
+                <select value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm">
+                  {["general", "tech", "business", "creative", "education", "health", "legal", "finance"].map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="w-28">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("expertHub.creator.priceLabel")}</label>
+                <Input type="number" min={0} value={createPrice} onChange={(e) => setCreatePrice(Number(e.target.value))} placeholder="10" />
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("expertHub.creator.priceDesc")}</p>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("expertHub.creator.mode")}</label>
+              <select value={createMode} onChange={(e) => setCreateMode(e.target.value)} className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm">
+                <option value="managed">{t("expertHub.creator.modeManaged")}</option>
+                <option value="webhook">{t("expertHub.creator.modeWebhook")}</option>
               </select>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{createMode === "managed" ? t("expertHub.creator.modeManagedDesc") : t("expertHub.creator.modeWebhookDesc")}</p>
             </div>
             {createMode === "webhook" && (
               <div className="space-y-1.5">
