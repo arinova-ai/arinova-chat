@@ -1908,6 +1908,7 @@
   "expertHub.creator.publish": "Publish",
   "expertHub.creator.unpublish": "Unpublish",
   "expertHub.creator.published": "Published",
+  "expertHub.creator.unpublished": "Unpublished",
   "expertHub.creator.draft": "Draft",
   "expertHub.creator.knowledge": "Knowledge",
   "expertHub.creator.knowledgePlaceholder": "Paste your knowledge content here...",
