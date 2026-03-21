@@ -615,6 +615,9 @@ async fn main() {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_experts_owner ON experts(owner_id)").execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_experts_published ON experts(is_published)").execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_expert_knowledge_expert ON expert_knowledge(expert_id)").execute(&db).await.ok();
+    // Fix: expert_asks FK needs ON DELETE CASCADE (otherwise delete expert fails)
+    sqlx::query("ALTER TABLE expert_asks DROP CONSTRAINT IF EXISTS expert_asks_expert_id_fkey").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE expert_asks ADD CONSTRAINT expert_asks_expert_id_fkey FOREIGN KEY (expert_id) REFERENCES experts(id) ON DELETE CASCADE").execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_expert_asks_expert ON expert_asks(expert_id)").execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_expert_asks_user ON expert_asks(user_id)").execute(&db).await.ok();
 
