@@ -491,9 +491,31 @@ async fn do_extraction(
         } else {
             (None, None)
         };
+        // Find the most similar source message in the time window using trigram similarity
+        let source_msg_id: Option<uuid::Uuid> = if source_start.is_some() && source_end.is_some() {
+            sqlx::query_scalar::<_, uuid::Uuid>(
+                r#"SELECT id FROM messages
+                   WHERE conversation_id = $1
+                     AND created_at >= $2 AND created_at <= $3
+                     AND content != ''
+                   ORDER BY similarity(content, $4) DESC
+                   LIMIT 1"#,
+            )
+            .bind(conversation_id)
+            .bind(source_start)
+            .bind(source_end)
+            .bind(content)
+            .fetch_optional(&mut *tx)
+            .await
+            .ok()
+            .flatten()
+        } else {
+            None
+        };
+
         sqlx::query(
-            r#"INSERT INTO memory_entries (capsule_id, content, embedding, importance, tags, source_start, source_end)
-               VALUES ($1, $2, $3::vector, $4, $5, $6, $7)"#,
+            r#"INSERT INTO memory_entries (capsule_id, content, embedding, importance, tags, source_start, source_end, source_message_id)
+               VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8)"#,
         )
         .bind(capsule_id)
         .bind(content)
@@ -502,6 +524,7 @@ async fn do_extraction(
         .bind(tags)
         .bind(source_start)
         .bind(source_end)
+        .bind(source_msg_id)
         .execute(&mut *tx)
         .await
         .context("Failed to insert memory entry")?;

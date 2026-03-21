@@ -594,6 +594,7 @@ export interface Note {
     sourceStart?: string | null;
     sourceEnd?: string | null;
     sourceConversationId?: string | null;
+    sourceMessageId?: string | null;
   }>;
   suggestedTags?: string[];
   linkedConversations?: Array<{ conversationId: string; title: string }>;

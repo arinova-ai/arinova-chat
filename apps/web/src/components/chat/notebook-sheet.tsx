@@ -886,7 +886,13 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                         onClick={async () => {
                           const convId = cap.sourceConversationId;
                           if (!convId) return;
-                          // Find the message nearest to sourceStart and jump to it
+                          // Prefer direct message ID (stored during extraction)
+                          if (cap.sourceMessageId) {
+                            onOpenChange(false);
+                            jumpToMessage(convId, cap.sourceMessageId);
+                            return;
+                          }
+                          // Fallback: find nearest message by timestamp
                           if (cap.sourceStart) {
                             try {
                               const data = await api<{ messageId: string }>(
@@ -897,7 +903,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                                 jumpToMessage(convId, data.messageId);
                                 return;
                               }
-                            } catch { /* fallback to just switching conversation */ }
+                            } catch { /* fallback */ }
                           }
                           onOpenChange(false);
                           setActiveConversation(convId);

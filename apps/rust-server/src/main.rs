@@ -313,6 +313,8 @@ async fn main() {
 
     sqlx::query("ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_start TIMESTAMPTZ").execute(&db).await.ok();
     sqlx::query("ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_end TIMESTAMPTZ").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_message_id UUID").execute(&db).await.ok();
+    sqlx::query("CREATE EXTENSION IF NOT EXISTS pg_trgm").execute(&db).await.ok();
 
     sqlx::query("ALTER TABLE notes ADD COLUMN IF NOT EXISTS share_token VARCHAR(64) UNIQUE").execute(&db).await.ok();
     sqlx::query("ALTER TABLE notes ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE").execute(&db).await.ok();
