@@ -716,10 +716,11 @@ async fn get_related_capsules_inner(db: &PgPool, user_id: &str, content: &str, o
         return vec![];
     }
 
-    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, f32)> = sqlx::query_as(
+    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, f32, Option<Uuid>)> = sqlx::query_as(
         r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name,
                   me.source_start, me.source_end,
-                  ts_rank(me.search_vector, to_tsquery('english', $2)) AS rank
+                  ts_rank(me.search_vector, to_tsquery('english', $2)) AS rank,
+                  mc.source_conversation_id
            FROM memory_entries me
            JOIN memory_capsules mc ON mc.id = me.capsule_id
            WHERE mc.owner_id = $1
@@ -735,7 +736,7 @@ async fn get_related_capsules_inner(db: &PgPool, user_id: &str, content: &str, o
     .unwrap_or_default();
 
     rows.iter()
-        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end, _rank)| {
+        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end, _rank, source_conv_id)| {
             json!({
                 "id": id,
                 "content": content,
@@ -744,6 +745,7 @@ async fn get_related_capsules_inner(db: &PgPool, user_id: &str, content: &str, o
                 "capsuleName": capsule_name,
                 "sourceStart": source_start.map(|t| t.to_rfc3339()),
                 "sourceEnd": source_end.map(|t| t.to_rfc3339()),
+                "sourceConversationId": source_conv_id,
             })
         })
         .collect()
@@ -763,10 +765,11 @@ async fn embedding_search(db: &PgPool, user_id: &str, content: &str, api_key: &s
     let query_embedding = embeddings.into_iter().next()?;
     let query_vec = Vector::from(query_embedding);
 
-    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, f64)> = sqlx::query_as(
+    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, f64, Option<Uuid>)> = sqlx::query_as(
         r#"SELECT me.id, me.content, me.importance, mc.id AS capsule_id, mc.name AS capsule_name,
                   me.source_start, me.source_end,
-                  1 - (me.embedding <=> $2::vector) AS similarity
+                  1 - (me.embedding <=> $2::vector) AS similarity,
+                  mc.source_conversation_id
            FROM memory_entries me
            JOIN memory_capsules mc ON mc.id = me.capsule_id
            WHERE mc.owner_id = $1
@@ -783,7 +786,7 @@ async fn embedding_search(db: &PgPool, user_id: &str, content: &str, api_key: &s
     // Filter by similarity threshold (>= 0.3)
     let results: Vec<_> = rows.iter()
         .filter(|r| r.7 >= 0.3)
-        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end, similarity)| {
+        .map(|(id, content, importance, capsule_id, capsule_name, source_start, source_end, similarity, source_conv_id)| {
             json!({
                 "id": id,
                 "content": content,
@@ -793,6 +796,7 @@ async fn embedding_search(db: &PgPool, user_id: &str, content: &str, api_key: &s
                 "sourceStart": source_start.map(|t| t.to_rfc3339()),
                 "sourceEnd": source_end.map(|t| t.to_rfc3339()),
                 "similarity": similarity,
+                "sourceConversationId": source_conv_id,
             })
         })
         .collect();

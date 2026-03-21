@@ -593,6 +593,7 @@ export interface Note {
     capsuleName: string;
     sourceStart?: string | null;
     sourceEnd?: string | null;
+    sourceConversationId?: string | null;
   }>;
   suggestedTags?: string[];
   linkedConversations?: Array<{ conversationId: string; title: string }>;

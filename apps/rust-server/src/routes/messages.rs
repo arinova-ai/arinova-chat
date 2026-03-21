@@ -27,6 +27,10 @@ pub fn router() -> Router<AppState> {
             get(messages_dates),
         )
         .route(
+            "/api/conversations/{id}/messages/by-timestamp",
+            get(message_by_timestamp),
+        )
+        .route(
             "/api/conversations/{conversationId}/messages/{messageId}",
             delete(delete_message),
         )
@@ -1777,5 +1781,62 @@ fn clone_message_row(m: &MessageRow) -> MessageRow {
         metadata: m.metadata.clone(),
         created_at: m.created_at,
         updated_at: m.updated_at,
+    }
+}
+
+// ── Message by timestamp (for memory source jump) ─────────────
+
+#[derive(Deserialize)]
+struct ByTimestampQuery {
+    ts: String,
+}
+
+/// GET /api/conversations/:id/messages/by-timestamp?ts=ISO
+/// Finds the message closest to the given timestamp.
+async fn message_by_timestamp(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(conversation_id): Path<Uuid>,
+    Query(q): Query<ByTimestampQuery>,
+) -> Response {
+    // Verify access
+    let has_access = sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+            UNION ALL
+            SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+        )"#,
+    )
+    .bind(conversation_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !has_access {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Conversation not found"}))).into_response();
+    }
+
+    let ts = match chrono::DateTime::parse_from_rfc3339(&q.ts) {
+        Ok(t) => t.naive_utc(),
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid timestamp"}))).into_response(),
+    };
+
+    // Find the message closest to the timestamp
+    let msg = sqlx::query_as::<_, (Uuid,)>(
+        r#"SELECT id FROM messages
+           WHERE conversation_id = $1
+           ORDER BY ABS(EXTRACT(EPOCH FROM (created_at - $2::timestamp)))
+           LIMIT 1"#,
+    )
+    .bind(conversation_id)
+    .bind(ts)
+    .fetch_optional(&state.db)
+    .await;
+
+    match msg {
+        Ok(Some((id,))) => Json(json!({"messageId": id})).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "No messages found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 }
