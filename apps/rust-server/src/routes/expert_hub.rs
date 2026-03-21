@@ -79,7 +79,7 @@ async fn list_experts(
     let where_clause = conditions.join(" AND ");
     let sql = format!(
         r#"SELECT e.id, e.name, e.description, e.avatar_url, e.category, e.price_per_ask,
-                  e.total_asks, e.avg_rating, e.free_trial_count,
+                  e.is_published, e.total_asks, e.avg_rating, e.free_trial_count,
                   u.name AS owner_name, u.image AS owner_image, u.username AS owner_username
            FROM experts e
            JOIN "user" u ON u.id = e.owner_id
@@ -108,6 +108,7 @@ async fn list_experts(
                     "avatarUrl": r.get::<Option<String>, _>("avatar_url"),
                     "category": r.get::<String, _>("category"),
                     "pricePerAsk": r.get::<i32, _>("price_per_ask"),
+                    "isPublished": r.get::<bool, _>("is_published"),
                     "totalAsks": r.get::<i32, _>("total_asks"),
                     "avgRating": r.get::<Option<f64>, _>("avg_rating"),
                     "freeTrialCount": r.get::<i32, _>("free_trial_count"),
