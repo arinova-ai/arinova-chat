@@ -1943,18 +1943,22 @@ pub(crate) async fn do_trigger_agent_response(
     }
 
     // Inject memory capsule context for 1:1 agent conversations (hybrid search)
-    if conv_type == "h2a" || conv_type == "direct" {
-        // Find granted capsule IDs for this agent+user
+    {
+        // Find capsule IDs this agent can access (grants + explicit access)
         let capsule_ids = sqlx::query_as::<_, (uuid::Uuid,)>(
-            r#"SELECT mcg.capsule_id
-               FROM memory_capsule_grants mcg
-               JOIN memory_capsules mc ON mc.id = mcg.capsule_id
-               WHERE mcg.agent_id = $1::uuid
-                 AND mc.owner_id = $2
-                 AND mc.status = 'ready'"#,
+            r#"SELECT DISTINCT sub.capsule_id FROM (
+                SELECT mcg.capsule_id
+                FROM memory_capsule_grants mcg
+                JOIN memory_capsules mc ON mc.id = mcg.capsule_id
+                WHERE mcg.agent_id = $1::uuid AND mc.status = 'ready'
+                UNION
+                SELECT aca.capsule_id
+                FROM agent_capsule_access aca
+                JOIN memory_capsules mc ON mc.id = aca.capsule_id
+                WHERE aca.agent_id = $1::uuid AND mc.status = 'ready'
+            ) sub"#,
         )
         .bind(agent_id)
-        .bind(user_id)
         .fetch_all(db)
         .await
         .unwrap_or_default()
