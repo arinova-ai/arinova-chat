@@ -80,6 +80,13 @@ export function ChatLayout() {
     const convId = searchParams.get("c");
     const msgId = searchParams.get("m");
     if (convId) {
+      // On mobile, ensure back button returns to conversation list (not white screen)
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      if (isMobile) {
+        history.replaceState(null, "", "/");
+        history.pushState({ arinovaChat: true }, "", "/");
+        prevConvRef.current = convId;
+      }
       if (msgId) {
         jumpToMessage(convId, msgId);
       } else {
