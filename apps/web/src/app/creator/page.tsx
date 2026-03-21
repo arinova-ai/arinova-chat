@@ -39,6 +39,7 @@ import {
   Eye,
   EyeOff,
   Lightbulb,
+  FileText,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -1680,7 +1681,31 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                     />
                     <div className="flex flex-col gap-1">
                       <Button size="sm" className="text-xs h-7" onClick={handleAddKnowledge} disabled={!knowledgeInput.trim() || knowledgeLoading}>
-                        <Upload className="h-3 w-3 mr-1" />{t("expertHub.creator.upload")}
+                        <Upload className="h-3 w-3 mr-1" />{t("expertHub.creator.addText")}
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = ".txt,.md,.pdf";
+                        input.onchange = async () => {
+                          const file = input.files?.[0];
+                          if (!file) return;
+                          setKnowledgeLoading(true);
+                          try {
+                            const form = new FormData();
+                            form.append("file", file);
+                            await fetch(`/api/expert-hub/${ex.id}/knowledge/upload`, {
+                              method: "POST",
+                              body: form,
+                              credentials: "include",
+                            });
+                            handleLoadKnowledge(ex.id);
+                          } catch { /* */ }
+                          setKnowledgeLoading(false);
+                        };
+                        input.click();
+                      }} disabled={knowledgeLoading}>
+                        <FileText className="h-3 w-3 mr-1" />{t("expertHub.creator.uploadFile")}
                       </Button>
                       <Button size="sm" variant="outline" className="text-xs h-7" onClick={handleRebuild} disabled={knowledgeLoading}>
                         {t("expertHub.creator.rebuild")}

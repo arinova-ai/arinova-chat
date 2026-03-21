@@ -40,6 +40,9 @@ hmac = "0.12"
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 
+# PDF text extraction
+pdf-extract = "0.7"
+
 # Environment
 dotenvy = "0.15"
 

@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{delete, get, patch, post},
@@ -24,6 +24,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/expert-hub/{id}", get(get_expert).patch(update_expert).delete(delete_expert))
         // Knowledge
         .route("/api/expert-hub/{id}/knowledge", get(list_knowledge).post(add_knowledge))
+        .route("/api/expert-hub/{id}/knowledge/upload", post(upload_knowledge_file))
         .route("/api/expert-hub/{id}/knowledge/rebuild", post(rebuild_knowledge))
         // Ask
         .route("/api/expert-hub/{id}/ask", post(ask_expert))
@@ -245,6 +246,14 @@ async fn update_expert(State(state): State<AppState>, user: AuthUser, Path(id): 
         let _ = sqlx::query("UPDATE experts SET price_per_ask = $1 WHERE id = $2").bind(price).bind(id).execute(&state.db).await;
     }
     if let Some(published) = body.is_published {
+        if published {
+            let has_knowledge = sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM expert_knowledge WHERE expert_id = $1)"
+            ).bind(id).fetch_one(&state.db).await.unwrap_or(false);
+            if !has_knowledge {
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "knowledge_required", "message": "Add knowledge before publishing"}))).into_response();
+            }
+        }
         let _ = sqlx::query("UPDATE experts SET is_published = $1 WHERE id = $2").bind(published).bind(id).execute(&state.db).await;
     }
     if let Some(ftc) = body.free_trial_count {
@@ -333,6 +342,92 @@ async fn add_knowledge(State(state): State<AppState>, user: AuthUser, Path(id): 
             (StatusCode::CREATED, Json(json!({"chunks": 1, "embedded": false, "embeddingError": e.to_string()}))).into_response()
         }
     }
+}
+
+// ─── upload_knowledge_file ───────────────────────────────────────────────────
+
+async fn upload_knowledge_file(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    let is_owner = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM experts WHERE id = $1 AND owner_id = $2)")
+        .bind(id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the expert owner"}))).into_response();
+    }
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() != Some("file") { continue; }
+        let filename = field.file_name().unwrap_or("unknown").to_string();
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response(),
+        };
+        if data.len() > 10 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "File must be under 10MB"}))).into_response();
+        }
+
+        // Extract text based on file extension
+        let ext = filename.rsplit('.').next().unwrap_or("").to_lowercase();
+        let text = match ext.as_str() {
+            "txt" | "md" => String::from_utf8_lossy(&data).to_string(),
+            "pdf" => {
+                // Try pdf-extract; fallback to raw text extraction
+                match pdf_extract::extract_text_from_mem(&data) {
+                    Ok(t) => t,
+                    Err(_) => String::from_utf8_lossy(&data).to_string(),
+                }
+            }
+            _ => {
+                return (StatusCode::BAD_REQUEST, Json(json!({"error": "Supported formats: .txt, .md, .pdf"}))).into_response();
+            }
+        };
+
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "No text extracted from file"}))).into_response();
+        }
+        if text.len() > 100000 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Extracted text too long (max 100000 chars)"}))).into_response();
+        }
+
+        // Use same chunking + embedding logic as add_knowledge
+        let api_key = state.config.openai_api_key.as_deref().unwrap_or("");
+        if api_key.is_empty() {
+            let row = sqlx::query_as::<_, (Uuid,)>(
+                "INSERT INTO expert_knowledge (expert_id, raw_content, chunk_index) VALUES ($1, $2, 0) RETURNING id"
+            ).bind(id).bind(&text).fetch_one(&state.db).await;
+            return match row {
+                Ok((kid,)) => (StatusCode::CREATED, Json(json!({"id": kid, "chunks": 1, "embedded": false, "filename": filename}))).into_response(),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+            };
+        }
+
+        let chunks = chunk_text(&text, 500, 50);
+        let client = reqwest::Client::new();
+        match generate_embeddings(&client, api_key, &chunks, EMBEDDING_MODEL).await {
+            Ok(embs) => {
+                let mut count = 0;
+                for (i, (chunk, emb)) in chunks.iter().zip(embs.iter()).enumerate() {
+                    let vec = Vector::from(emb.clone());
+                    let _ = sqlx::query(
+                        "INSERT INTO expert_knowledge (expert_id, raw_content, embedding, chunk_index) VALUES ($1, $2, $3, $4)"
+                    ).bind(id).bind(chunk).bind(vec).bind(i as i32).execute(&state.db).await;
+                    count += 1;
+                }
+                return (StatusCode::CREATED, Json(json!({"chunks": count, "embedded": true, "filename": filename}))).into_response();
+            }
+            Err(e) => {
+                let _ = sqlx::query(
+                    "INSERT INTO expert_knowledge (expert_id, raw_content, chunk_index) VALUES ($1, $2, 0)"
+                ).bind(id).bind(&text).execute(&state.db).await;
+                return (StatusCode::CREATED, Json(json!({"chunks": 1, "embedded": false, "filename": filename, "embeddingError": e.to_string()}))).into_response();
+            }
+        }
+    }
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file field"}))).into_response()
 }
 
 // ─── list_knowledge ──────────────────────────────────────────────────────────

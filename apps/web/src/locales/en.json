@@ -1910,6 +1910,8 @@
   "expertHub.creator.knowledge": "Knowledge",
   "expertHub.creator.knowledgePlaceholder": "Paste your knowledge content here...",
   "expertHub.creator.upload": "Upload",
+  "expertHub.creator.addText": "Add Text",
+  "expertHub.creator.uploadFile": "Upload File",
   "expertHub.creator.rebuild": "Rebuild",
   "expertHub.creator.noKnowledge": "No knowledge added yet",
   "expertHub.creator.nameLabel": "Name",
