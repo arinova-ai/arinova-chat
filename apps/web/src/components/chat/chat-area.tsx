@@ -337,6 +337,7 @@ export function ChatArea() {
           open={wikiOpen}
           onOpenChange={setWikiOpen}
           conversationId={activeConversationId}
+          communityId={conversation.officialCommunityId ?? undefined}
         />
       )}
       <ChatCardDetailSheet />
