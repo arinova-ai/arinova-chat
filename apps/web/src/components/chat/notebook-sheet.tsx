@@ -299,6 +299,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+  const [capsuleDetail, setCapsuleDetail] = useState<{ capsuleId: string; capsuleName: string; entries: { id: string; content: string; importance: number }[] } | null>(null);
   const [titleInput, setTitleInput] = useState("");
   const [contentInput, setContentInput] = useState("");
   const [tagsInput, setTagsInput] = useState<string[]>([]);
@@ -881,11 +882,18 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                         key={cap.id}
                         type="button"
                         className="rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-left transition-colors hover:bg-muted/60 hover:border-muted-foreground/30 group cursor-pointer"
-                        onClick={() => {
-                          // Navigate to capsule or source conversation
-                          if (cap.capsuleId) {
-                            window.dispatchEvent(new CustomEvent("open-capsule", { detail: { capsuleId: cap.capsuleId } }));
-                          }
+                        onClick={async () => {
+                          if (!cap.capsuleId) return;
+                          try {
+                            const data = await api<{ entries: { id: string; content: string; importance: number }[] }>(
+                              `/api/memory/capsules/${cap.capsuleId}/entries`
+                            );
+                            setCapsuleDetail({
+                              capsuleId: cap.capsuleId,
+                              capsuleName: cap.capsuleName,
+                              entries: data.entries ?? [],
+                            });
+                          } catch { /* api shows toast */ }
                         }}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -910,6 +918,35 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                   </div>
                 </div>
               )}
+              {/* Capsule Detail Overlay */}
+              {capsuleDetail && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setCapsuleDetail(null)}>
+                  <div className="bg-background border border-border rounded-lg w-[420px] max-w-[90vw] max-h-[70vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Brain className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <h3 className="text-sm font-semibold truncate">{capsuleDetail.capsuleName}</h3>
+                      </div>
+                      <button type="button" onClick={() => setCapsuleDetail(null)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                      {capsuleDetail.entries.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">No entries</p>
+                      ) : (
+                        capsuleDetail.entries.map((entry) => (
+                          <div key={entry.id} className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs">
+                            <p className="text-foreground whitespace-pre-wrap">{entry.content}</p>
+                            {entry.importance > 0 && (
+                              <span className="text-[10px] text-muted-foreground mt-1 inline-block">importance: {entry.importance}</span>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Suggested Tags (Task 4) */}
               {suggestedTags.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-border">
