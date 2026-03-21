@@ -26,6 +26,7 @@ import {
   Bot,
   Send,
   ChevronDown,
+  ChevronRight,
   Paperclip,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
@@ -876,8 +877,21 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                   </h4>
                   <div className="flex flex-col gap-1.5">
                     {selectedNote.relatedCapsules.map((cap) => (
-                      <div key={cap.id} className="rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs">
-                        <p className="text-foreground">{cap.content}</p>
+                      <button
+                        key={cap.id}
+                        type="button"
+                        className="rounded-md border border-border bg-muted/30 px-2.5 py-2 text-xs text-left transition-colors hover:bg-muted/60 hover:border-muted-foreground/30 group cursor-pointer"
+                        onClick={() => {
+                          // Navigate to capsule or source conversation
+                          if (cap.capsuleId) {
+                            window.dispatchEvent(new CustomEvent("open-capsule", { detail: { capsuleId: cap.capsuleId } }));
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-foreground flex-1">{cap.content}</p>
+                          <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+                        </div>
                         <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
                           <span>{cap.capsuleName}</span>
                           {(cap.sourceStart || cap.sourceEnd) && (
@@ -891,7 +905,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                             </>
                           )}
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
