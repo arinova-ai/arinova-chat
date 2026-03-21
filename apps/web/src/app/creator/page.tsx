@@ -1655,8 +1655,8 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
           <h3 className="text-sm font-semibold flex-1">{selectedExpert.name}</h3>
           <div className="flex items-center gap-1.5">
             <Switch checked={selectedExpert.isPublished} onCheckedChange={() => handleTogglePublish(selectedExpert)} />
-            <span className={`text-[11px] ${selectedExpert.isPublished ? "text-green-400" : "text-muted-foreground"}`}>
-              {selectedExpert.isPublished ? t("expertHub.creator.published") : t("expertHub.creator.draft")}
+            <span className="text-[11px] text-muted-foreground">
+              {t("expertHub.creator.published")}
             </span>
           </div>
         </div>
@@ -1832,8 +1832,8 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                 </div>
                 <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <Switch checked={ex.isPublished} onCheckedChange={() => handleTogglePublish(ex)} />
-                  <span className={`text-[11px] ${ex.isPublished ? "text-green-400" : "text-muted-foreground"}`}>
-                    {ex.isPublished ? t("expertHub.creator.published") : t("expertHub.creator.draft")}
+                  <span className="text-[11px] text-muted-foreground">
+                    {t("expertHub.creator.published")}
                   </span>
                 </div>
               </div>
