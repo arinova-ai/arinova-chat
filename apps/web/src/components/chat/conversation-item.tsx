@@ -276,13 +276,19 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-9 w-9">
-              {(type === "h2h" || type === "h2a" || type === "direct") && (
+              {agentAvatarUrl ? (
                 <AvatarImage
-                  src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
+                  src={assetUrl(agentAvatarUrl)}
+                  alt={agentName || title || ""}
+                  className="object-cover"
+                />
+              ) : (type === "h2h" || type === "h2a" || type === "direct") ? (
+                <AvatarImage
+                  src={AGENT_DEFAULT_AVATAR}
                   alt={agentName}
                   className="object-cover"
                 />
-              )}
+              ) : null}
               <AvatarFallback className="bg-accent text-foreground/80 text-xs">
                 {isGroupLike(type) ? (
                   <Users className="h-4 w-4" />
@@ -403,13 +409,19 @@ export function ConversationItem({
         >
           <div className="relative shrink-0">
             <Avatar className="h-10 w-10">
-              {(type === "h2h" || type === "h2a" || type === "direct") && (
+              {agentAvatarUrl ? (
                 <AvatarImage
-                  src={agentAvatarUrl ? assetUrl(agentAvatarUrl) : AGENT_DEFAULT_AVATAR}
+                  src={assetUrl(agentAvatarUrl)}
+                  alt={agentName || title || ""}
+                  className="object-cover"
+                />
+              ) : (type === "h2h" || type === "h2a" || type === "direct") ? (
+                <AvatarImage
+                  src={AGENT_DEFAULT_AVATAR}
                   alt={agentName}
                   className="object-cover"
                 />
-              )}
+              ) : null}
               <AvatarFallback className="bg-accent text-foreground/80 text-xs">
                 {isGroupLike(type) ? (
                   <Users className="h-5 w-5" />
