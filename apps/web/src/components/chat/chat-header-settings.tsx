@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 // Keep HEADER_BUTTONS export exactly as is
 interface HeaderButton {
@@ -169,56 +170,35 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
     } catch {}
   }, [conversationId]);
 
-  if (!open) return null;
+  if (!open && !inline) return null;
 
-  return (
-    <div className={inline ? "flex flex-col h-full" : "fixed inset-0 z-50 flex flex-col bg-background"}>
-      {/* Top bar (hidden in inline mode — right panel has its own header) */}
-      {!inline && (
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-lg font-semibold">{t("chat.header.settings")}</h1>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex border-b border-border">
-        <button
-          type="button"
-          className={cn(
-            "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
-            activeTab === "general" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
-          )}
-          onClick={() => setActiveTab("general")}
-        >
-          {t("chat.settings.general")}
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
-            activeTab === "pins" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
-          )}
-          onClick={() => setActiveTab("pins")}
-        >
-          {t("chat.header.pinnedButtons")}
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
-            activeTab === "appearance" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
-          )}
-          onClick={() => setActiveTab("appearance")}
-        >
-          {t("chat.settings.appearance")}
-        </button>
+  const tabsBar = (
+    <div className="flex gap-1 px-4 py-2 overflow-x-auto border-b border-border shrink-0">
+        {[
+          { id: "general" as const, label: t("chat.settings.general") },
+          { id: "pins" as const, label: t("chat.header.pinnedButtons") },
+          { id: "appearance" as const, label: t("chat.settings.appearance") },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors",
+              activeTab === tab.id
+                ? "bg-brand text-white"
+                : "text-muted-foreground hover:bg-accent"
+            )}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-4">
+  );
+
+  const tabContent = (
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {activeTab === "general" && (
           <div className="space-y-6">
             {isGroup && (
@@ -365,7 +345,30 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
           </div>
         )}
       </div>
-    </div>
+  );
+
+  // Inline mode: render content directly (right panel)
+  if (inline) {
+    if (!open) return null;
+    return (
+      <div className="flex flex-col h-full">
+        {tabsBar}
+        {tabContent}
+      </div>
+    );
+  }
+
+  // Sheet mode (mobile + desktop)
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="flex flex-col w-full sm:max-w-lg p-0 overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <SheetHeader className="px-4 pt-4 pb-0 shrink-0">
+          <SheetTitle>{t("chat.header.settings")}</SheetTitle>
+        </SheetHeader>
+        {tabsBar}
+        {tabContent}
+      </SheetContent>
+    </Sheet>
   );
 }
 
