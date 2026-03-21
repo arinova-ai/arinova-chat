@@ -1588,7 +1588,12 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
     try {
       await api(`/api/expert-hub/${expert.id}`, { method: "PATCH", body: JSON.stringify({ isPublished: !expert.isPublished }) });
       fetchExperts();
-    } catch { /* */ }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("knowledge_required")) {
+        window.alert(t("expertHub.creator.knowledgeRequired"));
+      }
+    }
   };
 
   const handleDelete = async (id: string) => {

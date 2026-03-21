@@ -1916,6 +1916,7 @@
   "expertHub.creator.uploadFile": "Upload File",
   "expertHub.creator.rebuild": "Rebuild",
   "expertHub.creator.noKnowledge": "No knowledge added yet",
+  "expertHub.creator.knowledgeRequired": "Please add knowledge before publishing",
   "expertHub.creator.nameLabel": "Name",
   "expertHub.creator.namePlaceholder": "Expert name",
   "expertHub.creator.descLabel": "Description",

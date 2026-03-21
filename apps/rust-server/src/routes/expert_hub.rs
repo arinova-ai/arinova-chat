@@ -46,6 +46,7 @@ struct ListExpertsQuery {
     search: Option<String>,
     category: Option<String>,
     sort: Option<String>, // "popular" or "newest"
+    published_only: Option<bool>,
 }
 
 async fn list_experts(
@@ -58,9 +59,13 @@ async fn list_experts(
         _ => "e.created_at DESC",
     };
 
-    // Build dynamic query — show published OR owned by current user (drafts)
+    // Build dynamic query
     let mut binds: Vec<String> = vec![user.id.clone()];
-    let mut conditions = vec![format!("(e.is_published = true OR e.owner_id = $1)")];
+    let mut conditions = if q.published_only.unwrap_or(false) {
+        vec!["e.is_published = true".to_string()]
+    } else {
+        vec![format!("(e.is_published = true OR e.owner_id = $1)")]
+    };
 
     if let Some(ref search) = q.search {
         binds.push(format!("%{}%", search.to_lowercase()));

@@ -45,6 +45,7 @@ function ExpertHubContent() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("published_only", "true");
       if (search.trim()) params.set("search", search.trim());
       if (category !== "all") params.set("category", category);
       params.set("sort", sort);
