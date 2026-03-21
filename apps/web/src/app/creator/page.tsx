@@ -8,6 +8,7 @@ import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { PageTitle } from "@/components/ui/page-title";
 import { useTranslation } from "@/lib/i18n";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
@@ -1653,9 +1654,12 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                   <p className="text-xs text-muted-foreground">{ex.category} · {ex.pricePerAsk} Coin · {ex.totalAsks} asks · {ex.totalRevenue} revenue</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleTogglePublish(ex)}>
-                    {ex.isPublished ? <><EyeOff className="h-3 w-3 mr-1" />{t("expertHub.creator.unpublish")}</> : <><Eye className="h-3 w-3 mr-1" />{t("expertHub.creator.publish")}</>}
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Switch checked={ex.isPublished} onCheckedChange={() => handleTogglePublish(ex)} />
+                    <span className={`text-[11px] ${ex.isPublished ? "text-green-400" : "text-muted-foreground"}`}>
+                      {ex.isPublished ? t("expertHub.creator.published") : t("expertHub.creator.draft")}
+                    </span>
+                  </div>
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleLoadKnowledge(ex.id)}>
                     {t("expertHub.creator.knowledge")}
                   </Button>

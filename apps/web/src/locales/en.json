@@ -1907,6 +1907,8 @@
   "expertHub.creator.empty": "You haven't created any experts yet",
   "expertHub.creator.publish": "Publish",
   "expertHub.creator.unpublish": "Unpublish",
+  "expertHub.creator.published": "Published",
+  "expertHub.creator.draft": "Draft",
   "expertHub.creator.knowledge": "Knowledge",
   "expertHub.creator.knowledgePlaceholder": "Paste your knowledge content here...",
   "expertHub.creator.upload": "Upload",
