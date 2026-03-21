@@ -106,6 +106,7 @@ interface NotebookEditorProps {
   editable?: boolean;
   placeholder?: string;
   className?: string;
+  uploadEndpoint?: string; // default: /api/notes/upload
 }
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -126,6 +127,7 @@ export function NotebookEditor({
   editable = true,
   placeholder = "Write something...",
   className,
+  uploadEndpoint = "/api/notes/upload",
 }: NotebookEditorProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,7 +146,7 @@ export function NotebookEditor({
     formData.append("file", file);
     try {
       const res = await fetch(
-        `${BACKEND_URL}/api/notes/upload`,
+        `${BACKEND_URL}${uploadEndpoint}`,
         { method: "POST", body: formData, credentials: "include" }
       );
       if (!res.ok) {
