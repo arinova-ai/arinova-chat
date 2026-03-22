@@ -3874,9 +3874,9 @@ async fn upload_cover_image(
     Path(community_id): Path<Uuid>,
     mut multipart: Multipart,
 ) -> Response {
-    // Check admin/creator permission
+    // Check admin/creator permission (role is community_role enum, cast to text)
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&user.id)
