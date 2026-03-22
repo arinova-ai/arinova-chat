@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useNotificationStore } from "@/store/notification-store";
 import { useChatStore } from "@/store/chat-store";
@@ -14,6 +14,8 @@ export function InAppNotification() {
   const notification = useNotificationStore((s) => s.current);
   const dismiss = useNotificationStore((s) => s.dismiss);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bannerRef = useRef<HTMLButtonElement>(null);
+  const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
     if (!notification) return;
@@ -23,6 +25,28 @@ export function InAppNotification() {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [notification, dismiss]);
+
+  // Swipe up to dismiss
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartY.current = null;
+    if (dy < -30) {
+      // Swipe up — animate out then dismiss
+      if (bannerRef.current) {
+        bannerRef.current.style.transition = "transform 200ms, opacity 200ms";
+        bannerRef.current.style.transform = "translateY(-100%)";
+        bannerRef.current.style.opacity = "0";
+        setTimeout(dismiss, 200);
+      } else {
+        dismiss();
+      }
+    }
+  }, [dismiss]);
 
   if (!notification) return null;
 
@@ -39,8 +63,11 @@ export function InAppNotification() {
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <button
+        ref={bannerRef}
         onClick={handleClick}
-        className="pointer-events-auto mx-2 mt-2 flex items-center gap-3 rounded-xl border border-border bg-card/95 backdrop-blur-md px-3 py-2.5 shadow-lg animate-in slide-in-from-top-2 duration-200"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="pointer-events-auto mx-3 mt-2 flex w-[calc(100%-1.5rem)] max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-xl border border-border bg-card backdrop-blur-md px-3 py-2.5 shadow-xl animate-in slide-in-from-top-2 duration-200"
       >
         <Avatar className="h-9 w-9 shrink-0">
           {notification.senderImage ? (
