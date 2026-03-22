@@ -666,7 +666,8 @@ function CommunityDetailContent() {
                         try {
                           const form = new FormData();
                           form.append("file", file);
-                          const res = await fetch(`https://api.chat-staging.arinova.ai/api/communities/${community.id}/cover`, {
+                          const { BACKEND_URL } = await import("@/lib/config");
+                          const res = await fetch(`${BACKEND_URL}/api/communities/${community.id}/cover`, {
                             method: "POST",
                             body: form,
                             credentials: "include",
