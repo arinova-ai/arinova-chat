@@ -2,7 +2,7 @@ use axum::{
     extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use serde::Deserialize;
@@ -19,7 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/agents", post(create_agent).get(list_agents))
         .route(
             "/api/agents/{id}",
-            get(get_agent).put(update_agent).delete(delete_agent),
+            get(get_agent).put(update_agent).patch(update_agent).delete(delete_agent),
         )
         .route("/api/agents/{id}/skills", get(get_skills))
         .route("/api/agents/{id}/avatar", post(upload_avatar))
