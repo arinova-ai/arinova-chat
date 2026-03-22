@@ -1052,23 +1052,8 @@ async fn list_user_notes(
                 None
             };
 
-            // Fetch linked conversations for these notes
-            let note_ids: Vec<Uuid> = rows.iter().take(limit as usize).map(|n| n.id).collect();
-            let linked_convs = if !note_ids.is_empty() {
-                sqlx::query_as::<_, (Uuid, Uuid, String)>(
-                    r#"SELECT n.id AS note_id, n.conversation_id,
-                              COALESCE(c.title, 'Untitled') AS conv_title
-                       FROM notes n
-                       LEFT JOIN conversations c ON c.id = n.conversation_id
-                       WHERE n.id = ANY($1) AND n.conversation_id IS NOT NULL"#,
-                )
-                .bind(&note_ids)
-                .fetch_all(&state.db)
-                .await
-                .unwrap_or_default()
-            } else {
-                vec![]
-            };
+            // Notes are standalone — no conversation linking
+            let linked_convs: Vec<(Uuid, Uuid, String)> = vec![];
 
             // Build a map: note_id -> linked conversations
             let mut conv_map: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
