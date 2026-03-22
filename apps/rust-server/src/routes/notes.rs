@@ -1930,12 +1930,13 @@ async fn post_note_thread(
         "INSERT INTO note_thread_messages (id, note_id, role, content, agent_conversation_id) VALUES ($1, $2, 'user', $3, $4)",
     ).bind(user_msg_id).bind(note_id).bind(question).bind(agent_conv_uuid).execute(&state.db).await;
 
-    // If agent mode, send to agent conversation and return
+    // If agent mode, send to agent conversation with noteThreadId metadata
     if let Some(conv_id) = agent_conv_uuid {
         let note_context = format!("[Note: {}]\n{}\n\n[Question]\n{}", title, &content[..content.len().min(2000)], question);
+        let metadata = json!({ "noteThreadId": note_id.to_string() });
         let _ = sqlx::query(
-            "INSERT INTO messages (conversation_id, role, content, status, sender_user_id, seq) VALUES ($1, 'user', $2, 'completed', $3, COALESCE((SELECT MAX(seq) FROM messages WHERE conversation_id = $1), 0) + 1)",
-        ).bind(conv_id).bind(&note_context).bind(&user.id).execute(&state.db).await;
+            "INSERT INTO messages (conversation_id, role, content, status, sender_user_id, metadata, seq) VALUES ($1, 'user', $2, 'completed', $3, $4, COALESCE((SELECT MAX(seq) FROM messages WHERE conversation_id = $1), 0) + 1)",
+        ).bind(conv_id).bind(&note_context).bind(&user.id).bind(&metadata).execute(&state.db).await;
 
         return Json(json!({
             "userMessage": { "id": user_msg_id, "role": "user", "content": question, "agentConversationId": conv_id },

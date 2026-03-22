@@ -594,11 +594,31 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
       );
       // Add user message
       setThreadMessages((prev) => [...prev, { ...res.userMessage, createdAt: new Date().toISOString() }]);
-      // Add AI reply if present
+      // Add AI reply if present (built-in mode)
       if (res.assistantMessage) {
         setThreadMessages((prev) => [...prev, { ...res.assistantMessage!, createdAt: new Date().toISOString() }]);
-      } else if (res.sentToAgent && agentConv) {
-        setThreadMessages((prev) => [...prev, { id: "agent-pending", role: "assistant", content: `Sent to ${agentConv.agentName}. Check conversation for reply.`, createdAt: new Date().toISOString() }]);
+      } else if (res.sentToAgent) {
+        // Poll for agent reply (agent writes back via stream_end → note_thread_messages)
+        const noteId = selectedNote.id;
+        const currentCount = threadMessages.length + 1; // +1 for the user msg we just added
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          try {
+            const d = await api<{ messages: { id: string; role: string; content: string; createdAt: string }[] }>(`/api/notes/${noteId}/thread`);
+            if (d.messages.length > currentCount) {
+              setThreadMessages(d.messages);
+              clearInterval(poll);
+              setAskAiLoading(false);
+            }
+          } catch { /* ignore */ }
+          if (attempts >= 30) { // 30s timeout
+            clearInterval(poll);
+            setAskAiLoading(false);
+          }
+        }, 1000);
+        setAskAiQuestion("");
+        return; // Don't setAskAiLoading(false) here — polling handles it
       }
       setAskAiQuestion("");
     } catch (err: unknown) {
