@@ -54,7 +54,7 @@ interface NotebookSheetProps {
 
 const EMPTY_NOTES: Note[] = [];
 
-type ViewMode = "list" | "detail" | "edit" | "create";
+type ViewMode = "list" | "detail" | "edit" | "create" | "askAi";
 
 // Swipe constants (matching conversation-item pattern)
 const SWIPE_THRESHOLD = 60;
@@ -999,57 +999,86 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                 {autoTagging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 {t("chat.notebook.autoTag")}
               </Button>
-              <Button variant="ghost" size="sm" className={cn("h-7 text-xs gap-1", askAiOpen && "bg-accent")} onClick={() => setAskAiOpen(!askAiOpen)}>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => { setAskAiOpen(true); setViewMode("askAi"); }}>
                 <Bot className="h-3.5 w-3.5" />
                 {t("chat.notebook.askAi")}
               </Button>
             </div>
-            {askAiOpen && (
-              <div className="border-t border-border px-3 py-2 space-y-2">
-                {askAiAgents.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2">{t("chat.notebook.noAgentsForAskAi")}</p>
-                ) : (<>
-                {/* Agent selector */}
-                <div className="flex items-center gap-2">
-                  <select
-                    value={askAiAgentId ?? askAiAgents[0]?.agentId ?? ""}
-                    onChange={(e) => setAskAiAgentId(e.target.value)}
-                    className="rounded-md border border-input bg-background px-2 py-1 text-xs h-7 min-w-0 max-w-[180px]"
-                  >
-                    {askAiAgents.map((a) => (
-                      <option key={a.agentId} value={a.agentId}>{a.agentName}</option>
-                    ))}
-                  </select>
+          </div>
+        )}
+
+        {/* Ask AI Full-page View */}
+        {viewMode === "askAi" && selectedNote && (
+          <div className="flex flex-col h-full">
+            {/* Header */}
+            <div className={cn("flex items-center gap-2 shrink-0", isMobile ? "px-2 pb-3" : "px-4 pt-4 pb-3 border-b")}>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => { setViewMode("detail"); setAskAiOpen(false); }}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold truncate">{selectedNote.title}</h3>
+                <p className="text-[10px] text-muted-foreground">Ask AI</p>
+              </div>
+              {askAiAgents.length > 0 && (
+                <select
+                  value={askAiAgentId ?? askAiAgents[0]?.agentId ?? ""}
+                  onChange={(e) => setAskAiAgentId(e.target.value)}
+                  className="rounded-md border border-input bg-background px-2 py-1 text-xs h-7 max-w-[140px]"
+                >
+                  {askAiAgents.map((a) => (
+                    <option key={a.agentId} value={a.agentId}>{a.agentName}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Thread messages */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
+              {askAiAgents.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-muted-foreground">{t("chat.notebook.noAgentsForAskAi")}</p>
                 </div>
+              ) : threadMessages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-muted-foreground">{t("chat.notebook.askAiPlaceholder")}</p>
+                </div>
+              ) : (
+                threadMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={cn(
+                      "rounded-lg px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap",
+                      msg.role === "user"
+                        ? "bg-brand/15 ml-auto"
+                        : "bg-muted/60 mr-auto"
+                    )}
+                  >
+                    {msg.content}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Input */}
+            {askAiAgents.length > 0 && (
+              <div className="shrink-0 border-t border-border px-3 py-2">
                 <div className="flex gap-2">
                   <Input
                     value={askAiQuestion}
                     onChange={(e) => setAskAiQuestion(e.target.value)}
                     placeholder={t("chat.notebook.askAiPlaceholder")}
-                    className="flex-1 h-8 text-sm"
-                    onKeyDown={(e) => e.key === "Enter" && handleAskAi()}
+                    className="flex-1 h-9 text-sm"
+                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleAskAi()}
                   />
                   <Button
                     size="sm"
-                    className="h-8"
+                    className="h-9 px-3"
                     onClick={handleAskAi}
                     disabled={askAiLoading || !askAiQuestion.trim()}
                   >
-                    {askAiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                    {askAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
-                {/* Thread messages */}
-                {threadMessages.length > 0 && (
-                  <div className="max-h-48 overflow-y-auto space-y-1.5">
-                    {threadMessages.map((msg) => (
-                      <div key={msg.id} className={`rounded-md p-2 text-xs whitespace-pre-wrap ${msg.role === "user" ? "bg-brand/10 ml-6" : "bg-muted/50 mr-6"}`}>
-                        <span className="text-[10px] font-medium text-muted-foreground">{msg.role === "user" ? "You" : "AI"}</span>
-                        <p className="mt-0.5">{msg.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                </>)}
               </div>
             )}
           </div>
