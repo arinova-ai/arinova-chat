@@ -1644,14 +1644,14 @@ async fn explore_lounge(
     State(state): State<AppState>,
 ) -> (StatusCode, Json<Value>) {
     let rows = sqlx::query_as::<_, ExploreAccountRow>(
-        r#"SELECT a.id, a.name, a.avatar, a.bio, a.owner_id,
+        r#"SELECT c.id, c.name, c.avatar_url AS avatar, c.description AS bio, c.creator_id AS owner_id,
                   u.name AS owner_name, u.image AS owner_image,
-                  (SELECT COUNT(*) FROM account_subscribers WHERE account_id = a.id) AS subscriber_count,
-                  a.created_at
-           FROM accounts a
-           JOIN "user" u ON u.id = a.owner_id
-           WHERE a.type = 'lounge'
-           ORDER BY subscriber_count DESC, a.created_at DESC"#,
+                  c.member_count::bigint AS subscriber_count,
+                  c.created_at
+           FROM communities c
+           JOIN "user" u ON u.id = c.creator_id
+           WHERE c.type = 'lounge' AND c.status = 'active'
+           ORDER BY c.member_count DESC, c.created_at DESC"#,
     )
     .fetch_all(&state.db)
     .await;
