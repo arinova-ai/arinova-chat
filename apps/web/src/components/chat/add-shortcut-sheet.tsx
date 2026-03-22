@@ -1,76 +1,85 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
-  Globe, Smile, PenTool, Store, Users, Wallet,
-  Palette, Building2, type LucideIcon,
+  Gamepad2, Loader2, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import { useShortcutStore } from "@/store/shortcut-store";
-import type { QuickShortcut } from "@/store/shortcut-store";
 import { useTranslation } from "@/lib/i18n";
+import { api } from "@/lib/api";
 
-const ICON_MAP: Record<string, LucideIcon> = {
-  globe: Globe,
-  smile: Smile,
-  "pen-tool": PenTool,
-  store: Store,
-  users: Users,
-  wallet: Wallet,
-  palette: Palette,
-  "building-2": Building2,
-};
-
-const PRESET_SHORTCUTS: QuickShortcut[] = [
-  { type: "page", label: "Spaces", icon: "globe", url: "/spaces" },
-  { type: "page", label: "Sticker Shop", icon: "smile", url: "/stickers" },
-  { type: "page", label: "Creator Console", icon: "pen-tool", url: "/creator" },
-  { type: "page", label: "Skills", icon: "store", url: "/skills" },
-  { type: "page", label: "Community", icon: "users", url: "/community" },
-  { type: "page", label: "Wallet", icon: "wallet", url: "/wallet" },
-  { type: "page", label: "Theme Store", icon: "palette", url: "/office/themes" },
-];
+interface SpaceItem {
+  id: string;
+  name: string;
+  coverImageUrl?: string | null;
+}
 
 function ShortcutOptionList({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const shortcuts = useShortcutStore((s) => s.shortcuts);
   const addShortcut = useShortcutStore((s) => s.addShortcut);
+  const [spaces, setSpaces] = useState<SpaceItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Filter out already-added shortcuts
-  const available = PRESET_SHORTCUTS.filter(
-    (preset) => !shortcuts.some((s) => s.url === preset.url)
+  useEffect(() => {
+    api<{ spaces: SpaceItem[] }>("/api/spaces?sort=newest&limit=20", { silent: true })
+      .then((d) => setSpaces(d.spaces ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Filter out already-added spaces
+  const available = spaces.filter(
+    (s) => !shortcuts.some((sc) => sc.url === `/spaces/${s.id}`)
   );
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (available.length === 0) {
     return (
       <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-        {t("nav.allShortcutsAdded")}
+        {spaces.length === 0 ? t("nav.noSpaces") : t("nav.allShortcutsAdded")}
       </p>
     );
   }
 
   return (
     <div className="flex flex-col py-1">
-      {available.map((preset) => {
-        const Icon = ICON_MAP[preset.icon] ?? Globe;
-        return (
-          <button
-            key={preset.url}
-            type="button"
-            onClick={() => {
-              addShortcut(preset);
-              onClose();
-            }}
-            className="flex h-12 items-center gap-3 px-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70"
-          >
-            <Icon className="h-5 w-5 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">{preset.label}</span>
-          </button>
-        );
-      })}
+      {available.map((space) => (
+        <button
+          key={space.id}
+          type="button"
+          onClick={() => {
+            addShortcut({
+              type: "page",
+              label: space.name,
+              icon: "gamepad-2",
+              url: `/spaces/${space.id}`,
+            });
+            onClose();
+          }}
+          className="flex h-12 items-center gap-3 px-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70"
+        >
+          {space.coverImageUrl ? (
+            <img src={space.coverImageUrl} alt="" className="h-8 w-8 rounded-md object-cover shrink-0" />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand/15 shrink-0">
+              <Gamepad2 className="h-4 w-4 text-brand-text" />
+            </div>
+          )}
+          <span className="text-sm font-medium text-foreground truncate">{space.name}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -113,7 +122,7 @@ export function AddShortcutPopover({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent side="right" align="start" className="w-52 p-0">
+      <PopoverContent side="right" align="start" className="w-56 p-0">
         <p className="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground">{t("nav.addShortcut")}</p>
         <ShortcutOptionList onClose={() => onOpenChange(false)} />
       </PopoverContent>
