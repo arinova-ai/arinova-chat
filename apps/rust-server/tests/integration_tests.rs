@@ -843,3 +843,361 @@ mod expert_hub_tests {
         );
     }
 }
+
+// ============================================================================
+// Memory Capsule tests
+// ============================================================================
+#[cfg(test)]
+mod memory_capsule_tests {
+    use super::*;
+
+    async fn setup_user(client: &Client) -> String {
+        let email = "test_capsule@test.com";
+        let _ = create_test_user(client, email, "pass123", "CapsuleUser").await;
+        let (cookie, _) = login(client, email, "pass123").await;
+        cookie
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn create_capsule() {
+        // POST a conversation first, then create a capsule for it
+        // The capsule creation might be implicit (on first extraction)
+        // or via POST /api/memory/capsules
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let res = authed_get(&client, &cookie, "/api/memory/capsules").await;
+        assert!(res.is_object() || res.is_array()); // Can list capsules
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn capsule_entries_require_auth() {
+        let client = Client::new();
+        let res = client
+            .get(&format!("{BASE}/api/memory/capsules"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status().as_u16(), 401);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn by_timestamp_endpoint() {
+        // GET /api/conversations/:id/messages/by-timestamp?ts=...
+        // Should return 400 for invalid timestamp
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let res = client
+            .get(&format!(
+                "{BASE}/api/conversations/00000000-0000-0000-0000-000000000000/messages/by-timestamp?ts=invalid"
+            ))
+            .header("Cookie", &cookie)
+            .send()
+            .await
+            .unwrap();
+        assert!(res.status().as_u16() == 400 || res.status().as_u16() == 404);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn backfill_embeddings_admin_only() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let res =
+            authed_post(&client, &cookie, "/api/admin/backfill-embeddings", json!({})).await;
+        // Non-admin should get 403
+        assert!(res.status().as_u16() == 403 || res.status().as_u16() == 401);
+    }
+}
+
+// ============================================================================
+// Notebook & Kanban tests
+// ============================================================================
+#[cfg(test)]
+mod notebook_kanban_tests {
+    use super::*;
+
+    async fn setup_user(client: &Client) -> String {
+        let email = "test_nb_kanban@test.com";
+        let _ = create_test_user(client, email, "pass123", "NbKanban").await;
+        let (cookie, _) = login(client, email, "pass123").await;
+        cookie
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn list_notebooks() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let res = authed_get(&client, &cookie, "/api/notebooks").await;
+        let notebooks = res.get("notebooks").and_then(|v| v.as_array());
+        assert!(notebooks.is_some());
+        // Default notebook should exist
+        assert!(notebooks.unwrap().len() >= 1);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn create_note_standalone() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        // Get default notebook
+        let nbs = authed_get(&client, &cookie, "/api/notebooks").await;
+        let nb_id = nbs["notebooks"][0]["id"].as_str().unwrap();
+        let res = authed_post(
+            &client,
+            &cookie,
+            "/api/notes",
+            json!({
+                "notebookId": nb_id,
+                "title": "Test Note",
+                "content": "Test content",
+                "tags": ["test"]
+            }),
+        )
+        .await;
+        assert!(res.status().is_success());
+        let body: Value = res.json().await.unwrap();
+        assert!(body.get("id").is_some());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn update_note_standalone() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let nbs = authed_get(&client, &cookie, "/api/notebooks").await;
+        let nb_id = nbs["notebooks"][0]["id"].as_str().unwrap();
+        let create_res = authed_post(
+            &client,
+            &cookie,
+            "/api/notes",
+            json!({
+                "notebookId": nb_id, "title": "Update Me", "content": "old"
+            }),
+        )
+        .await;
+        let note: Value = create_res.json().await.unwrap();
+        let note_id = note["id"].as_str().unwrap();
+        let patch_res = authed_patch(
+            &client,
+            &cookie,
+            &format!("/api/notes/{note_id}"),
+            json!({
+                "title": "Updated", "content": "new content"
+            }),
+        )
+        .await;
+        assert!(patch_res.status().is_success());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn delete_note_standalone() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let nbs = authed_get(&client, &cookie, "/api/notebooks").await;
+        let nb_id = nbs["notebooks"][0]["id"].as_str().unwrap();
+        let create_res = authed_post(
+            &client,
+            &cookie,
+            "/api/notes",
+            json!({
+                "notebookId": nb_id, "title": "Delete Me", "content": ""
+            }),
+        )
+        .await;
+        let note: Value = create_res.json().await.unwrap();
+        let note_id = note["id"].as_str().unwrap();
+        let del_res = authed_delete(&client, &cookie, &format!("/api/notes/{note_id}")).await;
+        assert!(del_res.status().as_u16() == 204 || del_res.status().is_success());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn kanban_boards_auto_create() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let res = authed_get(&client, &cookie, "/api/kanban/boards").await;
+        // Should auto-create default board
+        let boards = if res.is_array() {
+            res.as_array().unwrap().clone()
+        } else {
+            vec![]
+        };
+        assert!(boards.len() >= 1);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn kanban_create_card() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let boards = authed_get(&client, &cookie, "/api/kanban/boards").await;
+        let board_id = boards.as_array().unwrap()[0]["id"].as_str().unwrap();
+        let board = authed_get(
+            &client,
+            &cookie,
+            &format!("/api/kanban/boards/{board_id}"),
+        )
+        .await;
+        let col_id = board["columns"][0]["id"].as_str().unwrap();
+        let res = authed_post(
+            &client,
+            &cookie,
+            "/api/kanban/cards",
+            json!({
+                "boardId": board_id, "columnId": col_id, "title": "Test Card"
+            }),
+        )
+        .await;
+        assert!(res.status().is_success());
+    }
+}
+
+// ============================================================================
+// Spaces tests
+// ============================================================================
+#[cfg(test)]
+mod spaces_tests {
+    use super::*;
+
+    async fn setup_user(client: &Client) -> String {
+        let email = "test_spaces@test.com";
+        let _ = create_test_user(client, email, "pass123", "SpacesUser").await;
+        let (cookie, _) = login(client, email, "pass123").await;
+        cookie
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn list_spaces_public() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let res = authed_get(&client, &cookie, "/api/spaces").await;
+        assert!(res.get("spaces").is_some());
+        assert!(res.get("total").is_some());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn create_space() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let res = authed_post(
+            &client,
+            &cookie,
+            "/api/spaces",
+            json!({
+                "name": "Test Space", "description": "A test", "category": "other"
+            }),
+        )
+        .await;
+        assert!(res.status().is_success());
+        let body: Value = res.json().await.unwrap();
+        assert!(body.get("id").is_some());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn update_space_cover_url() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let create = authed_post(
+            &client,
+            &cookie,
+            "/api/spaces",
+            json!({
+                "name": "Cover Test", "description": "", "category": "other"
+            }),
+        )
+        .await;
+        let body: Value = create.json().await.unwrap();
+        let id = body["id"].as_str().unwrap();
+        let update = client
+            .put(&format!("{BASE}/api/spaces/{id}"))
+            .header("Cookie", &cookie)
+            .json(&json!({"coverImageUrl": "https://example.com/cover.png"}))
+            .send()
+            .await
+            .unwrap();
+        assert!(update.status().is_success());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn delete_space() {
+        let client = Client::new();
+        let cookie = setup_user(&client).await;
+        let create = authed_post(
+            &client,
+            &cookie,
+            "/api/spaces",
+            json!({
+                "name": "Delete Me", "description": "", "category": "other"
+            }),
+        )
+        .await;
+        let body: Value = create.json().await.unwrap();
+        let id = body["id"].as_str().unwrap();
+        let del = authed_delete(&client, &cookie, &format!("/api/spaces/{id}")).await;
+        assert!(del.status().as_u16() == 204 || del.status().is_success());
+    }
+}
+
+// ============================================================================
+// Navigation tests
+// ============================================================================
+#[cfg(test)]
+mod navigation_tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn deep_link_conversation_param() {
+        // Verify that the web app serves HTML for /?c=xxx
+        // (Next.js should return the SPA regardless of query params)
+        let client = Client::new();
+        let res = client
+            .get(&format!("{BASE}/?c=test-conv-id"))
+            .send()
+            .await
+            .unwrap();
+        // Should get 200 (SPA) not 404
+        assert!(res.status().is_success());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn deep_link_with_message_param() {
+        let client = Client::new();
+        let res = client
+            .get(&format!("{BASE}/?c=test-conv&m=test-msg"))
+            .send()
+            .await
+            .unwrap();
+        assert!(res.status().is_success());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn protected_pages_redirect() {
+        // /settings, /creator, /office should still serve the SPA
+        // (client-side auth guard handles redirect)
+        let client = Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap();
+        for path in ["/settings", "/creator", "/office"] {
+            let res = client
+                .get(&format!("{BASE}{path}"))
+                .send()
+                .await
+                .unwrap();
+            // Should get 200 (SPA) or 307 redirect
+            assert!(res.status().as_u16() == 200 || res.status().as_u16() == 307);
+        }
+    }
+}
