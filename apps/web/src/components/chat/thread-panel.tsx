@@ -43,14 +43,17 @@ export function ThreadPanel() {
 
   // Auto-scroll to bottom on new messages
   const lastMsg = messages[messages.length - 1];
+  const prevMsgCountRef = useRef(0);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Only auto-scroll if already near bottom
+    const isNewMessage = messages.length > prevMsgCountRef.current;
+    prevMsgCountRef.current = messages.length;
+    // Always scroll on new message; for streaming updates, only if near bottom
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-    if (isNearBottom) {
+    if (isNewMessage || isNearBottom) {
       requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
+        el.scrollTo({ top: el.scrollHeight, behavior: isNewMessage ? "smooth" : "auto" });
       });
     }
   }, [lastMsg?.content, lastMsg?.status, messages.length]);
