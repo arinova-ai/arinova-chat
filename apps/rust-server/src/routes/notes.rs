@@ -25,7 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/notes/{noteId}/archive", post(archive_note_standalone))
         .route("/api/notes/{noteId}/unarchive", post(unarchive_note_standalone))
         .route("/api/notes/{noteId}/auto-tag", post(auto_tag_note_standalone))
-        .route("/api/notes/{noteId}/ask-ai", post(ask_ai_standalone))
+        // ask-ai removed — use /api/notes/:id/thread with agentConversationId
         .route("/api/notes/{noteId}/thread", get(get_note_thread).post(post_note_thread))
         .route("/api/notes/{noteId}/related-memories", get(get_note_related_memories))
         .route("/api/notes/upload", post(upload_note_image_standalone))
@@ -1944,49 +1944,6 @@ async fn post_note_thread(
         })).into_response();
     }
 
-    // Built-in AI: get Gemini key + call LLM
-    let gemini_key = match sqlx::query_scalar::<_, Option<String>>(
-        "SELECT gemini_api_key FROM user_settings WHERE user_id = $1",
-    ).bind(&user.id).fetch_optional(&state.db).await {
-        Ok(Some(Some(k))) if !k.is_empty() => crate::routes::user_settings::decrypt_api_key(&state.config, &k),
-        _ => return (StatusCode::PAYMENT_REQUIRED, Json(json!({"error": "Set Gemini API key in Settings"}))).into_response(),
-    };
-
-    if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
-        return resp;
-    }
-
-    // Build conversation history for context
-    let history = sqlx::query_as::<_, (String, String)>(
-        "SELECT role, content FROM note_thread_messages WHERE note_id = $1 ORDER BY created_at",
-    ).bind(note_id).fetch_all(&state.db).await.unwrap_or_default();
-
-    let mut prompt = format!("# Note: {}\n\n{}\n\n---\n", title, &content[..content.len().min(3000)]);
-    if !history.is_empty() {
-        prompt.push_str("Previous conversation:\n");
-        for (role, msg) in &history {
-            prompt.push_str(&format!("{}: {}\n", if role == "user" { "User" } else { "AI" }, msg));
-        }
-        prompt.push_str("---\n");
-    }
-    prompt.push_str(&format!("Question: {}", question));
-
-    let system = "You are a helpful AI assistant. The user has a note and is asking questions about it. Answer concisely. If previous conversation exists, maintain context.";
-
-    match call_gemini(&gemini_key, system, &prompt, 1024).await {
-        Ok(answer) => {
-            // Save assistant message
-            let ai_msg_id = Uuid::new_v4();
-            let _ = sqlx::query(
-                "INSERT INTO note_thread_messages (id, note_id, role, content) VALUES ($1, $2, 'assistant', $3)",
-            ).bind(ai_msg_id).bind(note_id).bind(&answer).execute(&state.db).await;
-
-            Json(json!({
-                "userMessage": { "id": user_msg_id, "role": "user", "content": question },
-                "assistantMessage": { "id": ai_msg_id, "role": "assistant", "content": answer },
-                "sentToAgent": false,
-            })).into_response()
-        }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response(),
-    }
+    // No agent conversation specified — built-in AI removed
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "agentConversationId is required. Select an agent to ask."}))).into_response()
 }

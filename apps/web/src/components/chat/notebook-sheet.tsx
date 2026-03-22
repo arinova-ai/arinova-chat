@@ -570,9 +570,11 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
     if (!askAiOpen) return;
     if (askAiAgents.length === 0) {
       const conversations = useChatStore.getState().conversations;
-      setAskAiAgents(conversations
+      const agents = conversations
         .filter((c) => c.type === "h2a" && c.agentId)
-        .map((c) => ({ id: c.id, agentId: c.agentId!, agentName: c.agentName ?? c.title ?? "Agent", agentAvatarUrl: c.agentAvatarUrl ?? null })));
+        .map((c) => ({ id: c.id, agentId: c.agentId!, agentName: c.agentName ?? c.title ?? "Agent", agentAvatarUrl: c.agentAvatarUrl ?? null }));
+      setAskAiAgents(agents);
+      if (agents.length > 0 && !askAiAgentId) setAskAiAgentId(agents[0].agentId);
     }
     if (selectedNote) {
       api<{ messages: { id: string; role: string; content: string; createdAt: string }[] }>(`/api/notes/${selectedNote.id}/thread`)
@@ -1004,21 +1006,20 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
             </div>
             {askAiOpen && (
               <div className="border-t border-border px-3 py-2 space-y-2">
+                {askAiAgents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">{t("chat.notebook.noAgentsForAskAi")}</p>
+                ) : (<>
                 {/* Agent selector */}
                 <div className="flex items-center gap-2">
                   <select
-                    value={askAiAgentId ?? ""}
-                    onChange={(e) => setAskAiAgentId(e.target.value || null)}
+                    value={askAiAgentId ?? askAiAgents[0]?.agentId ?? ""}
+                    onChange={(e) => setAskAiAgentId(e.target.value)}
                     className="rounded-md border border-input bg-background px-2 py-1 text-xs h-7 min-w-0 max-w-[180px]"
                   >
-                    <option value="">Arinova AI</option>
                     {askAiAgents.map((a) => (
                       <option key={a.agentId} value={a.agentId}>{a.agentName}</option>
                     ))}
                   </select>
-                  {askAiAgentId && (
-                    <span className="text-[10px] text-muted-foreground shrink-0">{t("chat.notebook.askAgentHint")}</span>
-                  )}
                 </div>
                 <div className="flex gap-2">
                   <Input
@@ -1048,6 +1049,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                     ))}
                   </div>
                 )}
+                </>)}
               </div>
             )}
           </div>

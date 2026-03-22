@@ -26,15 +26,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/user/{userId}/office-visit", get(get_office_visit))
 }
 
-/// GET /api/user/settings — get current user's settings (never returns the actual key)
+/// GET /api/user/settings
 async fn get_settings(State(state): State<AppState>, user: AuthUser) -> Response {
-    let row = sqlx::query_as::<_, (Option<String>,)>(
-        "SELECT gemini_api_key FROM user_settings WHERE user_id = $1",
-    )
-    .bind(&user.id)
-    .fetch_optional(&state.db)
-    .await;
-
     let office_visits = sqlx::query_scalar::<_, bool>(
         r#"SELECT office_visits_enabled FROM "user" WHERE id = $1"#,
     )
@@ -45,17 +38,9 @@ async fn get_settings(State(state): State<AppState>, user: AuthUser) -> Response
     .flatten()
     .unwrap_or(false);
 
-    match row {
-        Ok(Some((key,))) => Json(json!({
-            "hasGeminiKey": key.is_some(),
-            "officeVisitsEnabled": office_visits,
-        })).into_response(),
-        Ok(None) => Json(json!({
-            "hasGeminiKey": false,
-            "officeVisitsEnabled": office_visits,
-        })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
-    }
+    Json(json!({
+        "officeVisitsEnabled": office_visits,
+    })).into_response()
 }
 
 #[derive(Debug, Deserialize)]
