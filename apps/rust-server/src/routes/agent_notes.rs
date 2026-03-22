@@ -39,6 +39,10 @@ pub fn router() -> Router<AppState> {
             "/api/agent/notes/{noteId}",
             get(agent_get_note_standalone).patch(agent_update_note_standalone).delete(agent_delete_note_standalone),
         )
+        .route(
+            "/api/agent/notes/{noteId}/thread",
+            get(agent_get_note_thread).post(agent_post_note_thread),
+        )
 }
 
 // ===== Internal types =====
@@ -1199,4 +1203,71 @@ async fn agent_delete_note_standalone(
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
+}
+
+// ===== Agent Note Thread =====
+
+/// GET /api/agent/notes/:noteId/thread — list thread messages
+async fn agent_get_note_thread(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    // Verify agent has access (note belongs to agent's owner)
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM notes n JOIN agents a ON a.owner_id = n.owner_id WHERE n.id = $1 AND a.id = $2)",
+    ).bind(note_id).bind(agent.id).fetch_one(&state.db).await.unwrap_or(false);
+    if !has_access {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Access denied"}))).into_response();
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>)>(
+        "SELECT id, role, content, created_at FROM note_thread_messages WHERE note_id = $1 ORDER BY created_at",
+    ).bind(note_id).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(msgs) => {
+            let items: Vec<_> = msgs.iter().map(|(id, role, content, created)| json!({
+                "id": id, "role": role, "content": content, "createdAt": created.to_rfc3339(),
+            })).collect();
+            Json(json!({ "messages": items })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct AgentThreadBody {
+    content: String,
+}
+
+/// POST /api/agent/notes/:noteId/thread — agent replies to note thread (role=assistant)
+async fn agent_post_note_thread(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Path(note_id): Path<Uuid>,
+    Json(body): Json<AgentThreadBody>,
+) -> Response {
+    let content = body.content.trim();
+    if content.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Content required"}))).into_response();
+    }
+
+    let has_access = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM notes n JOIN agents a ON a.owner_id = n.owner_id WHERE n.id = $1 AND a.id = $2)",
+    ).bind(note_id).bind(agent.id).fetch_one(&state.db).await.unwrap_or(false);
+    if !has_access {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Access denied"}))).into_response();
+    }
+
+    let msg_id = Uuid::new_v4();
+    let _ = sqlx::query(
+        "INSERT INTO note_thread_messages (id, note_id, role, content) VALUES ($1, $2, 'assistant', $3)",
+    ).bind(msg_id).bind(note_id).bind(content).execute(&state.db).await;
+
+    Json(json!({
+        "id": msg_id,
+        "role": "assistant",
+        "content": content,
+    })).into_response()
 }

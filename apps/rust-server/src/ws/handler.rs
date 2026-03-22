@@ -2227,29 +2227,6 @@ pub(crate) async fn do_trigger_agent_response(
                                     });
                                 }
 
-                                // Write back to note thread if triggered by a note Ask AI question
-                                {
-                                    let db_nt = db.clone();
-                                    let cid_nt = conversation_id.clone();
-                                    let fc = full_content.clone();
-                                    tokio::spawn(async move {
-                                        // Find the most recent user message with noteThreadId metadata in this conversation
-                                        let meta = sqlx::query_scalar::<_, Option<serde_json::Value>>(
-                                            r#"SELECT metadata FROM messages
-                                               WHERE conversation_id = $1::uuid AND role = 'user' AND metadata->>'noteThreadId' IS NOT NULL
-                                               ORDER BY created_at DESC LIMIT 1"#,
-                                        ).bind(&cid_nt).fetch_optional(&db_nt).await.ok().flatten().flatten();
-                                        if let Some(ref m) = meta {
-                                            if let Some(note_id_str) = m.get("noteThreadId").and_then(|v| v.as_str()) {
-                                                if let Ok(note_id) = uuid::Uuid::parse_str(note_id_str) {
-                                                    let _ = sqlx::query(
-                                                        "INSERT INTO note_thread_messages (note_id, role, content) VALUES ($1, 'assistant', $2)",
-                                                    ).bind(note_id).bind(&fc).execute(&db_nt).await;
-                                                }
-                                            }
-                                        }
-                                    });
-                                }
 
                                 // Spawn auto memory extraction in background (throttled)
                                 {

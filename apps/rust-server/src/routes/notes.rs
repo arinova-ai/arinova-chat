@@ -1930,60 +1930,33 @@ async fn post_note_thread(
         "INSERT INTO note_thread_messages (id, note_id, role, content, agent_conversation_id) VALUES ($1, $2, 'user', $3, $4)",
     ).bind(user_msg_id).bind(note_id).bind(question).bind(agent_conv_uuid).execute(&state.db).await;
 
-    // If agent mode, send to agent conversation with noteThreadId metadata
-    if let Some(conv_id) = agent_conv_uuid {
-        let end = { let mut e = content.len().min(2000); while e > 0 && !content.is_char_boundary(e) { e -= 1; } e };
-        let note_context = format!("[Note: {}]\n{}\n\n[Question]\n{}", title, &content[..end], question);
-        let metadata = json!({ "noteThreadId": note_id.to_string() });
-
-        // Get next seq
-        let msg_seq = sqlx::query_scalar::<_, i32>(
-            "SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE conversation_id = $1",
-        ).bind(conv_id).fetch_one(&state.db).await.unwrap_or(1);
-
-        let msg_id = Uuid::new_v4();
-        let _ = sqlx::query(
-            "INSERT INTO messages (id, conversation_id, role, content, status, sender_user_id, metadata, seq) VALUES ($1, $2, 'user', $3, 'completed', $4, $5, $6)",
-        ).bind(msg_id).bind(conv_id).bind(&note_context).bind(&user.id).bind(&metadata).bind(msg_seq).execute(&state.db).await;
-
-        // Update conversation timestamp
-        let _ = sqlx::query("UPDATE conversations SET updated_at = NOW() WHERE id = $1")
-            .bind(conv_id).execute(&state.db).await;
-
-        // Broadcast new_message to trigger agent response
-        let conv_id_str = conv_id.to_string();
-        let member_ids = crate::ws::handler::get_conv_member_ids(&state.ws, &state.db, &conv_id_str, &user.id).await;
-        state.ws.broadcast_to_members(&member_ids, &json!({
-            "type": "new_message",
-            "conversationId": conv_id_str,
-            "message": {
-                "id": msg_id.to_string(),
-                "conversationId": conv_id_str,
-                "seq": msg_seq,
-                "role": "user",
-                "content": note_context,
-                "status": "completed",
-                "senderUserId": &user.id,
-                "createdAt": chrono::Utc::now().to_rfc3339(),
-            }
-        }), &state.redis);
-
-        // Trigger agent response via WS agent dispatch
+    // Notify agent via WS note_thread_question event
+    if let Some(agent_conv_id) = agent_conv_uuid {
+        // Find the agent_id from the conversation
         let agent_id = sqlx::query_scalar::<_, Uuid>(
             "SELECT agent_id FROM conversations WHERE id = $1 AND agent_id IS NOT NULL",
-        ).bind(conv_id).fetch_optional(&state.db).await.ok().flatten();
+        ).bind(agent_conv_id).fetch_optional(&state.db).await.ok().flatten();
 
-        if let Some(_aid) = agent_id {
-            crate::ws::handler::trigger_agent_response(
-                &user.id, &conv_id_str, &note_context,
-                true, // skip_user_message — already inserted above
-                None, None, &[], None, Some(metadata.clone()),
-                &state.ws, &state.db, &state.redis, &state.config,
-            ).await;
+        if let Some(aid) = agent_id {
+            let end = { let mut e = content.len().min(2000); while e > 0 && !content.is_char_boundary(e) { e -= 1; } e };
+            // Send note_thread_question to agent's bot token connections
+            let event = json!({
+                "type": "note_thread_question",
+                "noteId": note_id.to_string(),
+                "noteTitle": title,
+                "noteContent": &content[..end],
+                "question": question,
+                "agentId": aid.to_string(),
+            });
+            // Find the agent owner to route the event
+            let owner_id = sqlx::query_scalar::<_, String>(
+                "SELECT owner_id FROM agents WHERE id = $1",
+            ).bind(aid).fetch_optional(&state.db).await.ok().flatten().unwrap_or_default();
+            state.ws.send_to_user_or_queue(&owner_id, &event, &state.redis);
         }
 
         return Json(json!({
-            "userMessage": { "id": user_msg_id, "role": "user", "content": question, "agentConversationId": conv_id },
+            "userMessage": { "id": user_msg_id, "role": "user", "content": question },
             "assistantMessage": null,
             "sentToAgent": true,
         })).into_response();
