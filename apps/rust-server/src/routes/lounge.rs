@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Multipart, Path, State},
     http::StatusCode,
-    response::Json,
-    routing::{get, post},
+    response::{IntoResponse, Json, Response},
+    routing::{delete, get, post},
     Router,
 };
 use serde::Deserialize;
@@ -18,6 +18,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/lounge/{id}", get(get_lounge))
         .route("/api/lounge/{id}/start-chat", post(start_chat))
         .route("/api/lounge/{id}/join", post(join_lounge))
+        .route("/api/lounge/{id}/posts", get(list_posts).post(create_post))
+        .route("/api/lounge/{id}/posts/{postId}", delete(delete_post))
+        .route("/api/lounge/{id}/posts/upload", post(upload_post_image))
         .route("/api/lounge/{id}/dashboard", get(dashboard))
 }
 
@@ -538,4 +541,154 @@ async fn join_lounge(
     }
 
     (StatusCode::OK, Json(json!({"conversationId": conversation_id})))
+}
+
+// ---------------------------------------------------------------------------
+// Lounge Posts
+// ---------------------------------------------------------------------------
+
+/// GET /api/lounge/:id/posts
+async fn list_posts(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<String>, chrono::DateTime<chrono::Utc>, Option<String>, Option<String>)>(
+        r#"SELECT p.id, p.content, p.author_id, p.image_url, p.created_at,
+                  u.name AS author_name, u.image AS author_image
+           FROM lounge_posts p
+           JOIN "user" u ON u.id = p.author_id
+           WHERE p.lounge_id = $1
+           ORDER BY p.created_at DESC
+           LIMIT 50"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(posts) => {
+            let items: Vec<Value> = posts.iter().map(|(pid, content, author_id, image, created, name, avatar)| json!({
+                "id": pid,
+                "content": content,
+                "authorId": author_id,
+                "imageUrl": image,
+                "createdAt": created.to_rfc3339(),
+                "authorName": name,
+                "authorImage": avatar,
+            })).collect();
+            (StatusCode::OK, Json(json!({ "posts": items })))
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+    }
+}
+
+#[derive(Deserialize)]
+struct CreatePostBody {
+    content: String,
+    #[serde(rename = "imageUrl")]
+    image_url: Option<String>,
+}
+
+/// POST /api/lounge/:id/posts — admin only
+async fn create_post(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreatePostBody>,
+) -> (StatusCode, Json<Value>) {
+    // Check ownership (account owner)
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1 AND owner_id = $2)",
+    ).bind(id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the lounge owner can post"})));
+    }
+
+    let post_id = Uuid::new_v4();
+    let _ = sqlx::query(
+        "INSERT INTO lounge_posts (id, lounge_id, author_id, content, image_url) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(post_id).bind(id).bind(&user.id).bind(&body.content).bind(&body.image_url)
+    .execute(&state.db).await;
+
+    (StatusCode::CREATED, Json(json!({ "id": post_id })))
+}
+
+/// DELETE /api/lounge/:id/posts/:postId
+async fn delete_post(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((id, post_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1 AND owner_id = $2)",
+    ).bind(id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the lounge owner can delete posts"})));
+    }
+
+    let _ = sqlx::query("DELETE FROM lounge_posts WHERE id = $1 AND lounge_id = $2")
+        .bind(post_id).bind(id).execute(&state.db).await;
+
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+/// POST /api/lounge/:id/posts/upload — upload post image
+async fn upload_post_image(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1 AND owner_id = $2)",
+    ).bind(id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only owner"}))).into_response();
+    }
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() != Some("file") { continue; }
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response(),
+        };
+        if data.len() > 10 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Image must be under 10MB"}))).into_response();
+        }
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Only PNG, JPEG, WebP"}))).into_response();
+        };
+
+        let stored = format!("lounge_post_{}_{}.{}", id, chrono::Utc::now().timestamp_millis(), ext);
+        let r2_key = format!("lounge/{}", stored);
+        let url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(s3, &state.config.r2_bucket, &r2_key, data.to_vec(), content_type, &state.config.r2_public_url).await {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("lounge");
+                    let _ = tokio::fs::create_dir_all(&dir).await;
+                    let _ = tokio::fs::write(dir.join(&stored), &data).await;
+                    format!("/uploads/lounge/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("lounge");
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            let _ = tokio::fs::write(dir.join(&stored), &data).await;
+            format!("/uploads/lounge/{}", stored)
+        };
+
+        return Json(json!({"url": url})).into_response();
+    }
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file"}))).into_response()
 }

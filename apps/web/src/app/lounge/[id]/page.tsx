@@ -182,6 +182,63 @@ function LoungeDetailInner() {
           {t("lounge.joinChat")}
         </Button>
       </div>
+
+      {/* Posts Feed */}
+      <LoungePosts loungeId={id} />
+    </div>
+  );
+}
+
+interface Post {
+  id: string;
+  content: string;
+  imageUrl: string | null;
+  authorName: string;
+  authorImage: string | null;
+  createdAt: string;
+}
+
+function LoungePosts({ loungeId }: { loungeId: string }) {
+  const { t } = useTranslation();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api<{ posts: Post[] }>(`/api/lounge/${loungeId}/posts`)
+      .then((d) => setPosts(d.posts))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [loungeId]);
+
+  if (loading) return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin" /></div>;
+  if (posts.length === 0) return null;
+
+  return (
+    <div className="px-4 pb-4 space-y-3">
+      <h3 className="text-sm font-semibold text-muted-foreground">{t("lounge.posts")}</h3>
+      {posts.map((post) => (
+        <div key={post.id} className="rounded-xl border border-border p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-purple-500/10 overflow-hidden flex items-center justify-center shrink-0">
+              {post.authorImage ? (
+                <img src={post.authorImage} alt="" className="h-8 w-8 rounded-full object-cover" />
+              ) : (
+                <Mic className="h-4 w-4 text-purple-500" />
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-medium">{post.authorName}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {new Date(post.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+          </div>
+          {post.content && <p className="text-sm">{post.content}</p>}
+          {post.imageUrl && (
+            <img src={post.imageUrl} alt="" className="w-full rounded-lg object-cover max-h-64" />
+          )}
+        </div>
+      ))}
     </div>
   );
 }

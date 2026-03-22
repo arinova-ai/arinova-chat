@@ -381,7 +381,7 @@ export default function LoungeSettingsPage() {
                         const formData = new FormData();
                         formData.append("file", file);
                         try {
-                          const res = await api<{ url: string }>("/api/auth/upload-avatar", { method: "POST", body: formData });
+                          const res = await api<{ url: string }>("/api/notes/upload", { method: "POST", body: formData });
                           setAvatarUrl(res.url);
                         } catch { /* toast */ }
                         e.target.value = "";

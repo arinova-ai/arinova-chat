@@ -636,6 +636,17 @@ async fn main() {
     sqlx::query("ALTER TABLE note_thread_messages ADD COLUMN IF NOT EXISTS agent_id UUID").execute(&db).await.ok();
     sqlx::query("UPDATE note_thread_messages SET agent_id = (SELECT agent_id FROM conversations WHERE id = note_thread_messages.agent_conversation_id) WHERE agent_id IS NULL AND agent_conversation_id IS NOT NULL").execute(&db).await.ok();
 
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS lounge_posts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        lounge_id UUID NOT NULL,
+        author_id TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        image_url TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )"#).execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_lounge_posts_lounge ON lounge_posts(lounge_id, created_at DESC)").execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards
