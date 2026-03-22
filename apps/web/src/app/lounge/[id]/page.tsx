@@ -43,10 +43,13 @@ function LoungeDetailInner() {
       .then(setLounge)
       .catch(() => {})
       .finally(() => setLoading(false));
-    // Check membership from conversations list
-    api<{ conversations: { officialCommunityId?: string }[] }>("/api/conversations")
+    // Check membership: look for existing lounge conversation
+    api<{ conversations: { officialCommunityId?: string; type?: string; title?: string }[] }>("/api/conversations")
       .then((d) => {
-        if (d.conversations?.some((c) => c.officialCommunityId === id)) setIsMember(true);
+        const match = d.conversations?.some((c) =>
+          c.officialCommunityId === id || c.type === "lounge"
+        );
+        if (match) setIsMember(true);
       })
       .catch(() => {});
   }, [id]);

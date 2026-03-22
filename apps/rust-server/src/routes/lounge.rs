@@ -537,10 +537,9 @@ async fn join_lounge(
                 return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to create conversation: {}", e)})));
             }
 
-            // Track via official_conversations
-            let _ = sqlx::query(
-                "INSERT INTO official_conversations (community_id, user_id, conversation_id, status) VALUES ($1, $2, $3, 'ai_active')",
-            ).bind(id).bind(&user.id).bind(conv_id).execute(&state.db).await;
+            // Note: official_conversations has FK to communities(id), so accounts-based lounges
+            // can't use it. The conversation is tracked by type='lounge' + title matching.
+            // Skip official_conversations INSERT for accounts-based lounges.
 
             // Add agent as conversation member (if agent exists)
             if let Some(aid) = agent_id {
