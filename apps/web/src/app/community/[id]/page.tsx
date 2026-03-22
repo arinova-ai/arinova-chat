@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { BACKEND_URL } from "@/lib/config";
 
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
@@ -159,6 +160,7 @@ function CommunityDetailContent() {
 
   // Data
   const [community, setCommunity] = useState<Community | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isMember, setIsMember] = useState(false);
@@ -655,7 +657,8 @@ function CommunityDetailContent() {
                 {currentUserId === community.creatorId && (
                   <button
                     type="button"
-                    className="absolute bottom-3 right-3 rounded-full bg-background/80 px-3 py-1.5 text-xs font-medium hover:bg-background transition-colors"
+                    disabled={coverUploading}
+                    className="absolute bottom-3 right-3 rounded-full bg-background/80 px-3 py-1.5 text-xs font-medium hover:bg-background transition-colors disabled:opacity-50"
                     onClick={() => {
                       const input = document.createElement("input");
                       input.type = "file";
@@ -663,10 +666,10 @@ function CommunityDetailContent() {
                       input.onchange = async () => {
                         const file = input.files?.[0];
                         if (!file) return;
+                        setCoverUploading(true);
                         try {
                           const form = new FormData();
                           form.append("file", file);
-                          const { BACKEND_URL } = await import("@/lib/config");
                           const res = await fetch(`${BACKEND_URL}/api/communities/${community.id}/cover`, {
                             method: "POST",
                             body: form,
@@ -676,32 +679,19 @@ function CommunityDetailContent() {
                             const data = await res.json();
                             setCommunity((prev) => prev ? { ...prev, coverImageUrl: data.url || data.coverImageUrl } : prev);
                           } else {
-                            // Fallback: use URL prompt
-                            const url = prompt("Upload failed. Enter cover image URL:");
-                            if (url) {
-                              await api(`/api/communities/${community.id}`, {
-                                method: "PATCH",
-                                body: JSON.stringify({ coverImageUrl: url.trim() }),
-                              });
-                              setCommunity((prev) => prev ? { ...prev, coverImageUrl: url.trim() } : prev);
-                            }
+                            const errText = await res.text().catch(() => "");
+                            alert(`Upload failed: ${errText || res.statusText}`);
                           }
-                        } catch {
-                          // Fallback to URL
-                          const url = prompt("Enter cover image URL:");
-                          if (url) {
-                            await api(`/api/communities/${community.id}`, {
-                              method: "PATCH",
-                              body: JSON.stringify({ coverImageUrl: url.trim() }),
-                            });
-                            setCommunity((prev) => prev ? { ...prev, coverImageUrl: url.trim() } : prev);
-                          }
+                        } catch (e) {
+                          alert(`Upload error: ${e instanceof Error ? e.message : "Unknown error"}`);
+                        } finally {
+                          setCoverUploading(false);
                         }
                       };
                       input.click();
                     }}
                   >
-                    {t("community.detail.editCover")}
+                    {coverUploading ? <><Loader2 className="h-3 w-3 animate-spin inline mr-1" />Uploading...</> : t("community.detail.editCover")}
                   </button>
                 )}
               </div>
