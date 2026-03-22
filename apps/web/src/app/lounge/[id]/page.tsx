@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Mic, Users, Loader2, Plus, Upload, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
-import { useChatStore } from "@/store/chat-store";
+import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthGuard } from "@/components/auth-guard";
@@ -27,6 +27,7 @@ function LoungeDetailInner() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { data: session } = authClient.useSession();
 
   const [lounge, setLounge] = useState<LoungeDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -186,7 +187,7 @@ function LoungeDetailInner() {
       </div>
 
       {/* Posts Feed */}
-      <LoungePosts loungeId={id} isOwner={lounge.creatorId === useChatStore.getState().currentUserId} />
+      <LoungePosts loungeId={id} isOwner={lounge.creatorId === session?.user?.id} />
     </div>
   );
 }
