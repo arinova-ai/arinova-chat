@@ -634,6 +634,7 @@ async fn main() {
     )"#).execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_note_thread_note ON note_thread_messages(note_id, created_at)").execute(&db).await.ok();
     sqlx::query("ALTER TABLE note_thread_messages ADD COLUMN IF NOT EXISTS agent_id UUID").execute(&db).await.ok();
+    sqlx::query("UPDATE note_thread_messages SET agent_id = (SELECT agent_id FROM conversations WHERE id = note_thread_messages.agent_conversation_id) WHERE agent_id IS NULL AND agent_conversation_id IS NOT NULL").execute(&db).await.ok();
 
     tracing::info!("Startup migrations completed");
 
