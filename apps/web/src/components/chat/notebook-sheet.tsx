@@ -316,13 +316,13 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   // Auto tag state
   const [autoTagging, setAutoTagging] = useState(false);
-  // Ask AI state
+  // Ask AI thread state
   const [askAiOpen, setAskAiOpen] = useState(false);
   const [askAiQuestion, setAskAiQuestion] = useState("");
-  const [askAiAnswer, setAskAiAnswer] = useState("");
   const [askAiLoading, setAskAiLoading] = useState(false);
-  const [askAiAgentId, setAskAiAgentId] = useState<string | null>(null); // null = built-in AI
+  const [askAiAgentId, setAskAiAgentId] = useState<string | null>(null);
   const [askAiAgents, setAskAiAgents] = useState<{ id: string; agentId: string; agentName: string; agentAvatarUrl: string | null }[]>([]);
+  const [threadMessages, setThreadMessages] = useState<{ id: string; role: string; content: string; createdAt: string }[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -347,8 +347,8 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
       setSuggestedTags([]);
       setAskAiOpen(false);
       setAskAiQuestion("");
-      setAskAiAnswer("");
       setAskAiLoading(false);
+      setThreadMessages([]);
     }
   }, [open]);
 
@@ -565,48 +565,43 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
     setSuggestedTags([]);
   }, []);
 
-  // Load agent conversations for Ask AI dropdown
+  // Load agent conversations + thread history when Ask AI opens
   useEffect(() => {
-    if (!askAiOpen || askAiAgents.length > 0) return;
-    const conversations = useChatStore.getState().conversations;
-    const agentConvs = conversations
-      .filter((c) => c.type === "h2a" && c.agentId)
-      .map((c) => ({
-        id: c.id,
-        agentId: c.agentId!,
-        agentName: c.agentName ?? c.title ?? "Agent",
-        agentAvatarUrl: c.agentAvatarUrl ?? null,
-      }));
-    setAskAiAgents(agentConvs);
-  }, [askAiOpen, askAiAgents.length]);
+    if (!askAiOpen) return;
+    if (askAiAgents.length === 0) {
+      const conversations = useChatStore.getState().conversations;
+      setAskAiAgents(conversations
+        .filter((c) => c.type === "h2a" && c.agentId)
+        .map((c) => ({ id: c.id, agentId: c.agentId!, agentName: c.agentName ?? c.title ?? "Agent", agentAvatarUrl: c.agentAvatarUrl ?? null })));
+    }
+    if (selectedNote) {
+      api<{ messages: { id: string; role: string; content: string; createdAt: string }[] }>(`/api/notes/${selectedNote.id}/thread`)
+        .then((d) => setThreadMessages(d.messages))
+        .catch(() => {});
+    }
+  }, [askAiOpen, selectedNote?.id, askAiAgents.length]);
 
   const handleAskAi = async () => {
     if (!selectedNote || !askAiQuestion.trim()) return;
     setAskAiLoading(true);
-    setAskAiAnswer("");
+    const agentConv = askAiAgentId ? askAiAgents.find((a) => a.agentId === askAiAgentId) : null;
     try {
-      if (askAiAgentId) {
-        // Send to specific agent's conversation
-        const agentConv = askAiAgents.find((a) => a.agentId === askAiAgentId);
-        if (!agentConv) throw new Error("Agent conversation not found");
-        const noteContent = selectedNote.content?.slice(0, 2000) ?? "";
-        const prompt = `[Note Context: ${selectedNote.title}]\n${noteContent}\n\n[Question]\n${askAiQuestion.trim()}`;
-        await api(`/api/conversations/${agentConv.id}/messages`, {
-          method: "POST",
-          body: JSON.stringify({ content: prompt }),
-        });
-        setAskAiAnswer(`Question sent to ${agentConv.agentName}. Check the conversation for the response.`);
-      } else {
-        // Built-in AI
-        const res = await api<{ answer: string }>(`/api/notes/${selectedNote.id}/ask-ai`, {
-          method: "POST",
-          body: JSON.stringify({ question: askAiQuestion.trim() }),
-        });
-        setAskAiAnswer(res.answer);
+      const res = await api<{ userMessage: { id: string; role: string; content: string }; assistantMessage: { id: string; role: string; content: string } | null; sentToAgent: boolean }>(
+        `/api/notes/${selectedNote.id}/thread`,
+        { method: "POST", body: JSON.stringify({ question: askAiQuestion.trim(), agentConversationId: agentConv?.id }) },
+      );
+      // Add user message
+      setThreadMessages((prev) => [...prev, { ...res.userMessage, createdAt: new Date().toISOString() }]);
+      // Add AI reply if present
+      if (res.assistantMessage) {
+        setThreadMessages((prev) => [...prev, { ...res.assistantMessage!, createdAt: new Date().toISOString() }]);
+      } else if (res.sentToAgent && agentConv) {
+        setThreadMessages((prev) => [...prev, { id: "agent-pending", role: "assistant", content: `Sent to ${agentConv.agentName}. Check conversation for reply.`, createdAt: new Date().toISOString() }]);
       }
+      setAskAiQuestion("");
     } catch (err: unknown) {
       const error = err as { message?: string };
-      setAskAiAnswer(error?.message || "Failed to get answer");
+      setThreadMessages((prev) => [...prev, { id: "error", role: "assistant", content: error?.message || "Failed", createdAt: new Date().toISOString() }]);
     }
     setAskAiLoading(false);
   };
@@ -1042,8 +1037,16 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                     {askAiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                   </Button>
                 </div>
-                {askAiAnswer && (
-                  <div className="rounded-md bg-muted/50 p-2 text-xs whitespace-pre-wrap">{askAiAnswer}</div>
+                {/* Thread messages */}
+                {threadMessages.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto space-y-1.5">
+                    {threadMessages.map((msg) => (
+                      <div key={msg.id} className={`rounded-md p-2 text-xs whitespace-pre-wrap ${msg.role === "user" ? "bg-brand/10 ml-6" : "bg-muted/50 mr-6"}`}>
+                        <span className="text-[10px] font-medium text-muted-foreground">{msg.role === "user" ? "You" : "AI"}</span>
+                        <p className="mt-0.5">{msg.content}</p>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

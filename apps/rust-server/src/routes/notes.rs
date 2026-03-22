@@ -26,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/notes/{noteId}/unarchive", post(unarchive_note_standalone))
         .route("/api/notes/{noteId}/auto-tag", post(auto_tag_note_standalone))
         .route("/api/notes/{noteId}/ask-ai", post(ask_ai_standalone))
+        .route("/api/notes/{noteId}/thread", get(get_note_thread).post(post_note_thread))
         .route("/api/notes/{noteId}/related-memories", get(get_note_related_memories))
         .route("/api/notes/upload", post(upload_note_image_standalone))
         .route("/api/users/me/notes", get(list_user_notes))
@@ -1856,4 +1857,136 @@ async fn upload_note_image_standalone(
         return Json(json!({"url": url})).into_response();
     }
     (StatusCode::BAD_REQUEST, Json(json!({"error": "No file field"}))).into_response()
+}
+
+// ===== Note Thread (Ask AI conversation) =====
+
+/// GET /api/notes/:noteId/thread — list thread messages
+async fn get_note_thread(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+) -> Response {
+    // Verify note ownership
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM notes WHERE id = $1 AND (creator_id = $2 OR owner_id = $2))",
+    ).bind(note_id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
+    if !exists {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response();
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<Uuid>, DateTime<Utc>)>(
+        "SELECT id, role, content, agent_conversation_id, created_at FROM note_thread_messages WHERE note_id = $1 ORDER BY created_at",
+    ).bind(note_id).fetch_all(&state.db).await;
+
+    match rows {
+        Ok(msgs) => {
+            let items: Vec<_> = msgs.iter().map(|(id, role, content, agent_conv, created)| json!({
+                "id": id,
+                "role": role,
+                "content": content,
+                "agentConversationId": agent_conv,
+                "createdAt": created.to_rfc3339(),
+            })).collect();
+            Json(json!({ "messages": items })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct PostThreadBody {
+    question: String,
+    #[serde(rename = "agentConversationId")]
+    agent_conversation_id: Option<String>,
+}
+
+/// POST /api/notes/:noteId/thread — add user message + get AI reply
+async fn post_note_thread(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(note_id): Path<Uuid>,
+    Json(body): Json<PostThreadBody>,
+) -> Response {
+    let question = body.question.trim();
+    if question.is_empty() || question.len() > 2000 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Question required (max 2000 chars)"}))).into_response();
+    }
+
+    // Verify note
+    let note = sqlx::query_as::<_, (String, String)>(
+        "SELECT title, content FROM notes WHERE id = $1 AND (creator_id = $2 OR owner_id = $2)",
+    ).bind(note_id).bind(&user.id).fetch_optional(&state.db).await;
+    let (title, content) = match note {
+        Ok(Some(n)) => n,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    };
+
+    // Save user message
+    let user_msg_id = Uuid::new_v4();
+    let agent_conv_uuid = body.agent_conversation_id.as_deref().and_then(|s| Uuid::parse_str(s).ok());
+    let _ = sqlx::query(
+        "INSERT INTO note_thread_messages (id, note_id, role, content, agent_conversation_id) VALUES ($1, $2, 'user', $3, $4)",
+    ).bind(user_msg_id).bind(note_id).bind(question).bind(agent_conv_uuid).execute(&state.db).await;
+
+    // If agent mode, send to agent conversation and return
+    if let Some(conv_id) = agent_conv_uuid {
+        let note_context = format!("[Note: {}]\n{}\n\n[Question]\n{}", title, &content[..content.len().min(2000)], question);
+        let _ = sqlx::query(
+            "INSERT INTO messages (conversation_id, role, content, status, sender_user_id, seq) VALUES ($1, 'user', $2, 'completed', $3, COALESCE((SELECT MAX(seq) FROM messages WHERE conversation_id = $1), 0) + 1)",
+        ).bind(conv_id).bind(&note_context).bind(&user.id).execute(&state.db).await;
+
+        return Json(json!({
+            "userMessage": { "id": user_msg_id, "role": "user", "content": question, "agentConversationId": conv_id },
+            "assistantMessage": null,
+            "sentToAgent": true,
+        })).into_response();
+    }
+
+    // Built-in AI: get Gemini key + call LLM
+    let gemini_key = match sqlx::query_scalar::<_, Option<String>>(
+        "SELECT gemini_api_key FROM user_settings WHERE user_id = $1",
+    ).bind(&user.id).fetch_optional(&state.db).await {
+        Ok(Some(Some(k))) if !k.is_empty() => crate::routes::user_settings::decrypt_api_key(&state.config, &k),
+        _ => return (StatusCode::PAYMENT_REQUIRED, Json(json!({"error": "Set Gemini API key in Settings"}))).into_response(),
+    };
+
+    if let Err(resp) = check_ai_rate_limit(&state.redis, &user.id).await {
+        return resp;
+    }
+
+    // Build conversation history for context
+    let history = sqlx::query_as::<_, (String, String)>(
+        "SELECT role, content FROM note_thread_messages WHERE note_id = $1 ORDER BY created_at",
+    ).bind(note_id).fetch_all(&state.db).await.unwrap_or_default();
+
+    let mut prompt = format!("# Note: {}\n\n{}\n\n---\n", title, &content[..content.len().min(3000)]);
+    if !history.is_empty() {
+        prompt.push_str("Previous conversation:\n");
+        for (role, msg) in &history {
+            prompt.push_str(&format!("{}: {}\n", if role == "user" { "User" } else { "AI" }, msg));
+        }
+        prompt.push_str("---\n");
+    }
+    prompt.push_str(&format!("Question: {}", question));
+
+    let system = "You are a helpful AI assistant. The user has a note and is asking questions about it. Answer concisely. If previous conversation exists, maintain context.";
+
+    match call_gemini(&gemini_key, system, &prompt, 1024).await {
+        Ok(answer) => {
+            // Save assistant message
+            let ai_msg_id = Uuid::new_v4();
+            let _ = sqlx::query(
+                "INSERT INTO note_thread_messages (id, note_id, role, content) VALUES ($1, $2, 'assistant', $3)",
+            ).bind(ai_msg_id).bind(note_id).bind(&answer).execute(&state.db).await;
+
+            Json(json!({
+                "userMessage": { "id": user_msg_id, "role": "user", "content": question },
+                "assistantMessage": { "id": ai_msg_id, "role": "assistant", "content": answer },
+                "sentToAgent": false,
+            })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))).into_response(),
+    }
 }
