@@ -37,7 +37,7 @@ import { ShareSheet, type ShareContent } from "./share-sheet";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { MarkdownContent } from "./markdown-content";
-import { assetUrl } from "@/lib/config";
+import { assetUrl, BACKEND_URL } from "@/lib/config";
 
 interface NotebookSheetProps {
   open: boolean;
@@ -598,7 +598,6 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
     setThreadMessages((prev) => [...prev, tempUserMsg]);
 
     try {
-      const { BACKEND_URL } = await import("@/lib/config");
       const res = await fetch(`${BACKEND_URL}/api/notes/${selectedNote.id}/thread`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1141,7 +1140,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                     onClick={handleAskAi}
                     disabled={askAiLoading || !askAiQuestion.trim()}
                   >
-                    {askAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    <Send className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
