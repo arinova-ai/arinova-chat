@@ -984,9 +984,9 @@ export function CommunitySettingsSheet({
                       <h4 className="text-sm font-medium">{t("communitySettings.transfer")}</h4>
                       <p className="text-xs text-muted-foreground">{t("communitySettings.transferDesc")}</p>
                       <div className="space-y-1">
-                        {members
-                          .filter((m) => m.userId !== currentUserId)
-                          .map((m) => (
+                        {(() => {
+                          const moderators = members.filter((m) => m.userId !== currentUserId && m.role === "moderator");
+                          return moderators.length > 0 ? moderators.map((m) => (
                             <Button
                               key={m.userId}
                               variant="outline"
@@ -997,7 +997,10 @@ export function CommunitySettingsSheet({
                               <ArrowUpDown className="h-3.5 w-3.5" />
                               {t("communitySettings.transferTo")} {m.userName}
                             </Button>
-                          ))}
+                          )) : (
+                            <p className="text-xs text-muted-foreground py-2">{t("communitySettings.noModerators")}</p>
+                          );
+                        })()}
                       </div>
                     </div>
 
