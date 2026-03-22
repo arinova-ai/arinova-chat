@@ -176,15 +176,28 @@ function LoungeDetailInner() {
           <p className="text-sm text-muted-foreground leading-relaxed">{lounge.description}</p>
         )}
 
-        <Button
-          className="w-full gap-2"
-          size="lg"
-          onClick={handleJoin}
-          disabled={joining}
-        >
-          {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
-          {t("lounge.joinChat")}
-        </Button>
+        {lounge.creatorId === session?.user?.id ? (
+          /* Owner: management buttons */
+          <div className="flex gap-2">
+            <Button className="flex-1 gap-2" variant="outline" onClick={() => router.push(`/lounge/${id}/dashboard`)}>
+              {t("lounge.dashboard")}
+            </Button>
+            <Button className="flex-1 gap-2" variant="outline" onClick={() => router.push(`/lounge/${id}/settings`)}>
+              {t("lounge.settings")}
+            </Button>
+          </div>
+        ) : (
+          /* Fan: join or continue */
+          <Button
+            className="w-full gap-2"
+            size="lg"
+            onClick={handleJoin}
+            disabled={joining}
+          >
+            {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
+            {t("lounge.joinChat")}
+          </Button>
+        )}
       </div>
 
       {/* Posts Feed */}
@@ -256,8 +269,8 @@ function LoungePosts({ loungeId, isOwner }: { loungeId: string; isOwner: boolean
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">{t("lounge.posts")}</h3>
         {isOwner && !creating && (
-          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setCreating(true)}>
-            <Plus className="h-3 w-3" /> {t("lounge.newPost")}
+          <Button variant="default" size="sm" className="gap-1.5" onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> {t("lounge.newPost")}
           </Button>
         )}
       </div>

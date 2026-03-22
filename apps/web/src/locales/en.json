@@ -1964,6 +1964,8 @@
   "lounge.addImage": "Add Image",
   "lounge.publish": "Publish",
   "lounge.noPosts": "No posts yet",
+  "lounge.dashboard": "Dashboard",
+  "lounge.settings": "Settings",
   "community.setupProfile": "Set Up Your Profile",
   "community.setupProfileDesc": "Choose a nickname and avatar for this community",
   "community.nickname": "Nickname",
