@@ -713,8 +713,8 @@ mod expert_hub_tests {
             &cookie,
             &format!("/api/expert-hub/{expert_id}/examples"),
             json!({
-                "input": "What is Rust?",
-                "output": "Rust is a systems programming language."
+                "question": "What is Rust?",
+                "answer": "Rust is a systems programming language."
             }),
         )
         .await;
@@ -739,8 +739,8 @@ mod expert_hub_tests {
             &cookie,
             &format!("/api/expert-hub/{expert_id}/examples"),
             json!({
-                "input": "Example input for listing",
-                "output": "Example output for listing"
+                "question": "Example input for listing",
+                "answer": "Example output for listing"
             }),
         )
         .await;
@@ -770,8 +770,8 @@ mod expert_hub_tests {
             &cookie,
             &format!("/api/expert-hub/{expert_id}/examples"),
             json!({
-                "input": "Original input",
-                "output": "Original output"
+                "question": "Original input",
+                "answer": "Original output"
             }),
         )
         .await;
@@ -789,8 +789,8 @@ mod expert_hub_tests {
             &cookie,
             &format!("/api/expert-hub/{expert_id}/examples/{example_id}"),
             json!({
-                "input": "Updated input",
-                "output": "Updated output"
+                "question": "Updated input",
+                "answer": "Updated output"
             }),
         )
         .await;
@@ -815,8 +815,8 @@ mod expert_hub_tests {
             &cookie,
             &format!("/api/expert-hub/{expert_id}/examples"),
             json!({
-                "input": "Example to delete",
-                "output": "This will be deleted"
+                "question": "Example to delete",
+                "answer": "This will be deleted"
             }),
         )
         .await;
