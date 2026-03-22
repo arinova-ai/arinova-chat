@@ -132,7 +132,8 @@ function LoungeDetailInner() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background overflow-y-auto">
+     <div className="max-w-2xl mx-auto w-full">
       {/* Cover / Header */}
       <div className="relative shrink-0">
         {lounge.coverImageUrl ? (
@@ -188,6 +189,7 @@ function LoungeDetailInner() {
 
       {/* Posts Feed */}
       <LoungePosts loungeId={id} isOwner={lounge.creatorId === session?.user?.id} />
+     </div>
     </div>
   );
 }

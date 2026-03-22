@@ -273,6 +273,7 @@ export default function LoungeSettingsPage() {
 
   return (
     <div className="flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
+      <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col">
       <audio ref={audioRef} className="hidden" />
 
       {/* Header */}
@@ -682,6 +683,7 @@ export default function LoungeSettingsPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

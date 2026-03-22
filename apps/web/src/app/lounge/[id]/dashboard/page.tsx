@@ -139,6 +139,7 @@ export default function LoungeDashboardPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)]">
+     <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
@@ -146,7 +147,7 @@ export default function LoungeDashboardPage() {
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-semibold">
-            {account?.name ?? "..."}
+            {account?.name ?? t("common.loading")}
           </h1>
           <p className="text-xs text-muted-foreground">
             {t("lounge.dashboard.title")}
@@ -447,6 +448,7 @@ export default function LoungeDashboardPage() {
           )}
         </div>
       </div>
+     </div>
     </div>
   );
 }

@@ -49,28 +49,38 @@ export default function ExplorLoungePage() {
               <Link
                 key={acc.id}
                 href={`/lounge/${acc.id}`}
-                className="rounded-xl border border-border p-4 hover:border-brand/50 transition-colors block"
+                className="rounded-xl border border-border overflow-hidden hover:border-brand/50 transition-colors block"
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center overflow-hidden shrink-0">
-                    {acc.avatar ? (
-                      <img src={acc.avatar} alt={acc.name} className="h-12 w-12 rounded-full object-cover" />
-                    ) : (
-                      <Mic className="h-6 w-6 text-purple-500" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate">{acc.name}</h3>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Users className="h-3 w-3" />
-                      <span>{acc.subscriberCount} {t("explore.subscribers")}</span>
+                {/* Cover area */}
+                <div className="h-24 bg-gradient-to-br from-purple-500/20 to-pink-500/10 flex items-center justify-center">
+                  {acc.avatar ? (
+                    <img src={acc.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Mic className="h-8 w-8 text-purple-500/30" />
+                  )}
+                </div>
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-10 w-10 -mt-8 rounded-full bg-background border-2 border-background flex items-center justify-center overflow-hidden shrink-0">
+                      {acc.avatar ? (
+                        <img src={acc.avatar} alt={acc.name} className="h-10 w-10 rounded-full object-cover" />
+                      ) : (
+                        <Mic className="h-5 w-5 text-purple-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium truncate">{acc.name}</h3>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Users className="h-3 w-3" />
+                        <span>{acc.subscriberCount} {t("explore.subscribers")}</span>
+                      </div>
                     </div>
                   </div>
+                  {acc.bio && <p className="text-sm text-muted-foreground line-clamp-2">{acc.bio}</p>}
+                  <Button variant="secondary" size="sm" className="w-full mt-3">
+                    {t("lounge.viewDetail")}
+                  </Button>
                 </div>
-                {acc.bio && <p className="text-sm text-muted-foreground line-clamp-2">{acc.bio}</p>}
-                <Button variant="secondary" size="sm" className="w-full mt-3">
-                  {t("lounge.viewDetail")}
-                </Button>
               </Link>
             ))}
           </div>

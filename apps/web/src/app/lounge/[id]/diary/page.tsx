@@ -243,6 +243,7 @@ export default function DiaryPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)]">
+      <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <Button
@@ -373,6 +374,7 @@ export default function DiaryPage({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

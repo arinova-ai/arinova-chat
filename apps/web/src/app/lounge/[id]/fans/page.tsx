@@ -143,6 +143,7 @@ export default function FansPage() {
 
   return (
     <div className="flex flex-col h-full bg-background pt-[env(safe-area-inset-top)]">
+      <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b">
         <Button
@@ -216,6 +217,7 @@ export default function FansPage() {
             t={t}
           />
         )}
+      </div>
       </div>
     </div>
   );
