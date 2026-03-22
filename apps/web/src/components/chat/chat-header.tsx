@@ -111,6 +111,7 @@ export function ChatHeader({
   // Community settings sheet
   const [communitySettingsOpen, setCommunitySettingsOpen] = useState(false);
   const [communitySettingsTab, setCommunitySettingsTab] = useState<"info" | undefined>(undefined);
+  const [resolvedCommunityId, setResolvedCommunityId] = useState<string | null>(null);
   // Header pin settings
   const [settingsOpen, setSettingsOpen] = useState(false);
   const pinnedIds = useHeaderPinStore((s) => s.pinnedIds);
@@ -340,6 +341,7 @@ export function ChatHeader({
                   try {
                     const data = await api<{ id: string }>(`/api/communities/by-conversation/${conversationId}`);
                     if (data.id) {
+                      setResolvedCommunityId(data.id);
                       setCommunitySettingsTab(undefined);
                       setCommunitySettingsOpen(true);
                       return;
@@ -507,7 +509,7 @@ export function ChatHeader({
       <CommunitySettingsSheet
         open={communitySettingsOpen}
         onClose={() => setCommunitySettingsOpen(false)}
-        communityId={officialCommunityId}
+        communityId={officialCommunityId ?? resolvedCommunityId}
         conversationId={conversationId}
         initialTab={communitySettingsTab}
       />
