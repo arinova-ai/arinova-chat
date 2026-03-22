@@ -580,7 +580,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
       if (agents.length > 0 && !askAiAgentId) setAskAiAgentId(agents[0].agentId);
     }
     if (selectedNote) {
-      api<{ messages: { id: string; role: string; content: string; createdAt: string }[] }>(`/api/notes/${selectedNote.id}/thread`)
+      api<{ messages: { id: string; role: string; content: string; createdAt: string; agentName?: string | null; agentAvatarUrl?: string | null }[] }>(`/api/notes/${selectedNote.id}/thread`)
         .then((d) => setThreadMessages(d.messages))
         .catch(() => {});
     }
@@ -608,7 +608,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
         const poll = setInterval(async () => {
           attempts++;
           try {
-            const d = await api<{ messages: { id: string; role: string; content: string; createdAt: string }[] }>(`/api/notes/${noteId}/thread`);
+            const d = await api<{ messages: { id: string; role: string; content: string; createdAt: string; agentName?: string | null; agentAvatarUrl?: string | null }[] }>(`/api/notes/${noteId}/thread`);
             if (d.messages.length > currentCount) {
               setThreadMessages(d.messages);
               clearInterval(poll);
