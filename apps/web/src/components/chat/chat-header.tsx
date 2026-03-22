@@ -509,7 +509,7 @@ export function ChatHeader({
       <CommunitySettingsSheet
         open={communitySettingsOpen}
         onClose={() => setCommunitySettingsOpen(false)}
-        communityId={officialCommunityId ?? resolvedCommunityId}
+        communityId={(officialCommunityId ?? resolvedCommunityId) as string}
         conversationId={conversationId}
         initialTab={communitySettingsTab}
       />
