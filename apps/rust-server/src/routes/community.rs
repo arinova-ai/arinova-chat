@@ -1,9 +1,9 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
-        Json,
+        IntoResponse, Json, Response,
     },
     routing::{get, post},
     Router,
@@ -103,6 +103,8 @@ pub fn router() -> Router<AppState> {
             "/api/communities/{id}/members/me/avatar",
             axum::routing::patch(update_member_avatar),
         )
+        // Cover image upload
+        .route("/api/communities/{id}/cover", post(upload_cover_image))
         // Lookup by conversation
         .route(
             "/api/communities/by-conversation/{conversationId}",
@@ -3861,4 +3863,82 @@ async fn get_community_by_conversation(
         Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Community not found"}))),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
     }
+}
+
+// ===== Cover Image Upload =====
+
+/// POST /api/communities/:id/cover — upload cover image (admin/creator only)
+async fn upload_cover_image(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    // Check admin/creator permission
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only admin/creator can upload cover"}))).into_response(),
+    }
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() != Some("file") { continue; }
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response(),
+        };
+        if data.len() > 5 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Image must be under 5MB"}))).into_response();
+        }
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.starts_with(&[0x47, 0x49, 0x46]) {
+            ("gif", "image/gif")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Only PNG, JPEG, GIF, and WebP are allowed"}))).into_response();
+        };
+
+        let stored = format!("community_cover_{}_{}.{}", community_id, chrono::Utc::now().timestamp_millis(), ext);
+        let r2_key = format!("community/{}", stored);
+
+        let url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(s3, &state.config.r2_bucket, &r2_key, data.to_vec(), content_type, &state.config.r2_public_url).await {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("community");
+                    let _ = tokio::fs::create_dir_all(&dir).await;
+                    let _ = tokio::fs::write(dir.join(&stored), &data).await;
+                    format!("/uploads/community/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("community");
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            let _ = tokio::fs::write(dir.join(&stored), &data).await;
+            format!("/uploads/community/{}", stored)
+        };
+
+        // Update community cover_image_url
+        let _ = sqlx::query("UPDATE communities SET cover_image_url = $1 WHERE id = $2")
+            .bind(&url)
+            .bind(community_id)
+            .execute(&state.db)
+            .await;
+
+        return Json(json!({"url": url})).into_response();
+    }
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file field"}))).into_response()
 }
