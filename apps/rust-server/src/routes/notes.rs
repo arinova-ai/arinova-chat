@@ -1935,9 +1935,52 @@ async fn post_note_thread(
         let end = { let mut e = content.len().min(2000); while e > 0 && !content.is_char_boundary(e) { e -= 1; } e };
         let note_context = format!("[Note: {}]\n{}\n\n[Question]\n{}", title, &content[..end], question);
         let metadata = json!({ "noteThreadId": note_id.to_string() });
+
+        // Get next seq
+        let msg_seq = sqlx::query_scalar::<_, i32>(
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE conversation_id = $1",
+        ).bind(conv_id).fetch_one(&state.db).await.unwrap_or(1);
+
+        let msg_id = Uuid::new_v4();
         let _ = sqlx::query(
-            "INSERT INTO messages (conversation_id, role, content, status, sender_user_id, metadata, seq) VALUES ($1, 'user', $2, 'completed', $3, $4, COALESCE((SELECT MAX(seq) FROM messages WHERE conversation_id = $1), 0) + 1)",
-        ).bind(conv_id).bind(&note_context).bind(&user.id).bind(&metadata).execute(&state.db).await;
+            "INSERT INTO messages (id, conversation_id, role, content, status, sender_user_id, metadata, seq) VALUES ($1, $2, 'user', $3, 'completed', $4, $5, $6)",
+        ).bind(msg_id).bind(conv_id).bind(&note_context).bind(&user.id).bind(&metadata).bind(msg_seq).execute(&state.db).await;
+
+        // Update conversation timestamp
+        let _ = sqlx::query("UPDATE conversations SET updated_at = NOW() WHERE id = $1")
+            .bind(conv_id).execute(&state.db).await;
+
+        // Broadcast new_message to trigger agent response
+        let conv_id_str = conv_id.to_string();
+        let member_ids = crate::ws::handler::get_conv_member_ids(&state.ws, &state.db, &conv_id_str, &user.id).await;
+        state.ws.broadcast_to_members(&member_ids, &json!({
+            "type": "new_message",
+            "conversationId": conv_id_str,
+            "message": {
+                "id": msg_id.to_string(),
+                "conversationId": conv_id_str,
+                "seq": msg_seq,
+                "role": "user",
+                "content": note_context,
+                "status": "completed",
+                "senderUserId": &user.id,
+                "createdAt": chrono::Utc::now().to_rfc3339(),
+            }
+        }), &state.redis);
+
+        // Trigger agent response via WS agent dispatch
+        let agent_id = sqlx::query_scalar::<_, Uuid>(
+            "SELECT agent_id FROM conversations WHERE id = $1 AND agent_id IS NOT NULL",
+        ).bind(conv_id).fetch_optional(&state.db).await.ok().flatten();
+
+        if let Some(_aid) = agent_id {
+            crate::ws::handler::trigger_agent_response(
+                &user.id, &conv_id_str, &note_context,
+                true, // skip_user_message — already inserted above
+                None, None, &[], None, Some(metadata.clone()),
+                &state.ws, &state.db, &state.redis, &state.config,
+            ).await;
+        }
 
         return Json(json!({
             "userMessage": { "id": user_msg_id, "role": "user", "content": question, "agentConversationId": conv_id },
