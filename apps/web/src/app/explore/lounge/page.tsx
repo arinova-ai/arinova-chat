@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { Mic, Users, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
-import { useAccountStore } from "@/store/account-store";
-import { GiftButton } from "@/components/accounts/gift-button";
+import { Button } from "@/components/ui/button";
 
 interface ExploreAccount {
   id: string;
@@ -19,7 +19,6 @@ interface ExploreAccount {
 export default function ExplorLoungePage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const subscribe = useAccountStore((s) => s.subscribe);
   const [accounts, setAccounts] = useState<ExploreAccount[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,9 +46,13 @@ export default function ExplorLoungePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
             {accounts.map((acc) => (
-              <div key={acc.id} className="rounded-xl border border-border p-4 hover:border-brand/50 transition-colors">
+              <Link
+                key={acc.id}
+                href={`/lounge/${acc.id}`}
+                className="rounded-xl border border-border p-4 hover:border-brand/50 transition-colors block"
+              >
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-full bg-purple-500/10 flex items-center justify-center overflow-hidden shrink-0">
                     {acc.avatar ? (
                       <img src={acc.avatar} alt={acc.name} className="h-12 w-12 rounded-full object-cover" />
                     ) : (
@@ -64,18 +67,11 @@ export default function ExplorLoungePage() {
                     </div>
                   </div>
                 </div>
-                {acc.bio && <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{acc.bio}</p>}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => subscribe(acc.id)}
-                    className="flex-1 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand/90 transition-colors"
-                  >
-                    {t("explore.subscribe")}
-                  </button>
-                  <GiftButton accountId={acc.id} />
-                </div>
-              </div>
+                {acc.bio && <p className="text-sm text-muted-foreground line-clamp-2">{acc.bio}</p>}
+                <Button variant="secondary" size="sm" className="w-full mt-3">
+                  {t("lounge.viewDetail")}
+                </Button>
+              </Link>
             ))}
           </div>
         )}

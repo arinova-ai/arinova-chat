@@ -17,6 +17,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/lounge", post(create_lounge))
         .route("/api/lounge/{id}", get(get_lounge))
         .route("/api/lounge/{id}/start-chat", post(start_chat))
+        .route("/api/lounge/{id}/join", post(join_lounge))
         .route("/api/lounge/{id}/dashboard", get(dashboard))
 }
 
@@ -420,4 +421,92 @@ async fn dashboard(
             "todayUsageMinutes": today_usage_seconds / 60,
         })),
     )
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/lounge/:id/join — Join lounge + auto welcome message
+// ---------------------------------------------------------------------------
+
+async fn join_lounge(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    // Get the community's conversation_id
+    let conv = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT conversation_id, name FROM communities WHERE id = $1 AND type = 'lounge'",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (conversation_id, lounge_name) = match conv {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Lounge not found"}))),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+    };
+
+    // Check if already a member
+    let is_member = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_member {
+        // Join the community
+        let _ = sqlx::query(
+            "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING",
+        )
+        .bind(id)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await;
+
+        // Add to conversation_user_members
+        let _ = sqlx::query(
+            "INSERT INTO conversation_user_members (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(conversation_id)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await;
+
+        // Send welcome message from creator
+        let creator_id = sqlx::query_scalar::<_, String>(
+            "SELECT user_id FROM community_members WHERE community_id = $1 AND role = 'creator' LIMIT 1",
+        )
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        if let Some(cid) = creator_id {
+            let welcome = format!("Welcome to {}! 🎉", lounge_name);
+            let seq = sqlx::query_scalar::<_, i32>(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE conversation_id = $1",
+            )
+            .bind(conversation_id)
+            .fetch_one(&state.db)
+            .await
+            .unwrap_or(1);
+
+            let _ = sqlx::query(
+                r#"INSERT INTO messages (conversation_id, role, content, status, sender_user_id, seq)
+                   VALUES ($1, 'user', $2, 'completed', $3, $4)"#,
+            )
+            .bind(conversation_id)
+            .bind(&welcome)
+            .bind(&cid)
+            .bind(seq)
+            .execute(&state.db)
+            .await;
+        }
+    }
+
+    (StatusCode::OK, Json(json!({"conversationId": conversation_id})))
 }

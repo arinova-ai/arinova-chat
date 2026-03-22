@@ -1953,5 +1953,9 @@
   "creator.tab.experts": "Experts",
   "community.detail.editCover": "Edit Cover",
   "community.detail.noDescription": "No description",
-  "community.detail.goToChat": "Go to Chat"
+  "community.detail.goToChat": "Go to Chat",
+  "lounge.viewDetail": "View Details",
+  "lounge.joinChat": "Join Chat",
+  "common.notFound": "Not found",
+  "common.back": "Back"
 }
