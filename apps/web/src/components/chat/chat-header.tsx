@@ -237,7 +237,7 @@ export function ChatHeader({
     }
   }, [conversationId, isMuted, toggleMuteConversation]);
 
-  const displayName = (type === "group" || type === "community") && title ? title : agentName;
+  const displayName = (type === "group" || type === "community" || type === "lounge" || type === "official") && title ? title : agentName;
 
   return (
     <div className="shrink-0 border-b border-border">
