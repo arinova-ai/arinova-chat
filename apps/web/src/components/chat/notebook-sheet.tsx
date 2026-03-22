@@ -1079,6 +1079,9 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                         </Avatar>
                       )}
                       <div className="max-w-[80%]">
+                        {!isUser && selectedAgent && (
+                          <p className="text-[10px] font-medium text-muted-foreground mb-0.5 px-1">{selectedAgent.agentName}</p>
+                        )}
                         <div className={cn(
                           "rounded-lg px-3 py-2 text-sm",
                           isUser ? "bg-brand/15" : "bg-muted/60"
