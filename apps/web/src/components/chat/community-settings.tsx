@@ -345,11 +345,14 @@ export function CommunitySettingsSheet({
         credentials: "include",
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`Upload failed: ${res.status} ${errText}`);
+      }
       const data = await res.json();
       setAvatarUrl(data.url);
-    } catch {
-      // silently fail
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setCommunityAvatarUploading(false);
     }
