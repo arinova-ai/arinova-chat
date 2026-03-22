@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
     routing::{get, post},
@@ -19,6 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/spaces/{id}/sessions", get(list_sessions).post(create_session))
         .route("/api/spaces/{id}/sessions/{session_id}/join", post(join_session))
         .route("/api/spaces/{id}/sessions/{session_id}/leave", post(leave_session))
+        .route("/api/spaces/{id}/cover", post(upload_space_cover))
 }
 
 // ── Types ───────────────────────────────────────────────────
@@ -63,6 +64,7 @@ struct SpaceRow {
     is_public: bool,
     created_at: chrono::NaiveDateTime,
     updated_at: chrono::NaiveDateTime,
+    cover_image_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -105,7 +107,7 @@ async fn list_spaces(
     );
 
     let rows = sqlx::query_as::<_, SpaceRow>(
-        r#"SELECT id, owner_id, name, description, category::text, tags, definition, is_public, created_at, updated_at
+        r#"SELECT id, owner_id, name, description, category::text, tags, definition, is_public, created_at, updated_at, cover_image_url
            FROM playgrounds
            WHERE is_public = true
              AND ($1::text IS NULL OR name ILIKE $1)
@@ -153,7 +155,7 @@ async fn get_space(
     Path(id): Path<Uuid>,
 ) -> Response {
     let space = sqlx::query_as::<_, SpaceRow>(
-        r#"SELECT id, owner_id, name, description, category::text, tags, definition, is_public, created_at, updated_at
+        r#"SELECT id, owner_id, name, description, category::text, tags, definition, is_public, created_at, updated_at, cover_image_url
            FROM playgrounds WHERE id = $1"#,
     )
     .bind(id)
@@ -298,6 +300,7 @@ struct UpdateSpaceBody {
     tags: Option<Vec<String>>,
     definition: Option<serde_json::Value>,
     is_public: Option<bool>,
+    cover_image_url: Option<String>,
 }
 
 async fn update_space(
@@ -342,6 +345,11 @@ async fn update_space(
         idx += 1;
         sets.push(format!("category = ${idx}::playground_category"));
         binds.push(cat.clone());
+    }
+    if let Some(ref cover) = body.cover_image_url {
+        idx += 1;
+        sets.push(format!("cover_image_url = ${idx}"));
+        binds.push(cover.clone());
     }
 
     sets.push("updated_at = NOW()".to_string());
@@ -565,4 +573,67 @@ async fn leave_session(
             (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "db error"}))).into_response()
         }
     }
+}
+
+/// POST /api/spaces/:id/cover — upload cover image (owner only)
+async fn upload_space_cover(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    mut multipart: Multipart,
+) -> Response {
+    let owner = sqlx::query_scalar::<_, String>("SELECT owner_id FROM playgrounds WHERE id = $1")
+        .bind(id).fetch_optional(&state.db).await.ok().flatten();
+    match owner.as_deref() {
+        Some(oid) if oid == user.id => {}
+        Some(_) => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only owner can upload cover"}))).into_response(),
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Space not found"}))).into_response(),
+    }
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        if field.name() != Some("file") { continue; }
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Failed to read file"}))).into_response(),
+        };
+        if data.len() > 5 * 1024 * 1024 {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Image must be under 5MB"}))).into_response();
+        }
+        let (ext, content_type) = if data.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            ("png", "image/png")
+        } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("jpg", "image/jpeg")
+        } else if data.starts_with(&[0x47, 0x49, 0x46]) {
+            ("gif", "image/gif")
+        } else if data.len() >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+            ("webp", "image/webp")
+        } else {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "Only PNG, JPEG, GIF, and WebP are allowed"}))).into_response();
+        };
+
+        let stored = format!("space_cover_{}_{}.{}", id, chrono::Utc::now().timestamp_millis(), ext);
+        let r2_key = format!("spaces/{}", stored);
+        let url = if let Some(s3) = &state.s3 {
+            match crate::services::r2::upload_to_r2(s3, &state.config.r2_bucket, &r2_key, data.to_vec(), content_type, &state.config.r2_public_url).await {
+                Ok(url) => url,
+                Err(_) => {
+                    let dir = std::path::Path::new(&state.config.upload_dir).join("spaces");
+                    let _ = tokio::fs::create_dir_all(&dir).await;
+                    let _ = tokio::fs::write(dir.join(&stored), &data).await;
+                    format!("/uploads/spaces/{}", stored)
+                }
+            }
+        } else {
+            let dir = std::path::Path::new(&state.config.upload_dir).join("spaces");
+            let _ = tokio::fs::create_dir_all(&dir).await;
+            let _ = tokio::fs::write(dir.join(&stored), &data).await;
+            format!("/uploads/spaces/{}", stored)
+        };
+
+        let _ = sqlx::query("UPDATE playgrounds SET cover_image_url = $1, updated_at = NOW() WHERE id = $2")
+            .bind(&url).bind(id).execute(&state.db).await;
+
+        return Json(json!({"url": url})).into_response();
+    }
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "No file field"}))).into_response()
 }

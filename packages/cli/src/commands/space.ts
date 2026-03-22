@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { get, post, put, del } from "../client.js";
+import { get, post, put, del, upload } from "../client.js";
 import { printResult, printError, printSuccess, table } from "../output.js";
 
 export function registerSpace(program: Command): void {
@@ -109,6 +109,20 @@ export function registerSpace(program: Command): void {
     .action(async (id: string) => {
       try {
         const data = await put(`/api/spaces/${id}`, { isPublic: false });
+        printResult(data);
+      } catch (err) {
+        printError(err);
+      }
+    });
+
+  space
+    .command("cover <id>")
+    .description("Upload cover image for a space")
+    .requiredOption("--file <path>", "Path to image file")
+    .action(async (id: string, opts: { file: string }) => {
+      try {
+        const data = await upload(`/api/spaces/${id}/cover`, opts.file);
+        printSuccess("Cover image uploaded");
         printResult(data);
       } catch (err) {
         printError(err);

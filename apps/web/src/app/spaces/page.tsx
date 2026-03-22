@@ -34,8 +34,10 @@ function SpaceCard({ space, t }: { space: Space; t: (k: string) => string }) {
 
   return (
     <Link href={`/spaces/${space.id}`} className="flex flex-col rounded-xl border border-border bg-card transition-colors hover:border-brand-border">
-      <div className="flex aspect-[4/3] items-center justify-center rounded-t-xl bg-secondary/50 text-4xl">
-        🎮
+      <div className="flex aspect-[4/3] items-center justify-center rounded-t-xl bg-secondary/50 text-4xl overflow-hidden">
+        {space.coverImageUrl ? (
+          <img src={space.coverImageUrl} alt={space.name} className="w-full h-full object-cover" />
+        ) : "🎮"}
       </div>
 
       <div className="flex flex-1 flex-col p-3">

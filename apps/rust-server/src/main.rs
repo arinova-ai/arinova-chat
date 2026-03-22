@@ -631,6 +631,7 @@ async fn main() {
     )"#).execute(&db).await.ok();
     sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS member_avatar_url TEXT").execute(&db).await.ok();
     sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE playgrounds ADD COLUMN IF NOT EXISTS cover_image_url TEXT").execute(&db).await.ok();
 
     // Update arinova-help skill prompt_content with image upload docs
     sqlx::query(r#"UPDATE skills SET prompt_content = prompt_content || E'\n\n## 上傳圖片到對話\n1. 先使用 arinova_upload_file 工具上傳圖片，取得圖片 URL\n2. 再使用 arinova_send_message 發送訊息，在 content 中帶上圖片 URL\n\n範例流程：\n- 呼叫 arinova_upload_file(file) → 回傳 { url: \"https://...\" }\n- 呼叫 arinova_send_message({ content: \"![image](https://...)\" })'

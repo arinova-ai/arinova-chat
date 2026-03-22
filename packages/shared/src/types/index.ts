@@ -181,6 +181,7 @@ export interface Space {
   isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
+  coverImageUrl?: string | null;
 }
 
 export interface SpaceSession {

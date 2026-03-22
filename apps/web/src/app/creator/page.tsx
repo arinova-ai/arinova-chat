@@ -859,6 +859,7 @@ interface CreatorSpace {
   sessionCount: number;
   totalRevenue: number;
   status: string;
+  coverImageUrl?: string | null;
 }
 
 const SPACE_CATEGORIES = ["other", "strategy", "social", "puzzle", "board_game", "card_game", "rpg", "trivia"] as const;
@@ -1040,8 +1041,12 @@ function SpacesTab({ t }: { t: (k: string) => string }) {
               key={s.id}
               className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
-                <Gamepad2 className="h-5 w-5 text-brand-text" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15 overflow-hidden">
+                {s.coverImageUrl ? (
+                  <img src={s.coverImageUrl} alt={s.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Gamepad2 className="h-5 w-5 text-brand-text" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
