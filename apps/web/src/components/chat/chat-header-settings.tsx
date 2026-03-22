@@ -214,10 +214,10 @@ export function ChatHeaderSettings({ open, onOpenChange, conversationId, mode = 
             {/* History limit */}
             <div>
               <label className="text-sm font-medium text-foreground">
-                {t("chat.settings.historyLimit") || "Message History"}
+                {t("chat.settings.historyLimit")}
               </label>
               <p className="mt-1 text-xs text-muted-foreground">
-                {t("chat.settings.historyLimitDesc") || "Number of recent messages sent as context to the agent (0-50)"}
+                {t("chat.settings.historyLimitDesc")}
               </p>
               <input
                 type="number"
