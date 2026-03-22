@@ -186,10 +186,39 @@ async fn get_lounge(
                 "creatorImage": r.creator_image,
             })),
         ),
-        Ok(None) => (
-            StatusCode::NOT_FOUND,
-            Json(json!({ "error": "Lounge not found" })),
-        ),
+        Ok(None) => {
+            // Fallback: try accounts table (lounge might be account-based, not community-based)
+            let acc = sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, String, String, Option<String>)>(
+                r#"SELECT a.id, a.name, a.avatar, a.bio, a.owner_id,
+                          u.name AS owner_name, u.image AS owner_image
+                   FROM accounts a
+                   JOIN "user" u ON u.id = a.owner_id
+                   WHERE a.id = $1 AND a.type = 'lounge'"#,
+            )
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await;
+
+            match acc {
+                Ok(Some((aid, name, avatar, bio, owner_id, owner_name, owner_image))) => {
+                    let sub_count = sqlx::query_scalar::<_, i64>(
+                        "SELECT COUNT(*) FROM account_subscribers WHERE account_id = $1",
+                    ).bind(aid).fetch_one(&state.db).await.unwrap_or(0);
+
+                    (StatusCode::OK, Json(json!({
+                        "id": aid,
+                        "name": name,
+                        "description": bio,
+                        "avatarUrl": avatar,
+                        "subscriberCount": sub_count,
+                        "creatorId": owner_id,
+                        "creatorName": owner_name,
+                        "creatorImage": owner_image,
+                    })))
+                }
+                _ => (StatusCode::NOT_FOUND, Json(json!({ "error": "Lounge not found" })))
+            }
+        }
         Err(e) => {
             tracing::error!("get_lounge: {}", e);
             (

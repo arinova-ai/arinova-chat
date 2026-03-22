@@ -19,7 +19,6 @@ import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "@/lib/i18n";
 import { useAccountStore } from "@/store/account-store";
 import { api } from "@/lib/api";
-import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 type Tab = "general" | "pricing" | "voice" | "danger";
 type PricingMode = "free" | "subscription" | "perMessage";
@@ -363,15 +362,37 @@ export default function LoungeSettingsPage() {
               {/* Avatar */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t("lounge.settings.avatar")}</label>
-                {avatarUrl && (
-                  <div className="flex items-center gap-3 mb-2">
-                    <img src={avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
-                  </div>
-                )}
-                <DefaultAvatarPicker
-                  onSelect={(url) => setAvatarUrl(url)}
-                  selected={avatarUrl}
-                />
+                <div className="flex items-center gap-3">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-14 w-14 rounded-full bg-purple-500/10 flex items-center justify-center">
+                      <Mic className="h-6 w-6 text-purple-500" />
+                    </div>
+                  )}
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        try {
+                          const res = await api<{ url: string }>("/api/auth/upload-avatar", { method: "POST", body: formData });
+                          setAvatarUrl(res.url);
+                        } catch { /* toast */ }
+                        e.target.value = "";
+                      }}
+                    />
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent transition-colors">
+                      <Upload className="h-3.5 w-3.5" />
+                      {t("lounge.settings.uploadAvatar")}
+                    </span>
+                  </label>
+                </div>
               </div>
 
               {/* Category */}
