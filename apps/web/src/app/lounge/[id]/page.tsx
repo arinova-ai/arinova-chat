@@ -6,7 +6,9 @@ import { ArrowLeft, Mic, Users, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AuthGuard } from "@/components/auth-guard";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 interface LoungeDetail {
   id: string;
@@ -27,6 +29,10 @@ function LoungeDetailInner() {
   const [lounge, setLounge] = useState<LoungeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileNickname, setProfileNickname] = useState("");
+  const [profileAvatar, setProfileAvatar] = useState("");
+  const [joinedConvId, setJoinedConvId] = useState<string | null>(null);
 
   useEffect(() => {
     api<LoungeDetail>(`/api/lounge/${id}`)
@@ -39,15 +45,34 @@ function LoungeDetailInner() {
     setJoining(true);
     try {
       const res = await api<{ conversationId: string }>(`/api/lounge/${id}/join`, { method: "POST" });
-      router.push(`/?c=${res.conversationId}`);
+      setJoinedConvId(res.conversationId);
+      setShowProfile(true);
     } catch {
-      // Try start-chat as fallback (existing endpoint)
       try {
         const res = await api<{ conversationId: string }>(`/api/lounge/${id}/start-chat`, { method: "POST" });
-        router.push(`/?c=${res.conversationId}`);
+        setJoinedConvId(res.conversationId);
+        setShowProfile(true);
       } catch { /* toast handled by api */ }
     }
     setJoining(false);
+  };
+
+  const handleProfileDone = async () => {
+    if (!joinedConvId) return;
+    // Get community ID for identity update
+    try {
+      const comm = await api<{ id: string }>(`/api/communities/by-conversation/${joinedConvId}`);
+      if (comm.id && (profileNickname.trim() || profileAvatar)) {
+        await api(`/api/communities/${comm.id}/identity`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            displayName: profileNickname.trim() || "Anonymous",
+            avatarUrl: profileAvatar || null,
+          }),
+        });
+      }
+    } catch { /* ignore */ }
+    router.push(`/?c=${joinedConvId}`);
   };
 
   if (loading) {
@@ -65,6 +90,40 @@ function LoungeDetailInner() {
         <Button variant="outline" size="sm" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-1" /> {t("common.back")}
         </Button>
+      </div>
+    );
+  }
+
+  // Profile setup dialog after join
+  if (showProfile) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-background px-6 gap-6">
+        <div className="text-center">
+          <h2 className="text-lg font-semibold">{t("community.setupProfile")}</h2>
+          <p className="text-sm text-muted-foreground mt-1">{t("community.setupProfileDesc")}</p>
+        </div>
+        <div className="w-full max-w-sm space-y-4">
+          <div>
+            <label className="text-sm font-medium">{t("community.nickname")}</label>
+            <Input
+              value={profileNickname}
+              onChange={(e) => setProfileNickname(e.target.value)}
+              placeholder={t("community.nicknamePlaceholder")}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">{t("community.avatar")}</label>
+            <DefaultAvatarPicker
+              onSelect={setProfileAvatar}
+              selected={profileAvatar}
+              className="mt-1"
+            />
+          </div>
+          <Button className="w-full" onClick={handleProfileDone}>
+            {t("community.startChatting")}
+          </Button>
+        </div>
       </div>
     );
   }

@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "@/lib/i18n";
 import { useAccountStore } from "@/store/account-store";
 import { api } from "@/lib/api";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 type Tab = "general" | "pricing" | "voice" | "danger";
 type PricingMode = "free" | "subscription" | "perMessage";
@@ -359,15 +360,17 @@ export default function LoungeSettingsPage() {
                 />
               </div>
 
-              {/* Avatar URL */}
+              {/* Avatar */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Avatar URL</label>
-                <input
-                  type="text"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:border-brand"
+                <label className="text-sm font-medium">{t("lounge.settings.avatar")}</label>
+                {avatarUrl && (
+                  <div className="flex items-center gap-3 mb-2">
+                    <img src={avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover" />
+                  </div>
+                )}
+                <DefaultAvatarPicker
+                  onSelect={(url) => setAvatarUrl(url)}
+                  selected={avatarUrl}
                 />
               </div>
 

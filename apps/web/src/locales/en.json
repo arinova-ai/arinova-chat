@@ -1956,6 +1956,13 @@
   "community.detail.goToChat": "Go to Chat",
   "lounge.viewDetail": "View Details",
   "lounge.joinChat": "Join Chat",
+  "lounge.settings.avatar": "Avatar",
+  "community.setupProfile": "Set Up Your Profile",
+  "community.setupProfileDesc": "Choose a nickname and avatar for this community",
+  "community.nickname": "Nickname",
+  "community.nicknamePlaceholder": "Enter a display name...",
+  "community.avatar": "Avatar",
+  "community.startChatting": "Start Chatting",
   "common.notFound": "Not found",
   "common.back": "Back"
 }
