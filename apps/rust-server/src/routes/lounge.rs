@@ -464,83 +464,90 @@ async fn join_lounge(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
-    // Get the community's conversation_id
+    // Try communities first
     let conv = sqlx::query_as::<_, (Uuid, String)>(
         "SELECT conversation_id, name FROM communities WHERE id = $1 AND type = 'lounge'",
     )
     .bind(id)
     .fetch_optional(&state.db)
-    .await;
-
-    let (conversation_id, lounge_name) = match conv {
-        Ok(Some(c)) => c,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"error": "Lounge not found"}))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
-    };
-
-    // Check if already a member
-    let is_member = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
-    )
-    .bind(id)
-    .bind(&user.id)
-    .fetch_one(&state.db)
     .await
-    .unwrap_or(false);
+    .ok()
+    .flatten();
 
-    if !is_member {
-        // Join the community
-        let _ = sqlx::query(
-            "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING",
-        )
-        .bind(id)
-        .bind(&user.id)
-        .execute(&state.db)
-        .await;
+    if let Some((conversation_id_inner, lounge_name_inner)) = conv {
+        // Community-based lounge — continue with community join flow below
+        let conversation_id = conversation_id_inner;
+        let lounge_name = lounge_name_inner;
 
-        // Add to conversation_user_members
-        let _ = sqlx::query(
-            "INSERT INTO conversation_user_members (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-        )
-        .bind(conversation_id)
-        .bind(&user.id)
-        .execute(&state.db)
-        .await;
+        // Check if already a member
+        let is_member = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
+        ).bind(id).bind(&user.id).fetch_one(&state.db).await.unwrap_or(false);
 
-        // Send welcome message from creator
-        let creator_id = sqlx::query_scalar::<_, String>(
-            "SELECT user_id FROM community_members WHERE community_id = $1 AND role = 'creator' LIMIT 1",
-        )
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await
-        .ok()
-        .flatten();
-
-        if let Some(cid) = creator_id {
-            let welcome = format!("Welcome to {}! 🎉", lounge_name);
-            let seq = sqlx::query_scalar::<_, i32>(
-                "SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE conversation_id = $1",
-            )
-            .bind(conversation_id)
-            .fetch_one(&state.db)
-            .await
-            .unwrap_or(1);
-
+        if !is_member {
             let _ = sqlx::query(
-                r#"INSERT INTO messages (conversation_id, role, content, status, sender_user_id, seq)
-                   VALUES ($1, 'user', $2, 'completed', $3, $4)"#,
-            )
-            .bind(conversation_id)
-            .bind(&welcome)
-            .bind(&cid)
-            .bind(seq)
-            .execute(&state.db)
-            .await;
+                "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING",
+            ).bind(id).bind(&user.id).execute(&state.db).await;
+            let _ = sqlx::query(
+                "INSERT INTO conversation_user_members (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            ).bind(conversation_id).bind(&user.id).execute(&state.db).await;
+
+            // Welcome message
+            let creator_id = sqlx::query_scalar::<_, String>(
+                "SELECT user_id FROM community_members WHERE community_id = $1 AND role = 'creator' LIMIT 1",
+            ).bind(id).fetch_optional(&state.db).await.ok().flatten();
+            if let Some(cid) = creator_id {
+                let welcome = format!("Welcome to {}! 🎉", lounge_name);
+                let seq = sqlx::query_scalar::<_, i32>(
+                    "SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE conversation_id = $1",
+                ).bind(conversation_id).fetch_one(&state.db).await.unwrap_or(1);
+                let _ = sqlx::query(
+                    "INSERT INTO messages (conversation_id, role, content, status, sender_user_id, seq) VALUES ($1, 'user', $2, 'completed', $3, $4)",
+                ).bind(conversation_id).bind(&welcome).bind(&cid).bind(seq).execute(&state.db).await;
+            }
         }
+        return (StatusCode::OK, Json(json!({"conversationId": conversation_id})));
     }
 
-    (StatusCode::OK, Json(json!({"conversationId": conversation_id})))
+    // Fallback: accounts-based lounge
+    let acc = sqlx::query_as::<_, (String, Option<Uuid>)>(
+        "SELECT name, agent_id FROM accounts WHERE id = $1 AND type = 'lounge'",
+    ).bind(id).fetch_optional(&state.db).await;
+
+    match acc {
+        Ok(Some((lounge_name, agent_id))) => {
+            // Check existing conversation
+            let existing = sqlx::query_scalar::<_, Uuid>(
+                "SELECT conversation_id FROM official_conversations WHERE community_id = $1 AND user_id = $2",
+            ).bind(id).bind(&user.id).fetch_optional(&state.db).await.ok().flatten();
+
+            if let Some(conv_id) = existing {
+                return (StatusCode::OK, Json(json!({"conversationId": conv_id})));
+            }
+
+            // Create new conversation (same as start-chat)
+            let conv_id = Uuid::new_v4();
+            let agent_uuid = agent_id.unwrap_or_else(Uuid::new_v4);
+            let _ = sqlx::query(
+                r#"INSERT INTO conversations (id, user_id, agent_id, title, type)
+                   VALUES ($1, $2, $3, $4, 'lounge')"#,
+            ).bind(conv_id).bind(&user.id).bind(agent_uuid).bind(&lounge_name).execute(&state.db).await;
+
+            // Track via official_conversations
+            let _ = sqlx::query(
+                "INSERT INTO official_conversations (community_id, user_id, conversation_id, status) VALUES ($1, $2, $3, 'ai_active')",
+            ).bind(id).bind(&user.id).bind(conv_id).execute(&state.db).await;
+
+            // Add agent as conversation member
+            let _ = sqlx::query(
+                "INSERT INTO conversation_members (conversation_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            ).bind(conv_id).bind(agent_uuid).execute(&state.db).await;
+
+            return (StatusCode::OK, Json(json!({"conversationId": conv_id})));
+        }
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Lounge not found"}))),
+    }
+
 }
 
 // ---------------------------------------------------------------------------
