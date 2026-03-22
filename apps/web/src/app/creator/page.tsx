@@ -615,7 +615,7 @@ function ThemesTab({ t }: { t: (k: string) => string }) {
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-sm rounded-2xl border border-border bg-card p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Delete Theme</h3>
+            <h3 className="text-lg font-semibold">{t("creator.deleteTheme")}</h3>
             <p className="text-sm text-muted-foreground">
               Are you sure you want to delete this theme? This action cannot be undone.
             </p>
@@ -1919,7 +1919,7 @@ function ExpertsTab({ t }: { t: (key: string, vars?: Record<string, string | num
                     variant="outline"
                     className="text-xs h-7"
                     disabled={true}
-                    title="Create expert first, then test webhook"
+                    title={t("expertHub.webhook.createFirstHint")}
                     onClick={() => {}}
                   >
                     {webhookTesting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}

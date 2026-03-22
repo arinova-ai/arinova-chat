@@ -241,7 +241,7 @@ function SwipeableNoteItem({
           type="button"
           onClick={(e) => { e.stopPropagation(); onAttach(note); }}
           className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:text-brand transition-colors"
-          title="Attach to chat"
+          title={t("chat.notebook.attachToChat")}
         >
           <Paperclip className="h-3.5 w-3.5" />
         </button>
@@ -1015,7 +1015,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                 <div className="mt-4 pt-3 border-t border-border">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Sparkles className="h-3 w-3 text-amber-500" />
-                    <span className="text-xs font-medium text-muted-foreground">Suggested tags</span>
+                    <span className="text-xs font-medium text-muted-foreground">{t("chat.notebook.suggestedTags")}</span>
                     <button type="button" onClick={handleDismissSuggestedTags} className="ml-auto text-muted-foreground hover:text-foreground">
                       <X className="h-3 w-3" />
                     </button>
@@ -1068,7 +1068,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
               </Button>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold truncate">{selectedNote.title}</h3>
-                <p className="text-[10px] text-muted-foreground">Ask AI</p>
+                <p className="text-[10px] text-muted-foreground">{t("chat.notebook.askAi")}</p>
               </div>
               {askAiAgents.length > 0 && (
                 <select
