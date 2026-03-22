@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NewChatDialog } from "./new-chat-dialog";
 
@@ -69,8 +70,45 @@ vi.mock("./bot-manage-dialog", () => ({
   BotManageDialog: () => null,
 }));
 
+// Mock i18n
+vi.mock("@/lib/i18n", () => ({
+  useTranslation: () => ({ t: (k: string) => k }),
+}));
+
+// Mock utils
+vi.mock("@/lib/utils", () => ({
+  cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
+}));
+
+// Mock api
+vi.mock("@/lib/api", () => ({
+  api: vi.fn().mockResolvedValue({}),
+}));
+
+// Mock UI components
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: ({ children, open }: any) => open ? <div data-testid="dialog">{children}</div> : null,
+  DialogContent: ({ children }: any) => <div>{children}</div>,
+  DialogHeader: ({ children }: any) => <div>{children}</div>,
+  DialogTitle: ({ children }: any) => <h2>{children}</h2>,
+}));
+
+vi.mock("@/components/ui/button", () => ({
+  Button: (props: any) => <button {...props} />,
+}));
+
+vi.mock("@/components/ui/input", () => ({
+  Input: (props: any) => <input {...props} />,
+}));
+
+vi.mock("@/components/ui/verified-badge", () => ({
+  VerifiedBadge: () => null,
+}));
+
 vi.mock("@/lib/config", () => ({
   assetUrl: (url: string) => `http://localhost:21001${url}`,
+  AGENT_DEFAULT_AVATAR: "/default-avatar.png",
+  BACKEND_URL: "http://localhost:21001",
 }));
 
 describe("NewChatDialog", () => {
@@ -82,7 +120,7 @@ describe("NewChatDialog", () => {
 
   it("renders agent list when open", () => {
     render(<NewChatDialog open={true} onOpenChange={mockOnOpenChange} />);
-    expect(screen.getByText("New Conversation")).toBeInTheDocument();
+    expect(screen.getByText("newChat.title")).toBeInTheDocument();
     expect(screen.getByText("CodeBot")).toBeInTheDocument();
     expect(screen.getByText("HelperBot")).toBeInTheDocument();
   });
@@ -105,8 +143,8 @@ describe("NewChatDialog", () => {
 
   it("shows Create Bot and New Group buttons", () => {
     render(<NewChatDialog open={true} onOpenChange={mockOnOpenChange} />);
-    expect(screen.getByText("Create Bot")).toBeInTheDocument();
-    expect(screen.getByText("New Group")).toBeInTheDocument();
+    expect(screen.getByText("newChat.createBot")).toBeInTheDocument();
+    expect(screen.getByText("newChat.newGroup")).toBeInTheDocument();
   });
 
   it("loads agent health on open", () => {

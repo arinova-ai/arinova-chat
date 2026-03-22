@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MessageBubble, parseStickerUrl, isOwnMessage } from "./message-bubble";
 import type { Message } from "@arinova/shared/types";
@@ -23,6 +24,9 @@ vi.mock("@/store/chat-store", () => ({
       queuedMessageIds: {},
       openThread: vi.fn(),
       conversations: [],
+      togglePin: vi.fn(),
+      pinnedMessageIds: {},
+      readReceipts: {},
     }),
 }));
 
@@ -143,14 +147,14 @@ describe("MessageBubble", () => {
     render(
       <MessageBubble message={createMessage({ status: "error" })} />
     );
-    expect(screen.getByText("Error")).toBeInTheDocument();
+    expect(screen.getByText("chat.status.error")).toBeInTheDocument();
   });
 
   it("shows retry button for error messages", () => {
     render(
       <MessageBubble message={createMessage({ status: "error" })} />
     );
-    expect(screen.getByTitle("Retry message")).toBeInTheDocument();
+    expect(screen.getByTitle("chat.actions.retry")).toBeInTheDocument();
   });
 
   it("shows stop button when streaming (agent)", () => {
@@ -159,7 +163,7 @@ describe("MessageBubble", () => {
         message={createMessage({ status: "streaming", content: "text" })}
       />
     );
-    expect(screen.getByTitle("Stop generating")).toBeInTheDocument();
+    expect(screen.getByTitle("chat.actions.stopGenerating")).toBeInTheDocument();
   });
 
   it("calls cancelStream when stop button clicked", () => {
@@ -168,19 +172,19 @@ describe("MessageBubble", () => {
         message={createMessage({ status: "streaming", content: "text" })}
       />
     );
-    fireEvent.click(screen.getByTitle("Stop generating"));
+    fireEvent.click(screen.getByTitle("chat.actions.stopGenerating"));
     expect(mockCancelStream).toHaveBeenCalled();
   });
 
   it("shows copy and delete buttons (hover actions)", () => {
     render(<MessageBubble message={createMessage()} />);
-    expect(screen.getByTitle("Copy message")).toBeInTheDocument();
-    expect(screen.getByTitle("Delete message")).toBeInTheDocument();
+    expect(screen.getByTitle("chat.actions.copy")).toBeInTheDocument();
+    expect(screen.getByTitle("chat.actions.delete")).toBeInTheDocument();
   });
 
   it("calls deleteMessage when delete button clicked", () => {
     render(<MessageBubble message={createMessage()} />);
-    fireEvent.click(screen.getByTitle("Delete message"));
+    fireEvent.click(screen.getByTitle("chat.actions.delete"));
     expect(mockDeleteMessage).toHaveBeenCalledWith("conv-1", "msg-1");
   });
 
@@ -237,8 +241,8 @@ describe("MessageBubble", () => {
         message={createMessage({ status: "streaming", content: "text" })}
       />
     );
-    expect(screen.queryByTitle("Copy message")).not.toBeInTheDocument();
-    expect(screen.queryByTitle("Delete message")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("chat.actions.copy")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("chat.actions.delete")).not.toBeInTheDocument();
   });
 });
 

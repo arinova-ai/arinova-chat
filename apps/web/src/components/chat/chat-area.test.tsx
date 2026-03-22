@@ -1,13 +1,63 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { render, screen } from "@testing-library/react";
+
+// Mock next/navigation
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+// Mock i18n
+vi.mock("@/lib/i18n", () => ({
+  useTranslation: () => ({ t: (k: string) => k }),
+}));
+
+// Mock utils
+vi.mock("@/lib/utils", () => ({
+  cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
+  isGroupLike: () => false,
+}));
+
+// Mock config
+vi.mock("@/lib/config", () => ({
+  assetUrl: (url: string) => url,
+  BACKEND_URL: "http://localhost:21001",
+}));
+
+// Mock api
+vi.mock("@/lib/api", () => ({
+  api: vi.fn().mockResolvedValue({}),
+}));
+
+// Mock chat-diagnostics
+vi.mock("@/lib/chat-diagnostics", () => ({
+  useRenderDiag: vi.fn(),
+}));
+
+// Mock right-panel-store
+const mockRightPanelState = { panel: null, openPanel: vi.fn(), closePanel: vi.fn(), setActiveTab: vi.fn() };
+vi.mock("@/store/right-panel-store", () => ({
+  useRightPanelStore: Object.assign(
+    (sel: Function) => sel(mockRightPanelState),
+    { getState: () => mockRightPanelState }
+  ),
+}));
+
 import { ChatArea } from "./chat-area";
 
 // Build mock store state
 let mockStoreState: Record<string, unknown> = {};
 
 vi.mock("@/store/chat-store", () => ({
-  useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector(mockStoreState),
+  useChatStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector(mockStoreState),
+    {
+      getState: () => mockStoreState,
+    }
+  ),
 }));
 
 vi.mock("@/store/voice-call-store", () => ({
@@ -51,6 +101,58 @@ vi.mock("./bot-manage-dialog", () => ({
   BotManageDialog: () => null,
 }));
 
+vi.mock("./sticker-panel", () => ({
+  StickerPanel: () => null,
+}));
+
+vi.mock("./notebook-list", () => ({
+  NotebookList: () => null,
+}));
+
+vi.mock("./kanban-sidebar", () => ({
+  KanbanSidebar: () => null,
+}));
+
+vi.mock("./wiki-panel", () => ({
+  WikiPanel: () => null,
+}));
+
+vi.mock("./group-members-panel", () => ({
+  GroupMembersPanel: () => null,
+}));
+
+vi.mock("./add-member-sheet", () => ({
+  AddMemberSheet: () => null,
+}));
+
+vi.mock("./thread-panel", () => ({
+  ThreadPanel: () => null,
+}));
+
+vi.mock("./thread-list-sheet", () => ({
+  ThreadListSheet: () => null,
+}));
+
+vi.mock("./media-files-panel", () => ({
+  MediaFilesPanel: () => null,
+}));
+
+vi.mock("./pinned-messages-bar", () => ({
+  PinnedMessagesBar: () => null,
+}));
+
+vi.mock("./error-boundary", () => ({
+  ErrorBoundary: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock("./chat-card-detail-sheet", () => ({
+  ChatCardDetailSheet: () => null,
+}));
+
+vi.mock("./chat-note-detail-sheet", () => ({
+  ChatNoteDetailSheet: () => null,
+}));
+
 vi.mock("@/components/voice/active-call", () => ({
   ActiveCall: () => <div data-testid="active-call" />,
 }));
@@ -63,6 +165,14 @@ function setStoreState(overrides: Partial<typeof mockStoreState> = {}) {
     messagesByConversation: {},
     agents: [],
     agentHealth: {},
+    conversationMembers: {},
+    notebookOpen: false,
+    kanbanSidebarOpen: false,
+    openNotebook: vi.fn(),
+    closeNotebook: vi.fn(),
+    openKanbanSidebar: vi.fn(),
+    closeKanbanSidebar: vi.fn(),
+    setAttachedCard: vi.fn(),
     ...overrides,
   };
 }

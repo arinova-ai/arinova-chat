@@ -3,6 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // We need to test WebSocketManager class. Since wsManager is a singleton exported,
 // we'll test by importing fresh each time.
 
+// Mock document.visibilityState for the ws module
+Object.defineProperty(document, "visibilityState", {
+  value: "visible",
+  writable: true,
+});
+
 // Mock WebSocket
 class MockWebSocket {
   static CONNECTING = 0;
@@ -55,11 +61,12 @@ describe("WebSocketManager", () => {
     vi.resetModules();
   });
 
-  it("connects and reports isConnected", async () => {
+  it("connects and transitions to syncing status", async () => {
     const { wsManager } = await import("./ws");
     wsManager.connect();
     await vi.advanceTimersByTimeAsync(10);
-    expect(wsManager.isConnected()).toBe(true);
+    // After WS opens, status goes to "syncing" (waits for sync_response to become "connected")
+    expect(wsManager.status).toBe("syncing");
     wsManager.disconnect();
   });
 
@@ -67,8 +74,8 @@ describe("WebSocketManager", () => {
     const { wsManager } = await import("./ws");
     wsManager.connect();
     await vi.advanceTimersByTimeAsync(10);
-    wsManager.send({ type: "ping" });
-    // We can't easily access the MockWebSocket instance, but we verify no errors
+    // send should not throw
+    wsManager.send({ type: "ping" } as never);
     wsManager.disconnect();
   });
 
@@ -87,5 +94,6 @@ describe("WebSocketManager", () => {
     await vi.advanceTimersByTimeAsync(10);
     wsManager.disconnect();
     expect(wsManager.isConnected()).toBe(false);
+    expect(wsManager.status).toBe("disconnected");
   });
 });

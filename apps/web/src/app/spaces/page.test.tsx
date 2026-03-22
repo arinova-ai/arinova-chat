@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { render, screen } from "@testing-library/react";
 
 // Mock next/navigation
@@ -94,15 +95,15 @@ describe("SpacesPage", () => {
 
   it("displays cover image when present", () => {
     render(<SpacesPage />);
-    const coverImg = screen.getByAlt("Chess Arena");
+    const coverImg = screen.getByAltText("Chess Arena");
     expect(coverImg).toBeInTheDocument();
     expect(coverImg).toHaveAttribute("src", "https://example.com/chess.jpg");
   });
 
   it("shows category badges", () => {
     render(<SpacesPage />);
-    expect(screen.getByText("spaces.cat.board_game")).toBeInTheDocument();
-    expect(screen.getByText("spaces.cat.trivia")).toBeInTheDocument();
+    expect(screen.getAllByText("spaces.cat.board_game").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("spaces.cat.trivia").length).toBeGreaterThan(0);
   });
 
   it("shows play button", () => {

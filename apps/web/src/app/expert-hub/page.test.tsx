@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 // Mock next/navigation
@@ -50,6 +51,24 @@ vi.mock("@/components/chat/mobile-bottom-nav", () => ({
 
 vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
+}));
+
+vi.mock("@/components/ui/page-title", () => ({
+  PageTitle: ({ children }: { children: React.ReactNode }) => <h1>{children}</h1>,
+}));
+
+vi.mock("@/components/ui/avatar", () => ({
+  Avatar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  AvatarFallback: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  AvatarImage: () => <img />,
+}));
+
+vi.mock("@/components/ui/input", () => ({
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+}));
+
+vi.mock("@/components/ui/arinova-spinner", () => ({
+  ArinovaSpinner: () => <div data-testid="spinner" />,
 }));
 
 import ExpertHubPage from "./page";

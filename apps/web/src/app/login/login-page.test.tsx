@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import LoginPage from "./page";
 
@@ -6,6 +7,7 @@ import LoginPage from "./page";
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Mock next/link
@@ -19,6 +21,11 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
+// Mock AuthBrandPanel
+vi.mock("@/components/auth-brand-panel", () => ({
+  AuthBrandPanel: () => <div data-testid="brand-panel">Arinova Chat</div>,
+}));
+
 // Mock auth client
 const mockSignInEmail = vi.fn();
 const mockSignInSocial = vi.fn();
@@ -28,6 +35,7 @@ vi.mock("@/lib/auth-client", () => ({
       email: (...args: unknown[]) => mockSignInEmail(...args),
       social: (...args: unknown[]) => mockSignInSocial(...args),
     },
+    getSession: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -39,8 +47,8 @@ describe("LoginPage", () => {
   it("renders the login form", () => {
     render(<LoginPage />);
     expect(screen.getByText("Arinova Chat")).toBeInTheDocument();
-    expect(screen.getByText("Sign in to your account")).toBeInTheDocument();
-    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByText(/sign in to your account/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Sign In" })
@@ -49,7 +57,7 @@ describe("LoginPage", () => {
 
   it("renders email input with correct attributes", () => {
     render(<LoginPage />);
-    const emailInput = screen.getByLabelText("Email");
+    const emailInput = screen.getByLabelText(/email/i);
     expect(emailInput).toHaveAttribute("type", "email");
     expect(emailInput).toBeRequired();
   });
@@ -65,7 +73,7 @@ describe("LoginPage", () => {
     mockSignInEmail.mockResolvedValue({ data: { session: {} } });
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "test@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -88,7 +96,7 @@ describe("LoginPage", () => {
     });
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "test@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -105,7 +113,7 @@ describe("LoginPage", () => {
     mockSignInEmail.mockRejectedValue(new Error("Network error"));
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "test@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -146,7 +154,7 @@ describe("LoginPage", () => {
 
   it("links to the register page", () => {
     render(<LoginPage />);
-    const link = screen.getByText("Register");
+    const link = screen.getByText("Sign up");
     expect(link).toHaveAttribute("href", "/register");
   });
 

@@ -6,6 +6,8 @@ import React from "react";
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/register",
 }));
 
 vi.mock("next/link", () => ({
@@ -14,6 +16,11 @@ vi.mock("next/link", () => ({
       {children}
     </a>
   ),
+}));
+
+// Mock AuthBrandPanel
+vi.mock("@/components/auth-brand-panel", () => ({
+  AuthBrandPanel: () => <div data-testid="brand-panel">Arinova Chat</div>,
 }));
 
 const mockSignUpEmail = vi.fn();
@@ -25,6 +32,7 @@ vi.mock("@/lib/auth-client", () => ({
     signIn: {
       social: (...args: unknown[]) => vi.fn()(...args),
     },
+    getSession: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -38,9 +46,9 @@ describe("RegisterPage", () => {
   it("renders name, email, password inputs and Create Account button", () => {
     render(<RegisterPage />);
 
-    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/nickname/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/email/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /create account/i })
     ).toBeInTheDocument();
@@ -49,17 +57,17 @@ describe("RegisterPage", () => {
   it("renders the page heading", () => {
     render(<RegisterPage />);
     expect(screen.getByText("Arinova Chat")).toBeInTheDocument();
-    expect(screen.getByText(/create a new account/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /create account/i })).toBeInTheDocument();
   });
 
   it("shows 'Password must be at least 8 characters' when submitting with short password", async () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
 
-    await user.type(screen.getByLabelText(/^name$/i), "Alice");
-    await user.type(screen.getByLabelText(/^email$/i), "alice@example.com");
-    // Type a short password (fewer than 8 characters)
-    await user.type(screen.getByLabelText(/^password$/i), "short");
+    await user.type(screen.getByPlaceholderText(/nickname/i), "Alice");
+    await user.type(screen.getByPlaceholderText(/email/i), "alice@example.com");
+    await user.type(screen.getByPlaceholderText("Password"), "short");
+    await user.type(screen.getByPlaceholderText(/confirm/i), "short");
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
@@ -76,9 +84,10 @@ describe("RegisterPage", () => {
     const user = userEvent.setup();
     render(<RegisterPage />);
 
-    await user.type(screen.getByLabelText(/^name$/i), "Alice");
-    await user.type(screen.getByLabelText(/^email$/i), "alice@example.com");
-    await user.type(screen.getByLabelText(/^password$/i), "abc");
+    await user.type(screen.getByPlaceholderText(/nickname/i), "Alice");
+    await user.type(screen.getByPlaceholderText(/email/i), "alice@example.com");
+    await user.type(screen.getByPlaceholderText("Password"), "abc");
+    await user.type(screen.getByPlaceholderText(/confirm/i), "abc");
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(mockSignUpEmail).not.toHaveBeenCalled();
@@ -90,9 +99,10 @@ describe("RegisterPage", () => {
 
     render(<RegisterPage />);
 
-    await user.type(screen.getByLabelText(/^name$/i), "Alice");
-    await user.type(screen.getByLabelText(/^email$/i), "alice@example.com");
-    await user.type(screen.getByLabelText(/^password$/i), "securepassword");
+    await user.type(screen.getByPlaceholderText(/nickname/i), "Alice");
+    await user.type(screen.getByPlaceholderText(/email/i), "alice@example.com");
+    await user.type(screen.getByPlaceholderText("Password"), "securepassword");
+    await user.type(screen.getByPlaceholderText(/confirm/i), "securepassword");
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
@@ -110,9 +120,10 @@ describe("RegisterPage", () => {
 
     render(<RegisterPage />);
 
-    await user.type(screen.getByLabelText(/^name$/i), "Alice");
-    await user.type(screen.getByLabelText(/^email$/i), "alice@example.com");
-    await user.type(screen.getByLabelText(/^password$/i), "securepassword");
+    await user.type(screen.getByPlaceholderText(/nickname/i), "Alice");
+    await user.type(screen.getByPlaceholderText(/email/i), "alice@example.com");
+    await user.type(screen.getByPlaceholderText("Password"), "securepassword");
+    await user.type(screen.getByPlaceholderText(/confirm/i), "securepassword");
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
@@ -128,9 +139,10 @@ describe("RegisterPage", () => {
 
     render(<RegisterPage />);
 
-    await user.type(screen.getByLabelText(/^name$/i), "Alice");
-    await user.type(screen.getByLabelText(/^email$/i), "alice@example.com");
-    await user.type(screen.getByLabelText(/^password$/i), "securepassword");
+    await user.type(screen.getByPlaceholderText(/nickname/i), "Alice");
+    await user.type(screen.getByPlaceholderText(/email/i), "alice@example.com");
+    await user.type(screen.getByPlaceholderText("Password"), "securepassword");
+    await user.type(screen.getByPlaceholderText(/confirm/i), "securepassword");
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
@@ -144,9 +156,10 @@ describe("RegisterPage", () => {
 
     render(<RegisterPage />);
 
-    await user.type(screen.getByLabelText(/^name$/i), "Alice");
-    await user.type(screen.getByLabelText(/^email$/i), "alice@example.com");
-    await user.type(screen.getByLabelText(/^password$/i), "securepassword");
+    await user.type(screen.getByPlaceholderText(/nickname/i), "Alice");
+    await user.type(screen.getByPlaceholderText(/email/i), "alice@example.com");
+    await user.type(screen.getByPlaceholderText("Password"), "securepassword");
+    await user.type(screen.getByPlaceholderText(/confirm/i), "securepassword");
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {

@@ -2,6 +2,22 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 
+// Mock window.matchMedia for components that call it at module level
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  configurable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }),
+});
+
 // Node.js 25+ has a native globalThis.localStorage that shadows jsdom's window.localStorage.
 // Provide a proper Storage mock on globalThis so tests and production code both resolve correctly.
 const store: Record<string, string> = {};

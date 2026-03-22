@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import RegisterPage from "./page";
 
@@ -19,6 +20,11 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
+// Mock AuthBrandPanel
+vi.mock("@/components/auth-brand-panel", () => ({
+  AuthBrandPanel: () => <div data-testid="brand-panel">Arinova Chat</div>,
+}));
+
 // Mock auth client
 const mockSignUpEmail = vi.fn();
 const mockSignInSocial = vi.fn();
@@ -30,6 +36,7 @@ vi.mock("@/lib/auth-client", () => ({
     signIn: {
       social: (...args: unknown[]) => mockSignInSocial(...args),
     },
+    getSession: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -41,10 +48,10 @@ describe("RegisterPage", () => {
   it("renders the registration form", () => {
     render(<RegisterPage />);
     expect(screen.getByText("Arinova Chat")).toBeInTheDocument();
-    expect(screen.getByText("Create a new account")).toBeInTheDocument();
-    expect(screen.getByLabelText("Name")).toBeInTheDocument();
-    expect(screen.getByLabelText("Email")).toBeInTheDocument();
-    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create Account" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/nickname/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/email/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create Account" })
     ).toBeInTheDocument();
@@ -52,19 +59,19 @@ describe("RegisterPage", () => {
 
   it("renders name input as required", () => {
     render(<RegisterPage />);
-    expect(screen.getByLabelText("Name")).toBeRequired();
+    expect(screen.getByPlaceholderText(/nickname/i)).toBeRequired();
   });
 
   it("renders email input as required with email type", () => {
     render(<RegisterPage />);
-    const emailInput = screen.getByLabelText("Email");
+    const emailInput = screen.getByPlaceholderText(/email/i);
     expect(emailInput).toBeRequired();
     expect(emailInput).toHaveAttribute("type", "email");
   });
 
   it("renders password input with min length", () => {
     render(<RegisterPage />);
-    const passwordInput = screen.getByLabelText("Password");
+    const passwordInput = screen.getByPlaceholderText("Password");
     expect(passwordInput).toBeRequired();
     expect(passwordInput).toHaveAttribute("type", "password");
   });
@@ -72,13 +79,16 @@ describe("RegisterPage", () => {
   it("shows validation error for short password", async () => {
     render(<RegisterPage />);
 
-    fireEvent.change(screen.getByLabelText("Name"), {
+    fireEvent.change(screen.getByPlaceholderText(/nickname/i), {
       target: { value: "Test User" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByPlaceholderText(/email/i), {
       target: { value: "test@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Password"), {
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "short" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/confirm/i), {
       target: { value: "short" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
@@ -95,13 +105,16 @@ describe("RegisterPage", () => {
     mockSignUpEmail.mockResolvedValue({ data: { session: {} } });
     render(<RegisterPage />);
 
-    fireEvent.change(screen.getByLabelText("Name"), {
+    fireEvent.change(screen.getByPlaceholderText(/nickname/i), {
       target: { value: "Test User" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByPlaceholderText(/email/i), {
       target: { value: "test@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Password"), {
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/confirm/i), {
       target: { value: "password123" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
@@ -113,7 +126,9 @@ describe("RegisterPage", () => {
         name: "Test User",
       });
     });
-    expect(mockPush).toHaveBeenCalledWith("/");
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
   });
 
   it("shows error on registration failure", async () => {
@@ -122,13 +137,16 @@ describe("RegisterPage", () => {
     });
     render(<RegisterPage />);
 
-    fireEvent.change(screen.getByLabelText("Name"), {
+    fireEvent.change(screen.getByPlaceholderText(/nickname/i), {
       target: { value: "Test" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByPlaceholderText(/email/i), {
       target: { value: "dup@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Password"), {
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/confirm/i), {
       target: { value: "password123" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
@@ -142,13 +160,16 @@ describe("RegisterPage", () => {
     mockSignUpEmail.mockRejectedValue(new Error("Network error"));
     render(<RegisterPage />);
 
-    fireEvent.change(screen.getByLabelText("Name"), {
+    fireEvent.change(screen.getByPlaceholderText(/nickname/i), {
       target: { value: "Test" },
     });
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByPlaceholderText(/email/i), {
       target: { value: "test@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Password"), {
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/confirm/i), {
       target: { value: "password123" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create Account" }));

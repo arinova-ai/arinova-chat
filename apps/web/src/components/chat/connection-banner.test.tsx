@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import React from "react";
 import { render, screen, act } from "@testing-library/react";
 
 let statusCallback: ((status: string) => void) | null = null;
+
+// Mock i18n
+vi.mock("@/lib/i18n", () => ({
+  useTranslation: () => ({ t: (k: string) => k }),
+}));
 
 vi.mock("@/lib/ws", () => ({
   wsManager: {
@@ -31,19 +37,19 @@ describe("ConnectionBanner", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows 'Reconnecting...' when status is 'disconnected'", () => {
+  it("shows 'connection.reconnecting' when status is 'disconnected'", () => {
     (wsManager as { status: string }).status = "disconnected";
     render(<ConnectionBanner />);
-    expect(screen.getByText("Reconnecting...")).toBeInTheDocument();
+    expect(screen.getByText("connection.reconnecting")).toBeInTheDocument();
   });
 
-  it("shows 'Syncing...' when status is 'syncing'", () => {
+  it("shows 'connection.syncing' when status is 'syncing'", () => {
     (wsManager as { status: string }).status = "syncing";
     render(<ConnectionBanner />);
-    expect(screen.getByText("Syncing...")).toBeInTheDocument();
+    expect(screen.getByText("connection.syncing")).toBeInTheDocument();
   });
 
-  it("updates to show 'Reconnecting...' when status changes via callback", () => {
+  it("updates to show 'connection.reconnecting' when status changes via callback", () => {
     (wsManager as { status: string }).status = "connected";
     render(<ConnectionBanner />);
 
@@ -51,10 +57,10 @@ describe("ConnectionBanner", () => {
       if (statusCallback) statusCallback("disconnected");
     });
 
-    expect(screen.getByText("Reconnecting...")).toBeInTheDocument();
+    expect(screen.getByText("connection.reconnecting")).toBeInTheDocument();
   });
 
-  it("updates to show 'Syncing...' when status changes via callback", () => {
+  it("updates to show 'connection.syncing' when status changes via callback", () => {
     (wsManager as { status: string }).status = "connected";
     render(<ConnectionBanner />);
 
@@ -62,14 +68,14 @@ describe("ConnectionBanner", () => {
       if (statusCallback) statusCallback("syncing");
     });
 
-    expect(screen.getByText("Syncing...")).toBeInTheDocument();
+    expect(screen.getByText("connection.syncing")).toBeInTheDocument();
   });
 
   it("hides banner when status changes back to connected", () => {
     (wsManager as { status: string }).status = "disconnected";
     const { container } = render(<ConnectionBanner />);
 
-    expect(screen.getByText("Reconnecting...")).toBeInTheDocument();
+    expect(screen.getByText("connection.reconnecting")).toBeInTheDocument();
 
     act(() => {
       if (statusCallback) statusCallback("connected");

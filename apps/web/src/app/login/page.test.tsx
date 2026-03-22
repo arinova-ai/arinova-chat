@@ -6,6 +6,8 @@ import React from "react";
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/login",
 }));
 
 vi.mock("next/link", () => ({
@@ -16,6 +18,11 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+// Mock AuthBrandPanel
+vi.mock("@/components/auth-brand-panel", () => ({
+  AuthBrandPanel: () => <div data-testid="brand-panel">Arinova Chat</div>,
+}));
+
 const mockSignInEmail = vi.fn();
 const mockSignInSocial = vi.fn();
 vi.mock("@/lib/auth-client", () => ({
@@ -24,6 +31,7 @@ vi.mock("@/lib/auth-client", () => ({
       email: (...args: unknown[]) => mockSignInEmail(...args),
       social: (...args: unknown[]) => mockSignInSocial(...args),
     },
+    getSession: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -97,7 +105,7 @@ describe("LoginPage", () => {
 
   it("has a link to /register", () => {
     render(<LoginPage />);
-    const link = screen.getByRole("link", { name: /register/i });
+    const link = screen.getByRole("link", { name: /sign up/i });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/register");
   });
