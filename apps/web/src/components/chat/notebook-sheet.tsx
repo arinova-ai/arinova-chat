@@ -35,6 +35,10 @@ import { useIsMobile } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 import { ShareSheet, type ShareContent } from "./share-sheet";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { MarkdownContent } from "./markdown-content";
+import { authClient } from "@/lib/auth-client";
+import { assetUrl } from "@/lib/config";
 
 interface NotebookSheetProps {
   open: boolean;
@@ -1063,19 +1067,37 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                   <p className="text-sm text-muted-foreground">{t("chat.notebook.askAiPlaceholder")}</p>
                 </div>
               ) : (
-                threadMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      "rounded-lg px-3 py-2 text-sm max-w-[85%] whitespace-pre-wrap",
-                      msg.role === "user"
-                        ? "bg-brand/15 ml-auto"
-                        : "bg-muted/60 mr-auto"
-                    )}
-                  >
-                    {msg.content}
-                  </div>
-                ))
+                threadMessages.map((msg) => {
+                  const isUser = msg.role === "user";
+                  const session = authClient.useSession as unknown as { data?: { user?: { image?: string; name?: string } } };
+                  const selectedAgent = askAiAgents.find((a) => a.agentId === (askAiAgentId ?? askAiAgents[0]?.agentId));
+                  const avatarSrc = isUser
+                    ? (useChatStore.getState() as unknown as { currentUserImage?: string }).currentUserImage
+                    : selectedAgent?.agentAvatarUrl;
+                  const avatarName = isUser ? "You" : (selectedAgent?.agentName ?? "AI");
+                  const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+                  return (
+                    <div key={msg.id} className={cn("flex gap-2", isUser ? "flex-row-reverse" : "flex-row")}>
+                      <Avatar className="h-7 w-7 shrink-0 mt-0.5">
+                        {avatarSrc ? <AvatarImage src={assetUrl(avatarSrc)} alt={avatarName} /> : null}
+                        <AvatarFallback className="text-[10px] bg-accent">{avatarName.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className={cn("max-w-[80%]", isUser ? "items-end" : "items-start")}>
+                        <div className={cn(
+                          "rounded-lg px-3 py-2 text-sm",
+                          isUser ? "bg-brand/15" : "bg-muted/60"
+                        )}>
+                          {isUser ? (
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                          ) : (
+                            <MarkdownContent content={msg.content} />
+                          )}
+                        </div>
+                        {time && <p className="text-[10px] text-muted-foreground mt-0.5 px-1">{time}</p>}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 
