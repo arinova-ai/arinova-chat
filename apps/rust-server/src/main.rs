@@ -633,9 +633,9 @@ async fn main() {
     sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)").execute(&db).await.ok();
     sqlx::query("ALTER TABLE playgrounds ADD COLUMN IF NOT EXISTS cover_image_url TEXT").execute(&db).await.ok();
 
-    // Update arinova-help skill prompt_content with image upload docs
-    sqlx::query(r#"UPDATE skills SET prompt_content = prompt_content || E'\n\n## 上傳圖片到對話\n1. 先使用 arinova_upload_file 工具上傳圖片，取得圖片 URL\n2. 再使用 arinova_send_message 發送訊息，在 content 中帶上圖片 URL\n\n範例流程：\n- 呼叫 arinova_upload_file(file) → 回傳 { url: \"https://...\" }\n- 呼叫 arinova_send_message({ content: \"![image](https://...)\" })'
-    WHERE slug = 'arinova-help' AND prompt_content NOT LIKE '%上傳圖片到對話%'"#).execute(&db).await.ok();
+    // Update arinova-help skill prompt_content with CLI commands docs
+    sqlx::query(r#"UPDATE skills SET prompt_content = prompt_content || E'\n\n## 上傳圖片到對話\n1. 先使用 `openclaw arinova file upload` CLI 指令上傳圖片，取得圖片 URL\n2. 再使用 `openclaw arinova message send` 發送訊息，在 content 中帶上圖片 URL\n\n範例流程：\n- 執行 `openclaw arinova file upload --conversation-id <id> --file-path /path/to/image.png` → 回傳 { url: \"https://...\" }\n- 執行 `openclaw arinova message send --conversation-id <id> --content \"![image](https://...)\"` '
+    WHERE slug = 'arinova-help' AND prompt_content NOT LIKE '%openclaw arinova file upload%'"#).execute(&db).await.ok();
 
     tracing::info!("Startup migrations completed");
 

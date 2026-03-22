@@ -4,6 +4,7 @@ import { arinovaChatPlugin } from "./channel.js";
 import { setArinovaChatRuntime } from "./runtime.js";
 import { exchangeBotToken } from "./auth.js";
 import { registerOffice, shutdown as shutdownOffice } from "./office/index.js";
+import { registerCli } from "./cli.js";
 
 const plugin: {
   id: string;
@@ -23,6 +24,9 @@ const plugin: {
 
     // Virtual Office: register hooks and start tick loop
     registerOffice(api);
+
+    // CLI: openclaw arinova <subcommand>
+    registerCli(api);
 
     // Inject Arinova Chat tool docs into agent context
     (api as unknown as { on: (event: string, cb: (...args: unknown[]) => unknown) => void }).on("before_prompt_build", (_event: unknown, ctx: unknown) => {
