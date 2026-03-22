@@ -28,7 +28,7 @@ const PRESET_SHORTCUTS: QuickShortcut[] = [
   { type: "page", label: "Spaces", icon: "globe", url: "/spaces" },
   { type: "page", label: "Sticker Shop", icon: "smile", url: "/stickers" },
   { type: "page", label: "Creator Console", icon: "pen-tool", url: "/creator" },
-  { type: "page", label: "Agent Hub", icon: "store", url: "/agent-hub" },
+  { type: "page", label: "Skills", icon: "store", url: "/skills" },
   { type: "page", label: "Community", icon: "users", url: "/community" },
   { type: "page", label: "Wallet", icon: "wallet", url: "/wallet" },
   { type: "page", label: "Theme Store", icon: "palette", url: "/office/themes" },
