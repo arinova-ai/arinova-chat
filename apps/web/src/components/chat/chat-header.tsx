@@ -505,7 +505,7 @@ export function ChatHeader({
         }
       } : undefined}
     />
-    {officialCommunityId && conversationId && (
+    {(officialCommunityId || resolvedCommunityId) && conversationId && (
       <CommunitySettingsSheet
         open={communitySettingsOpen}
         onClose={() => setCommunitySettingsOpen(false)}
