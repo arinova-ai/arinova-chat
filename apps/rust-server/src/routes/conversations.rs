@@ -326,7 +326,7 @@ async fn list_conversations(
                 lm.sender_agent_id AS last_msg_sender_agent_id,
                 lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
-                COALESCE(oc.community_id, cm.id) AS official_community_id,
+                oc.community_id AS official_community_id,
                 cm.avatar_url AS community_avatar_url
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
@@ -382,7 +382,7 @@ async fn list_conversations(
                 lm.sender_agent_id AS last_msg_sender_agent_id,
                 lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
-                COALESCE(oc.community_id, cm.id) AS official_community_id,
+                oc.community_id AS official_community_id,
                 cm.avatar_url AS community_avatar_url
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
