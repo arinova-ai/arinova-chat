@@ -1930,29 +1930,96 @@ async fn post_note_thread(
         "INSERT INTO note_thread_messages (id, note_id, role, content, agent_conversation_id) VALUES ($1, $2, 'user', $3, $4)",
     ).bind(user_msg_id).bind(note_id).bind(question).bind(agent_conv_uuid).execute(&state.db).await;
 
-    // Notify agent via WS note_thread_question event
+    // Agent mode: call LLM with agent's system prompt + note context + thread history
     if let Some(agent_conv_id) = agent_conv_uuid {
-        // Find the agent_id from the conversation
         let agent_id = sqlx::query_scalar::<_, Uuid>(
             "SELECT agent_id FROM conversations WHERE id = $1 AND agent_id IS NOT NULL",
         ).bind(agent_conv_id).fetch_optional(&state.db).await.ok().flatten();
 
         if let Some(aid) = agent_id {
+            // Get agent system prompt
+            let agent_info = sqlx::query_as::<_, (String, Option<String>)>(
+                "SELECT name, system_prompt FROM agents WHERE id = $1",
+            ).bind(aid).fetch_optional(&state.db).await.ok().flatten();
+
+            let (agent_name, system_prompt) = agent_info.unwrap_or(("Agent".into(), None));
+
+            // Build thread history
+            let history = sqlx::query_as::<_, (String, String)>(
+                "SELECT role, content FROM note_thread_messages WHERE note_id = $1 ORDER BY created_at",
+            ).bind(note_id).fetch_all(&state.db).await.unwrap_or_default();
+
             let end = { let mut e = content.len().min(2000); while e > 0 && !content.is_char_boundary(e) { e -= 1; } e };
-            // Send note_thread_question to agent's bot token connections
-            let event = json!({
-                "type": "note_thread_question",
-                "noteId": note_id.to_string(),
-                "noteTitle": title,
-                "noteContent": &content[..end],
-                "question": question,
-                "agentId": aid.to_string(),
+            let mut prompt = format!("# Note: {}\n\n{}\n\n", title, &content[..end]);
+            if !history.is_empty() {
+                prompt.push_str("Previous conversation:\n");
+                for (role, msg) in &history {
+                    prompt.push_str(&format!("{}: {}\n", if role == "user" { "User" } else { &agent_name }, msg));
+                }
+                prompt.push('\n');
+            }
+            prompt.push_str(&format!("Question: {}", question));
+
+            let system = system_prompt.unwrap_or_else(|| format!(
+                "You are {}. The user has a note and is asking questions about it. Answer concisely based on the note content and conversation history.",
+                agent_name
+            ));
+
+            // Spawn LLM call in background, write reply when done
+            let db2 = state.db.clone();
+            let config2 = state.config.clone();
+            tokio::spawn(async move {
+                use crate::services::llm::{LlmCallOptions, LlmProvider, call_llm_stream, parse_openai_chunk, parse_anthropic_chunk, ChatMessage};
+                use futures::StreamExt;
+
+                let (provider, api_key, model) = if let Some(ref key) = config2.anthropic_api_key {
+                    (LlmProvider::Anthropic, key.clone(), "claude-haiku-4-5-20251001".to_string())
+                } else if let Some(ref key) = config2.openai_api_key {
+                    (LlmProvider::OpenAI, key.clone(), "gpt-4o-mini".to_string())
+                } else {
+                    return;
+                };
+
+                let opts = LlmCallOptions {
+                    provider: provider.clone(),
+                    model,
+                    api_key,
+                    messages: vec![
+                        ChatMessage { role: "system".into(), content: system },
+                        ChatMessage { role: "user".into(), content: prompt },
+                    ],
+                    max_tokens: Some(1024),
+                    temperature: Some(0.7),
+                };
+
+                let parser = match provider {
+                    LlmProvider::OpenAI => parse_openai_chunk,
+                    LlmProvider::Anthropic => parse_anthropic_chunk,
+                };
+
+                if let Ok(stream) = call_llm_stream(&opts).await {
+                    let mut stream = stream;
+                    let mut buf = String::new();
+                    let mut content = String::new();
+                    while let Some(Ok(bytes)) = stream.next().await {
+                        buf.push_str(&String::from_utf8_lossy(&bytes));
+                        while let Some(pos) = buf.find('\n') {
+                            let line = buf[..pos].trim().to_string();
+                            buf = buf[pos + 1..].to_string();
+                            if let Some(data) = line.strip_prefix("data: ") {
+                                if let Some(text) = parser(data) {
+                                    content.push_str(&text);
+                                }
+                            }
+                        }
+                    }
+                    if !content.is_empty() {
+                        let _ = sqlx::query(
+                            "INSERT INTO note_thread_messages (note_id, role, content) VALUES ($1, 'assistant', $2)",
+                        ).bind(note_id).bind(&content).execute(&db2).await;
+                    }
+                }
             });
-            // Find the agent owner to route the event
-            let owner_id = sqlx::query_scalar::<_, String>(
-                "SELECT owner_id FROM agents WHERE id = $1",
-            ).bind(aid).fetch_optional(&state.db).await.ok().flatten().unwrap_or_default();
-            state.ws.send_to_user_or_queue(&owner_id, &event, &state.redis);
         }
 
         return Json(json!({
