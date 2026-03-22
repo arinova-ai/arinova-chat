@@ -1056,11 +1056,11 @@ async fn list_user_notes(
             let note_ids: Vec<Uuid> = rows.iter().take(limit as usize).map(|n| n.id).collect();
             let linked_convs = if !note_ids.is_empty() {
                 sqlx::query_as::<_, (Uuid, Uuid, String)>(
-                    r#"SELECT ncl.note_id, ncl.conversation_id,
+                    r#"SELECT n.id AS note_id, n.conversation_id,
                               COALESCE(c.title, 'Untitled') AS conv_title
-                       FROM note_conversation_links ncl
-                       LEFT JOIN conversations c ON c.id = ncl.conversation_id
-                       WHERE ncl.note_id = ANY($1)"#,
+                       FROM notes n
+                       LEFT JOIN conversations c ON c.id = n.conversation_id
+                       WHERE n.id = ANY($1) AND n.conversation_id IS NOT NULL"#,
                 )
                 .bind(&note_ids)
                 .fetch_all(&state.db)

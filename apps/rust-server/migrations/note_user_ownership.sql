@@ -19,19 +19,5 @@ WHERE n.conversation_id = c.id
   AND n.creator_type = 'agent'
   AND n.owner_id IS NULL;
 
--- 3. Create note_conversation_links table
-CREATE TABLE IF NOT EXISTS note_conversation_links (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    note_id         UUID NOT NULL REFERENCES conversation_notes(id) ON DELETE CASCADE,
-    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    linked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(note_id, conversation_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_note_conv_links_note ON note_conversation_links(note_id);
-CREATE INDEX IF NOT EXISTS idx_note_conv_links_conv ON note_conversation_links(conversation_id);
-
--- 4. Backfill: create links for all existing notes (note_id + conversation_id)
-INSERT INTO note_conversation_links (note_id, conversation_id)
-SELECT id, conversation_id FROM conversation_notes
-ON CONFLICT (note_id, conversation_id) DO NOTHING;
+-- 3. Drop note_conversation_links table (no longer needed — use notes.conversation_id directly)
+DROP TABLE IF EXISTS note_conversation_links;

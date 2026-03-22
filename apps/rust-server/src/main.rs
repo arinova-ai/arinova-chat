@@ -296,20 +296,7 @@ async fn main() {
     sqlx::query("UPDATE notes SET owner_id = creator_id WHERE creator_type = 'user' AND owner_id IS NULL").execute(&db).await.ok();
     sqlx::query("UPDATE notes n SET owner_id = c.user_id FROM conversations c WHERE n.conversation_id = c.id AND n.creator_type = 'agent' AND n.owner_id IS NULL").execute(&db).await.ok();
 
-    sqlx::query(r#"CREATE TABLE IF NOT EXISTS note_conversation_links (
-        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        note_id         UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-        conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-        linked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE(note_id, conversation_id)
-    )"#).execute(&db).await.ok();
-
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_note_conv_links_note ON note_conversation_links(note_id)").execute(&db).await.ok();
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_note_conv_links_conv ON note_conversation_links(conversation_id)").execute(&db).await.ok();
-
-    sqlx::query(r#"INSERT INTO note_conversation_links (note_id, conversation_id)
-        SELECT id, conversation_id FROM notes
-        ON CONFLICT (note_id, conversation_id) DO NOTHING"#).execute(&db).await.ok();
+    sqlx::query("DROP TABLE IF EXISTS note_conversation_links").execute(&db).await.ok();
 
     sqlx::query("ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_start TIMESTAMPTZ").execute(&db).await.ok();
     sqlx::query("ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source_end TIMESTAMPTZ").execute(&db).await.ok();
@@ -561,7 +548,7 @@ async fn main() {
         PRIMARY KEY (notebook_id, user_id)
     )"#).execute(&db).await.ok();
 
-    // note_conversation_links and notes.conversation_id kept — still used by agent_notes.rs and memory.rs
+    sqlx::query("DROP TABLE IF EXISTS note_conversation_links").execute(&db).await.ok();
 
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS experts (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -208,7 +208,7 @@ async fn agent_get_note(
     }
 
     let row = sqlx::query_as::<_, NoteRow>(&format!(
-        "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE n.id = $1 AND ncl.conversation_id = $2",
+        "{} WHERE n.id = $1 AND n.conversation_id = $2",
         NOTE_QUERY_BASE
     ))
     .bind(note_id)
@@ -322,7 +322,7 @@ async fn agent_list_notes(
 
     let rows = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
+            "{} WHERE n.conversation_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
@@ -332,7 +332,7 @@ async fn agent_list_notes(
         .await
     } else {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} JOIN note_conversation_links ncl ON ncl.note_id = n.id WHERE ncl.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
+            "{} WHERE n.conversation_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
             NOTE_QUERY_BASE, archive_cond, tag_cond
         ))
         .bind(conv_id)
@@ -483,15 +483,6 @@ async fn agent_create_note(
 
     match result {
         Ok(_) => {
-            // Insert note_conversation_links entry
-            let _ = sqlx::query(
-                "INSERT INTO note_conversation_links (note_id, conversation_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-            )
-            .bind(note_id)
-            .bind(conv_id)
-            .execute(&state.db)
-            .await;
-
             // Sync [[Note Title]] backlinks
             if !body.content.is_empty() {
                 sync_note_links(&state.db, note_id, conv_id, &body.content).await;

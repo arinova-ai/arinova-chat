@@ -83,10 +83,9 @@ pub async fn extract_capsule(
             // Update note_count from linked conversation notes
             let note_count = sqlx::query_scalar::<_, i64>(
                 r#"SELECT COUNT(*) FROM notes n
-                   JOIN note_conversation_links ncl ON ncl.note_id = n.id
                    LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                    LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $2
-                   WHERE ncl.conversation_id = $1 AND n.content != ''
+                   WHERE n.owner_id = $1 AND n.content != ''
                      AND (
                        -- If notebook has capsule links configured, require a link to this capsule
                        ncl2.capsule_id IS NOT NULL
@@ -95,7 +94,7 @@ pub async fn extract_capsule(
                            AND COALESCE(nb.include_in_capsule, true) = true)
                      )"#,
             )
-            .bind(conv_id)
+            .bind(&owner_id)
             .bind(capsule_id)
             .fetch_one(&db)
             .await
@@ -222,14 +221,22 @@ async fn do_extraction(
     // 3b. Fetch linked notes incrementally (only new notes since last extraction)
     // If notebook has capsule links configured, only include notes linked to THIS capsule.
     // Otherwise fall back to legacy include_in_capsule flag.
+    // Fetch owner_id for filtering notes by capsule owner
+    let capsule_owner_id = sqlx::query_scalar::<_, String>(
+        "SELECT owner_id FROM memory_capsules WHERE id = $1",
+    )
+    .bind(capsule_id)
+    .fetch_one(db)
+    .await
+    .context("Failed to fetch capsule owner_id")?;
+
     let notes: Vec<(String, String, chrono::NaiveDateTime)> = if let Some(nw) = notes_extracted_through {
         sqlx::query_as(
             r#"SELECT n.title, n.content, n.created_at
                FROM notes n
-               JOIN note_conversation_links ncl ON ncl.note_id = n.id
                LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $3
-               WHERE ncl.conversation_id = $1 AND n.content != '' AND n.created_at > $2
+               WHERE n.owner_id = $1 AND n.content != '' AND n.created_at > $2
                  AND (
                    ncl2.capsule_id IS NOT NULL
                    OR (NOT EXISTS (SELECT 1 FROM notebook_capsule_links WHERE notebook_id = nb.id)
@@ -237,7 +244,7 @@ async fn do_extraction(
                  )
                ORDER BY n.created_at ASC"#,
         )
-        .bind(conversation_id)
+        .bind(&capsule_owner_id)
         .bind(nw)
         .bind(capsule_id)
         .fetch_all(db)
@@ -247,10 +254,9 @@ async fn do_extraction(
         sqlx::query_as(
             r#"SELECT n.title, n.content, n.created_at
                FROM notes n
-               JOIN note_conversation_links ncl ON ncl.note_id = n.id
                LEFT JOIN notebooks nb ON nb.id = n.notebook_id
                LEFT JOIN notebook_capsule_links ncl2 ON ncl2.notebook_id = nb.id AND ncl2.capsule_id = $2
-               WHERE ncl.conversation_id = $1 AND n.content != ''
+               WHERE n.owner_id = $1 AND n.content != ''
                  AND (
                    ncl2.capsule_id IS NOT NULL
                    OR (NOT EXISTS (SELECT 1 FROM notebook_capsule_links WHERE notebook_id = nb.id)
@@ -258,7 +264,7 @@ async fn do_extraction(
                  )
                ORDER BY n.created_at ASC"#,
         )
-        .bind(conversation_id)
+        .bind(&capsule_owner_id)
         .bind(capsule_id)
         .fetch_all(db)
         .await
