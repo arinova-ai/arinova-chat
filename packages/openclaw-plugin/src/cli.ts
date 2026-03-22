@@ -5,7 +5,7 @@ import { resolveAccount, apiCall } from "./tools.js";
 const DEFAULT_API_URL = "https://api.chat-staging.arinova.ai";
 
 /** Resolve account with --token / --agent overrides. Priority: --token > --agent > default */
-function resolveAccountWithOverrides(parentOpts: { agent?: string; token?: string }): ResolvedArinovaChatAccount {
+export function resolveAccountWithOverrides(parentOpts: { agent?: string; token?: string }): ResolvedArinovaChatAccount {
   if (parentOpts.token) {
     // Direct token override — construct a minimal account
     const base = (() => { try { return resolveAccount(); } catch { return null; } })();
