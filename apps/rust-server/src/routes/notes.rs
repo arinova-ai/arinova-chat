@@ -1932,7 +1932,8 @@ async fn post_note_thread(
 
     // If agent mode, send to agent conversation with noteThreadId metadata
     if let Some(conv_id) = agent_conv_uuid {
-        let note_context = format!("[Note: {}]\n{}\n\n[Question]\n{}", title, &content[..content.len().min(2000)], question);
+        let end = { let mut e = content.len().min(2000); while e > 0 && !content.is_char_boundary(e) { e -= 1; } e };
+        let note_context = format!("[Note: {}]\n{}\n\n[Question]\n{}", title, &content[..end], question);
         let metadata = json!({ "noteThreadId": note_id.to_string() });
         let _ = sqlx::query(
             "INSERT INTO messages (conversation_id, role, content, status, sender_user_id, metadata, seq) VALUES ($1, 'user', $2, 'completed', $3, $4, COALESCE((SELECT MAX(seq) FROM messages WHERE conversation_id = $1), 0) + 1)",
