@@ -325,7 +325,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
   const [askAiLoading, setAskAiLoading] = useState(false);
   const [askAiAgentId, setAskAiAgentId] = useState<string | null>(null);
   const [askAiAgents, setAskAiAgents] = useState<{ id: string; agentId: string; agentName: string; agentAvatarUrl: string | null }[]>([]);
-  const [threadMessages, setThreadMessages] = useState<{ id: string; role: string; content: string; createdAt: string }[]>([]);
+  const [threadMessages, setThreadMessages] = useState<{ id: string; role: string; content: string; createdAt: string; agentName?: string | null; agentAvatarUrl?: string | null }[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -1068,19 +1068,20 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
               ) : (
                 threadMessages.map((msg) => {
                   const isUser = msg.role === "user";
-                  const selectedAgent = askAiAgents.find((a) => a.agentId === (askAiAgentId ?? askAiAgents[0]?.agentId));
+                  const agentName = msg.agentName ?? "AI";
+                  const agentAvatar = msg.agentAvatarUrl;
                   const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
                   return (
                     <div key={msg.id} className={cn("flex gap-2", isUser ? "justify-end" : "justify-start")}>
                       {!isUser && (
                         <Avatar className="h-7 w-7 shrink-0 mt-0.5">
-                          {selectedAgent?.agentAvatarUrl ? <AvatarImage src={assetUrl(selectedAgent.agentAvatarUrl)} alt={selectedAgent.agentName} /> : null}
-                          <AvatarFallback className="text-[10px] bg-accent">{(selectedAgent?.agentName ?? "AI").charAt(0).toUpperCase()}</AvatarFallback>
+                          {agentAvatar ? <AvatarImage src={assetUrl(agentAvatar)} alt={agentName} /> : null}
+                          <AvatarFallback className="text-[10px] bg-accent">{agentName.charAt(0).toUpperCase()}</AvatarFallback>
                         </Avatar>
                       )}
                       <div className="max-w-[80%]">
-                        {!isUser && selectedAgent && (
-                          <p className="text-[10px] font-medium text-muted-foreground mb-0.5 px-1">{selectedAgent.agentName}</p>
+                        {!isUser && (
+                          <p className="text-[10px] font-medium text-muted-foreground mb-0.5 px-1">{agentName}</p>
                         )}
                         <div className={cn(
                           "rounded-lg px-3 py-2 text-sm",

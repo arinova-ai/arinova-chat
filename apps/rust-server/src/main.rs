@@ -633,6 +633,7 @@ async fn main() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )"#).execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_note_thread_note ON note_thread_messages(note_id, created_at)").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE note_thread_messages ADD COLUMN IF NOT EXISTS agent_id UUID").execute(&db).await.ok();
 
     tracing::info!("Startup migrations completed");
 

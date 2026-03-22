@@ -1875,17 +1875,25 @@ async fn get_note_thread(
         return (StatusCode::NOT_FOUND, Json(json!({"error": "Note not found"}))).into_response();
     }
 
-    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<Uuid>, DateTime<Utc>)>(
-        "SELECT id, role, content, agent_conversation_id, created_at FROM note_thread_messages WHERE note_id = $1 ORDER BY created_at",
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<Uuid>, DateTime<Utc>, Option<Uuid>, Option<String>, Option<String>)>(
+        r#"SELECT ntm.id, ntm.role, ntm.content, ntm.agent_conversation_id, ntm.created_at,
+                  ntm.agent_id, a.name AS agent_name, a.avatar_url AS agent_avatar_url
+           FROM note_thread_messages ntm
+           LEFT JOIN agents a ON a.id = ntm.agent_id
+           WHERE ntm.note_id = $1
+           ORDER BY ntm.created_at"#,
     ).bind(note_id).fetch_all(&state.db).await;
 
     match rows {
         Ok(msgs) => {
-            let items: Vec<_> = msgs.iter().map(|(id, role, content, agent_conv, created)| json!({
+            let items: Vec<_> = msgs.iter().map(|(id, role, content, agent_conv, created, agent_id, agent_name, agent_avatar)| json!({
                 "id": id,
                 "role": role,
                 "content": content,
                 "agentConversationId": agent_conv,
+                "agentId": agent_id,
+                "agentName": agent_name,
+                "agentAvatarUrl": agent_avatar,
                 "createdAt": created.to_rfc3339(),
             })).collect();
             Json(json!({ "messages": items })).into_response()
@@ -1926,17 +1934,21 @@ async fn post_note_thread(
     // Save user message
     let user_msg_id = Uuid::new_v4();
     let agent_conv_uuid = body.agent_conversation_id.as_deref().and_then(|s| Uuid::parse_str(s).ok());
+
+    // Resolve agent_id from conversation
+    let resolved_agent_id: Option<Uuid> = if let Some(conv_id) = agent_conv_uuid {
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT agent_id FROM conversations WHERE id = $1 AND agent_id IS NOT NULL",
+        ).bind(conv_id).fetch_optional(&state.db).await.ok().flatten()
+    } else { None };
+
     let _ = sqlx::query(
-        "INSERT INTO note_thread_messages (id, note_id, role, content, agent_conversation_id) VALUES ($1, $2, 'user', $3, $4)",
-    ).bind(user_msg_id).bind(note_id).bind(question).bind(agent_conv_uuid).execute(&state.db).await;
+        "INSERT INTO note_thread_messages (id, note_id, role, content, agent_conversation_id, agent_id) VALUES ($1, $2, 'user', $3, $4, $5)",
+    ).bind(user_msg_id).bind(note_id).bind(question).bind(agent_conv_uuid).bind(resolved_agent_id).execute(&state.db).await;
 
     // Agent mode: call LLM with agent's system prompt + note context + thread history
-    if let Some(agent_conv_id) = agent_conv_uuid {
-        let agent_id = sqlx::query_scalar::<_, Uuid>(
-            "SELECT agent_id FROM conversations WHERE id = $1 AND agent_id IS NOT NULL",
-        ).bind(agent_conv_id).fetch_optional(&state.db).await.ok().flatten();
-
-        if let Some(aid) = agent_id {
+    if agent_conv_uuid.is_some() {
+        if let Some(aid) = resolved_agent_id {
             // Get agent system prompt
             let agent_info = sqlx::query_as::<_, (String, Option<String>)>(
                 "SELECT name, system_prompt FROM agents WHERE id = $1",
@@ -1968,6 +1980,7 @@ async fn post_note_thread(
             // Spawn LLM call in background, write reply when done
             let db2 = state.db.clone();
             let config2 = state.config.clone();
+            let agent_id_for_reply = aid;
             tokio::spawn(async move {
                 use crate::services::llm::{LlmCallOptions, LlmProvider, call_llm_stream, parse_openai_chunk, parse_anthropic_chunk, ChatMessage};
                 use futures::StreamExt;
@@ -2015,8 +2028,8 @@ async fn post_note_thread(
                     }
                     if !content.is_empty() {
                         let _ = sqlx::query(
-                            "INSERT INTO note_thread_messages (note_id, role, content) VALUES ($1, 'assistant', $2)",
-                        ).bind(note_id).bind(&content).execute(&db2).await;
+                            "INSERT INTO note_thread_messages (note_id, role, content, agent_id) VALUES ($1, 'assistant', $2, $3)",
+                        ).bind(note_id).bind(&content).bind(agent_id_for_reply).execute(&db2).await;
                     }
                 }
             });
