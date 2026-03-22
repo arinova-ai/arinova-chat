@@ -321,6 +321,8 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
   const [askAiQuestion, setAskAiQuestion] = useState("");
   const [askAiAnswer, setAskAiAnswer] = useState("");
   const [askAiLoading, setAskAiLoading] = useState(false);
+  const [askAiAgentId, setAskAiAgentId] = useState<string | null>(null); // null = built-in AI
+  const [askAiAgents, setAskAiAgents] = useState<{ id: string; agentId: string; agentName: string; agentAvatarUrl: string | null }[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -563,16 +565,45 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
     setSuggestedTags([]);
   }, []);
 
+  // Load agent conversations for Ask AI dropdown
+  useEffect(() => {
+    if (!askAiOpen || askAiAgents.length > 0) return;
+    const conversations = useChatStore.getState().conversations;
+    const agentConvs = conversations
+      .filter((c) => c.type === "h2a" && c.agentId)
+      .map((c) => ({
+        id: c.id,
+        agentId: c.agentId!,
+        agentName: c.agentName ?? c.title ?? "Agent",
+        agentAvatarUrl: c.agentAvatarUrl ?? null,
+      }));
+    setAskAiAgents(agentConvs);
+  }, [askAiOpen, askAiAgents.length]);
+
   const handleAskAi = async () => {
     if (!selectedNote || !askAiQuestion.trim()) return;
     setAskAiLoading(true);
     setAskAiAnswer("");
     try {
-      const res = await api<{ answer: string }>(`/api/notes/${selectedNote.id}/ask-ai`, {
-        method: "POST",
-        body: JSON.stringify({ question: askAiQuestion.trim() }),
-      });
-      setAskAiAnswer(res.answer);
+      if (askAiAgentId) {
+        // Send to specific agent's conversation
+        const agentConv = askAiAgents.find((a) => a.agentId === askAiAgentId);
+        if (!agentConv) throw new Error("Agent conversation not found");
+        const noteContent = selectedNote.content?.slice(0, 2000) ?? "";
+        const prompt = `[Note Context: ${selectedNote.title}]\n${noteContent}\n\n[Question]\n${askAiQuestion.trim()}`;
+        await api(`/api/conversations/${agentConv.id}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ content: prompt }),
+        });
+        setAskAiAnswer(`Question sent to ${agentConv.agentName}. Check the conversation for the response.`);
+      } else {
+        // Built-in AI
+        const res = await api<{ answer: string }>(`/api/notes/${selectedNote.id}/ask-ai`, {
+          method: "POST",
+          body: JSON.stringify({ question: askAiQuestion.trim() }),
+        });
+        setAskAiAnswer(res.answer);
+      }
     } catch (err: unknown) {
       const error = err as { message?: string };
       setAskAiAnswer(error?.message || "Failed to get answer");
@@ -978,6 +1009,22 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
             </div>
             {askAiOpen && (
               <div className="border-t border-border px-3 py-2 space-y-2">
+                {/* Agent selector */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={askAiAgentId ?? ""}
+                    onChange={(e) => setAskAiAgentId(e.target.value || null)}
+                    className="rounded-md border border-input bg-background px-2 py-1 text-xs h-7 min-w-0 max-w-[180px]"
+                  >
+                    <option value="">Arinova AI</option>
+                    {askAiAgents.map((a) => (
+                      <option key={a.agentId} value={a.agentId}>{a.agentName}</option>
+                    ))}
+                  </select>
+                  {askAiAgentId && (
+                    <span className="text-[10px] text-muted-foreground shrink-0">{t("chat.notebook.askAgentHint")}</span>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Input
                     value={askAiQuestion}
