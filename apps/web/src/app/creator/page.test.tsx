@@ -130,4 +130,159 @@ describe("CreatorPage", () => {
     // Sticker tab should render
     expect(screen.getByText("creator.tab.stickers")).toBeInTheDocument();
   });
+
+  it("renders stickers tab content with pack list", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/creator/dashboard")) {
+        return Promise.resolve({
+          totalRevenue: 0, totalDownloads: 0, totalUsers: 0, avgRating: 0, totalReviews: 0,
+          creations: { stickerPacks: 1, agents: 0, themes: 0, communities: 0, spaces: 0 },
+          recentEarnings: [],
+        });
+      }
+      if (url.includes("/api/creator/stickers")) {
+        return Promise.resolve({
+          packs: [{ id: "p1", name: "Fun Pack", downloads: 50, price: 10, status: "active", stickerCount: 8 }],
+        });
+      }
+      if (url.includes("/api/creator/agents") || url.includes("/api/wallet") || url.includes("/api/expert")) return Promise.resolve({ listings: [], balance: 0, experts: [] });
+      return Promise.resolve({});
+    });
+    render(<CreatorPage />);
+    await screen.findByText("creator.tab.stickers");
+    fireEvent.click(screen.getByText("creator.tab.stickers"));
+    expect(await screen.findByText("Fun Pack")).toBeInTheDocument();
+  });
+
+  it("renders spaces tab with create button", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/creator/dashboard")) {
+        return Promise.resolve({
+          totalRevenue: 0, totalDownloads: 0, totalUsers: 0, avgRating: 0, totalReviews: 0,
+          creations: { stickerPacks: 0, agents: 0, themes: 0, communities: 0, spaces: 0 },
+          recentEarnings: [],
+        });
+      }
+      if (url.includes("/api/creator/spaces")) return Promise.resolve({ spaces: [] });
+      if (url.includes("/api/creator/agents") || url.includes("/api/wallet") || url.includes("/api/expert")) return Promise.resolve({ listings: [], balance: 0, experts: [] });
+      return Promise.resolve({});
+    });
+    render(<CreatorPage />);
+    await screen.findByText("creator.tab.stickers");
+    const spacesButtons = screen.getAllByText("creator.tab.spaces");
+    fireEvent.click(spacesButtons[0]);
+    expect(await screen.findByText("creator.createApp")).toBeInTheDocument();
+  });
+
+  it("renders community tab with create buttons", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/creator/dashboard")) {
+        return Promise.resolve({
+          totalRevenue: 0, totalDownloads: 0, totalUsers: 0, avgRating: 0, totalReviews: 0,
+          creations: { stickerPacks: 0, agents: 0, themes: 0, communities: 0, spaces: 0 },
+          recentEarnings: [],
+        });
+      }
+      if (url.includes("/api/creator/community")) return Promise.resolve({ communities: [] });
+      if (url.includes("/api/creator/agents") || url.includes("/api/wallet") || url.includes("/api/expert")) return Promise.resolve({ listings: [], balance: 0, experts: [] });
+      return Promise.resolve({});
+    });
+    render(<CreatorPage />);
+    await screen.findByText("creator.tab.stickers");
+    const communityButtons = screen.getAllByText("creator.tab.community");
+    fireEvent.click(communityButtons[0]);
+    expect(await screen.findByText("creator.createCommunity")).toBeInTheDocument();
+    expect(screen.getByText("creator.createLounge")).toBeInTheDocument();
+  });
+
+  it("renders experts tab with create button", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/creator/dashboard")) {
+        return Promise.resolve({
+          totalRevenue: 0, totalDownloads: 0, totalUsers: 0, avgRating: 0, totalReviews: 0,
+          creations: { stickerPacks: 0, agents: 0, themes: 0, communities: 0, spaces: 0 },
+          recentEarnings: [],
+        });
+      }
+      if (url.includes("/api/expert-hub")) return Promise.resolve({ experts: [] });
+      if (url.includes("/api/creator/agents") || url.includes("/api/wallet")) return Promise.resolve({ listings: [], balance: 0 });
+      return Promise.resolve({});
+    });
+    render(<CreatorPage />);
+    await screen.findByText("creator.tab.experts");
+    fireEvent.click(screen.getByText("creator.tab.experts"));
+    expect(await screen.findByText("expertHub.creator.create")).toBeInTheDocument();
+  });
+
+  it("renders overview creation counts", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/creator/dashboard")) {
+        return Promise.resolve({
+          totalRevenue: 500, totalDownloads: 100, totalUsers: 50, avgRating: 4.2, totalReviews: 10,
+          creations: { stickerPacks: 3, agents: 2, themes: 1, communities: 4, spaces: 5 },
+          recentEarnings: [],
+        });
+      }
+      if (url.includes("/api/creator/agents") || url.includes("/api/wallet") || url.includes("/api/expert")) return Promise.resolve({ listings: [], balance: 0, experts: [] });
+      return Promise.resolve({});
+    });
+    render(<CreatorPage />);
+    expect(await screen.findByText("creator.yourCreations")).toBeInTheDocument();
+    // Check creation counts are displayed
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("renders overview download stats", async () => {
+    render(<CreatorPage />);
+    expect(await screen.findByText("creator.totalDownloads")).toBeInTheDocument();
+    expect(screen.getByText("creator.totalUsers")).toBeInTheDocument();
+    expect(screen.getByText("creator.avgRating")).toBeInTheDocument();
+  });
+
+  it("renders recent activity section with no activity message", async () => {
+    render(<CreatorPage />);
+    expect(await screen.findByText("creator.recentActivity")).toBeInTheDocument();
+    expect(screen.getByText("creator.noActivity")).toBeInTheDocument();
+  });
+
+  it("renders recent activity with earnings", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/creator/dashboard")) {
+        return Promise.resolve({
+          totalRevenue: 500, totalDownloads: 100, totalUsers: 50, avgRating: 4.2, totalReviews: 10,
+          creations: { stickerPacks: 0, agents: 0, themes: 0, communities: 0, spaces: 0 },
+          recentEarnings: [
+            { id: "e1", amount: 25, description: "Sticker sale", source: "stickers", createdAt: "2025-01-01" },
+          ],
+        });
+      }
+      if (url.includes("/api/creator/agents") || url.includes("/api/wallet") || url.includes("/api/expert")) return Promise.resolve({ listings: [], balance: 0, experts: [] });
+      return Promise.resolve({});
+    });
+    render(<CreatorPage />);
+    expect(await screen.findByText("Sticker sale")).toBeInTheDocument();
+    expect(screen.getByText("+25")).toBeInTheDocument();
+  });
+
+  it("renders themes tab", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/creator/dashboard")) {
+        return Promise.resolve({
+          totalRevenue: 0, totalDownloads: 0, totalUsers: 0, avgRating: 0, totalReviews: 0,
+          creations: { stickerPacks: 0, agents: 0, themes: 0, communities: 0, spaces: 0 },
+          recentEarnings: [],
+        });
+      }
+      if (url.includes("/api/creator/themes")) return Promise.resolve({ themes: [] });
+      if (url.includes("/api/creator/agents") || url.includes("/api/wallet") || url.includes("/api/expert")) return Promise.resolve({ listings: [], balance: 0, experts: [] });
+      return Promise.resolve({});
+    });
+    render(<CreatorPage />);
+    await screen.findByText("creator.tab.stickers");
+    // The themes tab text may appear in both overview and tab bar
+    const themesButtons = screen.getAllByText("creator.tab.themes");
+    fireEvent.click(themesButtons[0]);
+    expect(await screen.findByText("creator.newTheme")).toBeInTheDocument();
+  });
 });

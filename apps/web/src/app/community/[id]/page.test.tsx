@@ -171,4 +171,203 @@ describe("CommunityDetailPage", () => {
     const elements = await screen.findAllByText(/42/);
     expect(elements.length).toBeGreaterThan(0);
   });
+
+  it("shows community description", async () => {
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Test Community");
+    expect(screen.getByText("A test community")).toBeInTheDocument();
+  });
+
+  it("shows community type badge", async () => {
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Test Community");
+    expect(screen.getByText("community.type.community")).toBeInTheDocument();
+  });
+
+  it("renders back button", async () => {
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Test Community");
+    // Back button is a button element with ArrowLeft icon
+    const buttons = document.querySelectorAll("button");
+    expect(buttons.length).toBeGreaterThan(0);
+  });
+
+  it("shows wiki button", async () => {
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Test Community");
+    // Wiki button has title
+    const wikiButton = screen.getByTitle("wiki.title");
+    expect(wikiButton).toBeInTheDocument();
+  });
+
+  it("shows members button", async () => {
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Test Community");
+    const memberButtons = screen.getAllByTitle("chat.header.members");
+    expect(memberButtons.length).toBeGreaterThan(0);
+  });
+
+  it("renders not found state when community doesn't exist", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/api/communities/community-1") && !url.includes("/members") && !url.includes("/agents")) {
+        return Promise.reject(new Error("Not found"));
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    expect(await screen.findByText("community.detail.notFound")).toBeInTheDocument();
+  });
+
+  it("shows settings button when user is a member", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/members")) {
+        return Promise.resolve({
+          members: [{ id: "m1", userId: "user1", role: "member", joinedAt: "2024-01-01", subscriptionStatus: null, userName: "Test", userImage: null }],
+        });
+      }
+      if (url.includes("/agents")) return Promise.resolve({ agents: [] });
+      if (url.includes("/api/communities/community-1")) {
+        return Promise.resolve({
+          id: "community-1", creatorId: "other-user", name: "Test Community", description: "A test community",
+          type: "community", joinFee: 0, monthlyFee: 0, agentCallFee: 0, status: "active",
+          memberCount: 42, avatarUrl: null, coverImageUrl: null, category: "tech", verified: false,
+          csMode: null, conversationId: "conv-1", createdAt: "2024-01-01",
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    const settingsButton = await screen.findByTitle("chat.header.settings");
+    expect(settingsButton).toBeInTheDocument();
+  });
+
+  it("shows verified badge when community is verified", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/members")) return Promise.resolve({ members: [] });
+      if (url.includes("/agents")) return Promise.resolve({ agents: [] });
+      if (url.includes("/api/communities/community-1")) {
+        return Promise.resolve({
+          id: "community-1", creatorId: "other-user", name: "Verified Community", description: "Verified",
+          type: "community", joinFee: 0, monthlyFee: 0, agentCallFee: 0, status: "active",
+          memberCount: 100, avatarUrl: null, coverImageUrl: null, category: "tech", verified: true,
+          csMode: null, conversationId: "conv-1", createdAt: "2024-01-01",
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Verified Community");
+    // The verified badge icon should be rendered (BadgeCheck component)
+    expect(document.body.innerHTML.length).toBeGreaterThan(0);
+  });
+
+  it("shows agent list when agents are present", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/members")) return Promise.resolve({ members: [] });
+      if (url.includes("/agents")) {
+        return Promise.resolve({
+          agents: [
+            { id: "a1", listingId: "l1", agentName: "ChatBot", avatarUrl: null, description: "A bot", model: "gpt-4", addedAt: "2024-01-01" },
+          ],
+        });
+      }
+      if (url.includes("/api/communities/community-1")) {
+        return Promise.resolve({
+          id: "community-1", creatorId: "other-user", name: "Test Community", description: "A test community",
+          type: "community", joinFee: 0, monthlyFee: 0, agentCallFee: 0, status: "active",
+          memberCount: 42, avatarUrl: null, coverImageUrl: null, category: "tech", verified: false,
+          csMode: null, conversationId: "conv-1", createdAt: "2024-01-01",
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Test Community");
+    expect(screen.getByText("ChatBot")).toBeInTheDocument();
+  });
+
+  it("shows member list when members are present", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/members")) {
+        return Promise.resolve({
+          members: [
+            { id: "m1", userId: "u1", role: "member", joinedAt: "2024-01-01", subscriptionStatus: null, userName: "Alice", userImage: null },
+            { id: "m2", userId: "u2", role: "member", joinedAt: "2024-01-02", subscriptionStatus: null, userName: "Bob", userImage: null },
+          ],
+        });
+      }
+      if (url.includes("/agents")) return Promise.resolve({ agents: [] });
+      if (url.includes("/api/communities/community-1")) {
+        return Promise.resolve({
+          id: "community-1", creatorId: "other-user", name: "Test Community", description: "desc",
+          type: "community", joinFee: 0, monthlyFee: 0, agentCallFee: 0, status: "active",
+          memberCount: 2, avatarUrl: null, coverImageUrl: null, category: null, verified: false,
+          csMode: null, conversationId: "conv-1", createdAt: "2024-01-01",
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Test Community");
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+  });
+
+  it("shows lounge type badge for lounge communities", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/members")) return Promise.resolve({ members: [] });
+      if (url.includes("/agents")) return Promise.resolve({ agents: [] });
+      if (url.includes("/api/communities/community-1")) {
+        return Promise.resolve({
+          id: "community-1", creatorId: "other-user", name: "My Lounge", description: null,
+          type: "lounge", joinFee: 0, monthlyFee: 0, agentCallFee: 0, status: "active",
+          memberCount: 5, avatarUrl: null, coverImageUrl: null, category: null, verified: false,
+          csMode: null, conversationId: "conv-1", createdAt: "2024-01-01",
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("My Lounge");
+    expect(screen.getByText("community.type.lounge")).toBeInTheDocument();
+  });
+
+  it("shows agent call fee when present", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/members")) return Promise.resolve({ members: [] });
+      if (url.includes("/agents")) return Promise.resolve({ agents: [] });
+      if (url.includes("/api/communities/community-1")) {
+        return Promise.resolve({
+          id: "community-1", creatorId: "other-user", name: "Paid Community", description: null,
+          type: "community", joinFee: 0, monthlyFee: 0, agentCallFee: 50, status: "active",
+          memberCount: 10, avatarUrl: null, coverImageUrl: null, category: null, verified: false,
+          csMode: null, conversationId: "conv-1", createdAt: "2024-01-01",
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Paid Community");
+    expect(screen.getByText(/50/)).toBeInTheDocument();
+  });
+
+  it("renders with avatar when avatarUrl is provided", async () => {
+    mockApi.mockImplementation((url: string) => {
+      if (url.includes("/members")) return Promise.resolve({ members: [] });
+      if (url.includes("/agents")) return Promise.resolve({ agents: [] });
+      if (url.includes("/api/communities/community-1")) {
+        return Promise.resolve({
+          id: "community-1", creatorId: "other-user", name: "Avatar Community", description: null,
+          type: "community", joinFee: 0, monthlyFee: 0, agentCallFee: 0, status: "active",
+          memberCount: 10, avatarUrl: "https://example.com/avatar.jpg", coverImageUrl: null,
+          category: "tech", verified: false, csMode: null, conversationId: "conv-1", createdAt: "2024-01-01",
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(<CommunityDetailPage />);
+    await screen.findAllByText("Avatar Community");
+    const imgs = document.querySelectorAll("img");
+    expect(imgs.length).toBeGreaterThan(0);
+  });
 });

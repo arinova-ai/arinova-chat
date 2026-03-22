@@ -277,4 +277,143 @@ describe("ChatArea", () => {
     render(<ChatArea />);
     expect(screen.getByTestId("message-list")).toBeInTheDocument();
   });
+
+  it("renders multiple messages in message list", () => {
+    setStoreState({
+      activeConversationId: "conv-1",
+      conversations: [
+        {
+          id: "conv-1",
+          title: "Test",
+          type: "h2a",
+          userId: "u1",
+          agentId: "a1",
+          agentName: "CodeBot",
+          agentDescription: null,
+          agentAvatarUrl: null,
+          lastMessage: null,
+          pinnedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      messagesByConversation: {
+        "conv-1": [
+          { id: "m1", conversationId: "conv-1", role: "user", content: "Hello", status: "delivered", createdAt: new Date(), updatedAt: new Date() },
+          { id: "m2", conversationId: "conv-1", role: "agent", content: "Hi there!", status: "completed", createdAt: new Date(), updatedAt: new Date() },
+        ],
+      },
+      agents: [{ id: "a1", name: "CodeBot", description: "A coding bot", avatarUrl: null }],
+      agentHealth: { a1: { status: "online", latencyMs: 10 } },
+    });
+    render(<ChatArea />);
+    expect(screen.getByText("Hello")).toBeInTheDocument();
+    expect(screen.getByText("Hi there!")).toBeInTheDocument();
+  });
+
+  it("renders for group conversation type", () => {
+    setStoreState({
+      activeConversationId: "conv-g1",
+      conversations: [
+        {
+          id: "conv-g1",
+          title: "Group Chat",
+          type: "group",
+          userId: "u1",
+          agentId: null,
+          agentName: "Group",
+          agentDescription: null,
+          agentAvatarUrl: null,
+          lastMessage: null,
+          pinnedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      messagesByConversation: { "conv-g1": [] },
+      conversationMembers: { "conv-g1": [] },
+    });
+    render(<ChatArea />);
+    expect(screen.getByTestId("chat-header")).toHaveTextContent("Group");
+    expect(screen.getByTestId("message-list")).toBeInTheDocument();
+    expect(screen.getByTestId("chat-input")).toBeInTheDocument();
+  });
+
+  it("renders for community conversation type", () => {
+    setStoreState({
+      activeConversationId: "conv-c1",
+      conversations: [
+        {
+          id: "conv-c1",
+          title: "Community",
+          type: "community",
+          userId: "u1",
+          agentId: null,
+          agentName: "Community Chat",
+          agentDescription: "A community",
+          agentAvatarUrl: null,
+          lastMessage: null,
+          pinnedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      messagesByConversation: { "conv-c1": [] },
+      conversationMembers: { "conv-c1": [] },
+    });
+    render(<ChatArea />);
+    expect(screen.getByTestId("chat-header")).toHaveTextContent("Community Chat");
+  });
+
+  it("uses agent info from agents list when present", () => {
+    setStoreState({
+      activeConversationId: "conv-1",
+      conversations: [
+        {
+          id: "conv-1",
+          title: "Bot Chat",
+          type: "h2a",
+          userId: "u1",
+          agentId: "a2",
+          agentName: "MathBot",
+          agentDescription: "Math helper",
+          agentAvatarUrl: "/math.png",
+          lastMessage: null,
+          pinnedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      messagesByConversation: { "conv-1": [] },
+      agents: [{ id: "a2", name: "MathBot", description: "Math helper", avatarUrl: "/math.png" }],
+      agentHealth: { a2: { status: "online", latencyMs: 5 } },
+    });
+    render(<ChatArea />);
+    expect(screen.getByTestId("chat-header")).toHaveTextContent("MathBot");
+  });
+
+  it("handles conversation with null agentId", () => {
+    setStoreState({
+      activeConversationId: "conv-h2h",
+      conversations: [
+        {
+          id: "conv-h2h",
+          title: "Direct Message",
+          type: "h2h",
+          userId: "u1",
+          agentId: null,
+          agentName: "John",
+          agentDescription: null,
+          agentAvatarUrl: null,
+          lastMessage: null,
+          pinnedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      messagesByConversation: { "conv-h2h": [] },
+    });
+    render(<ChatArea />);
+    expect(screen.getByTestId("chat-header")).toHaveTextContent("John");
+  });
 });

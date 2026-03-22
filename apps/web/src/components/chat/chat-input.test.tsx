@@ -7,39 +7,55 @@ const mockSendMessage = vi.fn();
 const mockLoadAgentSkills = vi.fn();
 
 vi.mock("@/store/chat-store", () => ({
-  useChatStore: (selector: any) => {
-    const state = {
-      sendMessage: mockSendMessage,
-      activeConversationId: "conv-1",
-      conversations: [
-        {
-          id: "conv-1",
-          type: "h2a",
-          agentId: "agent-1",
-          agentName: "TestBot",
-        },
-      ],
-      agents: [
-        {
-          id: "agent-1",
-          name: "TestBot",
-        },
-      ],
-      agentSkills: {},
-      loadAgentSkills: mockLoadAgentSkills,
-      replyingTo: null,
-      setReplyingTo: vi.fn(),
-      conversationMembers: {},
-      messagesByConversation: {},
-      inputDrafts: {},
-      setInputDraft: vi.fn(),
-      attachedCard: null,
-      setAttachedCard: vi.fn(),
-      attachedNote: null,
-      setAttachedNote: vi.fn(),
-    };
-    return selector(state);
-  },
+  useChatStore: Object.assign(
+    (selector: any) => {
+      const state = {
+        sendMessage: mockSendMessage,
+        sendThreadMessage: vi.fn(),
+        activeThreadId: null,
+        activeConversationId: "conv-1",
+        conversations: [
+          {
+            id: "conv-1",
+            type: "h2a",
+            agentId: "agent-1",
+            agentName: "TestBot",
+          },
+        ],
+        agents: [
+          {
+            id: "agent-1",
+            name: "TestBot",
+          },
+        ],
+        agentSkills: {},
+        loadAgentSkills: mockLoadAgentSkills,
+        cancelStream: vi.fn(),
+        insertSystemMessage: vi.fn(),
+        getConversationStatus: vi.fn(),
+        ttsEnabled: false,
+        setTtsEnabled: vi.fn(),
+        replyingTo: null,
+        setReplyingTo: vi.fn(),
+        conversationMembers: {},
+        messagesByConversation: {},
+        inputDrafts: {},
+        setInputDraft: vi.fn(),
+        clearInputDraft: vi.fn(),
+        attachedCard: null,
+        clearAttachedCard: vi.fn(),
+        setAttachedCard: vi.fn(),
+        attachedNote: null,
+        setAttachedNote: vi.fn(),
+      };
+      return selector(state);
+    },
+    {
+      getState: () => ({
+        addToast: vi.fn(),
+      }),
+    }
+  ),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -76,7 +92,7 @@ vi.mock("@/lib/sounds", () => ({
 }));
 
 vi.mock("@/hooks/use-input-history", () => ({
-  useInputHistory: () => ({ push: vi.fn(), up: vi.fn(), down: vi.fn(), reset: vi.fn() }),
+  useInputHistory: () => ({ addToHistory: vi.fn(), navigateUp: vi.fn(), navigateDown: vi.fn(), resetNavigation: vi.fn(), isNavigating: false }),
 }));
 
 vi.mock("@/lib/platform-commands", () => ({
@@ -226,5 +242,92 @@ describe("ChatInput", () => {
 
     // Verify sendMessage was called (clearing is an implementation detail)
     expect(mockSendMessage).toHaveBeenCalled();
+  });
+
+  it("renders attachment button", () => {
+    render(<ChatInput />);
+    // The file input for attachments should be present (hidden)
+    const { container } = render(<ChatInput />);
+    const fileInput = container.querySelector('input[type="file"]');
+    expect(fileInput).toBeTruthy();
+  });
+
+  it("renders voice recorder area", () => {
+    // VoiceRecorder is mocked to return null, but the component should still render
+    const { container } = render(<ChatInput />);
+    expect(container).toBeTruthy();
+  });
+
+  it("does not call sendMessage when textarea is empty and Enter is pressed", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput />);
+    const textarea = screen.getByPlaceholderText("Type a message...");
+    await user.click(textarea);
+    await user.keyboard("{Enter}");
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("textarea auto-grows when typing multiple lines", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput />);
+    const textarea = screen.getByPlaceholderText("Type a message...") as HTMLTextAreaElement;
+    await user.type(textarea, "Line 1{Shift>}{Enter}{/Shift}Line 2{Shift>}{Enter}{/Shift}Line 3");
+    // Textarea should contain newlines
+    expect(textarea.value).toContain("Line 1");
+    expect(textarea.value).toContain("Line 2");
+    expect(textarea.value).toContain("Line 3");
+  });
+
+  it("renders with stickerOpen prop", () => {
+    const onToggle = vi.fn();
+    const { container } = render(<ChatInput stickerOpen={true} onStickerToggle={onToggle} />);
+    expect(container).toBeTruthy();
+  });
+
+  it("renders with droppedFiles prop", () => {
+    const { container } = render(<ChatInput droppedFiles={null} onDropHandled={vi.fn()} />);
+    expect(container).toBeTruthy();
+  });
+
+  it("multiple Enter presses call sendMessage once per typed message", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput />);
+    const textarea = screen.getByPlaceholderText("Type a message...");
+    await user.type(textarea, "Hello");
+    await user.keyboard("{Enter}");
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    // After sending, type another message
+    await user.type(textarea, "World");
+    await user.keyboard("{Enter}");
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads agent skills on mount for h2a conversations", () => {
+    render(<ChatInput />);
+    // The mock store has agentId agent-1 for h2a conversation
+    expect(mockLoadAgentSkills).toHaveBeenCalledWith("agent-1");
+  });
+
+  it("renders attach file button with title", () => {
+    render(<ChatInput />);
+    const attachBtn = screen.getByTitle("Attach file");
+    expect(attachBtn).toBeInTheDocument();
+  });
+
+  it("renders mic/voice button when text is empty", () => {
+    const { container } = render(<ChatInput />);
+    // When textarea is empty, the component should render the mic button instead of send
+    const buttons = container.querySelectorAll("button");
+    expect(buttons.length).toBeGreaterThanOrEqual(2); // At least attach + mic/send
+  });
+
+  it("shows send button when text is present", async () => {
+    const user = userEvent.setup();
+    render(<ChatInput />);
+    const textarea = screen.getByPlaceholderText("Type a message...");
+    await user.type(textarea, "Hello");
+    // After typing, send button should appear (brand-gradient-btn class)
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -186,4 +186,170 @@ describe("ConversationItem", () => {
     render(<ConversationItem {...defaultProps} isThinking={true} />);
     expect(screen.getByText("chat.thinking")).toBeInTheDocument();
   });
+
+  it("shows unpin text when pinnedAt is set", () => {
+    render(<ConversationItem {...defaultProps} pinnedAt={new Date()} />);
+    // Pin text appears in both swipe area and dropdown
+    const unpinElements = screen.getAllByText("conversation.unpin");
+    expect(unpinElements.length).toBeGreaterThan(0);
+  });
+
+  it("shows pin text when not pinned", () => {
+    render(<ConversationItem {...defaultProps} pinnedAt={null} />);
+    const pinElements = screen.getAllByText("conversation.pin");
+    expect(pinElements.length).toBeGreaterThan(0);
+  });
+
+  it("renders collapsed view when collapsed is true", () => {
+    render(<ConversationItem {...defaultProps} collapsed={true} />);
+    // In collapsed view, the title should appear as truncated text
+    expect(screen.getByText("Test Conversation")).toBeInTheDocument();
+  });
+
+  it("shows unread badge in collapsed view", () => {
+    render(<ConversationItem {...defaultProps} collapsed={true} unreadCount={3} />);
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("shows 99+ in collapsed view for high unread count", () => {
+    render(<ConversationItem {...defaultProps} collapsed={true} unreadCount={150} />);
+    expect(screen.getByText("99+")).toBeInTheDocument();
+  });
+
+  it("shows online indicator in collapsed view", () => {
+    const { container } = render(
+      <ConversationItem {...defaultProps} collapsed={true} isOnline={true} />
+    );
+    const onlineIndicator = container.querySelector(".bg-green-500");
+    expect(onlineIndicator).toBeInTheDocument();
+  });
+
+  it("renders system message preview with info emoji", () => {
+    const props = {
+      ...defaultProps,
+      lastMessage: {
+        id: "msg-1",
+        conversationId: "conv-1",
+        seq: 1,
+        role: "system" as const,
+        content: "User joined the conversation",
+        status: "completed" as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+    render(<ConversationItem {...props} />);
+    // System messages show with info emoji prefix
+    expect(screen.getByText(/User joined/)).toBeInTheDocument();
+  });
+
+  it("renders image attachment preview", () => {
+    const props = {
+      ...defaultProps,
+      lastMessage: {
+        id: "msg-1",
+        conversationId: "conv-1",
+        seq: 1,
+        role: "user" as const,
+        content: "",
+        status: "completed" as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        attachments: [
+          { id: "att-1", messageId: "msg-1", fileName: "photo.jpg", fileType: "image/jpeg", fileSize: 1024, url: "/photo.jpg", createdAt: new Date() },
+        ],
+      },
+    };
+    render(<ConversationItem {...props} />);
+    // Image preview is shown with camera emoji prefix
+    const preview = screen.getByText((content) => content.includes("chat.photoMessage"));
+    expect(preview).toBeInTheDocument();
+  });
+
+  it("renders audio attachment preview", () => {
+    const props = {
+      ...defaultProps,
+      lastMessage: {
+        id: "msg-1",
+        conversationId: "conv-1",
+        seq: 1,
+        role: "user" as const,
+        content: "",
+        status: "completed" as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        attachments: [
+          { id: "att-1", messageId: "msg-1", fileName: "voice.webm", fileType: "audio/webm", fileSize: 2048, url: "/voice.webm", createdAt: new Date(), duration: 65 },
+        ],
+      },
+    };
+    render(<ConversationItem {...props} />);
+    expect(screen.getByText(/chat.voiceMessage/)).toBeInTheDocument();
+  });
+
+  it("renders file attachment preview", () => {
+    const props = {
+      ...defaultProps,
+      lastMessage: {
+        id: "msg-1",
+        conversationId: "conv-1",
+        seq: 1,
+        role: "user" as const,
+        content: "",
+        status: "completed" as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        attachments: [
+          { id: "att-1", messageId: "msg-1", fileName: "report.pdf", fileType: "application/pdf", fileSize: 4096, url: "/report.pdf", createdAt: new Date() },
+        ],
+      },
+    };
+    render(<ConversationItem {...props} />);
+    expect(screen.getByText(/report.pdf/)).toBeInTheDocument();
+  });
+
+  it("renders delete confirmation dialog text", () => {
+    render(<ConversationItem {...defaultProps} />);
+    // The dialog is always rendered (just hidden) - check for delete title text
+    expect(screen.getByText("conversation.deleteTitle")).toBeInTheDocument();
+  });
+
+  it("renders rename menu item", () => {
+    render(<ConversationItem {...defaultProps} />);
+    expect(screen.getByText("conversation.rename")).toBeInTheDocument();
+  });
+
+  it("shows mute option when onMuteToggle is provided", () => {
+    const onMuteToggle = vi.fn();
+    render(<ConversationItem {...defaultProps} onMuteToggle={onMuteToggle} isMuted={false} />);
+    const muteElements = screen.getAllByText("chat.header.muteConversation");
+    expect(muteElements.length).toBeGreaterThan(0);
+  });
+
+  it("shows unmute option when muted", () => {
+    const onMuteToggle = vi.fn();
+    render(<ConversationItem {...defaultProps} onMuteToggle={onMuteToggle} isMuted={true} />);
+    const unmuteElements = screen.getAllByText("chat.header.unmuteConversation");
+    expect(unmuteElements.length).toBeGreaterThan(0);
+  });
+
+  it("truncates long message previews", () => {
+    const longText = "A".repeat(100);
+    const props = {
+      ...defaultProps,
+      lastMessage: {
+        id: "msg-1",
+        conversationId: "conv-1",
+        seq: 1,
+        role: "agent" as const,
+        content: longText,
+        status: "completed" as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+    render(<ConversationItem {...props} />);
+    // Truncated to 50 chars + "..."
+    expect(screen.getByText("A".repeat(50) + "...")).toBeInTheDocument();
+  });
 });
