@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Mic, Users, Loader2 } from "lucide-react";
+import { ArrowLeft, Mic, Users, Loader2, Plus, Upload, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
+import { useChatStore } from "@/store/chat-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthGuard } from "@/components/auth-guard";
@@ -18,6 +19,7 @@ interface LoungeDetail {
   coverImageUrl: string | null;
   subscriberCount: number;
   voiceModelStatus: string;
+  creatorId?: string;
 }
 
 function LoungeDetailInner() {
@@ -184,7 +186,7 @@ function LoungeDetailInner() {
       </div>
 
       {/* Posts Feed */}
-      <LoungePosts loungeId={id} />
+      <LoungePosts loungeId={id} isOwner={lounge.creatorId === useChatStore.getState().currentUserId} />
     </div>
   );
 }
@@ -198,25 +200,102 @@ interface Post {
   createdAt: string;
 }
 
-function LoungePosts({ loungeId }: { loungeId: string }) {
+function LoungePosts({ loungeId, isOwner }: { loungeId: string; isOwner: boolean }) {
   const { t } = useTranslation();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [newContent, setNewContent] = useState("");
+  const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  const fetchPosts = useCallback(() => {
     api<{ posts: Post[] }>(`/api/lounge/${loungeId}/posts`)
       .then((d) => setPosts(d.posts))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [loungeId]);
 
+  useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+  const handleUploadImage = async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api<{ url: string }>(`/api/lounge/${loungeId}/posts/upload`, { method: "POST", body: formData });
+      setNewImageUrl(res.url);
+    } catch { /* toast */ }
+    setUploading(false);
+  };
+
+  const handleSubmit = async () => {
+    if (!newContent.trim() && !newImageUrl) return;
+    setSubmitting(true);
+    try {
+      await api(`/api/lounge/${loungeId}/posts`, {
+        method: "POST",
+        body: JSON.stringify({ content: newContent.trim(), imageUrl: newImageUrl }),
+      });
+      setNewContent("");
+      setNewImageUrl(null);
+      setCreating(false);
+      fetchPosts();
+    } catch { /* toast */ }
+    setSubmitting(false);
+  };
+
   if (loading) return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin" /></div>;
-  if (posts.length === 0) return null;
 
   return (
     <div className="px-4 pb-4 space-y-3">
-      <h3 className="text-sm font-semibold text-muted-foreground">{t("lounge.posts")}</h3>
-      {posts.map((post) => (
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-muted-foreground">{t("lounge.posts")}</h3>
+        {isOwner && !creating && (
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setCreating(true)}>
+            <Plus className="h-3 w-3" /> {t("lounge.newPost")}
+          </Button>
+        )}
+      </div>
+
+      {/* Create form */}
+      {isOwner && creating && (
+        <div className="rounded-xl border border-brand/30 p-3 space-y-2">
+          <textarea
+            value={newContent}
+            onChange={(e) => setNewContent(e.target.value)}
+            placeholder={t("lounge.postPlaceholder")}
+            rows={3}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none outline-none focus:border-brand"
+          />
+          {newImageUrl && (
+            <div className="relative">
+              <img src={newImageUrl} alt="" className="w-full rounded-lg object-cover max-h-48" />
+              <button type="button" onClick={() => setNewImageUrl(null)} className="absolute top-1 right-1 rounded-full bg-background/80 p-1">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer">
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadImage(f); e.target.value = ""; }} />
+              <span className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs hover:bg-accent">
+                {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                {t("lounge.addImage")}
+              </span>
+            </label>
+            <div className="flex-1" />
+            <Button size="sm" className="h-7 text-xs" onClick={() => { setCreating(false); setNewContent(""); setNewImageUrl(null); }} variant="ghost">{t("common.cancel")}</Button>
+            <Button size="sm" className="h-7 text-xs" onClick={handleSubmit} disabled={submitting || (!newContent.trim() && !newImageUrl)}>{t("lounge.publish")}</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Posts list */}
+      {posts.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-4">{t("lounge.noPosts")}</p>
+      ) : posts.map((post) => (
         <div key={post.id} className="rounded-xl border border-border p-3 space-y-2">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-full bg-purple-500/10 overflow-hidden flex items-center justify-center shrink-0">
