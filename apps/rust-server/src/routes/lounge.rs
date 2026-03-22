@@ -525,23 +525,29 @@ async fn join_lounge(
                 return (StatusCode::OK, Json(json!({"conversationId": conv_id})));
             }
 
-            // Create new conversation (same as start-chat)
+            // Create new conversation
             let conv_id = Uuid::new_v4();
-            let agent_uuid = agent_id.unwrap_or_else(Uuid::new_v4);
-            let _ = sqlx::query(
+            let insert_result = sqlx::query(
                 r#"INSERT INTO conversations (id, user_id, agent_id, title, type)
                    VALUES ($1, $2, $3, $4, 'lounge')"#,
-            ).bind(conv_id).bind(&user.id).bind(agent_uuid).bind(&lounge_name).execute(&state.db).await;
+            ).bind(conv_id).bind(&user.id).bind(agent_id).bind(&lounge_name).execute(&state.db).await;
+
+            if let Err(e) = insert_result {
+                tracing::error!("join_lounge: INSERT conversation failed: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": format!("Failed to create conversation: {}", e)})));
+            }
 
             // Track via official_conversations
             let _ = sqlx::query(
                 "INSERT INTO official_conversations (community_id, user_id, conversation_id, status) VALUES ($1, $2, $3, 'ai_active')",
             ).bind(id).bind(&user.id).bind(conv_id).execute(&state.db).await;
 
-            // Add agent as conversation member
-            let _ = sqlx::query(
-                "INSERT INTO conversation_members (conversation_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-            ).bind(conv_id).bind(agent_uuid).execute(&state.db).await;
+            // Add agent as conversation member (if agent exists)
+            if let Some(aid) = agent_id {
+                let _ = sqlx::query(
+                    "INSERT INTO conversation_members (conversation_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                ).bind(conv_id).bind(aid).execute(&state.db).await;
+            }
 
             return (StatusCode::OK, Json(json!({"conversationId": conv_id})));
         }
