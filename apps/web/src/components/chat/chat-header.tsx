@@ -333,11 +333,25 @@ export function ChatHeader({
                 case "files": onFilesClick?.(); break;
               }
             }}
-            onSettingsOpen={() => {
-              if (type === "community" && officialCommunityId) {
-                setCommunitySettingsTab(undefined);
-                setCommunitySettingsOpen(true);
-              } else if (window.matchMedia("(min-width: 1280px)").matches) {
+            onSettingsOpen={async () => {
+              if (type === "community") {
+                if (!officialCommunityId) {
+                  // Fetch community ID from conversation
+                  try {
+                    const data = await api<{ id: string }>(`/api/communities/by-conversation/${conversationId}`);
+                    if (data.id) {
+                      setCommunitySettingsTab(undefined);
+                      setCommunitySettingsOpen(true);
+                      return;
+                    }
+                  } catch { /* fall through */ }
+                } else {
+                  setCommunitySettingsTab(undefined);
+                  setCommunitySettingsOpen(true);
+                  return;
+                }
+              }
+              if (window.matchMedia("(min-width: 1280px)").matches) {
                 useRightPanelStore.getState().setActiveTab("settings");
               } else {
                 setSettingsOpen(true);
