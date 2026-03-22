@@ -223,6 +223,8 @@ export function ChatArea() {
             const data = await api<{ id: string }>(`/api/communities/by-conversation/${conversation.id}`);
             router.push(`/community/${data.id}`);
           } catch { /* ignore */ }
+        }) : conversation.type === "lounge" ? (() => {
+          if (conversation.officialCommunityId) router.push(`/lounge/${conversation.officialCommunityId}`);
         }) : (agent ? () => setManageOpen(true) : undefined) as (() => void) | undefined}
         onMembersClick={isGroupLike(conversation.type) ? () => {
           if (window.matchMedia("(min-width: 1280px)").matches) {

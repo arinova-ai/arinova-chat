@@ -32,6 +32,7 @@ function LoungeDetailInner() {
   const [lounge, setLounge] = useState<LoungeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [isMember, setIsMember] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [profileNickname, setProfileNickname] = useState("");
   const [profileAvatar, setProfileAvatar] = useState("");
@@ -42,17 +43,28 @@ function LoungeDetailInner() {
       .then(setLounge)
       .catch(() => {})
       .finally(() => setLoading(false));
+    // Check membership from conversations list
+    api<{ conversations: { officialCommunityId?: string }[] }>("/api/conversations")
+      .then((d) => {
+        if (d.conversations?.some((c) => c.officialCommunityId === id)) setIsMember(true);
+      })
+      .catch(() => {});
   }, [id]);
 
   const handleJoin = async () => {
     setJoining(true);
     try {
       const res = await api<{ conversationId: string }>(`/api/lounge/${id}/join`, { method: "POST" });
+      if (isMember) {
+        router.push(`/?c=${res.conversationId}`);
+        return;
+      }
       setJoinedConvId(res.conversationId);
       setShowProfile(true);
     } catch {
       try {
         const res = await api<{ conversationId: string }>(`/api/lounge/${id}/start-chat`, { method: "POST" });
+        if (isMember) { router.push(`/?c=${res.conversationId}`); return; }
         setJoinedConvId(res.conversationId);
         setShowProfile(true);
       } catch { /* toast handled by api */ }
@@ -195,7 +207,7 @@ function LoungeDetailInner() {
             disabled={joining}
           >
             {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
-            {t("lounge.joinChat")}
+            {isMember ? t("lounge.continueChat") : t("lounge.joinChat")}
           </Button>
         )}
       </div>
