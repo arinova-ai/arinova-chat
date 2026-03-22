@@ -561,8 +561,7 @@ async fn main() {
         PRIMARY KEY (notebook_id, user_id)
     )"#).execute(&db).await.ok();
 
-    sqlx::query("DROP TABLE IF EXISTS note_conversation_links").execute(&db).await.ok();
-    sqlx::query("ALTER TABLE notes DROP COLUMN IF EXISTS conversation_id").execute(&db).await.ok();
+    // note_conversation_links and notes.conversation_id kept — still used by agent_notes.rs and memory.rs
 
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS experts (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
