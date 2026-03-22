@@ -267,7 +267,7 @@ describe("MessageBubble", () => {
   it("renders delivered status message", () => {
     render(
       <MessageBubble
-        message={createMessage({ status: "delivered", role: "user", senderUserId: "current-user" })}
+        message={createMessage({ status: "completed", role: "user", senderUserId: "current-user" })}
       />
     );
     expect(screen.getByText("Hello world")).toBeInTheDocument();
@@ -282,7 +282,7 @@ describe("MessageBubble", () => {
             id: "msg-0",
             content: "Original message text",
             role: "user",
-            senderAgentName: null,
+            senderAgentName: undefined,
           },
         })}
       />
@@ -310,7 +310,6 @@ describe("MessageBubble", () => {
     render(
       <MessageBubble
         message={createMessage({ role: "agent" })}
-        agentAvatarUrl="/custom-avatar.png"
       />
     );
     // The avatar image should be rendered

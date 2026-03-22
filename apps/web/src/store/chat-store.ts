@@ -2502,6 +2502,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
 
+      // In-app notification for agent replies in other conversations (mobile only)
+      if (typeof window !== "undefined") {
+        const isMobileSE = window.matchMedia("(max-width: 767px)").matches;
+        if (
+          isMobileSE &&
+          conversationId !== get().activeConversationId &&
+          !get().mutedConversations[conversationId]
+        ) {
+          const seContent = finalContent || event.content || "";
+          const sePreview = seContent.length > 80 ? seContent.slice(0, 80) + "..." : seContent || "Agent replied";
+          useNotificationStore.getState().show({
+            conversationId,
+            senderName: senderAgentName || "Agent",
+            preview: sePreview,
+          });
+        }
+      }
+
       // Safety cleanup: ensure this messageId is removed from thinkingAgents
       const thinkingAfter = get().thinkingAgents[conversationId] ?? [];
       if (thinkingAfter.some((t) => t.messageId === messageId)) {
