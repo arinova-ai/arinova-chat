@@ -2353,11 +2353,21 @@ async fn agent_create_card(
         match permitted_board {
             Some(id) => id,
             None => {
-                // No permitted board — use default and auto-grant permission
-                let default_id = match ensure_default_board(&state.db, &owner_id).await {
-                    Ok(id) => id,
-                    Err(e) => return e,
+                // No permitted board — find user's first existing board (don't auto-create)
+                let existing_board = sqlx::query_scalar::<_, Uuid>(
+                    "SELECT id FROM kanban_boards WHERE owner_id = $1 AND archived = false ORDER BY created_at LIMIT 1",
+                )
+                .bind(&owner_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+                let default_id = match existing_board {
+                    Some(id) => id,
+                    None => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "No board available. User must create a board first." }))).into_response(),
                 };
+                // Auto-grant agent permission
                 let _ = sqlx::query(
                     "INSERT INTO board_agent_permissions (board_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 )
