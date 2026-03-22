@@ -765,6 +765,7 @@ async fn update_community(
         "SELECT cm.role::text FROM community_members cm WHERE cm.community_id = $1 AND cm.user_id = $2",
     )
     .bind(id)
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
 
