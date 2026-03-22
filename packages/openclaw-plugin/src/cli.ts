@@ -1,10 +1,39 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { ResolvedArinovaChatAccount } from "./accounts.js";
 import { resolveAccount, apiCall } from "./tools.js";
+
+const DEFAULT_API_URL = "https://api.chat-staging.arinova.ai";
+
+/** Resolve account with --token / --agent overrides. Priority: --token > --agent > default */
+function resolveAccountWithOverrides(parentOpts: { agent?: string; token?: string }): ResolvedArinovaChatAccount {
+  if (parentOpts.token) {
+    // Direct token override — construct a minimal account
+    const base = (() => { try { return resolveAccount(); } catch { return null; } })();
+    return {
+      accountId: "cli-override",
+      enabled: true,
+      name: "CLI Override",
+      apiUrl: base?.apiUrl ?? DEFAULT_API_URL,
+      botToken: parentOpts.token,
+      agentId: base?.agentId ?? "",
+      sessionToken: "",
+      config: base?.config ?? ({} as ResolvedArinovaChatAccount["config"]),
+    };
+  }
+  if (parentOpts.agent) {
+    return resolveAccount(parentOpts.agent);
+  }
+  return resolveAccount();
+}
 
 export function registerCli(api: OpenClawPluginApi): void {
   api.registerCli(
     async (ctx) => {
-      const arinova = ctx.program.command("arinova").description("Arinova Chat commands");
+      const arinova = ctx.program
+        .command("arinova")
+        .description("Arinova Chat commands")
+        .option("--agent <name>", "Account name from openclaw config")
+        .option("--token <botToken>", "Bot token (overrides --agent and default)");
 
       // ── Message commands ──
 
@@ -17,8 +46,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--content <text>", "Message content")
         .option("--reply-to <id>", "Reply to message ID")
         .action(async (opts: { conversationId: string; content: string; replyTo?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, string> = { conversationId: opts.conversationId, content: opts.content };
           if (opts.replyTo) body.replyTo = opts.replyTo;
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/send`, token: account.botToken, body });
@@ -32,8 +61,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--limit <n>", "Number of messages (default 50, max 100)")
         .option("--cursor <id>", "Message ID cursor (fetch older messages)")
         .action(async (opts: { conversationId: string; limit?: string; cursor?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const qs = new URLSearchParams();
           if (opts.limit) qs.set("limit", opts.limit);
           if (opts.cursor) qs.set("before", opts.cursor);
@@ -53,8 +82,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--conversation-id <id>", "Conversation ID")
         .requiredOption("--file-path <path>", "Absolute path to the file")
         .action(async (opts: { conversationId: string; filePath: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const fs = await import("node:fs");
           const path = await import("node:path");
 
@@ -106,8 +135,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--tags <tags>", "Filter by tags (comma-separated)")
         .option("--archived", "List archived notes instead of active")
         .action(async (opts: { notebookId?: string; limit?: string; cursor?: string; tags?: string; archived?: boolean }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const conversationId = opts.notebookId;
           if (!conversationId) { console.error("--notebook-id is required"); process.exit(1); }
           const qs = new URLSearchParams();
@@ -129,8 +158,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--content <text>", "Note content (markdown)")
         .option("--tags <tags>", "Tags (comma-separated)")
         .action(async (opts: { notebookId: string; title: string; content?: string; tags?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, unknown> = { title: opts.title, content: opts.content ?? "", tags: opts.tags ? opts.tags.split(",").map((t) => t.trim()) : [] };
           const result = await apiCall({
             method: "POST",
@@ -150,8 +179,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--content <text>", "New content (markdown)")
         .option("--tags <tags>", "Replace tags (comma-separated)")
         .action(async (opts: { noteId: string; notebookId?: string; title?: string; content?: string; tags?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const conversationId = opts.notebookId;
           if (!conversationId) { console.error("--notebook-id is required for update"); process.exit(1); }
           const body: Record<string, unknown> = {};
@@ -173,8 +202,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--note-id <id>", "Note ID")
         .option("--notebook-id <id>", "Conversation ID (notebook)")
         .action(async (opts: { noteId: string; notebookId?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const conversationId = opts.notebookId;
           if (!conversationId) { console.error("--notebook-id is required for delete"); process.exit(1); }
           const result = await apiCall({
@@ -195,8 +224,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--query <text>", "Search keywords or semantic query")
         .option("--limit <n>", "Number of results (default 10, max 20)")
         .action(async (opts: { query: string; limit?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const qs = new URLSearchParams();
           qs.set("query", opts.query);
           if (opts.limit) qs.set("limit", String(Math.min(Number(opts.limit), 20)));
@@ -220,8 +249,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .command("list")
         .description("List available Kanban boards")
         .action(async () => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "GET", url: `${account.apiUrl}/api/agent/kanban/boards`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -231,8 +260,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("Create a new Kanban board")
         .requiredOption("--name <name>", "Board name")
         .action(async (opts: { name: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/boards`, token: account.botToken, body: { name: opts.name } });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -243,8 +272,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--board-id <id>", "Board ID")
         .requiredOption("--name <name>", "New board name")
         .action(async (opts: { boardId: string; name: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "PATCH", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}`, token: account.botToken, body: { name: opts.name } });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -254,8 +283,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("Archive a Kanban board")
         .requiredOption("--board-id <id>", "Board ID")
         .action(async (opts: { boardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}/archive`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -265,8 +294,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("Unarchive a Kanban board")
         .requiredOption("--board-id <id>", "Board ID")
         .action(async (opts: { boardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           // The API toggles archive state; we call the same endpoint
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}/archive`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
@@ -281,8 +310,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("List columns in a board")
         .requiredOption("--board-id <id>", "Board ID")
         .action(async (opts: { boardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "GET", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}/columns`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -294,8 +323,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--name <name>", "Column name")
         .option("--sort-order <n>", "Position (0-based)")
         .action(async (opts: { boardId: string; name: string; sortOrder?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, unknown> = { name: opts.name };
           if (opts.sortOrder !== undefined) body.sortOrder = Number(opts.sortOrder);
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}/columns`, token: account.botToken, body });
@@ -309,8 +338,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--name <name>", "New column name")
         .option("--sort-order <n>", "New sort order")
         .action(async (opts: { columnId: string; name?: string; sortOrder?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, unknown> = {};
           if (opts.name !== undefined) body.name = opts.name;
           if (opts.sortOrder !== undefined) body.sortOrder = Number(opts.sortOrder);
@@ -323,8 +352,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("Delete an empty column")
         .requiredOption("--column-id <id>", "Column ID")
         .action(async (opts: { columnId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "DELETE", url: `${account.apiUrl}/api/agent/kanban/columns/${encodeURIComponent(opts.columnId)}`, token: account.botToken });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -335,8 +364,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--board-id <id>", "Board ID")
         .requiredOption("--column-ids <ids...>", "Column IDs in desired order")
         .action(async (opts: { boardId: string; columnIds: string[] }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}/columns/reorder`, token: account.botToken, body: { columnIds: opts.columnIds } });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -349,8 +378,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .command("list")
         .description("List all Kanban cards")
         .action(async () => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "GET", url: `${account.apiUrl}/api/agent/kanban/cards`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -365,8 +394,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--description <desc>", "Card description (markdown)")
         .option("--priority <level>", "Priority: low, medium, high, or urgent")
         .action(async (opts: { title: string; boardId?: string; columnName?: string; columnId?: string; description?: string; priority?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, unknown> = { title: opts.title };
           if (opts.boardId) body.boardId = opts.boardId;
           if (opts.columnId) body.columnId = opts.columnId;
@@ -386,8 +415,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--column-id <id>", "Move card to this column ID")
         .option("--priority <level>", "New priority: low, medium, high, or urgent")
         .action(async (opts: { cardId: string; title?: string; description?: string; columnId?: string; priority?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, unknown> = {};
           if (opts.title !== undefined) body.title = opts.title;
           if (opts.description !== undefined) body.description = opts.description;
@@ -402,8 +431,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("Mark a card as complete (move to Done)")
         .requiredOption("--card-id <id>", "Card ID")
         .action(async (opts: { cardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/complete`, token: account.botToken });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -413,8 +442,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("Archive a Kanban card")
         .requiredOption("--card-id <id>", "Card ID")
         .action(async (opts: { cardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           // Update card with archived flag
           const result = await apiCall({ method: "PATCH", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}`, token: account.botToken, body: { archived: true } });
           console.log(JSON.stringify(result, null, 2));
@@ -428,8 +457,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--message <msg>", "Commit message")
         .option("--url <url>", "Commit URL")
         .action(async (opts: { cardId: string; sha: string; message: string; url?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, string> = { commitHash: opts.sha, message: opts.message };
           if (opts.url) body.url = opts.url;
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/commits`, token: account.botToken, body });
@@ -441,8 +470,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("List commits linked to a card")
         .requiredOption("--card-id <id>", "Card ID")
         .action(async (opts: { cardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "GET", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/commits`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -453,8 +482,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--card-id <id>", "Card ID")
         .requiredOption("--note-id <id>", "Note ID")
         .action(async (opts: { cardId: string; noteId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/notes`, token: account.botToken, body: { noteId: opts.noteId } });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -465,8 +494,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--card-id <id>", "Card ID")
         .requiredOption("--note-id <id>", "Note ID")
         .action(async (opts: { cardId: string; noteId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "DELETE", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/notes/${encodeURIComponent(opts.noteId)}`, token: account.botToken });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -476,8 +505,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("List notes linked to a card")
         .requiredOption("--card-id <id>", "Card ID")
         .action(async (opts: { cardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "GET", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/notes`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -491,8 +520,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("List labels on a board")
         .requiredOption("--board-id <id>", "Board ID")
         .action(async (opts: { boardId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "GET", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}/labels`, token: account.botToken });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -504,8 +533,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--name <name>", "Label name")
         .requiredOption("--color <color>", "Label color (hex, e.g. '#ff0000')")
         .action(async (opts: { boardId: string; name: string; color: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/boards/${encodeURIComponent(opts.boardId)}/labels`, token: account.botToken, body: { name: opts.name, color: opts.color } });
           console.log(JSON.stringify(result, null, 2));
         });
@@ -517,8 +546,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .option("--name <name>", "New label name")
         .option("--color <color>", "New label color (hex)")
         .action(async (opts: { labelId: string; name?: string; color?: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const body: Record<string, string> = {};
           if (opts.name) body.name = opts.name;
           if (opts.color) body.color = opts.color;
@@ -531,8 +560,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .description("Delete a label")
         .requiredOption("--label-id <id>", "Label ID")
         .action(async (opts: { labelId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "DELETE", url: `${account.apiUrl}/api/agent/kanban/labels/${encodeURIComponent(opts.labelId)}`, token: account.botToken });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -545,8 +574,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--card-id <id>", "Card ID")
         .requiredOption("--label-id <id>", "Label ID")
         .action(async (opts: { cardId: string; labelId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "POST", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/labels`, token: account.botToken, body: { labelId: opts.labelId } });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
@@ -557,8 +586,8 @@ export function registerCli(api: OpenClawPluginApi): void {
         .requiredOption("--card-id <id>", "Card ID")
         .requiredOption("--label-id <id>", "Label ID")
         .action(async (opts: { cardId: string; labelId: string }) => {
-          const account = resolveAccount();
-          if (!account.botToken) { console.error("Not connected"); process.exit(1); }
+          const account = resolveAccountWithOverrides(arinova.opts());
+          if (!account.botToken) { console.error("Not connected. Use --token or run arinova-setup."); process.exit(1); }
           const result = await apiCall({ method: "DELETE", url: `${account.apiUrl}/api/agent/kanban/cards/${encodeURIComponent(opts.cardId)}/labels/${encodeURIComponent(opts.labelId)}`, token: account.botToken });
           console.log(JSON.stringify(result ?? { ok: true }, null, 2));
         });
