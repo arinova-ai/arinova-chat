@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   MessageSquare, Building2, Globe, Users, UserPlus, Wallet, Mic,
-  Palette, Store, Settings, Smile, PenTool, Plus, X, Radio, BookOpen, Send,
+  Palette, Store, Settings, Smile, PenTool, Plus, X, Radio, BookOpen, Send, Zap,
   Brain, BookHeart, Eye, LayoutDashboard, type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -74,6 +74,7 @@ export function MobileBottomNav() {
   const activeAccount = useAccountStore((s) => s.accounts.find((a) => a.id === s.activeAccountId));
 
   const personalItems = [
+    { id: "skills", icon: Zap, label: t("nav.skills"), href: "/skills" },
     { id: "spaces", icon: Globe, label: t("nav.spaces"), href: "/spaces" },
     { id: "stickers", icon: Smile, label: t("nav.stickers"), href: "/stickers" },
     { id: "creator", icon: PenTool, label: t("nav.creator"), href: "/creator" },
