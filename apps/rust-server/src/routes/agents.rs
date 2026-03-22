@@ -53,6 +53,8 @@ struct UpdateAgentBody {
     #[serde(rename = "isPublic")]
     is_public: Option<bool>,
     category: Option<String>,
+    #[serde(rename = "avatarUrl")]
+    avatar_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -212,6 +214,7 @@ async fn update_agent(
            notifications_enabled = COALESCE($7, notifications_enabled),
            is_public = COALESCE($8, is_public),
            category = COALESCE($9, category),
+           avatar_url = COALESCE($10, avatar_url),
            updated_at = NOW()
            WHERE id = $1 AND owner_id = $2
            RETURNING *"#,
@@ -225,6 +228,7 @@ async fn update_agent(
     .bind(body.notifications_enabled)
     .bind(body.is_public)
     .bind(&body.category)
+    .bind(&body.avatar_url)
     .fetch_optional(&state.db)
     .await;
 
