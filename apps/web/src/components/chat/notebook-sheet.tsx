@@ -588,42 +588,65 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
 
   const handleAskAi = async () => {
     if (!selectedNote || !askAiQuestion.trim()) return;
+    const question = askAiQuestion.trim();
+    setAskAiQuestion("");
     setAskAiLoading(true);
     const agentConv = askAiAgentId ? askAiAgents.find((a) => a.agentId === askAiAgentId) : null;
+
+    // Optimistic: add user message immediately
+    const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content: question, createdAt: new Date().toISOString() };
+    setThreadMessages((prev) => [...prev, tempUserMsg]);
+
     try {
-      const res = await api<{ userMessage: { id: string; role: string; content: string }; assistantMessage: { id: string; role: string; content: string } | null; sentToAgent: boolean }>(
-        `/api/notes/${selectedNote.id}/thread`,
-        { method: "POST", body: JSON.stringify({ question: askAiQuestion.trim(), agentConversationId: agentConv?.id }) },
-      );
-      // Add user message
-      setThreadMessages((prev) => [...prev, { ...res.userMessage, createdAt: new Date().toISOString() }]);
-      // Add AI reply if present (built-in mode)
-      if (res.assistantMessage) {
-        setThreadMessages((prev) => [...prev, { ...res.assistantMessage!, createdAt: new Date().toISOString() }]);
-      } else if (res.sentToAgent) {
-        // Poll for agent reply (agent writes back via stream_end → note_thread_messages)
-        const noteId = selectedNote.id;
-        const currentCount = threadMessages.length + 1; // +1 for the user msg we just added
-        let attempts = 0;
-        const poll = setInterval(async () => {
-          attempts++;
-          try {
-            const d = await api<{ messages: { id: string; role: string; content: string; createdAt: string; agentName?: string | null; agentAvatarUrl?: string | null }[] }>(`/api/notes/${noteId}/thread`);
-            if (d.messages.length > currentCount) {
-              setThreadMessages(d.messages);
-              clearInterval(poll);
-              setAskAiLoading(false);
-            }
-          } catch { /* ignore */ }
-          if (attempts >= 30) { // 30s timeout
-            clearInterval(poll);
-            setAskAiLoading(false);
-          }
-        }, 1000);
-        setAskAiQuestion("");
-        return; // Don't setAskAiLoading(false) here — polling handles it
+      const { BACKEND_URL } = await import("@/lib/config");
+      const res = await fetch(`${BACKEND_URL}/api/notes/${selectedNote.id}/thread`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ question, agentConversationId: agentConv?.id }),
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status}`);
       }
-      setAskAiQuestion("");
+
+      // Stream SSE response
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let streamBuf = "";
+      let aiContent = "";
+      const aiMsgId = `streaming-${Date.now()}`;
+      const selectedAgentForMsg = agentConv ? { agentName: agentConv.agentName, agentAvatarUrl: agentConv.agentAvatarUrl } : {};
+
+      // Add placeholder assistant message
+      setThreadMessages((prev) => [...prev, { id: aiMsgId, role: "assistant", content: "", createdAt: new Date().toISOString(), ...selectedAgentForMsg }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        streamBuf += decoder.decode(value, { stream: true });
+
+        while (streamBuf.includes("\n\n")) {
+          const idx = streamBuf.indexOf("\n\n");
+          const chunk = streamBuf.slice(0, idx);
+          streamBuf = streamBuf.slice(idx + 2);
+
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === "chunk" && data.content) {
+                  aiContent += data.content;
+                  setThreadMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: aiContent } : m));
+                } else if (data.type === "done") {
+                  // Replace streaming msg with final
+                  setThreadMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, id: data.messageId ?? aiMsgId, content: data.content ?? aiContent } : m));
+                }
+              } catch { /* ignore parse errors */ }
+            }
+          }
+        }
+      }
     } catch (err: unknown) {
       const error = err as { message?: string };
       setThreadMessages((prev) => [...prev, { id: "error", role: "assistant", content: error?.message || "Failed", createdAt: new Date().toISOString() }]);

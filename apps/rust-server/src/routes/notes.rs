@@ -1946,17 +1946,15 @@ async fn post_note_thread(
         "INSERT INTO note_thread_messages (id, note_id, role, content, agent_conversation_id, agent_id) VALUES ($1, $2, 'user', $3, $4, $5)",
     ).bind(user_msg_id).bind(note_id).bind(question).bind(agent_conv_uuid).bind(resolved_agent_id).execute(&state.db).await;
 
-    // Agent mode: call LLM with agent's system prompt + note context + thread history
+    // Agent mode: SSE streaming LLM response
     if agent_conv_uuid.is_some() {
         if let Some(aid) = resolved_agent_id {
-            // Get agent system prompt
             let agent_info = sqlx::query_as::<_, (String, Option<String>)>(
                 "SELECT name, system_prompt FROM agents WHERE id = $1",
             ).bind(aid).fetch_optional(&state.db).await.ok().flatten();
 
             let (agent_name, system_prompt) = agent_info.unwrap_or(("Agent".into(), None));
 
-            // Build thread history
             let history = sqlx::query_as::<_, (String, String)>(
                 "SELECT role, content FROM note_thread_messages WHERE note_id = $1 ORDER BY created_at",
             ).bind(note_id).fetch_all(&state.db).await.unwrap_or_default();
@@ -1977,71 +1975,87 @@ async fn post_note_thread(
                 agent_name
             ));
 
-            // Spawn LLM call in background, write reply when done
+            use crate::services::llm::{LlmCallOptions, LlmProvider, call_llm_stream, parse_openai_chunk, parse_anthropic_chunk, ChatMessage};
+
+            let (provider, api_key, model) = if let Some(ref key) = state.config.anthropic_api_key {
+                (LlmProvider::Anthropic, key.clone(), "claude-haiku-4-5-20251001".to_string())
+            } else if let Some(ref key) = state.config.openai_api_key {
+                (LlmProvider::OpenAI, key.clone(), "gpt-4o-mini".to_string())
+            } else {
+                return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "No LLM provider"}))).into_response();
+            };
+
+            let opts = LlmCallOptions {
+                provider: provider.clone(),
+                model, api_key,
+                messages: vec![
+                    ChatMessage { role: "system".into(), content: system },
+                    ChatMessage { role: "user".into(), content: prompt },
+                ],
+                max_tokens: Some(1024),
+                temperature: Some(0.7),
+            };
+
+            let sse_stream = match call_llm_stream(&opts).await {
+                Ok(s) => s,
+                Err(e) => return (StatusCode::BAD_GATEWAY, Json(json!({"error": e}))).into_response(),
+            };
+
+            let parser = match provider {
+                LlmProvider::OpenAI => parse_openai_chunk,
+                LlmProvider::Anthropic => parse_anthropic_chunk,
+            };
+
             let db2 = state.db.clone();
-            let config2 = state.config.clone();
             let agent_id_for_reply = aid;
-            tokio::spawn(async move {
-                use crate::services::llm::{LlmCallOptions, LlmProvider, call_llm_stream, parse_openai_chunk, parse_anthropic_chunk, ChatMessage};
+            let question_owned = question.to_string();
+
+            let output_stream = async_stream::stream! {
                 use futures::StreamExt;
+                // First event: user message confirmation
+                yield Ok::<_, std::convert::Infallible>(
+                    format!("data: {}\n\n", json!({"type": "user", "id": user_msg_id, "content": question_owned}))
+                );
 
-                let (provider, api_key, model) = if let Some(ref key) = config2.anthropic_api_key {
-                    (LlmProvider::Anthropic, key.clone(), "claude-haiku-4-5-20251001".to_string())
-                } else if let Some(ref key) = config2.openai_api_key {
-                    (LlmProvider::OpenAI, key.clone(), "gpt-4o-mini".to_string())
-                } else {
-                    return;
-                };
+                let mut buf = String::new();
+                let mut stream = sse_stream;
+                let mut full_content = String::new();
 
-                let opts = LlmCallOptions {
-                    provider: provider.clone(),
-                    model,
-                    api_key,
-                    messages: vec![
-                        ChatMessage { role: "system".into(), content: system },
-                        ChatMessage { role: "user".into(), content: prompt },
-                    ],
-                    max_tokens: Some(1024),
-                    temperature: Some(0.7),
-                };
-
-                let parser = match provider {
-                    LlmProvider::OpenAI => parse_openai_chunk,
-                    LlmProvider::Anthropic => parse_anthropic_chunk,
-                };
-
-                if let Ok(stream) = call_llm_stream(&opts).await {
-                    let mut stream = stream;
-                    let mut buf = String::new();
-                    let mut content = String::new();
-                    while let Some(Ok(bytes)) = stream.next().await {
-                        buf.push_str(&String::from_utf8_lossy(&bytes));
-                        while let Some(pos) = buf.find('\n') {
-                            let line = buf[..pos].trim().to_string();
-                            buf = buf[pos + 1..].to_string();
-                            if let Some(data) = line.strip_prefix("data: ") {
-                                if let Some(text) = parser(data) {
-                                    content.push_str(&text);
-                                }
+                while let Some(chunk_result) = stream.next().await {
+                    let bytes = match chunk_result { Ok(b) => b, Err(_) => break };
+                    buf.push_str(&String::from_utf8_lossy(&bytes));
+                    while let Some(pos) = buf.find('\n') {
+                        let line = buf[..pos].trim().to_string();
+                        buf = buf[pos + 1..].to_string();
+                        if let Some(data) = line.strip_prefix("data: ") {
+                            if let Some(text) = parser(data) {
+                                full_content.push_str(&text);
+                                yield Ok(format!("data: {}\n\n", json!({"type": "chunk", "content": text})));
                             }
                         }
                     }
-                    if !content.is_empty() {
-                        let _ = sqlx::query(
-                            "INSERT INTO note_thread_messages (note_id, role, content, agent_id) VALUES ($1, 'assistant', $2, $3)",
-                        ).bind(note_id).bind(&content).bind(agent_id_for_reply).execute(&db2).await;
-                    }
                 }
-            });
-        }
 
-        return Json(json!({
-            "userMessage": { "id": user_msg_id, "role": "user", "content": question },
-            "assistantMessage": null,
-            "sentToAgent": true,
-        })).into_response();
+                // Save assistant message
+                let msg_id = uuid::Uuid::new_v4();
+                if !full_content.is_empty() {
+                    let _ = sqlx::query(
+                        "INSERT INTO note_thread_messages (id, note_id, role, content, agent_id) VALUES ($1, $2, 'assistant', $3, $4)",
+                    ).bind(msg_id).bind(note_id).bind(&full_content).bind(agent_id_for_reply).execute(&db2).await;
+                }
+
+                yield Ok(format!("data: {}\n\n", json!({"type": "done", "messageId": msg_id.to_string(), "content": full_content})));
+            };
+
+            return axum::response::Response::builder()
+                .status(200)
+                .header("Content-Type", "text/event-stream")
+                .header("Cache-Control", "no-cache")
+                .header("Connection", "keep-alive")
+                .body(axum::body::Body::from_stream(output_stream))
+                .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+        }
     }
 
-    // No agent conversation specified — built-in AI removed
-    (StatusCode::BAD_REQUEST, Json(json!({"error": "agentConversationId is required. Select an agent to ask."}))).into_response()
+    (StatusCode::BAD_REQUEST, Json(json!({"error": "agentConversationId is required"}))).into_response()
 }
