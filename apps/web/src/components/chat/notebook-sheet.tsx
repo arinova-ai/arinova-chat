@@ -321,6 +321,10 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
   const [autoTagging, setAutoTagging] = useState(false);
   // Ask AI thread state
   const [askAiOpen, setAskAiOpen] = useState(false);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const scrollThreadToBottom = useCallback(() => {
+    setTimeout(() => threadScrollRef.current?.scrollTo({ top: threadScrollRef.current.scrollHeight, behavior: "smooth" }), 50);
+  }, []);
   const [askAiQuestion, setAskAiQuestion] = useState("");
   const [askAiLoading, setAskAiLoading] = useState(false);
   const [askAiAgentId, setAskAiAgentId] = useState<string | null>(null);
@@ -581,7 +585,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
     }
     if (selectedNote) {
       api<{ messages: { id: string; role: string; content: string; createdAt: string; agentName?: string | null; agentAvatarUrl?: string | null }[] }>(`/api/notes/${selectedNote.id}/thread`)
-        .then((d) => setThreadMessages(d.messages))
+        .then((d) => { setThreadMessages(d.messages); scrollThreadToBottom(); })
         .catch(() => {});
     }
   }, [askAiOpen, selectedNote?.id, askAiAgents.length]);
@@ -596,6 +600,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
     // Optimistic: add user message immediately
     const tempUserMsg = { id: `temp-${Date.now()}`, role: "user", content: question, createdAt: new Date().toISOString() };
     setThreadMessages((prev) => [...prev, tempUserMsg]);
+    scrollThreadToBottom();
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/notes/${selectedNote.id}/thread`, {
@@ -637,6 +642,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
                 if (data.type === "chunk" && data.content) {
                   aiContent += data.content;
                   setThreadMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: aiContent } : m));
+                  scrollThreadToBottom();
                 } else if (data.type === "done") {
                   // Replace streaming msg with final
                   setThreadMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, id: data.messageId ?? aiMsgId, content: data.content ?? aiContent } : m));
@@ -1078,7 +1084,7 @@ export function NotebookSheet({ open, onOpenChange, inline, notebookId, searchQu
             </div>
 
             {/* Thread messages */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
+            <div ref={threadScrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-2">
               {askAiAgents.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-sm text-muted-foreground">{t("chat.notebook.noAgentsForAskAi")}</p>
