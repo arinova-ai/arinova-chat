@@ -2285,14 +2285,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             } else if (useHudStore.getState().enabled && useHudStore.getState().canAutoRefresh()) {
               // HUD enabled but no data — silently refresh via WS (no UI message)
               useHudStore.getState().markAutoRefresh();
-              const conv = get().conversations.find((c) => c.id === conversationId);
-              let agName = conv?.agentName;
-              if (!agName && conv?.agentId) {
-                const members = get().conversationMembers[conversationId];
-                const agMember = members?.find((m) => (m as Record<string, unknown>).agentId === conv.agentId);
-                agName = (agMember as Record<string, unknown>)?.name as string | undefined;
-              }
-              const hudCmd = agName ? `/hud-for-usage ${agName}` : "/hud-for-usage";
+              const hudCmd = `/hud-for-usage ${conversationId}`;
               setTimeout(() => {
                 wsManager.send({ type: "send_message", conversationId, content: hudCmd });
               }, 500);
