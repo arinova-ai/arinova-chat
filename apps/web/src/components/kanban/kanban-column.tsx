@@ -88,7 +88,7 @@ export function FullColumn({
   onDeleteColumn?: (columnId: string) => void;
 }) {
   const { t } = useTranslation();
-  const [sortBy, setSortBy] = useState<SortBy>("manual");
+  const [sortBy, setSortBy] = useState<SortBy>("updated-desc");
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(column.name);
   const [deleteOpen, setDeleteOpen] = useState(false);
