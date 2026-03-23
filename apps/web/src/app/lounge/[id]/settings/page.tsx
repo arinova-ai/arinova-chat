@@ -153,7 +153,7 @@ export default function LoungeSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, isPublic, name, bio, avatarUrl, category, updateAccount]);
+  }, [accountId, isPublic, name, bio, avatarUrl, coverUrl, category, updateAccount]);
 
   const handleSavePricing = useCallback(async () => {
     setSaving(true);
