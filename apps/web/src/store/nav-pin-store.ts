@@ -8,6 +8,8 @@ export const DEFAULT_NAV_IDS = [
   "office",
   "friends",
   "community",
+  "skills",
+  "expert-hub",
   "market",
   "stickers",
 ] as const;
