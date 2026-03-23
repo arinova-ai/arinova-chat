@@ -146,7 +146,7 @@ function LoungeDetailInner() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-y-auto">
+    <div className="flex flex-col h-full bg-background overflow-y-auto" style={{ paddingTop: "env(safe-area-inset-top)" }}>
      <div className="max-w-2xl mx-auto w-full">
       {/* Cover / Header */}
       <div className="relative shrink-0">
