@@ -113,7 +113,13 @@ export async function handleArinovaChatInbound(params: {
 
   // Use actual sender identity from the task payload (multi-user support)
   const senderId = message.senderUserId ?? "arinova-user";
-  const senderName = message.senderUsername ?? "Arinova User";
+  const senderDisplayName = message.senderUsername ?? "Arinova User";
+  // SenderName carries JSON with conversationId + agentName for bridge routing
+  const senderNameJson = JSON.stringify({
+    name: senderDisplayName,
+    conversationId: message.conversationId || "",
+    agentName: account.name || account.accountId || "",
+  });
   const chatType = message.conversationType ?? "direct";
 
   // DM policy check
@@ -137,7 +143,7 @@ export async function handleArinovaChatInbound(params: {
     },
   });
 
-  const fromLabel = senderName;
+  const fromLabel = senderDisplayName;
   const storePath = core.channel.session.resolveStorePath(
     (config.session as Record<string, unknown> | undefined)?.store as string | undefined,
     { agentId: route.agentId },
@@ -171,7 +177,7 @@ export async function handleArinovaChatInbound(params: {
     AccountId: route.accountId,
     ChatType: chatType,
     ConversationLabel: fromLabel,
-    SenderName: senderName,
+    SenderName: senderNameJson,
     SenderId: peerId,
     Provider: CHANNEL_ID,
     Surface: CHANNEL_ID,
