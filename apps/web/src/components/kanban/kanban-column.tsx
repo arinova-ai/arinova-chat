@@ -88,7 +88,12 @@ export function FullColumn({
   onDeleteColumn?: (columnId: string) => void;
 }) {
   const { t } = useTranslation();
-  const [sortBy, setSortBy] = useState<SortBy>("updated-desc");
+  const sortStorageKey = `kanban-sort-${column.id}`;
+  const [sortBy, setSortByRaw] = useState<SortBy>(() => {
+    if (typeof window === "undefined") return "updated-desc";
+    return (localStorage.getItem(sortStorageKey) as SortBy) || "updated-desc";
+  });
+  const setSortBy = (s: SortBy) => { setSortByRaw(s); localStorage.setItem(sortStorageKey, s); };
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(column.name);
   const [deleteOpen, setDeleteOpen] = useState(false);
