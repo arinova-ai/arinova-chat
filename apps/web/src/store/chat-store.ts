@@ -2292,7 +2292,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 const agMember = members?.find((m) => (m as Record<string, unknown>).agentId === conv.agentId);
                 agName = (agMember as Record<string, unknown>)?.name as string | undefined;
               }
-              const hudCmd = agName ? `/hud-for-usage ${agName}` : "/hud-for-usage";
+              const hudCmd = agName ? `/hud-for-usage ${agName.toLowerCase()}` : "/hud-for-usage";
               setTimeout(() => {
                 wsManager.send({ type: "send_message", conversationId, content: hudCmd });
               }, 500);
