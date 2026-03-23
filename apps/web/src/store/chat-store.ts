@@ -1897,14 +1897,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         msg.senderUserId !== get().currentUserId &&
         msg.role !== "system"
       ) {
-        const senderName = msg.senderUserName || msg.senderUsername || "New message";
+        const nmConv = get().conversations.find((c) => c.id === conversationId);
+        const senderName = msg.senderUserName || msg.senderUsername || (msg as Record<string, unknown>).senderAgentName as string || nmConv?.agentName || "New message";
+        const senderImage = (msg as Record<string, unknown>).senderUserImage as string | undefined
+          ?? (msg.role === "agent" ? nmConv?.agentAvatarUrl ?? undefined : undefined);
         const preview = msg.content
           ? msg.content.length > 80 ? msg.content.slice(0, 80) + "..." : msg.content
           : "Sent an attachment";
         useNotificationStore.getState().show({
           conversationId,
           senderName,
-          senderImage: (msg as Record<string, unknown>).senderUserImage as string | undefined,
+          senderImage,
           preview,
         });
       }
@@ -2512,9 +2515,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ) {
           const seContent = finalContent || event.content || "";
           const sePreview = seContent.length > 80 ? seContent.slice(0, 80) + "..." : seContent || "Agent replied";
+          const seConv = get().conversations.find((c) => c.id === conversationId);
           useNotificationStore.getState().show({
             conversationId,
-            senderName: senderAgentName || "Agent",
+            senderName: senderAgentName || seConv?.agentName || "Agent",
+            senderImage: seConv?.agentAvatarUrl ?? undefined,
             preview: sePreview,
           });
         }
