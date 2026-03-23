@@ -1221,6 +1221,7 @@
   "rightPanel.members": "Members",
   "rightPanel.chat": "Chat",
   "rightPanel.memory": "Memory",
+  "rightPanel.settings": "Settings",
   "rightPanel.close": "Close panel",
   "rightPanel.comingSoon": "coming soon",
   "notebooks.title": "Notebooks",
