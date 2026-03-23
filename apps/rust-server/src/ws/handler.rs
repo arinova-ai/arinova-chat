@@ -1585,6 +1585,7 @@ pub async fn trigger_agent_response(
                 db,
                 redis,
                 config,
+                ephemeral,
             )
             .await;
         }
@@ -1605,6 +1606,7 @@ pub(crate) async fn do_trigger_agent_response(
     db: &PgPool,
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
+    ephemeral: bool,
 ) {
     let agent = sqlx::query_as::<_, (String, Option<String>)>(
         r#"SELECT name, system_prompt FROM agents WHERE id = $1::uuid"#,
@@ -1693,36 +1695,41 @@ pub(crate) async fn do_trigger_agent_response(
     };
 
     let agent_msg_id = uuid::Uuid::new_v4().to_string();
-    let _ = sqlx::query(
-        r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, thread_id, created_at, updated_at)
-           VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', $4::uuid, $5::uuid, NOW(), NOW())"#,
-    )
-    .bind(&agent_msg_id)
-    .bind(conversation_id)
-    .bind(agent_seq)
-    .bind(agent_id)
-    .bind(thread_id.as_deref())
-    .execute(db)
-    .await;
 
-    let _ = sqlx::query(r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#)
+    if !ephemeral {
+        let _ = sqlx::query(
+            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, thread_id, created_at, updated_at)
+               VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', $4::uuid, $5::uuid, NOW(), NOW())"#,
+        )
+        .bind(&agent_msg_id)
         .bind(conversation_id)
+        .bind(agent_seq)
+        .bind(agent_id)
+        .bind(thread_id.as_deref())
         .execute(db)
         .await;
+
+        let _ = sqlx::query(r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#)
+            .bind(conversation_id)
+            .execute(db)
+            .await;
+    }
 
     // Mark this agent as having active stream (keyed by conv:agent)
     let stream_key = format!("{}:{}", conversation_id, agent_id);
     ws_state.active_streams.insert(stream_key.clone(), std::time::Instant::now());
 
-    ws_state.broadcast_to_members(&member_ids, &json!({
-        "type": "stream_start",
-        "conversationId": conversation_id,
-        "messageId": agent_msg_id,
-        "seq": agent_seq,
-        "senderAgentId": agent_id,
-        "senderAgentName": agent_name,
-        "threadId": thread_id
-    }), redis);
+    if !ephemeral {
+        ws_state.broadcast_to_members(&member_ids, &json!({
+            "type": "stream_start",
+            "conversationId": conversation_id,
+            "messageId": agent_msg_id,
+            "seq": agent_seq,
+            "senderAgentId": agent_id,
+            "senderAgentName": agent_name,
+            "threadId": thread_id
+        }), redis);
+    }
 
     // Detect sticker messages and look up agent_prompt
     let sticker_regex = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
@@ -2130,6 +2137,7 @@ pub(crate) async fn do_trigger_agent_response(
     let conv_type = conv_type.to_string();
     let member_ids = member_ids;
     let thread_id = thread_id;
+    let ephemeral = ephemeral;
 
     tokio::spawn(async move {
         let mut stream_accumulated = String::new();
@@ -2171,6 +2179,7 @@ pub(crate) async fn do_trigger_agent_response(
                     match event {
                         Some(crate::ws::state::AgentEvent::Chunk(delta)) => {
                             stream_accumulated.push_str(&delta);
+                            if !ephemeral {
                             ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_chunk",
                                 "conversationId": &conversation_id,
@@ -2179,13 +2188,16 @@ pub(crate) async fn do_trigger_agent_response(
                                 "threadId": &thread_id,
                                 "chunk": delta
                             }), &redis);
+                            }
 
-                            if let Ok(mut conn) = redis.get().await {
-                                let _: Result<(), _> = conn.set_ex(
-                                    &format!("stream:{}", agent_msg_id_clone),
-                                    &stream_accumulated,
-                                    600,
-                                ).await;
+                            if !ephemeral {
+                                if let Ok(mut conn) = redis.get().await {
+                                    let _: Result<(), _> = conn.set_ex(
+                                        &format!("stream:{}", agent_msg_id_clone),
+                                        &stream_accumulated,
+                                        600,
+                                    ).await;
+                                }
                             }
                         }
                         Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
@@ -2214,7 +2226,16 @@ pub(crate) async fn do_trigger_agent_response(
                                 let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
                             }
 
-                            if full_content.trim().is_empty() {
+                            // Ephemeral mode (HUD): no DB persistence, just broadcast data
+                            if ephemeral {
+                                // Send HUD data as custom WS event to the requesting user
+                                ws_state.send_to_user_or_queue(&user_id, &serde_json::json!({
+                                    "type": "hud_data",
+                                    "conversationId": conversation_id,
+                                    "content": full_content,
+                                }), &redis);
+                                ws_state.active_streams.remove(&stream_key);
+                            } else if full_content.trim().is_empty() {
                                 // Empty completion — delete the placeholder message
                                 let _ = sqlx::query(
                                     r#"DELETE FROM messages WHERE id = $1::uuid AND status = 'streaming'"#,
@@ -2313,12 +2334,15 @@ pub(crate) async fn do_trigger_agent_response(
                                 "reason": "completed"
                             }), &redis);
 
-                            // Update thread summary if agent reply is in a thread
+                            // Update thread summary if agent reply is in a thread (skip for ephemeral)
+                            if !ephemeral {
                             if let Some(ref tid) = thread_id {
                                 update_thread_summary(&db, tid, None, Some(&agent_id)).await;
                             }
+                            }
 
-                            // Push notification for agent message — send to all conversation members
+                            // Push notification for agent message — send to all conversation members (skip for ephemeral)
+                            if !ephemeral {
                             for mid in &member_ids {
                                 // Skip push if user has the app in foreground
                                 if ws_state.is_user_foreground(mid) { continue; }
@@ -2348,9 +2372,12 @@ pub(crate) async fn do_trigger_agent_response(
                                     }
                                 }
                             }
+                            } // end !ephemeral push guard
 
                             ws_state.active_streams.remove(&stream_key);
-                            process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
+                            if !ephemeral {
+                                process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
+                            }
 
                             // Save mentions for dispatch after the select loop
                             if !mentions.is_empty() && conv_type == "group" {
@@ -2632,6 +2659,7 @@ fn spawn_mention_dispatch(
             &db,
             &redis,
             &config,
+            false,
         )
         .await;
     });
@@ -2695,6 +2723,7 @@ fn process_next_in_queue(
             &db,
             &redis,
             &config,
+            false,
         )
         .await;
     });

@@ -537,6 +537,7 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                                 &db,
                                 &redis,
                                 &config_clone,
+                                false,
                             )
                             .await;
                         }

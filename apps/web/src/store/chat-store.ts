@@ -2756,6 +2756,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // HUD data from ephemeral /hud-for-usage response
+    if ((event as Record<string, unknown>).type === "hud_data") {
+      const { conversationId, content } = event as unknown as { conversationId: string; content: string };
+      try {
+        import("@/store/hud-store").then(({ parseHudData, useHudStore }) => {
+          const hudData = parseHudData(content);
+          if (hudData) {
+            useHudStore.getState().setData(conversationId, hudData);
+          }
+        });
+      } catch { /* ignore */ }
+      return;
+    }
+
     if (event.type === "read_receipt") {
       const { conversationId, userId, seq } = event;
       const current = get().readReceipts[conversationId] ?? {};
