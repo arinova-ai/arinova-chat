@@ -12,6 +12,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAccountStore, type Account } from "@/store/account-store";
 import { useTranslation } from "@/lib/i18n";
+import { authClient } from "@/lib/auth-client";
+import { assetUrl } from "@/lib/config";
 import { CreateAccountDialog } from "./create-account-dialog";
 
 export function AccountSwitcher() {
@@ -21,6 +23,7 @@ export function AccountSwitcher() {
   const setActiveAccount = useAccountStore((s) => s.setActiveAccount);
   const loadAccounts = useAccountStore((s) => s.loadAccounts);
   const [createOpen, setCreateOpen] = useState(false);
+  const { data: session } = authClient.useSession();
 
   useEffect(() => {
     loadAccounts();
@@ -34,18 +37,14 @@ export function AccountSwitcher() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm hover:bg-accent/50 transition-colors"
+            className="flex items-center rounded-full hover:ring-2 hover:ring-accent transition-all"
           >
-            <Avatar className="h-6 w-6">
-              <AvatarImage src={activeAccount?.avatar ?? undefined} />
+            <Avatar className="h-7 w-7">
+              <AvatarImage src={activeAccount?.avatar ? assetUrl(activeAccount.avatar) : session?.user?.image ? assetUrl(session.user.image) : undefined} />
               <AvatarFallback className="text-[10px]">
-                {activeAccount ? activeAccount.name[0] : <User className="h-3 w-3" />}
+                {activeAccount ? activeAccount.name[0]?.toUpperCase() : (session?.user?.name?.[0]?.toUpperCase() ?? <User className="h-3.5 w-3.5" />)}
               </AvatarFallback>
             </Avatar>
-            <span className="max-w-[80px] truncate text-xs font-medium">
-              {activeAccount?.name ?? t("accounts.personal")}
-            </span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
