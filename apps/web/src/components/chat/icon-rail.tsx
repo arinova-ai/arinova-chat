@@ -235,12 +235,7 @@ export function IconRail() {
         <AccountSwitcher />
       </div>
 
-      {/* Logo */}
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-brand-gradient-end">
-        <img src="/assets/nav/logo-arinova-white.svg" alt="Arinova" width={28} height={28} className="h-7 w-7" />
-      </div>
-
-      {/* Main nav — no dividers */}
+      {/* Main nav */}
       <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto scrollbar-none">
         {visibleItems.map((item) =>
           item.id === "friends" ? (

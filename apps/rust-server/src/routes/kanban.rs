@@ -723,7 +723,7 @@ async fn get_board(
            FROM kanban_cards c
            JOIN kanban_columns col ON col.id = c.column_id
            WHERE col.board_id = $1 AND c.archived = FALSE
-           ORDER BY c.sort_order"#,
+           ORDER BY c.updated_at DESC NULLS LAST"#,
     )
     .bind(board_id)
     .fetch_all(&state.db)

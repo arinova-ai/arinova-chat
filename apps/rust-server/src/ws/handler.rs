@@ -1175,8 +1175,7 @@ pub async fn trigger_agent_response(
             // Push notification for human message to other members
             for mid in &member_ids {
                 if mid == user_id { continue; }
-                // Skip push if user has the app in foreground
-                if ws_state.is_user_foreground(mid) { continue; }
+                // Don't suppress push based on WS foreground — user may be in a different conversation
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
                         let preview = {
@@ -1440,8 +1439,7 @@ pub async fn trigger_agent_response(
             // Push notification for human message to other group members
             for mid in &member_ids {
                 if mid == user_id { continue; }
-                // Skip push if user has the app in foreground
-                if ws_state.is_user_foreground(mid) { continue; }
+                // Don't suppress push based on WS foreground — user may be in a different conversation
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
                         let preview = {
