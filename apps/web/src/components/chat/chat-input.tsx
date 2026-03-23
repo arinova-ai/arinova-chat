@@ -334,7 +334,7 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
           items.push({
             type: "agent-skill",
             id: `skill-${skill.id}`,
-            label: `/${cmd}`,
+            label: cmd.startsWith("/") ? cmd : `/${cmd}`,
             description: skill.description,
           });
         }
