@@ -2248,6 +2248,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const finalContent = event.content?.replace(/\r\n?/g, "\n");
       const threadId = event.threadId;
 
+      // Parse HUD data from agent response
+      if (finalContent) {
+        try {
+          // Dynamic import to avoid circular dep — fire-and-forget
+          import("@/store/hud-store").then(({ parseHudData, useHudStore }) => {
+            const hudData = parseHudData(finalContent);
+            if (hudData) {
+              useHudStore.getState().setData(conversationId, hudData);
+            }
+          });
+        } catch { /* ignore */ }
+      }
+
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);

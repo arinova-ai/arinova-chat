@@ -931,6 +931,20 @@ case "tts": {
     // Nothing to send
     if (!trimmed && !hasCard) return;
 
+    // Intercept /hud command locally
+    if (!hasCard && trimmed) {
+      const hudCmd = trimmed.toLowerCase();
+      if (hudCmd === "/hud" || hudCmd === "/hud on" || hudCmd === "/hud off") {
+        import("@/store/hud-store").then(({ useHudStore }) => {
+          if (hudCmd === "/hud on") useHudStore.getState().setEnabled(true);
+          else if (hudCmd === "/hud off") useHudStore.getState().setEnabled(false);
+          else useHudStore.getState().toggle();
+        });
+        clearInput();
+        return;
+      }
+    }
+
     // Intercept platform commands (only when no card attached)
     if (!hasCard && trimmed && tryExecuteSlashCommand(trimmed)) {
       clearInput();

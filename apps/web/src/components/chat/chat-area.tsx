@@ -6,6 +6,7 @@ import { useChatStore } from "@/store/chat-store";
 import { ChatHeader } from "./chat-header";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
+import { HudBar } from "./hud-bar";
 import { StickerPanel } from "./sticker-panel";
 import { EmptyState } from "./empty-state";
 import { BotManageDialog } from "./bot-manage-dialog";
@@ -278,6 +279,7 @@ export function ChatArea() {
       <ErrorBoundary scope="MessageList">
         <MessageList key={activeConversationId} messages={messages} agentName={conversation.agentName} isGroupConversation={isGroupLike(conversation.type)} />
       </ErrorBoundary>
+      <HudBar />
       <ErrorBoundary scope="ChatInput">
         <ChatInput
           droppedFiles={droppedFiles}
