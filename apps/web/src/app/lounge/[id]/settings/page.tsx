@@ -442,15 +442,15 @@ export default function LoungeSettingsPage() {
                 </select>
               </div>
 
+              {/* Sticky Save */}
+              <div className="sticky bottom-0 -mx-4 mt-4 border-t bg-background px-4 py-3">
+                <Button onClick={handleSaveGeneral} disabled={saving} className="w-full">
+                  <Save className="mr-2 h-4 w-4" />
+                  {saving ? "..." : t("common.save")}
+                </Button>
+              </div>
             </>
           )}
-          {/* Sticky Save */}
-          <div className="sticky bottom-0 -mx-4 mt-4 border-t bg-background px-4 py-3">
-            <Button onClick={handleSaveGeneral} disabled={saving} className="w-full">
-              <Save className="mr-2 h-4 w-4" />
-              {saving ? "..." : t("common.save")}
-            </Button>
-          </div>
 
           {/* ==================== Pricing Tab ==================== */}
           {tab === "pricing" && (

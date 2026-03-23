@@ -309,21 +309,26 @@ export default function LoungeDashboardPage() {
                     {t("lounge.dashboard.voiceModel")}
                   </span>
                 </div>
-                <Badge
-                  variant={
-                    account?.voiceModelStatus === "ready"
-                      ? "default"
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      account?.voiceModelStatus === "ready"
+                        ? "default"
+                        : account?.voiceModelStatus === "training"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {account?.voiceModelStatus === "ready"
+                      ? t("lounge.dashboard.configured")
                       : account?.voiceModelStatus === "training"
-                        ? "secondary"
-                        : "outline"
-                  }
-                >
-                  {account?.voiceModelStatus === "ready"
-                    ? t("lounge.dashboard.configured")
-                    : account?.voiceModelStatus === "training"
-                      ? "Training..."
-                      : t("lounge.dashboard.notConfigured")}
-                </Badge>
+                        ? "Training..."
+                        : t("lounge.dashboard.notConfigured")}
+                  </Badge>
+                  <button type="button" onClick={() => router.push(`/lounge/${accountId}/settings`)} className="text-xs text-brand hover:underline">
+                    {t("lounge.dashboard.configure")}
+                  </button>
+                </div>
               </div>
 
               {/* System Prompt Status */}
@@ -334,13 +339,18 @@ export default function LoungeDashboardPage() {
                     {t("lounge.dashboard.systemPrompt")}
                   </span>
                 </div>
-                <Badge
-                  variant={account?.systemPrompt ? "default" : "outline"}
-                >
-                  {account?.systemPrompt
-                    ? t("lounge.dashboard.configured")
-                    : t("lounge.dashboard.notConfigured")}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={account?.systemPrompt ? "default" : "outline"}
+                  >
+                    {account?.systemPrompt
+                      ? t("lounge.dashboard.configured")
+                      : t("lounge.dashboard.notConfigured")}
+                  </Badge>
+                  <button type="button" onClick={() => router.push(`/lounge/${accountId}/persona`)} className="text-xs text-brand hover:underline">
+                    {t("lounge.dashboard.configure")}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
