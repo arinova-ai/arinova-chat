@@ -266,7 +266,7 @@ async fn list_accounts(
                   auto_reply_mode, auto_reply_system_prompt, auto_reply_webhook_url,
                   persona_catchphrase, persona_tone, persona_personality, persona_template,
                   persona_age, persona_interests, persona_backstory, persona_intro,
-                  persona_forbidden_topics, pricing_mode, pricing_amount, free_trial_messages,
+                  persona_forbidden_topics, cover_image_url, pricing_mode, pricing_amount, free_trial_messages,
                   voice_model_status,
                   created_at, updated_at
            FROM accounts
@@ -398,7 +398,7 @@ async fn get_account(
                   auto_reply_mode, auto_reply_system_prompt, auto_reply_webhook_url,
                   persona_catchphrase, persona_tone, persona_personality, persona_template,
                   persona_age, persona_interests, persona_backstory, persona_intro,
-                  persona_forbidden_topics, pricing_mode, pricing_amount, free_trial_messages,
+                  persona_forbidden_topics, cover_image_url, pricing_mode, pricing_amount, free_trial_messages,
                   voice_model_status,
                   created_at, updated_at
            FROM accounts
