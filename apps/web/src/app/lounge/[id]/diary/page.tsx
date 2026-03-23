@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
 import { useAccountStore, type DiaryEntry } from "@/store/account-store";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface DiaryFormData {
@@ -181,18 +182,28 @@ export default function DiaryPage({
         />
       </div>
 
-      {/* Image URL */}
+      {/* Image Upload */}
       <div className="space-y-1">
         <label className="text-sm font-medium">
-          {t("lounge.diary.imageUrl")}
+          {t("lounge.diary.image")}
         </label>
-        <input
-          type="url"
-          value={form.imageUrl}
-          onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-          placeholder="https://..."
-          className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        />
+        {form.imageUrl && (
+          <img src={form.imageUrl} alt="" className="w-full h-32 rounded-lg object-cover" />
+        )}
+        <label className="cursor-pointer inline-block">
+          <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+            const file = e.target.files?.[0]; if (!file) return;
+            const formData = new FormData(); formData.append("file", file);
+            try {
+              const res = await api<{ url: string }>("/api/notes/upload", { method: "POST", body: formData });
+              setForm({ ...form, imageUrl: res.url });
+            } catch {}
+            e.target.value = "";
+          }} />
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent transition-colors">
+            {t("lounge.diary.uploadImage")}
+          </span>
+        </label>
       </div>
 
       {/* Important toggle + actions */}

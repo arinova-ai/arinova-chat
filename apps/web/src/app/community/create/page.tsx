@@ -195,21 +195,28 @@ function CreateCommunityContent() {
               </select>
             </div>
 
-            {/* Cover Image URL */}
+            {/* Cover Image */}
             <div className="rounded-xl border border-border bg-card p-5 space-y-3">
               <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                {t("community.form.coverImageUrl")}
+                {t("community.form.coverImage")}
               </label>
-              <input
-                type="text"
-                value={coverImageUrl}
-                onChange={(e) => setCoverImageUrl(e.target.value)}
-                placeholder="https://example.com/cover.jpg"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                {t("community.form.coverImageUrlHint")}
-              </p>
+              {coverImageUrl && (
+                <img src={coverImageUrl} alt="" className="w-full h-32 rounded-lg object-cover" />
+              )}
+              <label className="cursor-pointer inline-block">
+                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  const formData = new FormData(); formData.append("file", file);
+                  try {
+                    const res = await api<{ url: string }>("/api/notes/upload", { method: "POST", body: formData });
+                    setCoverImageUrl(res.url);
+                  } catch {}
+                  e.target.value = "";
+                }} />
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent transition-colors">
+                  {t("community.form.uploadCover")}
+                </span>
+              </label>
             </div>
 
             {/* Require Approval */}
