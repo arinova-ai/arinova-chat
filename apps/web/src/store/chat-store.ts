@@ -2255,11 +2255,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const hudData = parseHudData(finalContent);
             if (hudData) {
               useHudStore.getState().setData(conversationId, hudData);
+              // If content is pure HUD JSON (no other text), suppress from chat UI
+              const stripped = finalContent.trim();
+              if (stripped.startsWith("{") && stripped.endsWith("}") && stripped.includes('"context"')) {
+                // Remove the HUD-only message from the messages list
+                const msgs = get().messagesByConversation[conversationId];
+                if (msgs) {
+                  set({
+                    messagesByConversation: {
+                      ...get().messagesByConversation,
+                      [conversationId]: msgs.filter((m) => m.id !== messageId),
+                    },
+                  });
+                }
+              }
             } else if (useHudStore.getState().enabled && useHudStore.getState().canAutoRefresh()) {
-              // HUD enabled but no data — silently refresh (max once per 5s)
+              // HUD enabled but no data — silently refresh via WS (no UI message)
               useHudStore.getState().markAutoRefresh();
               setTimeout(() => {
-                get().sendMessage("/hud");
+                wsManager.send({ type: "send_message", conversationId, content: "/hud" });
               }, 500);
             }
           });

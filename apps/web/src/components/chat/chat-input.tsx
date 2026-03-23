@@ -958,9 +958,14 @@ case "tts": {
           if (hudCmd === "/hud on") store.setEnabled(true);
           else if (hudCmd === "/hud off") store.setEnabled(false);
           else store.toggle();
-          // If HUD just turned on, immediately fetch data
+          // If HUD just turned on, silently send /hud via WS (no UI message)
           if (useHudStore.getState().enabled) {
-            setTimeout(() => sendMessage("/hud"), 300);
+            const convId = useChatStore.getState().activeConversationId;
+            if (convId) {
+              setTimeout(() => {
+                wsManager.send({ type: "send_message", conversationId: convId, content: "/hud" });
+              }, 300);
+            }
           }
         });
         clearInput();
