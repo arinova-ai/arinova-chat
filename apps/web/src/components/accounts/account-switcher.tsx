@@ -39,7 +39,7 @@ export function AccountSwitcher() {
             type="button"
             className="flex items-center rounded-full hover:ring-2 hover:ring-accent transition-all"
           >
-            <Avatar className="h-7 w-7">
+            <Avatar className="h-9 w-9">
               <AvatarImage src={activeAccount?.avatar ? assetUrl(activeAccount.avatar) : session?.user?.image ? assetUrl(session.user.image) : undefined} />
               <AvatarFallback className="text-[10px]">
                 {activeAccount ? activeAccount.name[0]?.toUpperCase() : (session?.user?.name?.[0]?.toUpperCase() ?? <User className="h-3.5 w-3.5" />)}

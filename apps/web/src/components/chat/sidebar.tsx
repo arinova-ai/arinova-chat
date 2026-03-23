@@ -43,7 +43,6 @@ export function Sidebar({ collapsed = false, onToggleCollapse }: SidebarProps) {
             </div>
             <PageTitle
               title={t("nav.chat")}
-              subtitle={t("chat.subtitle")}
               icon={MessageCircle}
             />
           </div>
