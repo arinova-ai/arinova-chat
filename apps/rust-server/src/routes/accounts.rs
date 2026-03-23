@@ -480,8 +480,12 @@ struct UpdateAccountBody {
     #[serde(rename = "voiceCloneId")]
     voice_clone_id: Option<String>,
     // Official-specific
+    #[serde(rename = "coverImageUrl")]
+    cover_image_url: Option<String>,
     #[serde(rename = "isPublic")]
     is_public: Option<bool>,
+    #[serde(rename = "isPublished")]
+    is_published: Option<bool>,
     category: Option<String>,
     #[serde(rename = "welcomeEnabled")]
     welcome_enabled: Option<bool>,
@@ -592,7 +596,9 @@ async fn update_account(
     push_field!(body.context_window, "context_window");
     push_field!(body.voice_sample_url, "voice_sample_url");
     push_field!(body.voice_clone_id, "voice_clone_id");
+    push_field!(body.cover_image_url, "cover_image_url");
     push_field!(body.is_public, "is_public");
+    push_field!(body.is_published, "is_published");
     push_field!(body.category, "category");
     push_field!(body.welcome_enabled, "welcome_enabled");
     push_field!(body.welcome_message, "welcome_message");
@@ -662,8 +668,14 @@ async fn update_account(
     if let Some(ref voice_clone_id) = body.voice_clone_id {
         query = query.bind(voice_clone_id);
     }
+    if let Some(ref cover_image_url) = body.cover_image_url {
+        query = query.bind(cover_image_url);
+    }
     if let Some(ref is_public) = body.is_public {
         query = query.bind(is_public);
+    }
+    if let Some(ref is_published) = body.is_published {
+        query = query.bind(is_published);
     }
     if let Some(ref category) = body.category {
         query = query.bind(category);
@@ -1650,7 +1662,7 @@ async fn explore_lounge(
                   a.created_at
            FROM accounts a
            JOIN "user" u ON u.id = a.owner_id
-           WHERE a.type = 'lounge'
+           WHERE a.type = 'lounge' AND COALESCE(a.is_published, true) = true
            ORDER BY subscriber_count DESC, a.created_at DESC"#,
     )
     .fetch_all(&state.db)

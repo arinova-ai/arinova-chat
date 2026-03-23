@@ -143,8 +143,9 @@ export default function LoungeSettingsPage() {
         name,
         bio,
         avatar: avatarUrl || null,
+        coverImageUrl: coverUrl || null,
         category,
-      });
+      } as Parameters<typeof updateAccount>[1]);
     } catch (err) {
       console.error("Failed to save general settings:", err);
     } finally {

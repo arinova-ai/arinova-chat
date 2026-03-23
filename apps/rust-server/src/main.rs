@@ -647,6 +647,8 @@ async fn main() {
     )"#).execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_lounge_posts_lounge ON lounge_posts(lounge_id, created_at DESC)").execute(&db).await.ok();
     sqlx::query("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS lounge_account_id UUID").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS cover_image_url TEXT").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE").execute(&db).await.ok();
 
     tracing::info!("Startup migrations completed");
 
