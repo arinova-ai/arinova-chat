@@ -1899,8 +1899,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ) {
         const nmConv = get().conversations.find((c) => c.id === conversationId);
         const senderName = msg.senderUserName || msg.senderUsername || (msg as Record<string, unknown>).senderAgentName as string || nmConv?.agentName || "New message";
-        const senderImage = (msg as Record<string, unknown>).senderUserImage as string | undefined
-          ?? (msg.role === "agent" ? nmConv?.agentAvatarUrl ?? undefined : undefined);
+        let senderImage = (msg as Record<string, unknown>).senderUserImage as string | undefined;
+        if (!senderImage && msg.role === "agent") {
+          senderImage = nmConv?.agentAvatarUrl ?? undefined;
+          if (!senderImage && nmConv?.agentId) {
+            senderImage = get().agents.find((a) => a.id === nmConv.agentId)?.avatarUrl ?? undefined;
+          }
+        }
         const preview = msg.content
           ? msg.content.length > 80 ? msg.content.slice(0, 80) + "..." : msg.content
           : "Sent an attachment";
@@ -2516,10 +2521,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const seContent = finalContent || event.content || "";
           const sePreview = seContent.length > 80 ? seContent.slice(0, 80) + "..." : seContent || "Agent replied";
           const seConv = get().conversations.find((c) => c.id === conversationId);
+          // Fallback: if conversation not found or has no avatar, check agents list
+          let seAvatar = seConv?.agentAvatarUrl;
+          if (!seAvatar && seConv?.agentId) {
+            const agentMatch = get().agents.find((a) => a.id === seConv.agentId);
+            if (agentMatch?.avatarUrl) seAvatar = agentMatch.avatarUrl;
+          }
           useNotificationStore.getState().show({
             conversationId,
             senderName: senderAgentName || seConv?.agentName || "Agent",
-            senderImage: seConv?.agentAvatarUrl ?? undefined,
+            senderImage: seAvatar ?? undefined,
             preview: sePreview,
           });
         }
