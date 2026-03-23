@@ -77,9 +77,6 @@ export default function ExplorLoungePage() {
                     </div>
                   </div>
                   {acc.bio && <p className="text-sm text-muted-foreground line-clamp-2">{acc.bio}</p>}
-                  <Button variant="secondary" size="sm" className="w-full mt-3">
-                    {t("lounge.viewDetail")}
-                  </Button>
                 </div>
               </Link>
             ))}

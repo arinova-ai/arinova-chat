@@ -224,8 +224,10 @@ export function ChatArea() {
             router.push(`/community/${data.id}`);
           } catch { /* ignore */ }
         }) : conversation.type === "lounge" ? (() => {
-          if (conversation.officialCommunityId) {
-            router.push(`/lounge/${conversation.officialCommunityId}`);
+          const loungeId = (conversation as unknown as Record<string, unknown>).loungeAccountId as string | undefined
+            ?? conversation.officialCommunityId;
+          if (loungeId) {
+            router.push(`/lounge/${loungeId}`);
           } else {
             router.push("/explore/lounge");
           }

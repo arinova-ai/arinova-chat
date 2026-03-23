@@ -646,6 +646,7 @@ async fn main() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )"#).execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_lounge_posts_lounge ON lounge_posts(lounge_id, created_at DESC)").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS lounge_account_id UUID").execute(&db).await.ok();
 
     tracing::info!("Startup migrations completed");
 

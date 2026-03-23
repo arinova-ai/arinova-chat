@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Mic, Users, Loader2, Plus, Upload, X } from "lucide-react";
+import { ArrowLeft, Mic, Users, Loader2, Plus, Upload, X, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { authClient } from "@/lib/auth-client";
@@ -44,9 +44,9 @@ function LoungeDetailInner() {
       .catch(() => {})
       .finally(() => setLoading(false));
     // Check membership: look for existing lounge conversation
-    api<{ officialCommunityId?: string; type?: string }[]>("/api/conversations")
+    api<{ officialCommunityId?: string; loungeAccountId?: string; type?: string }[]>("/api/conversations")
       .then((convs) => {
-        if (convs.some((c) => c.officialCommunityId === id || c.type === "lounge")) setIsMember(true);
+        if (convs.some((c) => c.loungeAccountId === id || c.officialCommunityId === id)) setIsMember(true);
       })
       .catch(() => {});
   }, [id]);
@@ -115,7 +115,7 @@ function LoungeDetailInner() {
       <div className="flex flex-col items-center justify-center h-full bg-background px-6 gap-6">
         <div className="text-center">
           <h2 className="text-lg font-semibold">{t("community.setupProfile")}</h2>
-          <p className="text-sm text-muted-foreground mt-1">{t("community.setupProfileDesc")}</p>
+          <p className="text-sm text-muted-foreground mt-1">{lounge?.name ? `Set up your profile for ${lounge.name}` : t("community.setupProfileDesc")}</p>
         </div>
         <div className="w-full max-w-sm space-y-4">
           <div>
@@ -333,12 +333,21 @@ function LoungePosts({ loungeId, isOwner }: { loungeId: string; isOwner: boolean
                 <Mic className="h-4 w-4 text-purple-500" />
               )}
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{post.authorName}</p>
               <p className="text-[10px] text-muted-foreground">
                 {new Date(post.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
+            {isOwner && (
+              <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive p-1" onClick={async (e) => {
+                e.stopPropagation();
+                await api(`/api/lounge/${loungeId}/posts/${post.id}`, { method: "DELETE" });
+                fetchPosts();
+              }}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           {post.content && <p className="text-sm">{post.content}</p>}
           {post.imageUrl && (

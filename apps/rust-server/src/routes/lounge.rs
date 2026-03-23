@@ -528,9 +528,9 @@ async fn join_lounge(
             // Create new conversation
             let conv_id = Uuid::new_v4();
             let insert_result = sqlx::query(
-                r#"INSERT INTO conversations (id, user_id, agent_id, title, type)
-                   VALUES ($1, $2, $3, $4, 'lounge')"#,
-            ).bind(conv_id).bind(&user.id).bind(agent_id).bind(&lounge_name).execute(&state.db).await;
+                r#"INSERT INTO conversations (id, user_id, agent_id, title, type, lounge_account_id)
+                   VALUES ($1, $2, $3, $4, 'lounge', $5)"#,
+            ).bind(conv_id).bind(&user.id).bind(agent_id).bind(&lounge_name).bind(id).execute(&state.db).await;
 
             if let Err(e) = insert_result {
                 tracing::error!("join_lounge: INSERT conversation failed: {}", e);

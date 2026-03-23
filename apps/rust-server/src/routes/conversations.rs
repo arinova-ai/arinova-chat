@@ -101,6 +101,8 @@ struct ConversationListRow {
     official_community_id: Option<Uuid>,
     // Community avatar
     community_avatar_url: Option<String>,
+    // Lounge account ID
+    lounge_account_id: Option<Uuid>,
 }
 
 /// Row for group agent member names batch fetch.
@@ -327,7 +329,8 @@ async fn list_conversations(
                 lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id,
-                cm.avatar_url AS community_avatar_url
+                cm.avatar_url AS community_avatar_url,
+                c.lounge_account_id
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
@@ -383,7 +386,8 @@ async fn list_conversations(
                 lm_agent.name AS last_msg_sender_agent_name,
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id,
-                cm.avatar_url AS community_avatar_url
+                cm.avatar_url AS community_avatar_url,
+                c.lounge_account_id
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
@@ -690,6 +694,7 @@ async fn list_conversations(
                 "agentAvatarUrl": avatar_url,
                 "isVerified": is_verified,
                 "officialCommunityId": row.official_community_id,
+                "loungeAccountId": row.lounge_account_id,
                 "lastMessage": last_message,
             })
         })
