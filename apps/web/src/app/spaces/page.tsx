@@ -102,7 +102,7 @@ function SpacesContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
-            <PageTitle title={t("spaces.title")} subtitle={t("spaces.subtitle")} icon={Gamepad2} />
+            <PageTitle title={t("spaces.title")} icon={Gamepad2} />
           </div>
 
           {/* Search */}

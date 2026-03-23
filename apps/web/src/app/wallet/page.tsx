@@ -97,7 +97,7 @@ function WalletContent() {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
-          <PageTitle icon={Wallet} title={t("wallet.title")} subtitle={t("wallet.subtitle")} />
+          <PageTitle icon={Wallet} title={t("wallet.title")} />
         </div>
 
         {/* Content */}

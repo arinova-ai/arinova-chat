@@ -1797,7 +1797,7 @@ function SettingsContent() {
       {/* Settings Sidebar — desktop */}
       <div className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
         <div className="p-5">
-          <PageTitle title={t("settings.title")} subtitle={t("settings.subtitle")} icon={Settings} />
+          <PageTitle title={t("settings.title")} icon={Settings} />
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
@@ -1840,7 +1840,7 @@ function SettingsContent() {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Mobile header */}
         <div className="border-b border-border px-4 py-3 md:hidden">
-          <PageTitle title={t("settings.title")} subtitle={t("settings.subtitle")} icon={Settings} />
+          <PageTitle title={t("settings.title")} icon={Settings} />
         </div>
 
         {/* Mobile nav tabs */}

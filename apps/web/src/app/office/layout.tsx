@@ -63,7 +63,6 @@ function OfficeLayoutInner({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-3">
             <PageTitle
               title={t("office.title")}
-              subtitle={t("office.subtitle")}
               icon={Building2}
               className="flex-1 min-w-0"
             />

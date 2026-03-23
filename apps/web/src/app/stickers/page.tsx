@@ -840,7 +840,7 @@ function StickerShopContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-6 py-5">
           <div className="flex items-center gap-4">
-            <PageTitle title={t("stickerShop.title")} subtitle={t("stickerShop.subtitle")} icon={Sticker} />
+            <PageTitle title={t("stickerShop.title")} icon={Sticker} />
           </div>
 
           {/* Search */}

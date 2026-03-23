@@ -64,7 +64,6 @@ function FriendsContent() {
             <PageTitle
               icon={UserPlus}
               title={t("friends.title")}
-              subtitle={t("friends.subtitle")}
             />
             <Button
               size="sm"

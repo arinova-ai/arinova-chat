@@ -102,7 +102,7 @@ function CommunityBrowseContent() {
         {/* Header */}
         <div className="shrink-0 border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-3">
-            <PageTitle icon={Users} title={t("community.title")} subtitle={t("community.subtitle")} />
+            <PageTitle icon={Users} title={t("community.title")} />
             <Button
               size="sm"
               className="brand-gradient-btn gap-1"
