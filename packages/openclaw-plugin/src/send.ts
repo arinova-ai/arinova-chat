@@ -44,7 +44,10 @@ export async function sendMessageArinovaChat(
   }
 
   if (!conversationId) {
-    throw new Error("Conversation ID is required for Arinova Chat sends");
+    // Delivery-recovery retries may have a `to` without conversationId (e.g. --deliver mode).
+    // Return empty result instead of throwing to avoid noisy startup errors.
+    console.warn("[openclaw-arinova-ai] Skipping send: no conversationId in target (delivery-mode message?)");
+    return {};
   }
 
   const agent = getAgentInstance(account.accountId);
