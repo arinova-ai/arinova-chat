@@ -553,6 +553,13 @@ export default function LoungeSettingsPage() {
           {/* ==================== Voice Tab ==================== */}
           {tab === "voice" && (
             <div className="space-y-4">
+              {/* Voice guidance */}
+              <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground text-sm">{t("lounge.settings.voiceGuideTitle")}</p>
+                <p>• {t("lounge.settings.voiceGuide1")}</p>
+                <p>• {t("lounge.settings.voiceGuide2")}</p>
+                <p>• {t("lounge.settings.voiceGuide3")}</p>
+              </div>
               {/* Voice model status */}
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium">

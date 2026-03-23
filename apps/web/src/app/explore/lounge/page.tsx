@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mic, Users, ArrowLeft } from "lucide-react";
+import { Mic, Users, ArrowLeft, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface ExploreAccount {
   id: string;
@@ -21,12 +21,26 @@ export default function ExplorLoungePage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<ExploreAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     api<ExploreAccount[]>("/api/explore/lounge")
       .then(setAccounts)
       .finally(() => setLoading(false));
+    // Check joined lounges
+    api<{ loungeAccountId?: string; type?: string }[]>("/api/conversations")
+      .then((convs) => {
+        const ids = new Set<string>();
+        convs.forEach((c) => { if (c.loungeAccountId) ids.add(c.loungeAccountId); });
+        setJoinedIds(ids);
+      })
+      .catch(() => {});
   }, []);
+
+  const filtered = search.trim()
+    ? accounts.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()) || a.bio?.toLowerCase().includes(search.toLowerCase()))
+    : accounts;
 
   return (
     <div className="flex flex-col h-full bg-background pt-[env(safe-area-inset-top)]">
@@ -38,6 +52,19 @@ export default function ExplorLoungePage() {
         <h1 className="text-lg font-semibold">{t("explore.lounge")}</h1>
       </div>
 
+      {/* Search */}
+      <div className="px-4 pt-3 shrink-0">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("lounge.searchPlaceholder")}
+            className="pl-9 h-9"
+          />
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
           <p className="text-center text-sm text-muted-foreground py-12">{t("common.loading")}</p>
@@ -45,7 +72,7 @@ export default function ExplorLoungePage() {
           <p className="text-center text-sm text-muted-foreground py-12">{t("explore.noAccounts")}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
-            {accounts.map((acc) => (
+            {filtered.map((acc) => (
               <Link
                 key={acc.id}
                 href={`/lounge/${acc.id}`}
@@ -69,7 +96,12 @@ export default function ExplorLoungePage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium truncate">{acc.name}</h3>
+                      <h3 className="font-medium truncate flex items-center gap-1.5">
+                      {acc.name}
+                      {joinedIds.has(acc.id) && (
+                        <span className="shrink-0 rounded-full bg-brand/15 text-brand px-1.5 py-0.5 text-[9px] font-medium">{t("lounge.joined")}</span>
+                      )}
+                    </h3>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Users className="h-3 w-3" />
                         <span>{acc.subscriberCount} {t("explore.subscribers")}</span>

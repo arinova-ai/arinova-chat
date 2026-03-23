@@ -295,6 +295,9 @@ export default function LoungeDashboardPage() {
                   <span className="text-xs font-medium">
                     {personaCompletion}%
                   </span>
+                  <button type="button" onClick={() => router.push(`/lounge/${accountId}/persona`)} className="text-xs text-brand hover:underline">
+                    {t("lounge.dashboard.configure")}
+                  </button>
                 </div>
               </div>
 

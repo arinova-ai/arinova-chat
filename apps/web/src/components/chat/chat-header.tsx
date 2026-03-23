@@ -767,7 +767,7 @@ function DirectHeaderButtons({
   onSettingsOpen,
   t,
 }: DirectHeaderButtonsProps) {
-  const convType = type === "direct" ? "h2a" : type;
+  const convType = type === "direct" ? "h2a" : type === "lounge" ? "h2a" : type;
 
   // Filter buttons for this conversation type
   const available = HEADER_BUTTONS.filter((btn) => {
