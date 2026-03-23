@@ -20,6 +20,8 @@ interface LoungeDetail {
   subscriberCount: number;
   voiceModelStatus: string;
   creatorId?: string;
+  subscriptionPriceCents?: number;
+  freeMinutesPerDay?: number;
 }
 
 function LoungeDetailInner() {
@@ -188,6 +190,27 @@ function LoungeDetailInner() {
           <p className="text-sm text-muted-foreground leading-relaxed">{lounge.description}</p>
         )}
 
+        {/* Pricing */}
+        {(lounge.subscriptionPriceCents != null || lounge.freeMinutesPerDay != null) && (
+          <div className="flex items-center gap-3 text-sm">
+            {lounge.subscriptionPriceCents != null && lounge.subscriptionPriceCents > 0 && (
+              <span className="rounded-full bg-brand/10 text-brand px-2.5 py-0.5 text-xs font-medium">
+                ${(lounge.subscriptionPriceCents / 100).toFixed(2)}/mo
+              </span>
+            )}
+            {lounge.freeMinutesPerDay != null && lounge.freeMinutesPerDay > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {lounge.freeMinutesPerDay} {t("lounge.freeMinutes")}
+              </span>
+            )}
+            {lounge.subscriptionPriceCents === 0 && (
+              <span className="rounded-full bg-green-500/10 text-green-500 px-2.5 py-0.5 text-xs font-medium">
+                {t("lounge.free")}
+              </span>
+            )}
+          </div>
+        )}
+
         {lounge.creatorId === session?.user?.id ? (
           /* Owner: management buttons */
           <div className="flex gap-2">
@@ -342,6 +365,7 @@ function LoungePosts({ loungeId, isOwner }: { loungeId: string; isOwner: boolean
             {isOwner && (
               <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive p-1" onClick={async (e) => {
                 e.stopPropagation();
+                if (!confirm(t("lounge.deletePostConfirm"))) return;
                 await api(`/api/lounge/${loungeId}/posts/${post.id}`, { method: "DELETE" });
                 fetchPosts();
               }}>

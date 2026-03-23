@@ -57,6 +57,7 @@ export default function LoungeSettingsPage() {
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
   const [category, setCategory] = useState("Other");
 
   // Pricing
@@ -396,6 +397,33 @@ export default function LoungeSettingsPage() {
                 </div>
               </div>
 
+              {/* Cover Image */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("lounge.settings.cover")}</label>
+                {coverUrl ? (
+                  <img src={coverUrl} alt="" className="w-full h-32 rounded-lg object-cover" />
+                ) : (
+                  <div className="w-full h-32 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/10 flex items-center justify-center">
+                    <Mic className="h-8 w-8 text-purple-500/30" />
+                  </div>
+                )}
+                <label className="cursor-pointer inline-block">
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    const formData = new FormData(); formData.append("file", file);
+                    try {
+                      const res = await api<{ url: string }>("/api/notes/upload", { method: "POST", body: formData });
+                      setCoverUrl(res.url);
+                    } catch {}
+                    e.target.value = "";
+                  }} />
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent transition-colors">
+                    <Upload className="h-3.5 w-3.5" />
+                    {t("lounge.settings.uploadCover")}
+                  </span>
+                </label>
+              </div>
+
               {/* Category */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">
@@ -414,13 +442,15 @@ export default function LoungeSettingsPage() {
                 </select>
               </div>
 
-              {/* Save */}
-              <Button onClick={handleSaveGeneral} disabled={saving}>
-                <Save className="mr-2 h-4 w-4" />
-                {saving ? "..." : t("common.save")}
-              </Button>
             </>
           )}
+          {/* Sticky Save */}
+          <div className="sticky bottom-0 -mx-4 mt-4 border-t bg-background px-4 py-3">
+            <Button onClick={handleSaveGeneral} disabled={saving} className="w-full">
+              <Save className="mr-2 h-4 w-4" />
+              {saving ? "..." : t("common.save")}
+            </Button>
+          </div>
 
           {/* ==================== Pricing Tab ==================== */}
           {tab === "pricing" && (

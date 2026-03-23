@@ -366,7 +366,7 @@ export default function PersonaPage() {
             className="w-full"
           >
             <Save className="mr-2 h-4 w-4" />
-            {saving ? "..." : t("lounge.persona.title")}
+            {saving ? "..." : t("common.save")}
           </Button>
         </div>
       </div>
