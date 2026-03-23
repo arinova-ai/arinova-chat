@@ -1816,6 +1816,7 @@
   "kanban.createCard": "Create Card",
   "kanban.rename": "Rename",
   "kanban.delete": "Delete",
+  "kanban.deleteCardConfirm": "Are you sure you want to delete this card?",
   "kanban.noCards": "No cards",
   "kanban.deleteColumnTitle": "Delete column",
   "kanban.deleteColumnHasCards": "This column has cards. Move or archive all cards before deleting.",

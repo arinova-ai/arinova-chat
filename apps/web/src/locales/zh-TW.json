@@ -1811,6 +1811,7 @@
   "kanban.createCard": "建立卡片",
   "kanban.rename": "重新命名",
   "kanban.delete": "刪除",
+  "kanban.deleteCardConfirm": "確定要刪除此卡片？",
   "kanban.noCards": "沒有卡片",
   "kanban.deleteColumnTitle": "刪除欄位",
   "kanban.deleteColumnHasCards": "此欄位有卡片。請先移動或封存所有卡片再刪除。",

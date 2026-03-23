@@ -448,7 +448,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       const list = map.get(card.columnId);
       if (list) list.push(card);
     }
-    for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
+    for (const list of map.values()) list.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
     return map;
   }, [board, columns, searchQuery]);
 
@@ -597,7 +597,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
 
       const colCards = board.cards
         .filter((c) => c.columnId === targetColumnId && c.id !== activeId)
-        .sort((a, b) => a.sortOrder - b.sortOrder);
+        .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
 
       let newOrder = 0;
       if (overCard && overCard.id !== activeId) {
@@ -691,6 +691,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
 
   const handleDeleteCard = useCallback(
     async (cardId: string) => {
+      if (!window.confirm(t("kanban.deleteCardConfirm"))) return;
       if (selectedCard?.id === cardId) setSelectedCard(null);
       setBoard((prev) => {
         if (!prev) return prev;
