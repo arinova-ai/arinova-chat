@@ -43,7 +43,8 @@ import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
 import { CommunitySettingsSheet } from "./community-settings";
 import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Pin, CalendarSearch } from "lucide-react";
+import { Pin, CalendarSearch, Activity } from "lucide-react";
+import { wsManager } from "@/lib/ws";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import type { Message } from "@arinova/shared/types";
@@ -650,6 +651,8 @@ function HamburgerMenu({
   pinnedIds,
   getMuteIcon,
   isInCall,
+  showHudToggle,
+  conversationId: menuConvId,
   t,
 }: {
   items: { id: string; icon: React.ComponentType<{ className?: string }>; labelKey: string }[];
@@ -658,6 +661,8 @@ function HamburgerMenu({
   pinnedIds: string[];
   getMuteIcon?: () => React.ComponentType<{ className?: string }>;
   isInCall?: boolean;
+  showHudToggle?: boolean;
+  conversationId?: string;
   t: (key: string) => string;
 }) {
   const isMobile = useIsMobile();
@@ -698,6 +703,25 @@ function HamburgerMenu({
                 </button>
               );
             })}
+            {showHudToggle && (
+              <button
+                type="button"
+                onClick={() => {
+                  import("@/store/hud-store").then(({ useHudStore }) => {
+                    const s = useHudStore.getState();
+                    s.toggle();
+                    if (useHudStore.getState().enabled && menuConvId) {
+                      setTimeout(() => wsManager.send({ type: "send_message", conversationId: menuConvId, content: "/hud" }), 300);
+                    }
+                  });
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors"
+              >
+                <Activity className="h-5 w-5 text-muted-foreground" />
+                <span className="flex-1 text-left">HUD</span>
+              </button>
+            )}
             <div className="my-1 border-t border-border" />
             <button
               type="button"
@@ -741,6 +765,20 @@ function HamburgerMenu({
             </DropdownMenuItem>
           );
         })}
+        {showHudToggle && (
+          <DropdownMenuItem onClick={() => {
+            import("@/store/hud-store").then(({ useHudStore }) => {
+              const s = useHudStore.getState();
+              s.toggle();
+              if (useHudStore.getState().enabled && menuConvId) {
+                setTimeout(() => wsManager.send({ type: "send_message", conversationId: menuConvId, content: "/hud" }), 300);
+              }
+            });
+          }}>
+            <Activity className="h-4 w-4" />
+            HUD
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onSettingsOpen}>
           <Settings className="h-4 w-4" />
@@ -836,6 +874,8 @@ function DirectHeaderButtons({
         pinnedIds={pinnedIds}
         getMuteIcon={getMuteIcon}
         isInCall={isInCall}
+        showHudToggle={!!agentId}
+        conversationId={conversationId}
         t={t}
       />
     </>

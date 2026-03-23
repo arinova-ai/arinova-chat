@@ -309,19 +309,10 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
       }
     }
 
-    // Agent skills + built-in slash commands (combined in one section)
-    {
-      // Built-in commands
-      const BUILTIN_CMDS = [
-        { id: "hud", slashCommand: "/hud", name: "HUD", description: "Toggle context & usage HUD" },
-      ];
+    // Agent skills section (only if agentId present)
+    if (agentId) {
+      const skills = agentSkills[agentId] ?? [];
       const q = query.toLowerCase();
-      const filteredBuiltin = q
-        ? BUILTIN_CMDS.filter((b) => b.slashCommand.includes(q) || b.name.toLowerCase().includes(q))
-        : BUILTIN_CMDS;
-
-      // Agent skills
-      const skills = agentId ? (agentSkills[agentId] ?? []) : [];
       const filteredSkills = q
         ? skills.filter(
             (s) =>
@@ -331,21 +322,12 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
           )
         : skills;
 
-      if (filteredBuiltin.length > 0 || filteredSkills.length > 0) {
+      if (filteredSkills.length > 0) {
         items.push({
           type: "header",
-          id: "header-commands",
-          label: "COMMANDS",
+          id: "header-agent-skills",
+          label: "AGENT SKILLS",
         });
-
-        for (const b of filteredBuiltin) {
-          items.push({
-            type: "agent-skill",
-            id: `builtin-${b.id}`,
-            label: b.slashCommand,
-            description: b.description,
-          });
-        }
 
         for (const skill of filteredSkills) {
           const cmd = skill.slashCommand ?? skill.id;
@@ -948,30 +930,6 @@ case "tts": {
 
     // Nothing to send
     if (!trimmed && !hasCard) return;
-
-    // Intercept /hud command locally
-    if (!hasCard && trimmed) {
-      const hudCmd = trimmed.toLowerCase();
-      if (hudCmd === "/hud" || hudCmd === "/hud on" || hudCmd === "/hud off") {
-        import("@/store/hud-store").then(({ useHudStore }) => {
-          const store = useHudStore.getState();
-          if (hudCmd === "/hud on") store.setEnabled(true);
-          else if (hudCmd === "/hud off") store.setEnabled(false);
-          else store.toggle();
-          // If HUD just turned on, silently send /hud via WS (no UI message)
-          if (useHudStore.getState().enabled) {
-            const convId = useChatStore.getState().activeConversationId;
-            if (convId) {
-              setTimeout(() => {
-                wsManager.send({ type: "send_message", conversationId: convId, content: "/hud" });
-              }, 300);
-            }
-          }
-        });
-        clearInput();
-        return;
-      }
-    }
 
     // Intercept platform commands (only when no card attached)
     if (!hasCard && trimmed && tryExecuteSlashCommand(trimmed)) {
