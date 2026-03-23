@@ -630,10 +630,7 @@ async fn main() {
         VALUES ('Arinova Search', 'arinova-search', 'Search across conversations, memories, and capsules', 'utility', '//arinova-search', true, true, '//arinova-search {query}', 'Search for content across all your data')
         ON CONFLICT (slug) DO NOTHING"#).execute(&db).await.ok();
 
-    // Built-in skill: hud
-    sqlx::query(r#"INSERT INTO skills (name, slug, description, category, slash_command, is_official, is_public, prompt_template, prompt_content)
-        VALUES ('HUD', 'hud', 'Toggle Context and Usage HUD display', 'utility', '/hud', true, true, '/hud', 'Show or hide the context usage HUD above chat input')
-        ON CONFLICT (slug) DO NOTHING"#).execute(&db).await.ok();
+    // hud skill removed — /hud is a built-in slash command handled by frontend
 
     // Note thread messages
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS note_thread_messages (

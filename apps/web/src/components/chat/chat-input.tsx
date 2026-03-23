@@ -309,6 +309,27 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
       }
     }
 
+    // Built-in slash commands (always available)
+    const BUILTIN_SLASH = [
+      { id: "hud", command: "/hud", description: "Toggle context & usage HUD" },
+    ];
+    const filteredBuiltin = query
+      ? BUILTIN_SLASH.filter((b) => b.command.includes(query.toLowerCase()) || b.description.toLowerCase().includes(query.toLowerCase()))
+      : BUILTIN_SLASH;
+    if (filteredBuiltin.length > 0) {
+      items.push({ type: "header", id: "header-builtin", label: "COMMANDS" });
+      for (const b of filteredBuiltin) {
+        items.push({
+          type: "platform-command",
+          id: b.id,
+          label: b.command,
+          description: b.description,
+          category: "display" as CommandCategory,
+          command: { id: b.id, name: b.command, description: b.description, category: "display" as CommandCategory, handler: "local" as const },
+        });
+      }
+    }
+
     // Agent skills section (only if agentId present)
     if (agentId) {
       const skills = agentSkills[agentId] ?? [];
