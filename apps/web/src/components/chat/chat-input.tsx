@@ -954,9 +954,14 @@ case "tts": {
       const hudCmd = trimmed.toLowerCase();
       if (hudCmd === "/hud" || hudCmd === "/hud on" || hudCmd === "/hud off") {
         import("@/store/hud-store").then(({ useHudStore }) => {
-          if (hudCmd === "/hud on") useHudStore.getState().setEnabled(true);
-          else if (hudCmd === "/hud off") useHudStore.getState().setEnabled(false);
-          else useHudStore.getState().toggle();
+          const store = useHudStore.getState();
+          if (hudCmd === "/hud on") store.setEnabled(true);
+          else if (hudCmd === "/hud off") store.setEnabled(false);
+          else store.toggle();
+          // If HUD just turned on, immediately fetch data
+          if (useHudStore.getState().enabled) {
+            setTimeout(() => sendMessage("/hud"), 300);
+          }
         });
         clearInput();
         return;
