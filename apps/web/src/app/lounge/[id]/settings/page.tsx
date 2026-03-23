@@ -90,6 +90,7 @@ export default function LoungeSettingsPage() {
           avatar: string | null;
           isPublic: boolean;
           category: string | null;
+          coverImageUrl: string | null;
           pricingMode: string | null;
           pricingAmount: number | null;
           freeTrialMessages: number | null;
@@ -98,6 +99,7 @@ export default function LoungeSettingsPage() {
         setName(account.name ?? "");
         setBio(account.bio ?? "");
         setAvatarUrl(account.avatar ?? "");
+        setCoverUrl(account.coverImageUrl ?? "");
         setIsPublic(account.isPublic ?? false);
         setCategory(account.category ?? "Other");
         setPricingMode(
