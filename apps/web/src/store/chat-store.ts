@@ -8,7 +8,7 @@ import { wsManager } from "@/lib/ws";
 function filterHudMessages(messages: Message[]): Message[] {
   return messages.filter((m) => {
     const c = m.content.trim();
-    if (c.startsWith("/hud")) return false;
+    if (c.startsWith("/hud-for-usage")) return false;
     if (c.startsWith("{") && c.includes('"limit5h"') && c.includes('"model"')) return false;
     return true;
   });
@@ -1703,7 +1703,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (event.type === "new_message") {
       const { conversationId, message: msg } = event;
       // Skip /hud command messages from appearing in UI
-      if (msg.content?.trim().startsWith("/hud")) return;
+      if (msg.content?.trim().startsWith("/hud-for-usage")) return;
       const threadId = (event as { threadId?: string }).threadId ?? msg.threadId;
       const { activeConversationId, unreadCounts } = get();
 
@@ -2286,7 +2286,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               // HUD enabled but no data — silently refresh via WS (no UI message)
               useHudStore.getState().markAutoRefresh();
               const conv = get().conversations.find((c) => c.id === conversationId);
-              const hudCmd = conv?.agentName ? `/hud ${conv.agentName}` : "/hud";
+              const hudCmd = conv?.agentName ? `/hud-for-usage ${conv.agentName}` : "/hud-for-usage";
               setTimeout(() => {
                 wsManager.send({ type: "send_message", conversationId, content: hudCmd });
               }, 500);
