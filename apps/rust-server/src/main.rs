@@ -229,6 +229,7 @@ async fn main() {
         quiet_hours_start TEXT,
         quiet_hours_end TEXT
     )"#).execute(&db).await.ok();
+    sqlx::query("ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS always_push_mobile BOOLEAN NOT NULL DEFAULT false").execute(&db).await.ok();
 
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS voice_calls (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

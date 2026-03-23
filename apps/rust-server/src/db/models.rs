@@ -329,6 +329,7 @@ pub struct NotificationPreference {
     pub playground_result_enabled: bool,
     pub quiet_hours_start: Option<String>,
     pub quiet_hours_end: Option<String>,
+    pub always_push_mobile: bool,
 }
 
 // ===== Community tables (Lounge + Hub) =====

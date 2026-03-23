@@ -24,10 +24,11 @@ pub async fn should_send_push(
         bool,
         Option<String>,
         Option<String>,
+        bool,
     )>(
         r#"SELECT global_enabled, message_enabled, playground_invite_enabled,
                   playground_turn_enabled, playground_result_enabled,
-                  quiet_hours_start, quiet_hours_end
+                  quiet_hours_start, quiet_hours_end, always_push_mobile
            FROM notification_preferences WHERE user_id = $1"#,
     )
     .bind(user_id)
@@ -42,7 +43,7 @@ pub async fn should_send_push(
         }
     };
 
-    let (global_enabled, message_enabled, invite_enabled, turn_enabled, result_enabled, quiet_start, quiet_end) = prefs;
+    let (global_enabled, message_enabled, invite_enabled, turn_enabled, result_enabled, quiet_start, quiet_end, _always_push_mobile) = prefs;
 
     // Global toggle
     if !global_enabled {

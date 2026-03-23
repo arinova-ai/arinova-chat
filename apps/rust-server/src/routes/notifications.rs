@@ -41,6 +41,7 @@ async fn get_preferences(
             "playgroundResultEnabled": p.playground_result_enabled,
             "quietHoursStart": p.quiet_hours_start,
             "quietHoursEnd": p.quiet_hours_end,
+            "alwaysPushMobile": p.always_push_mobile,
         }))
         .into_response(),
         Ok(None) => {
@@ -55,6 +56,7 @@ async fn get_preferences(
                 "playgroundResultEnabled": true,
                 "quietHoursStart": null,
                 "quietHoursEnd": null,
+                "alwaysPushMobile": false,
             }))
             .into_response()
         }
@@ -82,6 +84,8 @@ struct UpdatePreferencesBody {
     quiet_hours_start: Option<String>,
     #[serde(rename = "quietHoursEnd")]
     quiet_hours_end: Option<String>,
+    #[serde(rename = "alwaysPushMobile")]
+    always_push_mobile: Option<bool>,
 }
 
 async fn update_preferences(
@@ -96,11 +100,11 @@ async fn update_preferences(
         r#"INSERT INTO notification_preferences
                (id, user_id, global_enabled, message_enabled,
                 playground_invite_enabled, playground_turn_enabled, playground_result_enabled,
-                quiet_hours_start, quiet_hours_end)
+                quiet_hours_start, quiet_hours_end, always_push_mobile)
            VALUES ($1, $2,
                    COALESCE($3, true), COALESCE($4, true),
                    COALESCE($5, true), COALESCE($6, true), COALESCE($7, true),
-                   $8, $9)
+                   $8, $9, COALESCE($10, false))
            ON CONFLICT (user_id) DO UPDATE SET
                global_enabled = COALESCE($3, notification_preferences.global_enabled),
                message_enabled = COALESCE($4, notification_preferences.message_enabled),
@@ -108,7 +112,8 @@ async fn update_preferences(
                playground_turn_enabled = COALESCE($6, notification_preferences.playground_turn_enabled),
                playground_result_enabled = COALESCE($7, notification_preferences.playground_result_enabled),
                quiet_hours_start = $8,
-               quiet_hours_end = $9
+               quiet_hours_end = $9,
+               always_push_mobile = COALESCE($10, notification_preferences.always_push_mobile)
            RETURNING *"#,
     )
     .bind(pref_id)
@@ -120,6 +125,7 @@ async fn update_preferences(
     .bind(body.playground_result_enabled)
     .bind(&body.quiet_hours_start)
     .bind(&body.quiet_hours_end)
+    .bind(body.always_push_mobile)
     .fetch_one(&state.db)
     .await;
 

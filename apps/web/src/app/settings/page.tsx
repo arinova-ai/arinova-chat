@@ -1243,7 +1243,48 @@ function NotificationPanel() {
         <Separator />
 
         <SoundToggle />
+
+        <Separator />
+
+        <AlwaysPushMobileToggle />
       </div>
+    </div>
+  );
+}
+
+function AlwaysPushMobileToggle() {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api<{ alwaysPushMobile?: boolean }>("/api/notifications/preferences", { silent: true })
+      .then((d) => setEnabled(d.alwaysPushMobile ?? false))
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const handleToggle = async (checked: boolean) => {
+    setEnabled(checked);
+    try {
+      await api("/api/notifications/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ alwaysPushMobile: checked }),
+      });
+    } catch {
+      setEnabled(!checked);
+    }
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium">{t("settings.notifications.alwaysPushMobile")}</p>
+        <p className="text-xs text-muted-foreground">{t("settings.notifications.alwaysPushMobileDesc")}</p>
+      </div>
+      <Switch checked={enabled} onCheckedChange={handleToggle} />
     </div>
   );
 }

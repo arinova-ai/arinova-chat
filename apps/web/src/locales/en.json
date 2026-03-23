@@ -503,6 +503,8 @@
   "settings.notifications.to": "To",
   "settings.notifications.chatSounds": "Chat sounds",
   "settings.notifications.chatSoundsDesc": "Play sounds when sending and receiving messages",
+  "settings.notifications.alwaysPushMobile": "Always push to mobile",
+  "settings.notifications.alwaysPushMobileDesc": "Receive mobile push notifications even when the web app is open",
   "settings.notifications.chatTips": "Show chat tips",
   "settings.notifications.chatTipsDesc": "Display helpful tips in the chat input area",
   "settings.privacy.title": "Privacy",

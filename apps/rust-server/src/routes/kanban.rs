@@ -2272,7 +2272,7 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
            LEFT JOIN kanban_labels l ON l.id = cl.label_id
            WHERE b.owner_id = $1 AND c.archived = FALSE
              AND EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = b.id AND agent_id = $2)
-           ORDER BY c.sort_order, c.id"#,
+           ORDER BY c.updated_at DESC NULLS LAST, c.id"#,
     )
     .bind(&owner_id)
     .bind(agent.id)
