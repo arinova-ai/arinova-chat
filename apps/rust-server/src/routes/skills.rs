@@ -29,6 +29,7 @@ pub fn router() -> Router<AppState> {
             patch(update_agent_skill),
         )
         .route("/api/agents/{id}/commands", get(list_agent_commands))
+        .route("/api/skills/arinova-search", post(arinova_search))
 }
 
 // ===== Types =====
@@ -876,4 +877,114 @@ async fn list_agent_commands(
         )
             .into_response(),
     }
+}
+
+// ===== Built-in Skill: arinova-search =====
+
+#[derive(Deserialize)]
+struct ArinovaSearchBody {
+    query: String,
+}
+
+/// POST /api/skills/arinova-search — global search across conversations, memories, capsules
+async fn arinova_search(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<ArinovaSearchBody>,
+) -> Response {
+    let q = body.query.trim();
+    if q.is_empty() || q.len() > 500 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Query must be 1-500 characters"}))).into_response();
+    }
+
+    let pattern = format!("%{}%", q.replace('%', "\\%").replace('_', "\\_"));
+
+    // 1. Search messages in user's conversations
+    let msg_rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, chrono::NaiveDateTime)>(
+        r#"SELECT m.id, m.conversation_id, m.content, m.created_at
+           FROM messages m
+           JOIN conversations c ON c.id = m.conversation_id
+           WHERE (c.user_id = $1 OR EXISTS (
+               SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
+           ))
+           AND m.content ILIKE $2 AND m.content != ''
+           ORDER BY m.created_at DESC LIMIT 10"#,
+    )
+    .bind(&user.id)
+    .bind(&pattern)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // 2. Search memory entries (agent memories)
+    let mem_rows = sqlx::query_as::<_, (uuid::Uuid, String, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT am.id, am.content, am.created_at
+           FROM agent_memories am
+           JOIN agents a ON a.id = am.agent_id
+           WHERE a.owner_id = $1 AND am.content ILIKE $2
+           ORDER BY am.created_at DESC LIMIT 5"#,
+    )
+    .bind(&user.id)
+    .bind(&pattern)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // 3. Search memory capsule entries
+    let cap_rows = sqlx::query_as::<_, (uuid::Uuid, String, String, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT me.id, me.content, mc.name, me.created_at
+           FROM memory_entries me
+           JOIN memory_capsules mc ON mc.id = me.capsule_id
+           WHERE mc.owner_id = $1 AND me.content ILIKE $2
+           ORDER BY me.created_at DESC LIMIT 5"#,
+    )
+    .bind(&user.id)
+    .bind(&pattern)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // Merge + sort by createdAt DESC + truncate to 20
+    let mut results: Vec<serde_json::Value> = Vec::new();
+
+    for (id, conv_id, content, created_at) in &msg_rows {
+        let truncated = if content.len() > 200 { let mut e = 200; while !content.is_char_boundary(e) { e -= 1; } format!("{}...", &content[..e]) } else { content.clone() };
+        results.push(json!({
+            "source": "conversation",
+            "id": id,
+            "content": truncated,
+            "context": format!("conversation:{}", conv_id),
+            "createdAt": created_at.and_utc().to_rfc3339(),
+        }));
+    }
+
+    for (id, content, created_at) in &mem_rows {
+        let truncated = if content.len() > 200 { let mut e = 200; while !content.is_char_boundary(e) { e -= 1; } format!("{}...", &content[..e]) } else { content.clone() };
+        results.push(json!({
+            "source": "memory",
+            "id": id,
+            "content": truncated,
+            "createdAt": created_at.to_rfc3339(),
+        }));
+    }
+
+    for (id, content, capsule_name, created_at) in &cap_rows {
+        let truncated = if content.len() > 200 { let mut e = 200; while !content.is_char_boundary(e) { e -= 1; } format!("{}...", &content[..e]) } else { content.clone() };
+        results.push(json!({
+            "source": "capsule",
+            "id": id,
+            "content": truncated,
+            "context": capsule_name,
+            "createdAt": created_at.to_rfc3339(),
+        }));
+    }
+
+    results.sort_by(|a, b| {
+        let ta = a.get("createdAt").and_then(|v| v.as_str()).unwrap_or("");
+        let tb = b.get("createdAt").and_then(|v| v.as_str()).unwrap_or("");
+        tb.cmp(ta)
+    });
+    if results.len() > 20 { results.truncate(20); }
+
+    Json(json!({ "results": results })).into_response()
 }

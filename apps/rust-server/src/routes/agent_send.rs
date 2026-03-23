@@ -1,12 +1,14 @@
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Json, Response},
-    routing::post,
+    routing::{get, post},
     Router,
 };
+use chrono::NaiveDateTime;
 use serde::Deserialize;
 use serde_json::json;
+use uuid::Uuid;
 
 use crate::auth::middleware::AuthAgent;
 use crate::services::message_seq::get_next_seq;
@@ -17,7 +19,9 @@ use crate::ws::state::QueuedResponse;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/api/agent/send", post(agent_send))
+    Router::new()
+        .route("/api/agent/send", post(agent_send))
+        .route("/api/agent/search", get(agent_search))
 }
 
 #[derive(Deserialize)]
@@ -355,4 +359,93 @@ async fn agent_send(
         })),
     )
         .into_response()
+}
+
+// ── Agent Search ────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct AgentSearchQuery {
+    q: String,
+    #[serde(rename = "conversationId")]
+    conversation_id: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+/// GET /api/agent/search — keyword search across messages the agent can access
+async fn agent_search(
+    State(state): State<AppState>,
+    agent: AuthAgent,
+    Query(query): Query<AgentSearchQuery>,
+) -> Response {
+    let q = query.q.trim();
+    if q.is_empty() || q.len() > 500 {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Query must be 1-500 characters"}))).into_response();
+    }
+
+    let limit = query.limit.unwrap_or(20).min(50).max(1);
+    let offset = query.offset.unwrap_or(0).max(0);
+    let pattern = format!("%{}%", q.replace('%', "\\%").replace('_', "\\_"));
+
+    let rows = if let Some(ref conv_id) = query.conversation_id {
+        // Search within specific conversation
+        let conv_uuid = match Uuid::parse_str(conv_id) {
+            Ok(u) => u,
+            Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid conversationId"}))).into_response(),
+        };
+        sqlx::query_as::<_, (Uuid, Uuid, Option<String>, String, NaiveDateTime)>(
+            r#"SELECT m.id, m.conversation_id, COALESCE(u.name, a.name, 'Unknown') AS sender_name,
+                      m.content, m.created_at
+               FROM messages m
+               LEFT JOIN "user" u ON u.id = m.sender_user_id
+               LEFT JOIN agents a ON a.id = m.sender_agent_id
+               WHERE m.conversation_id = $1 AND m.content ILIKE $2
+               ORDER BY m.created_at DESC
+               LIMIT $3 OFFSET $4"#,
+        )
+        .bind(conv_uuid)
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        // Search across all conversations the agent's owner has
+        sqlx::query_as::<_, (Uuid, Uuid, Option<String>, String, NaiveDateTime)>(
+            r#"SELECT m.id, m.conversation_id, COALESCE(u.name, a.name, 'Unknown') AS sender_name,
+                      m.content, m.created_at
+               FROM messages m
+               JOIN conversations c ON c.id = m.conversation_id
+               LEFT JOIN "user" u ON u.id = m.sender_user_id
+               LEFT JOIN agents a ON a.id = m.sender_agent_id
+               WHERE (c.user_id = $1 OR EXISTS (
+                   SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
+               ))
+               AND m.content ILIKE $2
+               ORDER BY m.created_at DESC
+               LIMIT $3 OFFSET $4"#,
+        )
+        .bind(&agent.owner_id)
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&state.db)
+        .await
+    };
+
+    match rows {
+        Ok(rows) => {
+            let results: Vec<_> = rows.iter().map(|(msg_id, conv_id, sender_name, content, created_at)| {
+                json!({
+                    "messageId": msg_id,
+                    "conversationId": conv_id,
+                    "senderName": sender_name,
+                    "content": content,
+                    "createdAt": created_at.and_utc().to_rfc3339(),
+                })
+            }).collect();
+            Json(json!({ "results": results })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
 }
