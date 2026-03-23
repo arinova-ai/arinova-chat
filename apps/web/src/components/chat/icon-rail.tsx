@@ -6,7 +6,7 @@ import {
   MessageSquare, Building2, Globe, UserPlus,
   Palette, Users, Sparkles, Store, Wallet, Settings, Smile,
   LayoutDashboard, Plus, Mic, Check, Send, BookOpen, Brain,
-  BookHeart, Eye, Zap, type LucideIcon,
+  BookHeart, Eye, Scroll, type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -32,8 +32,8 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   friends: UserPlus,
   theme: Palette,
   community: Users,
-  skills: Zap,
-  "expert-hub": Brain,
+  skills: Sparkles,
+  "expert-hub": Scroll,
   market: Sparkles,
   wallet: Wallet,
   settings: Settings,
