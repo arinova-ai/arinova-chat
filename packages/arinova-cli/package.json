@@ -1,0 +1,24 @@
+{
+  "name": "@arinova-ai/cli",
+  "version": "0.0.1",
+  "description": "Arinova Chat CLI — manage messages, notes, kanban, memory, and more",
+  "type": "module",
+  "bin": {
+    "arinova": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.13",
+    "typescript": "^5.7.0"
+  }
+}
