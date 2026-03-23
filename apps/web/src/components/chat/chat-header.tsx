@@ -391,6 +391,15 @@ export function ChatHeader({
                     setMemoryCapsuleOpen(true);
                   }
                   break;
+                case "hud":
+                  import("@/store/hud-store").then(({ useHudStore }) => {
+                    const s = useHudStore.getState();
+                    s.toggle();
+                    if (useHudStore.getState().enabled && conversationId) {
+                      setTimeout(() => wsManager.send({ type: "send_message", conversationId, content: "/hud" }), 300);
+                    }
+                  });
+                  break;
               }
             }}
             onTransferHuman={handleTransferHuman}

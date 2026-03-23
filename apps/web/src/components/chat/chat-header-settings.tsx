@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { assetUrl, BACKEND_URL } from "@/lib/config";
 import {
   ArrowLeft, Search, Bell, SquareKanban, BookOpen, BookText, MessageSquare,
-  Phone, Image as ImageIcon, FileText, Brain, Pin, Upload, X, Users, UsersRound,
+  Phone, Image as ImageIcon, FileText, Brain, Pin, Upload, X, Users, UsersRound, Activity,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,7 @@ export const HEADER_BUTTONS: HeaderButton[] = [
   { id: "photos", labelKey: "chat.header.photos", icon: ImageIcon, supportedTypes: ["h2h", "h2a"] },
   { id: "files", labelKey: "chat.header.files", icon: FileText, supportedTypes: ["h2h", "h2a"] },
   { id: "capsule", labelKey: "memoryCapsule.title", icon: Brain, supportedTypes: ["h2a"] },
+  { id: "hud", labelKey: "chat.header.hud", icon: Activity, supportedTypes: ["h2a"] },
 ];
 
 /* ─── Group header buttons ─── */
