@@ -49,13 +49,13 @@ export function parseHudData(content: string): HudData | null {
 
   // Try JSON format (bridge output)
   try {
-    const jsonStr = text.match(/\{[\s\S]*"context"[\s\S]*\}/)?.[0];
+    const jsonStr = text.match(/\{[\s\S]*"limit5h"[\s\S]*\}/)?.[0];
     if (jsonStr) {
       const j = JSON.parse(jsonStr) as Record<string, unknown>;
       const ctx = j.context as { percent?: number } | undefined;
       const h5 = j.limit5h as { percent?: number } | undefined;
       const d7 = j.limit7d as { percent?: number } | undefined;
-      if (ctx?.percent != null || h5?.percent != null || d7?.percent != null) {
+      if (h5?.percent != null || d7?.percent != null || ctx?.percent != null) {
         return {
           context: ctx?.percent != null ? `${ctx.percent}%` : undefined,
           fiveHour: h5?.percent != null ? `${h5.percent}%` : undefined,

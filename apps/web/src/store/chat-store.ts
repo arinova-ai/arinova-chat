@@ -9,7 +9,7 @@ function filterHudMessages(messages: Message[]): Message[] {
   return messages.filter((m) => {
     const c = m.content.trim();
     if (c === "/hud") return false;
-    if (c.startsWith("{") && c.includes('"context"') && c.includes('"limit5h"')) return false;
+    if (c.startsWith("{") && c.includes('"limit5h"') && c.includes('"model"')) return false;
     return true;
   });
 }
@@ -2270,7 +2270,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               useHudStore.getState().setData(conversationId, hudData);
               // If content is pure HUD JSON (no other text), suppress from chat UI
               const stripped = finalContent.trim();
-              if (stripped.startsWith("{") && stripped.endsWith("}") && stripped.includes('"context"')) {
+              if (stripped.startsWith("{") && stripped.endsWith("}") && stripped.includes('"limit5h"') && stripped.includes('"model"')) {
                 // Remove the HUD-only message from the messages list
                 const msgs = get().messagesByConversation[conversationId];
                 if (msgs) {
