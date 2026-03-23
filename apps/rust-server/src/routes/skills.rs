@@ -853,9 +853,19 @@ async fn list_agent_commands(
     .fetch_all(&state.db)
     .await;
 
+    // Also fetch built-in skills (available to all agents)
+    let builtins = sqlx::query_as::<_, CommandRow>(
+        r#"SELECT id AS skill_id, name, slug, description, slash_command, icon_url, parameters
+           FROM skills WHERE is_official = true AND slash_command IS NOT NULL
+           ORDER BY name"#,
+    )
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
     match rows {
         Ok(cmds) => {
-            let items: Vec<_> = cmds
+            let mut items: Vec<_> = cmds
                 .iter()
                 .map(|c| {
                     json!({
@@ -869,6 +879,22 @@ async fn list_agent_commands(
                     })
                 })
                 .collect();
+            // Merge built-in skills (avoid duplicates)
+            let existing_slugs: std::collections::HashSet<String> = cmds.iter().map(|c| c.slug.clone()).collect();
+            for b in &builtins {
+                if !existing_slugs.contains(&b.slug) {
+                    items.push(json!({
+                        "id": b.skill_id.to_string(),
+                        "name": &b.name,
+                        "slug": &b.slug,
+                        "description": &b.description,
+                        "slashCommand": &b.slash_command,
+                        "iconUrl": &b.icon_url,
+                        "parameters": &b.parameters,
+                        "builtIn": true,
+                    }));
+                }
+            }
             Json(json!({ "commands": items })).into_response()
         }
         Err(e) => (
