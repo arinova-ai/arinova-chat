@@ -113,6 +113,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
   const [renamingBoard, setRenamingBoard] = useState(false);
+  const [autoArchiveDays, setAutoArchiveDays] = useState(3);
   const [renameBoardName, setRenameBoardName] = useState("");
   const [archiveBoardConfirm, setArchiveBoardConfirm] = useState(false);
 
@@ -268,7 +269,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
     try {
       await api(`/api/kanban/boards/${selectedBoardId}`, {
         method: "PATCH",
-        body: JSON.stringify({ name: renameBoardName.trim() }),
+        body: JSON.stringify({ name: renameBoardName.trim(), autoArchiveDays: autoArchiveDays }),
       });
       setRenamingBoard(false);
       setRenameBoardName("");
@@ -988,12 +989,26 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
           <DialogHeader>
             <DialogTitle>{t("kanban.renameBoard")}</DialogTitle>
           </DialogHeader>
-          <Input
-            value={renameBoardName}
-            onChange={(e) => setRenameBoardName(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => { if (e.key === "Enter") handleRenameBoard(); }}
-          />
+          <div className="space-y-3">
+            <Input
+              value={renameBoardName}
+              onChange={(e) => setRenameBoardName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") handleRenameBoard(); }}
+            />
+            <div>
+              <label className="text-xs text-muted-foreground">{t("kanban.autoArchiveDays")}</label>
+              <Input
+                type="number"
+                min={0}
+                max={365}
+                value={autoArchiveDays}
+                onChange={(e) => setAutoArchiveDays(parseInt(e.target.value) || 0)}
+                className="mt-1"
+              />
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("kanban.autoArchiveDaysDesc")}</p>
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenamingBoard(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleRenameBoard} disabled={!renameBoardName.trim()}>{t("common.save")}</Button>

@@ -322,6 +322,7 @@ async fn main() {
     sqlx::query("ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS pinned_buttons TEXT[]").execute(&db).await.ok();
     sqlx::query("ALTER TABLE conversation_user_settings ADD COLUMN IF NOT EXISTS kanban_board_id UUID REFERENCES kanban_boards(id) ON DELETE SET NULL").execute(&db).await.ok();
     sqlx::query("ALTER TABLE kanban_boards ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE kanban_boards ADD COLUMN IF NOT EXISTS auto_archive_days INTEGER NOT NULL DEFAULT 3").execute(&db).await.ok();
     sqlx::query("ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS progress JSONB").execute(&db).await.ok();
 
     sqlx::query("ALTER TABLE memory_capsules ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'owner_only'").execute(&db).await.ok();

@@ -1539,21 +1539,39 @@ pub async fn trigger_agent_response(
             continue;
         }
 
-        do_trigger_agent_response(
-            user_id,
-            agent_id,
-            conversation_id,
-            content,
-            reply_to_id.as_deref(),
-            thread_id.as_deref(),
-            &conv_type,
-            client_metadata.as_ref(),
-            ws_state,
-            db,
-            redis,
-            config,
-        )
-        .await;
+        // Skip agent trigger for sticker messages without AI tag (agentPrompt)
+        let sticker_check_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+        let is_sticker_without_ai = if let Some(caps) = sticker_check_re.captures(content.trim()) {
+            let filename = caps.get(3).unwrap().as_str();
+            let has_prompt = sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM stickers WHERE filename = $1 AND agent_prompt IS NOT NULL AND agent_prompt != '')",
+            )
+            .bind(filename)
+            .fetch_one(db)
+            .await
+            .unwrap_or(false);
+            !has_prompt
+        } else {
+            false
+        };
+
+        if !is_sticker_without_ai {
+            do_trigger_agent_response(
+                user_id,
+                agent_id,
+                conversation_id,
+                content,
+                reply_to_id.as_deref(),
+                thread_id.as_deref(),
+                &conv_type,
+                client_metadata.as_ref(),
+                ws_state,
+                db,
+                redis,
+                config,
+            )
+            .await;
+        }
     }
 }
 

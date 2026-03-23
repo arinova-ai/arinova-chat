@@ -322,6 +322,8 @@ struct CreateColumnInput {
 #[serde(rename_all = "camelCase")]
 struct UpdateBoardBody {
     name: String,
+    #[serde(default)]
+    auto_archive_days: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -585,21 +587,35 @@ async fn verify_card_edit_access(
 
 /// Lazy-archive: mark cards in Done columns as archived if updated_at > 3 days ago.
 async fn lazy_archive_done_cards(db: &sqlx::PgPool, board_id: Uuid) {
+    let days = sqlx::query_scalar::<_, i32>(
+        "SELECT COALESCE(auto_archive_days, 3) FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(3);
+
+    if days <= 0 { return; }
+
     let _ = sqlx::query(
         r#"UPDATE kanban_cards SET archived = TRUE, archived_at = NOW()
            WHERE archived = FALSE
              AND column_id IN (
                SELECT id FROM kanban_columns WHERE board_id = $1 AND name = 'Done'
              )
-             AND updated_at < NOW() - INTERVAL '3 days'"#,
+             AND updated_at < NOW() - make_interval(days => $2)"#,
     )
     .bind(board_id)
+    .bind(days)
     .execute(db)
     .await;
 }
 
 /// Lazy-archive across all boards owned by a user.
 async fn lazy_archive_done_cards_by_owner(db: &sqlx::PgPool, owner_id: &str) {
+    // Archive done cards per board's auto_archive_days setting
     let _ = sqlx::query(
         r#"UPDATE kanban_cards SET archived = TRUE, archived_at = NOW()
            WHERE archived = FALSE
@@ -607,8 +623,12 @@ async fn lazy_archive_done_cards_by_owner(db: &sqlx::PgPool, owner_id: &str) {
                SELECT kc.id FROM kanban_columns kc
                JOIN kanban_boards kb ON kb.id = kc.board_id
                WHERE kb.owner_id = $1 AND kc.name = 'Done'
+                 AND COALESCE(kb.auto_archive_days, 3) > 0
              )
-             AND updated_at < NOW() - INTERVAL '3 days'"#,
+             AND updated_at < NOW() - make_interval(days => COALESCE(
+               (SELECT kb2.auto_archive_days FROM kanban_boards kb2
+                JOIN kanban_columns kc2 ON kc2.board_id = kb2.id
+                WHERE kc2.id = kanban_cards.column_id LIMIT 1), 3))"#,
     )
     .bind(owner_id)
     .execute(db)
@@ -860,9 +880,10 @@ async fn update_board(
         return e;
     }
 
-    let result = sqlx::query("UPDATE kanban_boards SET name = $1 WHERE id = $2")
+    let result = sqlx::query("UPDATE kanban_boards SET name = $1, auto_archive_days = COALESCE($3, auto_archive_days) WHERE id = $2")
         .bind(&body.name)
         .bind(board_id)
+        .bind(body.auto_archive_days)
         .execute(&state.db)
         .await;
 

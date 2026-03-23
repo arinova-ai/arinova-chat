@@ -1766,6 +1766,8 @@
   "kanban.createBoardDesc": "Enter a name for the new board.",
   "kanban.boardName": "Board name",
   "kanban.create": "Create",
+  "kanban.autoArchiveDays": "Auto-archive done cards after (days)",
+  "kanban.autoArchiveDaysDesc": "0 = never auto-archive",
   "kanban.renameBoard": "Rename Board",
   "kanban.archiveBoard": "Archive Board",
   "kanban.archiveBoardDesc": "This will archive the board. It can be restored later.",
