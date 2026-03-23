@@ -3,6 +3,16 @@ import type { Agent, Conversation, Message, Note } from "@arinova/shared/types";
 import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
+
+/** Filter out /hud commands and HUD JSON responses from message lists */
+function filterHudMessages(messages: Message[]): Message[] {
+  return messages.filter((m) => {
+    const c = m.content.trim();
+    if (c === "/hud") return false;
+    if (c.startsWith("{") && c.includes('"context"') && c.includes('"limit5h"')) return false;
+    return true;
+  });
+}
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 import { isGroupLike } from "@/lib/utils";
 import { useNotificationStore } from "@/store/notification-store";
@@ -645,7 +655,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,
-        [conversationId]: data.messages,
+        [conversationId]: filterHudMessages(data.messages),
       },
     });
 
@@ -705,16 +715,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           dividerMsgId = data.messages[idx].id;
         }
       }
+      const filtered = filterHudMessages(data.messages);
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
-          [conversationId]: data.messages,
+          [conversationId]: filtered,
         },
         ...(dividerMsgId !== null && { unreadDividerMessageId: dividerMsgId }),
       });
 
       // Persist fresh messages to IDB cache
-      setCachedMessages(conversationId, data.messages).catch(() => {});
+      setCachedMessages(conversationId, filtered).catch(() => {});
 
       // Populate read receipts from API response (ensures checkmarks survive refresh)
       if (data.readReceipts && typeof data.readReceipts === "object") {
@@ -1691,6 +1702,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "new_message") {
       const { conversationId, message: msg } = event;
+      // Skip /hud command messages from appearing in UI
+      if (msg.content?.trim() === "/hud") return;
       const threadId = (event as { threadId?: string }).threadId ?? msg.threadId;
       const { activeConversationId, unreadCounts } = get();
 
