@@ -2255,8 +2255,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
             const hudData = parseHudData(finalContent);
             if (hudData) {
               useHudStore.getState().setData(conversationId, hudData);
-            } else if (useHudStore.getState().enabled) {
-              // HUD enabled but no data in response — silently send /hud to refresh
+            } else if (useHudStore.getState().enabled && useHudStore.getState().canAutoRefresh()) {
+              // HUD enabled but no data — silently refresh (max once per 5s)
+              useHudStore.getState().markAutoRefresh();
               setTimeout(() => {
                 get().sendMessage("/hud");
               }, 500);
