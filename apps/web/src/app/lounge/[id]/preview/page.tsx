@@ -94,20 +94,17 @@ export default function PreviewChatPage() {
   return (
     <div className="flex h-full flex-col pt-[env(safe-area-inset-top)]">
       {/* Header */}
-      <header className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.back()}
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-lg font-semibold">
-            {t("lounge.preview.title")}
-          </h1>
-        </div>
+      <header className="flex items-center gap-3 border-b px-4 py-3 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h1 className="text-lg font-semibold truncate flex-1">
+          {t("lounge.preview.title")}
+        </h1>
         <Button
           variant="ghost"
           size="icon"

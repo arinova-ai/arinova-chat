@@ -288,7 +288,7 @@ export default function LoungeSettingsPage() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-semibold">{t("lounge.settings.title")}</h1>
+        <h1 className="text-lg font-semibold truncate flex-1">{t("lounge.settings.title")}</h1>
       </header>
 
       {/* Tab Bar */}

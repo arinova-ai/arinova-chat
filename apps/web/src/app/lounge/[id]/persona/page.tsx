@@ -161,16 +161,15 @@ export default function PersonaPage() {
   return (
     <div className="flex h-full flex-col bg-background pt-[env(safe-area-inset-top)]">
       {/* Header */}
-      <header className="flex items-center gap-3 border-b px-4 py-3">
+      <header className="flex items-center gap-3 border-b px-4 py-3 shrink-0">
         <Button
           variant="ghost"
           size="icon"
           onClick={() => router.back()}
-          aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-semibold">{t("lounge.persona.title")}</h1>
+        <h1 className="text-lg font-semibold truncate flex-1">{t("lounge.persona.title")}</h1>
       </header>
 
       {/* Scrollable Form */}

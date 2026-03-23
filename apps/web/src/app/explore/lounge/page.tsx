@@ -7,6 +7,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface ExploreAccount {
   id: string;
@@ -44,13 +45,13 @@ export default function ExplorLoungePage() {
 
   return (
     <div className="flex flex-col h-full bg-background pt-[env(safe-area-inset-top)]">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-        <button type="button" onClick={() => router.back()} className="rounded-lg p-1 hover:bg-accent">
+      <header className="flex items-center gap-3 border-b px-4 py-3 shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
-        </button>
+        </Button>
         <Mic className="h-5 w-5 text-purple-500" />
-        <h1 className="text-lg font-semibold">{t("explore.lounge")}</h1>
-      </div>
+        <h1 className="text-lg font-semibold truncate flex-1">{t("explore.lounge")}</h1>
+      </header>
 
       {/* Search */}
       <div className="px-4 pt-3 shrink-0">

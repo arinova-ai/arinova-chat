@@ -141,12 +141,12 @@ export default function LoungeDashboardPage() {
     <div className="flex min-h-screen flex-col bg-background pt-[env(safe-area-inset-top)]">
      <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+      <header className="flex items-center gap-3 border-b px-4 py-3 shrink-0">
         <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold">
+          <h1 className="text-lg font-semibold truncate">
             {account?.name ?? t("common.loading")}
           </h1>
           <p className="text-xs text-muted-foreground">
@@ -161,7 +161,7 @@ export default function LoungeDashboardPage() {
         >
           <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
         </Button>
-      </div>
+      </header>
 
       <div className="flex-1 space-y-4 px-4 py-4">
         {/* Overview Cards */}
