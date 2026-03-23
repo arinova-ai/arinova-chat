@@ -396,7 +396,8 @@ export function ChatHeader({
                     const s = useHudStore.getState();
                     s.toggle();
                     if (useHudStore.getState().enabled && conversationId) {
-                      setTimeout(() => wsManager.send({ type: "send_message", conversationId, content: "/hud" }), 300);
+                      const hudCmd = agentName ? `/hud ${agentName}` : "/hud";
+                      setTimeout(() => wsManager.send({ type: "send_message", conversationId, content: hudCmd }), 300);
                     }
                   });
                   break;

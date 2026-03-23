@@ -1006,7 +1006,7 @@ pub async fn trigger_agent_response(
     config: &crate::config::Config,
 ) {
     // Ephemeral: /hud commands skip user message DB persistence (agent reply handled via frontend filter)
-    let ephemeral = content.trim() == "/hud";
+    let ephemeral = content.trim().starts_with("/hud");
     // Verify conversation access: user is owner OR member via conversation_user_members
     let conv = sqlx::query_as::<_, (String, Option<String>, String, bool)>(
         r#"SELECT c.id::text, c.agent_id::text, c.type::text, c.mention_only
