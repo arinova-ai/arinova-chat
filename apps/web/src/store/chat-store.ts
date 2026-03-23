@@ -2248,14 +2248,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const finalContent = event.content?.replace(/\r\n?/g, "\n");
       const threadId = event.threadId;
 
-      // Parse HUD data from agent response
+      // Parse HUD data from agent response + auto-refresh if enabled
       if (finalContent) {
         try {
-          // Dynamic import to avoid circular dep — fire-and-forget
           import("@/store/hud-store").then(({ parseHudData, useHudStore }) => {
             const hudData = parseHudData(finalContent);
             if (hudData) {
               useHudStore.getState().setData(conversationId, hudData);
+            } else if (useHudStore.getState().enabled) {
+              // HUD enabled but no data in response — silently send /hud to refresh
+              setTimeout(() => {
+                get().sendMessage("/hud");
+              }, 500);
             }
           });
         } catch { /* ignore */ }
