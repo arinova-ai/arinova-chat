@@ -309,31 +309,19 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
       }
     }
 
-    // Built-in slash commands (always available)
-    const BUILTIN_SLASH = [
-      { id: "hud", command: "/hud", description: "Toggle context & usage HUD" },
-    ];
-    const filteredBuiltin = query
-      ? BUILTIN_SLASH.filter((b) => b.command.includes(query.toLowerCase()) || b.description.toLowerCase().includes(query.toLowerCase()))
-      : BUILTIN_SLASH;
-    if (filteredBuiltin.length > 0) {
-      items.push({ type: "header", id: "header-builtin", label: "COMMANDS" });
-      for (const b of filteredBuiltin) {
-        items.push({
-          type: "platform-command",
-          id: b.id,
-          label: b.command,
-          description: b.description,
-          category: "display" as CommandCategory,
-          command: { id: b.id, name: b.command, description: b.description, category: "display" as CommandCategory, handler: "local" as const },
-        });
-      }
-    }
-
-    // Agent skills section (only if agentId present)
-    if (agentId) {
-      const skills = agentSkills[agentId] ?? [];
+    // Agent skills + built-in slash commands (combined in one section)
+    {
+      // Built-in commands
+      const BUILTIN_CMDS = [
+        { id: "hud", slashCommand: "/hud", name: "HUD", description: "Toggle context & usage HUD" },
+      ];
       const q = query.toLowerCase();
+      const filteredBuiltin = q
+        ? BUILTIN_CMDS.filter((b) => b.slashCommand.includes(q) || b.name.toLowerCase().includes(q))
+        : BUILTIN_CMDS;
+
+      // Agent skills
+      const skills = agentId ? (agentSkills[agentId] ?? []) : [];
       const filteredSkills = q
         ? skills.filter(
             (s) =>
@@ -343,12 +331,21 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
           )
         : skills;
 
-      if (filteredSkills.length > 0) {
+      if (filteredBuiltin.length > 0 || filteredSkills.length > 0) {
         items.push({
           type: "header",
-          id: "header-agent-skills",
-          label: "AGENT SKILLS",
+          id: "header-commands",
+          label: "COMMANDS",
         });
+
+        for (const b of filteredBuiltin) {
+          items.push({
+            type: "agent-skill",
+            id: `builtin-${b.id}`,
+            label: b.slashCommand,
+            description: b.description,
+          });
+        }
 
         for (const skill of filteredSkills) {
           const cmd = skill.slashCommand ?? skill.id;
