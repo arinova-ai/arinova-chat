@@ -126,7 +126,7 @@ export async function handleArinovaChatInbound(params: {
 
   // Resolve agent route — use conversationId as peer id so each conversation
   // gets its own session (critical for groups where multiple convos exist).
-  const peerId = message.conversationId ?? senderId;
+  const peerId = message.conversationId || senderId || message.taskId;
   const route = core.channel.routing.resolveAgentRoute({
     cfg: config as OpenClawConfig,
     channel: CHANNEL_ID,
