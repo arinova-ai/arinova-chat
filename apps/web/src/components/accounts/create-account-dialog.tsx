@@ -16,9 +16,10 @@ import { useTranslation } from "@/lib/i18n";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  availableTypes?: ("lounge" | "official")[];
 }
 
-export function CreateAccountDialog({ open, onOpenChange }: Props) {
+export function CreateAccountDialog({ open, onOpenChange, availableTypes }: Props) {
   const { t } = useTranslation();
   const createAccount = useAccountStore((s) => s.createAccount);
   const [step, setStep] = useState<"type" | "form">("type");
@@ -59,28 +60,32 @@ export function CreateAccountDialog({ open, onOpenChange }: Props) {
 
         {step === "type" ? (
           <div className="grid grid-cols-2 gap-3 py-4">
-            <button
-              type="button"
-              onClick={() => { setAccountType("official"); setStep("form"); }}
-              className="flex flex-col items-center gap-2 rounded-xl border-2 border-transparent bg-accent/30 p-6 hover:border-blue-500 transition-colors"
-            >
-              <Building2 className="h-10 w-10 text-blue-500" />
-              <span className="text-sm font-medium">{t("accounts.typeOfficial")}</span>
-              <span className="text-xs text-muted-foreground text-center">
-                {t("accounts.typeOfficialDesc")}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAccountType("lounge"); setStep("form"); }}
-              className="flex flex-col items-center gap-2 rounded-xl border-2 border-transparent bg-accent/30 p-6 hover:border-purple-500 transition-colors"
-            >
-              <Mic className="h-10 w-10 text-purple-500" />
-              <span className="text-sm font-medium">{t("accounts.typeLounge")}</span>
-              <span className="text-xs text-muted-foreground text-center">
-                {t("accounts.typeLoungeDesc")}
-              </span>
-            </button>
+            {(!availableTypes || availableTypes.includes("official")) && (
+              <button
+                type="button"
+                onClick={() => { setAccountType("official"); setStep("form"); }}
+                className="flex flex-col items-center gap-2 rounded-xl border-2 border-transparent bg-accent/30 p-6 hover:border-blue-500 transition-colors"
+              >
+                <Building2 className="h-10 w-10 text-blue-500" />
+                <span className="text-sm font-medium">{t("accounts.typeOfficial")}</span>
+                <span className="text-xs text-muted-foreground text-center">
+                  {t("accounts.typeOfficialDesc")}
+                </span>
+              </button>
+            )}
+            {(!availableTypes || availableTypes.includes("lounge")) && (
+              <button
+                type="button"
+                onClick={() => { setAccountType("lounge"); setStep("form"); }}
+                className="flex flex-col items-center gap-2 rounded-xl border-2 border-transparent bg-accent/30 p-6 hover:border-purple-500 transition-colors"
+              >
+                <Mic className="h-10 w-10 text-purple-500" />
+                <span className="text-sm font-medium">{t("accounts.typeLounge")}</span>
+                <span className="text-xs text-muted-foreground text-center">
+                  {t("accounts.typeLoungeDesc")}
+                </span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-4 py-2">

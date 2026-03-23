@@ -77,17 +77,31 @@ export function AccountSwitcher() {
             </DropdownMenuItem>
           ))}
 
-          <DropdownMenuSeparator />
-
-          {/* Create new account */}
-          <DropdownMenuItem onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            <span>{t("accounts.create")}</span>
-          </DropdownMenuItem>
+          {(() => {
+            const hasLounge = accounts.some((a) => a.type === "lounge");
+            const hasOfficial = accounts.some((a) => a.type === "official");
+            if (hasLounge && hasOfficial) return null;
+            return (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  <span>{t("accounts.create")}</span>
+                </DropdownMenuItem>
+              </>
+            );
+          })()}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <CreateAccountDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateAccountDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        availableTypes={[
+          ...(!accounts.some((a) => a.type === "lounge") ? ["lounge" as const] : []),
+          ...(!accounts.some((a) => a.type === "official") ? ["official" as const] : []),
+        ]}
+      />
     </>
   );
 }
