@@ -288,7 +288,7 @@ export function MobileBottomNav() {
           </button>
         </div>
 
-        {/* Friends / Subscribers */}
+        {/* Friends / Subscribers / Fans */}
         <div className="relative">
           {activeAccount?.type === "official" ? (
             <NavButton
@@ -296,6 +296,13 @@ export function MobileBottomNav() {
               label={t("nav.subscribers")}
               active={activeId === "friends"}
               onClick={() => router.push(`/official/${activeAccount.id}/subscribers`)}
+            />
+          ) : activeAccount?.type === "lounge" ? (
+            <NavButton
+              iconId="friends"
+              label={t("nav.fans")}
+              active={activeId === "friends"}
+              onClick={() => router.push(`/lounge/${activeAccount.id}/fans`)}
             />
           ) : (
             <>
