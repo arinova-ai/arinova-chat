@@ -2232,6 +2232,16 @@ pub(crate) async fn do_trigger_agent_response(
                                     .bind(&agent_msg_id_clone)
                                     .execute(&db)
                                     .await;
+                                // Revert conversation updated_at to last real message
+                                let _ = sqlx::query(
+                                    r#"UPDATE conversations SET updated_at = COALESCE(
+                                        (SELECT MAX(created_at) FROM messages WHERE conversation_id = $1::uuid),
+                                        conversations.created_at
+                                    ) WHERE id = $1::uuid"#,
+                                )
+                                .bind(&conversation_id)
+                                .execute(&db)
+                                .await;
                                 tracing::info!(
                                     "stream_end reason=hud_ephemeral (deleted) conv={} agent={} msgId={}",
                                     conversation_id, agent_id, agent_msg_id_clone
