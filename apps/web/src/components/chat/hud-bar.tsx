@@ -18,7 +18,6 @@ export function HudBar() {
       {data.fiveHour && <span>5H: {data.fiveHour}</span>}
       {data.sevenDay && <span>7D: {data.sevenDay}</span>}
       {data.model && <span>{data.model}</span>}
-      {data.cost && <span>{data.cost}</span>}
     </div>
   );
 }
