@@ -279,6 +279,8 @@ export const arinovaChatPlugin: ChannelPlugin<ResolvedArinovaChatAccount> = {
             timestamp: Date.now(),
             conversationId: task.conversationId,
             conversationType: task.conversationType,
+            senderUserId: task.senderUserId,
+            senderUsername: task.senderUsername,
             members: task.members,
             replyTo: task.replyTo,
             history: task.history,

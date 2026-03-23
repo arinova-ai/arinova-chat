@@ -179,6 +179,9 @@ export async function handleArinovaChatInbound(params: {
     Timestamp: message.timestamp,
     OriginatingChannel: CHANNEL_ID,
     OriginatingTo: `openclaw-arinova-ai:${account.agentId}`,
+    ReceiverId: account.accountId,
+    ReceiverName: account.accountId,
+    ArinovaConversationId: message.conversationId || peerId,
     CommandAuthorized: true,
   });
 
