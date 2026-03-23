@@ -444,13 +444,17 @@ export default function LoungeSettingsPage() {
               </div>
 
               {/* Sticky Save */}
-              <div className="sticky bottom-0 -mx-4 mt-4 border-t bg-background px-4 py-3">
+            </>
+          )}
+          {tab === "general" && (
+            <div className="fixed bottom-0 left-0 right-0 border-t bg-background px-4 py-3 z-10" style={{ paddingBottom: "env(safe-area-inset-bottom, 12px)" }}>
+              <div className="max-w-2xl mx-auto">
                 <Button onClick={handleSaveGeneral} disabled={saving} className="w-full">
                   <Save className="mr-2 h-4 w-4" />
                   {saving ? "..." : t("common.save")}
                 </Button>
               </div>
-            </>
+            </div>
           )}
 
           {/* ==================== Pricing Tab ==================== */}
