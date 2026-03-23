@@ -1005,6 +1005,8 @@ pub async fn trigger_agent_response(
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
 ) {
+    // Ephemeral: /hud commands skip user message DB persistence (agent reply handled via frontend filter)
+    let ephemeral = content.trim() == "/hud";
     // Verify conversation access: user is owner OR member via conversation_user_members
     let conv = sqlx::query_as::<_, (String, Option<String>, String, bool)>(
         r#"SELECT c.id::text, c.agent_id::text, c.type::text, c.mention_only
@@ -1320,55 +1322,59 @@ pub async fn trigger_agent_response(
             client_metadata.clone()
         };
 
-        let _ = sqlx::query(
-            r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, thread_id, metadata, created_at, updated_at)
-               VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, $7::uuid, $8, $9, $9)"#,
-        )
-        .bind(user_msg_id)
-        .bind(conversation_id)
-        .bind(user_seq)
-        .bind(content)
-        .bind(user_id)
-        .bind(reply_to_id.as_deref())
-        .bind(thread_id.as_deref())
-        .bind(&msg_metadata)
-        .bind(now.naive_utc())
-        .execute(db)
-        .await;
-
-        // Spawn link preview extraction in background
-        {
-            let db2 = db.clone();
-            let mid = user_msg_id.to_string();
-            let text = content.to_string();
-            let ws2 = ws_state.clone();
-            let redis2 = redis.clone();
-            let cid = conversation_id.to_string();
-            let uid = user_id.to_string();
-            tokio::spawn(async move {
-                let previews = crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
-                if !previews.is_empty() {
-                    let members = get_conv_member_ids(&ws2, &db2, &cid, &uid).await;
-                    ws2.broadcast_to_members(&members, &serde_json::json!({
-                        "type": "link_previews_ready",
-                        "conversationId": &cid,
-                        "messageId": &mid,
-                        "linkPreviews": previews,
-                    }), &redis2);
-                }
-            });
+        if !ephemeral {
+            let _ = sqlx::query(
+                r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, thread_id, metadata, created_at, updated_at)
+                   VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, $7::uuid, $8, $9, $9)"#,
+            )
+            .bind(user_msg_id)
+            .bind(conversation_id)
+            .bind(user_seq)
+            .bind(content)
+            .bind(user_id)
+            .bind(reply_to_id.as_deref())
+            .bind(thread_id.as_deref())
+            .bind(&msg_metadata)
+            .bind(now.naive_utc())
+            .execute(db)
+            .await;
         }
 
-        let _ = sqlx::query(
-            r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
-        )
-        .bind(conversation_id)
-        .execute(db)
-        .await;
+        if !ephemeral {
+            // Spawn link preview extraction in background
+            {
+                let db2 = db.clone();
+                let mid = user_msg_id.to_string();
+                let text = content.to_string();
+                let ws2 = ws_state.clone();
+                let redis2 = redis.clone();
+                let cid = conversation_id.to_string();
+                let uid = user_id.to_string();
+                tokio::spawn(async move {
+                    let previews = crate::services::link_preview::attach_link_previews(&db2, &mid, &text).await;
+                    if !previews.is_empty() {
+                        let members = get_conv_member_ids(&ws2, &db2, &cid, &uid).await;
+                        ws2.broadcast_to_members(&members, &serde_json::json!({
+                            "type": "link_previews_ready",
+                            "conversationId": &cid,
+                            "messageId": &mid,
+                            "linkPreviews": previews,
+                        }), &redis2);
+                    }
+                });
+            }
 
-        // Update thread summary if this message is part of a thread
-        if let Some(ref tid) = thread_id {
-            update_thread_summary(db, tid, Some(user_id), None).await;
+            let _ = sqlx::query(
+                r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#,
+            )
+            .bind(conversation_id)
+            .execute(db)
+            .await;
+
+            // Update thread summary if this message is part of a thread
+            if let Some(ref tid) = thread_id {
+                update_thread_summary(db, tid, Some(user_id), None).await;
+            }
         }
 
         // Broadcast user message to all conversation members (for group/community visibility)
