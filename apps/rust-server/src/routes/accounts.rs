@@ -1618,7 +1618,7 @@ async fn explore_official(
                   a.created_at
            FROM accounts a
            JOIN "user" u ON u.id = a.owner_id
-           WHERE a.type = 'official'
+           WHERE a.type = 'official' AND COALESCE(a.is_published, true) = true
            ORDER BY subscriber_count DESC, a.created_at DESC"#,
     )
     .fetch_all(&state.db)
