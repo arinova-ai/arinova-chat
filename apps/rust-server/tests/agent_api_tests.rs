@@ -110,14 +110,24 @@ async fn create_test_board(client: &Client) -> String {
         .to_string()
 }
 
-/// Archive (soft-delete) a test board so it no longer shows in listings.
+/// Hard-delete a test board and all its data (columns, cards, etc.).
 async fn delete_test_board(client: &Client, board_id: &str) {
-    let _ = agent_post(
-        client,
-        &format!("/api/v1/kanban/boards/{board_id}/archive"),
-        json!({}),
-    )
-    .await;
+    let _ = agent_delete(client, &format!("/api/v1/kanban/boards/{board_id}")).await;
+}
+
+/// Pre-test cleanup: remove any leftover __test_board__ boards from previous runs.
+async fn cleanup_stale_test_boards(client: &Client) {
+    let boards = agent_get_json(client, "/api/v1/kanban/boards?includeArchived=true").await;
+    if let Some(arr) = boards.as_array() {
+        for b in arr {
+            let name = b["name"].as_str().unwrap_or("");
+            if name.starts_with("__test") {
+                if let Some(id) = b["id"].as_str() {
+                    let _ = agent_delete(client, &format!("/api/v1/kanban/boards/{id}")).await;
+                }
+            }
+        }
+    }
 }
 
 /// Helper: get the first column ID of a board.
@@ -628,6 +638,8 @@ mod kanban_board_tests {
     #[ignore]
     async fn list_boards_returns_array() {
         let client = Client::new();
+        // Pre-cleanup: remove stale __test__ boards from previous runs
+        cleanup_stale_test_boards(&client).await;
         // Create a test board so the listing is never empty
         let board_id = create_test_board(&client).await;
 
@@ -654,10 +666,19 @@ mod kanban_board_tests {
     async fn list_boards_with_include_archived() {
         let client = Client::new();
         let board_id = create_test_board(&client).await;
-        delete_test_board(&client, &board_id).await; // archive it so there's something archived
+        // Archive (not hard-delete) so there's something in the archived list
+        let _ = agent_post(
+            &client,
+            &format!("/api/v1/kanban/boards/{board_id}/archive"),
+            json!({}),
+        )
+        .await;
 
         let res = agent_get(&client, "/api/v1/kanban/boards?include_archived=true").await;
         assert_eq!(res.status().as_u16(), 200);
+
+        // Cleanup: hard-delete
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]

@@ -21,7 +21,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         // Boards
         .route("/api/v1/kanban/boards", get(list_boards).post(create_board))
-        .route("/api/v1/kanban/boards/{id}", patch(update_board))
+        .route("/api/v1/kanban/boards/{id}", patch(update_board).delete(hard_delete_board))
         .route("/api/v1/kanban/boards/{id}/archive", post(archive_board))
         // Columns
         .route(
@@ -702,6 +702,38 @@ async fn archive_board(
     }
 
     Json(json!({ "ok": true, "archived": new_archived })).into_response()
+}
+
+/// DELETE /api/v1/kanban/boards/{id} — permanently delete a board and all its data
+async fn hard_delete_board(
+    State(state): State<AppState>,
+    caller: CallerIdentity,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    let owner_id = owner_id_str(&caller);
+    if let Err(e) = verify_board_owner(&state.db, board_id, &owner_id).await {
+        return e;
+    }
+
+    // Clear any conversation preferences pointing to this board
+    let _ = sqlx::query(
+        "UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1",
+    )
+    .bind(board_id)
+    .execute(&state.db)
+    .await;
+
+    // CASCADE handles columns, cards, labels, card_agents, card_labels, card_commits, card_notes
+    if let Err(e) = sqlx::query("DELETE FROM kanban_boards WHERE id = $1")
+        .bind(board_id)
+        .execute(&state.db)
+        .await
+    {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+            .into_response();
+    }
+
+    StatusCode::NO_CONTENT.into_response()
 }
 
 // ── Columns ──────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 const API_URL = "https://api.chat-staging.arinova.ai";
 const TOKEN = process.env.TEST_BOT_TOKEN ?? "";
@@ -138,9 +138,30 @@ describe.skipIf(!HAS_TOKEN)("note commands", () => {
   });
 });
 
+/** Remove all __test / __cli_test boards via API (hard-delete). */
+async function cleanupTestBoards() {
+  if (!HAS_TOKEN) return;
+  const res = await fetch(`${API_URL}/api/v1/kanban/boards?includeArchived=true`, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+  });
+  if (!res.ok) return;
+  const boards: any[] = await res.json();
+  for (const b of boards) {
+    if (typeof b.name === "string" && (b.name.startsWith("__cli_test") || b.name.startsWith("__test"))) {
+      await fetch(`${API_URL}/api/v1/kanban/boards/${b.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      }).catch(() => {});
+    }
+  }
+}
+
 describe.skipIf(!HAS_TOKEN)("kanban commands", () => {
   let testBoardId: string;
   let testCardId: string;
+
+  beforeAll(async () => { await cleanupTestBoards(); });
+  afterAll(async () => { await cleanupTestBoards(); });
 
   it("kanban board list exits 0 and outputs JSON array", () => {
     const out = run("kanban board list");
@@ -264,6 +285,8 @@ describe.skipIf(!HAS_TOKEN)("kanban commands", () => {
 });
 
 describe.skipIf(!HAS_TOKEN)("kanban label commands", () => {
+  afterAll(async () => { await cleanupTestBoards(); });
+
   it("label CRUD: create board, create label, list labels, verify, archive board", () => {
     const boardOut = run('kanban board create --name "__cli_test_label__"');
     const board = JSON.parse(boardOut);
