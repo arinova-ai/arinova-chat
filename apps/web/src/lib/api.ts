@@ -33,7 +33,7 @@ export async function api<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const message = body.error ?? `HTTP ${res.status}`;
+    const message = body.message ?? body.error ?? `HTTP ${res.status}`;
     const error = new ApiError(res.status, message, body);
 
     // Handle banned account — redirect to sign-in with banned indicator
