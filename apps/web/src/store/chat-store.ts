@@ -9,7 +9,7 @@ function filterHudMessages(messages: Message[]): Message[] {
   return messages.filter((m) => {
     const c = m.content.trim();
     if (c.startsWith("/hud-for-usage")) return false;
-    if (c.startsWith("{") && c.includes('"limit5h"') && c.includes('"model"')) return false;
+    if (c.includes('"hud-for-usage"')) return false;
     return true;
   });
 }
@@ -810,12 +810,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ...get().messagesByConversation,
         [activeConversationId]: [...current, userMsg],
       },
-      // Update sidebar lastMessage preview
-      conversations: get().conversations.map((c) =>
-        c.id === activeConversationId
-          ? { ...c, lastMessage: userMsg, updatedAt: new Date() }
-          : c
-      ),
+      // Update sidebar lastMessage preview (skip HUD commands)
+      conversations: content.trim().startsWith("/hud-for-usage")
+        ? get().conversations
+        : get().conversations.map((c) =>
+            c.id === activeConversationId
+              ? { ...c, lastMessage: userMsg, updatedAt: new Date() }
+              : c
+          ),
       replyingTo: null,
     });
 
@@ -2270,7 +2272,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               useHudStore.getState().setData(conversationId, hudData);
               // If content is pure HUD JSON (no other text), suppress from chat UI
               const stripped = finalContent.trim();
-              if (stripped.startsWith("{") && stripped.endsWith("}") && stripped.includes('"limit5h"') && stripped.includes('"model"')) {
+              if (stripped.includes('"hud-for-usage"')) {
                 // Remove the HUD-only message from the messages list
                 const msgs = get().messagesByConversation[conversationId];
                 if (msgs) {

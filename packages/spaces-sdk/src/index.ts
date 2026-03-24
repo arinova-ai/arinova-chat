@@ -185,10 +185,8 @@ export class Arinova {
       }, timeout);
 
       const handler = (event: MessageEvent) => {
-        console.log("[ARINOVA-SDK] message received", event.data?.type, { settled, hasPayload: !!event.data?.payload });
         if (event.data?.type !== "arinova:auth") return;
         if (settled) return;
-        console.log("[ARINOVA-SDK] arinova:auth matched, resolving connect()");
         settled = true;
         clearTimeout(timer);
         window.removeEventListener("message", handler);
@@ -197,7 +195,6 @@ export class Arinova {
         resolve(payload);
       };
       window.addEventListener("message", handler);
-      console.log("[ARINOVA-SDK] connect() listener registered, waiting for arinova:auth...");
     });
   }
 
