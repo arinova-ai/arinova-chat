@@ -414,19 +414,21 @@ mod notebooks_tests {
 
     #[tokio::test]
     #[ignore]
-    async fn list_notebooks_requires_user_id() {
+    async fn list_notebooks_returns_200() {
+        // v1 uses CallerIdentity — no userId param needed
         let client = Client::new();
         let res = agent_get(&client, "/api/v1/notebooks").await;
         assert_eq!(
             res.status().as_u16(),
-            400,
-            "GET /api/v1/notebooks without userId should return 400"
+            200,
+            "GET /api/v1/notebooks should return 200 (owner inferred from token)"
         );
     }
 
     #[tokio::test]
     #[ignore]
-    async fn list_notebooks_with_invalid_user_returns_403() {
+    async fn list_notebooks_ignores_invalid_user_param() {
+        // v1 ignores userId param — uses CallerIdentity instead
         let client = Client::new();
         let res = agent_get(
             &client,
@@ -435,8 +437,8 @@ mod notebooks_tests {
         .await;
         assert_eq!(
             res.status().as_u16(),
-            403,
-            "GET notebooks with invalid userId should return 403"
+            200,
+            "GET notebooks with userId param should still return 200 (param ignored)"
         );
     }
 
@@ -555,8 +557,8 @@ mod notebooks_tests {
         .await;
         assert_eq!(
             res.status().as_u16(),
-            404,
-            "Deleting nonexistent notebook should return 404"
+            403,
+            "Deleting nonexistent notebook should return 403 (permission check first)"
         );
     }
 }
