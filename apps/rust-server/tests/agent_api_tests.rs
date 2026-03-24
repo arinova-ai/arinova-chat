@@ -93,6 +93,48 @@ async fn agent_delete(client: &Client, path: &str) -> reqwest::Response {
 }
 
 // ============================================================================
+// Kanban test-board helpers
+// ============================================================================
+
+/// Create a fresh test board named `__test_board__` and return its ID.
+async fn create_test_board(client: &Client) -> String {
+    let body = agent_post_json(
+        client,
+        "/api/v1/kanban/boards",
+        json!({"name": "__test_board__"}),
+    )
+    .await;
+    body["id"]
+        .as_str()
+        .expect("create_test_board: response should contain 'id'")
+        .to_string()
+}
+
+/// Archive (soft-delete) a test board so it no longer shows in listings.
+async fn delete_test_board(client: &Client, board_id: &str) {
+    let _ = agent_post(
+        client,
+        &format!("/api/v1/kanban/boards/{board_id}/archive"),
+        json!({}),
+    )
+    .await;
+}
+
+/// Helper: get the first column ID of a board.
+async fn first_column_id(client: &Client, board_id: &str) -> String {
+    let cols = agent_get_json(
+        client,
+        &format!("/api/v1/kanban/boards/{board_id}/columns"),
+    )
+    .await;
+    cols.as_array()
+        .and_then(|arr| arr.first())
+        .and_then(|c| c["id"].as_str())
+        .expect("Board should have at least one column")
+        .to_string()
+}
+
+// ============================================================================
 // Notes tests
 // ============================================================================
 #[cfg(test)]
@@ -574,6 +616,9 @@ mod kanban_board_tests {
     #[ignore]
     async fn list_boards_returns_array() {
         let client = Client::new();
+        // Create a test board so the listing is never empty
+        let board_id = create_test_board(&client).await;
+
         let res = agent_get(&client, "/api/v1/kanban/boards").await;
         let status = res.status().as_u16();
         assert_eq!(status, 200, "GET /api/v1/kanban/boards should return 200, got {status}");
@@ -587,12 +632,18 @@ mod kanban_board_tests {
                 assert!(board.get("columns").is_some(), "Board should have 'columns'");
             }
         }
+
+        // Cleanup
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn list_boards_with_include_archived() {
         let client = Client::new();
+        let board_id = create_test_board(&client).await;
+        delete_test_board(&client, &board_id).await; // archive it so there's something archived
+
         let res = agent_get(&client, "/api/v1/kanban/boards?include_archived=true").await;
         assert_eq!(res.status().as_u16(), 200);
     }
@@ -604,7 +655,7 @@ mod kanban_board_tests {
         let res = agent_post(
             &client,
             "/api/v1/kanban/boards",
-            json!({"name": "Test Board from Agent API"}),
+            json!({"name": "__test_board__"}),
         )
         .await;
         assert_eq!(
@@ -615,6 +666,10 @@ mod kanban_board_tests {
         let body: Value = res.json().await.unwrap();
         assert!(body.get("id").is_some(), "Created board should have 'id'");
         assert!(body.get("name").is_some(), "Created board should have 'name'");
+
+        // Cleanup
+        let board_id = body["id"].as_str().unwrap();
+        delete_test_board(&client, board_id).await;
     }
 
     #[tokio::test]
@@ -625,7 +680,7 @@ mod kanban_board_tests {
             &client,
             "/api/v1/kanban/boards",
             json!({
-                "name": "Custom Columns Board",
+                "name": "__test_board__",
                 "columns": [
                     {"name": "Todo"},
                     {"name": "Doing"},
@@ -635,20 +690,19 @@ mod kanban_board_tests {
         )
         .await;
         assert_eq!(res.status().as_u16(), 201);
+
+        // Cleanup
+        let body: Value = res.json().await.unwrap();
+        if let Some(board_id) = body["id"].as_str() {
+            delete_test_board(&client, board_id).await;
+        }
     }
 
     #[tokio::test]
     #[ignore]
     async fn update_board() {
         let client = Client::new();
-        // Create a board first
-        let created = agent_post_json(
-            &client,
-            "/api/v1/kanban/boards",
-            json!({"name": "Board To Update"}),
-        )
-        .await;
-        let board_id = created["id"].as_str().expect("Board should have id");
+        let board_id = create_test_board(&client).await;
 
         let res = agent_patch(
             &client,
@@ -657,20 +711,16 @@ mod kanban_board_tests {
         )
         .await;
         assert_eq!(res.status().as_u16(), 200, "Update board should return 200");
+
+        // Cleanup
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn archive_board() {
         let client = Client::new();
-        // Create a board to archive
-        let created = agent_post_json(
-            &client,
-            "/api/v1/kanban/boards",
-            json!({"name": "Board To Archive"}),
-        )
-        .await;
-        let board_id = created["id"].as_str().expect("Board should have id");
+        let board_id = create_test_board(&client).await;
 
         let res = agent_post(
             &client,
@@ -693,41 +743,25 @@ mod kanban_board_tests {
 mod kanban_column_tests {
     use super::*;
 
-    /// Helper: get or create a test board, return its ID
-    async fn get_test_board_id(client: &Client) -> String {
-        let boards = agent_get_json(client, "/api/v1/kanban/boards").await;
-        if let Some(arr) = boards.as_array() {
-            if let Some(board) = arr.first() {
-                return board["id"].as_str().unwrap().to_string();
-            }
-        }
-        // Create one
-        let created = agent_post_json(
-            client,
-            "/api/v1/kanban/boards",
-            json!({"name": "Test Board for Columns"}),
-        )
-        .await;
-        created["id"].as_str().unwrap().to_string()
-    }
-
     #[tokio::test]
     #[ignore]
     async fn list_columns() {
         let client = Client::new();
-        let board_id = get_test_board_id(&client).await;
+        let board_id = create_test_board(&client).await;
 
         let res = agent_get(&client, &format!("/api/v1/kanban/boards/{board_id}/columns")).await;
         assert_eq!(res.status().as_u16(), 200, "List columns should return 200");
         let body: Value = res.json().await.unwrap();
         assert!(body.is_array(), "Columns response should be an array");
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn create_column() {
         let client = Client::new();
-        let board_id = get_test_board_id(&client).await;
+        let board_id = create_test_board(&client).await;
 
         let res = agent_post(
             &client,
@@ -736,13 +770,15 @@ mod kanban_column_tests {
         )
         .await;
         assert_eq!(res.status().as_u16(), 201, "Create column should return 201");
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn update_column() {
         let client = Client::new();
-        let board_id = get_test_board_id(&client).await;
+        let board_id = create_test_board(&client).await;
 
         // Create a column
         let col_res = agent_post(
@@ -766,13 +802,15 @@ mod kanban_column_tests {
             200,
             "Update column should return 200"
         );
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn delete_column() {
         let client = Client::new();
-        let board_id = get_test_board_id(&client).await;
+        let board_id = create_test_board(&client).await;
 
         // Create a column to delete
         let col: Value = agent_post_json(
@@ -789,13 +827,23 @@ mod kanban_column_tests {
             200,
             "Delete column should return 200"
         );
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn reorder_columns() {
         let client = Client::new();
-        let board_id = get_test_board_id(&client).await;
+        let board_id = create_test_board(&client).await;
+
+        // Add an extra column so we have at least 2
+        agent_post(
+            &client,
+            &format!("/api/v1/kanban/boards/{board_id}/columns"),
+            json!({"name": "Extra Column"}),
+        )
+        .await;
 
         // Get existing columns
         let cols: Value = agent_get_json(
@@ -824,6 +872,8 @@ mod kanban_column_tests {
                 );
             }
         }
+
+        delete_test_board(&client, &board_id).await;
     }
 }
 
@@ -838,11 +888,25 @@ mod kanban_card_tests {
     #[ignore]
     async fn list_cards_returns_array() {
         let client = Client::new();
-        let res = agent_get(&client, "/api/v1/kanban/cards").await;
+        let board_id = create_test_board(&client).await;
+        let col_id = first_column_id(&client, &board_id).await;
+
+        // Create a card so the listing is not empty
+        let created = agent_post_json(
+            &client,
+            "/api/v1/kanban/cards",
+            json!({
+                "title": "Shape Check Card",
+                "columnId": col_id
+            }),
+        )
+        .await;
+
+        let res = agent_get(&client, &format!("/api/v1/kanban/cards?boardId={board_id}")).await;
         assert_eq!(res.status().as_u16(), 200);
         let body: Value = res.json().await.unwrap();
         assert!(body.is_array(), "Cards response should be an array");
-        // Verify card shape if any exist
+        // Verify card shape
         if let Some(cards) = body.as_array() {
             if let Some(card) = cards.first() {
                 assert!(card.get("id").is_some(), "Card should have 'id'");
@@ -852,22 +916,34 @@ mod kanban_card_tests {
                 assert!(card.get("labels").is_some(), "Card should have 'labels'");
             }
         }
+
+        // Cleanup
+        if let Some(id) = created["id"].as_str() {
+            agent_delete(&client, &format!("/api/v1/kanban/cards/{id}")).await;
+        }
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn list_cards_with_search() {
         let client = Client::new();
-        let res = agent_get(&client, "/api/v1/kanban/cards?search=test").await;
+        let board_id = create_test_board(&client).await;
+
+        let res = agent_get(&client, &format!("/api/v1/kanban/cards?boardId={board_id}&search=test")).await;
         assert_eq!(res.status().as_u16(), 200);
         let body: Value = res.json().await.unwrap();
         assert!(body.is_array());
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn card_crud_cycle() {
         let client = Client::new();
+        let board_id = create_test_board(&client).await;
+        let col_id = first_column_id(&client, &board_id).await;
 
         // CREATE
         let create_res = agent_post(
@@ -876,7 +952,8 @@ mod kanban_card_tests {
             json!({
                 "title": "Agent Test Card",
                 "description": "Created by integration test",
-                "priority": "medium"
+                "priority": "medium",
+                "columnId": col_id
             }),
         )
         .await;
@@ -927,18 +1004,23 @@ mod kanban_card_tests {
             del_status == 200 || del_status == 204,
             "Delete card should return 200 or 204, got {del_status}"
         );
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn create_card_with_column_name() {
         let client = Client::new();
+        let board_id = create_test_board(&client).await;
+
         let res = agent_post(
             &client,
             "/api/v1/kanban/cards",
             json!({
                 "title": "Card in Named Column",
-                "columnName": "To Do"
+                "columnName": "To Do",
+                "boardId": board_id
             }),
         )
         .await;
@@ -952,6 +1034,8 @@ mod kanban_card_tests {
         if let Some(id) = body["id"].as_str() {
             agent_delete(&client, &format!("/api/v1/kanban/cards/{id}")).await;
         }
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
@@ -975,25 +1059,21 @@ mod kanban_card_tests {
     #[ignore]
     async fn list_archived_cards() {
         let client = Client::new();
-        // Get a board first
-        let boards = agent_get_json(&client, "/api/v1/kanban/boards").await;
-        if let Some(arr) = boards.as_array() {
-            if let Some(board) = arr.first() {
-                let board_id = board["id"].as_str().unwrap();
-                let res = agent_get(
-                    &client,
-                    &format!("/api/v1/kanban/boards/{board_id}/archived-cards?page=1&limit=10"),
-                )
-                .await;
-                assert_eq!(res.status().as_u16(), 200);
-                let body: Value = res.json().await.unwrap();
-                // Should have cards array and pagination info
-                assert!(
-                    body.get("cards").is_some() || body.is_array(),
-                    "Archived cards response should have structure"
-                );
-            }
-        }
+        let board_id = create_test_board(&client).await;
+
+        let res = agent_get(
+            &client,
+            &format!("/api/v1/kanban/boards/{board_id}/archived-cards?page=1&limit=10"),
+        )
+        .await;
+        assert_eq!(res.status().as_u16(), 200);
+        let body: Value = res.json().await.unwrap();
+        assert!(
+            body.get("cards").is_some() || body.is_array(),
+            "Archived cards response should have structure"
+        );
+
+        delete_test_board(&client, &board_id).await;
     }
 }
 
@@ -1004,36 +1084,31 @@ mod kanban_card_tests {
 mod kanban_commit_tests {
     use super::*;
 
-    /// Helper: create a card and return its ID
-    async fn create_test_card(client: &Client) -> Option<String> {
-        let res = agent_post(
+    /// Helper: create a card on the given board's first column and return its ID.
+    async fn create_test_card(client: &Client, board_id: &str) -> String {
+        let col_id = first_column_id(client, board_id).await;
+        let body = agent_post_json(
             client,
             "/api/v1/kanban/cards",
             json!({
                 "title": "Commit Test Card",
-                "description": "Card for commit testing"
+                "description": "Card for commit testing",
+                "columnId": col_id
             }),
         )
         .await;
-        if res.status().is_success() {
-            let body: Value = res.json().await.unwrap();
-            body["id"].as_str().map(|s| s.to_string())
-        } else {
-            None
-        }
+        body["id"]
+            .as_str()
+            .expect("Card should have id")
+            .to_string()
     }
 
     #[tokio::test]
     #[ignore]
     async fn add_and_list_commits() {
         let client = Client::new();
-        let card_id = match create_test_card(&client).await {
-            Some(id) => id,
-            None => {
-                eprintln!("SKIP: Could not create card for commit test");
-                return;
-            }
-        };
+        let board_id = create_test_board(&client).await;
+        let card_id = create_test_card(&client, &board_id).await;
 
         // Add a commit
         let add_res = agent_post(
@@ -1071,19 +1146,15 @@ mod kanban_commit_tests {
 
         // Cleanup
         agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn add_commit_with_invalid_hash_returns_400() {
         let client = Client::new();
-        let card_id = match create_test_card(&client).await {
-            Some(id) => id,
-            None => {
-                eprintln!("SKIP: Could not create card");
-                return;
-            }
-        };
+        let board_id = create_test_board(&client).await;
+        let card_id = create_test_card(&client, &board_id).await;
 
         let res = agent_post(
             &client,
@@ -1098,6 +1169,7 @@ mod kanban_commit_tests {
         );
 
         agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
+        delete_test_board(&client, &board_id).await;
     }
 }
 
@@ -1112,19 +1184,16 @@ mod kanban_card_note_tests {
     #[ignore]
     async fn link_unlink_and_list_card_notes() {
         let client = Client::new();
+        let board_id = create_test_board(&client).await;
+        let col_id = first_column_id(&client, &board_id).await;
 
-        // Create a card
-        let card_res = agent_post(
+        // Create a card on the test board
+        let card: Value = agent_post_json(
             &client,
             "/api/v1/kanban/cards",
-            json!({"title": "Card for Note Link Test"}),
+            json!({"title": "Card for Note Link Test", "columnId": col_id}),
         )
         .await;
-        if !card_res.status().is_success() {
-            eprintln!("SKIP: Could not create card for note link test");
-            return;
-        }
-        let card: Value = card_res.json().await.unwrap();
         let card_id = card["id"].as_str().unwrap();
 
         // Try to find an existing note to link
@@ -1132,6 +1201,7 @@ mod kanban_card_note_tests {
         if notes_res.status().as_u16() != 200 {
             eprintln!("SKIP: Cannot list notes for card-note link test");
             agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
+            delete_test_board(&client, &board_id).await;
             return;
         }
         let notes_body: Value = notes_res.json().await.unwrap();
@@ -1146,6 +1216,7 @@ mod kanban_card_note_tests {
             None => {
                 eprintln!("SKIP: No notes available for card-note link test");
                 agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
+                delete_test_board(&client, &board_id).await;
                 return;
             }
         };
@@ -1189,23 +1260,22 @@ mod kanban_card_note_tests {
 
         // Cleanup
         agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn link_nonexistent_note_returns_404() {
         let client = Client::new();
-        let card_res = agent_post(
+        let board_id = create_test_board(&client).await;
+        let col_id = first_column_id(&client, &board_id).await;
+
+        let card: Value = agent_post_json(
             &client,
             "/api/v1/kanban/cards",
-            json!({"title": "Card for 404 note test"}),
+            json!({"title": "Card for 404 note test", "columnId": col_id}),
         )
         .await;
-        if !card_res.status().is_success() {
-            eprintln!("SKIP: Could not create card");
-            return;
-        }
-        let card: Value = card_res.json().await.unwrap();
         let card_id = card["id"].as_str().unwrap();
 
         let res = agent_post(
@@ -1221,6 +1291,7 @@ mod kanban_card_note_tests {
         );
 
         agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
+        delete_test_board(&client, &board_id).await;
     }
 }
 
@@ -1231,26 +1302,11 @@ mod kanban_card_note_tests {
 mod kanban_label_tests {
     use super::*;
 
-    async fn get_test_board_id(client: &Client) -> Option<String> {
-        let boards = agent_get_json(client, "/api/v1/kanban/boards").await;
-        boards
-            .as_array()
-            .and_then(|arr| arr.first())
-            .and_then(|b| b["id"].as_str())
-            .map(|s| s.to_string())
-    }
-
     #[tokio::test]
     #[ignore]
     async fn label_crud_cycle() {
         let client = Client::new();
-        let board_id = match get_test_board_id(&client).await {
-            Some(id) => id,
-            None => {
-                eprintln!("SKIP: No board for label test");
-                return;
-            }
-        };
+        let board_id = create_test_board(&client).await;
 
         // CREATE
         let create_res = agent_post(
@@ -1289,21 +1345,18 @@ mod kanban_label_tests {
         // DELETE
         let del_res = agent_delete(&client, &format!("/api/v1/kanban/labels/{label_id}")).await;
         assert_eq!(del_res.status().as_u16(), 204);
+
+        delete_test_board(&client, &board_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn add_and_remove_label_from_card() {
         let client = Client::new();
-        let board_id = match get_test_board_id(&client).await {
-            Some(id) => id,
-            None => {
-                eprintln!("SKIP: No board for label-card test");
-                return;
-            }
-        };
+        let board_id = create_test_board(&client).await;
+        let col_id = first_column_id(&client, &board_id).await;
 
-        // Create a label
+        // Create a label on the test board
         let label: Value = agent_post_json(
             &client,
             &format!("/api/v1/kanban/boards/{board_id}/labels"),
@@ -1312,18 +1365,13 @@ mod kanban_label_tests {
         .await;
         let label_id = label["id"].as_str().expect("Label should have id");
 
-        // Create a card
-        let card_res = agent_post(
+        // Create a card on the test board
+        let card: Value = agent_post_json(
             &client,
             "/api/v1/kanban/cards",
-            json!({"title": "Card for Label Test"}),
+            json!({"title": "Card for Label Test", "columnId": col_id}),
         )
         .await;
-        if !card_res.status().is_success() {
-            eprintln!("SKIP: Could not create card for label test");
-            return;
-        }
-        let card: Value = card_res.json().await.unwrap();
         let card_id = card["id"].as_str().unwrap();
 
         // ADD label to card
@@ -1354,6 +1402,7 @@ mod kanban_label_tests {
         // Cleanup
         agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
         agent_delete(&client, &format!("/api/v1/kanban/labels/{label_id}")).await;
+        delete_test_board(&client, &board_id).await;
     }
 }
 
