@@ -12,7 +12,9 @@
 use reqwest::Client;
 use serde_json::{json, Value};
 
-const BASE: &str = "http://localhost:3001";
+fn base_url() -> String {
+    std::env::var("TEST_BASE_URL").unwrap_or_else(|_| "http://localhost:3501".to_string())
+}
 
 /// Fallback bot token — override with TEST_BOT_TOKEN env var.
 const DEFAULT_BOT_TOKEN: &str = "ari_test_bot_token";
@@ -27,7 +29,7 @@ fn bot_token() -> String {
 
 async fn agent_get(client: &Client, path: &str) -> reqwest::Response {
     client
-        .get(&format!("{BASE}{path}"))
+        .get(&format!("{}{path}", base_url()))
         .header("Authorization", format!("Bearer {}", bot_token()))
         .send()
         .await
@@ -44,7 +46,7 @@ async fn agent_get_json(client: &Client, path: &str) -> Value {
 
 async fn agent_post(client: &Client, path: &str, body: Value) -> reqwest::Response {
     client
-        .post(&format!("{BASE}{path}"))
+        .post(&format!("{}{path}", base_url()))
         .header("Authorization", format!("Bearer {}", bot_token()))
         .header("Content-Type", "application/json")
         .json(&body)
@@ -63,7 +65,7 @@ async fn agent_post_json(client: &Client, path: &str, body: Value) -> Value {
 
 async fn agent_patch(client: &Client, path: &str, body: Value) -> reqwest::Response {
     client
-        .patch(&format!("{BASE}{path}"))
+        .patch(&format!("{}{path}", base_url()))
         .header("Authorization", format!("Bearer {}", bot_token()))
         .header("Content-Type", "application/json")
         .json(&body)
@@ -83,7 +85,7 @@ async fn agent_patch_json(client: &Client, path: &str, body: Value) -> Value {
 
 async fn agent_delete(client: &Client, path: &str) -> reqwest::Response {
     client
-        .delete(&format!("{BASE}{path}"))
+        .delete(&format!("{}{path}", base_url()))
         .header("Authorization", format!("Bearer {}", bot_token()))
         .send()
         .await
@@ -1727,7 +1729,7 @@ mod agent_upload_tests {
         // Send a multipart request with no fields
         let form = reqwest::multipart::Form::new();
         let res = client
-            .post(&format!("{BASE}/api/agent/upload"))
+            .post(&format!("{}/api/agent/upload", base_url()))
             .header("Authorization", format!("Bearer {}", bot_token()))
             .multipart(form)
             .send()
@@ -1755,7 +1757,7 @@ mod agent_upload_tests {
             );
 
         let res = client
-            .post(&format!("{BASE}/api/agent/upload"))
+            .post(&format!("{}/api/agent/upload", base_url()))
             .header("Authorization", format!("Bearer {}", bot_token()))
             .multipart(form)
             .send()
@@ -1918,7 +1920,7 @@ mod auth_edge_cases {
     async fn request_without_token_returns_401() {
         let client = Client::new();
         let res = client
-            .get(&format!("{BASE}/api/agent/notes"))
+            .get(&format!("{}/api/agent/notes", base_url()))
             .send()
             .await
             .unwrap();
@@ -1934,7 +1936,7 @@ mod auth_edge_cases {
     async fn request_with_invalid_token_returns_401() {
         let client = Client::new();
         let res = client
-            .get(&format!("{BASE}/api/agent/notes"))
+            .get(&format!("{}/api/agent/notes", base_url()))
             .header("Authorization", "Bearer invalid_token_xxx")
             .send()
             .await
@@ -1951,7 +1953,7 @@ mod auth_edge_cases {
     async fn request_with_malformed_auth_header_returns_401() {
         let client = Client::new();
         let res = client
-            .get(&format!("{BASE}/api/agent/notes"))
+            .get(&format!("{}/api/agent/notes", base_url()))
             .header("Authorization", "NotBearer something")
             .send()
             .await
