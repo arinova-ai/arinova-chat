@@ -633,6 +633,7 @@ async fn handle_message(
         }
         "hud_request" => {
             let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
+            tracing::info!("hud_request: user={} conv={}", user_id, conversation_id);
             if conversation_id.is_empty() { return; }
 
             // Verify user has access to this conversation
@@ -668,12 +669,14 @@ async fn handle_message(
                 };
 
                 // Forward hud_request to each connected agent
+                tracing::info!("hud_request: forwarding to {} agents: {:?}", agent_ids.len(), agent_ids);
                 for aid in &agent_ids {
-                    ws_state.send_to_agent(aid, &json!({
+                    let sent = ws_state.send_to_agent(aid, &json!({
                         "type": "hud_request",
                         "conversationId": conversation_id,
                         "userId": user_id
                     }));
+                    tracing::info!("hud_request: send_to_agent {} => {}", aid, sent);
                 }
             }
         }
