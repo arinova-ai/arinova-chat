@@ -39,6 +39,19 @@ arinova file upload --conversation-id <CONV_ID> --file-path /path/to/file.png
 
 Supported file types: PNG, JPG, GIF, WebP, SVG, PDF, TXT, Markdown, JSON, CSV.
 
+#### Conversations
+
+```bash
+# List all conversations
+arinova conversation list
+
+# Filter by type
+arinova conversation list --type h2a
+
+# Search by name
+arinova conversation list --search "keyword"
+```
+
 #### Notes
 
 ```bash
@@ -141,6 +154,19 @@ curl -s "$BASE_URL/api/v1/messages/search?query=keyword&limit=20" \
 curl -s -X POST "$BASE_URL/api/v1/files/upload" \
   -H "Authorization: Bearer <TOKEN>" \
   -F "conversationId=<CONV_ID>" -F "file=@/path/to/file.png"
+```
+
+### Conversations
+
+```bash
+# List conversations
+curl -s "$BASE_URL/api/v1/conversations" -H "Authorization: Bearer <TOKEN>"
+
+# Filter by type
+curl -s "$BASE_URL/api/v1/conversations?type=h2a" -H "Authorization: Bearer <TOKEN>"
+
+# Search by name
+curl -s "$BASE_URL/api/v1/conversations?search=keyword&limit=50" -H "Authorization: Bearer <TOKEN>"
 ```
 
 ### Notebooks
