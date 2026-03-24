@@ -13,7 +13,7 @@ export function registerNoteCommands(program: Command): void {
       if (opts.notebookId) params.set("notebookId", opts.notebookId);
       if (opts.search) params.set("search", opts.search);
       const qs = params.toString() ? `?${params.toString()}` : "";
-      output(await apiCall({ method: "GET", url: `${apiUrl}/api/agent/notes${qs}`, token }));
+      output(await apiCall({ method: "GET", url: `${apiUrl}/api/v1/notes${qs}`, token }));
     });
 
   note.command("create")
@@ -23,7 +23,7 @@ export function registerNoteCommands(program: Command): void {
     .option("--tags <tags...>", "Tags")
     .action(async (opts: { notebookId: string; title: string; content?: string; tags?: string[] }) => {
       const { token, apiUrl } = getOpts(note);
-      output(await apiCall({ method: "POST", url: `${apiUrl}/api/agent/notes`, token, body: opts }));
+      output(await apiCall({ method: "POST", url: `${apiUrl}/api/v1/notes`, token, body: opts }));
     });
 
   note.command("update")
@@ -32,13 +32,13 @@ export function registerNoteCommands(program: Command): void {
     .option("--content <text>", "New content")
     .action(async (opts: { noteId: string; title?: string; content?: string }) => {
       const { token, apiUrl } = getOpts(note);
-      output(await apiCall({ method: "PATCH", url: `${apiUrl}/api/agent/notes/${opts.noteId}`, token, body: { title: opts.title, content: opts.content } }));
+      output(await apiCall({ method: "PATCH", url: `${apiUrl}/api/v1/notes/${opts.noteId}`, token, body: { title: opts.title, content: opts.content } }));
     });
 
   note.command("delete")
     .requiredOption("--note-id <id>", "Note ID")
     .action(async (opts: { noteId: string }) => {
       const { token, apiUrl } = getOpts(note);
-      output(await apiCall({ method: "DELETE", url: `${apiUrl}/api/agent/notes/${opts.noteId}`, token }));
+      output(await apiCall({ method: "DELETE", url: `${apiUrl}/api/v1/notes/${opts.noteId}`, token }));
     });
 }

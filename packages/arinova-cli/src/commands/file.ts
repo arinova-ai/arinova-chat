@@ -16,7 +16,7 @@ export function registerFileCommands(program: Command): void {
       form.append("file", new Blob([data]), basename(opts.filePath));
       form.append("conversationId", opts.conversationId);
 
-      const res = await fetch(`${apiUrl}/api/agent/upload`, {
+      const res = await fetch(`${apiUrl}/api/v1/files/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,

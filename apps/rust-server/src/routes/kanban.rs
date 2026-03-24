@@ -1715,7 +1715,7 @@ async fn agent_owner_id(db: &sqlx::PgPool, agent_id: Uuid) -> Result<String, Res
     })
 }
 
-async fn get_board_member_ids(db: &sqlx::PgPool, board_id: Uuid) -> Vec<String> {
+pub(crate) async fn get_board_member_ids(db: &sqlx::PgPool, board_id: Uuid) -> Vec<String> {
     // Get owner + all board_members
     sqlx::query_scalar::<_, String>(
         r#"SELECT owner_id FROM kanban_boards WHERE id = $1
@@ -1728,7 +1728,7 @@ async fn get_board_member_ids(db: &sqlx::PgPool, board_id: Uuid) -> Vec<String> 
     .unwrap_or_default()
 }
 
-async fn board_id_from_card(db: &sqlx::PgPool, card_id: Uuid) -> Option<Uuid> {
+pub(crate) async fn board_id_from_card(db: &sqlx::PgPool, card_id: Uuid) -> Option<Uuid> {
     sqlx::query_scalar::<_, Uuid>(
         "SELECT kc2.board_id FROM kanban_cards kc JOIN kanban_columns kc2 ON kc.column_id = kc2.id WHERE kc.id = $1",
     )
@@ -1739,7 +1739,7 @@ async fn board_id_from_card(db: &sqlx::PgPool, card_id: Uuid) -> Option<Uuid> {
     .flatten()
 }
 
-async fn board_id_from_column(db: &sqlx::PgPool, column_id: Uuid) -> Option<Uuid> {
+pub(crate) async fn board_id_from_column(db: &sqlx::PgPool, column_id: Uuid) -> Option<Uuid> {
     sqlx::query_scalar::<_, Uuid>(
         "SELECT board_id FROM kanban_columns WHERE id = $1",
     )

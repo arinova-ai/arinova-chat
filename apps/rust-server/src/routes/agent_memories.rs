@@ -758,6 +758,11 @@ pub async fn maybe_extract_memories(db: &sqlx::PgPool, agent_id: Uuid, conversat
     );
 }
 
+/// Public wrapper for `call_claude_extract` used by v1_resources.
+pub async fn call_claude_extract_public(conv_text: &str) -> anyhow::Result<String> {
+    call_claude_extract(conv_text).await
+}
+
 /// Call `claude -p --model haiku` to extract memories from conversation text
 async fn call_claude_extract(conv_text: &str) -> anyhow::Result<String> {
     use anyhow::Context;

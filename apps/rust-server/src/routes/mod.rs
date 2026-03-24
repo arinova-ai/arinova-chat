@@ -14,9 +14,6 @@ pub mod sandbox;
 pub mod uploads;
 pub mod users;
 pub mod agent_health;
-pub mod agent_messages;
-pub mod agent_send;
-pub mod agent_uploads;
 pub mod creator;
 pub mod agent_hub;
 pub mod agent_hub_chat;
@@ -31,9 +28,7 @@ pub mod admin;
 pub mod reports;
 pub mod pins;
 pub mod notes;
-pub mod agent_notes;
 pub mod notebooks;
-pub mod agent_notebooks;
 pub mod link_preview;
 pub mod spaces;
 pub mod media;
@@ -51,12 +46,14 @@ pub mod user_settings;
 pub mod conversation_settings;
 pub mod accounts;
 pub mod skills;
-pub mod agent_skills;
 pub mod wiki;
 pub mod docs;
 pub mod agent_memories;
 pub mod developer;
 pub mod expert_hub;
+pub mod v1_notes;
+pub mod v1_kanban;
+pub mod v1_resources;
 
 use axum::Router;
 use crate::AppState;
@@ -78,9 +75,6 @@ pub fn api_router() -> Router<AppState> {
         .merge(notifications::router())
         .merge(sandbox::router())
         .merge(agent_health::router())
-        .merge(agent_messages::router())
-        .merge(agent_send::router())
-        .merge(agent_uploads::router())
         .merge(office::router())
         .merge(users::router())
         .merge(friends::router())
@@ -98,9 +92,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(admin::router())
         .merge(reports::router())
         .merge(notes::router())
-        .merge(agent_notes::router())
         .merge(notebooks::router())
-        .merge(agent_notebooks::router())
         .merge(link_preview::router())
         .merge(spaces::router())
         .merge(media::router())
@@ -118,12 +110,13 @@ pub fn api_router() -> Router<AppState> {
         .merge(conversation_settings::router())
         .merge(accounts::router())
         .merge(skills::router())
-        .merge(agent_skills::router())
         .merge(wiki::router())
         .merge(docs::router())
-        .merge(agent_memories::router())
         .merge(developer::router())
         .merge(expert_hub::router())
+        .merge(v1_notes::router())
+        .merge(v1_kanban::router())
+        .merge(v1_resources::router())
 }
 
 /// Legacy wrapper — kept for backward compatibility.

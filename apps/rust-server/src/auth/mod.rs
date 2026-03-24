@@ -1,3 +1,4 @@
+pub mod caller_identity;
 pub mod middleware;
 pub mod oauth;
 pub mod password;

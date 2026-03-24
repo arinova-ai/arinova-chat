@@ -12,7 +12,7 @@ export function registerMessageCommands(program: Command): void {
       const { token, apiUrl } = getOpts(msg);
       const body: Record<string, string> = { conversationId: opts.conversationId, content: opts.content };
       if (opts.replyTo) body.replyTo = opts.replyTo;
-      const result = await apiCall({ method: "POST", url: `${apiUrl}/api/agent/send`, token, body });
+      const result = await apiCall({ method: "POST", url: `${apiUrl}/api/v1/messages/send`, token, body });
       output(result);
     });
 
@@ -26,7 +26,7 @@ export function registerMessageCommands(program: Command): void {
       if (opts.limit) qs.set("limit", opts.limit);
       if (opts.cursor) qs.set("before", opts.cursor);
       const q = qs.toString();
-      const result = await apiCall({ method: "GET", url: `${apiUrl}/api/agent/conversations/${opts.conversationId}/messages${q ? "?" + q : ""}`, token });
+      const result = await apiCall({ method: "GET", url: `${apiUrl}/api/v1/conversations/${opts.conversationId}/messages${q ? "?" + q : ""}`, token });
       output(result);
     });
 }

@@ -11,6 +11,6 @@ export function registerMemoryCommands(program: Command): void {
       const { token, apiUrl } = getOpts(memory);
       const qs = new URLSearchParams({ q: opts.query });
       if (opts.limit) qs.set("limit", opts.limit);
-      output(await apiCall({ method: "GET", url: `${apiUrl}/api/agent/memory/search?${qs}`, token }));
+      output(await apiCall({ method: "GET", url: `${apiUrl}/api/v1/memory/search?${qs}`, token }));
     });
 }
