@@ -22,7 +22,7 @@ vi.mock("@/lib/api", () => ({
 
 // Mock ws
 vi.mock("@/lib/ws", () => ({
-  wsManager: { on: vi.fn(), off: vi.fn() },
+  wsManager: { on: vi.fn(), off: vi.fn(), subscribe: vi.fn(() => vi.fn()) },
 }));
 
 // Mock useIsMobile
@@ -89,27 +89,42 @@ vi.mock("@/lib/utils", () => ({
   cn: (...args: unknown[]) => args.filter(Boolean).join(" "),
 }));
 
+import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "./kanban-board";
+
+const BOARD_LIST = [{ id: "board-1", name: "My Board", ownerId: "user1" }];
+const BOARD_DATA = {
+  id: "board-1",
+  columns: [
+    { id: "col-1", boardId: "board-1", name: "To Do", sortOrder: 0 },
+    { id: "col-2", boardId: "board-1", name: "Done", sortOrder: 1 },
+  ],
+  cards: [],
+  cardAgents: [],
+  cardNotes: [],
+  cardCommits: [],
+  labels: [],
+  cardLabels: [],
+};
 
 describe("KanbanBoard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockApi.mockImplementation((url: string) => {
+    mockApi.mockImplementation((url: string, opts?: { method?: string }) => {
       if (url === "/api/agents") {
         return Promise.resolve([]);
       }
+      if (url === "/api/kanban/boards" && opts?.method === "POST") {
+        return Promise.resolve({ id: "board-2", name: "New Board", ownerId: "user1" });
+      }
       if (url.includes("/api/kanban/boards") && !url.includes("board-")) {
-        return Promise.resolve([
-          { id: "board-1", name: "My Board", ownerId: "user1" },
-        ]);
+        return Promise.resolve(BOARD_LIST);
       }
       if (url.includes("/api/kanban/boards/board-1")) {
-        return Promise.resolve({
-          columns: [
-            { id: "col-1", name: "To Do", position: 0, cards: [] },
-            { id: "col-2", name: "Done", position: 1, cards: [] },
-          ],
-        });
+        return Promise.resolve(BOARD_DATA);
+      }
+      if (url.includes("/api/kanban/boards/board-2")) {
+        return Promise.resolve({ ...BOARD_DATA, id: "board-2", columns: [] });
       }
       return Promise.resolve([]);
     });
@@ -124,5 +139,26 @@ describe("KanbanBoard", () => {
     render(<KanbanBoard />);
     await screen.findByText("My Board");
     expect(await screen.findByTestId("column-col-1")).toBeInTheDocument();
+  });
+
+  it("handles board creation API error gracefully", async () => {
+    mockApi.mockImplementation((url: string, opts?: { method?: string }) => {
+      if (url === "/api/agents") return Promise.resolve([]);
+      if (url === "/api/kanban/boards" && opts?.method === "POST") {
+        return Promise.reject(new Error("plan_limit"));
+      }
+      if (url.includes("/api/kanban/boards") && !url.includes("board-")) {
+        return Promise.resolve(BOARD_LIST);
+      }
+      if (url.includes("/api/kanban/boards/board-1")) {
+        return Promise.resolve(BOARD_DATA);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<KanbanBoard />);
+    await screen.findByText("My Board");
+    // Board should still render after a failed creation attempt
+    expect(screen.getByTestId("column-col-1")).toBeInTheDocument();
   });
 });
