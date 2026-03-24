@@ -769,10 +769,11 @@ async fn create_notebook(
             // If caller is an agent, auto-grant permission on the new notebook
             if let CallerIdentity::Agent { agent_id, .. } = &caller {
                 let _ = sqlx::query(
-                    "INSERT INTO notebook_agent_permissions (notebook_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    "INSERT INTO notebook_agent_permissions (notebook_id, agent_id, granted_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
                 )
                 .bind(nb.id)
                 .bind(agent_id)
+                .bind(caller.owner_id().to_string())
                 .execute(&state.db)
                 .await;
             }
