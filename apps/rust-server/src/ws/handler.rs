@@ -418,15 +418,15 @@ async fn handle_message(
             }
 
             // Block check (1-on-1 only): reject if the other party has blocked sender
-            let conv_type = sqlx::query_scalar::<_, String>(
-                "SELECT type::text FROM conversations WHERE id = $1::uuid",
+            let conv_row = sqlx::query_as::<_, (String, String)>(
+                "SELECT type::text, user_id FROM conversations WHERE id = $1::uuid",
             )
             .bind(conversation_id)
             .fetch_optional(db)
             .await
             .ok()
-            .flatten()
-            .unwrap_or_default();
+            .flatten();
+            let (conv_type, conv_owner_id) = conv_row.unwrap_or_default();
 
             if conv_type == "h2h" || conv_type == "h2a" || conv_type == "direct" {
                 let blocked_in_conv = sqlx::query_scalar::<_, bool>(
@@ -482,6 +482,26 @@ async fn handle_message(
             }
 
             let content = sanitize_content(content);
+
+            // Wrap untrusted content: non-owner messages get tagged so agent knows not to execute dangerous ops
+            let content = if user_id != conv_owner_id && !conv_owner_id.is_empty() {
+                let sender_name = sqlx::query_scalar::<_, String>(
+                    r#"SELECT name FROM "user" WHERE id = $1"#,
+                )
+                .bind(user_id)
+                .fetch_optional(db)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "Unknown".to_string());
+                format!(
+                    "[UNTRUSTED_USER_MESSAGE sender=\"{}\" senderId=\"{}\"]\n{}\n[/UNTRUSTED_USER_MESSAGE]",
+                    sender_name, user_id, content
+                )
+            } else {
+                content
+            };
+
             trigger_agent_response(
                 user_id,
                 conversation_id,
