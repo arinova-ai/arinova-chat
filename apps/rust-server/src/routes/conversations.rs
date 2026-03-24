@@ -821,8 +821,8 @@ async fn delete_conversation(
         }
     };
 
-    // Human-to-human DM (no agent): soft-hide for this user only
-    if conv_type == "h2h" {
+    // Multi-user conversations (h2h, group, community, lounge, official): soft-hide for this user only
+    if matches!(conv_type.as_str(), "h2h" | "group" | "community" | "lounge" | "official") {
         let result = sqlx::query(
             r#"UPDATE conversation_user_members SET hidden_at = NOW()
                WHERE conversation_id = $1 AND user_id = $2"#,
@@ -842,7 +842,7 @@ async fn delete_conversation(
         };
     }
 
-    // Agent DMs and other types: hard delete the entire conversation
+    // Agent DMs (h2a) and other 1-on-1 types: hard delete
     let result = sqlx::query("DELETE FROM conversations WHERE id = $1")
         .bind(id)
         .execute(&state.db)
