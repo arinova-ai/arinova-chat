@@ -29,6 +29,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Settings,
   Trash2,
   Users,
   X,
@@ -77,6 +78,7 @@ interface BoardInfo {
   archived?: boolean;
   ownerId?: string;
   ownerUsername?: string | null;
+  autoArchiveDays?: number;
 }
 
 // ── Props ───────────────────────────────────────────────────
@@ -116,6 +118,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   const [autoArchiveDays, setAutoArchiveDays] = useState(3);
   const [renameBoardName, setRenameBoardName] = useState("");
   const [archiveBoardConfirm, setArchiveBoardConfirm] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Edit mode + column management state
   const [editMode, setEditMode] = useState(false);
@@ -230,7 +233,9 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       const data = await api<BoardData>(`/api/kanban/boards/${targetId}`, { silent: true });
       setBoard(data);
       setSelectedBoardId(targetId);
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error("[kanban] fetchBoard failed:", err);
+    }
     setLoading(false);
   }, [fetchBoards, selectedBoardId, conversationId]);
 
@@ -257,11 +262,19 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
         method: "POST",
         body: JSON.stringify({ name: newBoardName.trim() }),
       });
+      // Optimistically add to boards list so selector updates immediately
+      setBoards((prev) => [...prev, newBoard]);
       setNewBoardName("");
       setCreatingBoard(false);
       setSelectedBoardId(newBoard.id);
+      setLoading(true);
       await fetchBoard(newBoard.id);
-    } catch { /* api shows toast */ }
+    } catch (err) {
+      // Close dialog on error so user isn't stuck
+      setCreatingBoard(false);
+      setNewBoardName("");
+      // api() already shows a toast for non-silent errors
+    }
   }, [newBoardName, fetchBoard]);
 
   const handleRenameBoard = useCallback(async () => {
@@ -276,6 +289,19 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       await fetchBoard(selectedBoardId);
     } catch { /* api shows toast */ }
   }, [renameBoardName, selectedBoardId, fetchBoard]);
+
+  const handleSaveSettings = useCallback(async () => {
+    if (!selectedBoardId) return;
+    const currentBoard = boards.find((b) => b.id === selectedBoardId);
+    try {
+      await api(`/api/kanban/boards/${selectedBoardId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: currentBoard?.name || "Board", autoArchiveDays }),
+      });
+      setSettingsOpen(false);
+      await fetchBoard(selectedBoardId);
+    } catch { /* api shows toast */ }
+  }, [selectedBoardId, autoArchiveDays, boards, fetchBoard]);
 
   const handleArchiveBoard = useCallback(async () => {
     if (!selectedBoardId) return;
@@ -1035,6 +1061,33 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
         </DialogContent>
       </Dialog>
 
+      {/* Board Settings Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("kanban.boardSettings")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium">{t("kanban.autoArchiveDays")}</label>
+              <Input
+                type="number"
+                min={0}
+                max={365}
+                value={autoArchiveDays}
+                onChange={(e) => setAutoArchiveDays(parseInt(e.target.value) || 0)}
+                className="mt-1"
+              />
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("kanban.autoArchiveDaysDesc")}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettingsOpen(false)}>{t("common.cancel")}</Button>
+            <Button onClick={handleSaveSettings}>{t("common.save")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Board Members Dialog */}
       <Dialog open={membersOpen} onOpenChange={setMembersOpen}>
         <DialogContent className="max-w-md">
@@ -1213,6 +1266,18 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                   )}
                 </PopoverContent>
               </Popover>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentBoard = boards.find((b) => b.id === selectedBoardId);
+                  if (currentBoard?.autoArchiveDays != null) setAutoArchiveDays(currentBoard.autoArchiveDays);
+                  setSettingsOpen(true);
+                }}
+                className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">{t("kanban.boardSettings")}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setArchivedOpen(true)}

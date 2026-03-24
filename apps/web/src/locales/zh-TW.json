@@ -1963,6 +1963,7 @@
   "nav.noSpaces": "沒有可用的空間",
   "chat.header.hud": "HUD",
   "tips.next": "下一步",
+  "kanban.boardSettings": "設定",
   "kanban.autoArchiveDays": "自動封存已完成卡片（天數）",
   "kanban.autoArchiveDaysDesc": "0 = 永不自動封存",
   "expertHub.creator.unpublished": "未發布",

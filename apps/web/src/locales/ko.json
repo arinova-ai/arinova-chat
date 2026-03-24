@@ -1955,6 +1955,7 @@
   "skill.d.scientific-writing": "과학 논문 및 보고서 작성 지원",
   "skill.d.seo-fundamentals": "검색 엔진 최적화 기초 지식",
   "tips.next": "다음",
+  "kanban.boardSettings": "설정",
   "kanban.autoArchiveDays": "완료된 카드 자동 아카이브 (일)",
   "kanban.autoArchiveDaysDesc": "0 = 자동 아카이브 안 함",
   "kanban.deleteCardConfirm": "이 카드를 삭제하시겠습니까?",

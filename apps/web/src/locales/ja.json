@@ -1955,6 +1955,7 @@
   "spaces.cat.trivia": "トリビア",
   "rightPanel.settings": "設定",
   "tips.next": "次へ",
+  "kanban.boardSettings": "設定",
   "kanban.autoArchiveDays": "完了カードの自動アーカイブ（日数）",
   "kanban.autoArchiveDaysDesc": "0 = 自動アーカイブしない",
   "kanban.deleteCardConfirm": "このカードを削除しますか？",

@@ -1905,6 +1905,7 @@
   "skill.d.scientific-writing": "Bantuan menulis artikel dan laporan saintifik",
   "skill.d.seo-fundamentals": "Asas untuk mengoptimumkan kedudukan enjin carian",
   "tips.next": "Seterusnya",
+  "kanban.boardSettings": "Tetapan",
   "kanban.autoArchiveDays": "Arkib automatik kad selesai selepas (hari)",
   "kanban.autoArchiveDaysDesc": "0 = tidak pernah arkib automatik",
   "kanban.deleteCardConfirm": "Padam kad ini?",

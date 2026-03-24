@@ -1905,6 +1905,7 @@
   "skill.d.scientific-writing": "Assistance en rédaction d'articles et rapports scientifiques",
   "skill.d.seo-fundamentals": "Fondamentaux pour optimiser le référencement",
   "tips.next": "Suivant",
+  "kanban.boardSettings": "Paramètres",
   "kanban.autoArchiveDays": "Archiver auto les cartes terminées (jours)",
   "kanban.autoArchiveDaysDesc": "0 = jamais archiver automatiquement",
   "kanban.deleteCardConfirm": "Supprimer cette carte ?",

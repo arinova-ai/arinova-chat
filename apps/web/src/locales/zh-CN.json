@@ -1905,6 +1905,7 @@
   "skill.d.scientific-writing": "协助撰写科学论文和报告",
   "skill.d.seo-fundamentals": "优化搜索引擎排名的基础知识",
   "tips.next": "下一步",
+  "kanban.boardSettings": "设置",
   "kanban.autoArchiveDays": "自动归档已完成卡片（天数）",
   "kanban.autoArchiveDaysDesc": "0 = 永不自动归档",
   "kanban.deleteCardConfirm": "确定要删除此卡片？",
