@@ -1,6 +1,6 @@
 {
   "name": "@arinova-ai/openclaw-arinova-ai",
-  "version": "0.0.60",
+  "version": "0.0.63",
   "description": "OpenClaw plugin for Arinova Chat — channel (A2A streaming) + Virtual Office (agent status tracking via SSE)",
   "type": "module",
   "main": "dist/index.js",
@@ -39,11 +39,13 @@
       "quickstartAllowFrom": true
     }
   },
+  "dependencies": {
+    "@arinova-ai/agent-sdk": "^0.0.14"
+  },
   "peerDependencies": {
     "openclaw": ">=2026"
   },
   "devDependencies": {
-    "@arinova-ai/agent-sdk": "workspace:*",
     "@types/node": "^22",
     "openclaw": "latest",
     "tsup": "^8",
