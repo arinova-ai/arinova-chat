@@ -24,7 +24,7 @@ const program = new Command();
 program
   .name("arinova")
   .description("Arinova CLI — manage messages, notes, kanban, memory, creator tools, and more")
-  .version("0.1.0")
+  .version("0.0.8")
   .option("--token <botToken>", "Bot/API token (ari_...)")
   .option("--api-url <url>", "API endpoint (default: https://api.chat.arinova.ai)")
   .option("--staging", "Use staging environment")
