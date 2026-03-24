@@ -54,6 +54,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/wiki/{pageId}", patch(v1_update_wiki_page))
         // ── Capsules ────────────────────────────────────────────────
         .route("/api/v1/capsules", get(v1_query_capsules))
+        // ── Conversations ──────────────────────────────────────────
+        .route("/api/v1/conversations", get(v1_list_conversations))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2118,4 +2120,104 @@ async fn v1_query_capsules(
                 .into_response()
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Conversations
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationListQuery {
+    #[serde(rename = "type")]
+    conv_type: Option<String>,
+    search: Option<String>,
+    limit: Option<i64>,
+}
+
+/// GET /api/v1/conversations?type=h2a&search=keyword&limit=50
+async fn v1_list_conversations(
+    State(state): State<AppState>,
+    caller: CallerIdentity,
+    Query(q): Query<ConversationListQuery>,
+) -> Response {
+    let owner_id = caller.owner_id().to_string();
+    let limit = q.limit.unwrap_or(50).min(200);
+
+    // Build query based on caller type
+    let (conversations, is_agent) = if caller.is_agent() {
+        // Agent: list conversations where agent is a member
+        let agent_id = caller.agent_id().map(|id| id.to_string()).unwrap_or_default();
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<NaiveDateTime>)>(
+            r#"SELECT c.id::text, c.type::text,
+                      COALESCE(cs.group_name, u.name, a.name) as display_name,
+                      c.updated_at
+               FROM conversations c
+               LEFT JOIN "user" u ON u.id = c.user_id
+               LEFT JOIN agents a ON a.id = c.agent_id
+               LEFT JOIN conversation_settings cs ON cs.conversation_id = c.id
+               WHERE (c.agent_id = $1::uuid
+                      OR EXISTS (SELECT 1 FROM conversation_members cm WHERE cm.conversation_id = c.id AND cm.agent_id = $1::uuid))
+                 AND ($2::text IS NULL OR c.type::text = $2)
+                 AND ($3::text IS NULL OR (
+                      COALESCE(cs.group_name, '') ILIKE '%' || $3 || '%'
+                      OR COALESCE(u.name, '') ILIKE '%' || $3 || '%'
+                      OR COALESCE(a.name, '') ILIKE '%' || $3 || '%'
+                 ))
+                 AND c.hidden_at IS NULL
+               ORDER BY c.updated_at DESC NULLS LAST
+               LIMIT $4"#,
+        )
+        .bind(&agent_id)
+        .bind(&q.conv_type)
+        .bind(&q.search)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default();
+        (rows, true)
+    } else {
+        // User: list own conversations
+        let rows = sqlx::query_as::<_, (String, String, Option<String>, Option<NaiveDateTime>)>(
+            r#"SELECT c.id::text, c.type::text,
+                      COALESCE(cs.group_name, a.name, u2.name) as display_name,
+                      c.updated_at
+               FROM conversations c
+               LEFT JOIN agents a ON a.id = c.agent_id
+               LEFT JOIN "user" u2 ON u2.id = c.other_user_id
+               LEFT JOIN conversation_settings cs ON cs.conversation_id = c.id
+               WHERE c.user_id = $1
+                 AND ($2::text IS NULL OR c.type::text = $2)
+                 AND ($3::text IS NULL OR (
+                      COALESCE(cs.group_name, '') ILIKE '%' || $3 || '%'
+                      OR COALESCE(a.name, '') ILIKE '%' || $3 || '%'
+                      OR COALESCE(u2.name, '') ILIKE '%' || $3 || '%'
+                 ))
+                 AND c.hidden_at IS NULL
+               ORDER BY c.updated_at DESC NULLS LAST
+               LIMIT $4"#,
+        )
+        .bind(&owner_id)
+        .bind(&q.conv_type)
+        .bind(&q.search)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default();
+        (rows, false)
+    };
+
+    let items: Vec<Value> = conversations
+        .into_iter()
+        .map(|(id, conv_type, name, updated_at)| {
+            json!({
+                "id": id,
+                "type": conv_type,
+                "name": name,
+                "updatedAt": updated_at.map(|t| t.to_string()),
+            })
+        })
+        .collect();
+
+    Json(json!(items)).into_response()
 }

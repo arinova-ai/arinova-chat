@@ -17,6 +17,7 @@ import { registerStats } from "./commands/stats.js";
 import { registerList } from "./commands/list.js";
 import { registerApp } from "./commands/app.js";
 import { registerSetupOpenclaw } from "./commands/setup-openclaw.js";
+import { registerConversation } from "./commands/conversation.js";
 
 const program = new Command();
 
@@ -47,6 +48,7 @@ registerFileCommands(program);
 registerNoteCommands(program);
 registerMemoryCommands(program);
 registerKanbanCommands(program);
+registerConversation(program);
 
 // Creator commands (config-based auth)
 registerAuth(program);
