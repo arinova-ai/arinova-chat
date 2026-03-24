@@ -3401,8 +3401,15 @@ async fn create_invite(
         }
     }
 
-    // Generate a short invite code
-    let code = format!("{}", &Uuid::new_v4().to_string()[..8]);
+    // Generate a 6-char alphanumeric invite code (exclude confusing chars: 0/O, 1/I/L)
+    let code = {
+        const CHARSET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        let uuid_bytes = Uuid::new_v4();
+        let bytes = uuid_bytes.as_bytes();
+        (0..6)
+            .map(|i| CHARSET[(bytes[i] as usize) % CHARSET.len()] as char)
+            .collect::<String>()
+    };
 
     let expires_at = body
         .expires_in_hours

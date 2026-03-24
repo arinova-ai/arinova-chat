@@ -25,11 +25,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { assetUrl, AGENT_DEFAULT_AVATAR, BACKEND_URL } from "@/lib/config";
 import {
+  ChevronLeft,
   Crown,
   Shield,
   User,
   UserCircle2,
   UserMinus,
+  UserPlus,
   ArrowUpDown,
   Trash2,
   LogOut,
@@ -56,7 +58,7 @@ import { useToastStore } from "@/store/toast-store";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { compressImage } from "@/lib/image-compress";
 
-type Tab = "info" | "personal" | "permissions" | "invites" | "hidden" | "danger";
+type Tab = "info" | "members" | "personal" | "permissions" | "invites" | "hidden" | "danger";
 
 interface CommunitySettingsProps {
   open: boolean;
@@ -171,6 +173,16 @@ export function CommunitySettingsSheet({
   const [inviteMaxUses, setInviteMaxUses] = useState("");
   const [inviteExpiry, setInviteExpiry] = useState("24");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Members panel — invite friends / add agent
+  const [friendsList, setFriendsList] = useState<{ id: string; name: string; username: string | null; image: string | null }[]>([]);
+  const [agentsList, setAgentsList] = useState<{ id: string; name: string; avatarUrl: string | null }[]>([]);
+  const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  const [showInviteFriends, setShowInviteFriends] = useState(false);
+  const [showAddAgents, setShowAddAgents] = useState(false);
+  const [friendSearch, setFriendSearch] = useState("");
+  const [agentSearch, setAgentSearch] = useState("");
 
   const currentUserRole = members.find((m) => m.userId === currentUserId)?.role ?? null;
   const isCreator = currentUserRole === "creator";
@@ -471,10 +483,65 @@ export function CommunitySettingsSheet({
   );
 
   const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://chat.arinova.ai";
+    navigator.clipboard.writeText(`${origin}/join/${code}`);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };
+
+  // ── Invite Friends ──
+  const handleOpenInviteFriends = useCallback(async () => {
+    setShowInviteFriends(true);
+    setSelectedFriends(new Set());
+    setFriendSearch("");
+    try {
+      const friends = await api<{ id: string; name: string; username: string | null; image: string | null }[]>("/api/friends", { silent: true });
+      const memberUserIds = new Set(members.map((m) => m.userId));
+      setFriendsList(friends.filter((f) => !memberUserIds.has(f.id)));
+    } catch { setFriendsList([]); }
+  }, [members]);
+
+  const handleBatchInviteFriends = useCallback(async () => {
+    for (const uid of selectedFriends) {
+      try {
+        await api(`/api/communities/${communityId}/members`, {
+          method: "POST",
+          body: JSON.stringify({ userId: uid }),
+        });
+      } catch { /* ignore already-member errors */ }
+    }
+    setShowInviteFriends(false);
+    // Reload members
+    try {
+      const data = await api<{ members: Member[] }>(`/api/communities/${communityId}/members`, { silent: true });
+      setMembers(data.members);
+    } catch {}
+  }, [communityId, selectedFriends]);
+
+  // ── Add Agents ──
+  const handleOpenAddAgents = useCallback(async () => {
+    setShowAddAgents(true);
+    setSelectedAgents(new Set());
+    setAgentSearch("");
+    try {
+      const data = await api<{ agents: { id: string; name: string; avatarUrl: string | null }[] }>(`/api/communities/${communityId}/agents`, { silent: true });
+      const existingAgentIds = new Set(data.agents.map((a) => a.id));
+      const myAgents = await api<{ id: string; name: string; avatarUrl: string | null }[]>("/api/agents", { silent: true });
+      setAgentsList(myAgents.filter((a) => !existingAgentIds.has(a.id)));
+    } catch { setAgentsList([]); }
+  }, [communityId]);
+
+  const handleBatchAddAgents = useCallback(async () => {
+    for (const agentId of selectedAgents) {
+      try {
+        await api(`/api/communities/${communityId}/agents`, {
+          method: "POST",
+          body: JSON.stringify({ listingId: agentId }),
+        });
+      } catch {}
+    }
+    setShowAddAgents(false);
+  }, [communityId, selectedAgents]);
 
   // ── Helpers ──
   const roleIcon = (role: string) => {
@@ -501,6 +568,7 @@ export function CommunitySettingsSheet({
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
     { id: "info", label: t("communitySettings.info"), icon: <Globe className="h-4 w-4" /> },
+    { id: "members", label: t("communitySettings.members"), icon: <Users className="h-4 w-4" /> },
     { id: "personal", label: t("communitySettings.personalSettings"), icon: <Bell className="h-4 w-4" /> },
     { id: "permissions", label: t("communitySettings.permissions"), icon: <Lock className="h-4 w-4" />, adminOnly: true },
     { id: "invites", label: t("communitySettings.invites"), icon: <Link2 className="h-4 w-4" />, adminOnly: true },
@@ -679,6 +747,140 @@ export function CommunitySettingsSheet({
             )}
 
             {/* ── Members Tab ── */}
+            {activeTab === "members" && (
+              showInviteFriends ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setShowInviteFriends(false)} className="text-muted-foreground hover:text-foreground">
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <h3 className="text-sm font-semibold">{t("communitySettings.inviteFriends")}</h3>
+                  </div>
+                  <Input
+                    placeholder={t("common.search")}
+                    value={friendSearch}
+                    onChange={(e) => setFriendSearch(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {friendsList
+                      .filter((f) => !friendSearch || f.name.toLowerCase().includes(friendSearch.toLowerCase()) || f.username?.toLowerCase().includes(friendSearch.toLowerCase()))
+                      .map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted text-left"
+                        onClick={() => setSelectedFriends((prev) => {
+                          const next = new Set(prev);
+                          next.has(f.id) ? next.delete(f.id) : next.add(f.id);
+                          return next;
+                        })}
+                      >
+                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selectedFriends.has(f.id) ? "bg-brand border-brand text-white" : "border-muted-foreground/30"}`}>
+                          {selectedFriends.has(f.id) && <Check className="h-2.5 w-2.5" />}
+                        </div>
+                        <div className="h-7 w-7 rounded-full bg-muted overflow-hidden shrink-0">
+                          {f.image && <img src={f.image} alt="" className="h-full w-full object-cover" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm truncate">{f.name}</p>
+                          {f.username && <p className="text-xs text-muted-foreground">@{f.username}</p>}
+                        </div>
+                      </button>
+                    ))}
+                    {friendsList.length === 0 && (
+                      <p className="text-xs text-muted-foreground py-4 text-center">{t("communitySettings.noFriendsToInvite")}</p>
+                    )}
+                  </div>
+                  {selectedFriends.size > 0 && (
+                    <Button size="sm" className="w-full" onClick={handleBatchInviteFriends}>
+                      {t("communitySettings.invite")} ({selectedFriends.size})
+                    </Button>
+                  )}
+                </div>
+              ) : showAddAgents ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setShowAddAgents(false)} className="text-muted-foreground hover:text-foreground">
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <h3 className="text-sm font-semibold">{t("communitySettings.addAgent")}</h3>
+                  </div>
+                  <Input
+                    placeholder={t("common.search")}
+                    value={agentSearch}
+                    onChange={(e) => setAgentSearch(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {agentsList
+                      .filter((a) => !agentSearch || a.name.toLowerCase().includes(agentSearch.toLowerCase()))
+                      .map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted text-left"
+                        onClick={() => setSelectedAgents((prev) => {
+                          const next = new Set(prev);
+                          next.has(a.id) ? next.delete(a.id) : next.add(a.id);
+                          return next;
+                        })}
+                      >
+                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selectedAgents.has(a.id) ? "bg-brand border-brand text-white" : "border-muted-foreground/30"}`}>
+                          {selectedAgents.has(a.id) && <Check className="h-2.5 w-2.5" />}
+                        </div>
+                        <div className="h-7 w-7 rounded-full bg-muted overflow-hidden shrink-0">
+                          {a.avatarUrl && <img src={a.avatarUrl} alt="" className="h-full w-full object-cover" />}
+                        </div>
+                        <p className="text-sm truncate">{a.name}</p>
+                      </button>
+                    ))}
+                    {agentsList.length === 0 && (
+                      <p className="text-xs text-muted-foreground py-4 text-center">{t("communitySettings.noAgentsToAdd")}</p>
+                    )}
+                  </div>
+                  {selectedAgents.size > 0 && (
+                    <Button size="sm" className="w-full" onClick={handleBatchAddAgents}>
+                      {t("communitySettings.add")} ({selectedAgents.size})
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={handleOpenInviteFriends}>
+                      <UserPlus className="h-3.5 w-3.5" />
+                      {t("communitySettings.inviteFriends")}
+                    </Button>
+                    {community?.allowAgents !== false && (
+                      <Button size="sm" variant="outline" className="flex-1 gap-1.5" onClick={handleOpenAddAgents}>
+                        <Bot className="h-3.5 w-3.5" />
+                        {t("communitySettings.addAgent")}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {members.map((m) => (
+                      <div key={m.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                        <div className="h-8 w-8 rounded-full bg-muted overflow-hidden shrink-0">
+                          {(m.memberAvatarUrl || m.userImage) && (
+                            <img src={m.memberAvatarUrl || m.userImage || ""} alt="" className="h-full w-full object-cover" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium truncate">{m.displayName || m.userName}</p>
+                            {roleIcon(m.role)}
+                          </div>
+                        </div>
+                        <Badge variant={roleBadgeVariant(m.role)} className="text-[10px] shrink-0">{m.role}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
+
             {/* ── Personal Settings Tab ── */}
             {activeTab === "personal" && (
               <div className="space-y-4">
