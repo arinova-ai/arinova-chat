@@ -1204,6 +1204,7 @@ pub async fn trigger_agent_response(
                     ).bind(mid).fetch_optional(db).await.ok().flatten().unwrap_or(false);
                     if !always_push { continue; }
                 }
+                if !ephemeral {
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
                         let preview = {
@@ -1228,6 +1229,7 @@ pub async fn trigger_agent_response(
                         )
                         .await;
                     }
+                }
                 }
             }
         }
@@ -1478,6 +1480,7 @@ pub async fn trigger_agent_response(
                     ).bind(mid).fetch_optional(db).await.ok().flatten().unwrap_or(false);
                     if !always_push { continue; }
                 }
+                if !ephemeral {
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
                         let preview = {
@@ -1502,6 +1505,7 @@ pub async fn trigger_agent_response(
                         )
                         .await;
                     }
+                }
                 }
             }
         }

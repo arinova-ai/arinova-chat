@@ -1905,8 +1905,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       // In-app notification for messages from other conversations (mobile only)
       const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+      const isHudMessage = msg.content?.trim().startsWith("/hud-for-usage") || msg.content?.includes('"hud-for-usage"');
       if (
         isMobile &&
+        !isHudMessage &&
         conversationId !== activeConversationId &&
         !get().mutedConversations[conversationId] &&
         msg.senderUserId !== get().currentUserId &&
@@ -2561,8 +2563,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // In-app notification for agent replies in other conversations (mobile only)
       if (typeof window !== "undefined") {
         const isMobileSE = window.matchMedia("(max-width: 767px)").matches;
+        const seIsHud = (finalContent || event.content || "").includes('"hud-for-usage"');
         if (
           isMobileSE &&
+          !seIsHud &&
           conversationId !== get().activeConversationId &&
           !get().mutedConversations[conversationId]
         ) {
