@@ -21,4 +21,7 @@ registerNoteCommands(program);
 registerMemoryCommands(program);
 registerKanbanCommands(program);
 
-program.parse();
+program.parseAsync().then(() => {
+  // Force exit after async commands complete — Node's fetch keep-alive prevents natural exit
+  setTimeout(() => process.exit(0), 100);
+});

@@ -1,9 +1,7 @@
 import type { Command } from "commander";
 
 export function getOpts(cmd: Command): { token: string; apiUrl: string } {
-  const root = cmd.parent ?? cmd;
-  while (root.parent) { /* climb to root */ }
-  const opts = (cmd as unknown as { parent: Command }).parent?.optsWithGlobals?.() ?? cmd.optsWithGlobals();
+  const opts = cmd.optsWithGlobals();
   return {
     token: opts.token as string,
     apiUrl: (opts.apiUrl as string) ?? "https://api.chat.arinova.ai",
