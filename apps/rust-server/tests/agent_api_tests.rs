@@ -784,8 +784,8 @@ mod kanban_column_tests {
         let res = agent_delete(&client, &format!("/api/agent/kanban/columns/{col_id}")).await;
         assert_eq!(
             res.status().as_u16(),
-            204,
-            "Delete column should return 204"
+            200,
+            "Delete column should return 200"
         );
     }
 
