@@ -1,11 +1,13 @@
 {
-  "name": "@arinova-ai/cli",
-  "version": "0.0.1",
-  "private": true,
+  "name": "@arinova-ai/creator-cli",
+  "version": "0.0.4",
   "type": "module",
   "bin": {
-    "arinova-cli": "./dist/index.js"
+    "arinova-creator": "dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

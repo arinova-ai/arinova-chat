@@ -1,6 +1,6 @@
 {
-  "name": "@arinova/spaces-sdk",
-  "version": "0.1.0",
+  "name": "@arinova-ai/spaces-sdk",
+  "version": "0.1.6",
   "description": "Arinova Spaces SDK — OAuth PKCE login for third-party apps",
   "type": "module",
   "main": "dist/index.js",

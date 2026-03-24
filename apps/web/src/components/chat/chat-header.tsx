@@ -395,15 +395,9 @@ export function ChatHeader({
                   import("@/store/hud-store").then(({ useHudStore }) => {
                     const s = useHudStore.getState();
                     s.toggle();
-                    const nowEnabled = useHudStore.getState().enabled;
-                    console.log("[HUD] toggle:", nowEnabled, "conversationId:", conversationId);
-                    if (nowEnabled && conversationId) {
+                    if (useHudStore.getState().enabled && conversationId) {
                       const hudCmd = `/hud-for-usage ${conversationId}`;
-                      console.log("[HUD] sending message:", hudCmd);
-                      setTimeout(() => {
-                        console.log("[HUD] wsManager.send send_message");
-                        wsManager.send({ type: "send_message", conversationId, content: hudCmd });
-                      }, 300);
+                      setTimeout(() => wsManager.send({ type: "send_message", conversationId, content: hudCmd }), 300);
                     }
                   });
                   break;

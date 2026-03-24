@@ -42,24 +42,43 @@ export const useHudStore = create<HudStore>((set, get) => ({
  *  3. Inline text: "Context: X% | 5H: Y% | 7D: Z%"
  */
 export function parseHudData(content: string): HudData | null {
+  // Try [HUD]...[/HUD] wrapper
+  const hudMatch = content.match(/\[HUD\]([\s\S]*?)\[\/HUD\]/);
+  const hudText = hudMatch ? hudMatch[1].trim() : null;
+  const text = hudText ?? content;
+
+  // Try JSON format (bridge output)
   try {
-    const jsonStr = content.match(/\{[\s\S]*\}/)?.[0];
-    if (!jsonStr) return null;
-    const raw = JSON.parse(jsonStr) as Record<string, unknown>;
-    const j = raw["hud-for-usage"] as Record<string, unknown> | undefined;
-    if (!j) return null;
-    const ctx = j.context as { percent?: number } | undefined;
-    const h5 = j.limit5h as { percent?: number } | undefined;
-    const d7 = j.limit7d as { percent?: number } | undefined;
+    const jsonStr = text.match(/\{[\s\S]*"limit5h"[\s\S]*\}/)?.[0];
+    if (jsonStr) {
+      const j = JSON.parse(jsonStr) as Record<string, unknown>;
+      const ctx = j.context as { percent?: number } | undefined;
+      const h5 = j.limit5h as { percent?: number } | undefined;
+      const d7 = j.limit7d as { percent?: number } | undefined;
+      if (h5?.percent != null || d7?.percent != null || ctx?.percent != null) {
+        return {
+          context: ctx?.percent != null ? `${ctx.percent}%` : undefined,
+          fiveHour: h5?.percent != null ? `${h5.percent}%` : undefined,
+          sevenDay: d7?.percent != null ? `${d7.percent}%` : undefined,
+          model: j.model as string | undefined,
+          cost: j.cost != null ? `$${j.cost}` : undefined,
+        };
+      }
+    }
+  } catch { /* not JSON, try text format */ }
+
+  // Try inline text format: "Context: X% | 5H: Y% | 7D: Z%"
+  const contextMatch = text.match(/Context:\s*(\d+%)/i);
+  const fiveHourMatch = text.match(/5H:\s*(\d+%)/i);
+  const sevenDayMatch = text.match(/7D:\s*(\d+%)/i);
+
+  if (contextMatch || fiveHourMatch || sevenDayMatch) {
     return {
-      context: ctx?.percent != null ? `${ctx.percent}%` : undefined,
-      fiveHour: h5?.percent != null ? `${h5.percent}%` : undefined,
-      sevenDay: d7?.percent != null ? `${d7.percent}%` : undefined,
-      model: j.model as string | undefined,
-      cost: j.cost != null ? `$${j.cost}` : undefined,
+      context: contextMatch?.[1],
+      fiveHour: fiveHourMatch?.[1],
+      sevenDay: sevenDayMatch?.[1],
+      raw: hudText ?? undefined,
     };
-  } catch {
-    return null;
   }
   return null;
 }
