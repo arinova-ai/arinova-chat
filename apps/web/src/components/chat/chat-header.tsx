@@ -396,7 +396,10 @@ export function ChatHeader({
                   import("@/store/hud-store").then(({ useHudStore }) => {
                     const s = useHudStore.getState();
                     s.toggle();
-                    if (useHudStore.getState().enabled && conversationId) {
+                    const enabled = useHudStore.getState().enabled;
+                    console.log("[HUD] toggle:", enabled, "conversationId:", conversationId);
+                    if (enabled && conversationId) {
+                      console.log("[HUD] sending hud_request via WS");
                       wsManager.send({ type: "hud_request", conversationId });
                     }
                   });

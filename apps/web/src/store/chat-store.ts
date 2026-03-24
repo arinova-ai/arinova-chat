@@ -2713,9 +2713,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // HUD data from agent via custom WS event
     if ((event as Record<string, unknown>).type === "hud_update") {
       const { conversationId, data } = event as unknown as { conversationId: string; data: Record<string, unknown> };
+      console.log("[HUD] received hud_update:", conversationId, data);
       try {
         import("@/store/hud-store").then(({ parseHudData, useHudStore }) => {
           const hudData = parseHudData(data);
+          console.log("[HUD] parseHudData result:", hudData);
           if (hudData) {
             useHudStore.getState().setData(conversationId, hudData);
           }
