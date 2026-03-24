@@ -31,7 +31,7 @@ export function saveConfig(config: CliConfig): void {
   chmodSync(CONFIG_FILE, 0o600);
 }
 
-const STAGING_ENDPOINT = "https://chat-staging.arinova.ai";
+const STAGING_ENDPOINT = "https://api.chat-staging.arinova.ai";
 
 export function getEndpoint(): string {
   // Priority: env var > config file > default

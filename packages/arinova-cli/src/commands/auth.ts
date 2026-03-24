@@ -10,9 +10,12 @@ export function registerAuth(program: Command): void {
     .command("login")
     .description("Log in via browser (opens Arinova to generate a CLI key)")
     .option("-p, --port <port>", "Local callback port", "9876")
-    .action(async (opts: { port: string }) => {
+    .action(async function (this: Command, opts: { port: string }) {
       const port = parseInt(opts.port, 10);
-      const endpoint = getEndpoint();
+      const globalOpts = this.optsWithGlobals();
+      const endpoint = globalOpts.staging
+        ? "https://chat-staging.arinova.ai"
+        : getEndpoint();
 
       console.log("Opening browser for authentication...");
       console.log(`Waiting for callback on http://localhost:${port} ...\n`);

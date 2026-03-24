@@ -2152,7 +2152,7 @@ async fn v1_list_conversations(
                       COALESCE(a.name, u.name) as display_name,
                       c.updated_at
                FROM conversations c
-               LEFT JOIN \"user\" u ON u.id = c.user_id
+               LEFT JOIN "user" u ON u.id = c.user_id
                LEFT JOIN agents a ON a.id = c.agent_id
                WHERE (c.agent_id = $1::uuid
                       OR EXISTS (SELECT 1 FROM conversation_members cm WHERE cm.conversation_id = c.id AND cm.agent_id = $1::uuid))
