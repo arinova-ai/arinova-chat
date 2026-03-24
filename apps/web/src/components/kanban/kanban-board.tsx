@@ -937,7 +937,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
         onAddCard={setAddColumnId}
         onDeleteCard={handleDeleteCard}
         onSelectCard={handleSelectCard}
-        onMoveCard={isMobile ? handleMoveCard : undefined}
+        onMoveCard={handleMoveCard}
         onRenameColumn={handleRenameColumn}
         onDeleteColumn={handleDeleteColumn}
       />
