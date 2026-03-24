@@ -135,6 +135,47 @@ async fn first_column_id(client: &Client, board_id: &str) -> String {
 }
 
 // ============================================================================
+// Notebook / Note test-data helpers
+// ============================================================================
+
+/// Create a fresh test notebook named `__test_notebook__` and return its ID.
+async fn create_test_notebook(client: &Client) -> String {
+    let body = agent_post_json(
+        client,
+        "/api/v1/notebooks",
+        json!({"name": "__test_notebook__"}),
+    )
+    .await;
+    body["id"]
+        .as_str()
+        .expect("create_test_notebook: response should contain 'id'")
+        .to_string()
+}
+
+/// Delete a test notebook.
+async fn delete_test_notebook(client: &Client, notebook_id: &str) {
+    let _ = agent_delete(client, &format!("/api/v1/notebooks/{notebook_id}")).await;
+}
+
+/// Create a note inside the given notebook and return its ID.
+async fn create_test_note(client: &Client, notebook_id: &str, title: &str) -> String {
+    let body = agent_post_json(
+        client,
+        "/api/v1/notes",
+        json!({
+            "title": title,
+            "content": "Test note created by agent_api_tests",
+            "notebookId": notebook_id
+        }),
+    )
+    .await;
+    body["id"]
+        .as_str()
+        .expect("create_test_note: response should contain 'id'")
+        .to_string()
+}
+
+// ============================================================================
 // Notes tests
 // ============================================================================
 #[cfg(test)]
@@ -145,42 +186,70 @@ mod notes_tests {
     #[ignore]
     async fn list_notes_returns_expected_shape() {
         let client = Client::new();
+        let nb_id = create_test_notebook(&client).await;
+        // Create a note so listing is non-empty
+        let note_id = create_test_note(&client, &nb_id, "Shape Check Note").await;
+
         let res = agent_get(&client, "/api/v1/notes").await;
         let status = res.status().as_u16();
-        // May be 200 (success) or 403 (no notebook permission) — both are valid shapes
-        assert!(
-            status == 200 || status == 403,
-            "GET /api/v1/notes should return 200 or 403, got {status}"
-        );
-        if status == 200 {
-            let body: Value = res.json().await.unwrap();
-            assert!(body.get("notes").is_some(), "Response should have 'notes' key");
-            assert!(body.get("hasMore").is_some(), "Response should have 'hasMore' key");
-        }
+        assert_eq!(status, 200, "GET /api/v1/notes should return 200, got {status}");
+        let body: Value = res.json().await.unwrap();
+        assert!(body.get("notes").is_some(), "Response should have 'notes' key");
+        assert!(body.get("hasMore").is_some(), "Response should have 'hasMore' key");
+
+        // Cleanup
+        agent_delete(&client, &format!("/api/v1/notes/{note_id}")).await;
+        delete_test_notebook(&client, &nb_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn list_notes_with_search() {
         let client = Client::new();
-        let res = agent_get(&client, "/api/v1/notes?search=test").await;
-        let status = res.status().as_u16();
-        assert!(
-            status == 200 || status == 403,
-            "GET /api/v1/notes?search=test should return 200 or 403, got {status}"
+        let nb_id = create_test_notebook(&client).await;
+        let note_id = create_test_note(&client, &nb_id, "__test_search_note__").await;
+
+        let res = agent_get(&client, "/api/v1/notes?search=__test_search_note__").await;
+        assert_eq!(
+            res.status().as_u16(),
+            200,
+            "GET /api/v1/notes?search=... should return 200"
         );
+
+        // Cleanup
+        agent_delete(&client, &format!("/api/v1/notes/{note_id}")).await;
+        delete_test_notebook(&client, &nb_id).await;
     }
 
     #[tokio::test]
     #[ignore]
     async fn list_notes_with_tags_filter() {
         let client = Client::new();
-        let res = agent_get(&client, "/api/v1/notes?tags=important").await;
-        let status = res.status().as_u16();
-        assert!(
-            status == 200 || status == 403,
-            "GET /api/v1/notes?tags=important should return 200 or 403, got {status}"
+        let nb_id = create_test_notebook(&client).await;
+        // Create a note with a specific tag
+        let created = agent_post_json(
+            &client,
+            "/api/v1/notes",
+            json!({
+                "title": "__test_tagged_note__",
+                "content": "Tagged note for filter test",
+                "tags": ["__test_tag__"],
+                "notebookId": nb_id
+            }),
+        )
+        .await;
+        let note_id = created["id"].as_str().expect("Note should have id");
+
+        let res = agent_get(&client, "/api/v1/notes?tags=__test_tag__").await;
+        assert_eq!(
+            res.status().as_u16(),
+            200,
+            "GET /api/v1/notes?tags=__test_tag__ should return 200"
         );
+
+        // Cleanup
+        agent_delete(&client, &format!("/api/v1/notes/{note_id}")).await;
+        delete_test_notebook(&client, &nb_id).await;
     }
 
     #[tokio::test]
@@ -230,40 +299,14 @@ mod notes_tests {
     #[ignore]
     async fn note_crud_cycle() {
         let client = Client::new();
-
-        // First, we need a notebook ID the agent has permission on.
-        // List notebooks to find one.
-        let notebooks_res = agent_get(&client, "/api/v1/notes").await;
-        if notebooks_res.status().as_u16() == 403 {
-            eprintln!("SKIP: Agent has no notebook permissions, cannot test note CRUD");
-            return;
-        }
-        let notes_body: Value = notebooks_res.json().await.unwrap();
-        // Try to extract notebookId from an existing note, or use the notebooks endpoint
-        let notebook_id = if let Some(notes) = notes_body["notes"].as_array() {
-            if let Some(note) = notes.first() {
-                note["notebookId"].as_str().map(|s| s.to_string())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let notebook_id = match notebook_id {
-            Some(id) => id,
-            None => {
-                eprintln!("SKIP: No notebook found for note CRUD test");
-                return;
-            }
-        };
+        let nb_id = create_test_notebook(&client).await;
 
         // CREATE
         let create_body = json!({
             "title": "Integration Test Note",
             "content": "This is a test note created by agent_api_tests.",
             "tags": ["test", "integration"],
-            "notebookId": notebook_id
+            "notebookId": nb_id
         });
         let create_res = agent_post(&client, "/api/v1/notes", create_body).await;
         assert_eq!(create_res.status().as_u16(), 201, "Create note should return 201");
@@ -304,6 +347,9 @@ mod notes_tests {
         // Verify deletion
         let gone_res = agent_get(&client, &format!("/api/v1/notes/{note_id}")).await;
         assert_eq!(gone_res.status().as_u16(), 404, "Deleted note should return 404");
+
+        // Cleanup
+        delete_test_notebook(&client, &nb_id).await;
     }
 
     #[tokio::test]
@@ -381,44 +427,13 @@ mod note_thread_tests {
         );
     }
 
-    /// Full thread flow: create note, post thread message, get thread messages
+    /// Full thread flow: create notebook + note, post thread message, get thread messages
     #[tokio::test]
     #[ignore]
     async fn note_thread_flow() {
         let client = Client::new();
-
-        // Find a notebook
-        let notes_res = agent_get(&client, "/api/v1/notes").await;
-        if notes_res.status().as_u16() == 403 {
-            eprintln!("SKIP: No notebook permissions for thread test");
-            return;
-        }
-        let body: Value = notes_res.json().await.unwrap();
-        let notebook_id = body["notes"]
-            .as_array()
-            .and_then(|arr| arr.first())
-            .and_then(|n| n["notebookId"].as_str())
-            .map(|s| s.to_string());
-        let notebook_id = match notebook_id {
-            Some(id) => id,
-            None => {
-                eprintln!("SKIP: No notebook found for thread test");
-                return;
-            }
-        };
-
-        // Create a note for thread testing
-        let created = agent_post_json(
-            &client,
-            "/api/v1/notes",
-            json!({
-                "title": "Thread Test Note",
-                "content": "Note for thread testing",
-                "notebookId": notebook_id
-            }),
-        )
-        .await;
-        let note_id = created["id"].as_str().expect("Note should have id");
+        let nb_id = create_test_notebook(&client).await;
+        let note_id = create_test_note(&client, &nb_id, "Thread Test Note").await;
 
         // Post a thread message
         let thread_msg = agent_post_json(
@@ -444,6 +459,7 @@ mod note_thread_tests {
 
         // Cleanup
         agent_delete(&client, &format!("/api/v1/notes/{note_id}")).await;
+        delete_test_notebook(&client, &nb_id).await;
     }
 }
 
@@ -484,55 +500,51 @@ mod notebooks_tests {
         );
     }
 
-    /// Test the notebooks CRUD flow (requires the agent to have a conversation with the user)
+    /// Full notebook CRUD: create -> list notes -> update -> delete
     #[tokio::test]
     #[ignore]
     async fn notebook_crud_flow() {
         let client = Client::new();
 
-        // We need to discover a valid userId from an existing notebook listing.
-        // Try listing notes to find the agent's owner/user association.
-        let notes_res = agent_get(&client, "/api/v1/notes").await;
-        if notes_res.status().as_u16() == 403 {
-            eprintln!("SKIP: No notebook permissions for notebook CRUD test");
-            return;
-        }
-        let body: Value = notes_res.json().await.unwrap();
-        // Try to find a notebook and from it get the owner
-        let notes = body["notes"].as_array();
-        if notes.is_none() || notes.unwrap().is_empty() {
-            eprintln!("SKIP: No notes found — cannot determine user for notebook CRUD");
-            return;
-        }
-
-        // Get a notebookId from an existing note, then look up its owner via the notebooks endpoint
-        let nb_id = notes
-            .unwrap()
-            .first()
-            .and_then(|n| n["notebookId"].as_str());
-        if nb_id.is_none() {
-            eprintln!("SKIP: Note has no notebookId");
-            return;
-        }
-
-        // Get notebook notes to find the user
-        let nb_notes_res = agent_get(
+        // CREATE
+        let create_res = agent_post(
             &client,
-            &format!("/api/v1/notebooks/{}/notes", nb_id.unwrap()),
+            "/api/v1/notebooks",
+            json!({"name": "__test_notebook_crud__"}),
         )
         .await;
-        let status = nb_notes_res.status().as_u16();
+        assert_eq!(create_res.status().as_u16(), 201, "Create notebook should return 201");
+        let created: Value = create_res.json().await.unwrap();
+        let nb_id = created["id"].as_str().expect("Notebook should have id");
+
+        // Create a note inside it so listing is non-empty
+        let note_id = create_test_note(&client, nb_id, "Note in CRUD Notebook").await;
+
+        // LIST NOTES
+        let nb_notes_res = agent_get(
+            &client,
+            &format!("/api/v1/notebooks/{nb_id}/notes"),
+        )
+        .await;
+        assert_eq!(nb_notes_res.status().as_u16(), 200, "GET notebook notes should return 200");
+        let nb_notes: Value = nb_notes_res.json().await.unwrap();
         assert!(
-            status == 200 || status == 403,
-            "GET notebook notes should return 200 or 403, got {status}"
+            nb_notes.get("notes").is_some(),
+            "Notebook notes response should have 'notes' key"
         );
-        if status == 200 {
-            let nb_notes: Value = nb_notes_res.json().await.unwrap();
-            assert!(
-                nb_notes.get("notes").is_some(),
-                "Notebook notes response should have 'notes' key"
-            );
-        }
+
+        // UPDATE
+        let update_res = agent_patch(
+            &client,
+            &format!("/api/v1/notebooks/{nb_id}"),
+            json!({"name": "__test_notebook_crud_updated__"}),
+        )
+        .await;
+        assert_eq!(update_res.status().as_u16(), 200, "Update notebook should return 200");
+
+        // Cleanup
+        agent_delete(&client, &format!("/api/v1/notes/{note_id}")).await;
+        delete_test_notebook(&client, nb_id).await;
     }
 
     #[tokio::test]
@@ -1184,8 +1196,12 @@ mod kanban_card_note_tests {
     #[ignore]
     async fn link_unlink_and_list_card_notes() {
         let client = Client::new();
+
+        // Create isolated test data: board + notebook + note
         let board_id = create_test_board(&client).await;
         let col_id = first_column_id(&client, &board_id).await;
+        let nb_id = create_test_notebook(&client).await;
+        let note_id = create_test_note(&client, &nb_id, "Note for Card Link Test").await;
 
         // Create a card on the test board
         let card: Value = agent_post_json(
@@ -1195,31 +1211,6 @@ mod kanban_card_note_tests {
         )
         .await;
         let card_id = card["id"].as_str().unwrap();
-
-        // Try to find an existing note to link
-        let notes_res = agent_get(&client, "/api/v1/notes").await;
-        if notes_res.status().as_u16() != 200 {
-            eprintln!("SKIP: Cannot list notes for card-note link test");
-            agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
-            delete_test_board(&client, &board_id).await;
-            return;
-        }
-        let notes_body: Value = notes_res.json().await.unwrap();
-        let note_id = notes_body["notes"]
-            .as_array()
-            .and_then(|arr| arr.first())
-            .and_then(|n| n["id"].as_str())
-            .map(|s| s.to_string());
-
-        let note_id = match note_id {
-            Some(id) => id,
-            None => {
-                eprintln!("SKIP: No notes available for card-note link test");
-                agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
-                delete_test_board(&client, &board_id).await;
-                return;
-            }
-        };
 
         // LINK
         let link_res = agent_post(
@@ -1260,6 +1251,8 @@ mod kanban_card_note_tests {
 
         // Cleanup
         agent_delete(&client, &format!("/api/v1/kanban/cards/{card_id}")).await;
+        agent_delete(&client, &format!("/api/v1/notes/{note_id}")).await;
+        delete_test_notebook(&client, &nb_id).await;
         delete_test_board(&client, &board_id).await;
     }
 
