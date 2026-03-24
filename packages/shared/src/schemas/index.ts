@@ -283,10 +283,6 @@ export const wsClientEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("ping"),
   }),
-  z.object({
-    type: z.literal("hud_request"),
-    conversationId: z.string().uuid(),
-  }),
 ]);
 
 // ===== Agent WebSocket (Agent → Backend) =====

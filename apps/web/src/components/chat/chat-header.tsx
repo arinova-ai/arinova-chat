@@ -42,7 +42,6 @@ import { api } from "@/lib/api";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
 import { CommunitySettingsSheet } from "./community-settings";
 import { useRightPanelStore } from "@/store/right-panel-store";
-import { useHudStore } from "@/store/hud-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Pin, CalendarSearch, Activity } from "lucide-react";
 import { wsManager } from "@/lib/ws";
@@ -396,11 +395,9 @@ export function ChatHeader({
                   import("@/store/hud-store").then(({ useHudStore }) => {
                     const s = useHudStore.getState();
                     s.toggle();
-                    const enabled = useHudStore.getState().enabled;
-                    console.log("[HUD] toggle:", enabled, "conversationId:", conversationId);
-                    if (enabled && conversationId) {
-                      console.log("[HUD] sending hud_request via WS");
-                      wsManager.send({ type: "hud_request", conversationId });
+                    if (useHudStore.getState().enabled && conversationId) {
+                      const hudCmd = `/hud-for-usage ${conversationId}`;
+                      setTimeout(() => wsManager.send({ type: "send_message", conversationId, content: hudCmd }), 300);
                     }
                   });
                   break;
@@ -795,13 +792,10 @@ function DirectHeaderButtons({
 
   const pinned = available.filter((btn) => pinnedIds.includes(btn.id));
 
-  const hudEnabled = useHudStore((s) => s.enabled);
-
   const getActiveState = (id: string): boolean => {
     if (id === "search") return convSearchOpen;
     if (id === "mute") return isMuted;
     if (id === "call") return isInCall;
-    if (id === "hud") return hudEnabled;
     return false;
   };
 
@@ -809,7 +803,6 @@ function DirectHeaderButtons({
     if (id === "search" && convSearchOpen) return "text-blue-400";
     if (id === "mute" && isMuted) return "text-red-400";
     if (id === "call" && isInCall) return "text-green-400";
-    if (id === "hud" && hudEnabled) return "text-emerald-400";
     return "";
   };
 
