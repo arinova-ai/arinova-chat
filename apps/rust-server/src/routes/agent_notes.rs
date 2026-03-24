@@ -906,6 +906,7 @@ struct StandaloneListNotesQuery {
     limit: Option<String>,
     archived: Option<String>,
     tags: Option<String>,
+    search: Option<String>,
     #[serde(rename = "notebookId")]
     notebook_id: Option<String>,
 }
@@ -956,17 +957,24 @@ async fn agent_list_notes_standalone(
         format!(" AND n.tags @> ARRAY[{}]::text[]",
             tag_filter.iter().map(|t| format!("'{}'", t.replace('\'', "''"))).collect::<Vec<_>>().join(","))
     };
+    let search_cond = if let Some(ref s) = query.search {
+        let s = s.trim();
+        if !s.is_empty() {
+            let escaped = s.replace('%', "\\%").replace('_', "\\_").replace('\'', "''");
+            format!(" AND (n.title ILIKE '%{}%' OR n.content ILIKE '%{}%')", escaped, escaped)
+        } else { String::new() }
+    } else { String::new() };
 
     let rows = if let Some(ts) = cursor_ts {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.notebook_id = $1 AND {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
-            NOTE_QUERY_BASE, archive_cond, tag_cond
+            "{} WHERE n.notebook_id = $1 AND {} {} {} AND n.created_at < $2 ORDER BY n.created_at DESC LIMIT $3",
+            NOTE_QUERY_BASE, archive_cond, tag_cond, search_cond
         ))
         .bind(notebook_id).bind(ts).bind(limit + 1).fetch_all(&state.db).await
     } else {
         sqlx::query_as::<_, NoteRow>(&format!(
-            "{} WHERE n.notebook_id = $1 AND {} {} ORDER BY n.created_at DESC LIMIT $2",
-            NOTE_QUERY_BASE, archive_cond, tag_cond
+            "{} WHERE n.notebook_id = $1 AND {} {} {} ORDER BY n.created_at DESC LIMIT $2",
+            NOTE_QUERY_BASE, archive_cond, tag_cond, search_cond
         ))
         .bind(notebook_id).bind(limit + 1).fetch_all(&state.db).await
     };

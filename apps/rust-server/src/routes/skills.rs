@@ -912,7 +912,7 @@ struct ArinovaSearchBody {
     query: String,
 }
 
-/// POST /api/skills/arinova-search — global search across conversations, memories, capsules
+/// POST /api/skills/arinova-search — global search across conversations, notes, kanban, memories, capsules
 async fn arinova_search(
     State(state): State<AppState>,
     user: AuthUser,
@@ -942,7 +942,42 @@ async fn arinova_search(
     .await
     .unwrap_or_default();
 
-    // 2. Search memory entries (agent memories)
+    // 2. Search notes (title + content) in user's conversations
+    let note_rows = sqlx::query_as::<_, (uuid::Uuid, uuid::Uuid, String, String, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT n.id, n.conversation_id, n.title, n.content, n.updated_at
+           FROM notes n
+           JOIN conversations c ON c.id = n.conversation_id
+           WHERE (c.user_id = $1 OR EXISTS (
+               SELECT 1 FROM conversation_user_members cum WHERE cum.conversation_id = c.id AND cum.user_id = $1
+           ))
+           AND n.archived_at IS NULL
+           AND (n.title ILIKE $2 OR n.content ILIKE $2)
+           ORDER BY n.updated_at DESC LIMIT 10"#,
+    )
+    .bind(&user.id)
+    .bind(&pattern)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // 3. Search kanban cards (title + description) in user's boards
+    let card_rows = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, String, chrono::DateTime<chrono::Utc>)>(
+        r#"SELECT kc.id, kc.title, kc.description, kcol.name, kc.updated_at
+           FROM kanban_cards kc
+           JOIN kanban_columns kcol ON kcol.id = kc.column_id
+           JOIN kanban_boards kb ON kb.id = kcol.board_id
+           WHERE kb.owner_id = $1
+           AND kc.archived = FALSE
+           AND (kc.title ILIKE $2 OR kc.description ILIKE $2)
+           ORDER BY kc.updated_at DESC LIMIT 10"#,
+    )
+    .bind(&user.id)
+    .bind(&pattern)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // 4. Search memory entries (agent memories)
     let mem_rows = sqlx::query_as::<_, (uuid::Uuid, String, chrono::DateTime<chrono::Utc>)>(
         r#"SELECT am.id, am.content, am.created_at
            FROM agent_memories am
@@ -956,7 +991,7 @@ async fn arinova_search(
     .await
     .unwrap_or_default();
 
-    // 3. Search memory capsule entries
+    // 5. Search memory capsule entries
     let cap_rows = sqlx::query_as::<_, (uuid::Uuid, String, String, chrono::DateTime<chrono::Utc>)>(
         r#"SELECT me.id, me.content, mc.name, me.created_at
            FROM memory_entries me
@@ -970,36 +1005,66 @@ async fn arinova_search(
     .await
     .unwrap_or_default();
 
-    // Merge + sort by createdAt DESC + truncate to 20
+    // Merge all sources + sort by date DESC + truncate to 30
     let mut results: Vec<serde_json::Value> = Vec::new();
 
+    let truncate = |s: &str, max: usize| -> String {
+        if s.len() > max {
+            let mut e = max;
+            while !s.is_char_boundary(e) { e -= 1; }
+            format!("{}...", &s[..e])
+        } else {
+            s.to_string()
+        }
+    };
+
     for (id, conv_id, content, created_at) in &msg_rows {
-        let truncated = if content.len() > 200 { let mut e = 200; while !content.is_char_boundary(e) { e -= 1; } format!("{}...", &content[..e]) } else { content.clone() };
         results.push(json!({
             "source": "conversation",
             "id": id,
-            "content": truncated,
+            "content": truncate(content, 200),
             "context": format!("conversation:{}", conv_id),
             "createdAt": created_at.and_utc().to_rfc3339(),
         }));
     }
 
+    for (id, conv_id, title, content, updated_at) in &note_rows {
+        results.push(json!({
+            "source": "note",
+            "id": id,
+            "title": title,
+            "content": truncate(content, 300),
+            "context": format!("conversation:{}", conv_id),
+            "createdAt": updated_at.to_rfc3339(),
+        }));
+    }
+
+    for (id, title, description, column_name, updated_at) in &card_rows {
+        let desc = description.as_deref().unwrap_or("");
+        results.push(json!({
+            "source": "kanban",
+            "id": id,
+            "title": title,
+            "content": truncate(desc, 200),
+            "context": format!("column:{}", column_name),
+            "createdAt": updated_at.to_rfc3339(),
+        }));
+    }
+
     for (id, content, created_at) in &mem_rows {
-        let truncated = if content.len() > 200 { let mut e = 200; while !content.is_char_boundary(e) { e -= 1; } format!("{}...", &content[..e]) } else { content.clone() };
         results.push(json!({
             "source": "memory",
             "id": id,
-            "content": truncated,
+            "content": truncate(content, 200),
             "createdAt": created_at.to_rfc3339(),
         }));
     }
 
     for (id, content, capsule_name, created_at) in &cap_rows {
-        let truncated = if content.len() > 200 { let mut e = 200; while !content.is_char_boundary(e) { e -= 1; } format!("{}...", &content[..e]) } else { content.clone() };
         results.push(json!({
             "source": "capsule",
             "id": id,
-            "content": truncated,
+            "content": truncate(content, 200),
             "context": capsule_name,
             "createdAt": created_at.to_rfc3339(),
         }));
@@ -1010,7 +1075,19 @@ async fn arinova_search(
         let tb = b.get("createdAt").and_then(|v| v.as_str()).unwrap_or("");
         tb.cmp(ta)
     });
-    if results.len() > 20 { results.truncate(20); }
+    if results.len() > 30 { results.truncate(30); }
 
-    Json(json!({ "results": results })).into_response()
+    let summary = json!({
+        "total": results.len(),
+        "sources": {
+            "conversations": msg_rows.len(),
+            "notes": note_rows.len(),
+            "kanban": card_rows.len(),
+            "memories": mem_rows.len(),
+            "capsules": cap_rows.len(),
+        },
+        "results": results,
+    });
+
+    Json(summary).into_response()
 }

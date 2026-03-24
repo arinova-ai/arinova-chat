@@ -27,9 +27,10 @@ export function registerKanbanCommands(program: Command): void {
 
   // Card commands
   const card = kanban.command("card").description("Card management");
-  card.command("list").action(async () => {
+  card.command("list").option("--search <query>", "Search cards by title or description").action(async (opts: { search?: string }) => {
     const { token, apiUrl } = getOpts(card);
-    output(await apiCall({ method: "GET", url: `${apiUrl}/api/agent/kanban/cards`, token }));
+    const qs = opts.search ? `?search=${encodeURIComponent(opts.search)}` : "";
+    output(await apiCall({ method: "GET", url: `${apiUrl}/api/agent/kanban/cards${qs}`, token }));
   });
   card.command("create").requiredOption("--title <title>", "Card title").option("--board-id <id>", "Board ID").option("--column-name <name>", "Column name").option("--description <desc>", "Description").action(async (opts: { title: string; boardId?: string; columnName?: string; description?: string }) => {
     const { token, apiUrl } = getOpts(card);

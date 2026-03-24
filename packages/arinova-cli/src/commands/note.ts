@@ -6,9 +6,13 @@ export function registerNoteCommands(program: Command): void {
 
   note.command("list")
     .option("--notebook-id <id>", "Filter by notebook")
-    .action(async (opts: { notebookId?: string }) => {
+    .option("--search <query>", "Search notes by title or content")
+    .action(async (opts: { notebookId?: string; search?: string }) => {
       const { token, apiUrl } = getOpts(note);
-      const qs = opts.notebookId ? `?notebookId=${opts.notebookId}` : "";
+      const params = new URLSearchParams();
+      if (opts.notebookId) params.set("notebookId", opts.notebookId);
+      if (opts.search) params.set("search", opts.search);
+      const qs = params.toString() ? `?${params.toString()}` : "";
       output(await apiCall({ method: "GET", url: `${apiUrl}/api/agent/notes${qs}`, token }));
     });
 

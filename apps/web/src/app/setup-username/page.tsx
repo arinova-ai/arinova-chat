@@ -12,7 +12,7 @@ const USERNAME_REGEX = /^[a-z][a-z0-9_]*$/;
 const NO_CONSECUTIVE_UNDERSCORES = /_{2,}/;
 
 function validateFormat(value: string): string | null {
-  if (value.length < 3) return "Must be at least 3 characters";
+  if (value.length < 10) return "Must be at least 10 characters";
   if (value.length > 32) return "Must be at most 32 characters";
   if (!/^[a-z]/.test(value)) return "Must start with a letter";
   if (!USERNAME_REGEX.test(value))
@@ -116,7 +116,7 @@ export default function SetupUsernamePage() {
     }
   };
 
-  const isValid = !formatError && available === true && username.length >= 3;
+  const isValid = !formatError && available === true && username.length >= 10;
 
   // Show loading while checking auth
   if (isPending) {

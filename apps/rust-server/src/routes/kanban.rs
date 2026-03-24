@@ -2234,8 +2234,13 @@ async fn agent_reorder_columns(
     Json(json!({ "ok": true })).into_response()
 }
 
-/// GET /api/agent/kanban/cards — list owner's kanban cards
-async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Response {
+#[derive(Deserialize)]
+struct AgentListCardsQuery {
+    search: Option<String>,
+}
+
+/// GET /api/agent/kanban/cards — list owner's kanban cards (optional ?search= filter)
+async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent, Query(query): Query<AgentListCardsQuery>) -> Response {
     let owner_id = match agent_owner_id(&state.db, agent.id).await {
         Ok(id) => id,
         Err(e) => return e,
@@ -2261,7 +2266,15 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
         label_color: Option<String>,
     }
 
-    let rows = sqlx::query_as::<_, CardWithLabelRow>(
+    let search_cond = if let Some(ref s) = query.search {
+        let s = s.trim();
+        if !s.is_empty() {
+            let escaped = s.replace('%', "\\%").replace('_', "\\_").replace('\'', "''");
+            format!(" AND (c.title ILIKE '%{}%' OR c.description ILIKE '%{}%')", escaped, escaped)
+        } else { String::new() }
+    } else { String::new() };
+
+    let sql = format!(
         r#"SELECT c.id, c.column_id, col.name AS column_name, c.title, c.description, c.priority,
                   c.due_date, c.sort_order, c.created_by, c.created_at, c.updated_at,
                   l.id AS label_id, l.name AS label_name, l.color AS label_color
@@ -2272,8 +2285,12 @@ async fn agent_list_cards(State(state): State<AppState>, agent: AuthAgent) -> Re
            LEFT JOIN kanban_labels l ON l.id = cl.label_id
            WHERE b.owner_id = $1 AND c.archived = FALSE
              AND EXISTS (SELECT 1 FROM board_agent_permissions WHERE board_id = b.id AND agent_id = $2)
+             {}
            ORDER BY c.updated_at DESC NULLS LAST, c.id"#,
-    )
+        search_cond
+    );
+
+    let rows = sqlx::query_as::<_, CardWithLabelRow>(&sql)
     .bind(&owner_id)
     .bind(agent.id)
     .fetch_all(&state.db)

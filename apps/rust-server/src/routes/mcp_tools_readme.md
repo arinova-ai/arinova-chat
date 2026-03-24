@@ -431,7 +431,11 @@ curl -s "$BASE_URL/api/agent/notebooks/<NOTEBOOK_ID>/notes" -H "Authorization: B
 ### Notes
 
 ```bash
-# List notes
+# List notes (with optional search)
+curl -s "$BASE_URL/api/agent/notes" -H "Authorization: Bearer <TOKEN>"
+curl -s "$BASE_URL/api/agent/notes?search=keyword" -H "Authorization: Bearer <TOKEN>"
+
+# List notes (conversation-scoped, legacy)
 curl -s "$BASE_URL/api/agent/conversations/<CONV_ID>/notes" -H "Authorization: Bearer <TOKEN>"
 
 # Create note
@@ -462,8 +466,9 @@ curl -s -X POST "$BASE_URL/api/agent/kanban/boards" \
 curl -s -X POST "$BASE_URL/api/agent/kanban/boards/<BOARD_ID>/archive" \
   -H "Authorization: Bearer <TOKEN>"
 
-# Cards
+# Cards (with optional search)
 curl -s "$BASE_URL/api/agent/kanban/cards" -H "Authorization: Bearer <TOKEN>"
+curl -s "$BASE_URL/api/agent/kanban/cards?search=keyword" -H "Authorization: Bearer <TOKEN>"
 curl -s -X POST "$BASE_URL/api/agent/kanban/cards" \
   -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN>" \
   -d '{ "title": "Task", "columnName": "To Do", "priority": "medium" }'

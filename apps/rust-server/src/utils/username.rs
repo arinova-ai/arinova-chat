@@ -1,11 +1,11 @@
 /// Validate username format:
-/// - 3-32 characters
+/// - 10-32 characters (1-9 char usernames reserved for future sale)
 /// - lowercase a-z, 0-9, underscore only
 /// - must start with a letter
 /// - no consecutive underscores
 pub fn validate_username(username: &str) -> Result<(), &'static str> {
-    if username.len() < 3 {
-        return Err("Username must be at least 3 characters");
+    if username.len() < 10 {
+        return Err("Username must be at least 10 characters");
     }
     if username.len() > 32 {
         return Err("Username must be at most 32 characters");
@@ -29,14 +29,15 @@ mod tests {
     #[test]
     fn test_valid_usernames() {
         assert!(validate_username("ripple_42").is_ok());
-        assert!(validate_username("abc").is_ok());
-        assert!(validate_username("a_b_c").is_ok());
+        assert!(validate_username("abcdefghij").is_ok());
+        assert!(validate_username("a_b_c_d_ef").is_ok());
         assert!(validate_username("longusername12345678901234567890").is_ok()); // 32 chars
     }
 
     #[test]
     fn test_too_short() {
-        assert_eq!(validate_username("ab").unwrap_err(), "Username must be at least 3 characters");
+        assert_eq!(validate_username("ab").unwrap_err(), "Username must be at least 10 characters");
+        assert_eq!(validate_username("abcdefghi").unwrap_err(), "Username must be at least 10 characters");
     }
 
     #[test]
