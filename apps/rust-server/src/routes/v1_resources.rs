@@ -89,7 +89,7 @@ async fn v1_send_message(
     let owner_id = caller.owner_id().to_string();
 
     // Determine sender identity
-    let (sender_agent_id, sender_role, agent_name) = if let Some(aid) = caller.agent_id() {
+    let (sender_agent_id, _sender_role, agent_name) = if let Some(aid) = caller.agent_id() {
         // Look up agent name for WS events
         let name: String = sqlx::query_scalar::<_, String>(
             "SELECT name FROM agents WHERE id = $1",
@@ -176,8 +176,8 @@ async fn v1_send_message(
 
     let msg_id = Uuid::new_v4().to_string();
 
-    if let Some(ref aid) = sender_agent_id {
-        let _ = sqlx::query(
+    let insert_result = if let Some(ref aid) = sender_agent_id {
+        sqlx::query(
             r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, created_at, updated_at)
                VALUES ($1::uuid, $2::uuid, $3, 'agent', $4, 'completed', $5::uuid, NOW(), NOW())"#,
         )
@@ -187,20 +187,28 @@ async fn v1_send_message(
         .bind(content)
         .bind(aid)
         .execute(&state.db)
-        .await;
+        .await
     } else {
-        let _ = sqlx::query(
+        sqlx::query(
             r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, created_at, updated_at)
-               VALUES ($1::uuid, $2::uuid, $3, $4, $5, 'completed', $6, NOW(), NOW())"#,
+               VALUES ($1::uuid, $2::uuid, $3, 'user', $4, 'completed', $5, NOW(), NOW())"#,
         )
         .bind(&msg_id)
         .bind(conversation_id)
         .bind(seq)
-        .bind(sender_role)
         .bind(content)
         .bind(&owner_id)
         .execute(&state.db)
-        .await;
+        .await
+    };
+
+    if let Err(e) = insert_result {
+        tracing::error!("v1_send_message: failed to insert message: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Failed to save message"})),
+        )
+            .into_response();
     }
 
     // Spawn link preview extraction in background
