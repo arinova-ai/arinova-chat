@@ -2247,7 +2247,7 @@ pub(crate) async fn do_trigger_agent_response(
                                     "stream_end reason=empty_content (deleted placeholder) conv={} agent={} msgId={}",
                                     conversation_id, agent_id, agent_msg_id_clone
                                 );
-                            } else if full_content.trim().starts_with("{") && full_content.contains("\"limit5h\"") && full_content.contains("\"model\"") {
+                            } else if full_content.contains("\"hud-for-usage\"") {
                                 // HUD JSON response — delete the placeholder message instead of persisting
                                 let _ = sqlx::query("DELETE FROM messages WHERE id = $1::uuid")
                                     .bind(&agent_msg_id_clone)
