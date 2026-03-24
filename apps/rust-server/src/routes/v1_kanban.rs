@@ -1104,7 +1104,38 @@ async fn create_card(
 ) -> Response {
     let owner_id = owner_id_str(&caller);
 
-    let board_id = if let Some(bid) = body.board_id {
+    // If columnId is provided without boardId, resolve board from the column
+    let board_id = if body.board_id.is_none() && body.column_id.is_some() {
+        let col_id = body.column_id.unwrap();
+        match sqlx::query_scalar::<_, Uuid>(
+            "SELECT board_id FROM kanban_columns WHERE id = $1",
+        )
+        .bind(col_id)
+        .fetch_optional(&state.db)
+        .await
+        {
+            Ok(Some(bid)) => {
+                if let Err(e) = verify_board_owner(&state.db, bid, &owner_id).await {
+                    return e;
+                }
+                if let Some(agent_id) = caller.agent_id() {
+                    let has_perm = sqlx::query_scalar::<_, bool>(
+                        "SELECT EXISTS(SELECT 1 FROM board_agent_permissions WHERE board_id = $1 AND agent_id = $2)",
+                    )
+                    .bind(bid)
+                    .bind(agent_id)
+                    .fetch_one(&state.db)
+                    .await
+                    .unwrap_or(false);
+                    if !has_perm {
+                        return (StatusCode::FORBIDDEN, Json(json!({"error": "Agent does not have permission for this board"}))).into_response();
+                    }
+                }
+                bid
+            }
+            _ => return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid columnId"}))).into_response(),
+        }
+    } else if let Some(bid) = body.board_id {
         if let Err(e) = verify_board_owner(&state.db, bid, &owner_id).await {
             return e;
         }
