@@ -1135,11 +1135,13 @@ export function CommunitySettingsSheet({
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <code className="text-sm font-mono">{invite.code}</code>
+                              <code className="text-xs font-mono truncate" title={`${typeof window !== "undefined" ? window.location.origin : "https://chat.arinova.ai"}/join/${invite.code}`}>
+                                {typeof window !== "undefined" ? window.location.origin : "https://chat.arinova.ai"}/join/{invite.code}
+                              </code>
                               <button
                                 type="button"
                                 onClick={() => handleCopyCode(invite.code)}
-                                className="text-muted-foreground hover:text-foreground"
+                                className="text-muted-foreground hover:text-foreground shrink-0"
                               >
                                 {copiedCode === invite.code ? (
                                   <Check className="h-3.5 w-3.5 text-green-500" />
