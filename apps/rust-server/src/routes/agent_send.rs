@@ -277,7 +277,6 @@ async fn agent_send(
                     &state.db,
                     &state.redis,
                     &state.config,
-                    false,
                 )
                 .await;
             }

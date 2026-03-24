@@ -4,15 +4,6 @@ import type { WSServerEvent } from "@arinova/shared/types";
 import { api } from "@/lib/api";
 import { wsManager } from "@/lib/ws";
 
-/** Filter out /hud commands and HUD JSON responses from message lists */
-function filterHudMessages(messages: Message[]): Message[] {
-  return messages.filter((m) => {
-    const c = m.content.trim();
-    if (c.startsWith("/hud-for-usage")) return false;
-    if (c.includes('"hud-for-usage"')) return false;
-    return true;
-  });
-}
 import { diagCount, diagEvent } from "@/lib/chat-diagnostics";
 import { isGroupLike } from "@/lib/utils";
 import { useNotificationStore } from "@/store/notification-store";
@@ -655,7 +646,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       unreadCounts: { ...get().unreadCounts, [conversationId]: 0 },
       messagesByConversation: {
         ...get().messagesByConversation,
-        [conversationId]: filterHudMessages(data.messages),
+        [conversationId]: data.messages,
       },
     });
 
@@ -715,17 +706,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
           dividerMsgId = data.messages[idx].id;
         }
       }
-      const filtered = filterHudMessages(data.messages);
       set({
         messagesByConversation: {
           ...get().messagesByConversation,
-          [conversationId]: filtered,
+          [conversationId]: data.messages,
         },
         ...(dividerMsgId !== null && { unreadDividerMessageId: dividerMsgId }),
       });
 
       // Persist fresh messages to IDB cache
-      setCachedMessages(conversationId, filtered).catch(() => {});
+      setCachedMessages(conversationId, data.messages).catch(() => {});
 
       // Populate read receipts from API response (ensures checkmarks survive refresh)
       if (data.readReceipts && typeof data.readReceipts === "object") {
@@ -810,14 +800,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ...get().messagesByConversation,
         [activeConversationId]: [...current, userMsg],
       },
-      // Update sidebar lastMessage preview (skip HUD commands)
-      conversations: content.trim().startsWith("/hud-for-usage")
-        ? get().conversations
-        : get().conversations.map((c) =>
-            c.id === activeConversationId
-              ? { ...c, lastMessage: userMsg, updatedAt: new Date() }
-              : c
-          ),
+      conversations: get().conversations.map((c) =>
+        c.id === activeConversationId
+          ? { ...c, lastMessage: userMsg, updatedAt: new Date() }
+          : c
+      ),
       replyingTo: null,
     });
 
@@ -1704,8 +1691,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     if (event.type === "new_message") {
       const { conversationId, message: msg } = event;
-      // Skip /hud command messages from appearing in UI
-      if (msg.content?.trim().startsWith("/hud-for-usage")) return;
       const threadId = (event as { threadId?: string }).threadId ?? msg.threadId;
       const { activeConversationId, unreadCounts } = get();
 
@@ -2263,39 +2248,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const finalContent = event.content?.replace(/\r\n?/g, "\n");
       const threadId = event.threadId;
 
-      // Parse HUD data from agent response + auto-refresh if enabled
-      if (finalContent) {
-        try {
-          import("@/store/hud-store").then(({ parseHudData, useHudStore }) => {
-            const hudData = parseHudData(finalContent);
-            if (hudData) {
-              useHudStore.getState().setData(conversationId, hudData);
-              // If content is pure HUD JSON (no other text), suppress from chat UI
-              const stripped = finalContent.trim();
-              if (stripped.includes('"hud-for-usage"')) {
-                // Remove the HUD-only message from the messages list
-                const msgs = get().messagesByConversation[conversationId];
-                if (msgs) {
-                  set({
-                    messagesByConversation: {
-                      ...get().messagesByConversation,
-                      [conversationId]: msgs.filter((m) => m.id !== messageId),
-                    },
-                  });
-                }
-              }
-            } else if (useHudStore.getState().enabled && useHudStore.getState().canAutoRefresh()) {
-              // HUD enabled but no data — silently refresh via WS (no UI message)
-              useHudStore.getState().markAutoRefresh();
-              const hudCmd = `/hud-for-usage ${conversationId}`;
-              setTimeout(() => {
-                wsManager.send({ type: "send_message", conversationId, content: hudCmd });
-              }, 500);
-            }
-          });
-        } catch { /* ignore */ }
-      }
-
       // Check if still in thinkingAgents (no chunks ever arrived)
       const thinking = get().thinkingAgents[conversationId] ?? [];
       const stillThinking = thinking.find((t) => t.messageId === messageId);
@@ -2758,12 +2710,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    // HUD data from ephemeral /hud-for-usage response
-    if ((event as Record<string, unknown>).type === "hud_data") {
-      const { conversationId, content } = event as unknown as { conversationId: string; content: string };
+    // HUD data from agent via custom WS event
+    if ((event as Record<string, unknown>).type === "hud_update") {
+      const { conversationId, data } = event as unknown as { conversationId: string; data: Record<string, unknown> };
       try {
         import("@/store/hud-store").then(({ parseHudData, useHudStore }) => {
-          const hudData = parseHudData(content);
+          const hudData = parseHudData(data);
           if (hudData) {
             useHudStore.getState().setData(conversationId, hudData);
           }

@@ -387,7 +387,6 @@ async fn v1_send_message(
                         &state.db,
                         &state.redis,
                         &state.config,
-                        false,
                     )
                     .await;
                 }

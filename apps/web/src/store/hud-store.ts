@@ -35,18 +35,27 @@ export const useHudStore = create<HudStore>((set, get) => ({
   clear: () => set({ data: null, conversationId: null }),
 }));
 
-/** Parse HUD data from agent message content.
- *  Supports:
- *  1. JSON format: {"context":{"percent":5},"limit5h":{"percent":32},"limit7d":{"percent":19},"model":"Opus 4.6","cost":1.38}
- *  2. [HUD]...[/HUD] wrapper around JSON or text
- *  3. Inline text: "Context: X% | 5H: Y% | 7D: Z%"
+/** Parse HUD data from WS event data payload or legacy message content string.
+ *  Accepts either:
+ *  - A structured object: { "hud-for-usage": { context: { percent: 5 }, ... } }
+ *  - A string containing JSON (legacy fallback)
  */
-export function parseHudData(content: string): HudData | null {
+export function parseHudData(input: Record<string, unknown> | string): HudData | null {
   try {
-    const jsonStr = content.match(/\{[\s\S]*\}/)?.[0];
-    if (!jsonStr) return null;
-    const raw = JSON.parse(jsonStr) as Record<string, unknown>;
-    const j = raw["hud-for-usage"] as Record<string, unknown> | undefined;
+    let j: Record<string, unknown> | undefined;
+
+    if (typeof input === "string") {
+      // Legacy: parse JSON from string content
+      const jsonStr = input.match(/\{[\s\S]*\}/)?.[0];
+      if (!jsonStr) return null;
+      const raw = JSON.parse(jsonStr) as Record<string, unknown>;
+      j = raw["hud-for-usage"] as Record<string, unknown> | undefined;
+    } else {
+      // Structured WS event data
+      j = input["hud-for-usage"] as Record<string, unknown> | undefined;
+      if (!j) j = input as Record<string, unknown>;
+    }
+
     if (!j) return null;
     const ctx = j.context as { percent?: number } | undefined;
     const h5 = j.limit5h as { percent?: number } | undefined;
@@ -61,5 +70,4 @@ export function parseHudData(content: string): HudData | null {
   } catch {
     return null;
   }
-  return null;
 }

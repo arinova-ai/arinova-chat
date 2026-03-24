@@ -537,11 +537,58 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                                 &db,
                                 &redis,
                                 &config_clone,
-                                false,
                             )
                             .await;
                         }
                     }
+                }
+                "hud_update" => {
+                    let conversation_id = event.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
+                    let data = event.get("data").cloned().unwrap_or(json!({}));
+
+                    if conversation_id.is_empty() {
+                        tracing::warn!("hud_update: empty conversationId from agent {}", agent_id_clone);
+                        continue;
+                    }
+
+                    // Verify agent is a member of this conversation
+                    let membership = sqlx::query_as::<_, (String,)>(
+                        r#"SELECT c.user_id
+                           FROM conversations c
+                           WHERE c.id = $1::uuid
+                             AND (
+                               c.agent_id = $2::uuid
+                               OR EXISTS (
+                                 SELECT 1 FROM conversation_members cm
+                                 WHERE cm.conversation_id = c.id AND cm.agent_id = $2::uuid
+                               )
+                             )"#,
+                    )
+                    .bind(conversation_id)
+                    .bind(&agent_id_clone)
+                    .fetch_optional(&db)
+                    .await;
+
+                    let user_id = match membership {
+                        Ok(Some((uid,))) => uid,
+                        Ok(None) => {
+                            tracing::warn!("hud_update: agent {} is not a member of conversation {}", agent_id_clone, conversation_id);
+                            continue;
+                        }
+                        Err(e) => {
+                            tracing::error!("hud_update: DB error checking membership: {}", e);
+                            continue;
+                        }
+                    };
+
+                    tracing::info!("hud_update: agentId={} conversationId={}", agent_id_clone, conversation_id);
+
+                    // Forward HUD data to conversation owner — no DB persistence
+                    ws_state.send_to_user_or_queue(&user_id, &json!({
+                        "type": "hud_update",
+                        "conversationId": conversation_id,
+                        "data": data
+                    }), &redis);
                 }
                 "agent_telemetry" => {
                     let telemetry_event = event.get("event").and_then(|v| v.as_str()).unwrap_or("");
