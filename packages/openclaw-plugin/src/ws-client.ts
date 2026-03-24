@@ -117,6 +117,39 @@ export function createWSClient(opts: AgentWSClientOptions): AgentWSClient {
           return;
         }
 
+        if (data.type === "hud_request") {
+          // Handle HUD request — fire as a special task, response sent as hud_update WS event
+          const { conversationId } = data;
+          const hudTaskId = `hud_${Date.now()}`;
+          const hudContent = `/hud-for-usage ${conversationId}`;
+          const sendHudComplete = (finalContent: string) => {
+            // Try to parse JSON from agent response, forward as hud_update
+            try {
+              const parsed = JSON.parse(finalContent.trim().match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+              send({ type: "hud_update", conversationId, data: parsed });
+            } catch {
+              send({ type: "hud_update", conversationId, data: finalContent });
+            }
+          };
+          Promise.resolve(
+            onTask({
+              taskId: hudTaskId,
+              conversationId,
+              conversationType: "agent",
+              content: hudContent,
+              members: [],
+              replyTo: undefined,
+              history: [],
+              attachments: [],
+              sendChunk: () => {},  // no streaming for HUD
+              sendComplete: sendHudComplete,
+              sendError: () => {},
+              signal: new AbortController().signal,
+            })
+          ).catch(() => {});
+          return;
+        }
+
         if (data.type === "task") {
           const { taskId, conversationId, conversationType, content, members, replyTo, history, attachments } = data;
           const taskAbortController = new AbortController();
