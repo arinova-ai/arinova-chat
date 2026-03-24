@@ -417,6 +417,11 @@ async fn handle_message(
                 return;
             }
 
+            // Drop legacy /hud-for-usage messages — HUD now uses WS custom events
+            if content.trim().starts_with("/hud-for-usage") {
+                return;
+            }
+
             // Block check (1-on-1 only): reject if the other party has blocked sender
             let conv_type = sqlx::query_scalar::<_, String>(
                 "SELECT type::text FROM conversations WHERE id = $1::uuid",
