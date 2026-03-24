@@ -342,6 +342,7 @@ async fn browse(
            LEFT JOIN officials o ON o.community_id = c.id
            LEFT JOIN community_members cm ON cm.community_id = c.id AND cm.user_id = $6
            WHERE c.status = 'active'
+             AND c.is_private = false
              AND ($1::text IS NULL OR c.type = $1)
              AND ($2::text IS NULL OR c.category = $2)
              AND ($3::text IS NULL OR c.name ILIKE '%' || $3 || '%' OR c.description ILIKE '%' || $3 || '%')
@@ -360,6 +361,7 @@ async fn browse(
     let total = sqlx::query_scalar::<_, i64>(
         r#"SELECT COUNT(*) FROM communities
            WHERE status = 'active'
+             AND is_private = false
              AND ($1::text IS NULL OR type = $1)
              AND ($2::text IS NULL OR category = $2)
              AND ($3::text IS NULL OR name ILIKE '%' || $3 || '%' OR description ILIKE '%' || $3 || '%')"#,
