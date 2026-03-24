@@ -194,6 +194,97 @@ describe.skipIf(!HAS_TOKEN)("kanban commands", () => {
     const result = runSafe("kanban card list --search __nonexistent__");
     expect(result.status === 0 || result.status === null).toBe(true);
   });
+
+  it("board update: create board, rename it, verify, archive", () => {
+    const boardOut = run('kanban board create --name "__cli_test_board_update__"');
+    const board = JSON.parse(boardOut);
+    expect(board).toHaveProperty("id");
+    const boardId = board.id;
+
+    try {
+      const updateOut = run(
+        `kanban board update --board-id ${boardId} --name "__cli_test_board_renamed__"`,
+      );
+      const updated = JSON.parse(updateOut);
+      expect(updated).toBeDefined();
+    } finally {
+      runSafe(`kanban board archive --board-id ${boardId}`);
+    }
+  });
+
+  it("board archive: create board then archive it", () => {
+    const boardOut = run('kanban board create --name "__cli_test_board_archive__"');
+    const board = JSON.parse(boardOut);
+    expect(board).toHaveProperty("id");
+
+    const archiveOut = run(`kanban board archive --board-id ${board.id}`);
+    expect(archiveOut).toBeDefined();
+  });
+
+  it("card delete: create board + card, delete card, archive board", () => {
+    const boardOut = run('kanban board create --name "__cli_test_card_delete__"');
+    const board = JSON.parse(boardOut);
+    const boardId = board.id;
+
+    try {
+      const cardOut = run(
+        `kanban card create --title "__cli_test_card_del__" --board-id ${boardId}`,
+      );
+      const card = JSON.parse(cardOut);
+      expect(card).toHaveProperty("id");
+
+      const deleteOut = run(`kanban card delete --card-id ${card.id}`);
+      expect(deleteOut).toBeDefined();
+    } finally {
+      runSafe(`kanban board archive --board-id ${boardId}`);
+    }
+  });
+
+  it("card add-commit: create board + card, add commit, verify", () => {
+    const boardOut = run('kanban board create --name "__cli_test_card_commit__"');
+    const board = JSON.parse(boardOut);
+    const boardId = board.id;
+
+    try {
+      const cardOut = run(
+        `kanban card create --title "__cli_test_card_commit__" --board-id ${boardId}`,
+      );
+      const card = JSON.parse(cardOut);
+      expect(card).toHaveProperty("id");
+
+      const commitOut = run(
+        `kanban card add-commit --card-id ${card.id} --sha abc1234 --message "test commit"`,
+      );
+      const commitResult = JSON.parse(commitOut);
+      expect(commitResult).toBeDefined();
+    } finally {
+      runSafe(`kanban board archive --board-id ${boardId}`);
+    }
+  });
+});
+
+describe.skipIf(!HAS_TOKEN)("kanban label commands", () => {
+  it("label CRUD: create board, create label, list labels, verify, archive board", () => {
+    const boardOut = run('kanban board create --name "__cli_test_label__"');
+    const board = JSON.parse(boardOut);
+    const boardId = board.id;
+
+    try {
+      const labelOut = run(
+        `kanban label create --board-id ${boardId} --name "__cli_test_label__" --color "#ff0000"`,
+      );
+      const label = JSON.parse(labelOut);
+      expect(label).toBeDefined();
+
+      const listOut = run(`kanban label list --board-id ${boardId}`);
+      const labels = JSON.parse(listOut);
+      expect(Array.isArray(labels)).toBe(true);
+      const found = labels.some((l: any) => l.name === "__cli_test_label__");
+      expect(found).toBe(true);
+    } finally {
+      runSafe(`kanban board archive --board-id ${boardId}`);
+    }
+  });
 });
 
 describe.skipIf(!HAS_TOKEN)("memory commands", () => {
@@ -211,5 +302,24 @@ describe.skipIf(!HAS_TOKEN)("message commands", () => {
     );
     // We just verify it ran (exit 0 or non-zero) — it should not hang or segfault
     expect(typeof result.status).toBe("number");
+  });
+
+  it("message send with a dummy conversation-id does not crash", () => {
+    const result = runSafe(
+      'message send --conversation-id 00000000-0000-0000-0000-000000000000 --content "__cli_test_msg__"',
+    );
+    // Will likely fail with 4xx but should not crash or hang
+    expect(typeof result.status).toBe("number");
+  });
+});
+
+describe.skipIf(!HAS_TOKEN)("file commands", () => {
+  it("file upload with a dummy conversation-id and missing file does not crash", () => {
+    const result = runSafe(
+      "file upload --conversation-id 00000000-0000-0000-0000-000000000000 --file-path /tmp/__cli_test_nonexistent_file__",
+    );
+    // Will fail (file doesn't exist) but should not hang or segfault
+    expect(typeof result.status).toBe("number");
+    expect(result.status).not.toBe(0);
   });
 });

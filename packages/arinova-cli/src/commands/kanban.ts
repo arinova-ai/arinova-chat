@@ -44,13 +44,13 @@ export function registerKanbanCommands(program: Command): void {
     const { token, apiUrl } = getOpts(card);
     output(await apiCall({ method: "POST", url: `${apiUrl}/api/v1/kanban/cards/${opts.cardId}/complete`, token }));
   });
-  card.command("archive").requiredOption("--card-id <id>", "Card ID").action(async (opts: { cardId: string }) => {
+  card.command("delete").requiredOption("--card-id <id>", "Card ID").action(async (opts: { cardId: string }) => {
     const { token, apiUrl } = getOpts(card);
-    output(await apiCall({ method: "POST", url: `${apiUrl}/api/v1/kanban/cards/${opts.cardId}/archive`, token }));
+    output(await apiCall({ method: "DELETE", url: `${apiUrl}/api/v1/kanban/cards/${opts.cardId}`, token }));
   });
   card.command("add-commit").requiredOption("--card-id <id>", "Card ID").requiredOption("--sha <sha>", "Commit SHA").requiredOption("--message <msg>", "Commit message").option("--url <url>", "Commit URL").action(async (opts: { cardId: string; sha: string; message: string; url?: string }) => {
     const { token, apiUrl } = getOpts(card);
-    output(await apiCall({ method: "POST", url: `${apiUrl}/api/v1/kanban/cards/${opts.cardId}/commits`, token, body: { sha: opts.sha, message: opts.message, url: opts.url } }));
+    output(await apiCall({ method: "POST", url: `${apiUrl}/api/v1/kanban/cards/${opts.cardId}/commits`, token, body: { commitHash: opts.sha, message: opts.message, url: opts.url } }));
   });
 
   // Label commands
