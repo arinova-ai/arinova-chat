@@ -3,7 +3,9 @@ import { create } from "zustand";
 export interface HudData {
   context?: string;
   fiveHour?: string;
+  fiveHourReset?: string;
   sevenDay?: string;
+  sevenDayReset?: string;
   model?: string;
   cost?: string;
   raw?: string;
@@ -49,14 +51,15 @@ export function parseHudData(content: string): HudData | null {
     const j = raw["hud-for-usage"] as Record<string, unknown> | undefined;
     if (!j) return null;
     const ctx = j.context as { percent?: number } | undefined;
-    const h5 = j.limit5h as { percent?: number } | undefined;
-    const d7 = j.limit7d as { percent?: number } | undefined;
+    const h5 = j.limit5h as { percent?: number; resetIn?: string } | undefined;
+    const d7 = j.limit7d as { percent?: number; resetIn?: string } | undefined;
     return {
       context: ctx?.percent != null ? `${ctx.percent}%` : undefined,
       fiveHour: h5?.percent != null ? `${h5.percent}%` : undefined,
+      fiveHourReset: h5?.resetIn ?? undefined,
       sevenDay: d7?.percent != null ? `${d7.percent}%` : undefined,
+      sevenDayReset: d7?.resetIn ?? undefined,
       model: j.model as string | undefined,
-      cost: j.cost != null ? `$${j.cost}` : undefined,
     };
   } catch {
     return null;

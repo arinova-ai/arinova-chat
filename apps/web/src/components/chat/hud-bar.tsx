@@ -15,8 +15,8 @@ export function HudBar() {
   return (
     <div className="shrink-0 flex items-center justify-center gap-3 px-3 py-0.5 text-[10px] text-muted-foreground/60 font-mono select-none">
       {data.context && <span>Context: {data.context}</span>}
-      {data.fiveHour && <span>5H: {data.fiveHour}</span>}
-      {data.sevenDay && <span>7D: {data.sevenDay}</span>}
+      {data.fiveHour && <span>5H: {data.fiveHour}{data.fiveHourReset ? ` (${data.fiveHourReset})` : ""}</span>}
+      {data.sevenDay && <span>7D: {data.sevenDay}{data.sevenDayReset ? ` (${data.sevenDayReset})` : ""}</span>}
       {data.model && <span>{data.model}</span>}
     </div>
   );
