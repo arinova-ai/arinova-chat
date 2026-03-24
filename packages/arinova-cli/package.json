@@ -1,7 +1,7 @@
 {
   "name": "@arinova-ai/cli",
-  "version": "0.0.4",
-  "description": "Arinova Chat CLI — manage messages, notes, kanban, memory, and more",
+  "version": "0.1.0",
+  "description": "Arinova CLI — manage messages, notes, kanban, memory, creator tools, and more",
   "type": "module",
   "bin": {
     "arinova": "dist/index.js"

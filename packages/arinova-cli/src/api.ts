@@ -1,11 +1,22 @@
 import type { Command } from "commander";
+import { getApiKey } from "./config.js";
 
 export function getOpts(cmd: Command): { token: string; apiUrl: string } {
   const opts = cmd.optsWithGlobals();
-  return {
-    token: opts.token as string,
-    apiUrl: (opts.apiUrl as string) ?? "https://api.chat.arinova.ai",
-  };
+
+  // Priority: --token flag > config file apiKey > error
+  let token = opts.token as string | undefined;
+  if (!token) {
+    token = getApiKey();
+  }
+  if (!token) {
+    console.error("Error: No token provided. Use --token flag or run: arinova auth set-key <key>");
+    process.exit(1);
+  }
+
+  const apiUrl = (opts.apiUrl as string) ?? "https://api.chat.arinova.ai";
+
+  return { token, apiUrl };
 }
 
 export async function apiCall(opts: {
