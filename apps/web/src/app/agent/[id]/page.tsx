@@ -219,7 +219,7 @@ function AgentProfileContent() {
   useEffect(() => {
     if (!agent || !session?.user?.id || session.user.id !== agent.ownerId) return;
     let cancelled = false;
-    api<{ memories: AgentMemory[] }>(`/api/agent/memories?agent_id=${agentId}`, { silent: true })
+    api<{ memories: AgentMemory[] }>(`/api/v1/memories?agent_id=${agentId}`, { silent: true })
       .then((res) => {
         if (!cancelled) {
           setMemories(res.memories);
@@ -236,7 +236,7 @@ function AgentProfileContent() {
     if (!showMemories || memoriesLoaded) return;
     if (!agent || !session?.user?.id || session.user.id !== agent.ownerId) return;
     let cancelled = false;
-    api<{ memories: AgentMemory[] }>(`/api/agent/memories?agent_id=${agentId}`, { silent: true })
+    api<{ memories: AgentMemory[] }>(`/api/v1/memories?agent_id=${agentId}`, { silent: true })
       .then((res) => {
         if (!cancelled) {
           setMemories(res.memories);
@@ -267,7 +267,7 @@ function AgentProfileContent() {
   const handleAddMemory = useCallback(async () => {
     if (!newSummary.trim()) return;
     try {
-      const m = await api<AgentMemory>("/api/agent/memories", {
+      const m = await api<AgentMemory>("/api/v1/memories", {
         method: "POST",
         body: JSON.stringify({
           agent_id: agentId,
@@ -286,7 +286,7 @@ function AgentProfileContent() {
 
   const handleDeleteMemory = useCallback(async (memoryId: string) => {
     try {
-      await api(`/api/agent/memories/${memoryId}`, { method: "DELETE" });
+      await api(`/api/v1/memories/${memoryId}`, { method: "DELETE" });
       setMemories((prev) => prev.filter((m) => m.id !== memoryId));
       setMemoryCount((c) => Math.max(0, (c ?? 1) - 1));
     } catch { /* toast handled by api() */ }
@@ -304,7 +304,7 @@ function AgentProfileContent() {
     setExtracting(true);
     setExtractResult(null);
     try {
-      const res = await api<{ extracted: number }>("/api/agent/memories/extract", {
+      const res = await api<{ extracted: number }>("/api/v1/memories/extract", {
         method: "POST",
         body: JSON.stringify({
           agent_id: agentId,
