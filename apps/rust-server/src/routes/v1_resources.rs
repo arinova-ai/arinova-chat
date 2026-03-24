@@ -2149,7 +2149,7 @@ async fn v1_list_conversations(
         let agent_id = caller.agent_id().map(|id| id.to_string()).unwrap_or_default();
         sqlx::query_as::<_, (String, String, Option<String>, Option<NaiveDateTime>)>(
             r#"SELECT c.id::text, c.type::text,
-                      COALESCE(a.name, u.name) as display_name,
+                      COALESCE(c.title, a.name, u.name) as display_name,
                       c.updated_at
                FROM conversations c
                LEFT JOIN "user" u ON u.id = c.user_id
@@ -2158,7 +2158,8 @@ async fn v1_list_conversations(
                       OR EXISTS (SELECT 1 FROM conversation_members cm WHERE cm.conversation_id = c.id AND cm.agent_id = $1::uuid))
                  AND ($2::text IS NULL OR c.type::text = $2)
                  AND ($3::text IS NULL OR (
-                      COALESCE(a.name, '') ILIKE '%' || $3 || '%'
+                      COALESCE(c.title, '') ILIKE '%' || $3 || '%'
+                      OR COALESCE(a.name, '') ILIKE '%' || $3 || '%'
                       OR COALESCE(u.name, '') ILIKE '%' || $3 || '%'
                  ))
                ORDER BY c.updated_at DESC NULLS LAST
@@ -2174,14 +2175,15 @@ async fn v1_list_conversations(
     } else {
         sqlx::query_as::<_, (String, String, Option<String>, Option<NaiveDateTime>)>(
             r#"SELECT c.id::text, c.type::text,
-                      a.name as display_name,
+                      COALESCE(c.title, a.name) as display_name,
                       c.updated_at
                FROM conversations c
                LEFT JOIN agents a ON a.id = c.agent_id
                WHERE c.user_id = $1
                  AND ($2::text IS NULL OR c.type::text = $2)
                  AND ($3::text IS NULL OR (
-                      COALESCE(a.name, '') ILIKE '%' || $3 || '%'
+                      COALESCE(c.title, '') ILIKE '%' || $3 || '%'
+                      OR COALESCE(a.name, '') ILIKE '%' || $3 || '%'
                  ))
                ORDER BY c.updated_at DESC NULLS LAST
                LIMIT $4"#,
