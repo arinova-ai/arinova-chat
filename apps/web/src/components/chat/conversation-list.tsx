@@ -1,16 +1,27 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
-import { MessageCirclePlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { MessageCirclePlus, ChevronLeft, ChevronRight, EyeOff, RotateCcw } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useAccountStore } from "@/store/account-store";
 import { ConversationItem } from "./conversation-item";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
-type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "communities" | "lounges";
-const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "communities", "lounges"];
+type Tab = "all" | "agents" | "friends" | "groups" | "officials" | "communities" | "lounges" | "hidden";
+const TABS: Tab[] = ["all", "agents", "friends", "groups", "officials", "communities", "lounges", "hidden"];
+
+interface HiddenConversation {
+  id: string;
+  title: string | null;
+  type: string;
+  agentName: string | null;
+  agentAvatarUrl: string | null;
+  communityAvatarUrl: string | null;
+  hiddenAt: string;
+}
 
 const PINNED_ORDER_KEY = "arinova-chat-pinned-order";
 
@@ -61,6 +72,26 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
 
   const [tab, setTab] = useState<Tab>("all");
   const [pinnedOrder, setPinnedOrder] = useState<string[]>(loadPinnedOrder);
+
+  // Hidden conversations
+  const [hiddenConvs, setHiddenConvs] = useState<HiddenConversation[]>([]);
+  const [hiddenLoading, setHiddenLoading] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "hidden") return;
+    setHiddenLoading(true);
+    api<HiddenConversation[]>("/api/conversations/hidden", { silent: true })
+      .then(setHiddenConvs)
+      .catch(() => setHiddenConvs([]))
+      .finally(() => setHiddenLoading(false));
+  }, [tab]);
+
+  const handleUnhide = useCallback(async (id: string) => {
+    await api(`/api/conversations/${id}/unhide`, { method: "PUT" });
+    setHiddenConvs((prev) => prev.filter((c) => c.id !== id));
+    // Refresh main conversation list
+    useChatStore.getState().loadConversations();
+  }, []);
 
   // Drag state
   const [dragId, setDragId] = useState<string | null>(null);
@@ -194,7 +225,47 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
 
       {/* Conversation list */}
       <div className={cn("flex-1 min-w-0 overflow-y-auto py-1", collapsed ? "px-1" : "px-2")}>
-        {sorted.length === 0 ? (
+        {tab === "hidden" ? (
+          hiddenLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+            </div>
+          ) : hiddenConvs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+              <EyeOff className="h-10 w-10 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">{t("chat.noHiddenConversations")}</p>
+            </div>
+          ) : (
+            <div className="flex min-w-0 flex-col gap-1">
+              {hiddenConvs.map((conv) => (
+                <div
+                  key={conv.id}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-secondary"
+                >
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                    {(conv.agentAvatarUrl || conv.communityAvatarUrl) ? (
+                      <img src={conv.agentAvatarUrl || conv.communityAvatarUrl || ""} className="h-full w-full object-cover" alt="" />
+                    ) : (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{conv.title || conv.agentName || conv.type}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(conv.hiddenAt).toLocaleDateString()}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleUnhide(conv.id)}
+                    title={t("chat.unhide")}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )
+        ) : sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
             <MessageCirclePlus className="h-10 w-10 text-muted-foreground/50" />
             {!collapsed && (

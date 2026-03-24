@@ -34,6 +34,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/conversations/{id}/read", put(mark_read))
         .route("/api/conversations/{id}/mute", put(toggle_mute))
         .route("/api/conversations/{id}/status", get(get_status))
+        .route("/api/conversations/hidden", get(list_hidden_conversations))
+        .route("/api/conversations/{id}/unhide", put(unhide_conversation))
 }
 
 // ===== Request / Response types =====
@@ -1170,4 +1172,87 @@ async fn get_status(
         "agent": agent_info,
     }))
     .into_response()
+}
+
+// ===== Hidden conversations =====
+
+/// GET /api/conversations/hidden — list soft-hidden conversations for the current user
+async fn list_hidden_conversations(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Response {
+    #[derive(FromRow, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct HiddenRow {
+        id: Uuid,
+        title: Option<String>,
+        #[sqlx(rename = "conv_type")]
+        #[serde(rename = "type")]
+        conv_type: String,
+        agent_name: Option<String>,
+        agent_avatar_url: Option<String>,
+        community_avatar_url: Option<String>,
+        hidden_at: NaiveDateTime,
+    }
+
+    let rows = sqlx::query_as::<_, HiddenRow>(
+        r#"SELECT
+            c.id,
+            c.title,
+            c.type::text AS conv_type,
+            a.name AS agent_name,
+            a.avatar_url AS agent_avatar_url,
+            cm.avatar_url AS community_avatar_url,
+            h.hidden_at
+        FROM conversation_user_members h
+        JOIN conversations c ON c.id = h.conversation_id
+        LEFT JOIN agents a ON c.agent_id = a.id
+        LEFT JOIN communities cm ON cm.conversation_id = c.id
+        WHERE h.user_id = $1
+          AND h.hidden_at IS NOT NULL
+          AND h.hidden_at >= c.updated_at
+        ORDER BY h.hidden_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(rows) => Json(json!(rows)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// PUT /api/conversations/{id}/unhide — restore a soft-hidden conversation
+async fn unhide_conversation(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<String>,
+) -> Response {
+    let result = sqlx::query(
+        r#"UPDATE conversation_user_members SET hidden_at = NULL
+           WHERE conversation_id = $1::uuid AND user_id = $2"#,
+    )
+    .bind(&id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "No hidden conversation found"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }
