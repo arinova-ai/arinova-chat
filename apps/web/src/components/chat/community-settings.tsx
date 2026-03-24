@@ -139,7 +139,7 @@ export function CommunitySettingsSheet({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [isPrivate, setIsPrivate] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(true);
   const [requireApproval, setRequireApproval] = useState(false);
   const [approvalQuestions, setApprovalQuestions] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
@@ -608,7 +608,7 @@ export function CommunitySettingsSheet({
                           </p>
                         </div>
                       </div>
-                      <Switch checked={isPrivate} onCheckedChange={setIsPrivate} />
+                      <Switch checked={!isPrivate} onCheckedChange={(v) => setIsPrivate(!v)} />
                     </div>
 
                     {/* Require Approval */}
