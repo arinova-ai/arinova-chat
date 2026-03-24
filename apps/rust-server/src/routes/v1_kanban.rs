@@ -597,10 +597,11 @@ async fn create_board(
     // Auto-grant agent permission to new board (if caller is an agent)
     if let Some(agent_id) = caller.agent_id() {
         let _ = sqlx::query(
-            "INSERT INTO board_agent_permissions (board_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            "INSERT INTO board_agent_permissions (board_id, agent_id, granted_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
         )
         .bind(board_id)
         .bind(agent_id)
+        .bind(caller.owner_id().to_string())
         .execute(&state.db)
         .await;
     }
@@ -1165,10 +1166,11 @@ async fn create_card(
                 };
                 // Auto-grant agent permission
                 let _ = sqlx::query(
-                    "INSERT INTO board_agent_permissions (board_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    "INSERT INTO board_agent_permissions (board_id, agent_id, granted_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
                 )
                 .bind(default_id)
                 .bind(agent_id)
+                .bind(owner_id.to_string())
                 .execute(&state.db)
                 .await;
                 default_id
