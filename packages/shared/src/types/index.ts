@@ -403,6 +403,7 @@ export type WSClientEvent =
   | { type: "mark_read"; conversationId: string; seq: number }
   | { type: "focus"; visible: boolean }
   | { type: "typing"; conversationId: string }
+  | { type: "hud_request"; conversationId: string }
   | { type: "ping" };
 
 export interface SyncConversationSummary {
