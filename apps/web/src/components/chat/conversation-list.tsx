@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
-import { MessageCirclePlus } from "lucide-react";
+import { MessageCirclePlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useAccountStore } from "@/store/account-store";
 import { ConversationItem } from "./conversation-item";
@@ -151,22 +151,44 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
     <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
       {/* Tab bar — hidden when collapsed */}
       {!collapsed && (
-        <div className="shrink-0 flex gap-1 overflow-x-auto scrollbar-none px-3 pb-2">
-          {TABS.map((tb) => (
-            <button
-              key={tb}
-              type="button"
-              onClick={() => setTab(tb)}
-              className={cn(
-                "shrink-0 rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors",
-                tab === tb
-                  ? "bg-brand text-white"
-                  : "bg-secondary text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t(`chat.tab.${tb}`)}
-            </button>
-          ))}
+        <div className="shrink-0 flex items-center px-1 pb-2">
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById("conv-tab-scroll");
+              if (el) el.scrollBy({ left: -100, behavior: "smooth" });
+            }}
+            className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div id="conv-tab-scroll" className="flex-1 flex gap-1 overflow-x-auto scrollbar-none px-1">
+            {TABS.map((tb) => (
+              <button
+                key={tb}
+                type="button"
+                onClick={() => setTab(tb)}
+                className={cn(
+                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                  tab === tb
+                    ? "bg-brand text-white"
+                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t(`chat.tab.${tb}`)}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById("conv-tab-scroll");
+              if (el) el.scrollBy({ left: 100, behavior: "smooth" });
+            }}
+            className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       )}
 
