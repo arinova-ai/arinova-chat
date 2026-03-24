@@ -291,6 +291,32 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                         .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                         .unwrap_or_default();
 
+                    // Intercept HUD task completions — convert to hud_update WS event
+                    if task_id.starts_with("_hud_") && content.contains("hud-for-usage") {
+                        // Find conversation owner to forward HUD data
+                        if let Ok(Some((conv_id, user_id))) = sqlx::query_as::<_, (String, String)>(
+                            r#"SELECT c.id::text, c.user_id
+                               FROM conversations c
+                               WHERE c.agent_id = $1::uuid
+                               LIMIT 1"#,
+                        )
+                        .bind(&agent_id_clone)
+                        .fetch_optional(&db)
+                        .await
+                        {
+                            let hud_data: serde_json::Value = serde_json::from_str(
+                                content.trim().find('{').map(|i| &content[i..]).unwrap_or("{}")
+                            ).unwrap_or(json!({"raw": content}));
+                            tracing::info!("hud_update: intercepted _hud_ task from agent {}", agent_id_clone);
+                            ws_state.send_to_user_or_queue(&user_id, &json!({
+                                "type": "hud_update",
+                                "conversationId": conv_id,
+                                "data": hud_data
+                            }), &redis);
+                        }
+                        continue;
+                    }
+
                     if let Some((_, task)) = ws_state.pending_tasks.remove(task_id) {
                         if task.agent_id == agent_id_clone {
                             task.timeout_handle.abort();
