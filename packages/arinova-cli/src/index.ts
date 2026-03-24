@@ -16,6 +16,7 @@ import { registerSpace } from "./commands/space.js";
 import { registerStats } from "./commands/stats.js";
 import { registerList } from "./commands/list.js";
 import { registerApp } from "./commands/app.js";
+import { registerSetupOpenclaw } from "./commands/setup-openclaw.js";
 
 const program = new Command();
 
@@ -57,6 +58,7 @@ registerSpace(program);
 registerStats(program);
 registerList(program);
 registerApp(program);
+registerSetupOpenclaw(program);
 
 program.parseAsync().then(() => {
   // Force exit after async commands complete — Node's fetch keep-alive prevents natural exit
