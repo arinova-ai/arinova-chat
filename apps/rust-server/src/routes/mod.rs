@@ -54,6 +54,7 @@ pub mod expert_hub;
 pub mod v1_notes;
 pub mod v1_kanban;
 pub mod v1_resources;
+pub mod hud;
 
 use axum::Router;
 use crate::AppState;
@@ -117,6 +118,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(v1_notes::router())
         .merge(v1_kanban::router())
         .merge(v1_resources::router())
+        .merge(hud::router())
 }
 
 /// Legacy wrapper — kept for backward compatibility.

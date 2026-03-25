@@ -1025,8 +1025,6 @@ pub async fn trigger_agent_response(
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
 ) {
-    // Ephemeral: /hud commands skip user message DB persistence (agent reply handled via frontend filter)
-    let ephemeral = content.trim().starts_with("/hud-for-usage");
     // Verify conversation access: user is owner OR member via conversation_user_members
     let conv = sqlx::query_as::<_, (String, Option<String>, String, bool)>(
         r#"SELECT c.id::text, c.agent_id::text, c.type::text, c.mention_only
@@ -1204,7 +1202,6 @@ pub async fn trigger_agent_response(
                     ).bind(mid).fetch_optional(db).await.ok().flatten().unwrap_or(false);
                     if !always_push { continue; }
                 }
-                if !ephemeral {
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
                         let preview = {
@@ -1229,7 +1226,6 @@ pub async fn trigger_agent_response(
                         )
                         .await;
                     }
-                }
                 }
             }
         }
@@ -1344,8 +1340,7 @@ pub async fn trigger_agent_response(
             client_metadata.clone()
         };
 
-        if !ephemeral {
-            let _ = sqlx::query(
+        let _ = sqlx::query(
                 r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id, reply_to_id, thread_id, metadata, created_at, updated_at)
                    VALUES ($1, $2::uuid, $3, 'user', $4, 'completed', $5, $6::uuid, $7::uuid, $8, $9, $9)"#,
             )
@@ -1360,9 +1355,8 @@ pub async fn trigger_agent_response(
             .bind(now.naive_utc())
             .execute(db)
             .await;
-        }
 
-        if !ephemeral {
+        {
             // Spawn link preview extraction in background
             {
                 let db2 = db.clone();
@@ -1480,7 +1474,6 @@ pub async fn trigger_agent_response(
                     ).bind(mid).fetch_optional(db).await.ok().flatten().unwrap_or(false);
                     if !always_push { continue; }
                 }
-                if !ephemeral {
                 if let Ok(false) = is_conversation_muted(db, mid, conversation_id).await {
                     if let Ok(true) = should_send_push(db, mid, "message").await {
                         let preview = {
@@ -1505,7 +1498,6 @@ pub async fn trigger_agent_response(
                         )
                         .await;
                     }
-                }
                 }
             }
         }
@@ -1609,7 +1601,6 @@ pub async fn trigger_agent_response(
                 db,
                 redis,
                 config,
-                ephemeral,
             )
             .await;
         }
@@ -1630,7 +1621,6 @@ pub(crate) async fn do_trigger_agent_response(
     db: &PgPool,
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
-    ephemeral: bool,
 ) {
     let agent = sqlx::query_as::<_, (String, Option<String>)>(
         r#"SELECT name, system_prompt FROM agents WHERE id = $1::uuid"#,
@@ -1720,8 +1710,7 @@ pub(crate) async fn do_trigger_agent_response(
 
     let agent_msg_id = uuid::Uuid::new_v4().to_string();
 
-    if !ephemeral {
-        let _ = sqlx::query(
+    let _ = sqlx::query(
             r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_agent_id, thread_id, created_at, updated_at)
                VALUES ($1::uuid, $2::uuid, $3, 'agent', '', 'streaming', $4::uuid, $5::uuid, NOW(), NOW())"#,
         )
@@ -1733,18 +1722,16 @@ pub(crate) async fn do_trigger_agent_response(
         .execute(db)
         .await;
 
-        let _ = sqlx::query(r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#)
+    let _ = sqlx::query(r#"UPDATE conversations SET updated_at = NOW() WHERE id = $1::uuid"#)
             .bind(conversation_id)
             .execute(db)
             .await;
-    }
 
     // Mark this agent as having active stream (keyed by conv:agent)
     let stream_key = format!("{}:{}", conversation_id, agent_id);
     ws_state.active_streams.insert(stream_key.clone(), std::time::Instant::now());
 
-    if !ephemeral {
-        ws_state.broadcast_to_members(&member_ids, &json!({
+    ws_state.broadcast_to_members(&member_ids, &json!({
             "type": "stream_start",
             "conversationId": conversation_id,
             "messageId": agent_msg_id,
@@ -1753,7 +1740,6 @@ pub(crate) async fn do_trigger_agent_response(
             "senderAgentName": agent_name,
             "threadId": thread_id
         }), redis);
-    }
 
     // Detect sticker messages and look up agent_prompt
     let sticker_regex = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
@@ -2161,7 +2147,6 @@ pub(crate) async fn do_trigger_agent_response(
     let conv_type = conv_type.to_string();
     let member_ids = member_ids;
     let thread_id = thread_id;
-    let ephemeral = ephemeral;
 
     tokio::spawn(async move {
         let mut stream_accumulated = String::new();
@@ -2203,7 +2188,6 @@ pub(crate) async fn do_trigger_agent_response(
                     match event {
                         Some(crate::ws::state::AgentEvent::Chunk(delta)) => {
                             stream_accumulated.push_str(&delta);
-                            if !ephemeral {
                             ws_state.broadcast_to_members(&member_ids, &json!({
                                 "type": "stream_chunk",
                                 "conversationId": &conversation_id,
@@ -2212,16 +2196,13 @@ pub(crate) async fn do_trigger_agent_response(
                                 "threadId": &thread_id,
                                 "chunk": delta
                             }), &redis);
-                            }
 
-                            if !ephemeral {
-                                if let Ok(mut conn) = redis.get().await {
+                            if let Ok(mut conn) = redis.get().await {
                                     let _: Result<(), _> = conn.set_ex(
                                         &format!("stream:{}", agent_msg_id_clone),
                                         &stream_accumulated,
                                         600,
                                     ).await;
-                                }
                             }
                         }
                         Some(crate::ws::state::AgentEvent::Complete(full_content, mentions)) => {
@@ -2250,16 +2231,7 @@ pub(crate) async fn do_trigger_agent_response(
                                 let _: Result<(), _> = conn.del(&format!("stream:{}", agent_msg_id_clone)).await;
                             }
 
-                            // Ephemeral mode (HUD): no DB persistence, just broadcast data
-                            if ephemeral {
-                                // Send HUD data as custom WS event to the requesting user
-                                ws_state.send_to_user_or_queue(&user_id, &serde_json::json!({
-                                    "type": "hud_data",
-                                    "conversationId": conversation_id,
-                                    "content": full_content,
-                                }), &redis);
-                                ws_state.active_streams.remove(&stream_key);
-                            } else if full_content.trim().is_empty() {
+                            if full_content.trim().is_empty() {
                                 // Empty completion — delete the placeholder message
                                 let _ = sqlx::query(
                                     r#"DELETE FROM messages WHERE id = $1::uuid AND status = 'streaming'"#,
@@ -2269,26 +2241,6 @@ pub(crate) async fn do_trigger_agent_response(
                                 .await;
                                 tracing::info!(
                                     "stream_end reason=empty_content (deleted placeholder) conv={} agent={} msgId={}",
-                                    conversation_id, agent_id, agent_msg_id_clone
-                                );
-                            } else if full_content.contains("\"hud-for-usage\"") {
-                                // HUD JSON response — delete the placeholder message instead of persisting
-                                let _ = sqlx::query("DELETE FROM messages WHERE id = $1::uuid")
-                                    .bind(&agent_msg_id_clone)
-                                    .execute(&db)
-                                    .await;
-                                // Revert conversation updated_at to last real message
-                                let _ = sqlx::query(
-                                    r#"UPDATE conversations SET updated_at = COALESCE(
-                                        (SELECT MAX(created_at) FROM messages WHERE conversation_id = $1::uuid),
-                                        conversations.created_at
-                                    ) WHERE id = $1::uuid"#,
-                                )
-                                .bind(&conversation_id)
-                                .execute(&db)
-                                .await;
-                                tracing::info!(
-                                    "stream_end reason=hud_ephemeral (deleted) conv={} agent={} msgId={}",
                                     conversation_id, agent_id, agent_msg_id_clone
                                 );
                             } else {
@@ -2358,15 +2310,12 @@ pub(crate) async fn do_trigger_agent_response(
                                 "reason": "completed"
                             }), &redis);
 
-                            // Update thread summary if agent reply is in a thread (skip for ephemeral)
-                            if !ephemeral {
+                            // Update thread summary if agent reply is in a thread
                             if let Some(ref tid) = thread_id {
                                 update_thread_summary(&db, tid, None, Some(&agent_id)).await;
                             }
-                            }
 
-                            // Push notification for agent message — send to all conversation members (skip for ephemeral)
-                            if !ephemeral {
+                            // Push notification for agent message — send to all conversation members
                             for mid in &member_ids {
                                 // Skip push if user has the app in foreground
                                 if ws_state.is_user_foreground(mid) { continue; }
@@ -2396,12 +2345,8 @@ pub(crate) async fn do_trigger_agent_response(
                                     }
                                 }
                             }
-                            } // end !ephemeral push guard
-
                             ws_state.active_streams.remove(&stream_key);
-                            if !ephemeral {
-                                process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
-                            }
+                            process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
 
                             // Save mentions for dispatch after the select loop
                             if !mentions.is_empty() && conv_type == "group" {
@@ -2683,7 +2628,6 @@ fn spawn_mention_dispatch(
             &db,
             &redis,
             &config,
-            false,
         )
         .await;
     });
@@ -2747,7 +2691,6 @@ fn process_next_in_queue(
             &db,
             &redis,
             &config,
-            false,
         )
         .await;
     });

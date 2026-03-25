@@ -44,7 +44,6 @@ import { CommunitySettingsSheet } from "./community-settings";
 import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Pin, CalendarSearch, Activity } from "lucide-react";
-import { wsManager } from "@/lib/ws";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import type { Message } from "@arinova/shared/types";
@@ -393,12 +392,7 @@ export function ChatHeader({
                   break;
                 case "hud":
                   import("@/store/hud-store").then(({ useHudStore }) => {
-                    const s = useHudStore.getState();
-                    s.toggle();
-                    if (useHudStore.getState().enabled && conversationId) {
-                      const hudCmd = `/hud-for-usage ${conversationId}`;
-                      setTimeout(() => wsManager.send({ type: "send_message", conversationId, content: hudCmd }), 300);
-                    }
+                    useHudStore.getState().toggle();
                   });
                   break;
               }

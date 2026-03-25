@@ -15,12 +15,9 @@ interface HudStore {
   enabled: boolean;
   data: HudData | null;
   conversationId: string | null;
-  lastAutoRefreshAt: number;
   toggle: () => void;
   setEnabled: (v: boolean) => void;
   setData: (conversationId: string, data: HudData) => void;
-  markAutoRefresh: () => void;
-  canAutoRefresh: () => boolean;
   clear: () => void;
 }
 
@@ -28,12 +25,9 @@ export const useHudStore = create<HudStore>((set, get) => ({
   enabled: false,
   data: null,
   conversationId: null,
-  lastAutoRefreshAt: 0,
   toggle: () => set({ enabled: !get().enabled }),
   setEnabled: (v) => set({ enabled: v }),
   setData: (conversationId, data) => set({ data, conversationId }),
-  markAutoRefresh: () => set({ lastAutoRefreshAt: Date.now() }),
-  canAutoRefresh: () => Date.now() - get().lastAutoRefreshAt > 5000,
   clear: () => set({ data: null, conversationId: null }),
 }));
 
