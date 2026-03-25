@@ -632,6 +632,9 @@ async fn main() {
 
     // hud skill removed — /hud is a built-in slash command handled by frontend
 
+    // Kanban cards per-column index for pagination
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_kanban_cards_column_updated ON kanban_cards(column_id, updated_at DESC) WHERE archived = FALSE").execute(&db).await.ok();
+
     // Note thread messages
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS note_thread_messages (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -22,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/kanban/boards/{id}/archive", post(archive_board))
         .route("/api/kanban/boards/{id}/columns", get(list_columns).post(create_column))
         .route("/api/kanban/columns/{id}", patch(update_column).delete(delete_column))
+        .route("/api/kanban/columns/{id}/cards", get(list_column_cards))
         .route("/api/kanban/boards/{id}/columns/reorder", post(reorder_columns))
         .route(
             "/api/kanban/boards/{id}/archived-cards",
@@ -1110,6 +1111,72 @@ async fn delete_column(
             Json(json!({ "ok": true })).into_response()
         }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// GET /api/kanban/columns/:id/cards?limit=20&offset=0
+async fn list_column_cards(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(column_id): Path<Uuid>,
+    Query(q): Query<PaginationQuery>,
+) -> Response {
+    // Verify user has access to the board this column belongs to
+    let board_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT board_id FROM kanban_columns WHERE id = $1",
+    )
+    .bind(column_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let board_id = match board_id {
+        Some(id) => id,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Column not found"}))).into_response(),
+    };
+
+    if let Err(e) = verify_board_access(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    let limit = q.limit.unwrap_or(20).min(100).max(1);
+    let page = q.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * limit;
+
+    let total = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM kanban_cards WHERE column_id = $1 AND archived = FALSE",
+    )
+    .bind(column_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    let cards = sqlx::query_as::<_, CardRow>(
+        r#"SELECT id, column_id, title,
+                  CASE WHEN length(description) > 100 THEN substring(description, 1, 100) || '...' ELSE description END AS description,
+                  priority, due_date, sort_order, created_by, created_at, updated_at,
+                  share_token, COALESCE(is_public, false) AS is_public
+           FROM kanban_cards
+           WHERE column_id = $1 AND archived = FALSE
+           ORDER BY updated_at DESC NULLS LAST
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(column_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await;
+
+    match cards {
+        Ok(rows) => Json(json!({
+            "cards": rows,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "hasMore": (offset + limit) < total,
+        })).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 }
 
