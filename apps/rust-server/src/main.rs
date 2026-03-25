@@ -662,6 +662,24 @@ async fn main() {
     sqlx::query("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS cover_image_url TEXT").execute(&db).await.ok();
     sqlx::query("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE").execute(&db).await.ok();
 
+    // Wiki comments + likes
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS wiki_comments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        wiki_page_id UUID NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )"#).execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_wiki_comments_page ON wiki_comments(wiki_page_id, created_at)").execute(&db).await.ok();
+
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS wiki_likes (
+        wiki_page_id UUID NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (wiki_page_id, user_id)
+    )"#).execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards

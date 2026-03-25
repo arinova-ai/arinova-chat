@@ -37,6 +37,10 @@ pub fn router() -> Router<AppState> {
         )
         // Wiki image upload
         .route("/api/wiki/upload", post(upload_wiki_image))
+        // Wiki likes + comments
+        .route("/api/wiki/{pageId}/like", post(toggle_like))
+        .route("/api/wiki/{pageId}/comments", get(list_comments).post(add_comment))
+        .route("/api/wiki/comments/{id}", delete(delete_comment))
         // Agent wiki API
         .route("/api/agent/wiki", post(agent_create_wiki_page))
         .route("/api/agent/wiki/{pageId}", patch(agent_update_wiki_page))
@@ -55,6 +59,9 @@ struct WikiPageRow {
     owner_id: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    owner_name: Option<String>,
+    owner_image: Option<String>,
+    like_count: Option<i64>,
 }
 
 fn wiki_page_to_json(row: &WikiPageRow) -> serde_json::Value {
@@ -66,6 +73,9 @@ fn wiki_page_to_json(row: &WikiPageRow) -> serde_json::Value {
         "tags": &row.tags,
         "isPinned": row.is_pinned,
         "ownerId": &row.owner_id,
+        "authorName": &row.owner_name,
+        "authorAvatar": &row.owner_image,
+        "likeCount": row.like_count.unwrap_or(0),
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
     })
@@ -101,10 +111,13 @@ async fn list_wiki_pages(
     }
 
     let rows = sqlx::query_as::<_, WikiPageRow>(
-        r#"SELECT id, conversation_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
-           FROM wiki_pages
-           WHERE conversation_id = $1
-           ORDER BY is_pinned DESC, updated_at DESC"#,
+        r#"SELECT wp.id, wp.conversation_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+           FROM wiki_pages wp
+           LEFT JOIN "user" u ON u.id = wp.owner_id
+           WHERE wp.conversation_id = $1
+           ORDER BY wp.is_pinned DESC, wp.updated_at DESC"#,
     )
     .bind(conv_id)
     .fetch_all(&state.db)
@@ -130,9 +143,12 @@ async fn get_wiki_page(
     }
 
     let row = sqlx::query_as::<_, WikiPageRow>(
-        r#"SELECT id, conversation_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
-           FROM wiki_pages
-           WHERE id = $1 AND conversation_id = $2"#,
+        r#"SELECT wp.id, wp.conversation_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+           FROM wiki_pages wp
+           LEFT JOIN "user" u ON u.id = wp.owner_id
+           WHERE wp.id = $1 AND wp.conversation_id = $2"#,
     )
     .bind(page_id)
     .bind(conv_id)
@@ -168,9 +184,16 @@ async fn create_wiki_page(
     }
 
     let row = sqlx::query_as::<_, WikiPageRow>(
-        r#"INSERT INTO wiki_pages (conversation_id, title, content, tags, owner_id)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, conversation_id, title, content, tags, is_pinned, owner_id, created_at, updated_at"#,
+        r#"WITH inserted AS (
+             INSERT INTO wiki_pages (conversation_id, title, content, tags, owner_id)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, conversation_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
+           )
+           SELECT i.id, i.conversation_id, i.title, i.content, i.tags, i.is_pinned, i.owner_id, i.created_at, i.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  0::bigint AS like_count
+           FROM inserted i
+           LEFT JOIN "user" u ON u.id = i.owner_id"#,
     )
     .bind(conv_id)
     .bind(&body.title)
@@ -206,6 +229,21 @@ async fn update_wiki_page(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
     }
 
+    // Only owner can edit (except pin toggling)
+    if body.title.is_some() || body.content.is_some() || body.tags.is_some() {
+        let owner_id = sqlx::query_scalar::<_, String>("SELECT owner_id FROM wiki_pages WHERE id = $1 AND conversation_id = $2")
+            .bind(page_id).bind(conv_id).fetch_optional(&state.db).await;
+        match owner_id {
+            Ok(Some(oid)) if oid != user.id => {
+                return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the author can modify"}))).into_response();
+            }
+            Ok(None) => {
+                return (StatusCode::NOT_FOUND, Json(json!({"error": "Wiki page not found"}))).into_response();
+            }
+            _ => {}
+        }
+    }
+
     // Dynamic SET clause
     let mut set_clauses = vec!["updated_at = NOW()".to_string()];
     let mut idx = 3u32; // $1 = page_id, $2 = conv_id
@@ -233,7 +271,15 @@ async fn update_wiki_page(
     }
 
     let sql = format!(
-        "UPDATE wiki_pages SET {} WHERE id = $1 AND conversation_id = $2 RETURNING id, conversation_id, title, content, tags, is_pinned, owner_id, created_at, updated_at",
+        r#"WITH updated AS (
+             UPDATE wiki_pages SET {} WHERE id = $1 AND conversation_id = $2
+             RETURNING id, conversation_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
+           )
+           SELECT up.id, up.conversation_id, up.title, up.content, up.tags, up.is_pinned, up.owner_id, up.created_at, up.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = up.id) AS like_count
+           FROM updated up
+           LEFT JOIN "user" u ON u.id = up.owner_id"#,
         set_clauses.join(", ")
     );
 
@@ -259,6 +305,19 @@ async fn delete_wiki_page(
 ) -> Response {
     if !is_member(&state.db, conv_id, &user.id).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    // Only owner can delete
+    let owner_id = sqlx::query_scalar::<_, String>("SELECT owner_id FROM wiki_pages WHERE id = $1 AND conversation_id = $2")
+        .bind(page_id).bind(conv_id).fetch_optional(&state.db).await;
+    match owner_id {
+        Ok(Some(oid)) if oid != user.id => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the author can delete"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Wiki page not found"}))).into_response();
+        }
+        _ => {}
     }
 
     let result = sqlx::query("DELETE FROM wiki_pages WHERE id = $1 AND conversation_id = $2")
@@ -287,6 +346,9 @@ struct CommunityWikiPageRow {
     owner_id: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    owner_name: Option<String>,
+    owner_image: Option<String>,
+    like_count: Option<i64>,
 }
 
 fn community_wiki_page_to_json(row: &CommunityWikiPageRow) -> serde_json::Value {
@@ -298,6 +360,9 @@ fn community_wiki_page_to_json(row: &CommunityWikiPageRow) -> serde_json::Value 
         "tags": &row.tags,
         "isPinned": row.is_pinned,
         "ownerId": &row.owner_id,
+        "authorName": &row.owner_name,
+        "authorAvatar": &row.owner_image,
+        "likeCount": row.like_count.unwrap_or(0),
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
     })
@@ -325,10 +390,13 @@ async fn list_community_wiki_pages(
     }
 
     let rows = sqlx::query_as::<_, CommunityWikiPageRow>(
-        r#"SELECT id, community_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
-           FROM wiki_pages
-           WHERE community_id = $1
-           ORDER BY is_pinned DESC, updated_at DESC"#,
+        r#"SELECT wp.id, wp.community_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+           FROM wiki_pages wp
+           LEFT JOIN "user" u ON u.id = wp.owner_id
+           WHERE wp.community_id = $1
+           ORDER BY wp.is_pinned DESC, wp.updated_at DESC"#,
     )
     .bind(community_id)
     .fetch_all(&state.db)
@@ -354,9 +422,12 @@ async fn get_community_wiki_page(
     }
 
     let row = sqlx::query_as::<_, CommunityWikiPageRow>(
-        r#"SELECT id, community_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
-           FROM wiki_pages
-           WHERE id = $1 AND community_id = $2"#,
+        r#"SELECT wp.id, wp.community_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+           FROM wiki_pages wp
+           LEFT JOIN "user" u ON u.id = wp.owner_id
+           WHERE wp.id = $1 AND wp.community_id = $2"#,
     )
     .bind(page_id)
     .bind(community_id)
@@ -382,9 +453,16 @@ async fn create_community_wiki_page(
     }
 
     let row = sqlx::query_as::<_, CommunityWikiPageRow>(
-        r#"INSERT INTO wiki_pages (community_id, title, content, tags, owner_id)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, community_id, title, content, tags, is_pinned, owner_id, created_at, updated_at"#,
+        r#"WITH inserted AS (
+             INSERT INTO wiki_pages (community_id, title, content, tags, owner_id)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, community_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
+           )
+           SELECT i.id, i.community_id, i.title, i.content, i.tags, i.is_pinned, i.owner_id, i.created_at, i.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  0::bigint AS like_count
+           FROM inserted i
+           LEFT JOIN "user" u ON u.id = i.owner_id"#,
     )
     .bind(community_id)
     .bind(&body.title)
@@ -411,6 +489,21 @@ async fn update_community_wiki_page(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
     }
 
+    // Only owner can edit (except pin toggling)
+    if body.title.is_some() || body.content.is_some() || body.tags.is_some() {
+        let owner_id = sqlx::query_scalar::<_, String>("SELECT owner_id FROM wiki_pages WHERE id = $1 AND community_id = $2")
+            .bind(page_id).bind(community_id).fetch_optional(&state.db).await;
+        match owner_id {
+            Ok(Some(oid)) if oid != user.id => {
+                return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the author can modify"}))).into_response();
+            }
+            Ok(None) => {
+                return (StatusCode::NOT_FOUND, Json(json!({"error": "Wiki page not found"}))).into_response();
+            }
+            _ => {}
+        }
+    }
+
     let mut set_clauses = vec!["updated_at = NOW()".to_string()];
     let mut idx = 3u32;
 
@@ -425,7 +518,15 @@ async fn update_community_wiki_page(
     }
 
     let sql = format!(
-        "UPDATE wiki_pages SET {} WHERE id = $1 AND community_id = $2 RETURNING id, community_id, title, content, tags, is_pinned, owner_id, created_at, updated_at",
+        r#"WITH updated AS (
+             UPDATE wiki_pages SET {} WHERE id = $1 AND community_id = $2
+             RETURNING id, community_id, title, content, tags, is_pinned, owner_id, created_at, updated_at
+           )
+           SELECT up.id, up.community_id, up.title, up.content, up.tags, up.is_pinned, up.owner_id, up.created_at, up.updated_at,
+                  u.name AS owner_name, u.image AS owner_image,
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = up.id) AS like_count
+           FROM updated up
+           LEFT JOIN "user" u ON u.id = up.owner_id"#,
         set_clauses.join(", ")
     );
 
@@ -451,6 +552,19 @@ async fn delete_community_wiki_page(
 ) -> Response {
     if !is_community_member(&state.db, community_id, &user.id).await {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    // Only owner can delete
+    let owner_id = sqlx::query_scalar::<_, String>("SELECT owner_id FROM wiki_pages WHERE id = $1 AND community_id = $2")
+        .bind(page_id).bind(community_id).fetch_optional(&state.db).await;
+    match owner_id {
+        Ok(Some(oid)) if oid != user.id => {
+            return (StatusCode::FORBIDDEN, Json(json!({"error": "Only the author can delete"}))).into_response();
+        }
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({"error": "Wiki page not found"}))).into_response();
+        }
+        _ => {}
     }
 
     let result = sqlx::query("DELETE FROM wiki_pages WHERE id = $1 AND community_id = $2")
@@ -661,6 +775,172 @@ async fn agent_update_wiki_page(
     match query.execute(&state.db).await {
         Ok(r) if r.rows_affected() > 0 => Json(json!({"ok": true})).into_response(),
         Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Wiki page not found"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+// ===== Wiki Likes =====
+
+/// POST /api/wiki/:pageId/like — toggle like
+async fn toggle_like(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+) -> Response {
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = $1 AND user_id = $2)",
+    )
+    .bind(page_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if exists {
+        sqlx::query("DELETE FROM wiki_likes WHERE wiki_page_id = $1 AND user_id = $2")
+            .bind(page_id)
+            .bind(&user.id)
+            .execute(&state.db)
+            .await
+            .ok();
+    } else {
+        sqlx::query("INSERT INTO wiki_likes (wiki_page_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            .bind(page_id)
+            .bind(&user.id)
+            .execute(&state.db)
+            .await
+            .ok();
+    }
+
+    let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM wiki_likes WHERE wiki_page_id = $1")
+        .bind(page_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+    Json(json!({"liked": !exists, "likeCount": count})).into_response()
+}
+
+// ===== Wiki Comments =====
+
+#[derive(Debug, FromRow)]
+struct WikiCommentRow {
+    id: Uuid,
+    wiki_page_id: Uuid,
+    user_id: String,
+    content: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    user_name: Option<String>,
+    user_image: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct AddCommentBody {
+    content: String,
+}
+
+/// GET /api/wiki/:pageId/comments
+async fn list_comments(
+    State(state): State<AppState>,
+    _user: AuthUser,
+    Path(page_id): Path<Uuid>,
+) -> Response {
+    let rows = sqlx::query_as::<_, WikiCommentRow>(
+        r#"SELECT wc.id, wc.wiki_page_id, wc.user_id, wc.content, wc.created_at, wc.updated_at,
+                  u.name AS user_name, u.image AS user_image
+           FROM wiki_comments wc
+           LEFT JOIN "user" u ON u.id = wc.user_id
+           WHERE wc.wiki_page_id = $1
+           ORDER BY wc.created_at ASC"#,
+    )
+    .bind(page_id)
+    .fetch_all(&state.db)
+    .await;
+
+    match rows {
+        Ok(comments) => {
+            let items: Vec<_> = comments
+                .iter()
+                .map(|c| {
+                    json!({
+                        "id": c.id.to_string(),
+                        "wikiPageId": c.wiki_page_id.to_string(),
+                        "userId": &c.user_id,
+                        "userName": &c.user_name,
+                        "userImage": &c.user_image,
+                        "content": &c.content,
+                        "createdAt": c.created_at.to_rfc3339(),
+                        "updatedAt": c.updated_at.to_rfc3339(),
+                    })
+                })
+                .collect();
+            Json(json!({ "comments": items })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// POST /api/wiki/:pageId/comments
+async fn add_comment(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(page_id): Path<Uuid>,
+    Json(body): Json<AddCommentBody>,
+) -> Response {
+    let content = body.content.trim();
+    if content.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Content is required"}))).into_response();
+    }
+
+    let row = sqlx::query_as::<_, WikiCommentRow>(
+        r#"WITH inserted AS (
+             INSERT INTO wiki_comments (wiki_page_id, user_id, content)
+             VALUES ($1, $2, $3)
+             RETURNING id, wiki_page_id, user_id, content, created_at, updated_at
+           )
+           SELECT i.id, i.wiki_page_id, i.user_id, i.content, i.created_at, i.updated_at,
+                  u.name AS user_name, u.image AS user_image
+           FROM inserted i
+           LEFT JOIN "user" u ON u.id = i.user_id"#,
+    )
+    .bind(page_id)
+    .bind(&user.id)
+    .bind(content)
+    .fetch_one(&state.db)
+    .await;
+
+    match row {
+        Ok(c) => (StatusCode::CREATED, Json(json!({
+            "id": c.id.to_string(),
+            "wikiPageId": c.wiki_page_id.to_string(),
+            "userId": &c.user_id,
+            "userName": &c.user_name,
+            "userImage": &c.user_image,
+            "content": &c.content,
+            "createdAt": c.created_at.to_rfc3339(),
+            "updatedAt": c.updated_at.to_rfc3339(),
+        }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+/// DELETE /api/wiki/comments/:id
+async fn delete_comment(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(comment_id): Path<Uuid>,
+) -> Response {
+    // Only comment author can delete
+    let result = sqlx::query("DELETE FROM wiki_comments WHERE id = $1 AND user_id = $2")
+        .bind(comment_id)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Comment not found or not authorized"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))).into_response(),
     }
 }

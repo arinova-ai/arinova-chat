@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,9 @@ import {
   X,
   ArrowLeft,
   Save,
+  Heart,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 
 interface WikiPage {
@@ -29,6 +33,20 @@ interface WikiPage {
   tags: string[];
   isPinned: boolean;
   ownerId: string;
+  authorName?: string | null;
+  authorAvatar?: string | null;
+  likeCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface WikiComment {
+  id: string;
+  wikiPageId: string;
+  userId: string;
+  userName?: string | null;
+  userImage?: string | null;
+  content: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +64,8 @@ type ViewMode = "list" | "detail" | "create";
 export function WikiPanel({ conversationId, communityId, inline, open, onOpenChange }: WikiPanelProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const { data: session } = authClient.useSession();
+  const currentUserId = session?.user?.id;
   const wikiBase = communityId
     ? `/api/communities/${communityId}/wiki`
     : `/api/conversations/${conversationId}/wiki`;
@@ -57,6 +77,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedPage, setSelectedPage] = useState<WikiPage | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Edit fields
   const [editTitle, setEditTitle] = useState("");
@@ -65,6 +86,14 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
   // Create fields
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
+
+  // Like state
+  const [likeCount, setLikeCount] = useState(0);
+  const [isLiked, setIsLiked] = useState(false);
+
+  // Comments
+  const [comments, setComments] = useState<WikiComment[]>([]);
+  const [newComment, setNewComment] = useState("");
 
   // Escape key closes mobile overlay
   useEffect(() => {
@@ -129,13 +158,23 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
     setSelectedPage(page);
     setEditTitle(page.title);
     setEditContent(page.content || "");
+    setIsEditing(false);
     setViewMode("detail");
-    // Fetch full page content
+    setLikeCount(page.likeCount ?? 0);
+    setIsLiked(false);
+    setComments([]);
+    setNewComment("");
+    // Fetch full page content + comments in parallel
     try {
-      const full = await api<WikiPage>(`${wikiBase}/${page.id}`);
+      const [full, commentsRes] = await Promise.all([
+        api<WikiPage>(`${wikiBase}/${page.id}`),
+        api<{ comments: WikiComment[] }>(`/api/wiki/${page.id}/comments`, { silent: true }),
+      ]);
       setSelectedPage(full);
       setEditTitle(full.title);
       setEditContent(full.content || "");
+      setLikeCount(full.likeCount ?? 0);
+      setComments(commentsRes.comments ?? []);
     } catch { /* keep list data */ }
   }, [wikiBase]);
 
@@ -185,6 +224,49 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
     } catch { /* ignore */ }
   };
 
+  const handleDelete = async () => {
+    if (!selectedPage) return;
+    try {
+      await api(`${wikiBase}/${selectedPage.id}`, { method: "DELETE" });
+      setPages((prev) => prev.filter((p) => p.id !== selectedPage.id));
+      setViewMode("list");
+      setSelectedPage(null);
+    } catch { /* api shows toast */ }
+  };
+
+  const handleToggleLike = async () => {
+    if (!selectedPage) return;
+    try {
+      const res = await api<{ liked: boolean; likeCount: number }>(
+        `/api/wiki/${selectedPage.id}/like`,
+        { method: "POST" },
+      );
+      setIsLiked(res.liked);
+      setLikeCount(res.likeCount);
+      // Update in list too
+      setPages((prev) => prev.map((p) => p.id === selectedPage.id ? { ...p, likeCount: res.likeCount } : p));
+    } catch { /* ignore */ }
+  };
+
+  const handleAddComment = async () => {
+    if (!selectedPage || !newComment.trim()) return;
+    try {
+      const comment = await api<WikiComment>(
+        `/api/wiki/${selectedPage.id}/comments`,
+        { method: "POST", body: JSON.stringify({ content: newComment.trim() }) },
+      );
+      setComments((prev) => [...prev, comment]);
+      setNewComment("");
+    } catch { /* api shows toast */ }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await api(`/api/wiki/comments/${commentId}`, { method: "DELETE" });
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    } catch { /* api shows toast */ }
+  };
+
   function formatTime(date: string): string {
     const d = new Date(date);
     const now = new Date();
@@ -199,6 +281,8 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
     return d.toLocaleDateString([], { month: "short", day: "numeric" });
   }
 
+  const isOwner = selectedPage?.ownerId === currentUserId;
+
   // Detail/Edit view
   const detailView = (
     <div className="flex flex-col h-full">
@@ -212,15 +296,37 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
           <ArrowLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-semibold flex-1 truncate">{selectedPage?.title || ""}</span>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors disabled:opacity-50 flex items-center gap-1"
-        >
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-          {t("wiki.save")}
-        </button>
+        {isOwner && !isEditing && (
+          <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+            title="Edit"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {isOwner && !isEditing && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-red-500 transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {isEditing && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors disabled:opacity-50 flex items-center gap-1"
+          >
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+            {t("wiki.save")}
+          </button>
+        )}
         {!inline && onOpenChange && (
           <button
             type="button"
@@ -233,13 +339,90 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
       </div>
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
-        <input
-          value={editTitle}
-          onChange={(e) => setEditTitle(e.target.value)}
-          placeholder={t("wiki.titlePlaceholder")}
-          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-        <NotebookEditor content={editContent} onChange={setEditContent} editable placeholder={t("wiki.contentPlaceholder")} uploadEndpoint="/api/wiki/upload" className="flex-1 min-h-0 rounded-md border border-border bg-background"  />
+        {/* Author info + like */}
+        <div className="flex items-center gap-2">
+          {selectedPage?.authorAvatar && (
+            <img src={selectedPage.authorAvatar} alt="" className="h-5 w-5 rounded-full" />
+          )}
+          {selectedPage?.authorName && (
+            <span className="text-xs text-muted-foreground">{selectedPage.authorName}</span>
+          )}
+          <span className="text-[10px] text-muted-foreground">{selectedPage ? formatTime(selectedPage.updatedAt) : ""}</span>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={handleToggleLike}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+          >
+            <Heart className={cn("h-4 w-4", isLiked && "fill-red-500 text-red-500")} />
+            <span>{likeCount}</span>
+          </button>
+        </div>
+
+        {isEditing ? (
+          <>
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder={t("wiki.titlePlaceholder")}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <NotebookEditor content={editContent} onChange={setEditContent} editable placeholder={t("wiki.contentPlaceholder")} uploadEndpoint="/api/wiki/upload" className="flex-1 min-h-0 rounded-md border border-border bg-background" />
+          </>
+        ) : (
+          <>
+            <NotebookEditor content={editContent} onChange={() => {}} editable={false} placeholder="" uploadEndpoint="/api/wiki/upload" className="flex-1 min-h-0 rounded-md border border-border bg-background" />
+          </>
+        )}
+
+        {/* Comments */}
+        <div className="mt-4 border-t border-border pt-3 space-y-2">
+          <h4 className="text-sm font-medium">Comments ({comments.length})</h4>
+          {comments.map((c) => (
+            <div key={c.id} className="flex items-start gap-2 py-1.5">
+              {c.userImage && <img src={c.userImage} alt="" className="h-5 w-5 rounded-full mt-0.5" />}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium">{c.userName || "Unknown"}</span>
+                  <span className="text-[10px] text-muted-foreground">{formatTime(c.createdAt)}</span>
+                </div>
+                <p className="text-sm text-foreground">{c.content}</p>
+              </div>
+              {c.userId === currentUserId && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteComment(c.id)}
+                  className="rounded-md p-1 text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Add a comment..."
+              rows={2}
+              className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAddComment();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleAddComment}
+              disabled={!newComment.trim()}
+              className="self-end rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
+            >
+              Post
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -377,7 +560,14 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
                   </div>
                 )}
                 <div className="flex items-center gap-2 mt-0.5">
+                  {page.authorAvatar && <img src={page.authorAvatar} alt="" className="h-3.5 w-3.5 rounded-full" />}
+                  {page.authorName && <span className="text-[10px] text-muted-foreground">{page.authorName}</span>}
                   <span className="text-[10px] text-muted-foreground">{formatTime(page.updatedAt)}</span>
+                  {(page.likeCount ?? 0) > 0 && (
+                    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                      <Heart className="h-2.5 w-2.5" />{page.likeCount}
+                    </span>
+                  )}
                   {page.tags && page.tags.length > 0 && (
                     <div className="flex gap-0.5">
                       {page.tags.slice(0, 2).map((tag) => (
