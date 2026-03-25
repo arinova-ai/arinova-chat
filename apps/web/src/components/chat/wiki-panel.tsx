@@ -316,20 +316,20 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
             title={t("wiki.edit")}
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil className="h-4 w-4" />
           </button>
         )}
         {isOwner && !isEditing && (
           <button
             type="button"
             onClick={handleDelete}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-red-500 transition-colors"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted/50 hover:text-red-500 transition-colors"
             title={t("wiki.delete")}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4" />
           </button>
         )}
         {isEditing && (
@@ -395,7 +395,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
           </>
         ) : (
           <>
-            <NotebookEditor content={editContent} onChange={() => {}} editable={false} placeholder="" uploadEndpoint="/api/wiki/upload" className="flex-1 min-h-0 rounded-md border border-border bg-background" />
+            <NotebookEditor content={editContent} onChange={() => {}} editable={false} placeholder="" uploadEndpoint="/api/wiki/upload" className="rounded-md border border-border bg-background" />
           </>
         )}
 
@@ -419,9 +419,9 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
                 <button
                   type="button"
                   onClick={() => handleDeleteComment(c.id)}
-                  className="rounded-md p-1 text-muted-foreground hover:text-red-500 transition-colors shrink-0"
+                  className="rounded-md p-2 text-muted-foreground hover:text-red-500 transition-colors shrink-0"
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -622,7 +622,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
                   "rounded-md p-1 transition-colors shrink-0",
                   page.isPinned
                     ? "text-brand-text hover:text-brand-text/70"
-                    : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground",
+                    : "text-muted-foreground md:opacity-0 md:group-hover:opacity-100 hover:text-foreground",
                 )}
                 title={page.isPinned ? t("wiki.unpin") : t("wiki.pin")}
               >
