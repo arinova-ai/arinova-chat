@@ -29,7 +29,7 @@ async fn hud_ws_upgrade(
 ) -> Response {
     // Validate bot token
     let agent = sqlx::query_as::<_, (uuid::Uuid, String)>(
-        "SELECT id, owner_id FROM agents WHERE bot_token = $1"
+        "SELECT id, owner_id::text FROM agents WHERE secret_token = $1"
     )
     .bind(&q.token)
     .fetch_optional(&state.db)
