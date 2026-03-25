@@ -11,6 +11,10 @@ import { registerSpace } from "./commands/space.js";
 import { registerStats } from "./commands/stats.js";
 import { registerList } from "./commands/list.js";
 import { registerApp } from "./commands/app.js";
+import { registerKanban } from "./commands/kanban.js";
+import { registerMemory } from "./commands/memory.js";
+import { registerConversation } from "./commands/conversation.js";
+import { registerMessage } from "./commands/message.js";
 
 const program = new Command();
 
@@ -39,5 +43,9 @@ registerSpace(program);
 registerStats(program);
 registerList(program);
 registerApp(program);
+registerKanban(program);
+registerMemory(program);
+registerConversation(program);
+registerMessage(program);
 
 program.parse();

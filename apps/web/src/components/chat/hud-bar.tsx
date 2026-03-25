@@ -2,6 +2,7 @@
 
 import { useHudStore } from "@/store/hud-store";
 import { useChatStore } from "@/store/chat-store";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 /** Convert reset time string like "2d 12h 30m" to decimal hours (36.5h) or minutes if < 1h */
 function fmtReset(s: string): string {
@@ -28,14 +29,18 @@ export function HudBar() {
   const data = useHudStore((s) => s.data);
   const hudConvId = useHudStore((s) => s.conversationId);
   const activeConvId = useChatStore((s) => s.activeConversationId);
+  const isMobile = useIsMobile();
 
   if (!enabled || !data || hudConvId !== activeConvId) return null;
+
+  const fmt5h = data.fiveHourReset ? (isMobile ? fmtReset(data.fiveHourReset) : data.fiveHourReset) : "";
+  const fmt7d = data.sevenDayReset ? (isMobile ? fmtReset(data.sevenDayReset) : data.sevenDayReset) : "";
 
   return (
     <div className="shrink-0 flex items-center justify-center gap-3 px-3 py-0.5 text-[10px] text-muted-foreground/60 font-mono select-none">
       {data.context && <span>Ctx: {data.context}</span>}
-      {data.fiveHour && <span>5H: {data.fiveHour}{data.fiveHourReset ? ` (${fmtReset(data.fiveHourReset)})` : ""}</span>}
-      {data.sevenDay && <span>7D: {data.sevenDay}{data.sevenDayReset ? ` (${fmtReset(data.sevenDayReset)})` : ""}</span>}
+      {data.fiveHour && <span>5H: {data.fiveHour}{fmt5h ? ` (${fmt5h})` : ""}</span>}
+      {data.sevenDay && <span>7D: {data.sevenDay}{fmt7d ? ` (${fmt7d})` : ""}</span>}
       {data.model && <span>{fmtModel(data.model)}</span>}
     </div>
   );

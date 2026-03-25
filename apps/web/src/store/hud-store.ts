@@ -21,12 +21,21 @@ interface HudStore {
   clear: () => void;
 }
 
+const HUD_KEY = "arinova-hud-enabled";
+function readEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(HUD_KEY) === "true";
+}
+function writeEnabled(v: boolean) {
+  if (typeof window !== "undefined") localStorage.setItem(HUD_KEY, String(v));
+}
+
 export const useHudStore = create<HudStore>((set, get) => ({
-  enabled: false,
+  enabled: readEnabled(),
   data: null,
   conversationId: null,
-  toggle: () => set({ enabled: !get().enabled }),
-  setEnabled: (v) => set({ enabled: v }),
+  toggle: () => { const next = !get().enabled; writeEnabled(next); set({ enabled: next }); },
+  setEnabled: (v) => { writeEnabled(v); set({ enabled: v }); },
   setData: (conversationId, data) => set({ data, conversationId }),
   clear: () => set({ data: null, conversationId: null }),
 }));
