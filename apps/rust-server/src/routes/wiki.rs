@@ -62,6 +62,7 @@ struct WikiPageRow {
     owner_name: Option<String>,
     owner_image: Option<String>,
     like_count: Option<i64>,
+    is_liked: Option<bool>,
 }
 
 fn wiki_page_to_json(row: &WikiPageRow) -> serde_json::Value {
@@ -76,6 +77,7 @@ fn wiki_page_to_json(row: &WikiPageRow) -> serde_json::Value {
         "authorName": &row.owner_name,
         "authorAvatar": &row.owner_image,
         "likeCount": row.like_count.unwrap_or(0),
+        "isLiked": row.is_liked.unwrap_or(false),
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
     })
@@ -113,13 +115,15 @@ async fn list_wiki_pages(
     let rows = sqlx::query_as::<_, WikiPageRow>(
         r#"SELECT wp.id, wp.conversation_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count,
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $2) AS is_liked
            FROM wiki_pages wp
            LEFT JOIN "user" u ON u.id = wp.owner_id
            WHERE wp.conversation_id = $1
            ORDER BY wp.is_pinned DESC, wp.updated_at DESC"#,
     )
     .bind(conv_id)
+    .bind(&user.id)
     .fetch_all(&state.db)
     .await;
 
@@ -145,13 +149,15 @@ async fn get_wiki_page(
     let row = sqlx::query_as::<_, WikiPageRow>(
         r#"SELECT wp.id, wp.conversation_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count,
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $3) AS is_liked
            FROM wiki_pages wp
            LEFT JOIN "user" u ON u.id = wp.owner_id
            WHERE wp.id = $1 AND wp.conversation_id = $2"#,
     )
     .bind(page_id)
     .bind(conv_id)
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
 
@@ -191,7 +197,8 @@ async fn create_wiki_page(
            )
            SELECT i.id, i.conversation_id, i.title, i.content, i.tags, i.is_pinned, i.owner_id, i.created_at, i.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  0::bigint AS like_count
+                  0::bigint AS like_count,
+                  false AS is_liked
            FROM inserted i
            LEFT JOIN "user" u ON u.id = i.owner_id"#,
     )
@@ -264,6 +271,8 @@ async fn update_wiki_page(
         set_clauses.push(format!("is_pinned = ${idx}"));
         idx += 1;
     }
+    let user_id_idx = idx;
+    idx += 1;
     let _ = idx;
 
     if set_clauses.len() == 1 {
@@ -277,10 +286,11 @@ async fn update_wiki_page(
            )
            SELECT up.id, up.conversation_id, up.title, up.content, up.tags, up.is_pinned, up.owner_id, up.created_at, up.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = up.id) AS like_count
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = up.id) AS like_count,
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = up.id AND user_id = ${}) AS is_liked
            FROM updated up
            LEFT JOIN "user" u ON u.id = up.owner_id"#,
-        set_clauses.join(", ")
+        set_clauses.join(", "), user_id_idx
     );
 
     let mut q = sqlx::query_as::<_, WikiPageRow>(&sql);
@@ -289,6 +299,7 @@ async fn update_wiki_page(
     if let Some(ref c) = body.content { q = q.bind(c); }
     if let Some(ref tags) = body.tags { q = q.bind(tags); }
     if let Some(pinned) = body.is_pinned { q = q.bind(pinned); }
+    q = q.bind(&user.id);
 
     match q.fetch_optional(&state.db).await {
         Ok(Some(page)) => Json(wiki_page_to_json(&page)).into_response(),
@@ -349,6 +360,7 @@ struct CommunityWikiPageRow {
     owner_name: Option<String>,
     owner_image: Option<String>,
     like_count: Option<i64>,
+    is_liked: Option<bool>,
 }
 
 fn community_wiki_page_to_json(row: &CommunityWikiPageRow) -> serde_json::Value {
@@ -363,6 +375,7 @@ fn community_wiki_page_to_json(row: &CommunityWikiPageRow) -> serde_json::Value 
         "authorName": &row.owner_name,
         "authorAvatar": &row.owner_image,
         "likeCount": row.like_count.unwrap_or(0),
+        "isLiked": row.is_liked.unwrap_or(false),
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
     })
@@ -392,13 +405,15 @@ async fn list_community_wiki_pages(
     let rows = sqlx::query_as::<_, CommunityWikiPageRow>(
         r#"SELECT wp.id, wp.community_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count,
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $2) AS is_liked
            FROM wiki_pages wp
            LEFT JOIN "user" u ON u.id = wp.owner_id
            WHERE wp.community_id = $1
            ORDER BY wp.is_pinned DESC, wp.updated_at DESC"#,
     )
     .bind(community_id)
+    .bind(&user.id)
     .fetch_all(&state.db)
     .await;
 
@@ -424,13 +439,15 @@ async fn get_community_wiki_page(
     let row = sqlx::query_as::<_, CommunityWikiPageRow>(
         r#"SELECT wp.id, wp.community_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count,
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $3) AS is_liked
            FROM wiki_pages wp
            LEFT JOIN "user" u ON u.id = wp.owner_id
            WHERE wp.id = $1 AND wp.community_id = $2"#,
     )
     .bind(page_id)
     .bind(community_id)
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await;
 
@@ -460,7 +477,8 @@ async fn create_community_wiki_page(
            )
            SELECT i.id, i.community_id, i.title, i.content, i.tags, i.is_pinned, i.owner_id, i.created_at, i.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  0::bigint AS like_count
+                  0::bigint AS like_count,
+                  false AS is_liked
            FROM inserted i
            LEFT JOIN "user" u ON u.id = i.owner_id"#,
     )
@@ -511,6 +529,8 @@ async fn update_community_wiki_page(
     if body.content.is_some() { set_clauses.push(format!("content = ${idx}")); idx += 1; }
     if body.tags.is_some() { set_clauses.push(format!("tags = ${idx}")); idx += 1; }
     if body.is_pinned.is_some() { set_clauses.push(format!("is_pinned = ${idx}")); idx += 1; }
+    let user_id_idx = idx;
+    idx += 1;
     let _ = idx;
 
     if set_clauses.len() == 1 {
@@ -524,10 +544,11 @@ async fn update_community_wiki_page(
            )
            SELECT up.id, up.community_id, up.title, up.content, up.tags, up.is_pinned, up.owner_id, up.created_at, up.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
-                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = up.id) AS like_count
+                  (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = up.id) AS like_count,
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = up.id AND user_id = ${}) AS is_liked
            FROM updated up
            LEFT JOIN "user" u ON u.id = up.owner_id"#,
-        set_clauses.join(", ")
+        set_clauses.join(", "), user_id_idx
     );
 
     let mut q = sqlx::query_as::<_, CommunityWikiPageRow>(&sql);
@@ -536,6 +557,7 @@ async fn update_community_wiki_page(
     if let Some(ref c) = body.content { q = q.bind(c); }
     if let Some(ref tags) = body.tags { q = q.bind(tags); }
     if let Some(pinned) = body.is_pinned { q = q.bind(pinned); }
+    q = q.bind(&user.id);
 
     match q.fetch_optional(&state.db).await {
         Ok(Some(page)) => Json(community_wiki_page_to_json(&page)).into_response(),
