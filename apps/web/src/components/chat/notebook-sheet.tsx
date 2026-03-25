@@ -187,7 +187,7 @@ function SwipeableNoteItem({
       {/* Right action (left swipe): Delete — mobile only */}
       {isMobile && (
         <div
-          className="absolute inset-y-0 right-0 z-10 flex items-stretch md:hidden"
+          className="absolute inset-y-0 right-0 flex items-stretch md:hidden"
           style={{ width: SWIPE_DELETE_WIDTH }}
         >
           <button
@@ -202,7 +202,7 @@ function SwipeableNoteItem({
       )}
 
       {/* Content */}
-      <div className="group/note relative">
+      <div className="group/note relative overflow-hidden rounded-lg">
       <button
         type="button"
         draggable
@@ -211,7 +211,7 @@ function SwipeableNoteItem({
           e.dataTransfer.effectAllowed = "copy";
         }}
         className={cn(
-          "flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/60 transition-colors cursor-grab active:cursor-grabbing bg-secondary",
+          "relative z-[1] flex w-full flex-col gap-1 rounded-lg px-3 py-2.5 text-left active:bg-accent hover:bg-accent/60 transition-colors cursor-grab active:cursor-grabbing bg-secondary",
           swipeOffset === 0 && "transition-transform duration-200",
           swipeOffset !== 0 && !swipingRef.current && "transition-transform duration-200",
         )}
