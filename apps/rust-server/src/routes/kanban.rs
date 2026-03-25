@@ -20,7 +20,7 @@ fn board_cache_key(board_id: Uuid) -> String {
 }
 
 /// Invalidate board cache in Redis
-async fn invalidate_board_cache(redis: &deadpool_redis::Pool, board_id: Uuid) {
+pub(crate) async fn invalidate_board_cache(redis: &deadpool_redis::Pool, board_id: Uuid) {
     if let Ok(mut conn) = redis.get().await {
         let _: Result<(), _> = deadpool_redis::redis::AsyncCommands::del(&mut *conn, board_cache_key(board_id)).await;
     }
