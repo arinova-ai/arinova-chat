@@ -37,13 +37,11 @@ export const useHudStore = create<HudStore>((set, get) => ({
  *  2. [HUD]...[/HUD] wrapper around JSON or text
  *  3. Inline text: "Context: X% | 5H: Y% | 7D: Z%"
  */
-export function parseHudData(content: string): HudData | null {
+/** Parse HUD data from a JSON object (from hud_data WS event). */
+export function parseHudData(data: unknown): HudData | null {
   try {
-    const jsonStr = content.match(/\{[\s\S]*\}/)?.[0];
-    if (!jsonStr) return null;
-    const raw = JSON.parse(jsonStr) as Record<string, unknown>;
-    const j = raw["hud-for-usage"] as Record<string, unknown> | undefined;
-    if (!j) return null;
+    const j = data as Record<string, unknown>;
+    if (!j || typeof j !== "object") return null;
     const ctx = j.context as { percent?: number } | undefined;
     const h5 = j.limit5h as { percent?: number; resetIn?: string } | undefined;
     const d7 = j.limit7d as { percent?: number; resetIn?: string } | undefined;
@@ -58,5 +56,4 @@ export function parseHudData(content: string): HudData | null {
   } catch {
     return null;
   }
-  return null;
 }

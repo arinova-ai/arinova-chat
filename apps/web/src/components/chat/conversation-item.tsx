@@ -119,9 +119,6 @@ export function ConversationItem({
   const isDesktop = useSyncExternalStore(subscribeHover, getHoverSnapshot, getHoverServerSnapshot);
   const preview = (() => {
     if (!lastMessage) return t("chat.noMessages");
-    // Hide HUD messages from preview
-    const c = lastMessage.content?.trim() ?? "";
-    if (c.startsWith("/hud-for-usage") || c.includes('"hud-for-usage"')) return t("chat.noMessages");
     if (lastMessage.role === "system") {
       return `ℹ️ ${truncate(lastMessage.content.replace(/\n/g, " "), 50)}`;
     }
