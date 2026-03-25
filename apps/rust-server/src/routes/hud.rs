@@ -18,20 +18,35 @@ pub fn router() -> Router<AppState> {
 
 #[derive(Deserialize)]
 struct HudQuery {
-    token: String,
+    token: Option<String>,
 }
 
 /// GET /api/v1/hud?token=ari_xxx — WebSocket for HUD data relay
+/// Also supports Authorization: Bearer ari_xxx header
 async fn hud_ws_upgrade(
     State(state): State<AppState>,
     Query(q): Query<HudQuery>,
+    headers: axum::http::HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
+    // Resolve token: query param first, then Authorization header
+    let token = q.token.or_else(|| {
+        headers.get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(|t| t.trim().to_string())
+    });
+
+    let token = match token {
+        Some(t) if !t.is_empty() => t,
+        _ => return (axum::http::StatusCode::UNAUTHORIZED, axum::Json(json!({"error": "Token required"}))).into_response(),
+    };
+
     // Validate bot token
     let agent = sqlx::query_as::<_, (uuid::Uuid, String)>(
         "SELECT id, owner_id::text FROM agents WHERE secret_token = $1"
     )
-    .bind(&q.token)
+    .bind(&token)
     .fetch_optional(&state.db)
     .await;
 
