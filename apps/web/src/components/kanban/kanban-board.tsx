@@ -110,6 +110,9 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
   const [searchQuery, setSearchQuery] = useState("");
   const [archivedBoards, setArchivedBoards] = useState<BoardInfo[]>([]);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [columnPageLimit, setColumnPageLimit] = useState<Record<string, number>>({});
+  const [loadingMore, setLoadingMore] = useState<string | null>(null);
+  const CARDS_PER_PAGE = 20;
 
   // Board management state
   const [creatingBoard, setCreatingBoard] = useState(false);
@@ -465,18 +468,26 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
     [board],
   );
 
-  const cardsByColumn = useMemo(() => {
+  const { cardsByColumn, columnHasMore } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const map = new Map<string, KanbanCard[]>();
+    const hasMore = new Map<string, boolean>();
     for (const col of columns) map.set(col.id, []);
     for (const card of board?.cards ?? []) {
       if (q && !card.title.toLowerCase().includes(q) && !(card.description ?? "").toLowerCase().includes(q)) continue;
       const list = map.get(card.columnId);
       if (list) list.push(card);
     }
-    for (const list of map.values()) list.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
-    return map;
-  }, [board, columns, searchQuery]);
+    for (const [colId, list] of map.entries()) {
+      list.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
+      const limit = columnPageLimit[colId] ?? CARDS_PER_PAGE;
+      if (list.length > limit) {
+        hasMore.set(colId, true);
+        map.set(colId, list.slice(0, limit));
+      }
+    }
+    return { cardsByColumn: map, columnHasMore: hasMore };
+  }, [board, columns, searchQuery, columnPageLimit]);
 
   const cardAgentsMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -943,6 +954,16 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
     </div>
   ) : null;
 
+  const handleLoadMore = useCallback(async (columnId: string) => {
+    setLoadingMore(columnId);
+    try {
+      const currentLimit = columnPageLimit[columnId] ?? CARDS_PER_PAGE;
+      const nextLimit = currentLimit + CARDS_PER_PAGE;
+      setColumnPageLimit((prev) => ({ ...prev, [columnId]: nextLimit }));
+    } catch { /* ignore */ }
+    setLoadingMore(null);
+  }, [columnPageLimit]);
+
   // ── Render columns ────────────────────────────────────
 
   const columnItems = columns.map((col) => {
@@ -966,6 +987,9 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
         onMoveCard={handleMoveCard}
         onRenameColumn={handleRenameColumn}
         onDeleteColumn={handleDeleteColumn}
+        hasMore={columnHasMore.get(col.id) ?? false}
+        loadingMore={loadingMore === col.id}
+        onLoadMore={() => handleLoadMore(col.id)}
       />
     );
   });
