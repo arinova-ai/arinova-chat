@@ -1601,7 +1601,9 @@ async fn invite_member(
 #[derive(Deserialize)]
 struct AddAgentBody {
     #[serde(rename = "listingId")]
-    listing_id: Uuid,
+    listing_id: Option<Uuid>,
+    #[serde(rename = "agentId")]
+    agent_id: Option<Uuid>,
 }
 
 async fn add_agent(
@@ -1636,11 +1638,56 @@ async fn add_agent(
         );
     }
 
+    // Resolve listing_id: prefer direct listing_id, fallback to agent_id → find listing
+    let listing_id = if let Some(lid) = body.listing_id {
+        lid
+    } else if let Some(aid) = body.agent_id {
+        // Look up active listing for this agent
+        match sqlx::query_scalar::<_, Uuid>(
+            "SELECT id FROM agent_listings WHERE agent_id = $1 AND status = 'active' LIMIT 1",
+        )
+        .bind(aid)
+        .fetch_optional(&state.db)
+        .await
+        {
+            Ok(Some(lid)) => lid,
+            Ok(None) => {
+                // No listing — add agent directly to conversation members
+                let conv_id = sqlx::query_scalar::<_, Uuid>(
+                    "SELECT conversation_id FROM communities WHERE id = $1",
+                )
+                .bind(id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(cid) = conv_id {
+                    let _ = sqlx::query(
+                        r#"INSERT INTO conversation_members (conversation_id, agent_id)
+                           VALUES ($1, $2) ON CONFLICT DO NOTHING"#,
+                    )
+                    .bind(cid)
+                    .bind(aid)
+                    .execute(&state.db)
+                    .await;
+                }
+                return (StatusCode::CREATED, Json(json!({"ok": true, "method": "direct"})));
+            }
+            Err(e) => {
+                tracing::error!("add_agent: agent lookup failed: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+            }
+        }
+    } else {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Either listingId or agentId is required"})));
+    };
+
     // Verify listing exists and is active
     let listing_active = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM agent_listings WHERE id = $1 AND status = 'active')",
     )
-    .bind(body.listing_id)
+    .bind(listing_id)
     .fetch_one(&state.db)
     .await
     {
@@ -1667,7 +1714,7 @@ async fn add_agent(
            ON CONFLICT (community_id, listing_id) DO NOTHING"#,
     )
     .bind(id)
-    .bind(body.listing_id)
+    .bind(listing_id)
     .execute(&state.db)
     .await;
 

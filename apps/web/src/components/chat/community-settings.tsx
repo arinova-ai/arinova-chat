@@ -536,9 +536,9 @@ export function CommunitySettingsSheet({
       try {
         await api(`/api/communities/${communityId}/agents`, {
           method: "POST",
-          body: JSON.stringify({ listingId: agentId }),
+          body: JSON.stringify({ agentId }),
         });
-      } catch {}
+      } catch { /* api shows toast */ }
     }
     setShowAddAgents(false);
   }, [communityId, selectedAgents]);

@@ -73,8 +73,13 @@ fn wiki_page_to_json(row: &WikiPageRow) -> serde_json::Value {
 
 /// Check if user is a member of the conversation
 async fn is_member(db: &sqlx::PgPool, conv_id: Uuid, user_id: &str) -> bool {
+    // Check conversation_user_members (human users) + fallback to conversation owner
     sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2)",
+        r#"SELECT EXISTS(
+            SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2
+            UNION ALL
+            SELECT 1 FROM conversations WHERE id = $1 AND user_id = $2
+        )"#,
     )
     .bind(conv_id)
     .bind(user_id)
