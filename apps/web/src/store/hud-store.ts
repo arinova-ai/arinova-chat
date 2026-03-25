@@ -13,11 +13,11 @@ export interface HudData {
 
 interface HudStore {
   enabled: boolean;
-  data: HudData | null;
-  conversationId: string | null;
+  dataMap: Record<string, HudData>;
   toggle: () => void;
   setEnabled: (v: boolean) => void;
   setData: (conversationId: string, data: HudData) => void;
+  getData: (conversationId: string) => HudData | null;
   clear: () => void;
 }
 
@@ -32,12 +32,12 @@ function writeEnabled(v: boolean) {
 
 export const useHudStore = create<HudStore>((set, get) => ({
   enabled: readEnabled(),
-  data: null,
-  conversationId: null,
+  dataMap: {},
   toggle: () => { const next = !get().enabled; writeEnabled(next); set({ enabled: next }); },
   setEnabled: (v) => { writeEnabled(v); set({ enabled: v }); },
-  setData: (conversationId, data) => set({ data, conversationId }),
-  clear: () => set({ data: null, conversationId: null }),
+  setData: (conversationId, data) => set({ dataMap: { ...get().dataMap, [conversationId]: data } }),
+  getData: (conversationId) => get().dataMap[conversationId] ?? null,
+  clear: () => set({ dataMap: {} }),
 }));
 
 /** Parse HUD data from agent message content.

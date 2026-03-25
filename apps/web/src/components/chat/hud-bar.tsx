@@ -26,12 +26,11 @@ function fmtModel(s: string): string {
 /** Tiny HUD bar above chat input showing context/usage stats */
 export function HudBar() {
   const enabled = useHudStore((s) => s.enabled);
-  const data = useHudStore((s) => s.data);
-  const hudConvId = useHudStore((s) => s.conversationId);
   const activeConvId = useChatStore((s) => s.activeConversationId);
+  const data = useHudStore((s) => activeConvId ? s.dataMap[activeConvId] : null);
   const isMobile = useIsMobile();
 
-  if (!enabled || !data || hudConvId !== activeConvId) return null;
+  if (!enabled || !data) return null;
 
   const fmt5h = data.fiveHourReset ? (isMobile ? fmtReset(data.fiveHourReset) : data.fiveHourReset) : "";
   const fmt7d = data.sevenDayReset ? (isMobile ? fmtReset(data.sevenDayReset) : data.sevenDayReset) : "";
