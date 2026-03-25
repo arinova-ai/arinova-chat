@@ -670,6 +670,7 @@ function HamburgerMenu({
 }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const hudEnabled = useHudStore((s) => s.enabled);
 
   if (isMobile) {
     const overlay = open ? createPortal(
@@ -692,6 +693,7 @@ function HamburgerMenu({
           <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
             {items.map((btn) => {
               const Icon = btn.id === "mute" && getMuteIcon ? getMuteIcon() : btn.icon;
+              const isHudActive = btn.id === "hud" && hudEnabled;
               return (
                 <button
                   key={btn.id}
@@ -700,8 +702,8 @@ function HamburgerMenu({
                   disabled={btn.id === "call" && isInCall}
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/50 active:bg-muted transition-colors disabled:opacity-40"
                 >
-                  <Icon className="h-5 w-5 text-muted-foreground" />
-                  <span className="flex-1 text-left">{t(btn.labelKey)}</span>
+                  <Icon className={`h-5 w-5 ${isHudActive ? "text-brand" : "text-muted-foreground"}`} />
+                  <span className={`flex-1 text-left ${isHudActive ? "text-brand" : ""}`}>{t(btn.labelKey)}</span>
                   {pinnedIds.includes(btn.id) && <Pin className="h-3.5 w-3.5 text-muted-foreground" />}
                 </button>
               );
@@ -743,8 +745,8 @@ function HamburgerMenu({
           const Icon = btn.id === "mute" && getMuteIcon ? getMuteIcon() : btn.icon;
           return (
             <DropdownMenuItem key={btn.id} onClick={() => onAction(btn.id)} disabled={btn.id === "call" && isInCall}>
-              <Icon className="h-4 w-4" />
-              <span className="flex-1">{t(btn.labelKey)}</span>
+              <Icon className={`h-4 w-4 ${btn.id === "hud" && hudEnabled ? "text-brand" : ""}`} />
+              <span className={`flex-1 ${btn.id === "hud" && hudEnabled ? "text-brand" : ""}`}>{t(btn.labelKey)}</span>
               {pinnedIds.includes(btn.id) && <Pin className="ml-2 h-3 w-3 text-muted-foreground" />}
             </DropdownMenuItem>
           );
