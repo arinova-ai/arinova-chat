@@ -7,6 +7,7 @@ use axum::{
     routing::get,
     Router,
 };
+use chrono::Datelike;
 use deadpool_redis::redis::AsyncCommands;
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
@@ -115,9 +116,10 @@ async fn inject_agent_memories(
     let query_vec = pgvector::Vector::from(embeddings.into_iter().next().unwrap());
 
     // Search agent_memories by cosine similarity
-    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>, f64)>(
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>, f64, Option<chrono::DateTime<chrono::Utc>>)>(
         r#"SELECT id, summary, category, detail,
-                  1 - (embedding <=> $2::vector) AS similarity
+                  1 - (embedding <=> $2::vector) AS similarity,
+                  first_seen_at
            FROM agent_memories
            WHERE agent_id = $1::uuid AND embedding IS NOT NULL
            ORDER BY embedding <=> $2::vector
@@ -144,10 +146,15 @@ async fn inject_agent_memories(
     .execute(db)
     .await;
 
-    // Format memory context
+    // Format memory context with date
     let mut ctx = String::from("[Agent Memory Context]\n");
     for r in &relevant {
-        ctx.push_str(&format!("- [{}] {}", r.2, r.1));
+        let date_str = r.5.map(|dt| format!("{}/{}", dt.month(), dt.day())).unwrap_or_default();
+        if date_str.is_empty() {
+            ctx.push_str(&format!("- [{}] {}", r.2, r.1));
+        } else {
+            ctx.push_str(&format!("- [{}] ({}) {}", r.2, date_str, r.1));
+        }
         if let Some(ref detail) = r.3 {
             if !detail.is_empty() {
                 ctx.push_str(&format!(" ({})", safe_truncate(detail, 100)));

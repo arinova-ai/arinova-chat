@@ -187,7 +187,7 @@ function SwipeableNoteItem({
       {/* Right action (left swipe): Delete — mobile only */}
       {isMobile && (
         <div
-          className="absolute inset-y-0 right-0 flex items-stretch md:hidden"
+          className="absolute inset-y-0 right-0 z-10 flex items-stretch md:hidden"
           style={{ width: SWIPE_DELETE_WIDTH }}
         >
           <button
