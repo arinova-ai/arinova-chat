@@ -1216,7 +1216,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 className={`flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium transition-colors ${editMode ? "bg-brand/10 text-brand-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               >
                 <Pencil className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">{t("kanban.editMode")}</span>
+
               </button>
               <button
                 type="button"
@@ -1224,7 +1224,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Users className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">{t("kanban.members")}</span>
+
               </button>
               <Popover open={agentPermsOpen} onOpenChange={setAgentPermsOpen}>
                 <PopoverTrigger asChild>
@@ -1234,7 +1234,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                     className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <Bot className="h-3.5 w-3.5" />
-                    <span className="hidden md:inline">{t("kanban.agentAccess")}</span>
+
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-52 p-1" align="end" side="bottom">
@@ -1276,7 +1276,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Settings className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">{t("kanban.boardSettings")}</span>
+
               </button>
               <button
                 type="button"
@@ -1284,7 +1284,7 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
                 className="flex items-center gap-1 md:gap-1.5 rounded-md px-1.5 md:px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               >
                 <Archive className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">{t("kanban.archived")}</span>
+
               </button>
             </div>
           </div>

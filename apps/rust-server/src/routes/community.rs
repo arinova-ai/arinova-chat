@@ -35,7 +35,7 @@ pub fn router() -> Router<AppState> {
         // Members
         .route("/api/communities/{id}/join", post(join))
         .route("/api/communities/{id}/leave", post(leave))
-        .route("/api/communities/{id}/members", get(list_members))
+        .route("/api/communities/{id}/members", get(list_members).post(invite_member))
         // Agents
         .route(
             "/api/communities/{id}/agents",
@@ -1521,6 +1521,77 @@ async fn list_members(
             )
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/:id/members — Invite user (creator/moderator)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct InviteMemberBody {
+    #[serde(rename = "userId")]
+    user_id: String,
+}
+
+async fn invite_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    Json(body): Json<InviteMemberBody>,
+) -> (StatusCode, Json<Value>) {
+    // Check caller is creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can invite"}))),
+    }
+
+    // Add to community_members
+    let _ = sqlx::query(
+        "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT (community_id, user_id) DO NOTHING",
+    )
+    .bind(community_id)
+    .bind(&body.user_id)
+    .execute(&state.db)
+    .await;
+
+    // Also add to conversation_user_members
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
+    )
+    .bind(community_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(cid) = conv_id {
+        let _ = sqlx::query(
+            "INSERT INTO conversation_user_members (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT (conversation_id, user_id) DO NOTHING",
+        )
+        .bind(cid)
+        .bind(&body.user_id)
+        .execute(&state.db)
+        .await;
+
+        // WS notification to the invited user
+        state.ws.send_to_user_or_queue(&body.user_id, &json!({
+            "type": "community_invite",
+            "communityId": community_id,
+            "conversationId": cid,
+        }), &state.redis);
+    }
+
+    (StatusCode::CREATED, Json(json!({"ok": true})))
 }
 
 // ---------------------------------------------------------------------------

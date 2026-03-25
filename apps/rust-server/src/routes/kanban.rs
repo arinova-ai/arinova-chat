@@ -760,7 +760,7 @@ async fn get_board(
            FROM kanban_card_agents ca
            JOIN kanban_cards c ON c.id = ca.card_id
            JOIN kanban_columns col ON col.id = c.column_id
-           WHERE col.board_id = $1"#,
+           WHERE col.board_id = $1 AND c.archived = FALSE"#,
     )
     .bind(board_id)
     .fetch_all(&state.db)
@@ -772,7 +772,7 @@ async fn get_board(
            JOIN notes n ON n.id = cn.note_id
            JOIN kanban_cards c ON c.id = cn.card_id
            JOIN kanban_columns col ON col.id = c.column_id
-           WHERE col.board_id = $1
+           WHERE col.board_id = $1 AND c.archived = FALSE
            ORDER BY cn.created_at"#,
     )
     .bind(board_id)
@@ -784,7 +784,7 @@ async fn get_board(
            FROM kanban_card_commits cc
            JOIN kanban_cards c ON c.id = cc.card_id
            JOIN kanban_columns col ON col.id = c.column_id
-           WHERE col.board_id = $1
+           WHERE col.board_id = $1 AND c.archived = FALSE
            ORDER BY cc.created_at DESC"#,
     )
     .bind(board_id)
@@ -804,7 +804,7 @@ async fn get_board(
            JOIN kanban_labels l ON l.id = cl.label_id
            JOIN kanban_cards c ON c.id = cl.card_id
            JOIN kanban_columns col ON col.id = c.column_id
-           WHERE col.board_id = $1
+           WHERE col.board_id = $1 AND c.archived = FALSE
            ORDER BY l.name"#,
     )
     .bind(board_id)

@@ -228,8 +228,15 @@ function TabContent({ tab }: { tab: string }) {
       return sideChatConversationId ? (
         <div className="flex h-full items-center justify-center text-muted-foreground text-sm">Side chat: {sideChatConversationId}</div>
       ) : null;
-    case "settings":
+    case "settings": {
+      // For community conversations, use CommunitySettingsSheet (rendered elsewhere)
+      // For other types, use inline settings
+      const conv = useChatStore.getState().conversations.find((c) => c.id === activeConversationId);
+      if (conv?.type === "community") {
+        return <div className="flex h-full items-center justify-center text-muted-foreground text-sm">Community Settings</div>;
+      }
       return <ChatHeaderSettingsInline conversationId={activeConversationId} />;
+    }
     default:
       return null;
   }
