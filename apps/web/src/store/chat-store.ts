@@ -2715,7 +2715,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { conversationId, data } = event as unknown as { conversationId: string; data: Record<string, unknown> };
       try {
         import("@/store/hud-store").then(({ parseHudData, useHudStore }) => {
-          const hudData = parseHudData(JSON.stringify(data));
+          const hudData = parseHudData(data);
           if (hudData) {
             useHudStore.getState().setData(conversationId, hudData);
           }
