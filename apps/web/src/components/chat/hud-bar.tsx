@@ -27,20 +27,35 @@ function fmtModel(s: string): string {
 export function HudBar() {
   const enabled = useHudStore((s) => s.enabled);
   const activeConvId = useChatStore((s) => s.activeConversationId);
-  const data = useHudStore((s) => activeConvId ? s.dataMap[activeConvId] : null);
+  const convData = useHudStore((s) => activeConvId ? s.dataMap[activeConvId] : null);
+  const shared = useHudStore((s) => s.shared);
   const isMobile = useIsMobile();
 
-  if (!enabled || !data) return null;
+  // Show if enabled AND we have either shared or per-conversation data
+  const has5h = shared.fiveHour || convData?.fiveHour;
+  const has7d = shared.sevenDay || convData?.sevenDay;
+  const hasCtx = convData?.context;
+  const hasModel = convData?.model;
 
-  const fmt5h = data.fiveHourReset ? (isMobile ? fmtReset(data.fiveHourReset) : data.fiveHourReset) : "";
-  const fmt7d = data.sevenDayReset ? (isMobile ? fmtReset(data.sevenDayReset) : data.sevenDayReset) : "";
+  if (!enabled || (!has5h && !has7d && !hasCtx && !hasModel)) return null;
+
+  // 5H/7D from shared (global), context/model from per-conversation
+  const fiveHour = shared.fiveHour || convData?.fiveHour;
+  const fiveHourReset = shared.fiveHourReset || convData?.fiveHourReset;
+  const sevenDay = shared.sevenDay || convData?.sevenDay;
+  const sevenDayReset = shared.sevenDayReset || convData?.sevenDayReset;
+  const context = convData?.context;
+  const model = convData?.model;
+
+  const fmt5h = fiveHourReset ? (isMobile ? fmtReset(fiveHourReset) : fiveHourReset) : "";
+  const fmt7d = sevenDayReset ? (isMobile ? fmtReset(sevenDayReset) : sevenDayReset) : "";
 
   return (
     <div className="shrink-0 flex items-center justify-center gap-3 px-3 py-0.5 text-[10px] text-muted-foreground/60 font-mono select-none">
-      {data.context && <span>Ctx: {data.context}</span>}
-      {data.fiveHour && <span>5H: {data.fiveHour}{fmt5h ? ` (${fmt5h})` : ""}</span>}
-      {data.sevenDay && <span>7D: {data.sevenDay}{fmt7d ? ` (${fmt7d})` : ""}</span>}
-      {data.model && <span>{fmtModel(data.model)}</span>}
+      {context && <span>Ctx: {context}</span>}
+      {fiveHour && <span>5H: {fiveHour}{fmt5h ? ` (${fmt5h})` : ""}</span>}
+      {sevenDay && <span>7D: {sevenDay}{fmt7d ? ` (${fmt7d})` : ""}</span>}
+      {model && <span>{fmtModel(model)}</span>}
     </div>
   );
 }

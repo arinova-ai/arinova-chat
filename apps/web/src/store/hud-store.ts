@@ -11,13 +11,22 @@ export interface HudData {
   raw?: string;
 }
 
+export interface HudShared {
+  fiveHour?: string;
+  fiveHourReset?: string;
+  sevenDay?: string;
+  sevenDayReset?: string;
+}
+
 interface HudStore {
   enabled: boolean;
-  dataMap: Record<string, HudData>;
+  shared: HudShared;
+  dataMap: Record<string, HudData>; // per-conversation (context + model)
   toggle: () => void;
   setEnabled: (v: boolean) => void;
   setData: (conversationId: string, data: HudData) => void;
   getData: (conversationId: string) => HudData | null;
+  getShared: () => HudShared;
   clear: () => void;
 }
 
@@ -32,20 +41,28 @@ function writeEnabled(v: boolean) {
 
 export const useHudStore = create<HudStore>((set, get) => ({
   enabled: readEnabled(),
+  shared: {},
   dataMap: {},
   toggle: () => { const next = !get().enabled; writeEnabled(next); set({ enabled: next }); },
   setEnabled: (v) => { writeEnabled(v); set({ enabled: v }); },
-  setData: (conversationId, data) => set({ dataMap: { ...get().dataMap, [conversationId]: data } }),
+  setData: (conversationId, data) => {
+    // Always update shared 5H/7D
+    const shared: HudShared = { ...get().shared };
+    if (data.fiveHour) shared.fiveHour = data.fiveHour;
+    if (data.fiveHourReset) shared.fiveHourReset = data.fiveHourReset;
+    if (data.sevenDay) shared.sevenDay = data.sevenDay;
+    if (data.sevenDayReset) shared.sevenDayReset = data.sevenDayReset;
+    // Per-conversation: context + model
+    set({
+      shared,
+      dataMap: { ...get().dataMap, [conversationId]: data },
+    });
+  },
   getData: (conversationId) => get().dataMap[conversationId] ?? null,
-  clear: () => set({ dataMap: {} }),
+  getShared: () => get().shared,
+  clear: () => set({ shared: {}, dataMap: {} }),
 }));
 
-/** Parse HUD data from agent message content.
- *  Supports:
- *  1. JSON format: {"context":{"percent":5},"limit5h":{"percent":32},"limit7d":{"percent":19},"model":"Opus 4.6","cost":1.38}
- *  2. [HUD]...[/HUD] wrapper around JSON or text
- *  3. Inline text: "Context: X% | 5H: Y% | 7D: Z%"
- */
 /** Parse HUD data from a JSON object (from hud_data WS event). */
 export function parseHudData(data: unknown): HudData | null {
   try {
