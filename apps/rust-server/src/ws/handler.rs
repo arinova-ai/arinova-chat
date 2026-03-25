@@ -92,6 +92,74 @@ pub fn filter_agents_for_dispatch(
 }
 
 /// Safely truncate a string at a character boundary.
+/// Inject relevant agent memories into message content via embedding similarity search.
+async fn inject_agent_memories(
+    db: &PgPool,
+    config: &crate::config::Config,
+    agent_id: &str,
+    content: &str,
+) -> String {
+    let api_key = match config.openai_api_key.as_deref() {
+        Some(k) => k,
+        None => return content.to_string(),
+    };
+
+    // Generate embedding for user message
+    let client = reqwest::Client::new();
+    let embeddings = match crate::services::embedding::generate_embeddings(
+        &client, api_key, &[content.to_string()], crate::services::embedding::EMBEDDING_MODEL,
+    ).await {
+        Ok(e) if !e.is_empty() => e,
+        _ => return content.to_string(),
+    };
+    let query_vec = pgvector::Vector::from(embeddings.into_iter().next().unwrap());
+
+    // Search agent_memories by cosine similarity
+    let rows = sqlx::query_as::<_, (uuid::Uuid, String, String, Option<String>, f64)>(
+        r#"SELECT id, summary, category, detail,
+                  1 - (embedding <=> $2::vector) AS similarity
+           FROM agent_memories
+           WHERE agent_id = $1::uuid AND embedding IS NOT NULL
+           ORDER BY embedding <=> $2::vector
+           LIMIT 5"#,
+    )
+    .bind(agent_id)
+    .bind(&query_vec)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    // Filter by similarity threshold
+    let relevant: Vec<_> = rows.iter().filter(|r| r.4 >= 0.3).collect();
+    if relevant.is_empty() {
+        return content.to_string();
+    }
+
+    // Update hit_count + last_used_at
+    let ids: Vec<uuid::Uuid> = relevant.iter().map(|r| r.0).collect();
+    let _ = sqlx::query(
+        "UPDATE agent_memories SET hit_count = hit_count + 1, last_used_at = NOW() WHERE id = ANY($1)",
+    )
+    .bind(&ids)
+    .execute(db)
+    .await;
+
+    // Format memory context
+    let mut ctx = String::from("[Agent Memory Context]\n");
+    for r in &relevant {
+        ctx.push_str(&format!("- [{}] {}", r.2, r.1));
+        if let Some(ref detail) = r.3 {
+            if !detail.is_empty() {
+                ctx.push_str(&format!(" ({})", safe_truncate(detail, 100)));
+            }
+        }
+        ctx.push('\n');
+    }
+    ctx.push('\n');
+    ctx.push_str(content);
+    ctx
+}
+
 fn safe_truncate(s: &str, max_chars: usize) -> &str {
     match s.char_indices().nth(max_chars) {
         Some((idx, _)) => &s[..idx],
@@ -1588,11 +1656,13 @@ pub async fn trigger_agent_response(
         };
 
         if !is_sticker_without_ai {
+            // Inject relevant agent memories into message context
+            let enriched_content = inject_agent_memories(db, config, agent_id, content).await;
             do_trigger_agent_response(
                 user_id,
                 agent_id,
                 conversation_id,
-                content,
+                &enriched_content,
                 reply_to_id.as_deref(),
                 thread_id.as_deref(),
                 &conv_type,
