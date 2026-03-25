@@ -14,6 +14,18 @@ use crate::auth::middleware::{AuthAgent, AuthUser};
 use crate::ws::handler::trigger_agent_response;
 use crate::AppState;
 
+/// Redis cache key for board data
+fn board_cache_key(board_id: Uuid) -> String {
+    format!("kanban:board:{}", board_id)
+}
+
+/// Invalidate board cache in Redis
+async fn invalidate_board_cache(redis: &deadpool_redis::Pool, board_id: Uuid) {
+    if let Ok(mut conn) = redis.get().await {
+        let _: Result<(), _> = deadpool_redis::redis::AsyncCommands::del(&mut *conn, board_cache_key(board_id)).await;
+    }
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         // User API
@@ -711,6 +723,18 @@ async fn get_board(
     // Lazy-archive Done cards older than 3 days
     lazy_archive_done_cards(&state.db, board_id).await;
 
+    // Check Redis cache first
+    {
+        if let Ok(mut conn) = state.redis.get().await {
+            let cached: Result<String, _> = deadpool_redis::redis::AsyncCommands::get(&mut *conn, board_cache_key(board_id)).await;
+            if let Ok(json_str) = cached {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                    return Json(val).into_response();
+                }
+            }
+        }
+    }
+
     let columns = sqlx::query_as::<_, ColumnRow>(
         "SELECT id, board_id, name, sort_order FROM kanban_columns WHERE board_id = $1 ORDER BY sort_order",
     )
@@ -788,17 +812,27 @@ async fn get_board(
     .await;
 
     match (columns, cards, card_agents, card_notes, card_commits, labels, card_labels) {
-        (Ok(cols), Ok(crds), Ok(agents), Ok(notes), Ok(commits), Ok(lbls), Ok(cl)) => Json(json!({
-            "id": board_id,
-            "columns": cols,
-            "cards": crds,
-            "cardAgents": agents,
-            "cardNotes": notes,
-            "cardCommits": commits,
-            "labels": lbls,
-            "cardLabels": cl,
-        }))
-        .into_response(),
+        (Ok(cols), Ok(crds), Ok(agents), Ok(notes), Ok(commits), Ok(lbls), Ok(cl)) => {
+            let response_json = json!({
+                "id": board_id,
+                "columns": cols,
+                "cards": crds,
+                "cardAgents": agents,
+                "cardNotes": notes,
+                "cardCommits": commits,
+                "labels": lbls,
+                "cardLabels": cl,
+            });
+            // Cache in Redis (5 min TTL)
+            {
+                if let Ok(serialized) = serde_json::to_string(&response_json) {
+                    if let Ok(mut conn) = state.redis.get().await {
+                        let _: Result<(), _> = deadpool_redis::redis::AsyncCommands::set_ex(&mut *conn, board_cache_key(board_id), &serialized, 300).await;
+                    }
+                }
+            }
+            Json(response_json).into_response()
+        }
         _ => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "Failed to fetch board" })))
             .into_response(),
     }
@@ -890,7 +924,10 @@ async fn update_board(
         .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            invalidate_board_cache(&state.redis, board_id).await;
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -1011,6 +1048,7 @@ async fn create_column(
 
     match col {
         Ok(c) => {
+            invalidate_board_cache(&state.redis, board_id).await;
             let members = get_board_member_ids(&state.db, board_id).await;
             state.ws.broadcast_to_members(&members, &json!({
                 "type": "kanban_update",
@@ -1054,6 +1092,7 @@ async fn update_column(
     match result {
         Ok(_) => {
             if let Some(bid) = board_id_from_column(&state.db, column_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -1100,6 +1139,7 @@ async fn delete_column(
     match result {
         Ok(_) => {
             if let Some(bid) = bid {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -1229,6 +1269,7 @@ async fn reorder_columns(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
     }
 
+    invalidate_board_cache(&state.redis, board_id).await;
     Json(json!({ "ok": true })).into_response()
 }
 
@@ -1282,6 +1323,7 @@ async fn create_card(
     match result {
         Ok(card) => {
             if let Some(bid) = board_id_from_card(&state.db, card.id).await {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -1443,6 +1485,7 @@ async fn update_card(
     match result {
         Ok(_) => {
             if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -1479,6 +1522,7 @@ async fn delete_card(
     match result {
         Ok(_) => {
             if let Some(bid) = bid {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -1514,7 +1558,12 @@ async fn assign_agent(
     .await;
 
     match result {
-        Ok(_) => (StatusCode::CREATED, Json(json!({ "ok": true }))).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            (StatusCode::CREATED, Json(json!({ "ok": true }))).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -1537,7 +1586,12 @@ async fn unassign_agent(
         .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -1990,7 +2044,10 @@ async fn agent_update_board(
         .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            invalidate_board_cache(&state.redis, board_id).await;
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -2136,6 +2193,7 @@ async fn agent_create_column(
 
     match col {
         Ok(c) => {
+            invalidate_board_cache(&state.redis, board_id).await;
             let members = get_board_member_ids(&state.db, board_id).await;
             state.ws.broadcast_to_members(&members, &json!({
                 "type": "kanban_update",
@@ -2183,6 +2241,7 @@ async fn agent_update_column(
     match result {
         Ok(_) => {
             if let Some(bid) = board_id_from_column(&state.db, column_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -2232,6 +2291,7 @@ async fn agent_delete_column(
     match result {
         Ok(_) => {
             if let Some(bid) = bid {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -2299,6 +2359,7 @@ async fn agent_reorder_columns(
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
     }
 
+    invalidate_board_cache(&state.redis, board_id).await;
     Json(json!({ "ok": true })).into_response()
 }
 
@@ -2575,6 +2636,7 @@ async fn agent_create_card(
             .await;
 
             if let Some(bid) = board_id_from_card(&state.db, card.id).await {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -2634,6 +2696,7 @@ async fn agent_update_card(
     match result {
         Ok(_) => {
             if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -2675,6 +2738,7 @@ async fn agent_delete_card(
     match result {
         Ok(_) => {
             if let Some(bid) = bid {
+                invalidate_board_cache(&state.redis, bid).await;
                 let members = get_board_member_ids(&state.db, bid).await;
                 state.ws.broadcast_to_members(&members, &json!({
                     "type": "kanban_update",
@@ -2726,6 +2790,9 @@ async fn agent_complete_card(
             .bind(done_id)
             .execute(&state.db)
             .await;
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
             Json(json!({ "ok": true })).into_response()
         }
         _ => (
@@ -2811,7 +2878,12 @@ async fn archive_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -2835,7 +2907,12 @@ async fn unarchive_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "ok": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -2951,7 +3028,12 @@ async fn link_note_to_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!({ "linked": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -2976,7 +3058,12 @@ async fn unlink_note_from_card(
     .await;
 
     match result {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -3057,7 +3144,10 @@ async fn create_label(
     .await;
 
     match label {
-        Ok(l) => (StatusCode::CREATED, Json(json!(l))).into_response(),
+        Ok(l) => {
+            invalidate_board_cache(&state.redis, board_id).await;
+            (StatusCode::CREATED, Json(json!(l))).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3125,7 +3215,13 @@ async fn update_label(
     .await;
 
     match label {
-        Ok(l) => Json(json!(l)).into_response(),
+        Ok(l) => {
+            if let Some(bid) = sqlx::query_scalar::<_, Uuid>("SELECT board_id FROM kanban_labels WHERE id = $1")
+                .bind(label_id).fetch_optional(&state.db).await.ok().flatten() {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!(l)).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3140,13 +3236,22 @@ async fn delete_label(
         return e;
     }
 
+    // Get board_id before deleting the label
+    let bid = sqlx::query_scalar::<_, Uuid>("SELECT board_id FROM kanban_labels WHERE id = $1")
+        .bind(label_id).fetch_optional(&state.db).await.ok().flatten();
+
     let result = sqlx::query("DELETE FROM kanban_labels WHERE id = $1")
         .bind(label_id)
         .execute(&state.db)
         .await;
 
     match result {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(bid) = bid {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3190,7 +3295,12 @@ async fn add_label_to_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!({ "linked": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3214,7 +3324,12 @@ async fn remove_label_from_card(
     .await;
 
     match result {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3304,7 +3419,12 @@ async fn add_card_commit(
     .await;
 
     match result {
-        Ok(_) => StatusCode::CREATED.into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::CREATED.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3351,7 +3471,12 @@ async fn delete_card_commit(
     .await;
 
     match result {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3413,7 +3538,12 @@ async fn agent_add_card_commit(
     .await;
 
     match result {
-        Ok(_) => StatusCode::CREATED.into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::CREATED.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3456,7 +3586,12 @@ async fn agent_link_note_to_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!({ "linked": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -3485,7 +3620,12 @@ async fn agent_unlink_note_from_card(
     .await;
 
     match result {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
             .into_response(),
     }
@@ -3551,7 +3691,10 @@ async fn agent_create_label(
     .await;
 
     match label {
-        Ok(l) => (StatusCode::CREATED, Json(json!(l))).into_response(),
+        Ok(l) => {
+            invalidate_board_cache(&state.redis, board_id).await;
+            (StatusCode::CREATED, Json(json!(l))).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3627,7 +3770,13 @@ async fn agent_update_label(
     .await;
 
     match label {
-        Ok(l) => Json(json!(l)).into_response(),
+        Ok(l) => {
+            if let Some(bid) = sqlx::query_scalar::<_, Uuid>("SELECT board_id FROM kanban_labels WHERE id = $1")
+                .bind(label_id).fetch_optional(&state.db).await.ok().flatten() {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!(l)).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3646,13 +3795,22 @@ async fn agent_delete_label(
         return e;
     }
 
+    // Get board_id before deleting the label
+    let bid = sqlx::query_scalar::<_, Uuid>("SELECT board_id FROM kanban_labels WHERE id = $1")
+        .bind(label_id).fetch_optional(&state.db).await.ok().flatten();
+
     let result = sqlx::query("DELETE FROM kanban_labels WHERE id = $1")
         .bind(label_id)
         .execute(&state.db)
         .await;
 
     match result {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(bid) = bid {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3700,7 +3858,12 @@ async fn agent_add_label_to_card(
     .await;
 
     match result {
-        Ok(_) => Json(json!({ "linked": true })).into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            Json(json!({ "linked": true })).into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
@@ -3728,7 +3891,12 @@ async fn agent_remove_label_from_card(
     .await;
 
     match result {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(bid) = board_id_from_card(&state.db, card_id).await {
+                invalidate_board_cache(&state.redis, bid).await;
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
