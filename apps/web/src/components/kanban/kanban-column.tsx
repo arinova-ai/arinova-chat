@@ -70,9 +70,6 @@ export function FullColumn({
   onMoveCard,
   onRenameColumn,
   onDeleteColumn,
-  hasMore,
-  loadingMore,
-  onLoadMore,
 }: {
   column: KanbanColumn;
   cards: KanbanCard[];
@@ -89,9 +86,6 @@ export function FullColumn({
   onMoveCard?: (cardId: string, targetColumnId: string) => void;
   onRenameColumn?: (columnId: string, name: string) => void;
   onDeleteColumn?: (columnId: string) => void;
-  hasMore?: boolean;
-  loadingMore?: boolean;
-  onLoadMore?: () => void;
 }) {
   const { t } = useTranslation();
   const sortStorageKey = `kanban-sort-${column.id}`;
@@ -257,16 +251,6 @@ export function FullColumn({
         </SortableContext>
         {sortedCards.length === 0 && (
           <p className="py-6 text-center text-xs text-muted-foreground/60">{t("kanban.noCards")}</p>
-        )}
-        {hasMore && onLoadMore && (
-          <button
-            type="button"
-            onClick={onLoadMore}
-            disabled={loadingMore}
-            className="w-full py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {loadingMore ? <Loader2 className="h-3 w-3 animate-spin mx-auto" /> : t("common.loadMore")}
-          </button>
         )}
       </div>
 
