@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { useHudStore } from "@/store/hud-store";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -786,10 +787,13 @@ function DirectHeaderButtons({
 
   const pinned = available.filter((btn) => pinnedIds.includes(btn.id));
 
+  const hudEnabled = useHudStore((s) => s.enabled);
+
   const getActiveState = (id: string): boolean => {
     if (id === "search") return convSearchOpen;
     if (id === "mute") return isMuted;
     if (id === "call") return isInCall;
+    if (id === "hud") return hudEnabled;
     return false;
   };
 
@@ -797,6 +801,7 @@ function DirectHeaderButtons({
     if (id === "search" && convSearchOpen) return "text-blue-400";
     if (id === "mute" && isMuted) return "text-red-400";
     if (id === "call" && isInCall) return "text-green-400";
+    if (id === "hud" && hudEnabled) return "text-brand";
     return "";
   };
 
