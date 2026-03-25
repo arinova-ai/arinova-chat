@@ -1360,6 +1360,8 @@
   "wiki.comments": "留言",
   "wiki.edit": "編輯",
   "wiki.delete": "刪除",
+  "wiki.confirmDeletePage": "確定要刪除這個頁面嗎？",
+  "wiki.confirmDeleteComment": "確定要刪除這則留言嗎？",
   "rightPanel.wiki": "維基",
   "nav.persona": "人設",
   "nav.diary": "日記",

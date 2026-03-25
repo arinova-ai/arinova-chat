@@ -203,7 +203,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
       setIsEditing(false);
     } catch { /* api shows toast */ }
     setSaving(false);
-  }, [selectedPage, wikiBase, editTitle, editContent]);
+  }, [selectedPage, wikiBase, editTitle, editContent, editTags]);
 
   const handleCreate = async () => {
     const title = newTitle.trim();
@@ -240,7 +240,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
 
   const handleDelete = async () => {
     if (!selectedPage) return;
-    if (!window.confirm("Delete this page?")) return;
+    if (!window.confirm(t("wiki.confirmDeletePage"))) return;
     try {
       await api(`${wikiBase}/${selectedPage.id}`, { method: "DELETE" });
       setPages((prev) => prev.filter((p) => p.id !== selectedPage.id));
@@ -276,7 +276,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!window.confirm("Delete this comment?")) return;
+    if (!window.confirm(t("wiki.confirmDeleteComment"))) return;
     try {
       await api(`/api/wiki/comments/${commentId}`, { method: "DELETE" });
       setComments((prev) => prev.filter((c) => c.id !== commentId));
@@ -374,6 +374,13 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
             <span>{likeCount}</span>
           </button>
         </div>
+        {selectedPage?.tags && selectedPage.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {selectedPage.tags.map((tag: string) => (
+              <span key={tag} className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">{tag}</span>
+            ))}
+          </div>
+        )}
 
         {isEditing ? (
           <>
@@ -424,7 +431,7 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               placeholder={t("wiki.commentPlaceholder")}
-              rows={2}
+              rows={1}
               className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
