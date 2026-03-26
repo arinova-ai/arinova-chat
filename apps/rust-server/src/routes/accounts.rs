@@ -1123,7 +1123,7 @@ async fn subscribe(
 
     let conv_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO conversations (title, type, user_id, agent_id)
-           VALUES ($1, 'account', $2, NULL)
+           VALUES ($1, 'official', $2, NULL)
            RETURNING id"#,
     )
     .bind(&account_name)
