@@ -1141,10 +1141,10 @@ async fn subscribe(
         }
     };
 
-    // Add proxy user as participant if exists
+    // Add proxy user as conversation member if exists
     if let Some(ref pid) = proxy_user_id {
         let _ = sqlx::query(
-            r#"INSERT INTO conversation_participants (conversation_id, user_id)
+            r#"INSERT INTO conversation_user_members (conversation_id, user_id)
                VALUES ($1, $2)
                ON CONFLICT DO NOTHING"#,
         )
