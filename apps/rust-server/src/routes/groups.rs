@@ -648,6 +648,65 @@ async fn join_via_invite(
     let (conv_id, invite_enabled) = match group {
         Ok(Some(g)) => g,
         Ok(None) => {
+            // Fall back to community invite code
+            let community_invite = sqlx::query_as::<_, (Uuid, Uuid)>(
+                r#"SELECT id, community_id FROM community_invites WHERE code = $1"#,
+            )
+            .bind(&token)
+            .fetch_optional(&state.db)
+            .await;
+
+            if let Ok(Some((_invite_id, community_id))) = community_invite {
+                // Redirect to community join-by-invite handler
+                let body = serde_json::json!({});
+                let result = sqlx::query(
+                    r#"INSERT INTO community_members (community_id, user_id, role)
+                       VALUES ($1, $2, 'member')
+                       ON CONFLICT (community_id, user_id) DO NOTHING"#,
+                )
+                .bind(community_id)
+                .bind(&user.id)
+                .execute(&state.db)
+                .await;
+
+                if let Err(e) = result {
+                    tracing::error!("Community join via invite failed: {}", e);
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to join community"}))).into_response();
+                }
+
+                // Update member count
+                let _ = sqlx::query("UPDATE communities SET member_count = member_count + 1, updated_at = NOW() WHERE id = $1")
+                    .bind(community_id).execute(&state.db).await;
+
+                // Update invite use count
+                let _ = sqlx::query("UPDATE community_invites SET use_count = use_count + 1 WHERE code = $1")
+                    .bind(&token).execute(&state.db).await;
+
+                // Add to conversation
+                let conv = sqlx::query_scalar::<_, Uuid>(
+                    "SELECT conversation_id FROM communities WHERE id = $1",
+                )
+                .bind(community_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(cid) = conv {
+                    let _ = sqlx::query(
+                        "INSERT INTO conversation_user_members (conversation_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING",
+                    )
+                    .bind(cid)
+                    .bind(&user.id)
+                    .execute(&state.db)
+                    .await;
+
+                    return Json(json!({"conversationId": cid, "joined": true})).into_response();
+                }
+
+                return Json(json!({"joined": true})).into_response();
+            }
+
             return (
                 StatusCode::NOT_FOUND,
                 Json(json!({"error": "Invalid invite link"})),
