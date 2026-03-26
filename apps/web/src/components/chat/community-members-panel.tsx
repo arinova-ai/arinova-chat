@@ -510,7 +510,7 @@ export function CommunityMembersPanel({
                     {t("communityMembers.humans")} ({filteredMembers.length})
                   </p>
                   {sortedMembers.map((m) => (
-                    <div key={m.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 cursor-pointer" onClick={() => setProfileUserId(m.userId)}
+                    <div key={m.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 cursor-pointer" onClick={() => setProfileUserId(m.userId)}>
                       <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
                         {(m.memberAvatarUrl || m.userImage) ? (
                           <img src={assetUrl(m.memberAvatarUrl || m.userImage || "")} alt="" className="h-full w-full object-cover" />
