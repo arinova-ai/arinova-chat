@@ -3067,7 +3067,7 @@ async fn update_member_role(
     }
 
     let result = sqlx::query(
-        "UPDATE community_members SET role = $1 WHERE community_id = $2 AND user_id = $3",
+        "UPDATE community_members SET role = $1::community_role WHERE community_id = $2 AND user_id = $3",
     )
     .bind(&body.role)
     .bind(id)
@@ -4685,7 +4685,7 @@ async fn change_member_role(
     }
 
     let result = sqlx::query(
-        "UPDATE community_members SET role = $3 WHERE community_id = $1 AND user_id = $2",
+        "UPDATE community_members SET role = $3::community_role WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&target_user_id)
