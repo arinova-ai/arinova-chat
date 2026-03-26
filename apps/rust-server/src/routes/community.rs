@@ -4805,12 +4805,12 @@ async fn get_member_profile(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"})));
     }
 
-    // Fetch member profile
-    let member = sqlx::query_as::<_, (String, Option<String>, Option<String>, String, Option<String>)>(
-        r#"SELECT cm.role::text, cm.display_name, cm.member_avatar_url, u.name, u.image
+    // Fetch member profile (target_user_id may be real user_id OR community_members.id)
+    let member = sqlx::query_as::<_, (String, Option<String>, Option<String>, String, Option<String>, String)>(
+        r#"SELECT cm.role::text, cm.display_name, cm.member_avatar_url, u.name, u.image, cm.user_id
            FROM community_members cm
            JOIN "user" u ON u.id = cm.user_id
-           WHERE cm.community_id = $1 AND cm.user_id = $2"#,
+           WHERE cm.community_id = $1 AND (cm.user_id = $2 OR cm.id::text = $2)"#,
     )
     .bind(community_id)
     .bind(&target_user_id)
@@ -4818,7 +4818,7 @@ async fn get_member_profile(
     .await;
 
     match member {
-        Ok(Some((role, display_name, member_avatar, user_name, user_image))) => {
+        Ok(Some((role, display_name, member_avatar, user_name, user_image, real_user_id))) => {
             // Fetch agents owned by this member in this community
             let conv_id = sqlx::query_scalar::<_, Uuid>(
                 "SELECT conversation_id FROM communities WHERE id = $1",
@@ -4837,7 +4837,7 @@ async fn get_member_profile(
                        WHERE cm.conversation_id = $1 AND cm.owner_user_id = $2"#,
                 )
                 .bind(cid)
-                .bind(&target_user_id)
+                .bind(&real_user_id)
                 .fetch_all(&state.db)
                 .await
                 .unwrap_or_default()
