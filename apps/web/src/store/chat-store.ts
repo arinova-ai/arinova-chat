@@ -2750,6 +2750,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // Friend request notification
+    if ((event as Record<string, unknown>).type === "friend_request") {
+      const requesterName = (event as Record<string, unknown>).requesterName as string || "Someone";
+      useToastStore.getState().addToast(`${requesterName} wants to be your friend`, "info");
+      return;
+    }
+
     if (event.type === "read_receipt") {
       const { conversationId, userId, seq } = event;
       const current = get().readReceipts[conversationId] ?? {};

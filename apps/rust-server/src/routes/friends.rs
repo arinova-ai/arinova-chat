@@ -118,11 +118,52 @@ async fn send_friend_request(
     .await;
 
     match result {
-        Ok((id,)) => (
-            StatusCode::CREATED,
-            Json(json!({"id": id, "status": "pending"})),
-        )
-            .into_response(),
+        Ok((id,)) => {
+            // Get requester's name for notification
+            let requester_name = sqlx::query_scalar::<_, String>(
+                r#"SELECT name FROM "user" WHERE id = $1"#,
+            )
+            .bind(&user.id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "Someone".to_string());
+
+            // WS notification to addressee
+            state.ws.send_to_user_or_queue(&addressee_id, &json!({
+                "type": "friend_request",
+                "requesterId": &user.id,
+                "requesterName": &requester_name,
+                "friendshipId": id,
+            }), &state.redis);
+
+            // Push notification to addressee
+            let db2 = state.db.clone();
+            let config2 = state.config.clone();
+            let addr = addressee_id.clone();
+            let name = requester_name.clone();
+            tokio::spawn(async move {
+                let _ = crate::services::push::send_push_to_user(
+                    &db2,
+                    &config2,
+                    &addr,
+                    &crate::services::push::PushPayload {
+                        notification_type: "friend_request".into(),
+                        title: format!("{} wants to be your friend", name),
+                        body: "Tap to view the request".into(),
+                        url: Some("/friends".into()),
+                        message_id: None,
+                    },
+                ).await;
+            });
+
+            (
+                StatusCode::CREATED,
+                Json(json!({"id": id, "status": "pending"})),
+            )
+                .into_response()
+        }
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("unique") || msg.contains("duplicate") {
