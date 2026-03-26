@@ -70,7 +70,7 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
       return allConversations.filter((c) => accountConvIds.has(c.id));
     }
     // Personal mode: exclude conversations that belong to an official/lounge account
-    return allConversations.filter((c) => !(c as Record<string, unknown>).accountId);
+    return allConversations.filter((c) => !(c as unknown as Record<string, unknown>).accountId);
   }, [allConversations, activeAccountId, accountConversations]);
 
   const [tab, setTab] = useState<Tab>("all");
