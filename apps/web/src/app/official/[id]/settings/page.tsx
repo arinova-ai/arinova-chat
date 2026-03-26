@@ -8,10 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "@/lib/i18n";
 import { useAccountStore } from "@/store/account-store";
 import { api } from "@/lib/api";
+import { BACKEND_URL } from "@/lib/config";
 
 type Tab = "general" | "danger";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
 
 export default function OfficialSettingsPage() {
   const params = useParams();
