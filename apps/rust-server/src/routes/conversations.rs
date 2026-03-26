@@ -7,7 +7,7 @@ use axum::{
 };
 use chrono::NaiveDateTime;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use sqlx::FromRow;
 use uuid::Uuid;
 
@@ -36,6 +36,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/conversations/{id}/status", get(get_status))
         .route("/api/conversations/hidden", get(list_hidden_conversations))
         .route("/api/conversations/{id}/unhide", put(unhide_conversation))
+        .route("/api/conversations/{id}/subscription", get(get_subscription))
 }
 
 // ===== Request / Response types =====
@@ -1269,5 +1270,29 @@ async fn unhide_conversation(
             Json(json!({"error": e.to_string()})),
         )
             .into_response(),
+    }
+}
+
+/// GET /api/conversations/:id/subscription — Get account subscription info
+async fn get_subscription(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let sub = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT account_id FROM account_subscribers WHERE conversation_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match sub {
+        Ok(Some((account_id,))) => (StatusCode::OK, Json(json!({"accountId": account_id}))),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Not subscribed"}))),
+        Err(e) => {
+            tracing::error!("get_subscription: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+        }
     }
 }

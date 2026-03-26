@@ -408,17 +408,26 @@ export function ChatHeader({
                 case "unsubscribe":
                   if (confirm(t("official.detail.unsubscribeConfirmFull"))) {
                     const convObj = useChatStore.getState().conversations.find((c) => c.id === conversationId);
-                    const accId = (convObj as unknown as Record<string, unknown> | undefined)?.accountId as string | undefined;
-                    if (accId) {
-                      api(`/api/accounts/${accId}/subscribe`, { method: "DELETE" }).then(() => {
+                    let accId = (convObj as unknown as Record<string, unknown> | undefined)?.accountId as string | undefined;
+
+                    const doUnsub = async () => {
+                      // If no accountId on conversation, try to find it
+                      if (!accId && conversationId) {
+                        try {
+                          const sub = await api<{ accountId: string }>(`/api/conversations/${conversationId}/subscription`, { silent: true });
+                          accId = sub.accountId;
+                        } catch { /* ignore */ }
+                      }
+                      if (accId) {
+                        await api(`/api/accounts/${accId}/subscribe`, { method: "DELETE" });
                         useChatStore.getState().setActiveConversation(null);
-                        // Remove conversation from local store immediately
                         useChatStore.setState((s) => ({
                           conversations: s.conversations.filter((c) => c.id !== conversationId),
                         }));
                         useChatStore.getState().loadConversations();
-                      }).catch(() => {});
-                    }
+                      }
+                    };
+                    doUnsub().catch(() => {});
                   }
                   break;
                 case "report": {
