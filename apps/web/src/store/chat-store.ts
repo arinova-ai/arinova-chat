@@ -23,6 +23,7 @@ interface ConversationWithAgent extends Conversation {
   agentName: string;
   agentDescription: string | null;
   agentAvatarUrl: string | null;
+  communityAvatarUrl?: string | null;
   peerUserId?: string | null;
   lastMessage: Message | null;
   isVerified?: boolean;
