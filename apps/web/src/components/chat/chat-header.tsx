@@ -785,7 +785,7 @@ function DirectHeaderButtons({
 }: DirectHeaderButtonsProps) {
   const convType = type === "direct" ? "h2a" : type === "lounge" ? "h2a" : type === "official" ? "h2a" : type;
 
-  const isOfficialOrLounge = type === "official" || type === "lounge";
+  const isOfficialOrLounge = type === "official" || type === "lounge" || !!officialCommunityId;
   const officialExclude = new Set(["kanban", "notebook", "capsule", "hud", "call", "threads"]);
 
   // Filter buttons for this conversation type
