@@ -202,7 +202,7 @@ function SwipeableNoteItem({
       )}
 
       {/* Content */}
-      <div className="group/note relative overflow-hidden rounded-lg">
+      <div className="group/note relative">
       <button
         type="button"
         draggable
