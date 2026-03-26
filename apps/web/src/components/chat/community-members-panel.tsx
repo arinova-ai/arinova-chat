@@ -39,6 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 
 interface Member {
   id: string;
@@ -90,6 +91,7 @@ export function CommunityMembersPanel({
   const [myAgents, setMyAgents] = useState<MyAgent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<MyAgent | null>(null);
   const [agentDisplayName, setAgentDisplayName] = useState("");
+  const [agentAvatarUrl, setAgentAvatarUrl] = useState("");
   const [agentListenMode, setAgentListenMode] = useState("all");
   const [agentSearch, setAgentSearch] = useState("");
   const [adding, setAdding] = useState(false);
@@ -146,6 +148,7 @@ export function CommunityMembersPanel({
   const handleSelectAgent = (agent: MyAgent) => {
     setSelectedAgent(agent);
     setAgentDisplayName(agent.name);
+    setAgentAvatarUrl("");
     setAgentListenMode("all");
     setView("setupAgent");
   };
@@ -159,6 +162,7 @@ export function CommunityMembersPanel({
         body: JSON.stringify({
           agentId: selectedAgent.id,
           displayName: agentDisplayName || undefined,
+          memberAvatarUrl: agentAvatarUrl || undefined,
           listenMode: agentListenMode,
         }),
       });
@@ -344,6 +348,20 @@ export function CommunityMembersPanel({
                 <p className="text-sm font-semibold">{selectedAgent.name}</p>
                 <Badge variant="secondary" className="text-[10px] mt-0.5">agent</Badge>
               </div>
+            </div>
+
+            {/* Avatar picker */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">{t("communityMembers.avatar")}</label>
+              {agentAvatarUrl && (
+                <div className="flex items-center gap-3 mb-2">
+                  <img src={agentAvatarUrl} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-brand" />
+                  <Button variant="ghost" size="sm" onClick={() => setAgentAvatarUrl("")} className="text-muted-foreground text-xs">
+                    {t("common.remove")}
+                  </Button>
+                </div>
+              )}
+              <DefaultAvatarPicker onSelect={setAgentAvatarUrl} selected={agentAvatarUrl} />
             </div>
 
             {/* Display name */}
