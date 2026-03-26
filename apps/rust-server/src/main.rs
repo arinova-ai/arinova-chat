@@ -632,8 +632,22 @@ async fn main() {
 
     // hud skill removed — /hud is a built-in slash command handled by frontend
 
-    // Sticker AI tag column
+    // Sticker AI tag + pack slug
     sqlx::query("ALTER TABLE stickers ADD COLUMN IF NOT EXISTS agent_prompt TEXT").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE sticker_packs ADD COLUMN IF NOT EXISTS slug VARCHAR(100)").execute(&db).await.ok();
+    // Backfill slugs from pack names
+    for (name_pattern, slug) in [
+        ("Shinkai Girl%", "shinkai-girl-01"),
+        ("Arinova Official%", "arinova-pack-01"),
+        ("%Cat%", "cat-pack-01"),
+        ("%Ghost%", "ito-ghost-01"),
+        ("%Lobster%", "lobster-pack-01"),
+        ("%Panda%", "panda-ac-01"),
+        ("%Pixel%", "pixel-cat-01"),
+    ] {
+        sqlx::query("UPDATE sticker_packs SET slug = $1 WHERE slug IS NULL AND name ILIKE $2")
+            .bind(slug).bind(name_pattern).execute(&db).await.ok();
+    }
 
     // Kanban cards per-column index for pagination
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_kanban_cards_column_updated ON kanban_cards(column_id, updated_at DESC) WHERE archived = FALSE").execute(&db).await.ok();
