@@ -170,6 +170,7 @@
   "chat.unreadDivider": "以下是未讀訊息",
   "chat.messageActions": "訊息操作",
   "chat.header.members": "成員",
+  "chat.header.member": "成員",
   "chat.header.memberCount": "{count} 位成員",
   "chat.header.group": "群組",
   "chat.voiceMessage": "語音訊息",

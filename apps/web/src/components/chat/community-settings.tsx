@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -590,10 +591,11 @@ export function CommunitySettingsSheet({
       <SheetContent className="flex flex-col w-full sm:max-w-lg p-0 overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <SheetHeader className="px-4 pt-4 pb-0 shrink-0">
           <SheetTitle>{t("communitySettings.title")}</SheetTitle>
+          <SheetDescription className="sr-only">{t("communitySettings.title")}</SheetDescription>
         </SheetHeader>
 
         {/* Tab Navigation */}
-        <div className="flex gap-1 px-4 py-2 overflow-x-auto border-b border-border shrink-0">
+        <div className="flex gap-1 px-4 py-2 overflow-x-auto scrollbar-none border-b border-border shrink-0">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}

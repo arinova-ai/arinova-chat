@@ -296,7 +296,7 @@ export function ChatHeader({
             </p>
           ) : type === "group" || type === "community" ? (
             <p className="flex items-center gap-1 text-xs text-muted-foreground truncate">
-              <span>{memberCount ? `${memberCount} ${t("chat.header.members")}` : t("chat.header.group")}</span>
+              <span>{memberCount ? `${memberCount} ${memberCount === 1 ? t("chat.header.member") : t("chat.header.members")}` : t("chat.header.group")}</span>
               {type === "community" && pendingCount > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold leading-none">
                   {pendingCount}

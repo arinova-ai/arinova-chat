@@ -54,6 +54,7 @@ export function ChatArea() {
   const [manageOpen, setManageOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [communityMembersOpen, setCommunityMembersOpen] = useState(false);
+  const [resolvedCommunityId, setResolvedCommunityId] = useState<string | null>(null);
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
@@ -91,9 +92,11 @@ export function ChatArea() {
     conversationCount: conversations.length,
   }));
 
-  // Close sticker panel when switching conversations
+  // Close sticker panel and reset state when switching conversations
   useEffect(() => {
     setStickerOpen(false);
+    setCommunityMembersOpen(false);
+    setResolvedCommunityId(null);
   }, [activeConversationId]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -235,9 +238,15 @@ export function ChatArea() {
             router.push("/explore/lounge");
           }
         }) : (agent ? () => setManageOpen(true) : undefined) as (() => void) | undefined}
-        onMembersClick={isGroupLike(conversation.type) ? () => {
+        onMembersClick={isGroupLike(conversation.type) ? async () => {
           if (conversation.type === "community") {
-            setCommunityMembersOpen(true);
+            const cid = conversation.officialCommunityId
+              || resolvedCommunityId
+              || await api<{ id: string }>(`/api/communities/by-conversation/${conversation.id}`, { silent: true }).then((d) => d.id).catch(() => null);
+            if (cid) {
+              setResolvedCommunityId(cid);
+              setCommunityMembersOpen(true);
+            }
           } else if (window.matchMedia("(min-width: 1280px)").matches) {
             useRightPanelStore.getState().setActiveTab("members");
           } else {
@@ -304,11 +313,11 @@ export function ChatArea() {
 
       {isGroupLike(conversation.type) && (
         <>
-          {conversation.type === "community" && conversation.officialCommunityId ? (
+          {conversation.type === "community" && (conversation.officialCommunityId || resolvedCommunityId) ? (
             <CommunityMembersPanel
               open={communityMembersOpen}
               onClose={() => setCommunityMembersOpen(false)}
-              communityId={conversation.officialCommunityId}
+              communityId={(conversation.officialCommunityId || resolvedCommunityId) as string}
               canManage
             />
           ) : (

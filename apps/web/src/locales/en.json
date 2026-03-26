@@ -158,6 +158,7 @@
   "chat.unreadDivider": "Unread messages",
   "chat.messageActions": "Message actions",
   "chat.header.members": "Members",
+  "chat.header.member": "Member",
   "chat.header.memberCount": "{count} members",
   "chat.header.group": "Group",
   "chat.voiceMessage": "Voice message",
