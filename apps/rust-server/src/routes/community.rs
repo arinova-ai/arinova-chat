@@ -105,6 +105,13 @@ pub fn router() -> Router<AppState> {
         // Mute
         .route("/api/communities/{id}/mute-member", post(mute_member))
         .route("/api/communities/{id}/unmute-member", post(unmute_member))
+        // Role permissions
+        .route(
+            "/api/communities/{id}/role-permissions",
+            get(get_role_permissions).put(update_role_permissions),
+        )
+        // Change member role
+        .route("/api/communities/{id}/members/{user_id}/role", axum::routing::patch(change_member_role))
         // Hidden users
         .route(
             "/api/communities/{id}/hidden-users",
@@ -4495,4 +4502,270 @@ async fn unmute_member(
     .await;
 
     (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/communities/:id/role-permissions
+// ---------------------------------------------------------------------------
+
+const DEFAULT_PERMISSIONS: &[(&str, &[&str])] = &[
+    ("creator", &["kick", "mute", "invite", "add_agent", "manage_wiki", "pin_message"]),
+    ("admin", &["kick", "mute", "invite", "add_agent", "manage_wiki", "pin_message"]),
+    ("moderator", &["mute", "invite", "pin_message"]),
+    ("member", &[]),
+];
+
+const ALL_PERMISSIONS: &[&str] = &["kick", "mute", "invite", "add_agent", "manage_wiki", "pin_message"];
+
+async fn get_role_permissions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    // Check caller is creator or admin
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") | Some("admin") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Forbidden"}))),
+    }
+
+    // Fetch custom permissions
+    let rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT role, permission FROM community_role_permissions WHERE community_id = $1",
+    )
+    .bind(community_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    // Build result: start with defaults, overlay custom
+    let mut result: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+
+    if rows.is_empty() {
+        // No custom permissions — use defaults
+        for (role, perms) in DEFAULT_PERMISSIONS {
+            result.insert(role.to_string(), perms.iter().map(|p| p.to_string()).collect());
+        }
+    } else {
+        // Group by role
+        for (role, perm) in &rows {
+            result.entry(role.clone()).or_default().push(perm.clone());
+        }
+        // Ensure all roles present
+        for (role, _) in DEFAULT_PERMISSIONS {
+            result.entry(role.to_string()).or_default();
+        }
+    }
+
+    (StatusCode::OK, Json(json!({
+        "permissions": result,
+        "allPermissions": ALL_PERMISSIONS,
+    })))
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/communities/:id/role-permissions
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UpdateRolePermissionsBody {
+    /// Map of role -> [permission, ...]
+    permissions: std::collections::HashMap<String, Vec<String>>,
+}
+
+async fn update_role_permissions(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    Json(body): Json<UpdateRolePermissionsBody>,
+) -> (StatusCode, Json<Value>) {
+    // Only creator can update permissions
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if role.as_deref() != Some("creator") {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator can update permissions"})));
+    }
+
+    // Delete all existing and re-insert (but skip "creator" — always has all perms)
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))),
+    };
+
+    let _ = sqlx::query("DELETE FROM community_role_permissions WHERE community_id = $1")
+        .bind(community_id)
+        .execute(&mut *tx)
+        .await;
+
+    for (role, perms) in &body.permissions {
+        for perm in perms {
+            if ALL_PERMISSIONS.contains(&perm.as_str()) {
+                let _ = sqlx::query(
+                    "INSERT INTO community_role_permissions (community_id, role, permission) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+                )
+                .bind(community_id)
+                .bind(role)
+                .bind(perm)
+                .execute(&mut *tx)
+                .await;
+            }
+        }
+    }
+
+    let _ = tx.commit().await;
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/communities/:id/members/:user_id/role — Change member role
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ChangeRoleBody {
+    role: String,
+}
+
+async fn change_member_role(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((community_id, target_user_id)): Path<(Uuid, String)>,
+    Json(body): Json<ChangeRoleBody>,
+) -> (StatusCode, Json<Value>) {
+    // Only creator can change roles
+    let caller_role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if caller_role.as_deref() != Some("creator") {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator can change roles"})));
+    }
+
+    // Validate role
+    let valid_roles = ["admin", "moderator", "member"];
+    if !valid_roles.contains(&body.role.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid role"})));
+    }
+
+    // Cannot change creator's role (use transfer instead)
+    let target_role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if target_role.as_deref() == Some("creator") {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Cannot change creator role. Use transfer ownership."})));
+    }
+
+    let result = sqlx::query(
+        "UPDATE community_members SET role = $3 WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&target_user_id)
+    .bind(&body.role)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true}))),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Member not found"}))),
+        Err(e) => {
+            tracing::error!("change_member_role: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Check if user has a specific permission in a community
+// ---------------------------------------------------------------------------
+
+pub async fn has_community_permission(
+    db: &sqlx::PgPool,
+    community_id: Uuid,
+    user_id: &str,
+    permission: &str,
+) -> bool {
+    // Get user's role
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+
+    let role = match role {
+        Some(r) => r,
+        None => return false,
+    };
+
+    // Creator always has all permissions
+    if role == "creator" {
+        return true;
+    }
+
+    // Check custom permissions first
+    let has_custom = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM community_role_permissions WHERE community_id = $1 AND role = $2 AND permission = $3)",
+    )
+    .bind(community_id)
+    .bind(&role)
+    .bind(permission)
+    .fetch_one(db)
+    .await
+    .unwrap_or(false);
+
+    if has_custom {
+        return true;
+    }
+
+    // If no custom permissions exist for this community, use defaults
+    let any_custom = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM community_role_permissions WHERE community_id = $1)",
+    )
+    .bind(community_id)
+    .fetch_one(db)
+    .await
+    .unwrap_or(false);
+
+    if !any_custom {
+        // Use defaults
+        for (default_role, perms) in DEFAULT_PERMISSIONS {
+            if *default_role == role {
+                return perms.contains(&permission);
+            }
+        }
+    }
+
+    false
 }

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Crown,
   Shield,
+  Wrench,
   Search,
   UserPlus,
   Bot,
@@ -30,6 +31,7 @@ import {
   UserMinus,
   VolumeX,
   Volume2,
+  ShieldCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -230,6 +232,17 @@ export function CommunityMembersPanel({
         body: JSON.stringify({ userId }),
       });
       useToastStore.getState().addToast(t("communityMembers.unmuted"), "success");
+      fetchData();
+    } catch {}
+  }, [communityId, fetchData, t]);
+
+  const handleChangeRole = useCallback(async (userId: string, role: string) => {
+    try {
+      await api(`/api/communities/${communityId}/members/${userId}/role`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      });
+      useToastStore.getState().addToast(t("communityMembers.roleChanged"), "success");
       fetchData();
     } catch {}
   }, [communityId, fetchData, t]);
@@ -517,6 +530,28 @@ export function CommunityMembersPanel({
                                   <VolumeX className="h-4 w-4" />
                                   {t("communityMembers.mutePermanent")}
                                 </DropdownMenuItem>
+                              </>
+                            )}
+                            {myRole === "creator" && (
+                              <>
+                                {m.role !== "admin" && (
+                                  <DropdownMenuItem onClick={() => handleChangeRole(m.userId, "admin")}>
+                                    <ShieldCheck className="h-4 w-4" />
+                                    {t("communityMembers.promoteAdmin")}
+                                  </DropdownMenuItem>
+                                )}
+                                {m.role !== "moderator" && (
+                                  <DropdownMenuItem onClick={() => handleChangeRole(m.userId, "moderator")}>
+                                    <Wrench className="h-4 w-4" />
+                                    {t("communityMembers.promoteMod")}
+                                  </DropdownMenuItem>
+                                )}
+                                {m.role !== "member" && (
+                                  <DropdownMenuItem onClick={() => handleChangeRole(m.userId, "member")}>
+                                    <Shield className="h-4 w-4" />
+                                    {t("communityMembers.demoteToMember")}
+                                  </DropdownMenuItem>
+                                )}
                               </>
                             )}
                             <DropdownMenuItem className="text-red-400" onClick={() => setConfirmKick(m)}>

@@ -728,6 +728,14 @@ async fn main() {
     sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS is_muted BOOLEAN NOT NULL DEFAULT FALSE").execute(&db).await.ok();
     sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS muted_until TIMESTAMPTZ").execute(&db).await.ok();
 
+    // Community role permissions
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS community_role_permissions (
+        community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        permission TEXT NOT NULL,
+        PRIMARY KEY (community_id, role, permission)
+    )"#).execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards

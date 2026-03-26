@@ -65,6 +65,33 @@ async fn pin_message(
             .into_response();
     }
 
+    // For community conversations, check pin_message permission
+    let conv_type = sqlx::query_scalar::<_, String>(
+        r#"SELECT type::text FROM conversations WHERE id = $1::uuid"#,
+    )
+    .bind(&conv_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if conv_type.as_deref() == Some("community") {
+        let community_id = sqlx::query_scalar::<_, uuid::Uuid>(
+            "SELECT id FROM communities WHERE conversation_id = $1::uuid",
+        )
+        .bind(&conv_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        if let Some(cid) = community_id {
+            if !crate::routes::community::has_community_permission(&state.db, cid, &user.id, "pin_message").await {
+                return (StatusCode::FORBIDDEN, Json(json!({"error": "No permission to pin messages"}))).into_response();
+            }
+        }
+    }
+
     // Verify message belongs to this conversation
     let msg_exists = sqlx::query_as::<_, (i64,)>(
         r#"SELECT COUNT(*) FROM messages

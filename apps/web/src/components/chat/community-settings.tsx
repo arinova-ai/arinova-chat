@@ -938,6 +938,13 @@ export function CommunitySettingsSheet({
                       ? t("communitySettings.saved")
                       : t("communitySettings.saveInfo")}
                 </Button>
+
+                <Separator />
+
+                {/* Role Permission Matrix */}
+                {isCreator && (
+                  <RolePermissionMatrix communityId={communityId} />
+                )}
               </div>
             )}
 
@@ -1217,6 +1224,85 @@ function BannedUsersTab({ communityId }: { communityId: string }) {
           </Button>
         </div>
       ))}
+    </div>
+  );
+}
+
+const ROLES = ["admin", "moderator", "member"] as const;
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin 🛡️",
+  moderator: "Moderator 🔧",
+  member: "Member",
+};
+
+function RolePermissionMatrix({ communityId }: { communityId: string }) {
+  const { t } = useTranslation();
+  const [permissions, setPermissions] = useState<Record<string, string[]>>({});
+  const [allPerms, setAllPerms] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    api<{ permissions: Record<string, string[]>; allPermissions: string[] }>(`/api/communities/${communityId}/role-permissions`, { silent: true })
+      .then((d) => {
+        setPermissions(d.permissions);
+        setAllPerms(d.allPermissions);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [communityId]);
+
+  const togglePerm = (role: string, perm: string) => {
+    setPermissions((prev) => {
+      const current = prev[role] || [];
+      const has = current.includes(perm);
+      return {
+        ...prev,
+        [role]: has ? current.filter((p) => p !== perm) : [...current, perm],
+      };
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api(`/api/communities/${communityId}/role-permissions`, {
+        method: "PUT",
+        body: JSON.stringify({ permissions }),
+      });
+      useToastStore.getState().addToast(t("communitySettings.saved"), "success");
+    } catch {}
+    setSaving(false);
+  };
+
+  if (loading) return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold">{t("communitySettings.rolePermissions")}</h4>
+      <p className="text-xs text-muted-foreground">{t("communitySettings.rolePermissionsDesc")}</p>
+
+      {ROLES.map((role) => (
+        <div key={role} className="space-y-1">
+          <p className="text-xs font-semibold text-muted-foreground">{ROLE_LABELS[role]}</p>
+          <div className="grid grid-cols-2 gap-1">
+            {allPerms.map((perm) => {
+              const checked = (permissions[role] || []).includes(perm);
+              return (
+                <label key={perm} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-accent/50 cursor-pointer">
+                  <Switch checked={checked} onCheckedChange={() => togglePerm(role, perm)} className="scale-75" />
+                  <span className="text-xs">{perm.replace(/_/g, " ")}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      <Button size="sm" onClick={handleSave} disabled={saving}>
+        {saving ? t("communitySettings.saving") : t("communitySettings.saveInfo")}
+      </Button>
     </div>
   );
 }
