@@ -384,8 +384,8 @@ export function CommunityMembersPanel({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("communityMembers.listenAll")}</SelectItem>
-                  <SelectItem value="mention_only">{t("communityMembers.listenMention")}</SelectItem>
-                  <SelectItem value="none">{t("communityMembers.listenNone")}</SelectItem>
+                  <SelectItem value="all_mentions">{t("communityMembers.listenMention")}</SelectItem>
+                  <SelectItem value="muted">{t("communityMembers.listenNone")}</SelectItem>
                   <SelectItem value="owner_only">{t("communityMembers.listenOwnerOnly")}</SelectItem>
                   <SelectItem value="owner_and_allowlist">{t("communityMembers.listenOwnerAllowlist")}</SelectItem>
                   <SelectItem value="allowlist_mentions">{t("communityMembers.listenAllowlistMentions")}</SelectItem>
