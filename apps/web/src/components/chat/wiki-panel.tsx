@@ -107,6 +107,14 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
   const [comments, setComments] = useState<WikiComment[]>([]);
   const [newComment, setNewComment] = useState("");
 
+  // Reset to list view when panel is closed
+  useEffect(() => {
+    if (!open) {
+      setViewMode("list");
+      setSelectedPage(null);
+    }
+  }, [open]);
+
   // Escape key closes mobile overlay
   useEffect(() => {
     if (inline || !open || !onOpenChange) return;
