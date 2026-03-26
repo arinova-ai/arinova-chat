@@ -1619,8 +1619,18 @@ pub async fn trigger_agent_response(
         }
         // Per-agent queue: if this specific agent has an active stream, queue it
         if ws_state.has_active_stream_for_agent(conversation_id, agent_id) {
-            tracing::info!("Agent queued (active stream): conv={} agent={}", conversation_id, agent_id);
             let queue_key = format!("{}:{}", conversation_id, agent_id);
+
+            // Dedup: skip if this message is already queued for this agent
+            let already_queued = ws_state.agent_response_queues.get(&queue_key)
+                .map(|q| q.iter().any(|item| item.user_message_id.as_deref() == saved_user_msg_id.as_deref() && saved_user_msg_id.is_some()))
+                .unwrap_or(false);
+            if already_queued {
+                tracing::info!("Agent skip duplicate queue: conv={} agent={} msg={:?}", conversation_id, agent_id, saved_user_msg_id);
+                continue;
+            }
+
+            tracing::info!("Agent queued (active stream): conv={} agent={}", conversation_id, agent_id);
             ws_state
                 .agent_response_queues
                 .entry(queue_key)

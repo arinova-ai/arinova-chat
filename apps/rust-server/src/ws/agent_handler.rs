@@ -507,6 +507,15 @@ async fn handle_agent_ws(socket: WebSocket, state: AppState, client_ip: Option<S
                         for dispatch_agent_id in dispatch_ids {
                             if ws_state.has_active_stream_for_agent(conversation_id, &dispatch_agent_id) {
                                 let queue_key = format!("{}:{}", conversation_id, dispatch_agent_id);
+
+                                // Dedup: skip if this message is already queued
+                                let already_queued = ws_state.agent_response_queues.get(&queue_key)
+                                    .map(|q| q.iter().any(|item| item.user_message_id.as_deref() == Some(&msg_id)))
+                                    .unwrap_or(false);
+                                if already_queued {
+                                    continue;
+                                }
+
                                 ws_state
                                     .agent_response_queues
                                     .entry(queue_key)
