@@ -2001,6 +2001,37 @@ pub(crate) async fn do_trigger_agent_response(
         effective_content
     };
 
+    // Inject anonymous context for community conversations
+    let system_prompt = if conv_type == "community" {
+        let owner_display_name = sqlx::query_scalar::<_, String>(
+            r#"SELECT COALESCE(cm.display_name, u.name)
+               FROM community_members cm
+               JOIN communities c ON c.id = cm.community_id
+               JOIN "user" u ON u.id = cm.user_id
+               WHERE c.conversation_id = $1::uuid AND cm.user_id = (
+                   SELECT owner_id FROM agents WHERE id = $2::uuid
+               )"#,
+        )
+        .bind(conversation_id)
+        .bind(agent_id)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "Unknown".to_string());
+
+        let anon_context = format!(
+            "[Community Anonymous Context]\nYou are in an anonymous community. Your anonymous name is \"{}\". Your owner's anonymous name is \"{}\". NEVER reveal any real names or identities. Always refer to yourself as \"{}\" and your owner as \"{}\".\n\n",
+            agent_name, owner_display_name, agent_name, owner_display_name
+        );
+        match system_prompt {
+            Some(prompt) => Some(format!("{}{}", anon_context, prompt)),
+            None => Some(anon_context),
+        }
+    } else {
+        system_prompt
+    };
+
     // Prepend system prompt if configured
     let task_content = match &system_prompt {
         Some(prompt) if !prompt.is_empty() => {
