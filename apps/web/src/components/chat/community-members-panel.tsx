@@ -176,7 +176,7 @@ export function CommunityMembersPanel({
       } catch {}
     }
     if (sent > 0) {
-      useToastStore.getState().addToast({ message: t("communityMembers.inviteSent"), type: "success" });
+      useToastStore.getState().addToast(t("communityMembers.inviteSent"));
     }
     setView("main");
     fetchData();
