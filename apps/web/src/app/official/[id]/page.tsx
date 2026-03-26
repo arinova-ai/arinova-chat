@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { assetUrl } from "@/lib/config";
 import { useTranslation } from "@/lib/i18n";
 import { useAccountStore } from "@/store/account-store";
+import { useChatStore } from "@/store/chat-store";
 import { GiftButton } from "@/components/accounts/gift-button";
 
 interface OfficialDetail {
@@ -54,12 +55,18 @@ export default function OfficialDetailPage() {
         await unsubscribe(id);
         setIsSubscribed(false);
       } else {
-        await subscribe(id);
+        const res = await subscribe(id);
         setIsSubscribed(true);
+        // Navigate to conversation
+        if (res?.conversationId) {
+          await useChatStore.getState().loadConversations();
+          useChatStore.getState().setActiveConversation(res.conversationId);
+          router.push("/");
+        }
       }
     } catch {}
     setSubscribing(false);
-  }, [id, isSubscribed, subscribe, unsubscribe]);
+  }, [id, isSubscribed, subscribe, unsubscribe, router]);
 
   if (loading) {
     return (

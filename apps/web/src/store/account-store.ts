@@ -159,7 +159,7 @@ interface AccountState {
   loadAnalytics: (accountId: string) => Promise<AnalyticsData>;
 
   // Subscribe/Unsubscribe (as a user, not as owner)
-  subscribe: (accountId: string) => Promise<void>;
+  subscribe: (accountId: string) => Promise<{ conversationId?: string }>;
   unsubscribe: (accountId: string) => Promise<void>;
 
   // Lounge: Diaries
@@ -291,7 +291,7 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   },
 
   subscribe: async (accountId) => {
-    await api(`/api/accounts/${accountId}/subscribe`, { method: "POST" });
+    return api<{ conversationId?: string }>(`/api/accounts/${accountId}/subscribe`, { method: "POST" });
   },
 
   unsubscribe: async (accountId) => {
