@@ -26,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/accounts/{id}/analytics", get(get_analytics))
         .route("/api/explore/official", get(explore_official))
         .route("/api/explore/lounge", get(explore_lounge))
+        .route("/api/official/{id}", get(get_official_detail))
         // Broadcast CRUD
         .route("/api/accounts/{id}/broadcasts", get(list_broadcasts).post(create_broadcast))
         .route(
@@ -1650,6 +1651,50 @@ async fn explore_official(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({ "error": "Database error" })),
             )
+        }
+    }
+}
+
+/// GET /api/official/:id — Public detail for an official account
+async fn get_official_detail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> (StatusCode, Json<Value>) {
+    let row = sqlx::query_as::<_, (
+        String, String, Option<String>, Option<String>, Option<String>, String,
+        Option<String>, Option<String>, i64, DateTime<Utc>,
+    )>(
+        r#"SELECT a.id::text, a.name, a.avatar, a.bio, a.cover_image_url, a.owner_id,
+                  u.name, u.image,
+                  (SELECT COUNT(*) FROM account_subscribers WHERE account_id = a.id) AS subscriber_count,
+                  a.created_at
+           FROM accounts a
+           JOIN "user" u ON u.id = a.owner_id
+           WHERE a.id::text = $1 AND a.type = 'official'"#,
+    )
+    .bind(&id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match row {
+        Ok(Some((aid, name, avatar, bio, cover, owner_id, owner_name, owner_image, sub_count, created_at))) => {
+            (StatusCode::OK, Json(json!({
+                "id": aid,
+                "name": name,
+                "avatar": avatar,
+                "bio": bio,
+                "coverImageUrl": cover,
+                "ownerId": owner_id,
+                "ownerName": owner_name,
+                "ownerImage": owner_image,
+                "subscriberCount": sub_count,
+                "createdAt": created_at.to_rfc3339(),
+            })))
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Official account not found"}))),
+        Err(e) => {
+            tracing::error!("get_official_detail failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
         }
     }
 }
