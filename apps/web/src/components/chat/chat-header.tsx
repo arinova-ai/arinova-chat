@@ -406,12 +406,16 @@ export function ChatHeader({
                   });
                   break;
                 case "unsubscribe":
-                  if (confirm(t("official.detail.unsubscribeConfirm"))) {
+                  if (confirm(t("official.detail.unsubscribeConfirmFull"))) {
                     const convObj = useChatStore.getState().conversations.find((c) => c.id === conversationId);
-                    const accId = (convObj as Record<string, unknown> | undefined)?.accountId as string | undefined;
+                    const accId = (convObj as unknown as Record<string, unknown> | undefined)?.accountId as string | undefined;
                     if (accId) {
                       api(`/api/accounts/${accId}/subscribe`, { method: "DELETE" }).then(() => {
                         useChatStore.getState().setActiveConversation(null);
+                        // Remove conversation from local store immediately
+                        useChatStore.setState((s) => ({
+                          conversations: s.conversations.filter((c) => c.id !== conversationId),
+                        }));
                         useChatStore.getState().loadConversations();
                       }).catch(() => {});
                     }

@@ -165,6 +165,7 @@
   "chat.header.reportReason": "Why are you reporting this?",
   "chat.header.reportSent": "Report submitted",
   "official.detail.unsubscribeConfirm": "Are you sure you want to unsubscribe?",
+  "official.detail.unsubscribeConfirmFull": "Are you sure you want to unsubscribe? This conversation and its messages will be deleted.",
   "chat.voiceMessage": "Voice message",
   "chat.photoMessage": "Photo",
   "chat.stickerGift.claim": "View sticker pack",

@@ -177,6 +177,7 @@
   "chat.header.reportReason": "請說明檢舉原因",
   "chat.header.reportSent": "檢舉已提交",
   "official.detail.unsubscribeConfirm": "確定要取消訂閱嗎？",
+  "official.detail.unsubscribeConfirmFull": "確定要取消訂閱嗎？此對話及訊息將被刪除。",
   "chat.voiceMessage": "語音訊息",
   "chat.photoMessage": "照片",
   "chat.stickerGift.claim": "查看貼圖包",

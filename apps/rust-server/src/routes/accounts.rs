@@ -1229,6 +1229,17 @@ async fn unsubscribe(
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
+    // Get conversation_id before deleting subscription
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM account_subscribers WHERE account_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
     let result = sqlx::query(
         "DELETE FROM account_subscribers WHERE account_id = $1 AND user_id = $2",
     )
@@ -1238,10 +1249,19 @@ async fn unsubscribe(
     .await;
 
     match result {
-        Ok(r) if r.rows_affected() > 0 => (
-            StatusCode::OK,
-            Json(json!({ "success": true })),
-        ),
+        Ok(r) if r.rows_affected() > 0 => {
+            // Clean up: remove from conversation_user_members + delete conversation
+            if let Some(cid) = conv_id {
+                let _ = sqlx::query("DELETE FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2")
+                    .bind(cid).bind(&user.id).execute(&state.db).await;
+                let _ = sqlx::query("DELETE FROM official_conversations WHERE conversation_id = $1 AND user_id = $2")
+                    .bind(cid).bind(&user.id).execute(&state.db).await;
+                // Delete the conversation itself (subscriber's DM)
+                let _ = sqlx::query("DELETE FROM conversations WHERE id = $1 AND user_id = $2")
+                    .bind(cid).bind(&user.id).execute(&state.db).await;
+            }
+            (StatusCode::OK, Json(json!({ "success": true })))
+        }
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({ "error": "Subscription not found" })),
