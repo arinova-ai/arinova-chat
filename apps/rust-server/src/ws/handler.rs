@@ -558,25 +558,6 @@ async fn handle_message(
 
             let content = sanitize_content(content);
 
-            // Wrap untrusted content: non-owner messages get tagged so agent knows not to execute dangerous ops
-            let content = if user_id != conv_owner_id && !conv_owner_id.is_empty() {
-                let sender_name = sqlx::query_scalar::<_, String>(
-                    r#"SELECT name FROM "user" WHERE id = $1"#,
-                )
-                .bind(user_id)
-                .fetch_optional(db)
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| "Unknown".to_string());
-                format!(
-                    "[UNTRUSTED_USER_MESSAGE sender=\"{}\" senderId=\"{}\"]\n{}\n[/UNTRUSTED_USER_MESSAGE]",
-                    sender_name, user_id, content
-                )
-            } else {
-                content
-            };
-
             trigger_agent_response(
                 user_id,
                 conversation_id,
@@ -1938,6 +1919,35 @@ pub(crate) async fn do_trigger_agent_response(
             }
             _ => effective_content,
         }
+    } else {
+        effective_content
+    };
+
+    // Wrap untrusted content for agent (non-owner messages in 1-on-1)
+    let conv_owner = sqlx::query_scalar::<_, String>(
+        "SELECT user_id FROM conversations WHERE id = $1::uuid",
+    )
+    .bind(conversation_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_default();
+
+    let effective_content = if user_id != conv_owner && !conv_owner.is_empty() && (conv_type == "h2a" || conv_type == "h2h" || conv_type == "direct" || conv_type == "official") {
+        let wrap_name = sqlx::query_scalar::<_, String>(
+            r#"SELECT name FROM "user" WHERE id = $1"#,
+        )
+        .bind(user_id)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "Unknown".to_string());
+        format!(
+            "[UNTRUSTED_USER_MESSAGE sender=\"{}\" senderId=\"{}\"]\n{}\n[/UNTRUSTED_USER_MESSAGE]",
+            wrap_name, user_id, effective_content
+        )
     } else {
         effective_content
     };
