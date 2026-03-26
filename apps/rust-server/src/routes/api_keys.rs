@@ -127,7 +127,7 @@ async fn list_keys(
     .await
     .unwrap_or_default();
 
-    let keys: Vec<Value> = rows
+    let mut keys: Vec<Value> = rows
         .iter()
         .map(|r| {
             json!({
@@ -137,9 +137,32 @@ async fn list_keys(
                 "lastUsedAt": r.last_used_at.map(|t| t.and_utc().to_rfc3339()),
                 "createdAt": r.created_at.and_utc().to_rfc3339(),
                 "revokedAt": r.revoked_at.map(|t| t.and_utc().to_rfc3339()),
+                "type": "cli",
             })
         })
         .collect();
+
+    // Also include agent bot tokens (stored in agents.secret_token)
+    let agent_tokens = sqlx::query_as::<_, (String, String, String, NaiveDateTime)>(
+        r#"SELECT id::text, name, COALESCE(LEFT(secret_token, 12), ''), created_at
+           FROM agents
+           WHERE owner_id = $1 AND secret_token IS NOT NULL AND secret_token != ''"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    for (id, name, prefix, created_at) in &agent_tokens {
+        keys.push(json!({
+            "id": format!("agent_{}", id),
+            "name": format!("{} (Bot Token)", name),
+            "prefix": prefix,
+            "createdAt": created_at.and_utc().to_rfc3339(),
+            "revokedAt": null,
+            "type": "bot",
+        }));
+    }
 
     (StatusCode::OK, Json(json!({ "keys": keys })))
 }
