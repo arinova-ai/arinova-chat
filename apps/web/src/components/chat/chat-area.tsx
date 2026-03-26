@@ -103,15 +103,22 @@ export function ChatArea() {
 
   // Listen for community agent profile clicks from message-bubble
   useEffect(() => {
-    const handler = (e: Event) => {
+    const handler = async (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (detail?.agentId) {
+      if (detail?.agentId && detail?.conversationId) {
+        // Resolve communityId if needed
+        if (!resolvedCommunityId) {
+          try {
+            const data = await api<{ id: string }>(`/api/communities/by-conversation/${detail.conversationId}`, { silent: true });
+            setResolvedCommunityId(data.id);
+          } catch { /* ignore */ }
+        }
         setCommunityAgentSheet({ agentId: detail.agentId });
       }
     };
     window.addEventListener("community-agent-profile", handler);
     return () => window.removeEventListener("community-agent-profile", handler);
-  }, []);
+  }, [resolvedCommunityId]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
