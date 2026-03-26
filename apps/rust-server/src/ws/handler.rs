@@ -7,7 +7,7 @@ use axum::{
     routing::get,
     Router,
 };
-use chrono::Datelike;
+use chrono::{DateTime, Datelike, Utc};
 use deadpool_redis::redis::AsyncCommands;
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
@@ -1119,6 +1119,38 @@ pub async fn trigger_agent_response(
         Ok(Some(c)) => c,
         _ => return,
     };
+
+    // Check mute status for community conversations
+    if conv_type == "community" {
+        let muted = sqlx::query_as::<_, (bool, Option<DateTime<Utc>>)>(
+            r#"SELECT cm.is_muted, cm.muted_until
+               FROM community_members cm
+               JOIN communities c ON c.id = cm.community_id
+               WHERE c.conversation_id = $1::uuid AND cm.user_id = $2"#,
+        )
+        .bind(conversation_id)
+        .bind(user_id)
+        .fetch_optional(db)
+        .await
+        .ok()
+        .flatten();
+
+        if let Some((is_muted, muted_until)) = muted {
+            if is_muted {
+                let still_muted = muted_until.map_or(true, |until| Utc::now() < until);
+                if still_muted {
+                    // Send error back to user
+                    ws_state.send_to_user_or_queue(user_id, &json!({
+                        "type": "error",
+                        "code": "muted",
+                        "message": "You are muted in this community",
+                        "mutedUntil": muted_until,
+                    }), redis);
+                    return;
+                }
+            }
+        }
+    }
 
     // Determine target agent(s)
     let agent_ids: Vec<String> = if conv_type == "group" || conv_type == "community" {

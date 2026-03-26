@@ -59,7 +59,7 @@ import { useToastStore } from "@/store/toast-store";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { compressImage } from "@/lib/image-compress";
 
-type Tab = "info" | "personal" | "permissions" | "invites" | "hidden" | "danger";
+type Tab = "info" | "personal" | "permissions" | "invites" | "hidden" | "bans" | "danger";
 
 interface CommunitySettingsProps {
   open: boolean;
@@ -581,6 +581,7 @@ export function CommunitySettingsSheet({
     { id: "permissions", label: t("communitySettings.permissions"), icon: <Lock className="h-4 w-4" />, adminOnly: true },
     { id: "invites", label: t("communitySettings.invites"), icon: <Link2 className="h-4 w-4" />, adminOnly: true },
     { id: "hidden", label: t("communitySettings.hiddenUsers"), icon: <EyeOff className="h-4 w-4" /> },
+    { id: "bans", label: t("communitySettings.bannedUsers"), icon: <UserMinus className="h-4 w-4" />, adminOnly: true },
     { id: "danger", label: t("communitySettings.dangerZone"), icon: <Trash2 className="h-4 w-4" /> },
   ];
 
@@ -1050,6 +1051,11 @@ export function CommunitySettingsSheet({
               <HiddenUsersTab communityId={communityId} />
             )}
 
+            {/* ── Banned Users Tab ── */}
+            {activeTab === "bans" && (
+              <BannedUsersTab communityId={communityId} />
+            )}
+
             {/* ── Danger Zone Tab ── */}
             {activeTab === "danger" && (
               <div className="space-y-4">
@@ -1161,6 +1167,51 @@ function HiddenUsersTab({ communityId }: { communityId: string }) {
           </div>
           <Button variant="outline" size="sm" onClick={() => handleUnhide(u.userId)}>
             {t("communitySettings.unhide")}
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BannedUsersTab({ communityId }: { communityId: string }) {
+  const { t } = useTranslation();
+  const [bans, setBans] = useState<{ userId: string; userName: string; reason: string | null; createdAt: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api<{ bans: typeof bans }>(`/api/communities/${communityId}/bans`, { silent: true })
+      .then((d) => setBans(d.bans))
+      .catch(() => setBans([]))
+      .finally(() => setLoading(false));
+  }, [communityId]);
+
+  const handleUnban = async (userId: string) => {
+    try {
+      await api(`/api/communities/${communityId}/bans/${userId}`, { method: "DELETE" });
+      setBans((prev) => prev.filter((b) => b.userId !== userId));
+      useToastStore.getState().addToast(t("communitySettings.unbanned"), "success");
+    } catch {}
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  if (bans.length === 0) return <p className="py-8 text-center text-sm text-muted-foreground">{t("communitySettings.noBannedUsers")}</p>;
+
+  return (
+    <div className="space-y-1">
+      {bans.map((b) => (
+        <div key={b.userId} className="flex items-center gap-3 rounded-lg px-2 py-2">
+          <div className="h-8 w-8 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
+            {b.userName.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{b.userName}</p>
+            {b.reason && <p className="text-xs text-muted-foreground truncate">{b.reason}</p>}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => handleUnban(b.userId)}>
+            {t("communitySettings.unban")}
           </Button>
         </div>
       ))}

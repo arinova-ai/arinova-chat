@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { assetUrl } from "@/lib/config";
+import { authClient } from "@/lib/auth-client";
 import { useToastStore } from "@/store/toast-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,17 @@ import {
   Bot,
   Check,
   Loader2,
+  MoreHorizontal,
+  UserMinus,
+  VolumeX,
+  Volume2,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Member {
   id: string;
@@ -35,6 +46,8 @@ interface Member {
   userImage: string | null;
   displayName?: string | null;
   memberAvatarUrl?: string | null;
+  isMuted?: boolean;
+  mutedUntil?: string | null;
 }
 
 interface AgentMember {
@@ -83,6 +96,11 @@ export function CommunityMembersPanel({
   const [friendsList, setFriendsList] = useState<{ id: string; name: string; image: string | null }[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
   const [friendSearch, setFriendSearch] = useState("");
+
+  // Kick/mute
+  const [confirmKick, setConfirmKick] = useState<Member | null>(null);
+  const { data: session } = authClient.useSession();
+  const currentUserId = session?.user?.id;
 
   const fetchData = useCallback(async () => {
     if (!communityId) return;
@@ -181,6 +199,40 @@ export function CommunityMembersPanel({
     setView("main");
     fetchData();
   }, [communityId, selectedFriends, fetchData, t]);
+
+  const myRole = members.find((m) => m.userId === currentUserId)?.role;
+  const isCreatorOrAdmin = myRole === "creator" || myRole === "moderator";
+
+  const handleKick = useCallback(async (userId: string) => {
+    try {
+      await api(`/api/communities/${communityId}/members/${userId}`, { method: "DELETE" });
+      useToastStore.getState().addToast(t("communityMembers.kicked"), "success");
+      fetchData();
+    } catch {}
+    setConfirmKick(null);
+  }, [communityId, fetchData, t]);
+
+  const handleMute = useCallback(async (userId: string, duration: number | null) => {
+    try {
+      await api(`/api/communities/${communityId}/mute-member`, {
+        method: "POST",
+        body: JSON.stringify({ userId, duration }),
+      });
+      useToastStore.getState().addToast(t("communityMembers.muted"), "success");
+      fetchData();
+    } catch {}
+  }, [communityId, fetchData, t]);
+
+  const handleUnmute = useCallback(async (userId: string) => {
+    try {
+      await api(`/api/communities/${communityId}/unmute-member`, {
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      });
+      useToastStore.getState().addToast(t("communityMembers.unmuted"), "success");
+      fetchData();
+    } catch {}
+  }, [communityId, fetchData, t]);
 
   if (!open) return null;
 
@@ -428,9 +480,52 @@ export function CommunityMembersPanel({
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{m.displayName || m.userName}</p>
+                        <p className="text-sm font-medium truncate">
+                          {m.displayName || m.userName}
+                          {m.isMuted && <span className="ml-1 text-[10px] text-red-400">({t("communityMembers.mutedLabel")})</span>}
+                        </p>
                       </div>
                       {roleBadge(m.role)}
+                      {isCreatorOrAdmin && m.userId !== currentUserId && m.role !== "creator" && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="p-1 rounded hover:bg-muted shrink-0">
+                              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {m.isMuted ? (
+                              <DropdownMenuItem onClick={() => handleUnmute(m.userId)}>
+                                <Volume2 className="h-4 w-4" />
+                                {t("communityMembers.unmute")}
+                              </DropdownMenuItem>
+                            ) : (
+                              <>
+                                <DropdownMenuItem onClick={() => handleMute(m.userId, 3600)}>
+                                  <VolumeX className="h-4 w-4" />
+                                  {t("communityMembers.mute1h")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleMute(m.userId, 86400)}>
+                                  <VolumeX className="h-4 w-4" />
+                                  {t("communityMembers.mute24h")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleMute(m.userId, 604800)}>
+                                  <VolumeX className="h-4 w-4" />
+                                  {t("communityMembers.mute7d")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleMute(m.userId, null)}>
+                                  <VolumeX className="h-4 w-4" />
+                                  {t("communityMembers.mutePermanent")}
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            <DropdownMenuItem className="text-red-400" onClick={() => setConfirmKick(m)}>
+                              <UserMinus className="h-4 w-4" />
+                              {t("communityMembers.kick")}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -464,12 +559,34 @@ export function CommunityMembersPanel({
   };
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex flex-col bg-background animate-in slide-in-from-right duration-200"
-      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      {renderContent()}
-    </div>,
+    <>
+      <div
+        className="fixed inset-0 z-50 flex flex-col bg-background animate-in slide-in-from-right duration-200"
+        style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        {renderContent()}
+      </div>
+
+      {/* Kick confirmation */}
+      {confirmKick && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => setConfirmKick(null)}>
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-background p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold">{t("communityMembers.kickConfirmTitle")}</h3>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t("communityMembers.kickConfirmDesc", { name: confirmKick.displayName || confirmKick.userName })}
+            </p>
+            <div className="mt-4 flex gap-2 justify-end">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmKick(null)}>
+                {t("communityMembers.cancel")}
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => handleKick(confirmKick.userId)}>
+                {t("communityMembers.kick")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>,
     document.body,
   );
 }

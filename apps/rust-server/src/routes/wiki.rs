@@ -361,6 +361,8 @@ struct CommunityWikiPageRow {
     owner_image: Option<String>,
     like_count: Option<i64>,
     is_liked: Option<bool>,
+    community_display_name: Option<String>,
+    community_avatar: Option<String>,
 }
 
 fn community_wiki_page_to_json(row: &CommunityWikiPageRow) -> serde_json::Value {
@@ -372,8 +374,8 @@ fn community_wiki_page_to_json(row: &CommunityWikiPageRow) -> serde_json::Value 
         "tags": &row.tags,
         "isPinned": row.is_pinned,
         "ownerId": &row.owner_id,
-        "authorName": &row.owner_name,
-        "authorAvatar": &row.owner_image,
+        "authorName": row.community_display_name.as_ref().or(row.owner_name.as_ref()),
+        "authorAvatar": row.community_avatar.as_ref().or(row.owner_image.as_ref()),
         "likeCount": row.like_count.unwrap_or(0),
         "isLiked": row.is_liked.unwrap_or(false),
         "createdAt": row.created_at.to_rfc3339(),
@@ -406,9 +408,11 @@ async fn list_community_wiki_pages(
         r#"SELECT wp.id, wp.community_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
                   (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count,
-                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $2) AS is_liked
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $2) AS is_liked,
+                  cm.display_name AS community_display_name, cm.member_avatar_url AS community_avatar
            FROM wiki_pages wp
            LEFT JOIN "user" u ON u.id = wp.owner_id
+           LEFT JOIN community_members cm ON cm.community_id = wp.community_id AND cm.user_id = wp.owner_id
            WHERE wp.community_id = $1
            ORDER BY wp.is_pinned DESC, wp.updated_at DESC"#,
     )
@@ -440,9 +444,11 @@ async fn get_community_wiki_page(
         r#"SELECT wp.id, wp.community_id, wp.title, wp.content, wp.tags, wp.is_pinned, wp.owner_id, wp.created_at, wp.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
                   (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = wp.id) AS like_count,
-                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $3) AS is_liked
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = wp.id AND user_id = $3) AS is_liked,
+                  cm.display_name AS community_display_name, cm.member_avatar_url AS community_avatar
            FROM wiki_pages wp
            LEFT JOIN "user" u ON u.id = wp.owner_id
+           LEFT JOIN community_members cm ON cm.community_id = wp.community_id AND cm.user_id = wp.owner_id
            WHERE wp.id = $1 AND wp.community_id = $2"#,
     )
     .bind(page_id)
@@ -545,9 +551,11 @@ async fn update_community_wiki_page(
            SELECT up.id, up.community_id, up.title, up.content, up.tags, up.is_pinned, up.owner_id, up.created_at, up.updated_at,
                   u.name AS owner_name, u.image AS owner_image,
                   (SELECT COUNT(*) FROM wiki_likes wl WHERE wl.wiki_page_id = up.id) AS like_count,
-                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = up.id AND user_id = ${}) AS is_liked
+                  EXISTS(SELECT 1 FROM wiki_likes WHERE wiki_page_id = up.id AND user_id = ${}) AS is_liked,
+                  cm.display_name AS community_display_name, cm.member_avatar_url AS community_avatar
            FROM updated up
-           LEFT JOIN "user" u ON u.id = up.owner_id"#,
+           LEFT JOIN "user" u ON u.id = up.owner_id
+           LEFT JOIN community_members cm ON cm.community_id = up.community_id AND cm.user_id = up.owner_id"#,
         set_clauses.join(", "), user_id_idx
     );
 

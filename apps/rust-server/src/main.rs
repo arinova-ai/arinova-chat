@@ -714,6 +714,20 @@ async fn main() {
     sqlx::query("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)").execute(&db).await.ok();
     sqlx::query("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS member_avatar_url TEXT").execute(&db).await.ok();
 
+    // Community bans
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS community_bans (
+        community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES "user"(id),
+        banned_by TEXT NOT NULL REFERENCES "user"(id),
+        reason TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (community_id, user_id)
+    )"#).execute(&db).await.ok();
+
+    // Mute columns on community_members
+    sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS is_muted BOOLEAN NOT NULL DEFAULT FALSE").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS muted_until TIMESTAMPTZ").execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards

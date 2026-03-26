@@ -93,6 +93,18 @@ pub fn router() -> Router<AppState> {
         .route("/api/community-invites/my", get(my_invites))
         .route("/api/community-invites/{invite_id}/accept", post(accept_invite))
         .route("/api/community-invites/{invite_id}/reject", post(reject_invite))
+        // Bans
+        .route(
+            "/api/communities/{id}/bans",
+            get(list_bans),
+        )
+        .route(
+            "/api/communities/{id}/bans/{userId}",
+            axum::routing::delete(unban_user),
+        )
+        // Mute
+        .route("/api/communities/{id}/mute-member", post(mute_member))
+        .route("/api/communities/{id}/unmute-member", post(unmute_member))
         // Hidden users
         .route(
             "/api/communities/{id}/hidden-users",
@@ -1411,6 +1423,26 @@ async fn leave(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": "Database error" })),
         );
+    }
+
+    // Also remove from conversation_user_members
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(cid) = conv_id {
+        let _ = sqlx::query(
+            "DELETE FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+        )
+        .bind(cid)
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await;
     }
 
     if let Err(e) = sqlx::query(
@@ -3169,6 +3201,18 @@ async fn kick_member(
         .await;
     }
 
+    // Insert into community_bans
+    let _ = sqlx::query(
+        r#"INSERT INTO community_bans (community_id, user_id, banned_by)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (community_id, user_id) DO NOTHING"#,
+    )
+    .bind(id)
+    .bind(&target_user_id)
+    .bind(&user.id)
+    .execute(&mut *tx)
+    .await;
+
     // Decrement member_count
     if let Err(e) = sqlx::query(
         "UPDATE communities SET member_count = GREATEST(member_count - 1, 0), updated_at = NOW() WHERE id = $1",
@@ -3190,6 +3234,15 @@ async fn kick_member(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": "Database error" })),
         );
+    }
+
+    // WS notification to kicked user
+    if let Some(cid) = conv_id {
+        state.ws.send_to_user_or_queue(&target_user_id, &json!({
+            "type": "community_kicked",
+            "communityId": id,
+            "conversationId": cid,
+        }), &state.redis);
     }
 
     (StatusCode::OK, Json(json!({ "success": true })))
@@ -4246,6 +4299,200 @@ async fn reject_invite(
         .bind(invite_id)
         .execute(&state.db)
         .await;
+
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/communities/:id/bans — List banned users
+// ---------------------------------------------------------------------------
+
+async fn list_bans(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    // Check caller is creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can view bans"}))),
+    }
+
+    let rows = sqlx::query_as::<_, (String, String, Option<String>, DateTime<Utc>)>(
+        r#"SELECT b.user_id, u.name, b.reason, b.created_at
+           FROM community_bans b
+           JOIN "user" u ON u.id = b.user_id
+           WHERE b.community_id = $1
+           ORDER BY b.created_at DESC"#,
+    )
+    .bind(community_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let bans: Vec<Value> = rows.into_iter().map(|(uid, name, reason, created_at)| {
+        json!({ "userId": uid, "userName": name, "reason": reason, "createdAt": created_at })
+    }).collect();
+
+    (StatusCode::OK, Json(json!({ "bans": bans })))
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/communities/:id/bans/:userId — Unban user
+// ---------------------------------------------------------------------------
+
+async fn unban_user(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((community_id, target_user_id)): Path<(Uuid, String)>,
+) -> (StatusCode, Json<Value>) {
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can unban"}))),
+    }
+
+    let _ = sqlx::query("DELETE FROM community_bans WHERE community_id = $1 AND user_id = $2")
+        .bind(community_id)
+        .bind(&target_user_id)
+        .execute(&state.db)
+        .await;
+
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/:id/mute-member — Mute a member
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct MuteMemberBody {
+    #[serde(rename = "userId")]
+    user_id: String,
+    /// Duration in seconds. None = permanent
+    duration: Option<i64>,
+}
+
+async fn mute_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    Json(body): Json<MuteMemberBody>,
+) -> (StatusCode, Json<Value>) {
+    // Check caller is creator or moderator
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can mute members"}))),
+    }
+
+    let muted_until = body.duration.map(|d| Utc::now() + chrono::Duration::seconds(d));
+
+    let result = sqlx::query(
+        "UPDATE community_members SET is_muted = TRUE, muted_until = $3 WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&body.user_id)
+    .bind(muted_until)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => {
+            // WS notification
+            let conv_id = sqlx::query_scalar::<_, Uuid>(
+                "SELECT conversation_id FROM communities WHERE id = $1",
+            )
+            .bind(community_id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten();
+
+            if let Some(cid) = conv_id {
+                state.ws.send_to_user_or_queue(&body.user_id, &json!({
+                    "type": "community_muted",
+                    "communityId": community_id,
+                    "conversationId": cid,
+                    "mutedUntil": muted_until,
+                }), &state.redis);
+            }
+            (StatusCode::OK, Json(json!({"ok": true})))
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Member not found"}))),
+        Err(e) => {
+            tracing::error!("mute_member: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/communities/:id/unmute-member — Unmute a member
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UnmuteMemberBody {
+    #[serde(rename = "userId")]
+    user_id: String,
+}
+
+async fn unmute_member(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    Json(body): Json<UnmuteMemberBody>,
+) -> (StatusCode, Json<Value>) {
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can unmute members"}))),
+    }
+
+    let _ = sqlx::query(
+        "UPDATE community_members SET is_muted = FALSE, muted_until = NULL WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&body.user_id)
+    .execute(&state.db)
+    .await;
 
     (StatusCode::OK, Json(json!({"ok": true})))
 }

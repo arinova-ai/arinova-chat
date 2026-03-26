@@ -2731,6 +2731,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // Community muted — show toast
+    if ((event as Record<string, unknown>).type === "error" && (event as Record<string, unknown>).code === "muted") {
+      useToastStore.getState().addToast((event as Record<string, unknown>).message as string || "You are muted");
+      return;
+    }
+
+    // Community kicked — remove conversation from list
+    if ((event as Record<string, unknown>).type === "community_kicked") {
+      const cid = (event as Record<string, unknown>).conversationId as string;
+      if (cid) {
+        set((s) => ({
+          conversations: s.conversations.filter((c) => c.id !== cid),
+          activeConversationId: s.activeConversationId === cid ? null : s.activeConversationId,
+        }));
+      }
+      return;
+    }
+
     if (event.type === "read_receipt") {
       const { conversationId, userId, seq } = event;
       const current = get().readReceipts[conversationId] ?? {};
