@@ -379,6 +379,7 @@ export function ChatHeader({
             conversationId={conversationId}
             agentId={agentId}
             officialCommunityId={officialCommunityId}
+            isVerified={isVerified}
             csStatus={csStatus}
             onAction={(actionId) => {
               switch (actionId) {
@@ -542,6 +543,7 @@ interface DirectHeaderButtonsProps {
   conversationId?: string;
   agentId?: string;
   officialCommunityId?: string | null;
+  isVerified?: boolean;
   csStatus: string | null;
   onAction: (id: string) => void;
   onTransferHuman: () => void;
@@ -777,6 +779,7 @@ function DirectHeaderButtons({
   conversationId,
   agentId,
   officialCommunityId,
+  isVerified,
   csStatus,
   onAction,
   onTransferHuman,
@@ -785,7 +788,7 @@ function DirectHeaderButtons({
 }: DirectHeaderButtonsProps) {
   const convType = type === "direct" ? "h2a" : type === "lounge" ? "h2a" : type === "official" ? "h2a" : type;
 
-  const isOfficialOrLounge = type === "official" || type === "lounge" || !!officialCommunityId;
+  const isOfficialOrLounge = type === "official" || type === "lounge" || !!officialCommunityId || !!isVerified;
   const officialExclude = new Set(["kanban", "notebook", "capsule", "hud", "call", "threads"]);
 
   // Filter buttons for this conversation type
