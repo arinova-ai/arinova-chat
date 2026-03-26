@@ -240,7 +240,7 @@ function SwipeableNoteItem({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onAttach(note); }}
-          className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:text-brand transition-colors"
+          className="absolute right-2 top-2 z-[2] rounded p-1 text-muted-foreground hover:text-brand transition-colors"
           title={t("chat.notebook.attachToChat")}
         >
           <Paperclip className="h-3.5 w-3.5" />
