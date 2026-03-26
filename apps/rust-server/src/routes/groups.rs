@@ -408,7 +408,7 @@ async fn list_members(
             let (shown_user_id, shown_username, shown_is_verified) = if is_community {
                 use sha2::{Sha256, Digest};
                 let mut hasher = Sha256::new();
-                hasher.update(id.as_bytes());
+                hasher.update(id.to_string().as_bytes()); // use string form to match WS handler
                 hasher.update(r.1.as_bytes());
                 let anon_id = format!("anon-{}", hex::encode(&hasher.finalize()[..8]));
                 (anon_id, None, false)
