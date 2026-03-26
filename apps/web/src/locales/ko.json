@@ -851,6 +851,7 @@
   "communitySettings.add": "추가",
   "communitySettings.noFriendsToInvite": "초대할 친구가 없습니다",
   "communitySettings.noAgentsToAdd": "추가할 에이전트가 없습니다",
+  "communitySettings.agents": "Agents",
   "communitySettings.you": "(나)",
   "communitySettings.personalSettings": "개인 설정",
   "communitySettings.permissions": "권한 설정",

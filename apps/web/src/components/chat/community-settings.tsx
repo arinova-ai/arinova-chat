@@ -177,6 +177,7 @@ export function CommunitySettingsSheet({
   // Members panel — invite friends / add agent
   const [friendsList, setFriendsList] = useState<{ id: string; name: string; username: string | null; image: string | null }[]>([]);
   const [agentsList, setAgentsList] = useState<{ id: string; name: string; avatarUrl: string | null }[]>([]);
+  const [communityAgents, setCommunityAgents] = useState<{ id: string; agentName: string; avatarUrl: string | null }[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
   const [showInviteFriends, setShowInviteFriends] = useState(false);
@@ -193,12 +194,14 @@ export function CommunitySettingsSheet({
     if (!communityId) return;
     setLoading(true);
     try {
-      const [communityData, membersData] = await Promise.all([
+      const [communityData, membersData, agentsData] = await Promise.all([
         api<CommunityInfo>(`/api/communities/${communityId}`),
         api<{ members: Member[] }>(`/api/communities/${communityId}/members`),
+        api<{ agents: { id: string; agentName: string; avatarUrl: string | null }[] }>(`/api/communities/${communityId}/agents`, { silent: true }).catch(() => ({ agents: [] })),
       ]);
       setCommunity(communityData);
       setMembers(membersData.members);
+      setCommunityAgents(agentsData.agents);
       setName(communityData.name);
       setDescription(communityData.description ?? "");
       setAvatarUrl(communityData.avatarUrl ?? "");
@@ -882,6 +885,21 @@ export function CommunitySettingsSheet({
                       </div>
                     ))}
                   </div>
+
+                  {communityAgents.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase">{t("communitySettings.agents")}</p>
+                      {communityAgents.map((a) => (
+                        <div key={a.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                          <div className="h-8 w-8 rounded-full bg-muted overflow-hidden shrink-0">
+                            {a.avatarUrl && <img src={a.avatarUrl} alt="" className="h-full w-full object-cover" />}
+                          </div>
+                          <p className="text-sm font-medium truncate flex-1">{a.agentName}</p>
+                          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">agent</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             )}

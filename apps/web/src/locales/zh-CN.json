@@ -848,6 +848,7 @@
   "communitySettings.add": "添加",
   "communitySettings.noFriendsToInvite": "没有可邀请的好友",
   "communitySettings.noAgentsToAdd": "没有可添加的 Agent",
+  "communitySettings.agents": "Agents",
   "communitySettings.you": "（你）",
   "communitySettings.personalSettings": "个人设置",
   "communitySettings.permissions": "权限设置",
