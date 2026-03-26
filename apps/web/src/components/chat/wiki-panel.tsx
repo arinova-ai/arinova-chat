@@ -25,7 +25,10 @@ import {
   Heart,
   Trash2,
   Pencil,
+  ImageIcon,
+  Smile,
 } from "lucide-react";
+import { BACKEND_URL } from "@/lib/config";
 
 interface WikiPage {
   id: string;
@@ -413,7 +416,15 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
                   <span className="text-xs font-medium">{c.userName || "Unknown"}</span>
                   <span className="text-[10px] text-muted-foreground">{formatTime(c.createdAt)}</span>
                 </div>
-                <p className="text-sm text-foreground">{c.content}</p>
+                <div className="text-sm text-foreground space-y-1">
+                  {c.content.split("\n").map((line, i) => {
+                    const imgMatch = line.match(/^!\[.*?\]\((.*?)\)$/);
+                    if (imgMatch) {
+                      return <img key={i} src={imgMatch[1]} alt="" className="max-w-[200px] rounded-md mt-1" />;
+                    }
+                    return <p key={i}>{line}</p>;
+                  })}
+                </div>
               </div>
               {c.userId === currentUserId && (
                 <button
@@ -426,28 +437,64 @@ export function WikiPanel({ conversationId, communityId, inline, open, onOpenCha
               )}
             </div>
           ))}
-          <div className="flex gap-2">
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder={t("wiki.commentPlaceholder")}
-              rows={1}
-              className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleAddComment();
-                }
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleAddComment}
-              disabled={!newComment.trim()}
-              className="self-end rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
-            >
-              {t("wiki.commentPost")}
-            </button>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder={t("wiki.commentPlaceholder")}
+                rows={1}
+                className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddComment();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleAddComment}
+                disabled={!newComment.trim()}
+                className="self-end rounded-md px-2 py-1 text-xs font-medium bg-brand text-white hover:bg-brand/90 transition-colors disabled:opacity-50"
+              >
+                {t("wiki.commentPost")}
+              </button>
+            </div>
+            <div className="flex gap-1">
+              <label className="cursor-pointer rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                <ImageIcon className="h-4 w-4" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    try {
+                      const res = await fetch(`${BACKEND_URL}/api/uploads`, { method: "POST", credentials: "include", body: formData });
+                      const data = await res.json();
+                      if (data.url) {
+                        setNewComment((prev) => prev + (prev ? "\n" : "") + `![image](${data.url})`);
+                      }
+                    } catch {}
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                onClick={() => {
+                  setNewComment((prev) => prev + (prev ? " " : "") + "😊");
+                }}
+                title={t("wiki.addEmoji")}
+              >
+                <Smile className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

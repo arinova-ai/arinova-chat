@@ -59,7 +59,7 @@ export const GROUP_HEADER_BUTTONS: GroupHeaderButton[] = [
   { id: "files", labelKey: "chat.header.files", icon: FileText },
 ];
 
-export const GROUP_DEFAULT_PINS = ["members", "kanban"];
+export const GROUP_DEFAULT_PINS = ["members", "wiki", "kanban"];
 export const GROUP_MAX_PINS = 4;
 
 interface ChatHeaderSettingsProps {
