@@ -71,6 +71,7 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
   }, [allConversations, activeAccountId, accountConversations]);
 
   const [tab, setTab] = useState<Tab>("all");
+  const [communitySubTab, setCommunitySubTab] = useState<"all" | "joined" | "invites">("all");
   const [pinnedOrder, setPinnedOrder] = useState<string[]>(loadPinnedOrder);
 
   // Hidden conversations
@@ -85,6 +86,42 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
       .catch(() => setHiddenConvs([]))
       .finally(() => setHiddenLoading(false));
   }, [tab]);
+
+  // Community invites
+  interface CommunityInvite {
+    id: string;
+    communityId: string;
+    communityName: string;
+    communityAvatarUrl: string | null;
+    inviterName: string | null;
+    createdAt: string;
+  }
+  const [communityInvites, setCommunityInvites] = useState<CommunityInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "communities") return;
+    setInvitesLoading(true);
+    api<{ invites: CommunityInvite[] }>("/api/community-invites/my", { silent: true })
+      .then((d) => setCommunityInvites(d.invites))
+      .catch(() => setCommunityInvites([]))
+      .finally(() => setInvitesLoading(false));
+  }, [tab]);
+
+  const handleAcceptInvite = useCallback(async (inviteId: string) => {
+    try {
+      await api(`/api/community-invites/${inviteId}/accept`, { method: "POST" });
+      setCommunityInvites((prev) => prev.filter((i) => i.id !== inviteId));
+      useChatStore.getState().loadConversations();
+    } catch {}
+  }, []);
+
+  const handleRejectInvite = useCallback(async (inviteId: string) => {
+    try {
+      await api(`/api/community-invites/${inviteId}/reject`, { method: "POST" });
+      setCommunityInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    } catch {}
+  }, []);
 
   const handleUnhide = useCallback(async (id: string) => {
     await api(`/api/conversations/${id}/unhide`, { method: "PUT" });
@@ -223,9 +260,73 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
         </div>
       )}
 
+      {/* Community sub-tabs */}
+      {!collapsed && tab === "communities" && (
+        <div className="flex gap-1 px-3 pb-2">
+          {(["all", "joined", "invites"] as const).map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setCommunitySubTab(st)}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+                communitySubTab === st
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t(`chat.communityTab.${st}`)}
+              {st === "invites" && communityInvites.length > 0 && (
+                <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                  {communityInvites.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Conversation list */}
       <div className={cn("flex-1 min-w-0 overflow-y-auto py-1", collapsed ? "px-1" : "px-2")}>
-        {tab === "hidden" ? (
+        {tab === "communities" && communitySubTab === "invites" ? (
+          invitesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+            </div>
+          ) : communityInvites.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+              <p className="text-sm text-muted-foreground">{t("chat.communityTab.noInvites")}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {communityInvites.map((inv) => (
+                <div key={inv.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-accent/50">
+                  <div className="h-10 w-10 shrink-0 rounded-full bg-muted overflow-hidden">
+                    {inv.communityAvatarUrl && (
+                      <img src={inv.communityAvatarUrl} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{inv.communityName}</p>
+                    {inv.inviterName && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {t("chat.communityTab.invitedBy", { name: inv.inviterName })}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <Button size="sm" variant="default" className="h-7 px-3 text-xs" onClick={() => handleAcceptInvite(inv.id)}>
+                      {t("chat.communityTab.accept")}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => handleRejectInvite(inv.id)}>
+                      {t("chat.communityTab.reject")}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : tab === "hidden" ? (
           hiddenLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />

@@ -112,11 +112,13 @@ export function RightPanel() {
 
   const hasAgent = !!activeConversation?.agentId;
 
+  const isCommunity = activeConversation?.type === "community";
   const visibleTabs = TABS.filter((tab) => {
     if (tab.id === "wiki" && !isGroup) return false;
     if (tab.id === "members" && !isGroup) return false;
     if (tab.id === "memory" && !hasAgent) return false;
     if (tab.id === "chat" && !sideChatConversationId) return false;
+    if ((tab.id === "kanban" || tab.id === "notes") && isCommunity) return false;
     return true;
   });
 

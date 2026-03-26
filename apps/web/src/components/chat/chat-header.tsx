@@ -925,7 +925,7 @@ function GroupHeaderButtons({
       })}
 
       <HamburgerMenu
-        items={GROUP_HEADER_BUTTONS}
+        items={isCommunity ? GROUP_HEADER_BUTTONS.filter((btn) => COMMUNITY_FIXED_BUTTONS.includes(btn.id)) : GROUP_HEADER_BUTTONS}
         onAction={onAction}
         onSettingsOpen={onSettingsOpen}
         pinnedIds={!isCommunity ? groupPins : []}

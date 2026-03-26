@@ -16,6 +16,7 @@ import { KanbanSidebar } from "./kanban-sidebar";
 import { WikiPanel } from "./wiki-panel";
 
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
+import { CommunityMembersPanel } from "./community-members-panel";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
@@ -52,6 +53,7 @@ export function ChatArea() {
 
   const [manageOpen, setManageOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [communityMembersOpen, setCommunityMembersOpen] = useState(false);
   const [membersPanelTab, setMembersPanelTab] = useState<PanelTab>("members");
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [threadListOpen, setThreadListOpen] = useState(false);
@@ -234,7 +236,9 @@ export function ChatArea() {
           }
         }) : (agent ? () => setManageOpen(true) : undefined) as (() => void) | undefined}
         onMembersClick={isGroupLike(conversation.type) ? () => {
-          if (window.matchMedia("(min-width: 1280px)").matches) {
+          if (conversation.type === "community") {
+            setCommunityMembersOpen(true);
+          } else if (window.matchMedia("(min-width: 1280px)").matches) {
             useRightPanelStore.getState().setActiveTab("members");
           } else {
             openMembersPanel("members");
@@ -300,13 +304,22 @@ export function ChatArea() {
 
       {isGroupLike(conversation.type) && (
         <>
-          <GroupMembersPanel
-            open={membersOpen}
-            onOpenChange={setMembersOpen}
-            conversationId={conversation.id}
-            initialTab={membersPanelTab}
-            onAddMemberClick={() => setAddMemberOpen(true)}
-          />
+          {conversation.type === "community" && conversation.officialCommunityId ? (
+            <CommunityMembersPanel
+              open={communityMembersOpen}
+              onClose={() => setCommunityMembersOpen(false)}
+              communityId={conversation.officialCommunityId}
+              canManage
+            />
+          ) : (
+            <GroupMembersPanel
+              open={membersOpen}
+              onOpenChange={setMembersOpen}
+              conversationId={conversation.id}
+              initialTab={membersPanelTab}
+              onAddMemberClick={() => setAddMemberOpen(true)}
+            />
+          )}
           <AddMemberSheet
             open={addMemberOpen}
             onOpenChange={setAddMemberOpen}

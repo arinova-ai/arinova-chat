@@ -89,6 +89,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::delete(delete_invite),
         )
         .route("/api/communities/join-by-invite/{code}", post(join_by_invite))
+        // User-to-user invites
+        .route("/api/community-invites/my", get(my_invites))
+        .route("/api/community-invites/{invite_id}/accept", post(accept_invite))
+        .route("/api/community-invites/{invite_id}/reject", post(reject_invite))
         // Hidden users
         .route(
             "/api/communities/{id}/hidden-users",
@@ -1555,43 +1559,46 @@ async fn invite_member(
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can invite"}))),
     }
 
-    // Add to community_members
-    let _ = sqlx::query(
-        "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT (community_id, user_id) DO NOTHING",
+    // Check not already a member
+    let already = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&body.user_id)
-    .execute(&state.db)
-    .await;
-
-    // Also add to conversation_user_members
-    let conv_id = sqlx::query_scalar::<_, Uuid>(
-        "SELECT conversation_id FROM communities WHERE id = $1",
-    )
-    .bind(community_id)
-    .fetch_optional(&state.db)
+    .fetch_one(&state.db)
     .await
-    .ok()
-    .flatten();
+    .unwrap_or(0);
 
-    if let Some(cid) = conv_id {
-        let _ = sqlx::query(
-            "INSERT INTO conversation_user_members (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT (conversation_id, user_id) DO NOTHING",
-        )
-        .bind(cid)
-        .bind(&body.user_id)
-        .execute(&state.db)
-        .await;
-
-        // WS notification to the invited user
-        state.ws.send_to_user_or_queue(&body.user_id, &json!({
-            "type": "community_invite",
-            "communityId": community_id,
-            "conversationId": cid,
-        }), &state.redis);
+    if already > 0 {
+        return (StatusCode::CONFLICT, Json(json!({"error": "User is already a member"})));
     }
 
-    (StatusCode::CREATED, Json(json!({"ok": true})))
+    // Create pending invite (upsert: if rejected before, allow re-invite)
+    let result = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO community_user_invites (community_id, inviter_id, invitee_id, status)
+           VALUES ($1, $2, $3, 'pending')
+           ON CONFLICT (community_id, invitee_id, status) DO NOTHING
+           RETURNING id"#,
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .bind(&body.user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match result {
+        Ok(Some(invite_id)) => {
+            // WS notification to the invited user
+            state.ws.send_to_user_or_queue(&body.user_id, &json!({
+                "type": "community_invite",
+                "inviteId": invite_id,
+                "communityId": community_id,
+            }), &state.redis);
+            (StatusCode::CREATED, Json(json!({"ok": true, "inviteId": invite_id})))
+        }
+        Ok(None) => (StatusCode::CONFLICT, Json(json!({"error": "Invite already pending"}))),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to create invite"}))),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1604,6 +1611,12 @@ struct AddAgentBody {
     listing_id: Option<Uuid>,
     #[serde(rename = "agentId")]
     agent_id: Option<Uuid>,
+    #[serde(rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(rename = "memberAvatarUrl")]
+    member_avatar_url: Option<String>,
+    #[serde(rename = "listenMode")]
+    listen_mode: Option<String>,
 }
 
 async fn add_agent(
@@ -1668,11 +1681,17 @@ async fn add_agent(
     .flatten();
 
     if let Some(cid) = conv_id {
+        let listen = body.listen_mode.as_deref().unwrap_or("all");
         let _ = sqlx::query(
-            "INSERT INTO conversation_members (conversation_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            r#"INSERT INTO conversation_members (conversation_id, agent_id, listen_mode, display_name, member_avatar_url)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT DO NOTHING"#,
         )
         .bind(cid)
         .bind(agent_id)
+        .bind(listen)
+        .bind(&body.display_name)
+        .bind(&body.member_avatar_url)
         .execute(&state.db)
         .await;
     }
@@ -4059,4 +4078,174 @@ async fn upload_cover_image(
         return Json(json!({"url": url})).into_response();
     }
     (StatusCode::BAD_REQUEST, Json(json!({"error": "No file field"}))).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/community-invites/my — List pending invites for current user
+// ---------------------------------------------------------------------------
+
+async fn my_invites(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Json<Value> {
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, DateTime<Utc>)>(
+        r#"SELECT i.id, i.community_id, i.inviter_id, i.created_at
+           FROM community_user_invites i
+           WHERE i.invitee_id = $1 AND i.status = 'pending'
+           ORDER BY i.created_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut invites = Vec::new();
+    for (id, community_id, inviter_id, created_at) in rows {
+        // Fetch community info
+        let community = sqlx::query_as::<_, (String, Option<String>)>(
+            "SELECT name, avatar_url FROM communities WHERE id = $1",
+        )
+        .bind(community_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        // Fetch inviter name
+        let inviter_name = sqlx::query_scalar::<_, String>(
+            r#"SELECT name FROM "user" WHERE id = $1"#,
+        )
+        .bind(&inviter_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        let (community_name, community_avatar) = community.unwrap_or_default();
+        invites.push(json!({
+            "id": id,
+            "communityId": community_id,
+            "communityName": community_name,
+            "communityAvatarUrl": community_avatar,
+            "inviterName": inviter_name,
+            "createdAt": created_at,
+        }));
+    }
+
+    Json(json!({ "invites": invites }))
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/community-invites/:id/accept
+// ---------------------------------------------------------------------------
+
+async fn accept_invite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(invite_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    // Fetch and validate
+    let invite = sqlx::query_as::<_, (Uuid, String, String)>(
+        "SELECT community_id, invitee_id, status FROM community_user_invites WHERE id = $1",
+    )
+    .bind(invite_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let (community_id, invitee_id, status) = match invite {
+        Some(i) => i,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Invite not found"}))),
+    };
+
+    if invitee_id != user.id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your invite"})));
+    }
+    if status != "pending" {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Invite already processed"})));
+    }
+
+    // Mark accepted
+    let _ = sqlx::query("UPDATE community_user_invites SET status = 'accepted' WHERE id = $1")
+        .bind(invite_id)
+        .execute(&state.db)
+        .await;
+
+    // Add to community_members
+    let _ = sqlx::query(
+        "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'member') ON CONFLICT (community_id, user_id) DO NOTHING",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    // Add to conversation_user_members
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
+    )
+    .bind(community_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(cid) = conv_id {
+        let _ = sqlx::query(
+            "INSERT INTO conversation_user_members (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT (conversation_id, user_id) DO NOTHING",
+        )
+        .bind(cid)
+        .bind(&user.id)
+        .execute(&state.db)
+        .await;
+
+        // Update member count
+        let _ = sqlx::query("UPDATE communities SET member_count = member_count + 1 WHERE id = $1")
+            .bind(community_id)
+            .execute(&state.db)
+            .await;
+
+        (StatusCode::OK, Json(json!({"ok": true, "conversationId": cid})))
+    } else {
+        (StatusCode::OK, Json(json!({"ok": true})))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/community-invites/:id/reject
+// ---------------------------------------------------------------------------
+
+async fn reject_invite(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(invite_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let invite = sqlx::query_as::<_, (String, String)>(
+        "SELECT invitee_id, status FROM community_user_invites WHERE id = $1",
+    )
+    .bind(invite_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let (invitee_id, status) = match invite {
+        Some(i) => i,
+        None => return (StatusCode::NOT_FOUND, Json(json!({"error": "Invite not found"}))),
+    };
+
+    if invitee_id != user.id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not your invite"})));
+    }
+    if status != "pending" {
+        return (StatusCode::CONFLICT, Json(json!({"error": "Invite already processed"})));
+    }
+
+    let _ = sqlx::query("UPDATE community_user_invites SET status = 'rejected' WHERE id = $1")
+        .bind(invite_id)
+        .execute(&state.db)
+        .await;
+
+    (StatusCode::OK, Json(json!({"ok": true})))
 }

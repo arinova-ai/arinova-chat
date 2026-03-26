@@ -697,6 +697,23 @@ async fn main() {
         PRIMARY KEY (wiki_page_id, user_id)
     )"#).execute(&db).await.ok();
 
+    // Community user-to-user invites
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS community_user_invites (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        inviter_id TEXT NOT NULL REFERENCES "user"(id),
+        invitee_id TEXT NOT NULL REFERENCES "user"(id),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(community_id, invitee_id, status)
+    )"#).execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_community_user_invites_invitee ON community_user_invites(invitee_id, status)").execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_community_user_invites_community ON community_user_invites(community_id)").execute(&db).await.ok();
+
+    // Agent display_name + member_avatar_url on conversation_members
+    sqlx::query("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS member_avatar_url TEXT").execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards
