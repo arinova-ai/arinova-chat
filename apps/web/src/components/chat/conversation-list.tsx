@@ -65,9 +65,12 @@ export function ConversationList({ collapsed = false }: { collapsed?: boolean })
 
   // Filter conversations: account mode shows only account conversations
   const conversations = useMemo(() => {
-    if (!activeAccountId) return allConversations;
-    const accountConvIds = new Set(accountConversations.map((c) => c.id));
-    return allConversations.filter((c) => accountConvIds.has(c.id));
+    if (activeAccountId) {
+      const accountConvIds = new Set(accountConversations.map((c) => c.id));
+      return allConversations.filter((c) => accountConvIds.has(c.id));
+    }
+    // Personal mode: exclude conversations that belong to an official/lounge account
+    return allConversations.filter((c) => !(c as Record<string, unknown>).accountId);
   }, [allConversations, activeAccountId, accountConversations]);
 
   const [tab, setTab] = useState<Tab>("all");
