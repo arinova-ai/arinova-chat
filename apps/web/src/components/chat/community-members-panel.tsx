@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { assetUrl } from "@/lib/config";
+import { useToastStore } from "@/store/toast-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -164,17 +165,22 @@ export function CommunityMembersPanel({
   }, [members]);
 
   const handleBatchInvite = useCallback(async () => {
+    let sent = 0;
     for (const userId of selectedFriends) {
       try {
         await api(`/api/communities/${communityId}/members`, {
           method: "POST",
           body: JSON.stringify({ userId }),
         });
+        sent++;
       } catch {}
+    }
+    if (sent > 0) {
+      useToastStore.getState().addToast({ message: t("communityMembers.inviteSent"), type: "success" });
     }
     setView("main");
     fetchData();
-  }, [communityId, selectedFriends, fetchData]);
+  }, [communityId, selectedFriends, fetchData, t]);
 
   if (!open) return null;
 
@@ -228,7 +234,7 @@ export function CommunityMembersPanel({
           <div className="px-4 py-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)} placeholder={t("common.search")} className="pl-9" />
+              <Input value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)} placeholder={t("communityMembers.search")} className="pl-9" />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-1">
@@ -329,7 +335,7 @@ export function CommunityMembersPanel({
           <div className="px-4 py-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)} placeholder={t("common.search")} className="pl-9" />
+              <Input value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)} placeholder={t("communityMembers.search")} className="pl-9" />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-1">
@@ -414,9 +420,11 @@ export function CommunityMembersPanel({
                   </p>
                   {sortedMembers.map((m) => (
                     <div key={m.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50">
-                      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted">
-                        {(m.memberAvatarUrl || m.userImage) && (
+                      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
+                        {(m.memberAvatarUrl || m.userImage) ? (
                           <img src={assetUrl(m.memberAvatarUrl || m.userImage || "")} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          (m.displayName || m.userName || "?").charAt(0).toUpperCase()
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
