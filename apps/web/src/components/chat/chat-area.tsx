@@ -17,6 +17,7 @@ import { WikiPanel } from "./wiki-panel";
 
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { CommunityMembersPanel } from "./community-members-panel";
+import { CommunityAgentSheet } from "./community-agent-sheet";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
@@ -64,6 +65,7 @@ export function ChatArea() {
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const [wikiOpen, setWikiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
+  const [communityAgentSheet, setCommunityAgentSheet] = useState<{ agentId: string } | null>(null);
   const dragCounterRef = useRef(0);
 
   const [chatBgUrl, setChatBgUrl] = useState<string | null>(null);
@@ -98,6 +100,18 @@ export function ChatArea() {
     setCommunityMembersOpen(false);
     setResolvedCommunityId(null);
   }, [activeConversationId]);
+
+  // Listen for community agent profile clicks from message-bubble
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.agentId) {
+        setCommunityAgentSheet({ agentId: detail.agentId });
+      }
+    };
+    window.addEventListener("community-agent-profile", handler);
+    return () => window.removeEventListener("community-agent-profile", handler);
+  }, []);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -337,6 +351,15 @@ export function ChatArea() {
             onOpenChange={setAddMemberOpen}
             conversationId={conversation.id}
           />
+
+          {/* Agent profile sheet for community conversations */}
+          {communityAgentSheet && conversation.type === "community" && (conversation.officialCommunityId || resolvedCommunityId) && (
+            <CommunityAgentSheetLoader
+              communityId={(conversation.officialCommunityId || resolvedCommunityId) as string}
+              agentId={communityAgentSheet.agentId}
+              onClose={() => setCommunityAgentSheet(null)}
+            />
+          )}
         </>
       )}
 
@@ -378,5 +401,27 @@ export function ChatArea() {
       <ChatCardDetailSheet />
       <ChatNoteDetailSheet />
     </div>
+  );
+}
+
+function CommunityAgentSheetLoader({ communityId, agentId, onClose }: { communityId: string; agentId: string; onClose: () => void }) {
+  const [agent, setAgent] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    api<{ agents: Record<string, unknown>[] }>(`/api/communities/${communityId}/agents`, { silent: true })
+      .then((d) => {
+        const found = d.agents.find((a) => a.id === agentId);
+        setAgent(found ?? null);
+      })
+      .catch(() => setAgent(null));
+  }, [communityId, agentId]);
+
+  if (!agent) return null;
+  return (
+    <CommunityAgentSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      communityId={communityId}
+      agent={agent as never}
+    />
   );
 }

@@ -878,8 +878,14 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
             } else if (showUserProfile && message.senderUserId) {
               router.push(`/profile/${message.senderUserId}`);
             } else if (showAgentProfile && resolvedAgentId) {
-              const suffix = isGroupLike(conversation?.type) ? `?convId=${message.conversationId}` : "";
-              router.push(`/agent/${resolvedAgentId}${suffix}`);
+              if (conversation?.type === "community") {
+                window.dispatchEvent(new CustomEvent("community-agent-profile", {
+                  detail: { agentId: resolvedAgentId, conversationId: message.conversationId },
+                }));
+              } else {
+                const suffix = isGroupLike(conversation?.type) ? `?convId=${message.conversationId}` : "";
+                router.push(`/agent/${resolvedAgentId}${suffix}`);
+              }
             }
           }}
         />

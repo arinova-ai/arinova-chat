@@ -1828,8 +1828,8 @@ async fn list_agents(
 
     // Direct agents from conversation_members
     let direct_agents = if let Some(cid) = conv_id {
-        sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>)>(
-            r#"SELECT a.id, a.name, a.avatar_url, cm.display_name, cm.member_avatar_url, cm.listen_mode::text
+        sqlx::query_as::<_, (Uuid, String, Option<String>, Option<String>, Option<String>, Option<String>, String)>(
+            r#"SELECT a.id, a.name, a.avatar_url, cm.display_name, cm.member_avatar_url, cm.listen_mode::text, a.owner_id
                FROM conversation_members cm
                JOIN agents a ON a.id = cm.agent_id
                WHERE cm.conversation_id = $1"#,
@@ -1875,7 +1875,7 @@ async fn list_agents(
             let existing_ids: std::collections::HashSet<String> = agents.iter()
                 .filter_map(|a| a.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
                 .collect();
-            for (aid, name, avatar, display_name, member_avatar, listen_mode) in &direct_agents {
+            for (aid, name, avatar, display_name, member_avatar, listen_mode, owner_id) in &direct_agents {
                 if !existing_ids.contains(&aid.to_string()) {
                     agents.push(json!({
                         "id": aid,
@@ -1886,6 +1886,7 @@ async fn list_agents(
                         "displayName": display_name,
                         "memberAvatarUrl": member_avatar,
                         "listenMode": listen_mode,
+                        "ownerId": owner_id,
                     }));
                 }
             }
