@@ -181,6 +181,7 @@ interface SenderDisplayInfo {
   name: string;
   color: string;
   isVerified?: boolean;
+  role?: string;
 }
 
 /**
@@ -274,12 +275,29 @@ function MessageAvatar({ message, isOwn, clickable, onClick, agentAvatarUrl }: M
 }
 
 /** Name label shown above the message bubble content. */
+function RoleBadge({ role }: { role?: string }) {
+  if (!role || role === "member") return null;
+  switch (role) {
+    case "creator":
+      return <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-amber-400">👑</span>;
+    case "admin":
+      return <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-blue-400">🛡️</span>;
+    case "moderator":
+      return <span className="inline-flex items-center gap-0.5 rounded-full bg-gray-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-gray-400">🔧</span>;
+    case "agent":
+      return <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-purple-400">🤖</span>;
+    default:
+      return null;
+  }
+}
+
 function SenderLabel({ info }: { info: SenderDisplayInfo | null }) {
   if (!info) return null;
   return (
     <p className={`mb-1 flex items-center gap-1 text-xs font-medium ${info.color}`}>
       {info.name}
       {info.isVerified && <VerifiedBadge className="h-3.5 w-3.5 text-blue-500" />}
+      <RoleBadge role={info.role} />
     </p>
   );
 }
@@ -727,6 +745,17 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
   });
 
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
+
+  // Attach community role for badge display
+  if (senderInfo && isCommunityConversation) {
+    const gm = groupMembersData[message.conversationId];
+    if (message.senderUserId && gm?.users) {
+      const userMember = gm.users.find((u) => u.userId === message.senderUserId);
+      if (userMember) senderInfo.role = userMember.role;
+    } else if (message.senderAgentId && gm?.agents) {
+      senderInfo.role = "agent";
+    }
+  }
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
 
   // --- Select mode: popup textarea for partial text copy ---
