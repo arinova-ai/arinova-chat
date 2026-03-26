@@ -69,7 +69,7 @@ export default function OfficialSettingsPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
+      const res = await fetch(`${BACKEND_URL}/api/uploads`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -90,7 +90,7 @@ export default function OfficialSettingsPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
+      const res = await fetch(`${BACKEND_URL}/api/uploads`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -121,7 +121,7 @@ export default function OfficialSettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [accountId, isPublic, name, bio, avatarUrl, updateAccount]);
+  }, [accountId, isPublic, name, bio, avatarUrl, coverUrl, updateAccount]);
 
   const handleDelete = useCallback(async () => {
     try {
