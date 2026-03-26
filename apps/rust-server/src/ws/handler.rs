@@ -1121,7 +1121,7 @@ pub async fn trigger_agent_response(
     };
 
     // Determine target agent(s)
-    let agent_ids: Vec<String> = if conv_type == "group" {
+    let agent_ids: Vec<String> = if conv_type == "group" || conv_type == "community" {
         let members = sqlx::query_as::<_, (String,)>(
             r#"SELECT agent_id::text FROM conversation_members WHERE conversation_id = $1::uuid"#,
         )
@@ -1309,7 +1309,7 @@ pub async fn trigger_agent_response(
 
     // Two-layer filtering: mention_only (conversation-level) × listen_mode (per-agent)
     // Build AgentFilterConfig for each agent (requires DB queries for group conversations)
-    let agent_configs: Vec<AgentFilterConfig> = if conv_type == "group" {
+    let agent_configs: Vec<AgentFilterConfig> = if conv_type == "group" || conv_type == "community" {
         let mut configs = Vec::new();
         for aid in &agent_ids {
             let agent_perms = sqlx::query_as::<_, (String, Option<String>)>(
