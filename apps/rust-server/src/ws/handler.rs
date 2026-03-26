@@ -1649,11 +1649,18 @@ pub async fn trigger_agent_response(
         // Skip agent trigger for sticker messages without AI tag (agentPrompt)
         let sticker_check_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.\w+))\)$").unwrap();
         let is_sticker_without_ai = if let Some(caps) = sticker_check_re.captures(content.trim()) {
+            let pack_slug = caps.get(2).unwrap().as_str();
             let filename = caps.get(3).unwrap().as_str();
             let has_prompt = sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS(SELECT 1 FROM stickers WHERE filename = $1 AND agent_prompt IS NOT NULL AND agent_prompt != '')",
+                r#"SELECT EXISTS(
+                    SELECT 1 FROM stickers s
+                    JOIN sticker_packs sp ON sp.id = s.pack_id
+                    WHERE s.filename = $1 AND sp.slug = $2
+                      AND s.agent_prompt IS NOT NULL AND s.agent_prompt != ''
+                )"#,
             )
             .bind(filename)
+            .bind(pack_slug)
             .fetch_one(db)
             .await
             .unwrap_or(false);
