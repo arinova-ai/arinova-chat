@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/explore/official", get(explore_official))
         .route("/api/explore/lounge", get(explore_lounge))
         .route("/api/official/{id}", get(get_official_detail))
+        .route("/api/reports", post(create_report))
         // Broadcast CRUD
         .route("/api/accounts/{id}/broadcasts", get(list_broadcasts).post(create_broadcast))
         .route(
@@ -3056,5 +3057,51 @@ async fn verify_owner(db: &sqlx::PgPool, account_id: Uuid, user_id: &str) -> Res
     match owner {
         Ok(Some(oid)) if oid == user_id => Ok(()),
         _ => Err(()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/reports — Create a report
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CreateReportBody {
+    #[serde(rename = "targetType")]
+    target_type: String,
+    #[serde(rename = "targetId")]
+    target_id: String,
+    reason: String,
+    details: Option<String>,
+}
+
+async fn create_report(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<CreateReportBody>,
+) -> (StatusCode, Json<Value>) {
+    let valid_types = ["account", "user", "message", "community"];
+    if !valid_types.contains(&body.target_type.as_str()) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid target type"})));
+    }
+
+    let result = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO reports (reporter_id, target_type, target_id, reason, details)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id"#,
+    )
+    .bind(&user.id)
+    .bind(&body.target_type)
+    .bind(&body.target_id)
+    .bind(&body.reason)
+    .bind(&body.details)
+    .fetch_one(&state.db)
+    .await;
+
+    match result {
+        Ok(id) => (StatusCode::CREATED, Json(json!({"id": id, "ok": true}))),
+        Err(e) => {
+            tracing::error!("create_report failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to create report"})))
+        }
     }
 }

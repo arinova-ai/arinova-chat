@@ -105,6 +105,8 @@ struct ConversationListRow {
     community_avatar_url: Option<String>,
     // Lounge account ID
     lounge_account_id: Option<Uuid>,
+    // Subscriber account ID (official/lounge)
+    subscriber_account_id: Option<Uuid>,
 }
 
 /// Row for group agent member names batch fetch.
@@ -332,12 +334,14 @@ async fn list_conversations(
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id,
                 cm.avatar_url AS community_avatar_url,
-                c.lounge_account_id
+                c.lounge_account_id,
+                asub.account_id AS subscriber_account_id
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN communities cm ON cm.conversation_id = c.id
+            LEFT JOIN account_subscribers asub ON asub.conversation_id = c.id AND asub.user_id = $1
             LEFT JOIN LATERAL (
                 SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at, m.sender_agent_id
                 FROM messages m
@@ -389,12 +393,14 @@ async fn list_conversations(
                 agent_owner.is_verified AS agent_owner_is_verified,
                 oc.community_id AS official_community_id,
                 cm.avatar_url AS community_avatar_url,
-                c.lounge_account_id
+                c.lounge_account_id,
+                asub.account_id AS subscriber_account_id
             FROM conversations c
             LEFT JOIN agents a ON c.agent_id = a.id
             LEFT JOIN "user" agent_owner ON a.owner_id = agent_owner.id
             LEFT JOIN official_conversations oc ON oc.conversation_id = c.id
             LEFT JOIN communities cm ON cm.conversation_id = c.id
+            LEFT JOIN account_subscribers asub ON asub.conversation_id = c.id AND asub.user_id = $1
             LEFT JOIN LATERAL (
                 SELECT m.id, m.seq, m.role, m.content, m.status, m.metadata, m.created_at, m.updated_at, m.sender_agent_id
                 FROM messages m
@@ -697,6 +703,7 @@ async fn list_conversations(
                 "isVerified": is_verified,
                 "officialCommunityId": row.official_community_id,
                 "loungeAccountId": row.lounge_account_id,
+                "accountId": row.subscriber_account_id.or(row.lounge_account_id),
                 "lastMessage": last_message,
             })
         })

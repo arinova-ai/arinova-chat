@@ -28,6 +28,8 @@ import {
   Brain,
   Phone,
   X,
+  LogOut,
+  Flag,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useVoiceCallStore } from "@/store/voice-call-store";
@@ -403,6 +405,34 @@ export function ChatHeader({
                     useHudStore.getState().toggle();
                   });
                   break;
+                case "unsubscribe":
+                  if (confirm(t("official.detail.unsubscribeConfirm"))) {
+                    const convObj = useChatStore.getState().conversations.find((c) => c.id === conversationId);
+                    const accId = (convObj as Record<string, unknown> | undefined)?.accountId as string | undefined;
+                    if (accId) {
+                      api(`/api/accounts/${accId}/subscribe`, { method: "DELETE" }).then(() => {
+                        useChatStore.getState().setActiveConversation(null);
+                        useChatStore.getState().loadConversations();
+                      }).catch(() => {});
+                    }
+                  }
+                  break;
+                case "report": {
+                  const reason = prompt(t("chat.header.reportReason"));
+                  if (reason) {
+                    const conv = useChatStore.getState().conversations.find((c) => c.id === conversationId);
+                    const targetId = (conv as Record<string, unknown> | undefined)?.accountId as string || conversationId;
+                    api("/api/reports", {
+                      method: "POST",
+                      body: JSON.stringify({ targetType: "account", targetId, reason }),
+                    }).then(() => {
+                      import("@/store/toast-store").then(({ useToastStore }) => {
+                        useToastStore.getState().addToast(t("chat.header.reportSent"), "success");
+                      });
+                    }).catch(() => {});
+                  }
+                  break;
+                }
               }
             }}
             onTransferHuman={handleTransferHuman}
@@ -799,6 +829,14 @@ function DirectHeaderButtons({
     if (isOfficialOrLounge && officialExclude.has(btn.id)) return false;
     return true;
   });
+
+  // Add unsubscribe + report for official/lounge
+  if (isOfficialOrLounge) {
+    available.push(
+      { id: "unsubscribe", labelKey: "official.detail.unsubscribe", icon: LogOut, supportedTypes: ["h2a"] },
+      { id: "report", labelKey: "chat.header.report", icon: Flag, supportedTypes: ["h2a"] },
+    );
+  }
 
   const pinned = available.filter((btn) => pinnedIds.includes(btn.id));
 

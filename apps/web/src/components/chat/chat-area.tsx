@@ -237,6 +237,8 @@ export function ChatArea() {
           } else {
             router.push("/explore/lounge");
           }
+        }) : (conversation.isVerified && conversation.accountId) ? (() => {
+          router.push(`/official/${conversation.accountId}`);
         }) : (agent ? () => setManageOpen(true) : undefined) as (() => void) | undefined}
         onMembersClick={isGroupLike(conversation.type) ? async () => {
           if (conversation.type === "community") {

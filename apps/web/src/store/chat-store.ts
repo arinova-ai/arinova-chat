@@ -28,6 +28,7 @@ interface ConversationWithAgent extends Conversation {
   lastMessage: Message | null;
   isVerified?: boolean;
   officialCommunityId?: string | null;
+  accountId?: string | null;
 }
 
 interface GroupMember {

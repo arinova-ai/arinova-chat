@@ -750,6 +750,18 @@ async fn main() {
         PRIMARY KEY (community_id, role, permission)
     )"#).execute(&db).await.ok();
 
+    // Reports
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS reports (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        reporter_id TEXT NOT NULL REFERENCES "user"(id),
+        target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        details TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )"#).execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards
