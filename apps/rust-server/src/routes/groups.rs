@@ -304,10 +304,10 @@ async fn list_members(
             .into_response();
     }
 
-    // Fetch agent members with info
-    let agent_members = sqlx::query_as::<_, (Uuid, Uuid, Option<String>, String, chrono::NaiveDateTime, String, Option<String>, Option<String>)>(
+    // Fetch agent members with info (including display_name for community anonymous)
+    let agent_members = sqlx::query_as::<_, (Uuid, Uuid, Option<String>, String, chrono::NaiveDateTime, String, Option<String>, Option<String>, Option<String>, Option<String>)>(
         r#"SELECT cm.id, cm.agent_id, cm.owner_user_id, cm.listen_mode::text, cm.added_at,
-                  a.name, a.description, a.avatar_url
+                  a.name, a.description, a.avatar_url, cm.display_name, cm.member_avatar_url
            FROM conversation_members cm
            JOIN agents a ON a.id = cm.agent_id
            WHERE cm.conversation_id = $1
@@ -366,15 +366,26 @@ async fn list_members(
     let agents_json: Vec<serde_json::Value> = agent_members
         .iter()
         .map(|r| {
+            // For community conversations, use display_name/member_avatar if available
+            let shown_agent_name = if is_community {
+                r.8.as_deref().unwrap_or(&r.5)
+            } else {
+                &r.5
+            };
+            let shown_agent_avatar: &Option<String> = if is_community && r.9.is_some() {
+                &r.9
+            } else {
+                &r.7
+            };
             json!({
                 "id": r.0,
                 "agentId": r.1,
                 "ownerUserId": r.2,
                 "listenMode": r.3,
                 "addedAt": r.4.and_utc().to_rfc3339(),
-                "agentName": r.5,
+                "agentName": shown_agent_name,
                 "agentDescription": r.6,
-                "agentAvatarUrl": r.7,
+                "agentAvatarUrl": shown_agent_avatar,
             })
         })
         .collect();

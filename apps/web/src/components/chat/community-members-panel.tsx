@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { CommunityMemberSheet } from "./community-member-sheet";
+import { CommunityAgentSheet } from "./community-agent-sheet";
 
 interface Member {
   id: string;
@@ -58,6 +59,12 @@ interface AgentMember {
   id: string;
   agentName: string;
   avatarUrl: string | null;
+  realName?: string;
+  realAvatarUrl?: string | null;
+  displayName?: string | null;
+  memberAvatarUrl?: string | null;
+  listenMode?: string | null;
+  ownerId?: string;
 }
 
 interface MyAgent {
@@ -104,6 +111,7 @@ export function CommunityMembersPanel({
 
   // Profile sheet
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [profileAgent, setProfileAgent] = useState<AgentMember | null>(null);
 
   // Kick/mute
   const [confirmKick, setConfirmKick] = useState<Member | null>(null);
@@ -598,7 +606,7 @@ export function CommunityMembersPanel({
                     {t("communitySettings.agents")} ({filteredAgents.length})
                   </p>
                   {filteredAgents.map((a) => (
-                    <div key={a.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50">
+                    <div key={a.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 cursor-pointer" onClick={() => setProfileAgent(a)}>
                       <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted">
                         {a.avatarUrl && <img src={assetUrl(a.avatarUrl)} alt="" className="h-full w-full object-cover" />}
                       </div>
@@ -655,6 +663,16 @@ export function CommunityMembersPanel({
           onOpenChange={(open) => !open && setProfileUserId(null)}
           communityId={communityId}
           userId={profileUserId}
+        />
+      )}
+
+      {/* Agent profile sheet */}
+      {profileAgent && (
+        <CommunityAgentSheet
+          open={!!profileAgent}
+          onOpenChange={(open) => !open && setProfileAgent(null)}
+          communityId={communityId}
+          agent={profileAgent}
         />
       )}
     </>,
