@@ -1382,7 +1382,7 @@ pub async fn trigger_agent_response(
         let now = chrono::Utc::now();
 
         // Detect sticker messages and build metadata for DB storage
-        let sticker_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+        let sticker_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.\w+))\)$").unwrap();
         let msg_metadata: Option<serde_json::Value> = if let Some(caps) = sticker_re.captures(content.trim()) {
             let sticker_url = caps.get(1).unwrap().as_str();
             let filename = caps.get(3).unwrap().as_str();
@@ -1580,7 +1580,7 @@ pub async fn trigger_agent_response(
 
     // Skip agent dispatch for non-AI stickers (stickers without agent_prompt)
     let is_non_ai_sticker = {
-        let sticker_check_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+        let sticker_check_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.\w+))\)$").unwrap();
         if let Some(caps) = sticker_check_re.captures(content.trim()) {
             let filename = caps.get(3).unwrap().as_str();
             let has_prompt = sqlx::query_scalar::<_, bool>(
@@ -1647,7 +1647,7 @@ pub async fn trigger_agent_response(
         }
 
         // Skip agent trigger for sticker messages without AI tag (agentPrompt)
-        let sticker_check_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+        let sticker_check_re = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.\w+))\)$").unwrap();
         let is_sticker_without_ai = if let Some(caps) = sticker_check_re.captures(content.trim()) {
             let filename = caps.get(3).unwrap().as_str();
             let has_prompt = sqlx::query_scalar::<_, bool>(
@@ -1819,7 +1819,7 @@ pub(crate) async fn do_trigger_agent_response(
         }), redis);
 
     // Detect sticker messages and look up agent_prompt
-    let sticker_regex = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.png))\)$").unwrap();
+    let sticker_regex = regex_lite::Regex::new(r"^!\[sticker\]\((/stickers/(.+)/(.+\.\w+))\)$").unwrap();
     let sticker_metadata: Option<serde_json::Value> = if let Some(caps) = sticker_regex.captures(content.trim()) {
         let sticker_url = caps.get(1).unwrap().as_str();
         let filename = caps.get(3).unwrap().as_str();

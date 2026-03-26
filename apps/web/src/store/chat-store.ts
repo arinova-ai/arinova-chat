@@ -2724,6 +2724,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // Community invite — refetch conversations to show the new community
+    if ((event as Record<string, unknown>).type === "community_invite") {
+      get().loadConversations();
+      return;
+    }
+
     if (event.type === "read_receipt") {
       const { conversationId, userId, seq } = event;
       const current = get().readReceipts[conversationId] ?? {};
