@@ -1069,14 +1069,14 @@ async fn subscribe(
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
     // Verify account exists
-    let account = sqlx::query_as::<_, (String, Option<String>)>(
-        "SELECT name, proxy_user_id FROM accounts WHERE id = $1",
+    let account = sqlx::query_as::<_, (String, Option<String>, String, Option<Uuid>)>(
+        "SELECT name, proxy_user_id, owner_id, agent_id FROM accounts WHERE id = $1",
     )
     .bind(id)
     .fetch_optional(&state.db)
     .await;
 
-    let (account_name, proxy_user_id) = match account {
+    let (account_name, proxy_user_id, owner_id, agent_id) = match account {
         Ok(Some(a)) => a,
         Ok(None) => {
             return (
@@ -1123,11 +1123,12 @@ async fn subscribe(
 
     let conv_id = match sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO conversations (title, type, user_id, agent_id)
-           VALUES ($1, 'official', $2, NULL)
+           VALUES ($1, 'official', $2, $3)
            RETURNING id"#,
     )
     .bind(&account_name)
     .bind(&user.id)
+    .bind(agent_id)
     .fetch_one(&mut *tx)
     .await
     {
@@ -1141,15 +1142,51 @@ async fn subscribe(
         }
     };
 
+    // Add Official owner as conversation member so they can see and respond
+    let _ = sqlx::query(
+        r#"INSERT INTO conversation_user_members (conversation_id, user_id)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING"#,
+    )
+    .bind(conv_id)
+    .bind(&owner_id)
+    .execute(&mut *tx)
+    .await;
+
     // Add proxy user as conversation member if exists
     if let Some(ref pid) = proxy_user_id {
+        if *pid != owner_id {
+            let _ = sqlx::query(
+                r#"INSERT INTO conversation_user_members (conversation_id, user_id)
+                   VALUES ($1, $2)
+                   ON CONFLICT DO NOTHING"#,
+            )
+            .bind(conv_id)
+            .bind(pid)
+            .execute(&mut *tx)
+            .await;
+        }
+    }
+
+    // Link to official_conversations for dashboard visibility
+    let community_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT community_id FROM officials WHERE community_id IN (SELECT id FROM communities WHERE creator_id = $1) LIMIT 1",
+    )
+    .bind(&owner_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(cid) = community_id {
         let _ = sqlx::query(
-            r#"INSERT INTO conversation_user_members (conversation_id, user_id)
-               VALUES ($1, $2)
+            r#"INSERT INTO official_conversations (community_id, conversation_id, user_id, status)
+               VALUES ($1, $2, $3, 'ai_active')
                ON CONFLICT DO NOTHING"#,
         )
+        .bind(cid)
         .bind(conv_id)
-        .bind(pid)
+        .bind(&user.id)
         .execute(&mut *tx)
         .await;
     }
