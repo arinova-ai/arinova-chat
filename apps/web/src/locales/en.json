@@ -888,6 +888,8 @@
   "communityMembers.listenNone": "Silent",
   "communityMembers.listenModeDesc": "Controls when this agent responds to messages",
   "communityMembers.inviteSent": "Invite sent",
+  "communityMembers.searchAgents": "Search agents...",
+  "communityMembers.searchFriends": "Search friends...",
   "communitySettings.you": "(You)",
   "communitySettings.personalSettings": "Settings",
   "communitySettings.permissions": "Permissions",

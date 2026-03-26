@@ -900,6 +900,8 @@
   "communityMembers.listenNone": "靜默",
   "communityMembers.listenModeDesc": "控制此 Agent 何時回應訊息",
   "communityMembers.inviteSent": "邀請已送出",
+  "communityMembers.searchAgents": "搜尋 Agent...",
+  "communityMembers.searchFriends": "搜尋好友...",
   "communitySettings.you": "（你）",
   "communitySettings.personalSettings": "個人設定",
   "communitySettings.permissions": "權限設定",

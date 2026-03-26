@@ -176,7 +176,7 @@ export function CommunityMembersPanel({
       } catch {}
     }
     if (sent > 0) {
-      useToastStore.getState().addToast(t("communityMembers.inviteSent"));
+      useToastStore.getState().addToast(t("communityMembers.inviteSent"), "success");
     }
     setView("main");
     fetchData();
@@ -234,7 +234,7 @@ export function CommunityMembersPanel({
           <div className="px-4 py-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)} placeholder={t("communityMembers.search")} className="pl-9" />
+              <Input value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)} placeholder={t("communityMembers.searchAgents")} className="pl-9" />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-1">
@@ -335,7 +335,7 @@ export function CommunityMembersPanel({
           <div className="px-4 py-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)} placeholder={t("communityMembers.search")} className="pl-9" />
+              <Input value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)} placeholder={t("communityMembers.searchFriends")} className="pl-9" />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-1">
