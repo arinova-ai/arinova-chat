@@ -1721,10 +1721,13 @@ async fn add_agent(
 
     if let Some(cid) = conv_id {
         let listen = body.listen_mode.as_deref().unwrap_or("all");
-        let _ = sqlx::query(
+        let result = sqlx::query(
             r#"INSERT INTO conversation_members (conversation_id, agent_id, listen_mode, display_name, member_avatar_url)
                VALUES ($1, $2, $3, $4, $5)
-               ON CONFLICT DO NOTHING"#,
+               ON CONFLICT (conversation_id, agent_id) WHERE agent_id IS NOT NULL
+               DO UPDATE SET listen_mode = EXCLUDED.listen_mode,
+                             display_name = COALESCE(EXCLUDED.display_name, conversation_members.display_name),
+                             member_avatar_url = COALESCE(EXCLUDED.member_avatar_url, conversation_members.member_avatar_url)"#,
         )
         .bind(cid)
         .bind(agent_id)
@@ -1733,6 +1736,13 @@ async fn add_agent(
         .bind(&body.member_avatar_url)
         .execute(&state.db)
         .await;
+
+        if let Err(e) = result {
+            tracing::error!("add_agent: INSERT conversation_members failed: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to add agent"})));
+        }
+    } else {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Community has no conversation"})));
     }
 
     (StatusCode::CREATED, Json(json!({"ok": true})))
