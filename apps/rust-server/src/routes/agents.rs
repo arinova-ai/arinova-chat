@@ -110,7 +110,22 @@ async fn list_agents(State(state): State<AppState>, user: AuthUser) -> Response 
     match agents {
         Ok(agents) => {
             let vals: Vec<Value> = agents.into_iter().map(|a| {
-                serde_json::to_value(&a).unwrap_or_default()
+                json!({
+                    "id": a.id,
+                    "name": a.name,
+                    "description": a.description,
+                    "avatarUrl": a.avatar_url,
+                    "ownerId": a.owner_id,
+                    "isPublic": a.is_public,
+                    "category": a.category,
+                    "usageCount": a.usage_count,
+                    "systemPrompt": a.system_prompt,
+                    "welcomeMessage": a.welcome_message,
+                    "quickReplies": a.quick_replies,
+                    "notificationsEnabled": a.notifications_enabled,
+                    "createdAt": a.created_at.and_utc().to_rfc3339(),
+                    "updatedAt": a.updated_at.and_utc().to_rfc3339(),
+                })
             }).collect();
             Json(json!(vals)).into_response()
         }

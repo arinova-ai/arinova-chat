@@ -541,6 +541,11 @@ export function CommunitySettingsSheet({
       } catch { /* api shows toast */ }
     }
     setShowAddAgents(false);
+    // Refetch members to show newly added agents
+    try {
+      const data = await api<{ members: Member[] }>(`/api/communities/${communityId}/members`, { silent: true });
+      setMembers(data.members);
+    } catch {}
   }, [communityId, selectedAgents]);
 
   // ── Helpers ──
