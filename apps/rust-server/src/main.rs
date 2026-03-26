@@ -728,6 +728,20 @@ async fn main() {
     sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS is_muted BOOLEAN NOT NULL DEFAULT FALSE").execute(&db).await.ok();
     sqlx::query("ALTER TABLE community_members ADD COLUMN IF NOT EXISTS muted_until TIMESTAMPTZ").execute(&db).await.ok();
 
+    // Creator API keys (ensure table exists)
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS creator_api_keys (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        key_hash VARCHAR(255) NOT NULL,
+        key_prefix VARCHAR(20) NOT NULL,
+        last_used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        revoked_at TIMESTAMPTZ
+    )"#).execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_creator_api_keys_user ON creator_api_keys(user_id)").execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_creator_api_keys_hash ON creator_api_keys(key_hash)").execute(&db).await.ok();
+
     // Community role permissions
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS community_role_permissions (
         community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
