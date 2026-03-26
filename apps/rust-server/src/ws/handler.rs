@@ -1751,10 +1751,28 @@ pub(crate) async fn do_trigger_agent_response(
     .fetch_optional(db)
     .await;
 
-    let (agent_name, system_prompt) = match agent {
+    let (mut agent_name, system_prompt) = match agent {
         Ok(Some(a)) => a,
         _ => return,
     };
+
+    // For community conversations, override agent_name with display_name
+    let mut agent_avatar_override: Option<String> = None;
+    if conv_type == "community" {
+        if let Ok(Some((dn, ma))) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+            r#"SELECT cm.display_name, cm.member_avatar_url
+               FROM conversation_members cm
+               WHERE cm.conversation_id = $1::uuid AND cm.agent_id = $2::uuid"#,
+        )
+        .bind(conversation_id)
+        .bind(agent_id)
+        .fetch_optional(db)
+        .await
+        {
+            if let Some(dn) = dn { agent_name = dn; }
+            agent_avatar_override = ma;
+        }
+    }
 
     // Fetch agent's owner for blocking filter
     let agent_owner = sqlx::query_as::<_, (Option<String>,)>(
