@@ -1759,7 +1759,7 @@ pub(crate) async fn do_trigger_agent_response(
     // For community conversations, override agent_name with display_name
     let mut agent_avatar_override: Option<String> = None;
     if conv_type == "community" {
-        if let Ok(Some((dn, ma))) = sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        let cm_result = sqlx::query_as::<_, (Option<String>, Option<String>)>(
             r#"SELECT cm.display_name, cm.member_avatar_url
                FROM conversation_members cm
                WHERE cm.conversation_id = $1::uuid AND cm.agent_id = $2::uuid"#,
@@ -1767,9 +1767,15 @@ pub(crate) async fn do_trigger_agent_response(
         .bind(conversation_id)
         .bind(agent_id)
         .fetch_optional(db)
-        .await
-        {
-            if let Some(dn) = dn { agent_name = dn; }
+        .await;
+
+        tracing::info!("Agent anonymous lookup: conv={} agent={} result={:?}", conversation_id, agent_id, cm_result);
+
+        if let Ok(Some((dn, ma))) = cm_result {
+            if let Some(dn) = dn {
+                tracing::info!("Agent name override: {} -> {}", agent_name, dn);
+                agent_name = dn;
+            }
             agent_avatar_override = ma;
         }
     }
