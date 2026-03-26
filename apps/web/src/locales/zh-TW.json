@@ -910,6 +910,8 @@
   "communityMembers.inviteSent": "邀請已送出",
   "communityMembers.searchAgents": "搜尋 Agent...",
   "communityMembers.searchFriends": "搜尋好友...",
+  "communityMembers.profile": "成員資料",
+  "communityMembers.profileNotFound": "找不到此成員",
   "communityMembers.avatar": "頭像",
   "communityMembers.kick": "踢出",
   "communityMembers.kicked": "已踢出成員",

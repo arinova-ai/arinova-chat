@@ -40,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
+import { CommunityMemberSheet } from "./community-member-sheet";
 
 interface Member {
   id: string;
@@ -100,6 +101,9 @@ export function CommunityMembersPanel({
   const [friendsList, setFriendsList] = useState<{ id: string; name: string; image: string | null }[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
   const [friendSearch, setFriendSearch] = useState("");
+
+  // Profile sheet
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
 
   // Kick/mute
   const [confirmKick, setConfirmKick] = useState<Member | null>(null);
@@ -506,7 +510,7 @@ export function CommunityMembersPanel({
                     {t("communityMembers.humans")} ({filteredMembers.length})
                   </p>
                   {sortedMembers.map((m) => (
-                    <div key={m.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50">
+                    <div key={m.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 cursor-pointer" onClick={() => setProfileUserId(m.userId)}
                       <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
                         {(m.memberAvatarUrl || m.userImage) ? (
                           <img src={assetUrl(m.memberAvatarUrl || m.userImage || "")} alt="" className="h-full w-full object-cover" />
@@ -642,6 +646,16 @@ export function CommunityMembersPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Member profile sheet */}
+      {profileUserId && (
+        <CommunityMemberSheet
+          open={!!profileUserId}
+          onOpenChange={(open) => !open && setProfileUserId(null)}
+          communityId={communityId}
+          userId={profileUserId}
+        />
       )}
     </>,
     document.body,

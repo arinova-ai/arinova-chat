@@ -898,6 +898,8 @@
   "communityMembers.inviteSent": "Invite sent",
   "communityMembers.searchAgents": "Search agents...",
   "communityMembers.searchFriends": "Search friends...",
+  "communityMembers.profile": "Member Profile",
+  "communityMembers.profileNotFound": "Member not found",
   "communityMembers.avatar": "Avatar",
   "communityMembers.kick": "Kick",
   "communityMembers.kicked": "Member kicked",

@@ -43,7 +43,7 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/communities/{id}/agents/{listing_id}",
-            axum::routing::delete(remove_agent),
+            axum::routing::delete(remove_agent).patch(update_agent_listen_mode),
         )
         // Chat
         .route(
@@ -110,6 +110,8 @@ pub fn router() -> Router<AppState> {
             "/api/communities/{id}/role-permissions",
             get(get_role_permissions).put(update_role_permissions),
         )
+        // Single member profile
+        .route("/api/communities/{id}/members/{user_id}/profile", get(get_member_profile))
         // Change member role
         .route("/api/communities/{id}/members/{user_id}/role", axum::routing::patch(change_member_role))
         // Hidden users
@@ -4778,4 +4780,148 @@ pub async fn has_community_permission(
     }
 
     false
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/communities/:id/members/:userId/profile — Single member profile
+// ---------------------------------------------------------------------------
+
+async fn get_member_profile(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((community_id, target_user_id)): Path<(Uuid, String)>,
+) -> (StatusCode, Json<Value>) {
+    // Check caller is a member
+    let is_member = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2)",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_member {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"})));
+    }
+
+    // Fetch member profile
+    let member = sqlx::query_as::<_, (String, Option<String>, Option<String>, String, Option<String>)>(
+        r#"SELECT cm.role::text, cm.display_name, cm.member_avatar_url, u.name, u.image
+           FROM community_members cm
+           JOIN "user" u ON u.id = cm.user_id
+           WHERE cm.community_id = $1 AND cm.user_id = $2"#,
+    )
+    .bind(community_id)
+    .bind(&target_user_id)
+    .fetch_optional(&state.db)
+    .await;
+
+    match member {
+        Ok(Some((role, display_name, member_avatar, user_name, user_image))) => {
+            // Fetch agents owned by this member in this community
+            let conv_id = sqlx::query_scalar::<_, Uuid>(
+                "SELECT conversation_id FROM communities WHERE id = $1",
+            )
+            .bind(community_id)
+            .fetch_optional(&state.db)
+            .await
+            .ok()
+            .flatten();
+
+            let agents: Vec<Value> = if let Some(cid) = conv_id {
+                sqlx::query_as::<_, (String, String, Option<String>)>(
+                    r#"SELECT a.id::text, a.name, a.avatar_url
+                       FROM conversation_members cm
+                       JOIN agents a ON a.id = cm.agent_id
+                       WHERE cm.conversation_id = $1 AND cm.owner_user_id = $2"#,
+                )
+                .bind(cid)
+                .bind(&target_user_id)
+                .fetch_all(&state.db)
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(id, name, avatar)| json!({"id": id, "name": name, "avatarUrl": avatar}))
+                .collect()
+            } else {
+                vec![]
+            };
+
+            (StatusCode::OK, Json(json!({
+                "userId": target_user_id,
+                "displayName": display_name.unwrap_or(user_name.clone()),
+                "avatarUrl": member_avatar.or(user_image),
+                "role": role,
+                "agents": agents,
+            })))
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"error": "Member not found"}))),
+        Err(e) => {
+            tracing::error!("get_member_profile: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/communities/:id/agents/:agentId — Update agent listen mode
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UpdateAgentListenModeBody {
+    #[serde(rename = "listenMode")]
+    listen_mode: String,
+}
+
+async fn update_agent_listen_mode(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((community_id, agent_id)): Path<(Uuid, Uuid)>,
+    Json(body): Json<UpdateAgentListenModeBody>,
+) -> (StatusCode, Json<Value>) {
+    // Check caller owns this agent
+    let is_owner = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM agents WHERE id = $1 AND owner_id = $2)",
+    )
+    .bind(agent_id)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the agent owner"})));
+    }
+
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
+    )
+    .bind(community_id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(cid) = conv_id {
+        let result = sqlx::query(
+            "UPDATE conversation_members SET listen_mode = $3::agent_listen_mode WHERE conversation_id = $1 AND agent_id = $2",
+        )
+        .bind(cid)
+        .bind(agent_id)
+        .bind(&body.listen_mode)
+        .execute(&state.db)
+        .await;
+
+        match result {
+            Ok(r) if r.rows_affected() > 0 => (StatusCode::OK, Json(json!({"ok": true}))),
+            Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Agent not in this community"}))),
+            Err(e) => {
+                tracing::error!("update_agent_listen_mode: {}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+            }
+        }
+    } else {
+        (StatusCode::NOT_FOUND, Json(json!({"error": "Community has no conversation"})))
+    }
 }

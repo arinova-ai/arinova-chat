@@ -180,23 +180,40 @@ function AgentProfileContent() {
     };
   }, [agentId, agent]);
 
-  // Fetch owner name
+  // Fetch owner name (use community display_name if in community context)
   useEffect(() => {
     if (!agent?.ownerId) return;
-    if (session?.user?.id === agent.ownerId) {
-      setOwnerName(session.user.name ?? null);
-      return;
-    }
     let cancelled = false;
-    api<{ id: string; name: string }>(`/api/users/${agent.ownerId}`)
-      .then((data) => {
-        if (!cancelled) setOwnerName(data.name);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [agent?.ownerId, session?.user?.id, session?.user?.name]);
+
+    // Try community anonymous name first
+    if (convId) {
+      api<{ id: string }>(`/api/communities/by-conversation/${convId}`, { silent: true })
+        .then((community) =>
+          api<{ displayName: string }>(`/api/communities/${community.id}/members/${agent.ownerId}/profile`, { silent: true })
+        )
+        .then((profile) => {
+          if (!cancelled) setOwnerName(profile.displayName);
+        })
+        .catch(() => {
+          // Fallback to real name
+          if (session?.user?.id === agent.ownerId) {
+            if (!cancelled) setOwnerName(session.user.name ?? null);
+          } else {
+            api<{ id: string; name: string }>(`/api/users/${agent.ownerId}`, { silent: true })
+              .then((data) => { if (!cancelled) setOwnerName(data.name); })
+              .catch(() => {});
+          }
+        });
+    } else if (session?.user?.id === agent.ownerId) {
+      setOwnerName(session.user.name ?? null);
+    } else {
+      api<{ id: string; name: string }>(`/api/users/${agent.ownerId}`)
+        .then((data) => { if (!cancelled) setOwnerName(data.name); })
+        .catch(() => {});
+    }
+
+    return () => { cancelled = true; };
+  }, [agent?.ownerId, session?.user?.id, session?.user?.name, convId]);
 
   // Load capsules + grants for this agent (owner only)
   useEffect(() => {
