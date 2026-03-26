@@ -762,6 +762,15 @@ async fn main() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )"#).execute(&db).await.ok();
 
+    // Deduplicate conversation_members and add UNIQUE constraint
+    sqlx::query(r#"DELETE FROM conversation_members a
+        USING conversation_members b
+        WHERE a.ctid < b.ctid
+          AND a.conversation_id = b.conversation_id
+          AND a.agent_id = b.agent_id
+          AND a.agent_id IS NOT NULL"#).execute(&db).await.ok();
+    sqlx::query("CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_members_conv_agent ON conversation_members(conversation_id, agent_id) WHERE agent_id IS NOT NULL").execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards

@@ -1136,7 +1136,7 @@ pub async fn trigger_agent_response(
     // Determine target agent(s)
     let agent_ids: Vec<String> = if conv_type == "group" || conv_type == "community" {
         let members = sqlx::query_as::<_, (String,)>(
-            r#"SELECT agent_id::text FROM conversation_members WHERE conversation_id = $1::uuid"#,
+            r#"SELECT DISTINCT agent_id::text FROM conversation_members WHERE conversation_id = $1::uuid"#,
         )
         .bind(conversation_id)
         .fetch_all(db)
@@ -2660,7 +2660,7 @@ pub(crate) async fn do_trigger_agent_response(
         if conv_type == "group" || conv_type == "community" {
             // Build agent configs for all agents in the conversation
             let conv_agents = sqlx::query_as::<_, (String, String, Option<String>)>(
-                r#"SELECT cm.agent_id::text, cm.listen_mode::text, cm.owner_user_id
+                r#"SELECT DISTINCT ON (cm.agent_id) cm.agent_id::text, cm.listen_mode::text, cm.owner_user_id
                    FROM conversation_members cm
                    WHERE cm.conversation_id = $1::uuid AND cm.agent_id IS NOT NULL"#,
             )
