@@ -1729,6 +1729,21 @@ pub(crate) async fn do_trigger_agent_response(
     redis: &deadpool_redis::Pool,
     config: &crate::config::Config,
 ) {
+    // Dedup: prevent same content dispatched to same agent within 5 seconds
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    let dedup_key = format!("{}:{}:{}", conversation_id, agent_id, hasher.finish());
+    let now = std::time::Instant::now();
+    if let Some(prev) = ws_state.recent_dispatches.get(&dedup_key) {
+        if now.duration_since(*prev).as_secs() < 5 {
+            tracing::info!("Dedup: skipping duplicate dispatch conv={} agent={}", conversation_id, agent_id);
+            return;
+        }
+    }
+    ws_state.recent_dispatches.insert(dedup_key, now);
+
     let agent = sqlx::query_as::<_, (String, Option<String>)>(
         r#"SELECT name, system_prompt FROM agents WHERE id = $1::uuid"#,
     )

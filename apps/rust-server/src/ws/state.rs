@@ -66,6 +66,9 @@ pub struct WsState {
     /// Per-conversation agent response queues
     pub agent_response_queues: Arc<DashMap<String, VecDeque<QueuedResponse>>>,
 
+    /// Recent dispatch dedup: "conv:agent:content_hash" -> timestamp
+    pub recent_dispatches: Arc<DashMap<String, Instant>>,
+
     /// Agent connections: agentId -> (connectionId, sender)
     pub agent_connections: Arc<DashMap<String, (String, WsSender)>>,
 
@@ -104,6 +107,7 @@ impl WsState {
             stream_cancellers: Arc::new(DashMap::new()),
             active_streams: Arc::new(DashMap::new()),
             agent_response_queues: Arc::new(DashMap::new()),
+            recent_dispatches: Arc::new(DashMap::new()),
             agent_connections: Arc::new(DashMap::new()),
             agent_connection_ips: Arc::new(DashMap::new()),
             agent_skills: Arc::new(DashMap::new()),
