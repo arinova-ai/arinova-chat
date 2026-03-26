@@ -201,7 +201,7 @@ export function CommunityMembersPanel({
   }, [communityId, selectedFriends, fetchData, t]);
 
   const myRole = members.find((m) => m.userId === currentUserId)?.role;
-  const isCreatorOrAdmin = myRole === "creator" || myRole === "moderator";
+  const isCreatorOrAdmin = myRole === "creator" || myRole === "moderator" || myRole === "admin";
 
   const handleKick = useCallback(async (userId: string) => {
     try {

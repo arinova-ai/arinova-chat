@@ -188,7 +188,7 @@ export function CommunitySettingsSheet({
 
   const currentUserRole = members.find((m) => m.userId === currentUserId)?.role ?? null;
   const isCreator = currentUserRole === "creator";
-  const isAdmin = currentUserRole === "moderator";
+  const isAdmin = currentUserRole === "moderator" || currentUserRole === "admin";
   const canManage = isCreator || isAdmin;
 
   const fetchData = useCallback(async () => {

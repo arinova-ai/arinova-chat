@@ -1587,7 +1587,7 @@ async fn invite_member(
     .flatten();
 
     match role.as_deref() {
-        Some("creator") | Some("moderator") => {}
+        Some("creator") | Some("moderator") | Some("admin") => {}
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can invite"}))),
     }
 
@@ -4076,7 +4076,7 @@ async fn upload_cover_image(
     .flatten();
 
     match role.as_deref() {
-        Some("creator") | Some("moderator") => {}
+        Some("creator") | Some("moderator") | Some("admin") => {}
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only admin/creator can upload cover"}))).into_response(),
     }
 
@@ -4324,7 +4324,7 @@ async fn list_bans(
     .flatten();
 
     match role.as_deref() {
-        Some("creator") | Some("moderator") => {}
+        Some("creator") | Some("moderator") | Some("admin") => {}
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can view bans"}))),
     }
 
@@ -4367,7 +4367,7 @@ async fn unban_user(
     .flatten();
 
     match role.as_deref() {
-        Some("creator") | Some("moderator") => {}
+        Some("creator") | Some("moderator") | Some("admin") => {}
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can unban"}))),
     }
 
@@ -4410,7 +4410,7 @@ async fn mute_member(
     .flatten();
 
     match role.as_deref() {
-        Some("creator") | Some("moderator") => {}
+        Some("creator") | Some("moderator") | Some("admin") => {}
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can mute members"}))),
     }
 
@@ -4482,7 +4482,7 @@ async fn unmute_member(
     .flatten();
 
     match role.as_deref() {
-        Some("creator") | Some("moderator") => {}
+        Some("creator") | Some("moderator") | Some("admin") => {}
         _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Only creator or moderator can unmute members"}))),
     }
 
