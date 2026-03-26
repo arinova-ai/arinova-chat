@@ -856,20 +856,6 @@ export function CommunitySettingsSheet({
                   })}
                 </div>
 
-                <Separator />
-
-                {/* Leave community */}
-                {!isCreator && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-                    onClick={handleLeave}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {t("communitySettings.leave")}
-                  </Button>
-                )}
               </div>
             )}
 
@@ -1060,6 +1046,22 @@ export function CommunitySettingsSheet({
             {activeTab === "danger" && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">{t("communitySettings.dangerZoneDesc")}</p>
+
+                {/* Leave community (non-creator only) */}
+                {!isCreator && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">{t("communitySettings.leave")}</h4>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="w-full justify-start gap-2"
+                      onClick={handleLeave}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      {t("communitySettings.leave")}
+                    </Button>
+                  </div>
+                )}
 
                 {isCreator && (
                   <>

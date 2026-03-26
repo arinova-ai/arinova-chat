@@ -1852,12 +1852,12 @@ async fn list_agents(
                     })
                 })
                 .collect();
-            // Include directly-added agents from conversation_members
+            // Include directly-added agents from conversation_members (dedup by agent ID)
             let existing_ids: std::collections::HashSet<String> = agents.iter()
-                .filter_map(|a| a.get("agentName").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                .filter_map(|a| a.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
                 .collect();
             for (aid, name, avatar) in &direct_agents {
-                if !existing_ids.contains(&name.to_string()) {
+                if !existing_ids.contains(&aid.to_string()) {
                     agents.push(json!({
                         "id": aid,
                         "agentName": name,
