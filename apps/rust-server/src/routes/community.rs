@@ -1723,7 +1723,7 @@ async fn add_agent(
         let listen = body.listen_mode.as_deref().unwrap_or("all");
         let result = sqlx::query(
             r#"INSERT INTO conversation_members (conversation_id, agent_id, listen_mode, display_name, member_avatar_url)
-               VALUES ($1, $2, $3, $4, $5)
+               VALUES ($1, $2, $3::agent_listen_mode, $4, $5)
                ON CONFLICT (conversation_id, agent_id) WHERE agent_id IS NOT NULL
                DO UPDATE SET listen_mode = EXCLUDED.listen_mode,
                              display_name = COALESCE(EXCLUDED.display_name, conversation_members.display_name),
