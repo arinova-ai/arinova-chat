@@ -19,6 +19,7 @@ export default function OfficialSettingsPage() {
   const { t } = useTranslation();
   const { updateAccount, deleteAccount } = useAccountStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const accountId = params.id as string;
 
@@ -32,6 +33,8 @@ export default function OfficialSettingsPage() {
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [coverUrl, setCoverUrl] = useState("");
+  const [coverUploading, setCoverUploading] = useState(false);
 
   // Danger
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -44,11 +47,13 @@ export default function OfficialSettingsPage() {
           name: string;
           bio: string | null;
           avatar: string | null;
+          coverImageUrl: string | null;
           isPublic: boolean;
         }>(`/api/accounts/${accountId}`);
         setName(account.name ?? "");
         setBio(account.bio ?? "");
         setAvatarUrl(account.avatar ?? "");
+        setCoverUrl(account.coverImageUrl ?? "");
         setIsPublic(account.isPublic ?? false);
       } catch (err) {
         console.error("Failed to load account:", err);
@@ -80,6 +85,27 @@ export default function OfficialSettingsPage() {
     }
   }, []);
 
+  const handleCoverUpload = useCallback(async (file: File) => {
+    setCoverUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${BACKEND_URL}/api/auth/upload-avatar`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.url) {
+        setCoverUrl(data.url);
+      }
+    } catch (err) {
+      console.error("Failed to upload cover:", err);
+    } finally {
+      setCoverUploading(false);
+    }
+  }, []);
+
   const handleSaveGeneral = useCallback(async () => {
     setSaving(true);
     try {
@@ -88,6 +114,7 @@ export default function OfficialSettingsPage() {
         name,
         bio,
         avatar: avatarUrl || null,
+        coverImageUrl: coverUrl || null,
       });
     } catch (err) {
       console.error("Failed to save general settings:", err);
@@ -237,6 +264,57 @@ export default function OfficialSettingsPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => setAvatarUrl("")}
+                        className="text-destructive"
+                      >
+                        {t("common.remove")}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cover Image Upload */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("official.settings.coverImage")}</label>
+                <div className="space-y-3">
+                  {coverUrl ? (
+                    <div className="relative overflow-hidden rounded-lg border">
+                      <img
+                        src={coverUrl}
+                        alt="Cover"
+                        className="h-32 w-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-32 w-full items-center justify-center rounded-lg border border-dashed bg-muted">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleCoverUpload(file);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => coverInputRef.current?.click()}
+                      disabled={coverUploading}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {coverUploading ? "..." : t("common.upload")}
+                    </Button>
+                    {coverUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCoverUrl("")}
                         className="text-destructive"
                       >
                         {t("common.remove")}

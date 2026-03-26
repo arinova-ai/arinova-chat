@@ -1018,6 +1018,7 @@
   "official.settings.welcomeMessage": "歡迎訊息",
   "official.settings.welcomePlaceholder": "歡迎！感謝您的訂閱...",
   "official.settings.manageAutoReply": "管理自動回覆規則",
+  "official.settings.coverImage": "封面圖片",
   "official.settings.deleteAccount": "刪除帳號",
   "official.settings.deleteConfirm": "此操作無法復原，所有資料將永久刪除。",
   "official.broadcast.title": "群發訊息",

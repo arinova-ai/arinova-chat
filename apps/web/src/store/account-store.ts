@@ -17,6 +17,7 @@ export interface Account {
   contextWindow: number;
   voiceSampleUrl: string | null;
   voiceCloneId: string | null;
+  coverImageUrl: string | null;
   // Official-specific
   isPublic: boolean;
   category: string | null;

@@ -1034,6 +1034,7 @@
   "official.settings.welcomeMessage": "Welcome Message",
   "official.settings.welcomePlaceholder": "Welcome! Thanks for subscribing...",
   "official.settings.manageAutoReply": "Manage Auto-Reply Rules",
+  "official.settings.coverImage": "Cover Image",
   "official.settings.deleteAccount": "Delete Account",
   "official.settings.deleteConfirm": "This action cannot be undone. All data will be permanently deleted.",
   "official.broadcast.title": "Broadcast",
