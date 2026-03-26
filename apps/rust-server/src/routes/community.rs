@@ -1746,6 +1746,33 @@ async fn list_agents(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> (StatusCode, Json<Value>) {
+    // Query agents from conversation_members (direct add) + community_agents (legacy listing)
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    // Direct agents from conversation_members
+    let direct_agents = if let Some(cid) = conv_id {
+        sqlx::query_as::<_, (Uuid, String, Option<String>)>(
+            r#"SELECT a.id, a.name, a.avatar_url
+               FROM conversation_members cm
+               JOIN agents a ON a.id = cm.agent_id
+               WHERE cm.conversation_id = $1"#,
+        )
+        .bind(cid)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    // Legacy agents from community_agents + agent_listings
     let rows = sqlx::query_as::<_, CommunityAgentRow>(
         r#"SELECT ca.id, ca.listing_id, l.agent_name, l.avatar_url,
                   l.description, l.model, ca.added_at
@@ -1760,7 +1787,7 @@ async fn list_agents(
 
     match rows {
         Ok(rows) => {
-            let agents: Vec<Value> = rows
+            let mut agents: Vec<Value> = rows
                 .iter()
                 .map(|r| {
                     json!({
@@ -1774,6 +1801,19 @@ async fn list_agents(
                     })
                 })
                 .collect();
+            // Include directly-added agents from conversation_members
+            let existing_ids: std::collections::HashSet<String> = agents.iter()
+                .filter_map(|a| a.get("agentName").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                .collect();
+            for (aid, name, avatar) in &direct_agents {
+                if !existing_ids.contains(&name.to_string()) {
+                    agents.push(json!({
+                        "id": aid,
+                        "agentName": name,
+                        "avatarUrl": avatar,
+                    }));
+                }
+            }
             (StatusCode::OK, Json(json!({ "agents": agents })))
         }
         Err(e) => {
