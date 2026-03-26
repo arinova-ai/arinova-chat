@@ -386,6 +386,10 @@ export function CommunityMembersPanel({
                   <SelectItem value="all">{t("communityMembers.listenAll")}</SelectItem>
                   <SelectItem value="mention_only">{t("communityMembers.listenMention")}</SelectItem>
                   <SelectItem value="none">{t("communityMembers.listenNone")}</SelectItem>
+                  <SelectItem value="owner_only">{t("communityMembers.listenOwnerOnly")}</SelectItem>
+                  <SelectItem value="owner_and_allowlist">{t("communityMembers.listenOwnerAllowlist")}</SelectItem>
+                  <SelectItem value="allowlist_mentions">{t("communityMembers.listenAllowlistMentions")}</SelectItem>
+                  <SelectItem value="owner_unmention_others_mention">{t("communityMembers.listenOwnerAllOthersMention")}</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">{t("communityMembers.listenModeDesc")}</p>
