@@ -1638,96 +1638,46 @@ async fn add_agent(
         );
     }
 
-    // Resolve listing_id: prefer direct listing_id, fallback to agent_id → find listing
-    let listing_id = if let Some(lid) = body.listing_id {
-        lid
-    } else if let Some(aid) = body.agent_id {
-        // Look up active listing for this agent
-        match sqlx::query_scalar::<_, Uuid>(
-            "SELECT id FROM agent_listings WHERE agent_id = $1 AND status = 'active' LIMIT 1",
-        )
-        .bind(aid)
-        .fetch_optional(&state.db)
-        .await
-        {
-            Ok(Some(lid)) => lid,
-            Ok(None) => {
-                // No listing — add agent directly to conversation members
-                let conv_id = sqlx::query_scalar::<_, Uuid>(
-                    "SELECT conversation_id FROM communities WHERE id = $1",
-                )
-                .bind(id)
-                .fetch_optional(&state.db)
-                .await
-                .ok()
-                .flatten();
-
-                if let Some(cid) = conv_id {
-                    let _ = sqlx::query(
-                        r#"INSERT INTO conversation_members (conversation_id, agent_id)
-                           VALUES ($1, $2) ON CONFLICT DO NOTHING"#,
-                    )
-                    .bind(cid)
-                    .bind(aid)
-                    .execute(&state.db)
-                    .await;
-                }
-                return (StatusCode::CREATED, Json(json!({"ok": true, "method": "direct"})));
-            }
-            Err(e) => {
-                tracing::error!("add_agent: agent lookup failed: {}", e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
-            }
-        }
-    } else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Either listingId or agentId is required"})));
+    // Get agent_id from body
+    let agent_id = match body.agent_id.or(body.listing_id) {
+        Some(aid) => aid,
+        None => return (StatusCode::BAD_REQUEST, Json(json!({"error": "agentId is required"}))),
     };
 
-    // Verify listing exists and is active
-    let listing_active = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM agent_listings WHERE id = $1 AND status = 'active')",
+    // Verify agent exists
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM agents WHERE id = $1)",
     )
-    .bind(listing_id)
+    .bind(agent_id)
     .fetch_one(&state.db)
     .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!("add_agent: listing check failed: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Database error" })),
-            );
-        }
-    };
+    .unwrap_or(false);
 
-    if !listing_active {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Listing not found or not active" })),
-        );
+    if !exists {
+        return (StatusCode::NOT_FOUND, Json(json!({"error": "Agent not found"})));
     }
 
-    let result = sqlx::query(
-        r#"INSERT INTO community_agents (community_id, listing_id)
-           VALUES ($1, $2)
-           ON CONFLICT (community_id, listing_id) DO NOTHING"#,
+    // Add agent to conversation members
+    let conv_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT conversation_id FROM communities WHERE id = $1",
     )
     .bind(id)
-    .bind(listing_id)
-    .execute(&state.db)
-    .await;
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
 
-    match result {
-        Ok(_) => (StatusCode::CREATED, Json(json!({ "success": true }))),
-        Err(e) => {
-            tracing::error!("Add agent to community failed: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "Database error" })),
-            )
-        }
+    if let Some(cid) = conv_id {
+        let _ = sqlx::query(
+            "INSERT INTO conversation_members (conversation_id, agent_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(cid)
+        .bind(agent_id)
+        .execute(&state.db)
+        .await;
     }
+
+    (StatusCode::CREATED, Json(json!({"ok": true})))
 }
 
 // ---------------------------------------------------------------------------
