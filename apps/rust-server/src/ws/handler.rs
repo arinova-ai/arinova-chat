@@ -2014,7 +2014,7 @@ pub(crate) async fn do_trigger_agent_response(
     }
 
     // Add group members context
-    if conv_type == "group" {
+    if conv_type == "group" || conv_type == "community" {
         let members = sqlx::query_as::<_, (String, String)>(
             r#"SELECT a.id::text, a.name FROM conversation_members cm
                JOIN agents a ON a.id = cm.agent_id
@@ -2485,7 +2485,7 @@ pub(crate) async fn do_trigger_agent_response(
                             process_next_in_queue(&stream_key, &ws_state, &db, &redis, &config);
 
                             // Save mentions for dispatch after the select loop
-                            if !mentions.is_empty() && conv_type == "group" {
+                            if !mentions.is_empty() && (conv_type == "group" || conv_type == "community") {
                                 pending_mentions = Some((mentions, full_content.clone()));
                             }
 
@@ -2642,7 +2642,7 @@ pub(crate) async fn do_trigger_agent_response(
 
         // Dispatch to agents via listen_mode filter (mirrors user message path)
         let mut already_dispatched = std::collections::HashSet::new();
-        if conv_type == "group" {
+        if conv_type == "group" || conv_type == "community" {
             // Build agent configs for all agents in the conversation
             let conv_agents = sqlx::query_as::<_, (String, String, Option<String>)>(
                 r#"SELECT cm.agent_id::text, cm.listen_mode::text, cm.owner_user_id
