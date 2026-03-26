@@ -42,6 +42,7 @@ import { useTranslation } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { MemoryCapsuleSheet } from "./memory-capsule-sheet";
 import { CommunitySettingsSheet } from "./community-settings";
+import { VerifiedBadge } from "@/components/ui/verified-badge";
 import { useRightPanelStore } from "@/store/right-panel-store";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Pin, CalendarSearch, Activity } from "lucide-react";
@@ -70,6 +71,7 @@ interface ChatHeaderProps {
   onPhotosClick?: () => void;
   onFilesClick?: () => void;
   officialCommunityId?: string | null;
+  isVerified?: boolean;
 }
 
 export function ChatHeader({
@@ -92,6 +94,7 @@ export function ChatHeader({
   onPhotosClick,
   onFilesClick,
   officialCommunityId,
+  isVerified,
 }: ChatHeaderProps) {
   const { t } = useTranslation();
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
@@ -276,7 +279,10 @@ export function ChatHeader({
           </Avatar>
         </div>
         <div className="min-w-0 text-left">
-          <h2 className="text-sm font-semibold truncate">{displayName}</h2>
+          <h2 className="text-sm font-semibold truncate flex items-center gap-1">
+            {displayName}
+            {isVerified && <VerifiedBadge className="h-3.5 w-3.5 shrink-0" />}
+          </h2>
           {officialCommunityId && csStatus ? (
             <p className="flex items-center gap-1 text-xs truncate">
               <Headset className="h-3 w-3" />
@@ -777,13 +783,17 @@ function DirectHeaderButtons({
   onSettingsOpen,
   t,
 }: DirectHeaderButtonsProps) {
-  const convType = type === "direct" ? "h2a" : type === "lounge" ? "h2a" : type;
+  const convType = type === "direct" ? "h2a" : type === "lounge" ? "h2a" : type === "official" ? "h2a" : type;
+
+  const isOfficialOrLounge = type === "official" || type === "lounge";
+  const officialExclude = new Set(["kanban", "notebook", "capsule", "hud", "call", "threads"]);
 
   // Filter buttons for this conversation type
   const available = HEADER_BUTTONS.filter((btn) => {
     if (!btn.supportedTypes.includes(convType as "h2h" | "h2a")) return false;
     if (btn.id === "call" && !canCall) return false;
     if (btn.id === "capsule" && !(agentId && conversationId)) return false;
+    if (isOfficialOrLounge && officialExclude.has(btn.id)) return false;
     return true;
   });
 

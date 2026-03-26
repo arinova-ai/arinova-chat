@@ -285,6 +285,7 @@ export function ChatArea() {
         onPhotosClick={() => { setMediaFilesTab("media"); setMediaFilesOpen(true); }}
         onFilesClick={() => { setMediaFilesTab("files"); setMediaFilesOpen(true); }}
         officialCommunityId={conversation.officialCommunityId}
+        isVerified={conversation.isVerified}
       />
       <ErrorBoundary scope="PinnedMessagesBar">
         {activeConversationId && <PinnedMessagesBar conversationId={activeConversationId} />}
