@@ -1577,7 +1577,7 @@ async fn invite_member(
 ) -> (StatusCode, Json<Value>) {
     // Check caller is creator or moderator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&user.id)
@@ -4314,7 +4314,7 @@ async fn list_bans(
 ) -> (StatusCode, Json<Value>) {
     // Check caller is creator or moderator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&user.id)
@@ -4357,7 +4357,7 @@ async fn unban_user(
     Path((community_id, target_user_id)): Path<(Uuid, String)>,
 ) -> (StatusCode, Json<Value>) {
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&user.id)
@@ -4400,7 +4400,7 @@ async fn mute_member(
 ) -> (StatusCode, Json<Value>) {
     // Check caller is creator or moderator
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&user.id)
@@ -4472,7 +4472,7 @@ async fn unmute_member(
     Json(body): Json<UnmuteMemberBody>,
 ) -> (StatusCode, Json<Value>) {
     let role = sqlx::query_scalar::<_, String>(
-        "SELECT role FROM community_members WHERE community_id = $1 AND user_id = $2",
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
     )
     .bind(community_id)
     .bind(&user.id)
