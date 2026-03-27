@@ -61,6 +61,7 @@ async fn hud_ws_upgrade(
 }
 
 async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String, owner_id: String) {
+    tracing::info!("HUD WS connected: agent={} owner={}", agent_id, owner_id);
     let mut ping_interval = interval(Duration::from_secs(30));
     let mut last_pong = std::time::Instant::now();
 
@@ -83,6 +84,8 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
                             if msg_type == "pong" {
                                 continue;
                             }
+
+                            tracing::info!("HUD WS recv: agent={} type={} payload={}", agent_id, msg_type, &text[..text.len().min(200)]);
 
                             if msg_type == "hud_update" {
                                 let conv_id = data.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
