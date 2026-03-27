@@ -558,6 +558,30 @@ async fn handle_message(
 
             let content = sanitize_content(content);
 
+            // Check keyword filters BEFORE saving/broadcasting
+            let conv_type_check = sqlx::query_scalar::<_, String>(
+                "SELECT type::text FROM conversations WHERE id = $1::uuid",
+            )
+            .bind(conversation_id)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten();
+
+            if conv_type_check.as_deref() == Some("community") {
+                if crate::routes::community::check_keyword_filters(db, conversation_id, user_id, &content, ws_state, redis).await {
+                    send_event(tx, &json!({
+                        "type": "stream_error",
+                        "conversationId": conversation_id,
+                        "messageId": "",
+                        "seq": 0,
+                        "code": "keyword_blocked",
+                        "error": "Message blocked by keyword filter"
+                    }));
+                    return;
+                }
+            }
+
             trigger_agent_response(
                 user_id,
                 conversation_id,
@@ -1130,13 +1154,6 @@ pub async fn trigger_agent_response(
                     return;
                 }
             }
-        }
-    }
-
-    // Check keyword filters for community conversations
-    if conv_type == "community" {
-        if crate::routes::community::check_keyword_filters(db, conversation_id, user_id, content, ws_state, redis).await {
-            return; // Message blocked by keyword filter
         }
     }
 
