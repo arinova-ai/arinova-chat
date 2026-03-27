@@ -1013,14 +1013,19 @@ function MySkillsTab() {
               <div className="flex gap-1 shrink-0">
                 <Button variant="outline" size="sm" className="gap-1" onClick={async () => {
                   const agents = useChatStore.getState().agents;
-                  if (agents.length === 0) return;
+                  if (agents.length === 0) {
+                    useToastStore.getState().addToast(t("skills.my.noAgents"));
+                    return;
+                  }
                   try {
                     await api(`/api/skills/${s.id}/install`, {
                       method: "POST",
                       body: JSON.stringify({ agentIds: agents.map((a) => a.id) }),
                     });
-                    useToastStore.getState().addToast(t("skills.my.installed"), "success");
-                  } catch {}
+                    useToastStore.getState().addToast(t("skills.my.installedCount", { count: String(agents.length) }), "success");
+                  } catch {
+                    useToastStore.getState().addToast(t("skills.my.installFailed"));
+                  }
                 }}>
                   <Download className="h-3 w-3" />
                   {t("skills.my.install")}
