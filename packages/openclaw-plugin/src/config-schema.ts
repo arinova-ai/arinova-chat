@@ -1,4 +1,12 @@
-import { DmPolicySchema, requireOpenAllowFrom } from "openclaw/plugin-sdk";
+import { DmPolicySchema } from "openclaw/plugin-sdk/channel-config-schema";
+import { z as _z } from "zod";
+
+// Inline: requireOpenAllowFrom removed from new SDK
+function requireOpenAllowFrom(params: { policy?: string; allowFrom?: string[]; ctx: _z.RefinementCtx; path: string[]; message: string }) {
+  if (params.policy === "open" && (!params.allowFrom || !params.allowFrom.includes("*"))) {
+    params.ctx.addIssue({ code: _z.ZodIssueCode.custom, message: params.message, path: params.path });
+  }
+}
 import { z } from "zod";
 
 export const ArinovaChatAccountSchemaBase = z

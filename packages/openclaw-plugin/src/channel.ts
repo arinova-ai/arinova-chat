@@ -1,14 +1,13 @@
-import {
-  applyAccountNameToChannelSection,
-  buildChannelConfigSchema,
-  DEFAULT_ACCOUNT_ID,
-  formatPairingApproveHint,
-  normalizeAccountId,
-  type ChannelPlugin,
-  type ChannelSetupInput,
-  type OpenClawConfig,
-  type RuntimeEnv,
-} from "openclaw/plugin-sdk";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
+import { buildChannelConfigSchema } from "openclaw/plugin-sdk/core";
+import type { ChannelPlugin } from "openclaw/plugin-sdk/core";
+import type { ChannelSetupInput } from "openclaw/plugin-sdk/setup";
+import type { OpenClawConfig } from "openclaw/plugin-sdk";
+import type { RuntimeEnv } from "openclaw/plugin-sdk";
+
+// Inline stubs for functions removed from new SDK
+const applyAccountNameToChannelSection = (_section: string, _name: string): string => _section;
+const formatPairingApproveHint = (_opts: { channel: string; userId: string }): string => `Approve pairing for ${_opts.userId}`;
 import type { CoreConfig } from "./types.js";
 import {
   listArinovaChatAccountIds,

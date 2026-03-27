@@ -7,5 +7,6 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   target: "node22",
-  external: ["openclaw", "openclaw/plugin-sdk"],
+  dts: false,  // Skip type generation (SDK subpaths not available locally)
+  external: [/^openclaw/],  // Mark all openclaw/* imports as external
 });

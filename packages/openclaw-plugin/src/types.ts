@@ -1,6 +1,5 @@
-import type { DmPolicy } from "openclaw/plugin-sdk";
-
-export type { DmPolicy };
+// DmPolicy inlined (removed from root plugin-sdk export in new SDK)
+export type DmPolicy = "open" | "allowlist" | "paired";
 
 export type ArinovaChatAccountConfig = {
   name?: string;
