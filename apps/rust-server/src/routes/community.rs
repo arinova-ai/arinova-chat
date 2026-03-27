@@ -114,6 +114,15 @@ pub fn router() -> Router<AppState> {
         .route("/api/communities/{id}/members/{user_id}/profile", get(get_member_profile))
         // Change member role
         .route("/api/communities/{id}/members/{user_id}/role", axum::routing::patch(change_member_role))
+        // Keyword filters
+        .route(
+            "/api/communities/{id}/keyword-filters",
+            get(list_keyword_filters).post(create_keyword_filter),
+        )
+        .route(
+            "/api/communities/{id}/keyword-filters/{filter_id}",
+            axum::routing::delete(delete_keyword_filter),
+        )
         // Hidden users
         .route(
             "/api/communities/{id}/hidden-users",
@@ -4972,4 +4981,217 @@ async fn update_agent_listen_mode(
     } else {
         (StatusCode::NOT_FOUND, Json(json!({"error": "Community has no conversation"})))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Keyword Filters
+// ---------------------------------------------------------------------------
+
+async fn list_keyword_filters(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+) -> (StatusCode, Json<Value>) {
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") | Some("admin") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Forbidden"}))),
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, String, String, Option<i32>, DateTime<Utc>)>(
+        r#"SELECT id, keyword, action, mute_duration, created_at
+           FROM community_keyword_filters
+           WHERE community_id = $1
+           ORDER BY created_at DESC"#,
+    )
+    .bind(community_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let filters: Vec<Value> = rows.into_iter().map(|(id, keyword, action, dur, created)| {
+        json!({ "id": id, "keyword": keyword, "action": action, "muteDuration": dur, "createdAt": created })
+    }).collect();
+
+    (StatusCode::OK, Json(json!({ "filters": filters })))
+}
+
+#[derive(Deserialize)]
+struct CreateKeywordFilterBody {
+    keyword: String,
+    action: Option<String>,
+    #[serde(rename = "muteDuration")]
+    mute_duration: Option<i32>,
+}
+
+async fn create_keyword_filter(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(community_id): Path<Uuid>,
+    Json(body): Json<CreateKeywordFilterBody>,
+) -> (StatusCode, Json<Value>) {
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") | Some("admin") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Forbidden"}))),
+    }
+
+    let action = body.action.as_deref().unwrap_or("mute");
+    let result = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO community_keyword_filters (community_id, keyword, action, mute_duration, created_by)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id"#,
+    )
+    .bind(community_id)
+    .bind(body.keyword.trim())
+    .bind(action)
+    .bind(body.mute_duration)
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await;
+
+    match result {
+        Ok(id) => (StatusCode::CREATED, Json(json!({"id": id, "ok": true}))),
+        Err(e) => {
+            tracing::error!("create_keyword_filter: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+        }
+    }
+}
+
+async fn delete_keyword_filter(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((community_id, filter_id)): Path<(Uuid, Uuid)>,
+) -> (StatusCode, Json<Value>) {
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    match role.as_deref() {
+        Some("creator") | Some("moderator") | Some("admin") => {}
+        _ => return (StatusCode::FORBIDDEN, Json(json!({"error": "Forbidden"}))),
+    }
+
+    let _ = sqlx::query("DELETE FROM community_keyword_filters WHERE id = $1 AND community_id = $2")
+        .bind(filter_id)
+        .bind(community_id)
+        .execute(&state.db)
+        .await;
+
+    (StatusCode::OK, Json(json!({"ok": true})))
+}
+
+/// Check message content against keyword filters and auto-ban/mute
+pub async fn check_keyword_filters(
+    db: &sqlx::PgPool,
+    conversation_id: &str,
+    user_id: &str,
+    content: &str,
+    ws_state: &crate::ws::state::WsState,
+    redis: &deadpool_redis::Pool,
+) -> bool {
+    // Get community_id from conversation
+    let community_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM communities WHERE conversation_id = $1::uuid",
+    )
+    .bind(conversation_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+
+    let community_id = match community_id {
+        Some(id) => id,
+        None => return false,
+    };
+
+    // Check if sender is admin/creator (exempt from filters)
+    let role = sqlx::query_scalar::<_, String>(
+        "SELECT role::text FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(community_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+
+    if matches!(role.as_deref(), Some("creator") | Some("admin") | Some("moderator")) {
+        return false;
+    }
+
+    // Fetch all keyword filters
+    let filters = sqlx::query_as::<_, (String, String, Option<i32>)>(
+        "SELECT keyword, action, mute_duration FROM community_keyword_filters WHERE community_id = $1",
+    )
+    .bind(community_id)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default();
+
+    let content_lower = content.to_lowercase();
+    for (keyword, action, mute_duration) in &filters {
+        if content_lower.contains(&keyword.to_lowercase()) {
+            tracing::info!("Keyword filter triggered: keyword={} action={} user={}", keyword, action, user_id);
+
+            if action == "ban" {
+                // Ban: remove from community + add to bans
+                let _ = sqlx::query("DELETE FROM community_members WHERE community_id = $1 AND user_id = $2")
+                    .bind(community_id).bind(user_id).execute(db).await;
+                let _ = sqlx::query(
+                    "INSERT INTO community_bans (community_id, user_id, banned_by, reason) VALUES ($1, $2, 'system', $3) ON CONFLICT DO NOTHING",
+                )
+                .bind(community_id).bind(user_id).bind(format!("Keyword: {}", keyword)).execute(db).await;
+
+                ws_state.send_to_user_or_queue(user_id, &json!({
+                    "type": "community_kicked",
+                    "communityId": community_id,
+                    "reason": format!("Banned for keyword: {}", keyword),
+                }), redis);
+            } else {
+                // Mute
+                let muted_until = mute_duration.map(|d| chrono::Utc::now() + chrono::Duration::seconds(d as i64));
+                let _ = sqlx::query(
+                    "UPDATE community_members SET is_muted = TRUE, muted_until = $3 WHERE community_id = $1 AND user_id = $2",
+                )
+                .bind(community_id).bind(user_id).bind(muted_until).execute(db).await;
+
+                ws_state.send_to_user_or_queue(user_id, &json!({
+                    "type": "community_muted",
+                    "communityId": community_id,
+                    "mutedUntil": muted_until,
+                    "reason": format!("Muted for keyword: {}", keyword),
+                }), redis);
+            }
+
+            return true; // Message should be blocked
+        }
+    }
+
+    false
 }

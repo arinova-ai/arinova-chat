@@ -1133,6 +1133,13 @@ pub async fn trigger_agent_response(
         }
     }
 
+    // Check keyword filters for community conversations
+    if conv_type == "community" {
+        if crate::routes::community::check_keyword_filters(db, conversation_id, user_id, content, ws_state, redis).await {
+            return; // Message blocked by keyword filter
+        }
+    }
+
     // Determine target agent(s)
     let agent_ids: Vec<String> = if conv_type == "group" || conv_type == "community" {
         let members = sqlx::query_as::<_, (String,)>(

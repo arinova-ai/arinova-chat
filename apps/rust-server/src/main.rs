@@ -771,6 +771,18 @@ async fn main() {
           AND a.agent_id IS NOT NULL"#).execute(&db).await.ok();
     sqlx::query("CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_members_conv_agent ON conversation_members(conversation_id, agent_id) WHERE agent_id IS NOT NULL").execute(&db).await.ok();
 
+    // Community keyword filters
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS community_keyword_filters (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        community_id UUID NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+        keyword TEXT NOT NULL,
+        action TEXT NOT NULL DEFAULT 'mute' CHECK (action IN ('ban', 'mute')),
+        mute_duration INTEGER,
+        created_by TEXT NOT NULL REFERENCES "user"(id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )"#).execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_community_keyword_filters_community ON community_keyword_filters(community_id)").execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards

@@ -53,13 +53,14 @@ import {
   Upload,
   Loader2,
   EyeOff,
+  Filter,
 } from "lucide-react";
 import { useChatStore } from "@/store/chat-store";
 import { useToastStore } from "@/store/toast-store";
 import { DefaultAvatarPicker } from "@/components/ui/default-avatar-picker";
 import { compressImage } from "@/lib/image-compress";
 
-type Tab = "info" | "personal" | "permissions" | "invites" | "hidden" | "bans" | "danger";
+type Tab = "info" | "personal" | "permissions" | "invites" | "hidden" | "bans" | "keywords" | "danger";
 
 interface CommunitySettingsProps {
   open: boolean;
@@ -582,6 +583,7 @@ export function CommunitySettingsSheet({
     { id: "invites", label: t("communitySettings.invites"), icon: <Link2 className="h-4 w-4" />, adminOnly: true },
     { id: "hidden", label: t("communitySettings.hiddenUsers"), icon: <EyeOff className="h-4 w-4" /> },
     { id: "bans", label: t("communitySettings.bannedUsers"), icon: <UserMinus className="h-4 w-4" />, adminOnly: true },
+    { id: "keywords", label: t("communitySettings.keywordFilters"), icon: <Filter className="h-4 w-4" />, adminOnly: true },
     { id: "danger", label: t("communitySettings.dangerZone"), icon: <Trash2 className="h-4 w-4" /> },
   ];
 
@@ -1049,6 +1051,11 @@ export function CommunitySettingsSheet({
               <BannedUsersTab communityId={communityId} />
             )}
 
+            {/* ── Keyword Filters Tab ── */}
+            {activeTab === "keywords" && (
+              <KeywordFiltersTab communityId={communityId} />
+            )}
+
             {/* ── Danger Zone Tab ── */}
             {activeTab === "danger" && (
               <div className="space-y-4">
@@ -1303,6 +1310,112 @@ function RolePermissionMatrix({ communityId }: { communityId: string }) {
       <Button size="sm" onClick={handleSave} disabled={saving}>
         {saving ? t("communitySettings.saving") : t("communitySettings.saveInfo")}
       </Button>
+    </div>
+  );
+}
+
+function KeywordFiltersTab({ communityId }: { communityId: string }) {
+  const { t } = useTranslation();
+  interface KWFilter { id: string; keyword: string; action: string; muteDuration: number | null; createdAt: string }
+  const [filters, setFilters] = useState<KWFilter[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState("");
+  const [action, setAction] = useState("mute");
+  const [muteDuration, setMuteDuration] = useState("3600");
+
+  useEffect(() => {
+    setLoading(true);
+    api<{ filters: KWFilter[] }>(`/api/communities/${communityId}/keyword-filters`, { silent: true })
+      .then((d) => setFilters(d.filters))
+      .catch(() => setFilters([]))
+      .finally(() => setLoading(false));
+  }, [communityId]);
+
+  const handleAdd = async () => {
+    if (!keyword.trim()) return;
+    try {
+      await api(`/api/communities/${communityId}/keyword-filters`, {
+        method: "POST",
+        body: JSON.stringify({
+          keyword: keyword.trim(),
+          action,
+          muteDuration: action === "mute" ? parseInt(muteDuration) : undefined,
+        }),
+      });
+      setKeyword("");
+      const d = await api<{ filters: KWFilter[] }>(`/api/communities/${communityId}/keyword-filters`, { silent: true });
+      setFilters(d.filters);
+    } catch {}
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api(`/api/communities/${communityId}/keyword-filters/${id}`, { method: "DELETE" });
+      setFilters((prev) => prev.filter((f) => f.id !== id));
+    } catch {}
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">{t("communitySettings.keywordFiltersDesc")}</p>
+
+      {/* Add form */}
+      <div className="space-y-2 rounded-lg border p-3">
+        <Input
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder={t("communitySettings.keywordPlaceholder")}
+          className="text-sm"
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+        />
+        <div className="flex gap-2">
+          <Select value={action} onValueChange={setAction}>
+            <SelectTrigger className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mute">{t("communitySettings.actionMute")}</SelectItem>
+              <SelectItem value="ban">{t("communitySettings.actionBan")}</SelectItem>
+            </SelectContent>
+          </Select>
+          {action === "mute" && (
+            <Select value={muteDuration} onValueChange={setMuteDuration}>
+              <SelectTrigger className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3600">1h</SelectItem>
+                <SelectItem value="86400">24h</SelectItem>
+                <SelectItem value="604800">7d</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <Button size="sm" onClick={handleAdd} disabled={!keyword.trim()}>
+            {t("communitySettings.add")}
+          </Button>
+        </div>
+      </div>
+
+      {/* Filter list */}
+      {filters.length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">{t("communitySettings.noKeywordFilters")}</p>
+      ) : (
+        <div className="space-y-1">
+          {filters.map((f) => (
+            <div key={f.id} className="flex items-center gap-3 rounded-lg px-3 py-2 border">
+              <code className="flex-1 text-sm font-mono truncate">{f.keyword}</code>
+              <Badge variant={f.action === "ban" ? "destructive" : "secondary"} className="text-[10px] shrink-0">
+                {f.action}
+              </Badge>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400" onClick={() => handleDelete(f.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
