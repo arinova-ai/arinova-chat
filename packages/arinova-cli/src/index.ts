@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { setJsonMode } from "./output.js";
 import { getStagingEndpoint } from "./config.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
+
 import { registerMessageCommands } from "./commands/message.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerNoteCommands } from "./commands/note.js";
@@ -18,13 +25,14 @@ import { registerList } from "./commands/list.js";
 import { registerApp } from "./commands/app.js";
 import { registerSetupOpenclaw } from "./commands/setup-openclaw.js";
 import { registerConversation } from "./commands/conversation.js";
+import { registerSkill } from "./commands/skill.js";
 
 const program = new Command();
 
 program
   .name("arinova")
   .description("Arinova CLI — manage messages, notes, kanban, memory, creator tools, and more")
-  .version("0.0.9")
+  .version(pkg.version)
   .option("--token <botToken>", "Bot/API token (ari_...)")
   .option("--api-url <url>", "API endpoint (default: https://api.chat.arinova.ai)")
   .option("--staging", "Use staging environment")
@@ -49,6 +57,7 @@ registerNoteCommands(program);
 registerMemoryCommands(program);
 registerKanbanCommands(program);
 registerConversation(program);
+registerSkill(program);
 
 // Creator commands (config-based auth)
 registerAuth(program);

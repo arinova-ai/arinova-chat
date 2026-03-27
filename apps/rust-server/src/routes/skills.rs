@@ -30,6 +30,13 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/agents/{id}/commands", get(list_agent_commands))
         .route("/api/skills/arinova-search", post(arinova_search))
+        // Custom skills CRUD
+        .route("/api/skills/my", get(list_my_skills))
+        .route("/api/skills/custom", post(create_custom_skill))
+        .route(
+            "/api/skills/custom/{id}",
+            patch(update_custom_skill).delete(delete_custom_skill),
+        )
 }
 
 // ===== Types =====
@@ -1090,4 +1097,178 @@ async fn arinova_search(
     });
 
     Json(summary).into_response()
+}
+
+// ===== Custom Skills CRUD =====
+
+/// GET /api/skills/my — List current user's custom skills
+async fn list_my_skills(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Response {
+    let rows = sqlx::query_as::<_, SkillListRow>(
+        r#"SELECT s.id, s.name, s.slug, s.description, s.category, s.icon_url, s.version,
+                  s.slash_command, s.prompt_template, s.is_official, s.is_public,
+                  s.created_by, s.install_count, s.source_url,
+                  s.name_i18n, s.description_i18n, s.created_at, s.updated_at,
+                  EXISTS(SELECT 1 FROM user_favorite_skills f WHERE f.skill_id = s.id AND f.user_id = $1) AS is_favorited,
+                  COALESCE(ARRAY(SELECT a.agent_id FROM agent_skills a WHERE a.skill_id = s.id AND a.installed_by = $1), '{}') AS installed_agent_ids
+           FROM skills s
+           WHERE s.created_by = $1 AND s.is_official = false
+           ORDER BY s.updated_at DESC"#,
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let skills: Vec<serde_json::Value> = rows.iter().map(|r| {
+        json!({
+            "id": r.id,
+            "name": r.name,
+            "slug": r.slug,
+            "description": r.description,
+            "category": r.category,
+            "iconUrl": r.icon_url,
+            "slashCommand": r.slash_command,
+            "promptTemplate": r.prompt_template,
+            "isPublic": r.is_public,
+            "installCount": r.install_count,
+            "createdAt": r.created_at.to_rfc3339(),
+            "updatedAt": r.updated_at.to_rfc3339(),
+        })
+    }).collect();
+
+    Json(json!(skills)).into_response()
+}
+
+#[derive(Deserialize)]
+struct CreateCustomSkillBody {
+    name: String,
+    description: Option<String>,
+    command: Option<String>,
+    #[serde(rename = "promptTemplate")]
+    prompt_template: String,
+    #[serde(rename = "iconUrl")]
+    icon_url: Option<String>,
+    #[serde(rename = "isPublic")]
+    is_public: Option<bool>,
+    category: Option<String>,
+}
+
+/// POST /api/skills/custom — Create a custom skill
+async fn create_custom_skill(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Json(body): Json<CreateCustomSkillBody>,
+) -> Response {
+    let name = body.name.trim();
+    if name.is_empty() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Name required"}))).into_response();
+    }
+
+    let slug = format!("custom-{}", Uuid::new_v4().to_string().split('-').next().unwrap_or(""));
+    let slash_cmd = body.command.as_deref().map(|c| {
+        let c = c.trim().trim_start_matches('/');
+        if c.is_empty() { None } else { Some(format!("//{}", c)) }
+    }).flatten();
+
+    let result = sqlx::query_scalar::<_, Uuid>(
+        r#"INSERT INTO skills (name, slug, description, category, icon_url, slash_command, prompt_template, prompt_content, is_official, is_public, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $7, false, $8, $9)
+           RETURNING id"#,
+    )
+    .bind(name)
+    .bind(&slug)
+    .bind(body.description.as_deref().unwrap_or(""))
+    .bind(body.category.as_deref().unwrap_or("custom"))
+    .bind(&body.icon_url)
+    .bind(&slash_cmd)
+    .bind(&body.prompt_template)
+    .bind(body.is_public.unwrap_or(false))
+    .bind(&user.id)
+    .fetch_one(&state.db)
+    .await;
+
+    match result {
+        Ok(id) => (StatusCode::CREATED, Json(json!({
+            "id": id,
+            "slug": slug,
+            "slashCommand": slash_cmd,
+        }))).into_response(),
+        Err(e) => {
+            tracing::error!("create_custom_skill: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to create skill"}))).into_response()
+        }
+    }
+}
+
+/// PATCH /api/skills/custom/:id — Update a custom skill
+async fn update_custom_skill(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<CreateCustomSkillBody>,
+) -> Response {
+    // Verify ownership
+    let owner = sqlx::query_scalar::<_, String>(
+        "SELECT created_by FROM skills WHERE id = $1 AND is_official = false",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    if owner.as_deref() != Some(&user.id) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not the skill owner"}))).into_response();
+    }
+
+    let slash_cmd = body.command.as_deref().map(|c| {
+        let c = c.trim().trim_start_matches('/');
+        if c.is_empty() { None } else { Some(format!("//{}", c)) }
+    }).flatten();
+
+    let _ = sqlx::query(
+        r#"UPDATE skills SET name = $2, description = $3, category = $4, icon_url = $5,
+           slash_command = $6, prompt_template = $7, prompt_content = $7,
+           is_public = $8, updated_at = NOW()
+           WHERE id = $1"#,
+    )
+    .bind(id)
+    .bind(body.name.trim())
+    .bind(body.description.as_deref().unwrap_or(""))
+    .bind(body.category.as_deref().unwrap_or("custom"))
+    .bind(&body.icon_url)
+    .bind(&slash_cmd)
+    .bind(&body.prompt_template)
+    .bind(body.is_public.unwrap_or(false))
+    .execute(&state.db)
+    .await;
+
+    Json(json!({"ok": true})).into_response()
+}
+
+/// DELETE /api/skills/custom/:id — Delete a custom skill
+async fn delete_custom_skill(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let result = sqlx::query(
+        "DELETE FROM skills WHERE id = $1 AND created_by = $2 AND is_official = false",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => Json(json!({"ok": true})).into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"error": "Skill not found or not owned by you"}))).into_response(),
+        Err(e) => {
+            tracing::error!("delete_custom_skill: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"}))).into_response()
+        }
+    }
 }

@@ -21,7 +21,10 @@ import {
   Trash2,
   Terminal,
   ExternalLink,
+  Plus,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { PageTitle } from "@/components/ui/page-title";
 import { useChatStore } from "@/store/chat-store";
@@ -79,7 +82,7 @@ interface InstalledSkill {
 
 // ===== Tabs =====
 
-const TAB_KEYS = ["explore", "installed", "favorites"] as const;
+const TAB_KEYS = ["explore", "installed", "favorites", "my"] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 // ===== Main Content =====
@@ -146,6 +149,7 @@ function SkillsContent() {
           {activeTab === "explore" && <ExploreTab agents={agents} />}
           {activeTab === "installed" && <InstalledTab agents={agents} />}
           {activeTab === "favorites" && <FavoritesTab agents={agents} />}
+          {activeTab === "my" && <MySkillsTab />}
         </div>
 
         <MobileBottomNav />
@@ -935,5 +939,162 @@ export default function SkillsPage() {
     <AuthGuard>
       <SkillsContent />
     </AuthGuard>
+  );
+}
+
+// ===== My Skills Tab =====
+
+function MySkillsTab() {
+  const { t } = useTranslation();
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Skill | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const loadSkills = useCallback(() => {
+    setLoading(true);
+    api<Skill[]>("/api/skills/my")
+      .then(setSkills)
+      .catch(() => setSkills([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadSkills(); }, [loadSkills]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(t("skills.my.deleteConfirm"))) return;
+    try {
+      await api(`/api/skills/custom/${id}`, { method: "DELETE" });
+      loadSkills();
+    } catch {}
+  };
+
+  if (creating || editing) {
+    return (
+      <SkillEditor
+        skill={editing}
+        onSave={() => { setCreating(false); setEditing(null); loadSkills(); }}
+        onCancel={() => { setCreating(false); setEditing(null); }}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          {t("skills.my.title")} ({skills.length})
+        </h2>
+        <Button size="sm" className="gap-1" onClick={() => setCreating(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          {t("skills.my.create")}
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><ArinovaSpinner size="sm" /></div>
+      ) : skills.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+          <Sparkles className="h-10 w-10 mb-3 opacity-40" />
+          <p className="text-sm">{t("skills.my.empty")}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {skills.map((s) => (
+            <div key={s.id} className="flex items-center gap-3 rounded-xl border p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand/15">
+                <Sparkles className="h-5 w-5 text-brand-text" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold truncate">{s.name}</h3>
+                <p className="text-xs text-muted-foreground truncate">{s.slashCommand || "—"}</p>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
+                  {t("skills.my.edit")}
+                </Button>
+                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(s.id)}>
+                  {t("skills.my.delete")}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== Skill Editor =====
+
+function SkillEditor({ skill, onSave, onCancel }: { skill: Skill | null; onSave: () => void; onCancel: () => void }) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(skill?.name ?? "");
+  const [description, setDescription] = useState(skill?.description ?? "");
+  const [command, setCommand] = useState(skill?.slashCommand?.replace(/^\/+/, "") ?? "");
+  const [promptTemplate, setPromptTemplate] = useState(skill?.promptTemplate ?? "");
+  const [isPublic, setIsPublic] = useState(skill?.isPublic ?? false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim() || !promptTemplate.trim()) return;
+    setSaving(true);
+    try {
+      const body = { name, description, command: command || undefined, promptTemplate, isPublic };
+      if (skill) {
+        await api(`/api/skills/custom/${skill.id}`, { method: "PATCH", body: JSON.stringify(body) });
+      } else {
+        await api("/api/skills/custom", { method: "POST", body: JSON.stringify(body) });
+      }
+      onSave();
+    } catch {}
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">{skill ? t("skills.my.editTitle") : t("skills.my.createTitle")}</h2>
+        <Button variant="ghost" size="sm" onClick={onCancel}>{t("common.cancel")}</Button>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.name")}</label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Custom Skill" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.description")}</label>
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this skill do?" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.command")}</label>
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-muted-foreground">//</span>
+            <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="my-command" />
+          </div>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t("skills.my.commandHint")}</p>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.prompt")}</label>
+          <textarea
+            value={promptTemplate}
+            onChange={(e) => setPromptTemplate(e.target.value)}
+            rows={6}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+            placeholder={"You are a helpful assistant.\n\nUser message: {{message}}"}
+          />
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{t("skills.my.promptHint")}</p>
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="text-sm">{t("skills.my.share")}</label>
+          <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+        </div>
+      </div>
+
+      <Button className="w-full" onClick={handleSave} disabled={saving || !name.trim() || !promptTemplate.trim()}>
+        {saving ? "..." : skill ? t("skills.my.save") : t("skills.my.create")}
+      </Button>
+    </div>
   );
 }
