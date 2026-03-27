@@ -5160,13 +5160,27 @@ pub async fn check_keyword_filters(
             tracing::info!("Keyword filter triggered: keyword={} action={} user={}", keyword, action, user_id);
 
             if action == "ban" {
-                // Ban: remove from community + add to bans
-                let _ = sqlx::query("DELETE FROM community_members WHERE community_id = $1 AND user_id = $2")
-                    .bind(community_id).bind(user_id).execute(db).await;
-                let _ = sqlx::query(
-                    "INSERT INTO community_bans (community_id, user_id, banned_by, reason) VALUES ($1, $2, 'system', $3) ON CONFLICT DO NOTHING",
+                // Get community creator as banned_by
+                let creator_id = sqlx::query_scalar::<_, String>(
+                    "SELECT creator_id FROM communities WHERE id = $1",
                 )
-                .bind(community_id).bind(user_id).bind(format!("Keyword: {}", keyword)).execute(db).await;
+                .bind(community_id)
+                .fetch_optional(db)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| user_id.to_string());
+
+                // Ban: remove from community + add to bans
+                let del_result = sqlx::query("DELETE FROM community_members WHERE community_id = $1 AND user_id = $2")
+                    .bind(community_id).bind(user_id).execute(db).await;
+                tracing::info!("KW ban delete member: {:?}", del_result.as_ref().map(|r| r.rows_affected()));
+
+                let ban_result = sqlx::query(
+                    "INSERT INTO community_bans (community_id, user_id, banned_by, reason) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+                )
+                .bind(community_id).bind(user_id).bind(&creator_id).bind(format!("Keyword: {}", keyword)).execute(db).await;
+                tracing::info!("KW ban insert: {:?}", ban_result.as_ref().map(|r| r.rows_affected()));
 
                 ws_state.send_to_user_or_queue(user_id, &json!({
                     "type": "community_kicked",
