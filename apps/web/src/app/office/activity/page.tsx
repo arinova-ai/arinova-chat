@@ -3,16 +3,29 @@
 import { useEffect, useState } from "react";
 import { Activity, ChevronDown, ChevronRight, Clock, DollarSign, RotateCw } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { api } from "@/lib/api";
 
 interface TaskEntry {
   id: string;
   agentId: string;
+  agentName?: string;
   status: "started" | "completed";
   task?: string;
   durationMs?: number;
   costUsd?: number;
   numTurns?: number;
   timestamp: number;
+}
+
+interface ActivityLogItem {
+  id: string;
+  agentId: string;
+  agentName: string | null;
+  activityType: string;
+  title: string;
+  detail: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 function formatDuration(ms: number): string {
@@ -36,6 +49,44 @@ function relativeTime(ts: number): string {
 export default function OfficeActivityPage() {
   const [tasks, setTasks] = useState<TaskEntry[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Load history from API on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api<{ items: ActivityLogItem[]; nextCursor?: string }>(
+          "/api/office/activity?limit=50",
+          { silent: true },
+        );
+        if (data?.items?.length) {
+          const history: TaskEntry[] = data.items.map((item) => ({
+            id: item.id,
+            agentId: item.agentId,
+            agentName: item.agentName ?? undefined,
+            status: item.activityType === "task_completed" ? "completed" as const : "started" as const,
+            task: item.title,
+            durationMs: undefined,
+            costUsd: undefined,
+            numTurns: undefined,
+            timestamp: new Date(item.createdAt).getTime(),
+          }));
+          // Parse detail for completed tasks (e.g. "123ms · $0.0012 · 5 turns")
+          for (const entry of history) {
+            const item = data.items.find((i) => i.id === entry.id);
+            if (item?.detail) {
+              const dMatch = item.detail.match(/(\d+)ms/);
+              const cMatch = item.detail.match(/\$([0-9.]+)/);
+              const tMatch = item.detail.match(/(\d+) turns/);
+              if (dMatch) entry.durationMs = parseInt(dMatch[1]);
+              if (cMatch) entry.costUsd = parseFloat(cMatch[1]);
+              if (tMatch) entry.numTurns = parseInt(tMatch[1]);
+            }
+          }
+          setTasks(history);
+        }
+      } catch { /* API may not be available yet */ }
+    })();
+  }, []);
 
   // Listen for task_update events
   useEffect(() => {
@@ -63,6 +114,7 @@ export default function OfficeActivityPage() {
             return [{
               id: `${data.agentId}-${Date.now()}` as string,
               agentId: data.agentId as string,
+              agentName: data.agentName as string | undefined,
               status: "completed" as const,
               task: data.task as string | undefined,
               durationMs: data.durationMs as number | undefined,
@@ -76,6 +128,7 @@ export default function OfficeActivityPage() {
           setTasks((prev) => [{
             id: `${data.agentId}-${Date.now()}` as string,
             agentId: data.agentId as string,
+            agentName: data.agentName as string | undefined,
             status: "started" as const,
             task: data.task as string | undefined,
             timestamp: Date.now(),
@@ -140,6 +193,9 @@ export default function OfficeActivityPage() {
                     {!isCompleted && <span className="w-[14px] shrink-0" />}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{t.task || "Working..."}</p>
+                      {t.agentName && (
+                        <p className="text-[10px] text-muted-foreground/60 truncate">{t.agentName}</p>
+                      )}
                     </div>
                     <span className="text-[10px] text-muted-foreground/60 shrink-0">
                       {relativeTime(t.timestamp)}

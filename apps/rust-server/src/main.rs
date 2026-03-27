@@ -445,6 +445,20 @@ async fn main() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )"#).execute(&db).await.ok();
 
+    // Office activity logs (task_update persistence)
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS activity_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_id TEXT NOT NULL REFERENCES "user"(id),
+        agent_id TEXT NOT NULL,
+        agent_name TEXT,
+        activity_type TEXT NOT NULL DEFAULT 'task_update',
+        title TEXT NOT NULL,
+        detail TEXT,
+        metadata JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )"#).execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_activity_logs_owner ON activity_logs(owner_id, created_at DESC)").execute(&db).await.ok();
+
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS system_settings (
         key TEXT PRIMARY KEY,
         value JSONB NOT NULL DEFAULT '{}',

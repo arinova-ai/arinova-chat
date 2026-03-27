@@ -10,6 +10,7 @@ use std::time::Duration;
 use tokio::time::interval;
 
 use crate::AppState;
+use crate::routes::activity::insert_activity;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -156,6 +157,29 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
                                     "costUsd": cost_usd,
                                     "numTurns": num_turns,
                                 }), &state.redis);
+
+                                // Persist to activity_logs
+                                let title = task_desc.unwrap_or("(no description)").to_string();
+                                let detail_str = match status {
+                                    "completed" => {
+                                        let parts: Vec<String> = [
+                                            duration_ms.map(|d| format!("{}ms", d)),
+                                            cost_usd.map(|c| format!("${:.4}", c)),
+                                            num_turns.map(|n| format!("{} turns", n)),
+                                        ].into_iter().flatten().collect();
+                                        if parts.is_empty() { None } else { Some(parts.join(" · ")) }
+                                    }
+                                    _ => None,
+                                };
+                                insert_activity(
+                                    &state.db,
+                                    &owner_id,
+                                    &agent_id,
+                                    Some(&agent_name),
+                                    &format!("task_{}", status),
+                                    &title,
+                                    detail_str.as_deref(),
+                                ).await;
                             }
                         }
                     }
