@@ -51,8 +51,8 @@ async fn hud_ws_upgrade(
     .await;
 
     match agent {
-        Ok(Some((agent_id, _owner_id))) => {
-            ws.on_upgrade(move |socket| handle_hud_ws(socket, state, agent_id.to_string()))
+        Ok(Some((agent_id, owner_id))) => {
+            ws.on_upgrade(move |socket| handle_hud_ws(socket, state, agent_id.to_string(), owner_id))
         }
         _ => {
             (axum::http::StatusCode::UNAUTHORIZED, axum::Json(json!({"error": "Invalid token"}))).into_response()
@@ -60,7 +60,7 @@ async fn hud_ws_upgrade(
     }
 }
 
-async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String) {
+async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String, owner_id: String) {
     let mut ping_interval = interval(Duration::from_secs(30));
     let mut last_pong = std::time::Instant::now();
 
@@ -109,37 +109,24 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String)
                             }
 
                             // task_update: broadcast agent task status to the conversation owner
+                            // task_update: global office event, push directly to owner
                             if msg_type == "task_update" {
-                                let conv_id = data.get("conversationId").and_then(|v| v.as_str()).unwrap_or("");
                                 let status = data.get("status").and_then(|v| v.as_str()).unwrap_or("");
                                 let task_desc = data.get("task").and_then(|v| v.as_str());
                                 let duration_ms = data.get("durationMs").and_then(|v| v.as_u64());
                                 let cost_usd = data.get("costUsd").and_then(|v| v.as_f64());
                                 let num_turns = data.get("numTurns").and_then(|v| v.as_u64());
 
-                                if !conv_id.is_empty() {
-                                    let user_id = sqlx::query_scalar::<_, String>(
-                                        "SELECT user_id FROM conversations WHERE id = $1::uuid"
-                                    )
-                                    .bind(conv_id)
-                                    .fetch_optional(&state.db)
-                                    .await
-                                    .ok()
-                                    .flatten();
-
-                                    if let Some(uid) = user_id {
-                                        state.ws.send_to_user_or_queue(&uid, &json!({
-                                            "type": "task_update",
-                                            "agentId": &agent_id,
-                                            "conversationId": conv_id,
-                                            "status": status,
-                                            "task": task_desc,
-                                            "durationMs": duration_ms,
-                                            "costUsd": cost_usd,
-                                            "numTurns": num_turns,
-                                        }), &state.redis);
-                                    }
-                                }
+                                // Push directly to owner — no conversationId needed
+                                state.ws.send_to_user_or_queue(&owner_id, &json!({
+                                    "type": "task_update",
+                                    "agentId": &agent_id,
+                                    "status": status,
+                                    "task": task_desc,
+                                    "durationMs": duration_ms,
+                                    "costUsd": cost_usd,
+                                    "numTurns": num_turns,
+                                }), &state.redis);
                             }
                         }
                     }
