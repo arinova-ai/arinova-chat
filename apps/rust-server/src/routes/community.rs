@@ -5182,6 +5182,25 @@ pub async fn check_keyword_filters(
                 .bind(community_id).bind(user_id).bind(&creator_id).bind(format!("Keyword: {}", keyword)).execute(db).await;
                 tracing::info!("KW ban insert: {:?}", ban_result.as_ref().map(|r| r.rows_affected()));
 
+                // Also remove from conversation_user_members
+                let conv_id = sqlx::query_scalar::<_, Uuid>(
+                    "SELECT conversation_id FROM communities WHERE id = $1",
+                )
+                .bind(community_id)
+                .fetch_optional(db)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(cid) = conv_id {
+                    let _ = sqlx::query("DELETE FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2")
+                        .bind(cid).bind(user_id).execute(db).await;
+                }
+
+                // Decrement member count
+                let _ = sqlx::query("UPDATE communities SET member_count = GREATEST(member_count - 1, 0) WHERE id = $1")
+                    .bind(community_id).execute(db).await;
+
                 ws_state.send_to_user_or_queue(user_id, &json!({
                     "type": "community_kicked",
                     "communityId": community_id,
