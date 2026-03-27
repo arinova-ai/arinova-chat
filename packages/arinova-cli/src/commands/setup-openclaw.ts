@@ -158,7 +158,7 @@ export function registerSetupOpenclaw(program: Command): void {
             // Create a new bot
             console.log(`Creating bot for agent "${agent.name}"...`);
             try {
-              const created = (await post("/api/creator/agents/create", {
+              const created = (await post("/api/agents", {
                 agent_name: agent.name,
                 description: "OpenClaw agent",
                 category: "assistant",
