@@ -238,14 +238,24 @@ export function GroupMembersPanel({
       {/* Footer Actions */}
       <div className="border-t border-border p-4 space-y-2">
         {canManage && onAddMemberClick && (
-          <Button
-            variant="outline"
-            className="w-full gap-2"
-            onClick={() => { onAddMemberClick(); onOpenChange(false); }}
-          >
-            <UserPlus className="h-4 w-4" />
-            {t("addMember.title")}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 gap-1.5"
+              onClick={() => { onAddMemberClick(); onOpenChange(false); }}
+            >
+              <UserPlus className="h-4 w-4" />
+              {t("communitySettings.inviteFriends")}
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 gap-1.5"
+              onClick={() => { onAddMemberClick(); onOpenChange(false); }}
+            >
+              <Bot className="h-4 w-4" />
+              {t("communitySettings.addAgent")}
+            </Button>
+          </div>
         )}
         {isAdmin && (
           <Button

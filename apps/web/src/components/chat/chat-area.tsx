@@ -134,9 +134,13 @@ export function ChatArea() {
     };
     window.addEventListener("community-member-profile", memberHandler);
 
+    const addMemberHandler = () => setAddMemberOpen(true);
+    window.addEventListener("open-add-member", addMemberHandler);
+
     return () => {
       window.removeEventListener("community-agent-profile", handler);
       window.removeEventListener("community-member-profile", memberHandler);
+      window.removeEventListener("open-add-member", addMemberHandler);
     };
   }, [resolvedCommunityId]);
 

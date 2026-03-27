@@ -225,7 +225,7 @@ function TabContent({ tab }: { tab: string }) {
         />
       ) : null;
     case "members":
-      return <GroupMembersPanel inline open onOpenChange={() => {}} conversationId={activeConversationId} />;
+      return <GroupMembersPanel inline open onOpenChange={() => {}} conversationId={activeConversationId} onAddMemberClick={() => window.dispatchEvent(new Event("open-add-member"))} />;
     case "chat":
       return sideChatConversationId ? (
         <div className="flex h-full items-center justify-center text-muted-foreground text-sm">Side chat: {sideChatConversationId}</div>
