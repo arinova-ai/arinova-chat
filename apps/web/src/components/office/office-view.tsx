@@ -46,6 +46,29 @@ function OfficeViewInner() {
     username: sessionUser?.username ?? "",
   };
 
+  // Task updates from WS
+  const [taskUpdates, setTaskUpdates] = useState<Record<string, { status: string; task?: string; durationMs?: number; costUsd?: number; numTurns?: number }>>({});
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      if (data?.type === "task_update" && data.agentId) {
+        setTaskUpdates((prev) => ({
+          ...prev,
+          [data.agentId]: {
+            status: data.status,
+            task: data.task,
+            durationMs: data.durationMs,
+            costUsd: data.costUsd,
+            numTurns: data.numTurns,
+          },
+        }));
+      }
+    };
+    window.addEventListener("ws-task-update", handler);
+    return () => window.removeEventListener("ws-task-update", handler);
+  }, []);
+
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [characterModalSlot, setCharacterModalSlot] = useState<number | null>(null);
   const [floatWindows, setFloatWindows] = useState<string[]>([]);
@@ -92,6 +115,13 @@ function OfficeViewInner() {
       }
     }
     return makeEmptySlot(i);
+  }).map((agent) => {
+    // Enrich with task_update data
+    const task = taskUpdates[agent.id];
+    if (task?.status === "started" && task.task) {
+      return { ...agent, status: "working" as const, currentTask: { title: task.task, priority: "", due: "", assignedBy: "", progress: 0, subtasks: [] } };
+    }
+    return agent;
   });
 
   // Auto-bind unbound agents to empty slots

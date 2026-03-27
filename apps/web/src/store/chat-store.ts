@@ -2738,6 +2738,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // Task update — forward to office view
+    if ((event as Record<string, unknown>).type === "task_update") {
+      window.dispatchEvent(new CustomEvent("ws-task-update", { detail: event }));
+      return;
+    }
+
     // Community kicked — remove conversation from list
     if ((event as Record<string, unknown>).type === "community_kicked") {
       const cid = (event as Record<string, unknown>).conversationId as string;

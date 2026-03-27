@@ -82,7 +82,7 @@ export default {
     });
 
     // --- Build overlay effects ---
-    function buildOverlay(scene) {
+    function buildOverlay(scene, agents) {
       overlay.innerHTML = "";
       var html = "";
       if (scene === "working") {
@@ -98,7 +98,17 @@ export default {
           '@keyframes tdB{0%,60%,100%{transform:translateY(0);opacity:.3}30%{transform:translateY(-8px);opacity:1}}' +
           '@keyframes tbF{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}' +
           '</style>' +
-          '<div class="tb"><div class="td"></div><div class="td"></div><div class="td"></div></div>';
+          '<div class="tb" id="task-bubble"><div class="td"></div><div class="td"></div><div class="td"></div></div>';
+        // If there's a task description, show it instead of dots
+        var taskAgent = agents.find(function(a) { return a.currentTask && a.currentTask.title; });
+        if (taskAgent && taskAgent.currentTask) {
+          html +=
+            '<style>.task-text{position:absolute;top:25.4%;left:74.9%;background:rgba(255,255,255,.95);border-radius:18px;padding:8px 14px;max-width:200px;box-shadow:0 2px 12px rgba(0,0,0,.15);animation:tbF 3s ease-in-out infinite;font-size:12px;color:#333;line-height:1.4}' +
+            '.task-text::before,.task-text::after{content:"";position:absolute;background:rgba(255,255,255,.92);border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.1)}' +
+            '.task-text::before{width:14px;height:14px;bottom:-12px;left:8px}' +
+            '.task-text::after{width:8px;height:8px;bottom:-22px;left:2px}</style>' +
+            '<div class="task-text">' + taskAgent.currentTask.title.substring(0, 80) + '</div>';
+        }
       } else if (scene === "sleeping") {
         // Floating ZZZ — positioned at (490,195) from demo
         html +=
@@ -129,7 +139,7 @@ export default {
       }
       overlay.innerHTML = html;
     }
-    buildOverlay(current);
+    buildOverlay(current, sdk.agents);
 
     // --- Click handler ---
     canvas.addEventListener("click", function (e) {
@@ -191,7 +201,7 @@ export default {
           fade = 0;
           current = target;
           fading = false;
-          buildOverlay(current);
+          buildOverlay(current, sdk.agents);
         }
       } else {
         ctx.fillStyle = BG[current] || "#111";
