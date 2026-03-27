@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { ArinovaSpinner } from "@/components/ui/arinova-spinner";
 import { PageTitle } from "@/components/ui/page-title";
 import { useChatStore } from "@/store/chat-store";
+import { useToastStore } from "@/store/toast-store";
 import { cn } from "@/lib/utils";
 
 // ===== Types =====
@@ -1010,6 +1011,20 @@ function MySkillsTab() {
                 <p className="text-xs text-muted-foreground truncate">{s.slashCommand || "—"}</p>
               </div>
               <div className="flex gap-1 shrink-0">
+                <Button variant="outline" size="sm" className="gap-1" onClick={async () => {
+                  const agents = useChatStore.getState().agents;
+                  if (agents.length === 0) return;
+                  try {
+                    await api(`/api/skills/${s.id}/install`, {
+                      method: "POST",
+                      body: JSON.stringify({ agentIds: agents.map((a) => a.id) }),
+                    });
+                    useToastStore.getState().addToast(t("skills.my.installed"), "success");
+                  } catch {}
+                }}>
+                  <Download className="h-3 w-3" />
+                  {t("skills.my.install")}
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
                   {t("skills.my.edit")}
                 </Button>
@@ -1060,15 +1075,24 @@ function SkillEditor({ skill, onSave, onCancel }: { skill: Skill | null; onSave:
 
       <div className="space-y-3">
         <div>
-          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.name")}</label>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            {t("skills.my.name")}
+            <span title={t("skills.my.tooltip.name")} className="cursor-help text-muted-foreground/50 hover:text-muted-foreground">ⓘ</span>
+          </label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Custom Skill" />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.description")}</label>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            {t("skills.my.description")}
+            <span title={t("skills.my.tooltip.description")} className="cursor-help text-muted-foreground/50 hover:text-muted-foreground">ⓘ</span>
+          </label>
           <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this skill do?" />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.command")}</label>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            {t("skills.my.command")}
+            <span title={t("skills.my.tooltip.command")} className="cursor-help text-muted-foreground/50 hover:text-muted-foreground">ⓘ</span>
+          </label>
           <div className="flex items-center gap-1">
             <span className="text-sm text-muted-foreground">//</span>
             <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="my-command" />
@@ -1076,7 +1100,10 @@ function SkillEditor({ skill, onSave, onCancel }: { skill: Skill | null; onSave:
           <p className="mt-0.5 text-[11px] text-muted-foreground">{t("skills.my.commandHint")}</p>
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">{t("skills.my.prompt")}</label>
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            {t("skills.my.prompt")}
+            <span title={t("skills.my.tooltip.prompt")} className="cursor-help text-muted-foreground/50 hover:text-muted-foreground">ⓘ</span>
+          </label>
           <textarea
             value={promptTemplate}
             onChange={(e) => setPromptTemplate(e.target.value)}
