@@ -42,12 +42,14 @@
   "peerDependencies": {
     "openclaw": ">=2026"
   },
+  "dependencies": {
+    "zod": "^4"
+  },
   "devDependencies": {
     "@arinova-ai/agent-sdk": "workspace:*",
     "@types/node": "^22",
     "openclaw": "latest",
     "tsup": "^8",
-    "typescript": "^5",
-    "zod": "^4"
+    "typescript": "^5"
   }
 }
