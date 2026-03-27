@@ -163,13 +163,14 @@ export function registerSetupOpenclaw(program: Command): void {
                 description: "OpenClaw agent",
               })) as RemoteAgent;
 
-              token = created.botToken ?? created.secret_token;
+              const raw = created as Record<string, unknown>;
+              token = (raw.secretToken ?? raw.secret_token ?? raw.botToken ?? raw.bot_token) as string | undefined;
               if (!token) {
                 // The token might be nested in agent/data
-                const nested = (created as Record<string, unknown>).agent ?? (created as Record<string, unknown>).data;
+                const nested = raw.agent ?? raw.data;
                 if (nested && typeof nested === "object") {
-                  const n = nested as RemoteAgent;
-                  token = n.botToken ?? n.secret_token;
+                  const n = nested as Record<string, unknown>;
+                  token = (n.secretToken ?? n.secret_token ?? n.botToken ?? n.bot_token) as string | undefined;
                 }
               }
 
