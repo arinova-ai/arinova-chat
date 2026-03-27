@@ -111,13 +111,21 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
                             // task_update: broadcast agent task status to the conversation owner
                             // task_update: global office event, push directly to owner
                             if msg_type == "task_update" {
-                                let status = data.get("status").and_then(|v| v.as_str()).unwrap_or("");
-                                let task_desc = data.get("task").and_then(|v| v.as_str());
-                                let duration_ms = data.get("durationMs").and_then(|v| v.as_u64());
-                                let cost_usd = data.get("costUsd").and_then(|v| v.as_f64());
-                                let num_turns = data.get("numTurns").and_then(|v| v.as_u64());
+                                // Bridge sends nested: {type, agentName, data: {status, task, ...}}
+                                let inner = data.get("data").unwrap_or(&data);
+                                let status = inner.get("status").and_then(|v| v.as_str())
+                                    .or_else(|| data.get("status").and_then(|v| v.as_str()))
+                                    .unwrap_or("");
+                                let task_desc = inner.get("task").and_then(|v| v.as_str())
+                                    .or_else(|| data.get("task").and_then(|v| v.as_str()));
+                                let duration_ms = inner.get("durationMs").and_then(|v| v.as_u64())
+                                    .or_else(|| data.get("durationMs").and_then(|v| v.as_u64()));
+                                let cost_usd = inner.get("costUsd").and_then(|v| v.as_f64())
+                                    .or_else(|| data.get("costUsd").and_then(|v| v.as_f64()));
+                                let num_turns = inner.get("numTurns").and_then(|v| v.as_u64())
+                                    .or_else(|| data.get("numTurns").and_then(|v| v.as_u64()));
 
-                                // Also include agentName from the data (Bridge may send it)
+                                // agentName is on outer level
                                 let agent_name_from_data = data.get("agentName").and_then(|v| v.as_str());
                                 // Fallback: look up agent name from DB
                                 let agent_name = if let Some(n) = agent_name_from_data {
