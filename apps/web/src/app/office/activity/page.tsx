@@ -179,20 +179,17 @@ export default function OfficeActivityPage() {
                   {/* Collapsed row */}
                   <button
                     type="button"
-                    onClick={() => isCompleted ? toggleExpand(t.id) : undefined}
+                    onClick={() => toggleExpand(t.id)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/30 transition-colors text-left"
                   >
                     <span className="text-base shrink-0">
                       {isCompleted ? "✅" : "⏳"}
                     </span>
-                    {isCompleted && (
-                      <span className="shrink-0 text-muted-foreground">
-                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      </span>
-                    )}
-                    {!isCompleted && <span className="w-[14px] shrink-0" />}
+                    <span className="shrink-0 text-muted-foreground">
+                      {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{t.task || "Working..."}</p>
+                      <p className={`text-sm font-medium ${isExpanded ? "whitespace-pre-wrap break-words" : "truncate"}`}>{t.task || "Working..."}</p>
                       {t.agentName && (
                         <p className="text-[10px] text-muted-foreground/60 truncate">{t.agentName}</p>
                       )}

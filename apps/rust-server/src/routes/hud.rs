@@ -160,26 +160,52 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
 
                                 // Persist to activity_logs
                                 let title = task_desc.unwrap_or("(no description)").to_string();
-                                let detail_str = match status {
-                                    "completed" => {
+                                if status == "completed" {
+                                    // UPDATE the most recent task_started row for this agent
+                                    let metadata = json!({
+                                        "durationMs": duration_ms,
+                                        "costUsd": cost_usd,
+                                        "numTurns": num_turns,
+                                    });
+                                    let updated = sqlx::query(
+                                        r#"UPDATE activity_logs
+                                           SET activity_type = 'task_completed',
+                                               metadata = $1,
+                                               detail = $2
+                                           WHERE id = (
+                                               SELECT id FROM activity_logs
+                                               WHERE owner_id = $3 AND agent_id = $4 AND activity_type = 'task_started'
+                                               ORDER BY created_at DESC LIMIT 1
+                                           )"#,
+                                    )
+                                    .bind(&metadata)
+                                    .bind({
                                         let parts: Vec<String> = [
                                             duration_ms.map(|d| format!("{}ms", d)),
                                             cost_usd.map(|c| format!("${:.4}", c)),
                                             num_turns.map(|n| format!("{} turns", n)),
                                         ].into_iter().flatten().collect();
                                         if parts.is_empty() { None } else { Some(parts.join(" · ")) }
+                                    })
+                                    .bind(&owner_id)
+                                    .bind(&agent_id)
+                                    .execute(&state.db)
+                                    .await;
+                                    if let Err(e) = updated {
+                                        tracing::warn!("Failed to update activity log for completed: {}", e);
                                     }
-                                    _ => None,
-                                };
-                                insert_activity(
-                                    &state.db,
-                                    &owner_id,
-                                    &agent_id,
-                                    Some(&agent_name),
-                                    &format!("task_{}", status),
-                                    &title,
-                                    detail_str.as_deref(),
-                                ).await;
+                                } else {
+                                    // started — insert new row
+                                    insert_activity(
+                                        &state.db,
+                                        &owner_id,
+                                        &agent_id,
+                                        Some(&agent_name),
+                                        "task_started",
+                                        &title,
+                                        None,
+                                    ).await;
+                                }
                             }
                         }
                     }
