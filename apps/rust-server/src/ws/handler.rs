@@ -568,8 +568,12 @@ async fn handle_message(
             .ok()
             .flatten();
 
+            tracing::info!("KW_FILTER: conv={} type={:?} content_len={}", conversation_id, conv_type_check, content.len());
+
             if conv_type_check.as_deref() == Some("community") {
-                if crate::routes::community::check_keyword_filters(db, conversation_id, user_id, &content, ws_state, redis).await {
+                let blocked = crate::routes::community::check_keyword_filters(db, conversation_id, user_id, &content, ws_state, redis).await;
+                tracing::info!("KW_FILTER: blocked={}", blocked);
+                if blocked {
                     send_event(tx, &json!({
                         "type": "stream_error",
                         "conversationId": conversation_id,
