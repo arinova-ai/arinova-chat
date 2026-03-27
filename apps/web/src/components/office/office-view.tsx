@@ -63,7 +63,7 @@ function OfficeViewInner() {
         setTaskUpdates((prev) => {
           const next = { ...prev };
           if (data.agentId) next[data.agentId] = update;
-          if (data.agentName) next[data.agentName] = update; // Also key by name
+          if (data.agentName) next[data.agentName.toLowerCase()] = update; // key by lowercase name
           return next;
         });
       }
@@ -120,7 +120,7 @@ function OfficeViewInner() {
     return makeEmptySlot(i);
   }).map((agent) => {
     // Enrich with task_update data (match by id or name)
-    const task = taskUpdates[agent.id] || taskUpdates[agent.name];
+    const task = taskUpdates[agent.id] || taskUpdates[agent.name.toLowerCase()];
     if (task?.status === "started" && task.task) {
       return { ...agent, status: "working" as const, currentTask: { title: task.task, priority: "", due: "", assignedBy: "", progress: 0, subtasks: [] } };
     }
