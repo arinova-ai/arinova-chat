@@ -20,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/friends/{userId}", delete(remove_friend))
         .route("/api/friends", get(list_friends))
         .route("/api/friends/requests", get(list_requests))
+        .route("/api/friends/requests/{id}", delete(cancel_friend_request))
 }
 
 #[derive(Deserialize)]
@@ -381,4 +382,37 @@ async fn list_requests(
         "outgoing": outgoing_json,
     }))
     .into_response()
+}
+
+/// DELETE /api/friends/requests/:id — Cancel a sent friend request
+async fn cancel_friend_request(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    // Only allow cancelling requests that the current user sent and are still pending
+    let result = sqlx::query(
+        r#"DELETE FROM friendships
+           WHERE id = $1 AND requester_id = $2 AND status = 'pending'"#,
+    )
+    .bind(id)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await;
+
+    match result {
+        Ok(r) if r.rows_affected() > 0 => {
+            Json(json!({"success": true})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Request not found or already accepted"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }

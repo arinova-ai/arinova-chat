@@ -212,10 +212,20 @@ export function PendingRequests({ onCountChange }: PendingRequestsProps) {
                     @{req.username ?? "unknown"}
                   </p>
                 </div>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-                  <Clock className="h-3.5 w-3.5" />
-                  Pending
-                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-xs text-muted-foreground hover:text-destructive"
+                  onClick={async () => {
+                    try {
+                      await api(`/api/friends/requests/${req.id}`, { method: "DELETE" });
+                      loadRequests();
+                    } catch {}
+                  }}
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Cancel
+                </Button>
               </div>
             ))}
           </div>
