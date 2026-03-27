@@ -469,17 +469,6 @@ async fn main() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )"#).execute(&db).await.ok();
 
-    sqlx::query(r#"CREATE TABLE IF NOT EXISTS support_tickets (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        body TEXT,
-        status TEXT NOT NULL DEFAULT 'open',
-        admin_reply TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )"#).execute(&db).await.ok();
-
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS data_requests (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id TEXT NOT NULL,
@@ -781,7 +770,9 @@ async fn main() {
     )"#).execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_community_keyword_filters_community ON community_keyword_filters(community_id)").execute(&db).await.ok();
 
-    // Support tickets
+    // Support tickets — migrate old "body" column to "description" for existing tables
+    sqlx::query("ALTER TABLE support_tickets RENAME COLUMN body TO description").execute(&db).await.ok();
+    sqlx::query("ALTER TABLE support_tickets ALTER COLUMN description SET NOT NULL").execute(&db).await.ok();
     sqlx::query(r#"CREATE TABLE IF NOT EXISTS support_tickets (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id TEXT NOT NULL REFERENCES "user"(id),
