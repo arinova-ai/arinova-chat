@@ -52,32 +52,32 @@ export default function OfficeActivityPage() {
               const updated = [...prev];
               updated[idx] = {
                 ...updated[idx],
-                status: "completed",
-                durationMs: data.durationMs,
-                costUsd: data.costUsd,
-                numTurns: data.numTurns,
+                status: "completed" as const,
+                durationMs: data.durationMs as number | undefined,
+                costUsd: data.costUsd as number | undefined,
+                numTurns: data.numTurns as number | undefined,
               };
               return updated;
             }
             // No matching started — add as new completed
             return [{
-              id: `${data.agentId}-${Date.now()}`,
-              agentId: data.agentId,
-              status: "completed",
-              task: data.task,
-              durationMs: data.durationMs,
-              costUsd: data.costUsd,
-              numTurns: data.numTurns,
+              id: `${data.agentId}-${Date.now()}` as string,
+              agentId: data.agentId as string,
+              status: "completed" as const,
+              task: data.task as string | undefined,
+              durationMs: data.durationMs as number | undefined,
+              costUsd: data.costUsd as number | undefined,
+              numTurns: data.numTurns as number | undefined,
               timestamp: Date.now(),
             }, ...prev].slice(0, 100);
           });
         } else {
           // started — add new entry
           setTasks((prev) => [{
-            id: `${data.agentId}-${Date.now()}`,
-            agentId: data.agentId,
-            status: "started",
-            task: data.task,
+            id: `${data.agentId}-${Date.now()}` as string,
+            agentId: data.agentId as string,
+            status: "started" as const,
+            task: data.task as string | undefined,
             timestamp: Date.now(),
           }, ...prev].slice(0, 100));
         }
