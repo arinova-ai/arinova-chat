@@ -117,10 +117,28 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
                                 let cost_usd = data.get("costUsd").and_then(|v| v.as_f64());
                                 let num_turns = data.get("numTurns").and_then(|v| v.as_u64());
 
+                                // Also include agentName from the data (Bridge may send it)
+                                let agent_name_from_data = data.get("agentName").and_then(|v| v.as_str());
+                                // Fallback: look up agent name from DB
+                                let agent_name = if let Some(n) = agent_name_from_data {
+                                    n.to_string()
+                                } else {
+                                    sqlx::query_scalar::<_, String>(
+                                        "SELECT name FROM agents WHERE id = $1::uuid"
+                                    )
+                                    .bind(&agent_id)
+                                    .fetch_optional(&state.db)
+                                    .await
+                                    .ok()
+                                    .flatten()
+                                    .unwrap_or_default()
+                                };
+
                                 // Push directly to owner — no conversationId needed
                                 state.ws.send_to_user_or_queue(&owner_id, &json!({
                                     "type": "task_update",
                                     "agentId": &agent_id,
+                                    "agentName": &agent_name,
                                     "status": status,
                                     "task": task_desc,
                                     "durationMs": duration_ms,

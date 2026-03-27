@@ -46,23 +46,26 @@ function OfficeViewInner() {
     username: sessionUser?.username ?? "",
   };
 
-  // Task updates from WS
+  // Task updates from WS — keyed by agentId AND agentName for matching
   const [taskUpdates, setTaskUpdates] = useState<Record<string, { status: string; task?: string; durationMs?: number; costUsd?: number; numTurns?: number }>>({});
 
   useEffect(() => {
     const handler = (e: Event) => {
       const data = (e as CustomEvent).detail;
-      if (data?.type === "task_update" && data.agentId) {
-        setTaskUpdates((prev) => ({
-          ...prev,
-          [data.agentId]: {
-            status: data.status,
-            task: data.task,
-            durationMs: data.durationMs,
-            costUsd: data.costUsd,
-            numTurns: data.numTurns,
-          },
-        }));
+      if (data?.type === "task_update") {
+        const update = {
+          status: data.status,
+          task: data.task,
+          durationMs: data.durationMs,
+          costUsd: data.costUsd,
+          numTurns: data.numTurns,
+        };
+        setTaskUpdates((prev) => {
+          const next = { ...prev };
+          if (data.agentId) next[data.agentId] = update;
+          if (data.agentName) next[data.agentName] = update; // Also key by name
+          return next;
+        });
       }
     };
     window.addEventListener("ws-task-update", handler);
@@ -116,8 +119,8 @@ function OfficeViewInner() {
     }
     return makeEmptySlot(i);
   }).map((agent) => {
-    // Enrich with task_update data
-    const task = taskUpdates[agent.id];
+    // Enrich with task_update data (match by id or name)
+    const task = taskUpdates[agent.id] || taskUpdates[agent.name];
     if (task?.status === "started" && task.task) {
       return { ...agent, status: "working" as const, currentTask: { title: task.task, priority: "", due: "", assignedBy: "", progress: 0, subtasks: [] } };
     }
