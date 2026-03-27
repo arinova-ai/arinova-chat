@@ -4811,7 +4811,49 @@ async fn get_member_profile(
         return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"})));
     }
 
-    // Fetch member profile (target_user_id may be real user_id OR community_members.id)
+    // Resolve anonymized ID (anon-xxxx) to real user_id
+    let resolved_user_id = if target_user_id.starts_with("anon-") {
+        // Get conversation_id for this community
+        let conv_id = sqlx::query_scalar::<_, Uuid>(
+            "SELECT conversation_id FROM communities WHERE id = $1",
+        )
+        .bind(community_id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        if let Some(cid) = conv_id {
+            // Find member by computing hash for each and matching
+            let members = sqlx::query_as::<_, (String,)>(
+                "SELECT user_id FROM community_members WHERE community_id = $1",
+            )
+            .bind(community_id)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default();
+
+            let mut found = None;
+            for (uid,) in &members {
+                use sha2::{Sha256, Digest};
+                let mut hasher = Sha256::new();
+                hasher.update(cid.to_string().as_bytes());
+                hasher.update(uid.as_bytes());
+                let anon_id = format!("anon-{}", hex::encode(&hasher.finalize()[..8]));
+                if anon_id == target_user_id {
+                    found = Some(uid.clone());
+                    break;
+                }
+            }
+            found.unwrap_or(target_user_id.clone())
+        } else {
+            target_user_id.clone()
+        }
+    } else {
+        target_user_id.clone()
+    };
+
+    // Fetch member profile
     let member = sqlx::query_as::<_, (String, Option<String>, Option<String>, String, Option<String>, String)>(
         r#"SELECT cm.role::text, cm.display_name, cm.member_avatar_url, u.name, u.image, cm.user_id
            FROM community_members cm
@@ -4819,7 +4861,7 @@ async fn get_member_profile(
            WHERE cm.community_id = $1 AND (cm.user_id = $2 OR cm.id::text = $2)"#,
     )
     .bind(community_id)
-    .bind(&target_user_id)
+    .bind(&resolved_user_id)
     .fetch_optional(&state.db)
     .await;
 
