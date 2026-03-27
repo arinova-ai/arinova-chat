@@ -18,7 +18,7 @@ interface OpenclawBinding {
 }
 
 interface OpenclawConfig {
-  agents?: { list?: OpenclawAgent[] };
+  agents?: { list?: OpenclawAgent[]; defaults?: Record<string, unknown> };
   bindings?: OpenclawBinding[];
   channels?: Record<string, unknown>;
   plugins?: {
@@ -48,7 +48,7 @@ export function registerSetupOpenclaw(program: Command): void {
         // 1. Check auth
         const apiKey = getApiKey();
         if (!apiKey) {
-          printError("No API key configured. Please run `arinova auth set-key <key>` first");
+          printError("No API key configured. Please run `arinova auth login` first");
           return; // printError exits, but for clarity
         }
 
@@ -73,15 +73,22 @@ export function registerSetupOpenclaw(program: Command): void {
         const hasPluginInstall = config.plugins?.installs?.["openclaw-arinova-ai"];
         if (!hasPluginEntry && !hasPluginInstall) {
           printError(
-            "Arinova plugin not installed. Please run:\n  openclaw plugin install @arinova-ai/openclaw-arinova-ai",
+            "Arinova plugin not installed. Please run:\n  openclaw plugins install @arinova-ai/openclaw-arinova-ai",
           );
           return;
         }
 
         // 5. Get agents from openclaw config
-        const agents = config.agents?.list ?? [];
+        let agents = config.agents?.list ?? [];
+        if (agents.length === 0 && config.agents?.defaults) {
+          // Single-agent setup: only defaults defined, no list
+          const defaults = config.agents.defaults as Record<string, unknown>;
+          const name = (defaults.name as string) ?? "default";
+          const id = (defaults.id as string) ?? "default";
+          agents = [{ id, name, workspace: defaults.workspace as string | undefined }];
+        }
         if (agents.length === 0) {
-          printError("No agents found in openclaw.json agents.list");
+          printError("No agents found in openclaw.json (no agents.list or agents.defaults)");
           return;
         }
 
