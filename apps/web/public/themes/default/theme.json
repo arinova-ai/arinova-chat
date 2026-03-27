@@ -7,6 +7,9 @@
   "entry": "theme.js",
   "preview": "preview.png",
   "maxAgents": 1,
+  "roles": [
+    { "id": 0, "name": "Arinova", "position": { "x": 920, "y": 260 } }
+  ],
   "tags": ["default", "safe", "builtin"],
   "author": { "name": "Arinova Official", "id": "arinova-official" },
   "license": "standard"
