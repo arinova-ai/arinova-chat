@@ -867,7 +867,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
-      {showCommunityHide ? (
+      {!isUser && (showCommunityHide ? (
         <MessageAvatar
           message={message}
           isOwn={isUser}
@@ -918,7 +918,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
             }
           }}
         />
-      )}
+      ))}
 
       <div className="flex items-end gap-2 max-w-[75%] min-w-0">
         <div
