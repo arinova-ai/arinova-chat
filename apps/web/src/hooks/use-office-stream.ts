@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Agent } from "@/components/office/types";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
