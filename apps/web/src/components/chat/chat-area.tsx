@@ -18,6 +18,7 @@ import { WikiPanel } from "./wiki-panel";
 import { GroupMembersPanel, type PanelTab } from "./group-members-panel";
 import { CommunityMembersPanel } from "./community-members-panel";
 import { CommunityAgentSheet } from "./community-agent-sheet";
+import { CommunityMemberSheet } from "./community-member-sheet";
 import { AddMemberSheet } from "./add-member-sheet";
 import { ThreadPanel } from "./thread-panel";
 import { ThreadListSheet } from "./thread-list-sheet";
@@ -66,6 +67,7 @@ export function ChatArea() {
   const [wikiOpen, setWikiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   const [communityAgentSheet, setCommunityAgentSheet] = useState<{ agentId: string } | null>(null);
+  const [communityMemberProfileId, setCommunityMemberProfileId] = useState<string | null>(null);
   const dragCounterRef = useRef(0);
 
   const [chatBgUrl, setChatBgUrl] = useState<string | null>(null);
@@ -117,7 +119,25 @@ export function ChatArea() {
       }
     };
     window.addEventListener("community-agent-profile", handler);
-    return () => window.removeEventListener("community-agent-profile", handler);
+
+    const memberHandler = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.userId && detail?.conversationId) {
+        if (!resolvedCommunityId) {
+          try {
+            const data = await api<{ id: string }>(`/api/communities/by-conversation/${detail.conversationId}`, { silent: true });
+            setResolvedCommunityId(data.id);
+          } catch { /* ignore */ }
+        }
+        setCommunityMemberProfileId(detail.userId);
+      }
+    };
+    window.addEventListener("community-member-profile", memberHandler);
+
+    return () => {
+      window.removeEventListener("community-agent-profile", handler);
+      window.removeEventListener("community-member-profile", memberHandler);
+    };
   }, [resolvedCommunityId]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -365,6 +385,16 @@ export function ChatArea() {
               communityId={(conversation.officialCommunityId || resolvedCommunityId) as string}
               agentId={communityAgentSheet.agentId}
               onClose={() => setCommunityAgentSheet(null)}
+            />
+          )}
+
+          {/* Member profile from chat avatar click */}
+          {communityMemberProfileId && (conversation.officialCommunityId || resolvedCommunityId) && (
+            <CommunityMemberSheet
+              open={!!communityMemberProfileId}
+              onOpenChange={(open) => !open && setCommunityMemberProfileId(null)}
+              communityId={(conversation.officialCommunityId || resolvedCommunityId) as string}
+              userId={communityMemberProfileId}
             />
           )}
         </>

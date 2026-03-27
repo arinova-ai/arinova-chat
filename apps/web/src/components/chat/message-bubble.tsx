@@ -221,10 +221,11 @@ interface MessageAvatarProps {
   clickable: boolean;
   onClick: () => void;
   agentAvatarUrl?: string | null;
+  role?: string;
 }
 
 /** Avatar with optional click-to-open-profile. Renders agent or user icon. */
-function MessageAvatar({ message, isOwn, clickable, onClick, agentAvatarUrl }: MessageAvatarProps) {
+function MessageAvatar({ message, isOwn, clickable, onClick, agentAvatarUrl, role }: MessageAvatarProps) {
   const isAgent = message.role !== "user";
   const { data: session } = authClient.useSession();
   // In community conversations, use the anonymous avatar from message data instead of session user image
@@ -259,19 +260,26 @@ function MessageAvatar({ message, isOwn, clickable, onClick, agentAvatarUrl }: M
     </Avatar>
   );
 
+  const badgeOverlay = role && role !== "member" ? (
+    <span className="absolute -bottom-0.5 -right-0.5 text-[8px] leading-none">
+      {role === "creator" ? "👑" : role === "admin" ? "🛡️" : role === "moderator" ? "🔧" : role === "agent" ? "🤖" : ""}
+    </span>
+  ) : null;
+
   if (clickable) {
     return (
       <button
         type="button"
-        className="h-8 w-8 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="relative h-8 w-8 shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         onClick={onClick}
       >
         {avatarContent}
+        {badgeOverlay}
       </button>
     );
   }
 
-  return avatarContent;
+  return <div className="relative shrink-0">{avatarContent}{badgeOverlay}</div>;
 }
 
 /** Name label shown above the message bubble content. */
@@ -297,7 +305,6 @@ function SenderLabel({ info }: { info: SenderDisplayInfo | null }) {
     <p className={`mb-1 flex items-center gap-1 text-xs font-medium ${info.color}`}>
       {info.name}
       {info.isVerified && <VerifiedBadge className="h-3.5 w-3.5 text-blue-500" />}
-      <RoleBadge role={info.role} />
     </p>
   );
 }
@@ -746,14 +753,21 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
 
   const senderInfo = getSenderDisplayInfo(message, isUser, agentName, isGroupConversation);
 
-  // Attach community role for badge display
+  // For community conversations: override names with display_name + attach role badge
   if (senderInfo && isCommunityConversation) {
     const gm = groupMembersData[message.conversationId];
     if (message.senderUserId && gm?.users) {
       const userMember = gm.users.find((u) => u.userId === message.senderUserId);
-      if (userMember) senderInfo.role = userMember.role;
+      if (userMember) {
+        senderInfo.role = userMember.role;
+        // Override name with community display_name
+        if (userMember.name) senderInfo.name = userMember.name;
+      }
     } else if (message.senderAgentId && gm?.agents) {
       senderInfo.role = "agent";
+      // Override agent name with community display_name (agentName from groups.rs already has display_name)
+      const agentMember = gm.agents.find((a) => a.agentId === message.senderAgentId);
+      if (agentMember?.agentName) senderInfo.name = agentMember.agentName;
     }
   }
   const stickerUrl = useMemo(() => parseStickerUrl(message.content), [message.content]);
@@ -862,6 +876,7 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
                 isOwn={isUser}
                 clickable
                 agentAvatarUrl={resolvedAgentAvatarUrl}
+                role={senderInfo?.role}
                 onClick={() => setHidePopoverOpen(true)}
               />
             </div>
@@ -901,11 +916,24 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
           isOwn={isUser}
           clickable={showProfileClick}
           agentAvatarUrl={resolvedAgentAvatarUrl}
+          role={senderInfo?.role}
           onClick={() => {
             if (showOwnProfile && currentUserId) {
-              router.push(`/profile/${currentUserId}`);
+              if (isCommunityConversation) {
+                window.dispatchEvent(new CustomEvent("community-member-profile", {
+                  detail: { userId: currentUserId, conversationId: message.conversationId },
+                }));
+              } else {
+                router.push(`/profile/${currentUserId}`);
+              }
             } else if (showUserProfile && message.senderUserId) {
-              router.push(`/profile/${message.senderUserId}`);
+              if (isCommunityConversation) {
+                window.dispatchEvent(new CustomEvent("community-member-profile", {
+                  detail: { userId: message.senderUserId, conversationId: message.conversationId },
+                }));
+              } else {
+                router.push(`/profile/${message.senderUserId}`);
+              }
             } else if (showAgentProfile && resolvedAgentId) {
               if (conversation?.type === "community") {
                 window.dispatchEvent(new CustomEvent("community-agent-profile", {

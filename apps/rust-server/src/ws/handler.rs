@@ -56,7 +56,7 @@ pub fn filter_agents_for_dispatch(
     mentions: &[String],
     agents: &[AgentFilterConfig],
 ) -> Vec<String> {
-    if conv_type != "group" {
+    if conv_type != "group" && conv_type != "community" {
         // Direct / H2A conversations -> always dispatch
         return agents.iter().map(|a| a.agent_id.clone()).collect();
     }
