@@ -614,8 +614,8 @@ async fn main() {
 
     // Built-in skill: arinova-search
     sqlx::query(r#"INSERT INTO skills (name, slug, description, category, slash_command, is_official, is_public, prompt_template, prompt_content)
-        VALUES ('Arinova Search', 'arinova-search', 'Search across conversations, memories, and capsules', 'utility', '//arinova-search', true, true, '//arinova-search {query}', 'Search for content across all your data')
-        ON CONFLICT (slug) DO NOTHING"#).execute(&db).await.ok();
+        VALUES ('Arinova Search', 'arinova-search', 'Search across messages, notes, conversations, and memories', 'utility', '//arinova-search', true, true, '//arinova-search {query}', 'Unified search via GET /api/v1/search?q={query} — returns results from messages, notes, conversations, and agent memories in parallel')
+        ON CONFLICT (slug) DO UPDATE SET description = EXCLUDED.description, prompt_content = EXCLUDED.prompt_content"#).execute(&db).await.ok();
 
     // hud skill removed — /hud is a built-in slash command handled by frontend
 

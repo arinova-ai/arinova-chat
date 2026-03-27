@@ -26,6 +26,7 @@ import { registerApp } from "./commands/app.js";
 import { registerSetupOpenclaw } from "./commands/setup-openclaw.js";
 import { registerConversation } from "./commands/conversation.js";
 import { registerSkill } from "./commands/skill.js";
+import { registerSearchCommands } from "./commands/search.js";
 
 const program = new Command();
 
@@ -58,6 +59,7 @@ registerMemoryCommands(program);
 registerKanbanCommands(program);
 registerConversation(program);
 registerSkill(program);
+registerSearchCommands(program);
 
 // Creator commands (config-based auth)
 registerAuth(program);

@@ -210,7 +210,7 @@ export default function SetupUsernamePage() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            3-32 characters. Lowercase letters, numbers, and underscores only.
+            10 characters or more. Lowercase letters, numbers, and underscores only.
             Must start with a letter.
           </p>
 
