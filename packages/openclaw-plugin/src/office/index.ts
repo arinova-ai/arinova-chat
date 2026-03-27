@@ -79,10 +79,11 @@ export function registerOffice(api: OpenClawPluginApi): void {
     }
   }
 
-  if (apiUrl && tokens.size > 0) {
-    const forwardUrl = apiUrl.replace(/\/+$/, "") + "/api/office/event";
-    setForwardTarget(forwardUrl, tokens);
-  }
+  // Legacy event forwarding disabled — task_update now uses HUD WS channel
+  // if (apiUrl && tokens.size > 0) {
+  //   const forwardUrl = apiUrl.replace(/\/+$/, "") + "/api/office/event";
+  //   setForwardTarget(forwardUrl, tokens);
+  // }
 
   registerOfficeHooks(api);
   initialize();

@@ -121,6 +121,14 @@ function OfficeViewInner() {
     if (task?.status === "started" && task.task) {
       return { ...agent, status: "working" as const, currentTask: { title: task.task, priority: "", due: "", assignedBy: "", progress: 0, subtasks: [] } };
     }
+    if (task?.status === "completed") {
+      const summary = [
+        task.durationMs ? `${Math.round(task.durationMs / 1000)}s` : null,
+        task.costUsd ? `$${task.costUsd.toFixed(4)}` : null,
+        task.numTurns ? `${task.numTurns} turns` : null,
+      ].filter(Boolean).join(" · ");
+      return { ...agent, status: "idle" as const, currentTask: { title: `✅ ${task.task || "Done"} (${summary})`, priority: "", due: "", assignedBy: "", progress: 100, subtasks: [] } };
+    }
     return agent;
   });
 
