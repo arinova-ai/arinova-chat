@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, ChevronDown, ChevronRight, Clock, DollarSign, RotateCw, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Activity, ChevronDown, ChevronRight, Clock, DollarSign, RotateCw } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface TaskEntry {
   id: string;
@@ -95,41 +95,15 @@ export default function OfficeActivityPage() {
     });
   };
 
-  // Mock data for testing (dev only)
-  const addMockTask = () => {
-    const mockTasks = [
-      "Reviewing pull request #42",
-      "Running test suite",
-      "Deploying to staging",
-      "Analyzing code coverage",
-      "Building documentation",
-    ];
-    const task = mockTasks[Math.floor(Math.random() * mockTasks.length)];
-    const isCompleted = Math.random() > 0.5;
-    setTasks((prev) => [{
-      id: `mock-${Date.now()}`,
-      agentId: "mock-agent",
-      status: (isCompleted ? "completed" : "started") as "completed" | "started",
-      task,
-      durationMs: isCompleted ? Math.floor(Math.random() * 30000) + 1000 : undefined,
-      costUsd: isCompleted ? Math.random() * 0.05 : undefined,
-      numTurns: isCompleted ? Math.floor(Math.random() * 10) + 1 : undefined,
-      timestamp: Date.now(),
-    }, ...prev].slice(0, 100));
-  };
+  const { t } = useTranslation();
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="shrink-0 border-b border-border px-4 py-2.5 flex items-center gap-2">
         <Activity className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Task Activity</span>
+        <span className="text-sm font-medium">{t("office.activity.title")}</span>
         <span className="text-xs text-muted-foreground">({tasks.length})</span>
-        <div className="flex-1" />
-        <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground" onClick={addMockTask}>
-          <Plus className="h-3 w-3" />
-          Mock
-        </Button>
       </div>
 
       {/* Task list */}
@@ -139,8 +113,8 @@ export default function OfficeActivityPage() {
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600/15">
               <Activity className="h-7 w-7 text-blue-400" />
             </div>
-            <p className="text-sm text-muted-foreground">No task activity yet</p>
-            <p className="text-xs text-muted-foreground/60">Tasks will appear here when agents start working</p>
+            <p className="text-sm text-muted-foreground">{t("office.activity.empty")}</p>
+            <p className="text-xs text-muted-foreground/60">{t("office.activity.emptyHint")}</p>
           </div>
         ) : (
           <div className="space-y-1">
