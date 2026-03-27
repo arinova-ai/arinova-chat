@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { OFFICE_STREAM_URL } from "@/lib/office-config";
+import { useEffect, useState } from "react";
 import type { Agent } from "@/components/office/types";
 import { useChatStore } from "@/store/chat-store";
 import { api } from "@/lib/api";
@@ -94,10 +93,8 @@ function healthToAgent(h: AgentHealthItem): Agent {
 export function useOfficeStream() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [connected, setConnected] = useState(false);
-  const esRef = useRef<EventSource | null>(null);
 
-  // Single effect: fetch health first, then connect SSE.
-  // Health data is captured in a closure variable so SSE handler always has it.
+  // Fetch health data, then mark connected (SSE removed — WS task_update handles live updates)
   useEffect(() => {
     let cancelled = false;
     const healthMap = new Map<string, AgentHealthItem>();
@@ -116,45 +113,12 @@ export function useOfficeStream() {
       })
       .finally(() => {
         if (cancelled) return;
-
-        // 2. Connect SSE after health data is available
-        const es = new EventSource(OFFICE_STREAM_URL, { withCredentials: true });
-        esRef.current = es;
-
-        es.onopen = () => setConnected(true);
-
-        es.onmessage = (event) => {
-          try {
-            const data: OfficeStatusEvent = JSON.parse(event.data);
-            if (data.type !== "status_update") return;
-
-            const sseAgents = data.agents.map(toAgent);
-            const mergedIds = new Set(sseAgents.map((a) => a.id));
-            const merged = [...sseAgents];
-
-            // Append health-only agents not present in SSE
-            for (const [id, h] of healthMap) {
-              if (!mergedIds.has(id)) {
-                merged.push(healthToAgent(h));
-                mergedIds.add(id);
-              }
-            }
-
-            setAgents(merged);
-          } catch {
-            // Ignore malformed events
-          }
-        };
-
-        es.onerror = () => setConnected(false);
+        // SSE removed — agents now updated via WS task_update events
+        setConnected(true);
       });
 
     return () => {
       cancelled = true;
-      if (esRef.current) {
-        esRef.current.close();
-        esRef.current = null;
-      }
     };
   }, []);
 

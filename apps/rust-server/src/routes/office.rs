@@ -23,10 +23,6 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/office/health", get(office_health))
         .route("/api/office/status", get(office_status))
-        // Deprecated: SSE stream replaced by WS task_update via HUD channel
-        .route("/api/office/stream", get(office_stream))
-        // Deprecated: event ingestion replaced by WS task_update
-        .route("/api/office/event", post(office_ingest))
         .route(
             "/api/office/bindings",
             get(get_bindings).put(put_binding),
