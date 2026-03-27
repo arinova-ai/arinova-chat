@@ -8,6 +8,7 @@ import { PushNotificationHandler } from "@/components/push-notification-handler"
 import { GlobalActiveCall } from "@/components/voice/global-active-call";
 import { GlobalIncomingCall } from "@/components/voice/global-incoming-call";
 import { GlobalOfficePip } from "@/components/global-float-chat";
+import { ToastContainer } from "@/components/toast-container";
 import type { ReactNode } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -21,6 +22,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <GlobalActiveCall />
         <GlobalIncomingCall />
         <GlobalOfficePip />
+        <ToastContainer />
       </I18nProvider>
     </ThemeProvider>
   );
