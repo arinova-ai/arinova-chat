@@ -868,48 +868,20 @@ export const MessageBubble = memo(function MessageBubble({ message, agentName, h
       )}
     >
       {showCommunityHide ? (
-        <Popover open={hidePopoverOpen} onOpenChange={setHidePopoverOpen}>
-          <PopoverTrigger asChild>
-            <div>
-              <MessageAvatar
-                message={message}
-                isOwn={isUser}
-                clickable
-                agentAvatarUrl={resolvedAgentAvatarUrl}
-                role={senderInfo?.role}
-                onClick={() => setHidePopoverOpen(true)}
-              />
-            </div>
-          </PopoverTrigger>
-          <PopoverContent className="w-44 p-1" align="start" side="top">
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors text-destructive"
-              onClick={async () => {
-                setHidePopoverOpen(false);
-                try {
-                  await api(`/api/communities/${message.conversationId}/hidden-users`, {
-                    method: "POST",
-                    body: JSON.stringify({ userId: message.senderUserId }),
-                  });
-                  // Add to local hidden set
-                  useChatStore.setState((s) => ({
-                    communityHiddenUsers: {
-                      ...s.communityHiddenUsers,
-                      [message.conversationId]: [
-                        ...(s.communityHiddenUsers[message.conversationId] ?? []),
-                        message.senderUserId!,
-                      ],
-                    },
-                  }));
-                } catch { /* toast handled */ }
-              }}
-            >
-              <EyeOff className="h-3.5 w-3.5" />
-              {t("community.hideConversation")}
-            </button>
-          </PopoverContent>
-        </Popover>
+        <MessageAvatar
+          message={message}
+          isOwn={isUser}
+          clickable
+          agentAvatarUrl={resolvedAgentAvatarUrl}
+          role={senderInfo?.role}
+          onClick={() => {
+            if (message.senderUserId) {
+              window.dispatchEvent(new CustomEvent("community-member-profile", {
+                detail: { userId: message.senderUserId, conversationId: message.conversationId },
+              }));
+            }
+          }}
+        />
       ) : (
         <MessageAvatar
           message={message}
