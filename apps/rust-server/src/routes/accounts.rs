@@ -833,7 +833,7 @@ async fn list_account_conversations(
     }
 
     let rows = sqlx::query_as::<_, ConversationRow>(
-        r#"SELECT c.id, c.title, c.type, c.user_id, c.created_at, c.updated_at
+        r#"SELECT c.id, c.title, c.type::text, c.user_id, c.created_at, c.updated_at
            FROM conversations c
            JOIN account_subscribers s ON s.conversation_id = c.id
            WHERE s.account_id = $1
