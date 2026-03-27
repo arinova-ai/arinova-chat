@@ -159,10 +159,8 @@ export function registerSetupOpenclaw(program: Command): void {
             console.log(`Creating bot for agent "${agent.name}"...`);
             try {
               const created = (await post("/api/agents", {
-                agent_name: agent.name,
+                name: agent.name,
                 description: "OpenClaw agent",
-                category: "assistant",
-                model: "claude-sonnet-4-6",
               })) as RemoteAgent;
 
               token = created.botToken ?? created.secret_token;
