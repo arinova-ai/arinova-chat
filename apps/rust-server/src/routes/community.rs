@@ -5157,9 +5157,9 @@ pub async fn check_keyword_filters(
     let content_lower = content.to_lowercase();
     for (keyword, action, mute_duration) in &filters {
         if content_lower.contains(&keyword.to_lowercase()) {
-            tracing::info!("Keyword filter triggered: keyword={} action={} user={}", keyword, action, user_id);
+            tracing::info!("KW_ACTION: keyword={} action='{}' action_len={} action_bytes={:?} user={}", keyword, action, action.len(), action.as_bytes(), user_id);
 
-            if action == "ban" {
+            if action.trim() == "ban" {
                 // Get community creator as banned_by
                 let creator_id = sqlx::query_scalar::<_, String>(
                     "SELECT creator_id FROM communities WHERE id = $1",
@@ -5207,6 +5207,7 @@ pub async fn check_keyword_filters(
                     "reason": format!("Banned for keyword: {}", keyword),
                 }), redis);
             } else {
+                tracing::info!("KW_ACTION: taking MUTE branch for action='{}'", action);
                 // Mute
                 let muted_until = mute_duration.map(|d| chrono::Utc::now() + chrono::Duration::seconds(d as i64));
                 let _ = sqlx::query(
