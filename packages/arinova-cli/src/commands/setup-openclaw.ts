@@ -208,7 +208,17 @@ export function registerSetupOpenclaw(program: Command): void {
           accounts: accountsConfig,
         };
 
-        // 10. Write bindings — ensure each agent has a binding
+        // 10. Ensure plugins.allow includes openclaw-arinova-ai
+        if (!config.plugins) {
+          config.plugins = {};
+        }
+        const allow = ((config.plugins as Record<string, unknown>).allow ?? []) as string[];
+        if (!allow.includes("openclaw-arinova-ai")) {
+          allow.push("openclaw-arinova-ai");
+          (config.plugins as Record<string, unknown>).allow = allow;
+        }
+
+        // 11. Write bindings — ensure each agent has a binding
         if (!config.bindings) {
           config.bindings = [];
         }
