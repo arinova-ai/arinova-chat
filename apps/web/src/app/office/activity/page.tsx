@@ -109,7 +109,7 @@ export default function OfficeActivityPage() {
     setTasks((prev) => [{
       id: `mock-${Date.now()}`,
       agentId: "mock-agent",
-      status: isCompleted ? "completed" : "started",
+      status: (isCompleted ? "completed" : "started") as "completed" | "started",
       task,
       durationMs: isCompleted ? Math.floor(Math.random() * 30000) + 1000 : undefined,
       costUsd: isCompleted ? Math.random() * 0.05 : undefined,
