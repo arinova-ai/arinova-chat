@@ -46,6 +46,7 @@ pub mod user_settings;
 pub mod conversation_settings;
 pub mod accounts;
 pub mod skills;
+pub mod support;
 pub mod wiki;
 pub mod docs;
 pub mod agent_memories;
@@ -111,6 +112,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(conversation_settings::router())
         .merge(accounts::router())
         .merge(skills::router())
+        .merge(support::router())
         .merge(wiki::router())
         .merge(docs::router())
         .merge(developer::router())

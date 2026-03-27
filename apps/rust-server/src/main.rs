@@ -781,6 +781,20 @@ async fn main() {
     )"#).execute(&db).await.ok();
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_community_keyword_filters_community ON community_keyword_filters(community_id)").execute(&db).await.ok();
 
+    // Support tickets
+    sqlx::query(r#"CREATE TABLE IF NOT EXISTS support_tickets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id TEXT NOT NULL REFERENCES "user"(id),
+        subject TEXT NOT NULL,
+        description TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+        admin_reply TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )"#).execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id)").execute(&db).await.ok();
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status)").execute(&db).await.ok();
+
     tracing::info!("Startup migrations completed");
 
     // Backfill Backlog + Review columns for existing kanban boards
