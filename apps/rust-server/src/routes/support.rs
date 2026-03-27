@@ -18,9 +18,6 @@ pub fn router() -> Router<AppState> {
         .route("/api/support/tickets", post(create_ticket).get(my_tickets))
         .route("/api/admin/tickets", get(list_tickets))
         .route("/api/admin/tickets/{id}", patch(update_ticket))
-        // Aliases for existing admin page
-        .route("/api/admin/support-tickets", get(list_tickets_wrapped))
-        .route("/api/admin/support-tickets/{id}/reply", post(reply_ticket))
 }
 
 // ===== User endpoints =====
