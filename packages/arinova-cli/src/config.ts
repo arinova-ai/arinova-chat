@@ -38,7 +38,7 @@ export function getEndpoint(): string {
   if (process.env.ARINOVA_ENDPOINT) {
     return process.env.ARINOVA_ENDPOINT.replace(/\/+$/, "");
   }
-  return loadConfig().endpoint ?? "https://chat.arinova.ai";
+  return loadConfig().endpoint ?? "https://api.chat.arinova.ai";
 }
 
 export function getStagingEndpoint(): string {
