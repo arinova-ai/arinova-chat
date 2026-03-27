@@ -227,7 +227,7 @@ export function ChatHeader({
             router.push(`/community/${data.id}`);
           } catch { /* ignore */ }
         }
-      : type === "group" && conversationId
+      : (type === "group" || isGroupLike(type)) && conversationId
         ? () => setSettingsOpen(true)
         : peerUserId ? () => router.push(`/profile/${peerUserId}`) : undefined
   );
