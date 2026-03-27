@@ -202,6 +202,8 @@
   "chat.settings.removeBg": "移除背景",
   "chat.settings.general": "一般",
   "chat.settings.groupName": "群組名稱",
+  "chat.settings.groupDescription": "描述",
+  "chat.settings.groupDescriptionPlaceholder": "新增群組描述...",
   "chat.settings.save": "儲存",
   "chat.settings.tapToChangeAvatar": "點擊更換頭像",
   "chat.settings.historyLimit": "歷史訊息數量",

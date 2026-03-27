@@ -65,6 +65,7 @@ pub fn filter_agents_for_dispatch(
     for agent in agents {
         let is_owner = agent.owner_user_id == sender_user_id;
         let is_mentioned = mentions.contains(&"__all__".to_string())
+            || mentions.contains(&"__all_agents__".to_string())
             || mentions.contains(&agent.agent_id);
 
         let should_dispatch = match agent.listen_mode.as_str() {

@@ -380,17 +380,21 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
     if (mentionQuery === null || activeMembers.length === 0) return [];
     const q = mentionQuery.toLowerCase();
 
-    // Add @all as first item when mentionOnly is ON
+    // Add @all and @all_agents as special items
     const allItem: MentionItem = { agentId: "__all__", agentName: "all" };
+    const allAgentsItem: MentionItem = { agentId: "__all_agents__", agentName: "all_agents" };
     const filtered = q
       ? activeMembers.filter((m) => m.agentName.toLowerCase().includes(q))
       : activeMembers;
 
+    const specials: MentionItem[] = [];
+    if (!q || "all".includes(q)) specials.push(allItem);
+    if (!q || "all_agents".includes(q)) specials.push(allAgentsItem);
+
     if (isMentionOnly) {
-      const allMatches = !q || "all".includes(q);
-      return allMatches ? [allItem, ...filtered] : filtered;
+      return [...specials, ...filtered];
     }
-    return filtered;
+    return [...(specials.length > 0 ? [allAgentsItem] : []), ...filtered];
   }, [mentionQuery, activeMembers, isMentionOnly]);
 
   const showMentionPopup = mentionQuery !== null && mentionItems.length > 0;

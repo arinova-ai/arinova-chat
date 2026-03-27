@@ -232,11 +232,6 @@ export function IconRail() {
 
   return (
     <div className="flex h-full w-16 shrink-0 flex-col items-center border-r border-border bg-sidebar py-4">
-      {/* Account switcher */}
-      <div className="mb-2">
-        <AccountSwitcher />
-      </div>
-
       {/* Main nav */}
       <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto scrollbar-none">
         {visibleItems.map((item) =>
@@ -326,9 +321,10 @@ export function IconRail() {
         </Popover>
       </nav>
 
-      {/* Settings pinned to bottom */}
-      <div className="mt-auto">
+      {/* Settings + Account pinned to bottom */}
+      <div className="mt-auto flex flex-col items-center gap-2">
         {renderButton(settingsItem)}
+        <AccountSwitcher />
       </div>
 
     </div>

@@ -193,6 +193,8 @@
   "chat.settings.historyLimit": "Message History",
   "chat.settings.historyLimitDesc": "Number of recent messages sent as context to the agent (1-50)",
   "chat.settings.groupName": "Group Name",
+  "chat.settings.groupDescription": "Description",
+  "chat.settings.groupDescriptionPlaceholder": "Add a group description...",
   "chat.settings.save": "Save",
   "chat.settings.tapToChangeAvatar": "Tap to change avatar",
   "chat.header.voiceCall": "Voice call",

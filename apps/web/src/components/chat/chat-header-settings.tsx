@@ -470,6 +470,17 @@ function GroupGeneralTab({
           </Button>
         </div>
       </div>
+
+      {/* Group description */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium">{t("chat.settings.groupDescription")}</label>
+        <textarea
+          placeholder={t("chat.settings.groupDescriptionPlaceholder")}
+          rows={3}
+          className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          defaultValue=""
+        />
+      </div>
     </div>
   );
 }

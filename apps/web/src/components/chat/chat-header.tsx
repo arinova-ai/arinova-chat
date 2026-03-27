@@ -227,7 +227,9 @@ export function ChatHeader({
             router.push(`/community/${data.id}`);
           } catch { /* ignore */ }
         }
-      : peerUserId ? () => router.push(`/profile/${peerUserId}`) : undefined
+      : type === "group" && conversationId
+        ? () => setSettingsOpen(true)
+        : peerUserId ? () => router.push(`/profile/${peerUserId}`) : undefined
   );
 
   const handleMuteToggle = useCallback(async () => {
