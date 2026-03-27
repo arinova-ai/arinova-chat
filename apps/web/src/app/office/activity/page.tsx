@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, ChevronDown, ChevronRight, Clock, DollarSign, RotateCw } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, Clock, DollarSign, RotateCw, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface TaskEntry {
   id: string;
@@ -41,17 +42,45 @@ export default function OfficeActivityPage() {
     const handler = (e: Event) => {
       const data = (e as CustomEvent).detail;
       if (data?.type === "task_update" && data.agentId) {
-        const entry: TaskEntry = {
-          id: `${data.agentId}-${Date.now()}`,
-          agentId: data.agentId,
-          status: data.status ?? "started",
-          task: data.task,
-          durationMs: data.durationMs,
-          costUsd: data.costUsd,
-          numTurns: data.numTurns,
-          timestamp: Date.now(),
-        };
-        setTasks((prev) => [entry, ...prev].slice(0, 100)); // Keep last 100
+        if (data.status === "completed") {
+          // Update existing started entry to completed
+          setTasks((prev) => {
+            const idx = prev.findIndex(
+              (t) => t.agentId === data.agentId && t.status === "started" && t.task === data.task
+            );
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = {
+                ...updated[idx],
+                status: "completed",
+                durationMs: data.durationMs,
+                costUsd: data.costUsd,
+                numTurns: data.numTurns,
+              };
+              return updated;
+            }
+            // No matching started — add as new completed
+            return [{
+              id: `${data.agentId}-${Date.now()}`,
+              agentId: data.agentId,
+              status: "completed",
+              task: data.task,
+              durationMs: data.durationMs,
+              costUsd: data.costUsd,
+              numTurns: data.numTurns,
+              timestamp: Date.now(),
+            }, ...prev].slice(0, 100);
+          });
+        } else {
+          // started — add new entry
+          setTasks((prev) => [{
+            id: `${data.agentId}-${Date.now()}`,
+            agentId: data.agentId,
+            status: "started",
+            task: data.task,
+            timestamp: Date.now(),
+          }, ...prev].slice(0, 100));
+        }
       }
     };
     window.addEventListener("ws-task-update", handler);
@@ -66,6 +95,29 @@ export default function OfficeActivityPage() {
     });
   };
 
+  // Mock data for testing (dev only)
+  const addMockTask = () => {
+    const mockTasks = [
+      "Reviewing pull request #42",
+      "Running test suite",
+      "Deploying to staging",
+      "Analyzing code coverage",
+      "Building documentation",
+    ];
+    const task = mockTasks[Math.floor(Math.random() * mockTasks.length)];
+    const isCompleted = Math.random() > 0.5;
+    setTasks((prev) => [{
+      id: `mock-${Date.now()}`,
+      agentId: "mock-agent",
+      status: isCompleted ? "completed" : "started",
+      task,
+      durationMs: isCompleted ? Math.floor(Math.random() * 30000) + 1000 : undefined,
+      costUsd: isCompleted ? Math.random() * 0.05 : undefined,
+      numTurns: isCompleted ? Math.floor(Math.random() * 10) + 1 : undefined,
+      timestamp: Date.now(),
+    }, ...prev].slice(0, 100));
+  };
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -73,6 +125,11 @@ export default function OfficeActivityPage() {
         <Activity className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">Task Activity</span>
         <span className="text-xs text-muted-foreground">({tasks.length})</span>
+        <div className="flex-1" />
+        <Button variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground" onClick={addMockTask}>
+          <Plus className="h-3 w-3" />
+          Mock
+        </Button>
       </div>
 
       {/* Task list */}
@@ -95,7 +152,7 @@ export default function OfficeActivityPage() {
                   {/* Collapsed row */}
                   <button
                     type="button"
-                    onClick={() => isCompleted && toggleExpand(t.id)}
+                    onClick={() => isCompleted ? toggleExpand(t.id) : undefined}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/30 transition-colors text-left"
                   >
                     <span className="text-base shrink-0">
@@ -106,6 +163,7 @@ export default function OfficeActivityPage() {
                         {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       </span>
                     )}
+                    {!isCompleted && <span className="w-[14px] shrink-0" />}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{t.task || "Working..."}</p>
                     </div>
@@ -116,7 +174,7 @@ export default function OfficeActivityPage() {
 
                   {/* Expanded details */}
                   {isExpanded && isCompleted && (
-                    <div className="ml-12 mb-2 flex gap-4 text-xs text-muted-foreground">
+                    <div className="ml-12 mb-2 flex gap-4 text-xs text-muted-foreground bg-muted/20 rounded-lg px-3 py-2">
                       {t.durationMs != null && (
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
