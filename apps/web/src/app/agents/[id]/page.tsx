@@ -274,7 +274,7 @@ export default function AgentManagePage() {
 
 interface Capsule {
   id: string;
-  title: string;
+  name: string;
   status: string;
   entryCount: number;
   createdAt: string;
@@ -295,10 +295,10 @@ function MemoryCapsuleTab({ agentId }: { agentId: string }) {
     (async () => {
       try {
         const [capRes, grantRes] = await Promise.allSettled([
-          api<Capsule[]>("/api/memory/capsules", { silent: true }),
+          api<{ capsules: Capsule[] }>("/api/memory/capsules", { silent: true }),
           api<{ grants: CapsuleGrant[] }>(`/api/memory/capsules/grants?agent_id=${agentId}`, { silent: true }),
         ]);
-        if (capRes.status === "fulfilled") setCapsules(capRes.value ?? []);
+        if (capRes.status === "fulfilled") setCapsules(capRes.value?.capsules ?? []);
         if (grantRes.status === "fulfilled") {
           setGrants(new Set((grantRes.value?.grants ?? []).map((g) => g.capsuleId)));
         }
@@ -332,7 +332,7 @@ function MemoryCapsuleTab({ agentId }: { agentId: string }) {
       {capsules.map((c) => (
         <div key={c.id} className="flex items-center gap-3 rounded-lg border p-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{c.title || "Untitled Capsule"}</p>
+            <p className="text-sm font-medium truncate">{c.name || "Untitled Capsule"}</p>
             <p className="text-xs text-muted-foreground">{c.entryCount} entries</p>
           </div>
           <button
