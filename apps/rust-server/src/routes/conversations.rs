@@ -34,6 +34,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/conversations/{id}/read", put(mark_read))
         .route("/api/conversations/{id}/mute", put(toggle_mute))
         .route("/api/conversations/{id}/status", get(get_status))
+        .route("/api/conversations/{id}/chat-info", get(get_chat_info))
         .route("/api/conversations/hidden", get(list_hidden_conversations))
         .route("/api/conversations/{id}/unhide", put(unhide_conversation))
         .route("/api/conversations/{id}/subscription", get(get_subscription))
@@ -1186,6 +1187,131 @@ async fn get_status(
             "messageCount": msg_count,
         },
         "agent": agent_info,
+    }))
+    .into_response()
+}
+
+// ===== Chat Info (slash command /get-chat-info) =====
+
+/// GET /api/conversations/:id/chat-info — Comprehensive conversation info
+async fn get_chat_info(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Response {
+    // 1. Conversation basics
+    let conv = sqlx::query_as::<_, (String, Option<String>, String, chrono::NaiveDateTime)>(
+        r#"SELECT type::text, title, user_id, created_at FROM conversations WHERE id = $1"#,
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await;
+
+    let (conv_type, title, owner_id, created_at) = match conv {
+        Ok(Some(c)) => c,
+        _ => return (StatusCode::NOT_FOUND, Json(json!({"error": "Conversation not found"}))).into_response(),
+    };
+
+    // Verify membership
+    let is_member = owner_id == user.id
+        || sqlx::query_as::<_, (bool,)>(
+            "SELECT EXISTS(SELECT 1 FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2)",
+        )
+        .bind(id)
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await
+        .map(|(e,)| e)
+        .unwrap_or(false);
+
+    if !is_member {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "Not a member"}))).into_response();
+    }
+
+    // 2. Member count
+    let member_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM conversation_user_members WHERE conversation_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    // 3. Key members (creator/admin/moderator only)
+    let key_members = sqlx::query_as::<_, (String, String, String, Option<String>)>(
+        r#"SELECT cum.user_id, cum.role::text, u.name, u.username
+           FROM conversation_user_members cum
+           JOIN "user" u ON u.id = cum.user_id
+           WHERE cum.conversation_id = $1 AND cum.role::text IN ('admin', 'creator', 'moderator')
+           ORDER BY cum.role::text"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let members_json: Vec<serde_json::Value> = key_members
+        .iter()
+        .map(|(uid, role, name, username)| json!({"userId": uid, "role": role, "name": name, "username": username}))
+        .collect();
+
+    // 4. Agents with listen_mode
+    let agents = sqlx::query_as::<_, (uuid::Uuid, String, String)>(
+        r#"SELECT cm.agent_id, a.name, cm.listen_mode::text
+           FROM conversation_members cm
+           JOIN agents a ON a.id = cm.agent_id
+           WHERE cm.conversation_id = $1"#,
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let agents_json: Vec<serde_json::Value> = agents
+        .iter()
+        .map(|(aid, name, lm)| json!({"agentId": aid, "name": name, "listenMode": lm}))
+        .collect();
+
+    // 5. Settings: history_limit, muted, allow_agents
+    let history_limit: Option<i32> = sqlx::query_scalar(
+        "SELECT history_limit FROM conversations WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten();
+
+    let is_muted: bool = sqlx::query_scalar::<_, bool>(
+        "SELECT COALESCE(muted, false) FROM conversation_user_members WHERE conversation_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(false);
+
+    let message_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM messages WHERE conversation_id = $1",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(0);
+
+    Json(json!({
+        "conversationId": id,
+        "type": conv_type,
+        "title": title,
+        "createdAt": created_at.and_utc().to_rfc3339(),
+        "memberCount": member_count,
+        "keyMembers": members_json,
+        "agents": agents_json,
+        "historyLimit": history_limit,
+        "isMuted": is_muted,
+        "messageCount": message_count,
     }))
     .into_response()
 }

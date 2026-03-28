@@ -481,6 +481,41 @@ case "tts": {
           insertSystemMessage("Check your profile in Settings.");
           break;
         }
+        case "get-chat-info": {
+          if (!activeConversationId) {
+            insertSystemMessage("No active conversation.");
+            break;
+          }
+          (async () => {
+            try {
+              const info = await api<Record<string, unknown>>(`/api/conversations/${activeConversationId}/chat-info`, { silent: true });
+              const lines = [
+                `**Conversation ID:** \`${info.conversationId}\``,
+                `**Type:** ${info.type}`,
+                `**Title:** ${info.title || "(untitled)"}`,
+                `**Created:** ${info.createdAt ? new Date(info.createdAt as string).toLocaleString() : "—"}`,
+                `**Members:** ${info.memberCount}`,
+                `**Messages:** ${info.messageCount}`,
+                `**History Limit:** ${info.historyLimit ?? "default"}`,
+                `**Muted:** ${info.isMuted ? "Yes" : "No"}`,
+              ];
+              const keyMembers = info.keyMembers as { name: string; role: string; username?: string }[] ?? [];
+              if (keyMembers.length > 0) {
+                lines.push("", "**Key Members:**");
+                for (const m of keyMembers) lines.push(`  • ${m.name}${m.username ? ` (@${m.username})` : ""} — ${m.role}`);
+              }
+              const agents = info.agents as { name: string; listenMode: string }[] ?? [];
+              if (agents.length > 0) {
+                lines.push("", "**Agents:**");
+                for (const a of agents) lines.push(`  • ${a.name} — ${a.listenMode}`);
+              }
+              insertSystemMessage(lines.join("\n"));
+            } catch {
+              insertSystemMessage("Failed to fetch chat info.");
+            }
+          })();
+          break;
+        }
         default: {
           // All "forward" commands: send as message to agent
           if (cmd.handler === "forward") {
