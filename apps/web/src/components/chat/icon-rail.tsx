@@ -127,7 +127,7 @@ export function IconRail() {
 
   const activeId = getActiveId();
 
-  // ── Official account nav items ──
+  // ── Official account nav items (Settings is in bottom bar, not here) ──
   const officialItems: NavEntry[] = activeAccount ? [
     { id: "chat", label: t("nav.chat"), href: "/" },
     { id: "official-dashboard", label: t("nav.dashboard"), href: `/official/${activeAccount.id}/dashboard` },
@@ -135,17 +135,15 @@ export function IconRail() {
     { id: "official-auto-reply", label: t("nav.autoReply"), href: `/official/${activeAccount.id}/auto-reply` },
     { id: "official-knowledge", label: t("nav.knowledge"), href: `/official/${activeAccount.id}/knowledge` },
     { id: "official-subscribers", label: t("nav.subscribers"), href: `/official/${activeAccount.id}/subscribers` },
-    { id: "official-settings", label: t("nav.settings"), href: `/official/${activeAccount.id}/settings` },
   ] : [];
 
-  // ── Lounge account nav items ──
+  // ── Lounge account nav items (Settings is in bottom bar, not here) ──
   const loungeItems: NavEntry[] = activeAccount ? [
     { id: "chat", label: t("nav.chat"), href: "/" },
     { id: "lounge-dashboard", label: t("nav.dashboard"), href: `/lounge/${activeAccount.id}/dashboard` },
     { id: "lounge-persona", label: t("nav.persona"), href: `/lounge/${activeAccount.id}/persona` },
     { id: "lounge-diary", label: t("nav.diary"), href: `/lounge/${activeAccount.id}/diary` },
     { id: "lounge-preview", label: t("nav.preview"), href: `/lounge/${activeAccount.id}/preview` },
-    { id: "lounge-settings", label: t("nav.loungeSettings"), href: `/lounge/${activeAccount.id}/settings` },
     { id: "lounge-fans", label: t("nav.fans"), href: `/lounge/${activeAccount.id}/fans` },
   ] : [];
 
@@ -187,10 +185,15 @@ export function IconRail() {
   // Pinnable items for the popover (personal accounts only)
   const pinnableItems = ALL_ITEMS.filter((item) => pinnableSet.has(item.id));
 
+  const settingsHref = isOfficialAccount && activeAccount
+    ? `/official/${activeAccount.id}/settings`
+    : isLoungeAccount && activeAccount
+    ? `/lounge/${activeAccount.id}/settings`
+    : "/settings";
   const settingsItem: NavEntry = {
     id: "settings",
     label: t("nav.settings"),
-    href: "/settings",
+    href: settingsHref,
   };
 
   // Custom shortcuts

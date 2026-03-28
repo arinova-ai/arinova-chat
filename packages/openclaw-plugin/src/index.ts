@@ -126,8 +126,13 @@ Note: The conversation owner can disable agent note access. If disabled, all not
     api.on("gateway_start", () => {
       const channels = (api.config as Record<string, unknown>).channels as Record<string, unknown> | undefined;
       const arinova = (channels?.["openclaw-arinova-ai"] ?? {}) as Record<string, unknown>;
-      const hasAgent = Boolean(arinova.agentId || arinova.botToken);
       const hasUrl = Boolean(arinova.apiUrl);
+      // Check for agent token at top level or inside accounts
+      let hasAgent = Boolean(arinova.agentId || arinova.botToken);
+      if (!hasAgent && arinova.accounts && typeof arinova.accounts === "object") {
+        const accounts = arinova.accounts as Record<string, { botToken?: string }>;
+        hasAgent = Object.values(accounts).some((a) => Boolean(a?.botToken));
+      }
 
       if (!hasUrl || !hasAgent) {
         api.logger.warn("[openclaw-arinova-ai] Not configured yet.");

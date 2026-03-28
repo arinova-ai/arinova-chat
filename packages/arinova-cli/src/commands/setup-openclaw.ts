@@ -30,9 +30,11 @@ interface OpenclawConfig {
 
 interface RemoteAgent {
   id: string;
-  agent_name: string;
+  name?: string;
+  agent_name?: string;
   botToken?: string;
   secret_token?: string;
+  secretToken?: string;
   [key: string]: unknown;
 }
 
@@ -94,12 +96,12 @@ export function registerSetupOpenclaw(program: Command): void {
 
         console.log(`Found ${agents.length} agent(s) in openclaw.json: ${agents.map((a) => a.name).join(", ")}`);
 
-        // 6. Get existing bots from Arinova
+        // 6. Get existing bots from Arinova (use /api/agents for owned agents with name field)
         let remoteBots: RemoteAgent[] = [];
         try {
-          const data = await get("/api/creator/agents");
+          const data = await get("/api/agents");
           const raw = data as Record<string, unknown>;
-          const list = raw.listings ?? raw.agents ?? data;
+          const list = raw.agents ?? data;
           if (Array.isArray(list)) {
             remoteBots = list as RemoteAgent[];
           }
@@ -142,15 +144,15 @@ export function registerSetupOpenclaw(program: Command): void {
 
           // Try to match by name (case-insensitive)
           const match = remoteBots.find(
-            (b) => b.agent_name.toLowerCase() === agent.name.toLowerCase(),
+            (b) => (b.name ?? b.agent_name ?? "").toLowerCase() === agent.name.toLowerCase(),
           );
 
           let token: string | undefined;
 
           if (match) {
-            token = match.botToken ?? match.secret_token;
+            token = match.botToken ?? match.secretToken ?? match.secret_token;
             if (token) {
-              summary.push({ agent: agent.name, action: `matched existing bot "${match.agent_name}"` });
+              summary.push({ agent: agent.name, action: `matched existing bot "${match.name ?? match.agent_name}"` });
             }
           }
 
