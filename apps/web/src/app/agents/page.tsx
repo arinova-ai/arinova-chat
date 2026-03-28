@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Plus, Trash2, MessageSquare, Settings2, User } from "lucide-react";
+import { Bot, Plus, Trash2, MessageSquare, Settings2, User, Copy, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToastStore } from "@/store/toast-store";
+import { useChatStore } from "@/store/chat-store";
 import { IconRail } from "@/components/chat/icon-rail";
 import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
@@ -38,7 +40,15 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newA2a, setNewA2a] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const addToast = useToastStore((s) => s.addToast);
+  const createAgent = useChatStore((s) => s.createAgent);
 
   const fetchAgents = useCallback(async () => {
     const [agentsRes, listingsRes] = await Promise.allSettled([
@@ -88,6 +98,31 @@ export default function AgentsPage() {
     });
   };
 
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const agent = await createAgent({
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+        a2aEndpoint: newA2a.trim() || undefined,
+      });
+      setCreatedToken((agent as Record<string, unknown>).secretToken as string ?? null);
+      fetchAgents();
+    } catch { addToast("Failed to create agent"); }
+    setCreating(false);
+  };
+
+  const resetCreateDialog = () => {
+    setCreateOpen(false);
+    setNewName("");
+    setNewDesc("");
+    setNewA2a("");
+    setCreating(false);
+    setCreatedToken(null);
+    setCopied(false);
+  };
+
   const deleteSelected = async () => {
     if (!confirm(`Delete ${selected.size} agent(s)? This cannot be undone.`)) return;
     const results = await Promise.allSettled(
@@ -119,7 +154,7 @@ export default function AgentsPage() {
             Delete ({selected.size})
           </Button>
         )}
-        <Button size="sm" onClick={() => router.push("/creator/new")}>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" />
           Create Agent
         </Button>
@@ -135,7 +170,7 @@ export default function AgentsPage() {
               <Bot className="h-7 w-7 text-blue-400" />
             </div>
             <p className="text-sm text-muted-foreground">No agents yet</p>
-            <Button size="sm" onClick={() => router.push("/creator/new")}>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5 mr-1" />
               Create your first agent
             </Button>
@@ -180,14 +215,6 @@ export default function AgentsPage() {
                   )}
                 </div>
 
-                {/* Status badge */}
-                <span className={cn(
-                  "text-[10px] px-2 py-0.5 rounded-full shrink-0",
-                  agent.isPublic ? "bg-green-500/15 text-green-400" : "bg-muted text-muted-foreground",
-                )}>
-                  {agent.isPublic ? "Public" : "Private"}
-                </span>
-
                 {/* Actions */}
                 <div className="flex gap-1 shrink-0">
                   <button
@@ -229,6 +256,48 @@ export default function AgentsPage() {
 
       <MobileBottomNav />
       </div>
+
+      {/* Create Agent Dialog */}
+      <Dialog open={createOpen} onOpenChange={(open) => { if (!open) resetCreateDialog(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{createdToken ? "Agent Created" : "Create Agent"}</DialogTitle>
+          </DialogHeader>
+          {createdToken ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Your agent has been created. Copy the bot token below — it won&apos;t be shown again.</p>
+              <div className="flex gap-2">
+                <input value={createdToken} readOnly className="flex-1 rounded-md border bg-background px-3 py-2 text-sm font-mono" />
+                <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(createdToken); setCopied(true); }}>
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+              <Button className="w-full" onClick={resetCreateDialog}>Done</Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Name *</label>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="My Agent" className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Optional description" className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" />
+              </div>
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground">Advanced</summary>
+                <div className="mt-2">
+                  <label className="text-sm font-medium">A2A Endpoint</label>
+                  <input value={newA2a} onChange={(e) => setNewA2a(e.target.value)} placeholder="https://..." className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm font-mono" />
+                </div>
+              </details>
+              <Button className="w-full" onClick={handleCreate} disabled={creating || !newName.trim()}>
+                {creating ? "Creating..." : "Create Agent"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

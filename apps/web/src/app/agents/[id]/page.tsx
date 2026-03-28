@@ -28,15 +28,13 @@ interface AgentDetail {
   updatedAt: string;
 }
 
-type Tab = "general" | "prompt" | "skills" | "permissions" | "token" | "memory" | "activity" | "danger";
+type Tab = "general" | "skills" | "token" | "memory" | "activity" | "danger";
 
 const TABS: { id: Tab; label: string; icon: typeof Bot }[] = [
   { id: "general", label: "General", icon: Bot },
-  { id: "prompt", label: "System Prompt", icon: Brain },
   { id: "skills", label: "Skills", icon: Sparkles },
-  { id: "permissions", label: "Permissions", icon: Shield },
   { id: "token", label: "Token", icon: Key },
-  { id: "memory", label: "Memory", icon: Brain },
+  { id: "memory", label: "Memory Capsule", icon: Brain },
   { id: "activity", label: "Activity", icon: Activity },
   { id: "danger", label: "Danger Zone", icon: AlertTriangle },
 ];
@@ -83,7 +81,7 @@ export default function AgentManagePage() {
     try {
       await api(`/api/agents/${agentId}`, {
         method: "PUT",
-        body: JSON.stringify({ name, description, isPublic, category: category || null }),
+        body: JSON.stringify({ name, description, category: category || null, systemPrompt }),
       });
       addToast("Agent updated");
       fetchAgent();
@@ -91,29 +89,6 @@ export default function AgentManagePage() {
     setSaving(false);
   };
 
-  const savePrompt = async () => {
-    setSaving(true);
-    try {
-      await api(`/api/agents/${agentId}`, {
-        method: "PUT",
-        body: JSON.stringify({ systemPrompt, welcomeMessage }),
-      });
-      addToast("System prompt updated");
-    } catch { addToast("Failed to save"); }
-    setSaving(false);
-  };
-
-  const savePermissions = async () => {
-    setSaving(true);
-    try {
-      await api(`/api/agents/${agentId}`, {
-        method: "PUT",
-        body: JSON.stringify({ notificationsEnabled, isPublic }),
-      });
-      addToast("Permissions updated");
-    } catch { addToast("Failed to save"); }
-    setSaving(false);
-  };
 
   const regenerateToken = async () => {
     if (!confirm("Regenerate token? All existing integrations using the current token will stop working.")) return;
@@ -204,7 +179,7 @@ export default function AgentManagePage() {
             </div>
             <div>
               <label className="text-sm font-medium">Description</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm resize-none" />
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm resize-none" />
             </div>
             <div>
               <label className="text-sm font-medium">Category</label>
@@ -218,28 +193,12 @@ export default function AgentManagePage() {
                 <option value="other">Other</option>
               </select>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="isPublic" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="rounded" />
-              <label htmlFor="isPublic" className="text-sm">Public (visible to other users)</label>
-            </div>
-            <Button onClick={saveGeneral} disabled={saving} size="sm">
-              <Save className="h-3.5 w-3.5 mr-1" />
-              {saving ? "Saving..." : "Save"}
-            </Button>
-          </>
-        )}
-
-        {tab === "prompt" && (
-          <>
             <div>
               <label className="text-sm font-medium">System Prompt</label>
-              <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={12} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm font-mono resize-none" placeholder="You are a helpful AI assistant..." />
+              <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={6} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm font-mono resize-none" placeholder="You are a helpful AI assistant..." />
+              <p className="mt-1 text-xs text-muted-foreground">Instructions that define how this agent behaves in conversations.</p>
             </div>
-            <div>
-              <label className="text-sm font-medium">Welcome Message</label>
-              <textarea value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} rows={3} className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm resize-none" placeholder="First message sent when a user starts a conversation" />
-            </div>
-            <Button onClick={savePrompt} disabled={saving} size="sm">
+            <Button onClick={saveGeneral} disabled={saving} size="sm">
               <Save className="h-3.5 w-3.5 mr-1" />
               {saving ? "Saving..." : "Save"}
             </Button>
@@ -252,22 +211,7 @@ export default function AgentManagePage() {
           </div>
         )}
 
-        {tab === "permissions" && (
-          <>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="notifications" checked={notificationsEnabled} onChange={(e) => setNotificationsEnabled(e.target.checked)} className="rounded" />
-              <label htmlFor="notifications" className="text-sm">Enable notifications</label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="public2" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="rounded" />
-              <label htmlFor="public2" className="text-sm">Public (visible in agent hub)</label>
-            </div>
-            <Button onClick={savePermissions} disabled={saving} size="sm">
-              <Save className="h-3.5 w-3.5 mr-1" />
-              {saving ? "Saving..." : "Save"}
-            </Button>
-          </>
-        )}
+        {/* Permissions tab removed — public/private concept removed */}
 
         {tab === "token" && (
           <>
@@ -296,15 +240,11 @@ export default function AgentManagePage() {
         )}
 
         {tab === "memory" && (
-          <div className="text-sm text-muted-foreground">
-            <p>Agent memories are managed automatically during conversations. View memories in the <button type="button" onClick={() => router.push(`/agent/${agentId}`)} className="text-blue-400 hover:underline">agent chat</button>.</p>
-          </div>
+          <MemoryCapsuleTab agentId={agentId} />
         )}
 
         {tab === "activity" && (
-          <div className="text-sm text-muted-foreground">
-            <p>View task activity in the <button type="button" onClick={() => router.push("/office/activity")} className="text-blue-400 hover:underline">Office Activity tab</button>.</p>
-          </div>
+          <AgentActivityTab agentId={agentId} />
         )}
 
         {tab === "danger" && (
@@ -326,6 +266,146 @@ export default function AgentManagePage() {
 
       <MobileBottomNav />
       </div>
+    </div>
+  );
+}
+
+// ── Memory Capsule Tab ──────────────────────────────────────────────────
+
+interface Capsule {
+  id: string;
+  title: string;
+  status: string;
+  entryCount: number;
+  createdAt: string;
+}
+
+interface CapsuleGrant {
+  capsuleId: string;
+  agentId: string;
+}
+
+function MemoryCapsuleTab({ agentId }: { agentId: string }) {
+  const [capsules, setCapsules] = useState<Capsule[]>([]);
+  const [grants, setGrants] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const addToast = useToastStore((s) => s.addToast);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [capRes, grantRes] = await Promise.allSettled([
+          api<Capsule[]>("/api/memory/capsules", { silent: true }),
+          api<{ grants: CapsuleGrant[] }>(`/api/memory/capsules/grants?agent_id=${agentId}`, { silent: true }),
+        ]);
+        if (capRes.status === "fulfilled") setCapsules(capRes.value ?? []);
+        if (grantRes.status === "fulfilled") {
+          setGrants(new Set((grantRes.value?.grants ?? []).map((g) => g.capsuleId)));
+        }
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
+  }, [agentId]);
+
+  const toggleGrant = async (capsuleId: string) => {
+    const hasGrant = grants.has(capsuleId);
+    try {
+      if (hasGrant) {
+        await api(`/api/memory/capsules/${capsuleId}/grants/${agentId}`, { method: "DELETE" });
+        setGrants((prev) => { const next = new Set(prev); next.delete(capsuleId); return next; });
+      } else {
+        await api(`/api/memory/capsules/${capsuleId}/grants`, {
+          method: "POST",
+          body: JSON.stringify({ agentId }),
+        });
+        setGrants((prev) => new Set(prev).add(capsuleId));
+      }
+    } catch { addToast("Failed to update access"); }
+  };
+
+  if (loading) return <p className="text-sm text-muted-foreground">Loading capsules...</p>;
+  if (capsules.length === 0) return <p className="text-sm text-muted-foreground">No memory capsules yet. Create one from a conversation.</p>;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground mb-3">Toggle which memory capsules this agent can access.</p>
+      {capsules.map((c) => (
+        <div key={c.id} className="flex items-center gap-3 rounded-lg border p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium truncate">{c.title || "Untitled Capsule"}</p>
+            <p className="text-xs text-muted-foreground">{c.entryCount} entries</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => toggleGrant(c.id)}
+            className={cn(
+              "relative h-6 w-11 rounded-full transition-colors",
+              grants.has(c.id) ? "bg-blue-600" : "bg-muted",
+            )}
+          >
+            <span className={cn(
+              "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform",
+              grants.has(c.id) && "translate-x-5",
+            )} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Agent Activity Tab ──────────────────────────────────────────────────
+
+interface ActivityItem {
+  id: string;
+  activityType: string;
+  title: string;
+  detail: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+function AgentActivityTab({ agentId }: { agentId: string }) {
+  const [items, setItems] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api<{ items: ActivityItem[] }>(
+          `/api/office/activity?agentId=${agentId}&limit=50`,
+          { silent: true },
+        );
+        setItems(data?.items ?? []);
+      } catch { /* ignore */ }
+      setLoading(false);
+    })();
+  }, [agentId]);
+
+  if (loading) return <p className="text-sm text-muted-foreground">Loading activity...</p>;
+  if (items.length === 0) return <p className="text-sm text-muted-foreground">No activity recorded for this agent yet.</p>;
+
+  return (
+    <div className="space-y-1">
+      {items.map((item) => {
+        const isCompleted = item.activityType === "task_completed";
+        const durationMs = (item.metadata as Record<string, unknown>)?.durationMs as number | undefined;
+        const costUsd = (item.metadata as Record<string, unknown>)?.costUsd as number | undefined;
+        return (
+          <div key={item.id} className="flex items-start gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/30 transition-colors">
+            <span className="text-base shrink-0 mt-0.5">{isCompleted ? "\u2705" : "\u23F3"}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm">{item.title}</p>
+              {item.detail && <p className="text-xs text-muted-foreground">{item.detail}</p>}
+              <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground/60">
+                {durationMs != null && <span>{Math.round(durationMs / 1000)}s</span>}
+                {costUsd != null && <span>${costUsd.toFixed(4)}</span>}
+                <span>{new Date(item.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

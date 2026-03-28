@@ -76,7 +76,7 @@ export function MobileBottomNav() {
   const activeAccount = useAccountStore((s) => s.accounts.find((a) => a.id === s.activeAccountId));
 
   const personalItems = [
-    { id: "friends", icon: UserPlus, label: t("nav.friends"), href: "/friends" },
+    { id: "agents", icon: Bot, label: t("nav.agents"), href: "/agents" },
     { id: "skills", icon: Zap, label: t("nav.skills"), href: "/skills" },
     { id: "spaces", icon: Globe, label: t("nav.spaces"), href: "/spaces" },
     { id: "stickers", icon: Smile, label: t("nav.stickers"), href: "/stickers" },
@@ -297,29 +297,36 @@ export function MobileBottomNav() {
           </button>
         </div>
 
-        {/* Agents / Subscribers / Fans */}
+        {/* Friends / Subscribers / Fans */}
         <div className="relative">
           {activeAccount?.type === "official" ? (
             <NavButton
               iconId="subscribers"
               label={t("nav.subscribers")}
-              active={activeId === "agents"}
+              active={activeId === "friends"}
               onClick={() => router.push(`/official/${activeAccount.id}/subscribers`)}
             />
           ) : activeAccount?.type === "lounge" ? (
             <NavButton
-              iconId="agents"
+              iconId="friends"
               label={t("nav.fans")}
-              active={activeId === "agents"}
+              active={activeId === "friends"}
               onClick={() => router.push(`/lounge/${activeAccount.id}/fans`)}
             />
           ) : (
-            <NavButton
-              iconId="agents"
-              label={t("nav.agents")}
-              active={activeId === "agents"}
-              onClick={() => router.push("/agents")}
-            />
+            <>
+              <NavButton
+                iconId="friends"
+                label={t("nav.friends")}
+                active={activeId === "friends"}
+                onClick={() => router.push("/friends")}
+              />
+              {pendingRequestCount > 0 && (
+                <span className="absolute -top-0.5 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-medium text-white">
+                  {pendingRequestCount}
+                </span>
+              )}
+            </>
           )}
         </div>
 
