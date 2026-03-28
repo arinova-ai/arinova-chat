@@ -107,7 +107,7 @@ export default function AgentsPage() {
         description: newDesc.trim() || undefined,
         a2aEndpoint: newA2a.trim() || undefined,
       });
-      setCreatedToken((agent as Record<string, unknown>).secretToken as string ?? null);
+      setCreatedToken((agent as unknown as Record<string, string>).secretToken ?? null);
       fetchAgents();
     } catch { addToast("Failed to create agent"); }
     setCreating(false);
