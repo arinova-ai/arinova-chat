@@ -828,8 +828,8 @@ async fn list_account_conversations(
         #[sqlx(rename = "type")]
         conv_type: Option<String>,
         user_id: String,
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
+        created_at: chrono::NaiveDateTime,
+        updated_at: chrono::NaiveDateTime,
     }
 
     let rows = sqlx::query_as::<_, ConversationRow>(
@@ -853,8 +853,8 @@ async fn list_account_conversations(
                         "title": r.title,
                         "type": r.conv_type,
                         "userId": r.user_id,
-                        "createdAt": r.created_at.to_rfc3339(),
-                        "updatedAt": r.updated_at.to_rfc3339(),
+                        "createdAt": r.created_at.and_utc().to_rfc3339(),
+                        "updatedAt": r.updated_at.and_utc().to_rfc3339(),
                     })
                 })
                 .collect();
