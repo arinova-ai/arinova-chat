@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  MessageSquare, Building2, Globe, Users, UserPlus, Wallet, Mic,
+  MessageSquare, Building2, Globe, Users, UserPlus, Bot, Wallet, Mic,
   Palette, Store, Settings, Smile, PenTool, Plus, X, Radio, BookOpen, Send, Zap,
   Brain, BookHeart, Eye, LayoutDashboard, type LucideIcon,
 } from "lucide-react";
@@ -20,6 +20,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   chat: MessageSquare,
   office: Building2,
   dashboard: LayoutDashboard,
+  agents: Bot,
   friends: UserPlus,
   subscribers: Users,
   settings: Settings,
@@ -64,6 +65,7 @@ export function MobileBottomNav() {
     if (pathname === "/" || pathname.startsWith("/chat")) return "chat";
     if (pathname.startsWith("/official") || pathname.startsWith("/lounge")) return "office";
     if (pathname.startsWith("/office")) return "office";
+    if (pathname.startsWith("/agents")) return "agents";
     if (pathname.startsWith("/friends")) return "friends";
     if (pathname.startsWith("/settings")) return "settings";
     return "chat";
@@ -74,6 +76,7 @@ export function MobileBottomNav() {
   const activeAccount = useAccountStore((s) => s.accounts.find((a) => a.id === s.activeAccountId));
 
   const personalItems = [
+    { id: "friends", icon: UserPlus, label: t("nav.friends"), href: "/friends" },
     { id: "skills", icon: Zap, label: t("nav.skills"), href: "/skills" },
     { id: "spaces", icon: Globe, label: t("nav.spaces"), href: "/spaces" },
     { id: "stickers", icon: Smile, label: t("nav.stickers"), href: "/stickers" },
@@ -288,36 +291,29 @@ export function MobileBottomNav() {
           </button>
         </div>
 
-        {/* Friends / Subscribers / Fans */}
+        {/* Agents / Subscribers / Fans */}
         <div className="relative">
           {activeAccount?.type === "official" ? (
             <NavButton
               iconId="subscribers"
               label={t("nav.subscribers")}
-              active={activeId === "friends"}
+              active={activeId === "agents"}
               onClick={() => router.push(`/official/${activeAccount.id}/subscribers`)}
             />
           ) : activeAccount?.type === "lounge" ? (
             <NavButton
-              iconId="friends"
+              iconId="agents"
               label={t("nav.fans")}
-              active={activeId === "friends"}
+              active={activeId === "agents"}
               onClick={() => router.push(`/lounge/${activeAccount.id}/fans`)}
             />
           ) : (
-            <>
-              <NavButton
-                iconId="friends"
-                label={t("nav.friends")}
-                active={activeId === "friends"}
-                onClick={() => router.push("/friends")}
-              />
-              {pendingRequestCount > 0 && (
-                <span className="absolute -top-0.5 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-medium text-white">
-                  {pendingRequestCount}
-                </span>
-              )}
-            </>
+            <NavButton
+              iconId="agents"
+              label={t("nav.agents")}
+              active={activeId === "agents"}
+              onClick={() => router.push("/agents")}
+            />
           )}
         </div>
 

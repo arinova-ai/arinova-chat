@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  MessageSquare, Building2, Globe, UserPlus,
+  MessageSquare, Building2, Globe, UserPlus, Bot,
   Palette, Users, Sparkles, Store, Wallet, Settings, Smile,
   LayoutDashboard, Plus, Mic, Check, Send, BookOpen, Brain,
   BookHeart, Eye, Scroll, type LucideIcon,
@@ -29,6 +29,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   spaces: Globe,
   stickers: Smile,
   creator: LayoutDashboard,
+  agents: Bot,
   friends: UserPlus,
   theme: Palette,
   community: Users,
@@ -151,6 +152,7 @@ export function IconRail() {
   const ALL_ITEMS: NavEntry[] = [
     { id: "chat", label: t("nav.chat"), href: "/" },
     { id: "office", label: t("nav.office"), href: "/office" },
+    { id: "agents", label: t("nav.agents"), href: "/agents" },
     { id: "friends", label: t("nav.friends"), href: "/friends" },
     { id: "community", label: t("nav.community"), href: "/community" },
     { id: "stickers", label: t("nav.stickers"), href: "/stickers" },

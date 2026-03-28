@@ -6,6 +6,7 @@ import { create } from "zustand";
 export const DEFAULT_NAV_IDS = [
   "chat",
   "office",
+  "agents",
   "friends",
   "community",
   "skills",
