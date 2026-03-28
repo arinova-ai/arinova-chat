@@ -261,14 +261,14 @@ async fn update_notebook(
     }
 
     // Verify ownership
-    let owner: Option<(String,)> =
-        sqlx::query_as("SELECT owner_id FROM notebooks WHERE id = $1")
+    let owner: Option<(String, bool)> =
+        sqlx::query_as("SELECT owner_id, is_default FROM notebooks WHERE id = $1")
             .bind(id)
             .fetch_optional(&state.db)
             .await
             .unwrap_or(None);
 
-    match owner {
+    match &owner {
         None => {
             return (
                 StatusCode::NOT_FOUND,
@@ -276,7 +276,7 @@ async fn update_notebook(
             )
                 .into_response()
         }
-        Some((oid,)) if oid != user.id => {
+        Some((oid, _)) if *oid != user.id => {
             return (
                 StatusCode::FORBIDDEN,
                 Json(json!({"error": "Not authorized"})),
@@ -284,6 +284,17 @@ async fn update_notebook(
                 .into_response()
         }
         _ => {}
+    }
+
+    // Prevent archiving the default notebook
+    if let Some((_, true)) = &owner {
+        if body.archived == Some(true) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Cannot archive the default notebook"})),
+            )
+                .into_response();
+        }
     }
 
     if let Some(ref name) = body.name {
