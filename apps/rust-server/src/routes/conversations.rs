@@ -25,6 +25,7 @@ pub fn router() -> Router<AppState> {
             "/api/conversations/{id}",
             get(get_conversation)
                 .put(update_conversation)
+                .patch(update_conversation)
                 .delete(delete_conversation),
         )
         .route(
@@ -63,6 +64,8 @@ struct UpdateConversationBody {
     pinned: Option<bool>,
     #[serde(rename = "mentionOnly")]
     mention_only: Option<bool>,
+    #[serde(rename = "avatarUrl")]
+    avatar_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -772,18 +775,21 @@ async fn update_conversation(
                 ELSE pinned_at
             END,
             mention_only = CASE WHEN $7::boolean THEN $8 ELSE mention_only END,
+            avatar_url = CASE WHEN $9::boolean THEN $10 ELSE avatar_url END,
             updated_at = NOW()
            WHERE id = $1 AND user_id = $2
            RETURNING *"#,
     )
     .bind(id)
     .bind(&user.id)
-    .bind(body.title.is_some())    // $3: whether title was provided
-    .bind(&body.title)             // $4: the new title value
-    .bind(body.pinned.is_some())   // $5: whether pinned was provided
-    .bind(body.pinned.unwrap_or(false)) // $6: the pinned value
-    .bind(body.mention_only.is_some()) // $7: whether mention_only was provided
-    .bind(body.mention_only.unwrap_or(true)) // $8: the mention_only value
+    .bind(body.title.is_some())    // $3
+    .bind(&body.title)             // $4
+    .bind(body.pinned.is_some())   // $5
+    .bind(body.pinned.unwrap_or(false)) // $6
+    .bind(body.mention_only.is_some()) // $7
+    .bind(body.mention_only.unwrap_or(true)) // $8
+    .bind(body.avatar_url.is_some()) // $9
+    .bind(&body.avatar_url)        // $10
     .fetch_optional(&state.db)
     .await;
 

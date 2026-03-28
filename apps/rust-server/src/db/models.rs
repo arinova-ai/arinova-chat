@@ -190,6 +190,8 @@ pub struct Conversation {
     #[serde(rename = "mentionOnly")]
     pub mention_only: bool,
     pub pinned_at: Option<NaiveDateTime>,
+    #[serde(rename = "avatarUrl")]
+    pub avatar_url: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
