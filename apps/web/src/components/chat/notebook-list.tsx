@@ -514,7 +514,16 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                 >
                   <BookOpen className="h-4 w-4 text-muted-foreground mr-2.5 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate flex items-center gap-1">
+                    <div
+                      className="text-sm font-medium truncate flex items-center gap-1"
+                      onDoubleClick={(e) => {
+                        if (!nb.isDefault) {
+                          e.stopPropagation();
+                          setEditingId(nb.id);
+                          setEditName(nb.name);
+                        }
+                      }}
+                    >
                       {nb.name}
                       {nb.isDefault && (
                         <span className="text-[10px] text-muted-foreground font-normal">
