@@ -297,6 +297,11 @@ export function ConversationItem({
                 )}
               </AvatarFallback>
             </Avatar>
+            {type === "h2a" && (
+              <span className="absolute -bottom-0.5 -left-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 border border-card">
+                <Bot className="h-2.5 w-2.5 text-white" />
+              </span>
+            )}
             {isOnline && (
               <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card bg-green-500" />
             )}
@@ -430,6 +435,11 @@ export function ConversationItem({
                 )}
               </AvatarFallback>
             </Avatar>
+            {type === "h2a" && (
+              <span className="absolute -bottom-0.5 -left-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-blue-600 border border-card">
+                <Bot className="h-3 w-3 text-white" />
+              </span>
+            )}
             {isOnline && (
               <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-green-500" />
             )}
