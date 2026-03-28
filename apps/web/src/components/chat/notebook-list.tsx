@@ -937,7 +937,7 @@ function NotebookNotes({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-w-[260px]">
-                {notebooks.map((nb) => (
+                {notebooks.filter((nb) => !nb.archived).map((nb) => (
                   <DropdownMenuItem
                     key={nb.id}
                     onClick={() => onSwitchNotebook(nb)}
@@ -953,6 +953,30 @@ function NotebookNotes({
                     <span className="shrink-0 text-[10px] text-muted-foreground">{nb.noteCount}</span>
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => {
+                  const newName = prompt("Rename notebook:", notebook.name);
+                  if (newName && newName.trim() && newName.trim() !== notebook.name) {
+                    api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ name: newName.trim() }) })
+                      .then(() => onRefresh()).catch(() => {});
+                  }
+                }}>
+                  <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                  {t("notebooks.rename")}
+                </DropdownMenuItem>
+                {!notebook.isDefault && (
+                  <DropdownMenuItem onClick={async () => {
+                    try {
+                      await api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+                      onRefresh();
+                      const available = notebooks.filter((nb) => nb.id !== notebook.id && !nb.archived);
+                      if (available.length > 0) onSwitchNotebook(available[0]);
+                    } catch {}
+                  }}>
+                    <Archive className="h-3.5 w-3.5 mr-1.5" />
+                    Archive
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onCreateNotebook}>
                   <Plus className="h-3.5 w-3.5 mr-1.5" />
