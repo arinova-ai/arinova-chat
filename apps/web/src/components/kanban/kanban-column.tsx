@@ -70,6 +70,10 @@ export function FullColumn({
   onMoveCard,
   onRenameColumn,
   onDeleteColumn,
+  columnIndex,
+  totalColumns,
+  onMoveColumnLeft,
+  onMoveColumnRight,
 }: {
   column: KanbanColumn;
   cards: KanbanCard[];
