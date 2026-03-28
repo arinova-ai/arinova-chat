@@ -12,6 +12,7 @@ const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8")
 import { registerMessageCommands } from "./commands/message.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerNoteCommands } from "./commands/note.js";
+import { registerNotebookCommands } from "./commands/notebook.js";
 import { registerMemoryCommands } from "./commands/memory.js";
 import { registerKanbanCommands } from "./commands/kanban.js";
 import { registerAuth } from "./commands/auth.js";
@@ -55,6 +56,7 @@ program
 registerMessageCommands(program);
 registerFileCommands(program);
 registerNoteCommands(program);
+registerNotebookCommands(program);
 registerMemoryCommands(program);
 registerKanbanCommands(program);
 registerConversation(program);
