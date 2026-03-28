@@ -2,7 +2,7 @@
 
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDownAZ, ArrowUpAZ, Check, GripVertical, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Check, ChevronLeft, ChevronRight, GripVertical, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -86,6 +86,10 @@ export function FullColumn({
   onMoveCard?: (cardId: string, targetColumnId: string) => void;
   onRenameColumn?: (columnId: string, name: string) => void;
   onDeleteColumn?: (columnId: string) => void;
+  columnIndex?: number;
+  totalColumns?: number;
+  onMoveColumnLeft?: (columnId: string) => void;
+  onMoveColumnRight?: (columnId: string) => void;
 }) {
   const { t } = useTranslation();
   const sortStorageKey = `kanban-sort-${column.id}`;
@@ -136,6 +140,16 @@ export function FullColumn({
       {/* Column header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
         <div className="flex items-center gap-2 flex-1 min-w-0">
+          {/* Mobile: left arrow (hidden for first column) */}
+          {columnIndex != null && columnIndex > 0 && onMoveColumnLeft && (
+            <button
+              type="button"
+              onClick={() => onMoveColumnLeft(column.id)}
+              className="md:hidden shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
           {editMode && (
             <button
               type="button"
@@ -169,6 +183,16 @@ export function FullColumn({
             {cards.length}
           </span>
         </div>
+        {/* Mobile: right arrow (hidden for last column) */}
+        {columnIndex != null && totalColumns != null && columnIndex < totalColumns - 1 && onMoveColumnRight && (
+          <button
+            type="button"
+            onClick={() => onMoveColumnRight(column.id)}
+            className="md:hidden shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
         <div className="flex items-center gap-0.5 shrink-0">
           {editMode && (
             <DropdownMenu>

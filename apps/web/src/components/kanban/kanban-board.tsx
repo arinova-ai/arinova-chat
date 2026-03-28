@@ -945,7 +945,23 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
 
   // ── Render columns ────────────────────────────────────
 
-  const columnItems = columns.map((col) => {
+  const handleMoveColumnDirection = useCallback(async (columnId: string, direction: "left" | "right") => {
+    const idx = columns.findIndex((c) => c.id === columnId);
+    if (idx < 0) return;
+    const swapIdx = direction === "left" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= columns.length) return;
+    const reordered = [...columns];
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+    setBoard((prev) => prev ? { ...prev, columns: reordered.map((col, i) => ({ ...col, sortOrder: i })) } : prev);
+    try {
+      await api(`/api/kanban/boards/${board!.id}/columns/reorder`, {
+        method: "POST", body: JSON.stringify({ columnIds: reordered.map((c) => c.id) }), silent: true,
+      });
+    } catch { /* ignore */ }
+    fetchBoard(board!.id);
+  }, [columns, board, fetchBoard]);
+
+  const columnItems = columns.map((col, idx) => {
     const colCards = cardsByColumn.get(col.id) ?? [];
 
     return (
@@ -966,6 +982,10 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
         onMoveCard={handleMoveCard}
         onRenameColumn={handleRenameColumn}
         onDeleteColumn={handleDeleteColumn}
+        columnIndex={idx}
+        totalColumns={columns.length}
+        onMoveColumnLeft={(id) => handleMoveColumnDirection(id, "left")}
+        onMoveColumnRight={(id) => handleMoveColumnDirection(id, "right")}
       />
     );
   });
