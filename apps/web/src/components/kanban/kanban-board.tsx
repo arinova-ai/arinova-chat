@@ -1367,7 +1367,8 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             onDeleteBoard={async (id) => {
               try {
                 await api(`/api/kanban/boards/${id}`, { method: "DELETE" });
-                fetchBoard(board.id);
+                setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
+                if (id === board.id) fetchBoards();
               } catch { /* ignore */ }
             }}
           />

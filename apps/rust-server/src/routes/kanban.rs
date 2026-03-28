@@ -1017,63 +1017,37 @@ async fn delete_board(
         return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Board must be archived before deleting" }))).into_response();
     }
 
-    // Cascade delete: card_notes, card_labels, card_agents, card_commits, cards, columns, board_labels, board
-    // Get all column IDs
-    let col_ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>(
-        "SELECT id FROM kanban_columns WHERE board_id = $1",
-    )
-    .bind(board_id)
-    .fetch_all(&state.db)
-    .await
-    .unwrap_or_default()
-    .into_iter()
-    .map(|(id,)| id)
-    .collect();
+    // Cascade delete in a transaction
+    let mut tx = match state.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    // Get column IDs → card IDs for cascade
+    let col_ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT id FROM kanban_columns WHERE board_id = $1")
+        .bind(board_id).fetch_all(&mut *tx).await.unwrap_or_default().into_iter().map(|(id,)| id).collect();
 
     if !col_ids.is_empty() {
-        // Get all card IDs
-        let card_ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>(
-            "SELECT id FROM kanban_cards WHERE column_id = ANY($1)",
-        )
-        .bind(&col_ids)
-        .fetch_all(&state.db)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(id,)| id)
-        .collect();
+        let card_ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT id FROM kanban_cards WHERE column_id = ANY($1)")
+            .bind(&col_ids).fetch_all(&mut *tx).await.unwrap_or_default().into_iter().map(|(id,)| id).collect();
 
         if !card_ids.is_empty() {
-            // Delete card associations (not the notes themselves)
-            let _ = sqlx::query("DELETE FROM kanban_card_notes WHERE card_id = ANY($1)")
-                .bind(&card_ids).execute(&state.db).await;
-            let _ = sqlx::query("DELETE FROM kanban_card_labels WHERE card_id = ANY($1)")
-                .bind(&card_ids).execute(&state.db).await;
-            let _ = sqlx::query("DELETE FROM kanban_card_agents WHERE card_id = ANY($1)")
-                .bind(&card_ids).execute(&state.db).await;
-            let _ = sqlx::query("DELETE FROM kanban_card_commits WHERE card_id = ANY($1)")
-                .bind(&card_ids).execute(&state.db).await;
-            // Delete cards
-            let _ = sqlx::query("DELETE FROM kanban_cards WHERE column_id = ANY($1)")
-                .bind(&col_ids).execute(&state.db).await;
+            sqlx::query("DELETE FROM kanban_card_notes WHERE card_id = ANY($1)").bind(&card_ids).execute(&mut *tx).await.ok();
+            sqlx::query("DELETE FROM kanban_card_labels WHERE card_id = ANY($1)").bind(&card_ids).execute(&mut *tx).await.ok();
+            sqlx::query("DELETE FROM kanban_card_agents WHERE card_id = ANY($1)").bind(&card_ids).execute(&mut *tx).await.ok();
+            sqlx::query("DELETE FROM kanban_card_commits WHERE card_id = ANY($1)").bind(&card_ids).execute(&mut *tx).await.ok();
+            sqlx::query("DELETE FROM kanban_cards WHERE column_id = ANY($1)").bind(&col_ids).execute(&mut *tx).await.ok();
         }
-
-        // Delete columns
-        let _ = sqlx::query("DELETE FROM kanban_columns WHERE board_id = $1")
-            .bind(board_id).execute(&state.db).await;
+        sqlx::query("DELETE FROM kanban_columns WHERE board_id = $1").bind(board_id).execute(&mut *tx).await.ok();
     }
 
-    // Delete labels
-    let _ = sqlx::query("DELETE FROM kanban_labels WHERE board_id = $1")
-        .bind(board_id).execute(&state.db).await;
+    sqlx::query("DELETE FROM kanban_labels WHERE board_id = $1").bind(board_id).execute(&mut *tx).await.ok();
+    sqlx::query("UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1").bind(board_id).execute(&mut *tx).await.ok();
+    sqlx::query("DELETE FROM kanban_boards WHERE id = $1").bind(board_id).execute(&mut *tx).await.ok();
 
-    // Clear conversation settings references
-    let _ = sqlx::query("UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1")
-        .bind(board_id).execute(&state.db).await;
-
-    // Delete the board
-    let _ = sqlx::query("DELETE FROM kanban_boards WHERE id = $1")
-        .bind(board_id).execute(&state.db).await;
+    if let Err(e) = tx.commit().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response();
+    }
 
     Json(json!({ "ok": true })).into_response()
 }
@@ -1532,8 +1506,7 @@ async fn update_card(
     let resolved_column_id = if body.column_id.is_some() {
         body.column_id
     } else if let Some(ref col_name) = body.column_name {
-        // Look up column by name in the same board as the card
-        sqlx::query_scalar::<_, Uuid>(
+        let found = sqlx::query_scalar::<_, Uuid>(
             r#"SELECT col.id FROM kanban_columns col
                JOIN kanban_cards c ON c.id = $1
                JOIN kanban_columns cur ON cur.id = c.column_id
@@ -1545,7 +1518,11 @@ async fn update_card(
         .fetch_optional(&state.db)
         .await
         .ok()
-        .flatten()
+        .flatten();
+        if found.is_none() {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": format!("Column '{}' not found", col_name) }))).into_response();
+        }
+        found
     } else {
         None
     };
