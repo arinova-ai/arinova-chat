@@ -17,6 +17,17 @@ interface AgentItem {
   isPublic: boolean;
   category: string | null;
   createdAt: string;
+  source: "agent" | "listing";
+}
+
+interface ListingItem {
+  id: string;
+  agentName: string;
+  description: string | null;
+  avatarUrl: string | null;
+  category: string | null;
+  status: string;
+  createdAt: string;
 }
 
 export default function AgentsPage() {
@@ -28,10 +39,40 @@ export default function AgentsPage() {
   const addToast = useToastStore((s) => s.addToast);
 
   const fetchAgents = useCallback(async () => {
-    try {
-      const data = await api<AgentItem[]>("/api/agents", { silent: true });
-      setAgents(data ?? []);
-    } catch { /* ignore */ }
+    const [agentsRes, listingsRes] = await Promise.allSettled([
+      api<AgentItem[]>("/api/agents", { silent: true }),
+      api<{ listings: ListingItem[] }>("/api/agent-hub/manage", { silent: true }),
+    ]);
+
+    const items: AgentItem[] = [];
+    const seenIds = new Set<string>();
+
+    // Agents from /api/agents
+    if (agentsRes.status === "fulfilled" && agentsRes.value) {
+      for (const a of agentsRes.value) {
+        items.push({ ...a, source: "agent" });
+        seenIds.add(a.id);
+      }
+    }
+
+    // Listings from /api/agent-hub/manage (creator console agents)
+    if (listingsRes.status === "fulfilled" && listingsRes.value?.listings) {
+      for (const l of listingsRes.value.listings) {
+        if (seenIds.has(l.id)) continue;
+        items.push({
+          id: l.id,
+          name: l.agentName,
+          description: l.description,
+          avatarUrl: l.avatarUrl,
+          isPublic: l.status === "active",
+          category: l.category,
+          createdAt: l.createdAt,
+          source: "listing",
+        });
+      }
+    }
+
+    setAgents(items);
     setLoading(false);
   }, []);
 
@@ -48,7 +89,11 @@ export default function AgentsPage() {
   const deleteSelected = async () => {
     if (!confirm(`Delete ${selected.size} agent(s)? This cannot be undone.`)) return;
     const results = await Promise.allSettled(
-      [...selected].map((id) => api(`/api/agents/${id}`, { method: "DELETE" })),
+      [...selected].map((id) => {
+        const agent = agents.find((a) => a.id === id);
+        const endpoint = agent?.source === "listing" ? `/api/agent-hub/agents/${id}` : `/api/agents/${id}`;
+        return api(endpoint, { method: "DELETE" });
+      }),
     );
     const succeeded = results.filter((r) => r.status === "fulfilled").length;
     setSelected(new Set());
@@ -141,7 +186,10 @@ export default function AgentsPage() {
                 <div className="flex gap-1 shrink-0">
                   <button
                     type="button"
-                    onClick={() => router.push(`/agent/${agent.id}`)}
+                    onClick={() => {
+                      if (agent.source === "listing") router.push(`/agent-hub/chat/${agent.id}`);
+                      else router.push(`/agent/${agent.id}`);
+                    }}
                     className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     title="Chat"
                   >
@@ -149,7 +197,10 @@ export default function AgentsPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => router.push(`/agents/${agent.id}`)}
+                    onClick={() => {
+                      if (agent.source === "listing") router.push(`/creator/${agent.id}/edit`);
+                      else router.push(`/agents/${agent.id}`);
+                    }}
                     className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     title="Manage"
                   >
