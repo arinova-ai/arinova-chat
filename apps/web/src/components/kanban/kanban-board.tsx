@@ -1064,7 +1064,6 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
           <p className="text-[10px] text-muted-foreground mt-0.5">{t("kanban.autoArchiveDaysDesc")}</p>
         </div>
       </RenameDialog>
-      </Dialog>
 
       {/* Archive Board Dialog */}
       <Dialog open={archiveBoardConfirm} onOpenChange={setArchiveBoardConfirm}>
