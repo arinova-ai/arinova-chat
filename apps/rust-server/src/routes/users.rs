@@ -185,11 +185,18 @@ async fn search_users(
 
     match results {
         Ok(rows) => {
-            if rows.is_empty() {
-                // Increment miss counter with 5-minute TTL
-                if let Ok(mut conn) = state.redis.get().await {
-                    let _: Result<(), _> = conn.incr(&rl_key, 1i64).await;
-                    let _: Result<(), _> = conn.expire(&rl_key, 300).await;
+            if let Ok(mut conn) = state.redis.get().await {
+                if rows.is_empty() {
+                    // Atomic INCR + EXPIRE via pipeline
+                    let _: Result<(), _> = redis::pipe()
+                        .atomic()
+                        .incr(&rl_key, 1i64)
+                        .expire(&rl_key, 300)
+                        .query_async(&mut conn)
+                        .await;
+                } else {
+                    // Success — reset counter
+                    let _: Result<(), _> = conn.del(&rl_key).await;
                 }
             }
 

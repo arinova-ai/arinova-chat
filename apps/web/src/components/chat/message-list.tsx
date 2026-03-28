@@ -531,7 +531,15 @@ function SystemMessage({ content }: { content: string }) {
   try {
     const parsed = JSON.parse(content) as { key?: string; params?: Record<string, string> };
     if (parsed.key) {
-      text = t(parsed.key, parsed.params);
+      const translated = t(parsed.key, parsed.params);
+      if (translated !== parsed.key) {
+        text = translated;
+      } else {
+        // Key not found in locale — build readable fallback from params
+        const name = parsed.params?.name ?? "";
+        const action = parsed.key.split(".").pop() ?? "";
+        text = name ? `${name} — ${action}` : action;
+      }
     }
   } catch {
     // Not JSON — display as plain text (backward compat)

@@ -1417,6 +1417,18 @@ async fn leave(
         _ => {}
     }
 
+    // Fetch display name BEFORE deleting the member (so it's still available)
+    let leave_display_name = sqlx::query_scalar::<_, String>(
+        "SELECT COALESCE(display_name, '') FROM community_members WHERE community_id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(&user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or_default();
+
     let mut tx = match state.db.begin().await {
         Ok(tx) => tx,
         Err(e) => {
@@ -1487,24 +1499,16 @@ async fn leave(
 
     // Insert system message after successful leave
     if let Some(cid) = conv_id {
-        // Get anonymous display name for the leaving user
-        let display_name = sqlx::query_scalar::<_, String>(
-            "SELECT COALESCE(display_name, 'Someone') FROM community_members WHERE community_id = $1 AND user_id = $2",
-        )
-        .bind(id)
-        .bind(&user.id)
-        .fetch_optional(&state.db)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| {
-            // Member already deleted; generate anon hash
+        // Use pre-fetched display name, fallback to anon hash
+        let display_name = if leave_display_name.is_empty() {
             use sha2::{Sha256, Digest};
             let mut hasher = Sha256::new();
             hasher.update(cid.to_string().as_bytes());
             hasher.update(user.id.as_bytes());
             format!("anon-{}", hex::encode(&hasher.finalize()[..8]))
-        });
+        } else {
+            leave_display_name
+        };
 
         let content = serde_json::to_string(&json!({"key": "system.leftCommunity", "params": {"name": display_name}})).unwrap();
         // Re-use groups' system message pattern
