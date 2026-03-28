@@ -24,6 +24,17 @@ export function registerKanbanCommands(program: Command): void {
     const { token, apiUrl } = getOpts(board);
     output(await apiCall({ method: "POST", url: `${apiUrl}/api/v1/kanban/boards/${opts.boardId}/archive`, token }));
   });
+  board.command("delete").requiredOption("--board-id <id>", "Board ID").description("Delete an archived board (must be archived first)").action(async (opts: { boardId: string }) => {
+    const { token, apiUrl } = getOpts(board);
+    output(await apiCall({ method: "DELETE", url: `${apiUrl}/api/v1/kanban/boards/${opts.boardId}`, token }));
+  });
+
+  // Column commands
+  const column = kanban.command("column").description("Column management");
+  column.command("list").requiredOption("--board-id <id>", "Board ID").action(async (opts: { boardId: string }) => {
+    const { token, apiUrl } = getOpts(column);
+    output(await apiCall({ method: "GET", url: `${apiUrl}/api/v1/kanban/boards/${opts.boardId}/columns`, token }));
+  });
 
   // Card commands
   const card = kanban.command("card").description("Card management");
@@ -47,6 +58,10 @@ export function registerKanbanCommands(program: Command): void {
   card.command("delete").requiredOption("--card-id <id>", "Card ID").action(async (opts: { cardId: string }) => {
     const { token, apiUrl } = getOpts(card);
     output(await apiCall({ method: "DELETE", url: `${apiUrl}/api/v1/kanban/cards/${opts.cardId}`, token }));
+  });
+  card.command("move").requiredOption("--card-id <id>", "Card ID").requiredOption("--column-name <name>", "Target column name").action(async (opts: { cardId: string; columnName: string }) => {
+    const { token, apiUrl } = getOpts(card);
+    output(await apiCall({ method: "PATCH", url: `${apiUrl}/api/v1/kanban/cards/${opts.cardId}`, token, body: { columnName: opts.columnName } }));
   });
   card.command("add-commit").requiredOption("--card-id <id>", "Card ID").requiredOption("--sha <sha>", "Commit SHA").requiredOption("--message <msg>", "Commit message").option("--url <url>", "Commit URL").action(async (opts: { cardId: string; sha: string; message: string; url?: string }) => {
     const { token, apiUrl } = getOpts(card);

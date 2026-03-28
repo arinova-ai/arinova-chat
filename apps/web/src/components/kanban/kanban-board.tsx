@@ -1364,6 +1364,12 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
             onUnarchived={() => fetchBoard(board.id)}
             archivedBoards={archivedBoards}
             onUnarchiveBoard={handleUnarchiveBoard}
+            onDeleteBoard={async (id) => {
+              try {
+                await api(`/api/kanban/boards/${id}`, { method: "DELETE" });
+                fetchBoard(board.id);
+              } catch { /* ignore */ }
+            }}
           />
         )}
 

@@ -30,7 +30,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         // User API
         .route("/api/kanban/boards", get(list_boards).post(create_board))
-        .route("/api/kanban/boards/{id}", get(get_board).patch(update_board))
+        .route("/api/kanban/boards/{id}", get(get_board).patch(update_board).delete(delete_board))
         .route("/api/kanban/boards/{id}/archive", post(archive_board))
         .route("/api/kanban/boards/{id}/columns", get(list_columns).post(create_column))
         .route("/api/kanban/columns/{id}", patch(update_column).delete(delete_column))
@@ -264,12 +264,13 @@ struct CreateCardBody {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct UpdateCardBody {
     title: Option<String>,
     description: Option<String>,
     priority: Option<String>,
     column_id: Option<Uuid>,
+    column_name: Option<String>,
     sort_order: Option<i32>,
 }
 
@@ -279,6 +280,7 @@ impl UpdateCardBody {
             && self.description.is_none()
             && self.priority.is_none()
             && self.column_id.is_none()
+            && self.column_name.is_none()
             && self.sort_order.is_none()
     }
 }
@@ -991,6 +993,91 @@ async fn archive_board(
     Json(json!({ "ok": true, "archived": new_archived })).into_response()
 }
 
+/// DELETE /api/kanban/boards/:id — Delete board (must be archived first)
+/// Cascade: columns, cards, labels, card_notes (but not notes themselves)
+async fn delete_board(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(board_id): Path<Uuid>,
+) -> Response {
+    if let Err(e) = verify_board_owner(&state.db, board_id, &user.id).await {
+        return e;
+    }
+
+    // Must be archived to delete
+    let archived = sqlx::query_scalar::<_, bool>(
+        "SELECT archived FROM kanban_boards WHERE id = $1",
+    )
+    .bind(board_id)
+    .fetch_one(&state.db)
+    .await
+    .unwrap_or(false);
+
+    if !archived {
+        return (StatusCode::BAD_REQUEST, Json(json!({ "error": "Board must be archived before deleting" }))).into_response();
+    }
+
+    // Cascade delete: card_notes, card_labels, card_agents, card_commits, cards, columns, board_labels, board
+    // Get all column IDs
+    let col_ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT id FROM kanban_columns WHERE board_id = $1",
+    )
+    .bind(board_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|(id,)| id)
+    .collect();
+
+    if !col_ids.is_empty() {
+        // Get all card IDs
+        let card_ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>(
+            "SELECT id FROM kanban_cards WHERE column_id = ANY($1)",
+        )
+        .bind(&col_ids)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(id,)| id)
+        .collect();
+
+        if !card_ids.is_empty() {
+            // Delete card associations (not the notes themselves)
+            let _ = sqlx::query("DELETE FROM kanban_card_notes WHERE card_id = ANY($1)")
+                .bind(&card_ids).execute(&state.db).await;
+            let _ = sqlx::query("DELETE FROM kanban_card_labels WHERE card_id = ANY($1)")
+                .bind(&card_ids).execute(&state.db).await;
+            let _ = sqlx::query("DELETE FROM kanban_card_agents WHERE card_id = ANY($1)")
+                .bind(&card_ids).execute(&state.db).await;
+            let _ = sqlx::query("DELETE FROM kanban_card_commits WHERE card_id = ANY($1)")
+                .bind(&card_ids).execute(&state.db).await;
+            // Delete cards
+            let _ = sqlx::query("DELETE FROM kanban_cards WHERE column_id = ANY($1)")
+                .bind(&col_ids).execute(&state.db).await;
+        }
+
+        // Delete columns
+        let _ = sqlx::query("DELETE FROM kanban_columns WHERE board_id = $1")
+            .bind(board_id).execute(&state.db).await;
+    }
+
+    // Delete labels
+    let _ = sqlx::query("DELETE FROM kanban_labels WHERE board_id = $1")
+        .bind(board_id).execute(&state.db).await;
+
+    // Clear conversation settings references
+    let _ = sqlx::query("UPDATE conversation_user_settings SET kanban_board_id = NULL WHERE kanban_board_id = $1")
+        .bind(board_id).execute(&state.db).await;
+
+    // Delete the board
+    let _ = sqlx::query("DELETE FROM kanban_boards WHERE id = $1")
+        .bind(board_id).execute(&state.db).await;
+
+    Json(json!({ "ok": true })).into_response()
+}
+
 /// GET /api/kanban/boards/:id/columns
 async fn list_columns(
     State(state): State<AppState>,
@@ -1441,8 +1528,30 @@ async fn update_card(
         return e;
     }
 
+    // Resolve column_name to column_id if provided
+    let resolved_column_id = if body.column_id.is_some() {
+        body.column_id
+    } else if let Some(ref col_name) = body.column_name {
+        // Look up column by name in the same board as the card
+        sqlx::query_scalar::<_, Uuid>(
+            r#"SELECT col.id FROM kanban_columns col
+               JOIN kanban_cards c ON c.id = $1
+               JOIN kanban_columns cur ON cur.id = c.column_id
+               WHERE col.board_id = cur.board_id AND LOWER(col.name) = LOWER($2)
+               LIMIT 1"#,
+        )
+        .bind(card_id)
+        .bind(col_name)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+
     // If moving to a different column, verify the target column belongs to the same board
-    if let Some(target_col) = body.column_id {
+    if let Some(target_col) = resolved_column_id {
         let same_board = sqlx::query_scalar::<_, bool>(
             r#"SELECT EXISTS(
                 SELECT 1 FROM kanban_columns target
@@ -1477,7 +1586,7 @@ async fn update_card(
     .bind(&body.title)
     .bind(&body.description)
     .bind(&body.priority)
-    .bind(body.column_id)
+    .bind(resolved_column_id)
     .bind(body.sort_order)
     .execute(&state.db)
     .await;
@@ -2566,7 +2675,7 @@ async fn agent_create_card(
         Some(id) => id,
         None => {
             // Try column_name lookup
-            let column_name = body.column_name.as_deref().unwrap_or("Backlog");
+            let column_name = body.column_name.as_deref().unwrap_or("To Do");
             let by_name = sqlx::query_scalar::<_, Uuid>(
                 "SELECT id FROM kanban_columns WHERE board_id = $1 AND name = $2 LIMIT 1",
             )
@@ -2674,6 +2783,27 @@ async fn agent_update_card(
         return e;
     }
 
+    // Resolve column_name to column_id if provided
+    let resolved_column_id = if body.column_id.is_some() {
+        body.column_id
+    } else if let Some(ref col_name) = body.column_name {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"SELECT col.id FROM kanban_columns col
+               JOIN kanban_cards c ON c.id = $1
+               JOIN kanban_columns cur ON cur.id = c.column_id
+               WHERE col.board_id = cur.board_id AND LOWER(col.name) = LOWER($2)
+               LIMIT 1"#,
+        )
+        .bind(card_id)
+        .bind(col_name)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+
     let result = sqlx::query(
         r#"UPDATE kanban_cards SET
              title = COALESCE($2, title),
@@ -2688,7 +2818,7 @@ async fn agent_update_card(
     .bind(&body.title)
     .bind(&body.description)
     .bind(&body.priority)
-    .bind(body.column_id)
+    .bind(resolved_column_id)
     .bind(body.sort_order)
     .execute(&state.db)
     .await;

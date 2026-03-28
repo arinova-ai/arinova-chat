@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Archive, ChevronLeft, ChevronRight, Clock, KanbanSquare, Loader2, RotateCcw } from "lucide-react";
+import { Archive, ChevronLeft, ChevronRight, Clock, KanbanSquare, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { PriorityBadge } from "./kanban-card";
 import { formatTime } from "./types";
@@ -43,9 +43,10 @@ interface ArchivedCardsSheetProps {
   onUnarchived: () => void;
   archivedBoards?: ArchivedBoard[];
   onUnarchiveBoard?: (boardId: string) => void;
+  onDeleteBoard?: (boardId: string) => void;
 }
 
-export function ArchivedCardsSheet({ open, boardId, onClose, onUnarchived, archivedBoards, onUnarchiveBoard }: ArchivedCardsSheetProps) {
+export function ArchivedCardsSheet({ open, boardId, onClose, onUnarchived, archivedBoards, onUnarchiveBoard, onDeleteBoard }: ArchivedCardsSheetProps) {
   const [data, setData] = useState<ArchivedResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -116,19 +117,35 @@ export function ArchivedCardsSheet({ open, boardId, onClose, onUnarchived, archi
                   className="rounded-lg border border-border bg-card p-3 flex items-center justify-between gap-2"
                 >
                   <p className="text-sm font-medium text-foreground truncate">{board.name}</p>
-                  <button
-                    type="button"
-                    onClick={() => handleUnarchiveBoard(board.id)}
-                    disabled={unarchivingBoardId === board.id}
-                    className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-brand-text hover:bg-brand/10 transition-colors disabled:opacity-50 shrink-0"
-                  >
-                    {unarchivingBoardId === board.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <RotateCcw className="h-3 w-3" />
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleUnarchiveBoard(board.id)}
+                      disabled={unarchivingBoardId === board.id}
+                      className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-brand-text hover:bg-brand/10 transition-colors disabled:opacity-50"
+                    >
+                      {unarchivingBoardId === board.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" />
+                      )}
+                      Unarchive
+                    </button>
+                    {onDeleteBoard && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Delete "${board.name}"? All columns, cards, and labels will be permanently removed.`)) {
+                            onDeleteBoard(board.id);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </button>
                     )}
-                    Unarchive
-                  </button>
+                  </div>
                 </div>
               ))}
             </div>
