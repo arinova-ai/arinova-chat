@@ -206,9 +206,7 @@ export default function AgentManagePage() {
         )}
 
         {tab === "skills" && (
-          <div className="text-sm text-muted-foreground">
-            <p>Manage installed skills from the <button type="button" onClick={() => router.push("/skills")} className="text-blue-400 hover:underline">Skills page</button>.</p>
-          </div>
+          <AgentSkillsTab agentId={agentId} />
         )}
 
         {/* Permissions tab removed — public/private concept removed */}
@@ -266,6 +264,78 @@ export default function AgentManagePage() {
 
       <MobileBottomNav />
       </div>
+    </div>
+  );
+}
+
+// ── Agent Skills Tab ────────────────────────────────────────────────────
+
+interface InstalledSkill {
+  id: string;
+  name: string;
+  description: string;
+  slashCommand: string | null;
+  category: string;
+  isOfficial: boolean;
+}
+
+function AgentSkillsTab({ agentId }: { agentId: string }) {
+  const [skills, setSkills] = useState<InstalledSkill[]>([]);
+  const [loading, setLoading] = useState(true);
+  const addToast = useToastStore((s) => s.addToast);
+  const router = useRouter();
+
+  const fetchSkills = useCallback(async () => {
+    try {
+      const data = await api<{ skills: InstalledSkill[] }>(
+        `/api/skills/installed?agentId=${agentId}`,
+        { silent: true },
+      );
+      setSkills(data?.skills ?? []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [agentId]);
+
+  useEffect(() => { fetchSkills(); }, [fetchSkills]);
+
+  const uninstall = async (skillId: string) => {
+    try {
+      await api(`/api/skills/${skillId}/uninstall?agentId=${agentId}`, { method: "DELETE" });
+      setSkills((prev) => prev.filter((s) => s.id !== skillId));
+      addToast("Skill uninstalled");
+    } catch { addToast("Failed to uninstall"); }
+  };
+
+  if (loading) return <p className="text-sm text-muted-foreground">Loading skills...</p>;
+
+  return (
+    <div className="space-y-3">
+      {skills.length === 0 ? (
+        <div className="text-sm text-muted-foreground">
+          <p>No skills installed.</p>
+          <button type="button" onClick={() => router.push("/skills")} className="text-blue-400 hover:underline mt-1">Browse Skills</button>
+        </div>
+      ) : (
+        <>
+          {skills.map((s) => (
+            <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{s.name}</p>
+                {s.slashCommand && (
+                  <p className="text-xs text-blue-400 font-mono">{s.slashCommand}</p>
+                )}
+                {s.description && (
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{s.description}</p>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => uninstall(s.id)} className="text-red-400 hover:text-red-300 shrink-0">
+                Uninstall
+              </Button>
+            </div>
+          ))}
+          <button type="button" onClick={() => router.push("/skills")} className="text-sm text-blue-400 hover:underline">+ Install more skills</button>
+        </>
+      )}
     </div>
   );
 }
