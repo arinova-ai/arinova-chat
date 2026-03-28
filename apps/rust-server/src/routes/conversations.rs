@@ -87,6 +87,7 @@ struct ConversationListRow {
     pinned_at: Option<NaiveDateTime>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
+    conv_avatar_url: Option<String>,
     // Agent fields
     agent_name: Option<String>,
     agent_description: Option<String>,
@@ -325,6 +326,7 @@ async fn list_conversations(
                 c.pinned_at,
                 c.created_at,
                 c.updated_at,
+                c.avatar_url AS conv_avatar_url,
                 a.name AS agent_name,
                 a.description AS agent_description,
                 a.avatar_url AS agent_avatar_url,
@@ -387,6 +389,7 @@ async fn list_conversations(
                 c.pinned_at,
                 c.created_at,
                 c.updated_at,
+                c.avatar_url AS conv_avatar_url,
                 a.name AS agent_name,
                 a.description AS agent_description,
                 a.avatar_url AS agent_avatar_url,
@@ -676,8 +679,10 @@ async fn list_conversations(
                 serde_json::Value::Null
             };
 
-            // Avatar: community → community.avatar_url; human DM → peer avatar; agent → agent avatar
-            let avatar_url = if row.conv_type == "community" {
+            // Avatar: group → conv avatar_url; community → community.avatar_url; human DM → peer avatar; agent → agent avatar
+            let avatar_url = if row.conv_type == "group" {
+                row.conv_avatar_url.clone().or_else(|| row.agent_avatar_url.clone())
+            } else if row.conv_type == "community" {
                 row.community_avatar_url.clone()
             } else if row.agent_id.is_none() {
                 peer_user_names.get(&row.id).and_then(|(_, _, img, _)| img.clone())
