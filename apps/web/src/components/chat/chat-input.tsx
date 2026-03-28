@@ -376,26 +376,30 @@ export function ChatInput({ droppedFiles, onDropHandled, stickerOpen, onStickerT
   const isMentionOnly =
     isGroupLike(activeConversation?.type) && activeConversation?.mentionOnly;
 
+  const isGroupConv = isGroupLike(activeConversation?.type);
+
   const mentionItems = useMemo((): MentionItem[] => {
     if (mentionQuery === null || activeMembers.length === 0) return [];
     const q = mentionQuery.toLowerCase();
 
-    // Add @all and @all_agents as special items
-    const allItem: MentionItem = { agentId: "__all__", agentName: "all" };
-    const allAgentsItem: MentionItem = { agentId: "__all_agents__", agentName: "all_agents" };
     const filtered = q
       ? activeMembers.filter((m) => m.agentName.toLowerCase().includes(q))
       : activeMembers;
 
+    // @all and @all_agents only in group/community conversations
     const specials: MentionItem[] = [];
-    if (!q || "all".includes(q)) specials.push(allItem);
-    if (!q || "all_agents".includes(q)) specials.push(allAgentsItem);
+    if (isGroupConv) {
+      const allItem: MentionItem = { agentId: "__all__", agentName: "all" };
+      const allAgentsItem: MentionItem = { agentId: "__all_agents__", agentName: "all_agents" };
+      if (!q || "all".includes(q)) specials.push(allItem);
+      if (!q || "all_agents".includes(q)) specials.push(allAgentsItem);
+    }
 
     if (isMentionOnly) {
       return [...specials, ...filtered];
     }
-    return [...(specials.length > 0 ? [allAgentsItem] : []), ...filtered];
-  }, [mentionQuery, activeMembers, isMentionOnly]);
+    return [...specials, ...filtered];
+  }, [mentionQuery, activeMembers, isMentionOnly, isGroupConv]);
 
   const showMentionPopup = mentionQuery !== null && mentionItems.length > 0;
 
@@ -989,7 +993,8 @@ case "tts": {
     let match;
     while ((match = mentionPattern.exec(trimmed)) !== null) {
       const name = match[1].toLowerCase();
-      if (name === "all") continue;
+      if (name === "all") { mentionIds.add("__all__"); continue; }
+      if (name === "all_agents") { mentionIds.add("__all_agents__"); continue; }
       const member = activeMembers.find(
         (m) => m.agentName.toLowerCase() === name,
       );
