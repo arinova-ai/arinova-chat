@@ -10,6 +10,8 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToastStore } from "@/store/toast-store";
+import { IconRail } from "@/components/chat/icon-rail";
+import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
 interface AgentDetail {
   id: string;
@@ -140,11 +142,22 @@ export default function AgentManagePage() {
     } catch { addToast("Failed to delete agent"); }
   };
 
-  if (loading) return <div className="flex h-full items-center justify-center text-muted-foreground">Loading...</div>;
-  if (!agent) return <div className="flex h-full items-center justify-center text-muted-foreground">Agent not found</div>;
+  if (loading || !agent) return (
+    <div className="app-dvh flex bg-background">
+      <div className="hidden h-full md:block"><IconRail /></div>
+      <div className="flex flex-1 flex-col min-w-0 items-center justify-center text-muted-foreground">
+        {loading ? "Loading..." : "Agent not found"}
+        <MobileBottomNav />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
+    <div className="app-dvh flex bg-background">
+      <div className="hidden h-full md:block">
+        <IconRail />
+      </div>
+      <div className="flex flex-1 flex-col min-w-0">
       {/* Header */}
       <div className="shrink-0 border-b border-border px-4 py-3 flex items-center gap-3">
         <button type="button" onClick={() => router.back()} className="p-1 hover:bg-muted rounded">
@@ -309,6 +322,9 @@ export default function AgentManagePage() {
             </Button>
           </div>
         )}
+      </div>
+
+      <MobileBottomNav />
       </div>
     </div>
   );

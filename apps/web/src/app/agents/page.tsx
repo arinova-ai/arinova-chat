@@ -8,6 +8,8 @@ import { useTranslation } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToastStore } from "@/store/toast-store";
+import { IconRail } from "@/components/chat/icon-rail";
+import { MobileBottomNav } from "@/components/chat/mobile-bottom-nav";
 
 interface AgentItem {
   id: string;
@@ -102,7 +104,11 @@ export default function AgentsPage() {
   };
 
   return (
-    <div className="flex h-full flex-col pt-[env(safe-area-inset-top,0px)]">
+    <div className="app-dvh flex bg-background">
+      <div className="hidden h-full md:block">
+        <IconRail />
+      </div>
+      <div className="flex flex-1 flex-col min-w-0">
       {/* Header */}
       <div className="shrink-0 border-b border-border px-4 py-3 flex items-center gap-3">
         <Bot className="h-5 w-5 text-muted-foreground" />
@@ -219,6 +225,9 @@ export default function AgentsPage() {
             ))}
           </div>
         )}
+      </div>
+
+      <MobileBottomNav />
       </div>
     </div>
   );
