@@ -48,6 +48,7 @@ interface Notebook {
   isDefault: boolean;
   sortOrder: number;
   includeInCapsule: boolean;
+  archived?: boolean;
   noteCount: number;
   createdAt: string;
   updatedAt: string;
@@ -484,7 +485,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
             {t("notebooks.empty")}
           </div>
         ) : (
-          notebooks.map((nb) => (
+          notebooks.filter((nb) => !nb.archived).map((nb) => (
             <div key={nb.id} className="group">
               {editingId === nb.id ? (
                 <div className="flex items-center gap-2 px-3 py-2">
@@ -514,16 +515,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                 >
                   <BookOpen className="h-4 w-4 text-muted-foreground mr-2.5 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div
-                      className="text-sm font-medium truncate flex items-center gap-1"
-                      onDoubleClick={(e) => {
-                        if (!nb.isDefault) {
-                          e.stopPropagation();
-                          setEditingId(nb.id);
-                          setEditName(nb.name);
-                        }
-                      }}
-                    >
+                    <div className="text-sm font-medium truncate flex items-center gap-1">
                       {nb.name}
                       {nb.isDefault && (
                         <span className="text-[10px] text-muted-foreground font-normal">
@@ -533,6 +525,33 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                       {nb.ownerUsername && nb.ownerId !== currentUserId && (
                         <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground font-normal">@{nb.ownerUsername}</span>
                       )}
+                      {/* Inline edit + archive buttons */}
+                      <span className={cn("inline-flex gap-0.5 ml-1", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
+                        <span
+                          role="button"
+                          onClick={(e) => { e.stopPropagation(); setEditingId(nb.id); setEditName(nb.name); }}
+                          className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </span>
+                        {!nb.isDefault && (
+                          <span
+                            role="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              (async () => {
+                                try {
+                                  await api(`/api/notebooks/${nb.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+                                  fetchNotebooks();
+                                } catch {}
+                              })();
+                            }}
+                            className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                          >
+                            <Archive className="h-3 w-3" />
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       {nb.noteCount} {t("notebooks.noteCount")}
@@ -657,20 +676,18 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         )}
                         </>
                       )}
-                      {!nb.isDefault && (
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingId(nb.id);
-                            setEditName(nb.name);
-                            setMenuOpenId(null);
-                          }}
-                        >
-                          <Pencil className="h-3 w-3" /> {t("notebooks.rename")}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(nb.id);
+                          setEditName(nb.name);
+                          setMenuOpenId(null);
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" /> {t("notebooks.rename")}
+                      </button>
                       {!nb.isDefault && (
                         <button
                           type="button"
@@ -690,6 +707,47 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
               )}
             </div>
           ))
+        )}
+
+        {/* Archived notebooks */}
+        {notebooks.filter((nb) => nb.archived).length > 0 && (
+          <div className="mt-3 border-t border-border pt-3">
+            <h3 className="text-xs font-medium text-muted-foreground px-3 mb-1 flex items-center gap-1">
+              <Archive className="h-3 w-3" />
+              Archived ({notebooks.filter((nb) => nb.archived).length})
+            </h3>
+            {notebooks.filter((nb) => nb.archived).map((nb) => (
+              <div key={nb.id} className="flex items-center gap-2 px-3 py-2 opacity-60">
+                <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-sm truncate flex-1">{nb.name}</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await api(`/api/notebooks/${nb.id}`, { method: "PATCH", body: JSON.stringify({ archived: false }) });
+                      fetchNotebooks();
+                    } catch {}
+                  }}
+                  className="text-[10px] text-brand-text hover:underline shrink-0"
+                >
+                  Unarchive
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!confirm(`Delete "${nb.name}"? Notes will be moved to your default notebook.`)) return;
+                    try {
+                      await api(`/api/notebooks/${nb.id}`, { method: "DELETE" });
+                      fetchNotebooks();
+                    } catch {}
+                  }}
+                  className="text-[10px] text-red-400 hover:underline shrink-0"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -50,6 +50,7 @@ struct NotebookRow {
     is_default: bool,
     sort_order: i32,
     include_in_capsule: bool,
+    archived: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     note_count: Option<i64>,
@@ -68,6 +69,7 @@ struct UpdateNotebookBody {
     name: Option<String>,
     sort_order: Option<i32>,
     include_in_capsule: Option<bool>,
+    archived: Option<bool>,
 }
 
 // ===== Helpers =====
@@ -123,6 +125,7 @@ fn notebook_to_json(row: &NotebookRow) -> serde_json::Value {
         "isDefault": row.is_default,
         "sortOrder": row.sort_order,
         "includeInCapsule": row.include_in_capsule,
+        "archived": row.archived,
         "noteCount": row.note_count.unwrap_or(0),
         "createdAt": row.created_at.to_rfc3339(),
         "updatedAt": row.updated_at.to_rfc3339(),
@@ -148,7 +151,7 @@ async fn list_notebooks(
 
     let rows = sqlx::query_as::<_, NotebookRow>(
         r#"
-        SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, n.created_at, n.updated_at,
+        SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, COALESCE(n.archived, false) AS archived, n.created_at, n.updated_at,
                (SELECT COUNT(*) FROM notes cn WHERE cn.notebook_id = n.id) AS note_count,
                u.username AS owner_username,
                'owner'::text AS permission
@@ -156,7 +159,7 @@ async fn list_notebooks(
         JOIN "user" u ON u.id = n.owner_id
         WHERE n.owner_id = $1
         UNION ALL
-        SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, n.created_at, n.updated_at,
+        SELECT n.id, n.owner_id, n.name, n.is_default, n.sort_order, n.include_in_capsule, COALESCE(n.archived, false) AS archived, n.created_at, n.updated_at,
                (SELECT COUNT(*) FROM notes cn WHERE cn.notebook_id = n.id) AS note_count,
                u.username AS owner_username,
                nm.permission
@@ -223,7 +226,7 @@ async fn create_notebook(
         r#"
         INSERT INTO notebooks (owner_id, name, sort_order)
         VALUES ($1, $2, $3)
-        RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count, NULL::text AS owner_username, 'owner'::text AS permission
+        RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, COALESCE(archived, false) AS archived, created_at, updated_at, 0::bigint AS note_count, NULL::text AS owner_username, 'owner'::text AS permission
         "#,
     )
     .bind(&user.id)
@@ -249,7 +252,7 @@ async fn update_notebook(
     Path(id): Path<Uuid>,
     Json(body): Json<UpdateNotebookBody>,
 ) -> Response {
-    if body.name.is_none() && body.sort_order.is_none() && body.include_in_capsule.is_none() {
+    if body.name.is_none() && body.sort_order.is_none() && body.include_in_capsule.is_none() && body.archived.is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({"error": "Nothing to update"})),
@@ -310,9 +313,13 @@ async fn update_notebook(
         sets.push(format!("include_in_capsule = ${idx}"));
         idx += 1;
     }
+    if body.archived.is_some() {
+        sets.push(format!("archived = ${idx}"));
+        idx += 1;
+    }
 
     let sql = format!(
-        "UPDATE notebooks SET {} WHERE id = ${} RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, created_at, updated_at, 0::bigint AS note_count, NULL::text AS owner_username, 'owner'::text AS permission",
+        "UPDATE notebooks SET {} WHERE id = ${} RETURNING id, owner_id, name, is_default, sort_order, include_in_capsule, COALESCE(archived, false) AS archived, created_at, updated_at, 0::bigint AS note_count, NULL::text AS owner_username, 'owner'::text AS permission",
         sets.join(", "),
         idx
     );
@@ -327,6 +334,9 @@ async fn update_notebook(
     if let Some(include_in_capsule) = body.include_in_capsule {
         q = q.bind(include_in_capsule);
     }
+    if let Some(archived) = body.archived {
+        q = q.bind(archived);
+    }
     q = q.bind(id);
 
     match q.fetch_one(&state.db).await {
@@ -339,14 +349,14 @@ async fn update_notebook(
     }
 }
 
-/// DELETE /api/notebooks/:id — delete notebook (cannot delete default)
+/// DELETE /api/notebooks/:id — delete notebook (must be archived first, cannot delete default)
 async fn delete_notebook(
     State(state): State<AppState>,
     user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Response {
-    let row: Option<(String, bool)> =
-        sqlx::query_as("SELECT owner_id, is_default FROM notebooks WHERE id = $1")
+    let row: Option<(String, bool, bool)> =
+        sqlx::query_as("SELECT owner_id, is_default, COALESCE(archived, false) FROM notebooks WHERE id = $1")
             .bind(id)
             .fetch_optional(&state.db)
             .await
@@ -360,17 +370,24 @@ async fn delete_notebook(
             )
                 .into_response()
         }
-        Some((oid, _)) if oid != user.id => {
+        Some((oid, _, _)) if oid != user.id => {
             return (
                 StatusCode::FORBIDDEN,
                 Json(json!({"error": "Not authorized"})),
             )
                 .into_response()
         }
-        Some((_, true)) => {
+        Some((_, true, _)) => {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({"error": "Cannot delete default notebook"})),
+            )
+                .into_response()
+        }
+        Some((_, _, false)) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": "Notebook must be archived before deleting"})),
             )
                 .into_response()
         }
