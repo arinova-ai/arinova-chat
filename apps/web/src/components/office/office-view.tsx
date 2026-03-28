@@ -155,7 +155,7 @@ function OfficeViewInner() {
             silent: true,
           });
           boundSlots.add(slotIdx);
-        } catch { /* skip failed slots */ }
+        } catch (err) { console.warn(`[office] auto-bind failed for agent ${agent.id} slot ${slotIdx}:`, err); }
         slotIdx++;
       }
       fetchBindings();

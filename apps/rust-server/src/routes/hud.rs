@@ -146,10 +146,26 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
                                     .unwrap_or_default()
                                 };
 
+                                // Resolve actual agent UUID from name (bridge agent_id is the HUD connector, not the working agent)
+                                let resolved_agent_id = if !agent_name.is_empty() {
+                                    sqlx::query_scalar::<_, String>(
+                                        "SELECT id::text FROM agents WHERE LOWER(name) = LOWER($1) AND owner_id = $2 LIMIT 1"
+                                    )
+                                    .bind(&agent_name)
+                                    .bind(&owner_id)
+                                    .fetch_optional(&state.db)
+                                    .await
+                                    .ok()
+                                    .flatten()
+                                    .unwrap_or_else(|| agent_id.clone())
+                                } else {
+                                    agent_id.clone()
+                                };
+
                                 // Push directly to owner — no conversationId needed
                                 state.ws.send_to_user_or_queue(&owner_id, &json!({
                                     "type": "task_update",
-                                    "agentId": &agent_id,
+                                    "agentId": &resolved_agent_id,
                                     "agentName": &agent_name,
                                     "status": status,
                                     "task": task_desc,
@@ -188,7 +204,7 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
                                         if parts.is_empty() { None } else { Some(parts.join(" · ")) }
                                     })
                                     .bind(&owner_id)
-                                    .bind(&agent_id)
+                                    .bind(&resolved_agent_id)
                                     .execute(&state.db)
                                     .await;
                                     if let Err(e) = updated {
@@ -199,7 +215,7 @@ async fn handle_hud_ws(mut socket: WebSocket, state: AppState, agent_id: String,
                                     insert_activity(
                                         &state.db,
                                         &owner_id,
-                                        &agent_id,
+                                        &resolved_agent_id,
                                         Some(&agent_name),
                                         "task_started",
                                         &title,
