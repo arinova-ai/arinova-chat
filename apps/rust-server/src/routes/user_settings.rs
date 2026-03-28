@@ -434,7 +434,7 @@ async fn get_plan_limit(db: &sqlx::PgPool, user_id: &str, column: &str) -> i32 {
         .await
         .ok()
         .flatten()
-        .unwrap_or(3) // Default: free-tier gets 3 boards
+        .unwrap_or(-1) // Default: unlimited (subscriptions not yet live)
 }
 
 /// Decrypt a user's Gemini API key from DB. Used by other routes (e.g. notes ask_ai).

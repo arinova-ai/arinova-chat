@@ -326,6 +326,7 @@ struct PaginationQuery {
 struct CreateBoardBody {
     name: String,
     columns: Option<Vec<CreateColumnInput>>,
+    auto_archive_days: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -856,10 +857,11 @@ async fn create_board(
     }
 
     let board_id = sqlx::query_scalar::<_, Uuid>(
-        "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO kanban_boards (owner_id, name, auto_archive_days) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(&user.id)
     .bind(&body.name)
+    .bind(body.auto_archive_days.unwrap_or(0))
     .fetch_one(&state.db)
     .await;
 
@@ -2048,10 +2050,11 @@ async fn agent_create_board(
     };
 
     let board_id = sqlx::query_scalar::<_, Uuid>(
-        "INSERT INTO kanban_boards (owner_id, name) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO kanban_boards (owner_id, name, auto_archive_days) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(&owner_id)
     .bind(&body.name)
+    .bind(body.auto_archive_days.unwrap_or(0))
     .fetch_one(&state.db)
     .await;
 
