@@ -526,7 +526,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground font-normal">@{nb.ownerUsername}</span>
                       )}
                       {/* Inline edit + archive buttons */}
-                      <span className={cn("inline-flex gap-0.5 ml-1", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
+                      <span className={cn("inline-flex gap-0.5 ml-1", "opacity-100")}>
                         <span
                           role="button"
                           onClick={(e) => { e.stopPropagation(); setEditingId(nb.id); setEditName(nb.name); }}
@@ -567,7 +567,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         onClick={(e) => { e.stopPropagation(); setMenuOpenId(nb.id); }}
                         className={cn(
                           "rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors",
-                          isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                          "opacity-100"
                         )}
                       >
                         <MoreHorizontal className="h-3.5 w-3.5" />
@@ -984,6 +984,36 @@ function NotebookNotes({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* Inline edit + archive */}
+            <button
+              type="button"
+              onClick={() => {
+                const newName = prompt("Rename notebook:", notebook.name);
+                if (newName && newName.trim() && newName.trim() !== notebook.name) {
+                  api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ name: newName.trim() }) })
+                    .then(() => onRefresh()).catch(() => {});
+                }
+              }}
+              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+            {!notebook.isDefault && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api(`/api/notebooks/${notebook.id}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+                    onRefresh();
+                    const available = notebooks.filter((nb) => nb.id !== notebook.id && !nb.archived);
+                    if (available.length > 0) onSwitchNotebook(available[0]);
+                  } catch {}
+                }}
+                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <Archive className="h-3 w-3" />
+              </button>
+            )}
             <div className="flex-1" />
 
             {/* Toolbar icons */}
