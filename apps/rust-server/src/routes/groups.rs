@@ -525,7 +525,7 @@ async fn add_member(
             .map(|(n,)| n)
             .unwrap_or_else(|| "An agent".to_string());
 
-            insert_system_message(&state, id, &format!("Agent {} was added to the group", agent_name)).await;
+            insert_system_message(&state, id, &serde_json::to_string(&serde_json::json!({"key": "system.agentAddedToGroup", "params": {"name": agent_name}})).unwrap()).await;
 
             (StatusCode::CREATED, Json(json!({"added": true}))).into_response()
         }
@@ -577,7 +577,7 @@ async fn remove_member(
             .into_response(),
         Ok(_) => {
             let name = agent_name.unwrap_or_else(|| "An agent".to_string());
-            insert_system_message(&state, id, &format!("Agent {} was removed from the group", name)).await;
+            insert_system_message(&state, id, &serde_json::to_string(&serde_json::json!({"key": "system.agentRemovedFromGroup", "params": {"name": name}})).unwrap()).await;
             StatusCode::NO_CONTENT.into_response()
         }
         Err(e) => (
@@ -776,7 +776,7 @@ async fn join_via_invite(
                 .map(|(n,)| n)
                 .unwrap_or_else(|| "Someone".to_string());
 
-                insert_system_message(&state, conv_id, &format!("{} joined the group", joiner_name)).await;
+                insert_system_message(&state, conv_id, &serde_json::to_string(&serde_json::json!({"key": "system.joinedGroup", "params": {"name": joiner_name}})).unwrap()).await;
             }
 
             Json(json!({"conversationId": conv_id, "joined": true})).into_response()
@@ -868,7 +868,7 @@ async fn kick_user(
             .map(|(n,)| n)
             .unwrap_or_else(|| "Someone".to_string());
 
-            insert_system_message(&state, id, &format!("{} was removed from the group", kicked_name)).await;
+            insert_system_message(&state, id, &serde_json::to_string(&serde_json::json!({"key": "system.removedFromGroup", "params": {"name": kicked_name}})).unwrap()).await;
 
             Json(json!({"kicked": true})).into_response()
         }
@@ -1122,7 +1122,7 @@ async fn leave_group(
     .unwrap_or_else(|| "Someone".to_string());
 
     // Insert system message before removing the user (so they're still a member for broadcast)
-    insert_system_message(&state, id, &format!("{} left the group", leaver_name)).await;
+    insert_system_message(&state, id, &serde_json::to_string(&serde_json::json!({"key": "system.leftGroup", "params": {"name": leaver_name}})).unwrap()).await;
 
     // Remove user's agents
     let _ = sqlx::query(
@@ -1239,7 +1239,7 @@ async fn add_user_to_group(
             .map(|(n,)| n)
             .unwrap_or_else(|| "Someone".to_string());
 
-            insert_system_message(&state, id, &format!("{} was added to the group", added_name)).await;
+            insert_system_message(&state, id, &serde_json::to_string(&serde_json::json!({"key": "system.addedToGroup", "params": {"name": added_name}})).unwrap()).await;
 
             (StatusCode::CREATED, Json(json!({"added": true}))).into_response()
         }
@@ -1535,7 +1535,7 @@ async fn withdraw_agent(
     match result {
         Ok(_) => {
             let name = agent_name.unwrap_or_else(|| "An agent".to_string());
-            insert_system_message(&state, id, &format!("Agent {} was removed from the group", name)).await;
+            insert_system_message(&state, id, &serde_json::to_string(&serde_json::json!({"key": "system.agentRemovedFromGroup", "params": {"name": name}})).unwrap()).await;
             Json(json!({"withdrawn": true})).into_response()
         }
         Err(e) => (

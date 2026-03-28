@@ -125,13 +125,59 @@ async fn pin_message(
 
     match result {
         Ok(_) => {
+            // Resolve operator name: anonymous for communities, real name for groups
+            let operator_name = if conv_type.as_deref() == Some("community") {
+                // Try display_name from community_members first
+                let community_id = sqlx::query_scalar::<_, uuid::Uuid>(
+                    "SELECT id FROM communities WHERE conversation_id = $1::uuid",
+                )
+                .bind(&conv_id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten();
+
+                if let Some(cid) = community_id {
+                    sqlx::query_scalar::<_, String>(
+                        "SELECT COALESCE(display_name, '') FROM community_members WHERE community_id = $1 AND user_id = $2",
+                    )
+                    .bind(cid)
+                    .bind(&user.id)
+                    .fetch_optional(&state.db)
+                    .await
+                    .ok()
+                    .flatten()
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or_else(|| {
+                        use sha2::{Sha256, Digest};
+                        let mut hasher = Sha256::new();
+                        hasher.update(conv_id.as_bytes());
+                        hasher.update(user.id.as_bytes());
+                        format!("anon-{}", hex::encode(&hasher.finalize()[..8]))
+                    })
+                } else {
+                    "Someone".to_string()
+                }
+            } else {
+                // Group or direct: use real name
+                sqlx::query_scalar::<_, String>(
+                    r#"SELECT name FROM "user" WHERE id = $1"#,
+                )
+                .bind(&user.id)
+                .fetch_optional(&state.db)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "Someone".to_string())
+            };
+
             // Broadcast pin event to conversation members via system message
             let _ = sqlx::query(
                 r#"INSERT INTO messages (id, conversation_id, seq, role, content, status, sender_user_id)
                    VALUES (gen_random_uuid(), $1::uuid, 0, 'system', $2, 'completed', $3)"#,
             )
             .bind(&conv_id)
-            .bind(format!("pinned a message"))
+            .bind(serde_json::to_string(&serde_json::json!({"key": "system.pinnedMessage", "params": {"name": operator_name}})).unwrap())
             .bind(&user.id)
             .execute(&state.db)
             .await;

@@ -422,7 +422,12 @@ export function CommunitySettingsSheet({
     try {
       await api(`/api/communities/${communityId}/leave`, { method: "POST" });
       onClose();
-      useChatStore.getState().setActiveConversation(null);
+      const store = useChatStore.getState();
+      store.setActiveConversation(null);
+      // Remove from conversation list
+      useChatStore.setState((s) => ({
+        conversations: s.conversations.filter((c) => c.id !== conversationId),
+      }));
     } catch {}
   }, [communityId, t, onClose]);
 

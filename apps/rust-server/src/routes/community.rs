@@ -1485,6 +1485,74 @@ async fn leave(
         );
     }
 
+    // Insert system message after successful leave
+    if let Some(cid) = conv_id {
+        // Get anonymous display name for the leaving user
+        let display_name = sqlx::query_scalar::<_, String>(
+            "SELECT COALESCE(display_name, 'Someone') FROM community_members WHERE community_id = $1 AND user_id = $2",
+        )
+        .bind(id)
+        .bind(&user.id)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| {
+            // Member already deleted; generate anon hash
+            use sha2::{Sha256, Digest};
+            let mut hasher = Sha256::new();
+            hasher.update(cid.to_string().as_bytes());
+            hasher.update(user.id.as_bytes());
+            format!("anon-{}", hex::encode(&hasher.finalize()[..8]))
+        });
+
+        let content = serde_json::to_string(&json!({"key": "system.leftCommunity", "params": {"name": display_name}})).unwrap();
+        // Re-use groups' system message pattern
+        let msg_id = Uuid::new_v4();
+        let now = chrono::Utc::now();
+        let _ = sqlx::query(
+            r#"INSERT INTO messages (id, conversation_id, role, content, status, seq, created_at, updated_at)
+               VALUES ($1, $2, 'system', $3, 'completed', 0, $4, $4)"#,
+        )
+        .bind(msg_id)
+        .bind(cid)
+        .bind(&content)
+        .bind(now.naive_utc())
+        .execute(&state.db)
+        .await;
+
+        let _ = sqlx::query("UPDATE conversations SET updated_at = NOW() WHERE id = $1")
+            .bind(cid)
+            .execute(&state.db)
+            .await;
+
+        // Broadcast to remaining members
+        let member_ids: Vec<String> = sqlx::query_as::<_, (String,)>(
+            "SELECT user_id FROM conversation_user_members WHERE conversation_id = $1",
+        )
+        .bind(cid)
+        .fetch_all(&state.db)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(uid,)| uid)
+        .collect();
+
+        state.ws.broadcast_to_members(&member_ids, &json!({
+            "type": "new_message",
+            "conversationId": cid.to_string(),
+            "message": {
+                "id": msg_id.to_string(),
+                "conversationId": cid.to_string(),
+                "role": "system",
+                "content": &content,
+                "status": "completed",
+                "createdAt": now.to_rfc3339(),
+                "updatedAt": now.to_rfc3339(),
+            }
+        }), &state.redis);
+    }
+
     (StatusCode::OK, Json(json!({ "success": true })))
 }
 

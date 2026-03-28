@@ -422,11 +422,7 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
               <CommitSharePreview metadata={message.metadata as { commitHash: string; title: string; preview?: string }} />
             </div>
           ) : (
-            <div className="flex justify-center py-1.5">
-              <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
-                {message.content}
-              </span>
-            </div>
+            <SystemMessage content={message.content} />
           )
         ) : (
           <div className={cn("flex items-center gap-2", selectionMode && "cursor-pointer")}
@@ -524,6 +520,28 @@ export function MessageList({ messages: rawMessages, agentName, isGroupConversat
           <ArrowDown className="h-4 w-4" />
         </button>
       )}
+    </div>
+  );
+}
+
+function SystemMessage({ content }: { content: string }) {
+  const { t } = useTranslation();
+
+  let text = content;
+  try {
+    const parsed = JSON.parse(content) as { key?: string; params?: Record<string, string> };
+    if (parsed.key) {
+      text = t(parsed.key, parsed.params);
+    }
+  } catch {
+    // Not JSON — display as plain text (backward compat)
+  }
+
+  return (
+    <div className="flex justify-center py-1.5">
+      <span className="text-xs text-muted-foreground bg-muted/50 rounded-full px-3 py-1">
+        {text}
+      </span>
     </div>
   );
 }

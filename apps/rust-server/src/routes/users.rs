@@ -9,6 +9,8 @@ use chrono::NaiveDateTime;
 use serde::Deserialize;
 use serde_json::json;
 
+use redis::AsyncCommands;
+
 use crate::auth::middleware::AuthUser;
 use crate::utils::username::validate_username;
 use crate::AppState;
@@ -147,43 +149,50 @@ async fn check_username(
     }
 }
 
-/// GET /api/users/search?q=prefix — Search users by username prefix
-/// Pass `exact=true` to match username exactly instead of prefix.
+/// GET /api/users/search?q=username — Search users by exact username match
+/// Rate-limited: 3 misses within 5 minutes locks the caller out.
 async fn search_users(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Query(params): Query<SearchQuery>,
 ) -> Response {
     let limit = params.limit.unwrap_or(20).min(50);
-    let exact = params.exact.unwrap_or(false);
 
-    let results = if exact {
-        let q = params.q.to_lowercase();
-        sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
-            r#"SELECT id, name, image, username, is_verified FROM "user"
-               WHERE LOWER(username) = $1
-               LIMIT $2"#,
-        )
-        .bind(&q)
-        .bind(limit)
-        .fetch_all(&state.db)
-        .await
-    } else {
-        let pattern = format!("{}%", params.q.to_lowercase());
-        sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
-            r#"SELECT id, name, image, username, is_verified FROM "user"
-               WHERE username ILIKE $1
-               ORDER BY username
-               LIMIT $2"#,
-        )
-        .bind(&pattern)
-        .bind(limit)
-        .fetch_all(&state.db)
-        .await
-    };
+    // Rate limit: check if caller is locked out
+    let rl_key = format!("rl:usearch:{}", user.id);
+    if let Ok(mut conn) = state.redis.get().await {
+        let count: i64 = conn.get(&rl_key).await.unwrap_or(0);
+        if count >= 3 {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({"error": "Too many failed searches. Try again in a few minutes."})),
+            )
+                .into_response();
+        }
+    }
+
+    // Exact match only (case-insensitive)
+    let q = params.q.to_lowercase();
+    let results = sqlx::query_as::<_, (String, String, Option<String>, Option<String>, bool)>(
+        r#"SELECT id, name, image, username, is_verified FROM "user"
+           WHERE LOWER(username) = $1
+           LIMIT $2"#,
+    )
+    .bind(&q)
+    .bind(limit)
+    .fetch_all(&state.db)
+    .await;
 
     match results {
         Ok(rows) => {
+            if rows.is_empty() {
+                // Increment miss counter with 5-minute TTL
+                if let Ok(mut conn) = state.redis.get().await {
+                    let _: Result<(), _> = conn.incr(&rl_key, 1i64).await;
+                    let _: Result<(), _> = conn.expire(&rl_key, 300).await;
+                }
+            }
+
             let users: Vec<serde_json::Value> = rows
                 .into_iter()
                 .map(|(id, name, image, username, is_verified)| {
