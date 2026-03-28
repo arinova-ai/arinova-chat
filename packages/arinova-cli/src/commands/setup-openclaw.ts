@@ -2,7 +2,6 @@ import { Command } from "commander";
 import { readFileSync, writeFileSync, copyFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { get, post } from "../client.js";
 import { getApiKey, getEndpoint } from "../config.js";
 import { printSuccess, printError } from "../output.js";
 
@@ -47,6 +46,31 @@ export function registerSetupOpenclaw(program: Command): void {
     .option("--api-url <url>", "Arinova API URL for channel config")
     .action(async (opts: { workspace?: string; force?: boolean; apiUrl?: string }) => {
       try {
+        // Resolve API base: local --api-url > global --api-url/--staging > config
+        const globalOpts = program.optsWithGlobals() as { apiUrl?: string };
+        const apiBase = (opts.apiUrl ?? globalOpts.apiUrl ?? getEndpoint()).replace(/\/+$/, "");
+
+        // Helper functions that use resolved base
+        const apiHeaders = (): Record<string, string> => {
+          const key = getApiKey();
+          return { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+        };
+        const apiGet = async (path: string): Promise<unknown> => {
+          const res = await fetch(`${apiBase}${path}`, { method: "GET", headers: apiHeaders() });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        };
+        const apiPost = async (path: string, body?: unknown): Promise<unknown> => {
+          const res = await fetch(`${apiBase}${path}`, {
+            method: "POST", headers: apiHeaders(),
+            body: body != null ? JSON.stringify(body) : undefined,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        };
+
+        console.log(`Using API endpoint: ${apiBase}`);
+
         // 1. Check auth
         const apiKey = getApiKey();
         if (!apiKey) {
@@ -99,7 +123,7 @@ export function registerSetupOpenclaw(program: Command): void {
         // 6. Get existing bots from Arinova (use /api/agents for owned agents with name field)
         let remoteBots: RemoteAgent[] = [];
         try {
-          const data = await get("/api/agents");
+          const data = await apiGet("/api/agents");
           const raw = data as Record<string, unknown>;
           const list = raw.agents ?? data;
           if (Array.isArray(list)) {
@@ -115,8 +139,9 @@ export function registerSetupOpenclaw(program: Command): void {
         console.log(`Found ${remoteBots.length} existing bot(s) on Arinova`);
 
         // 7. Match agents to bots and collect tokens
-        const channelApiUrl = opts.apiUrl ?? (() => {
-          const endpoint = getEndpoint();
+        // channelApiUrl: the URL written into openclaw.json for the plugin
+        const channelApiUrl = apiBase.startsWith("https://api.") ? apiBase : (() => {
+          const endpoint = apiBase;
           // Convert chat.arinova.ai -> api.chat.arinova.ai
           // Convert chat-staging.arinova.ai -> api.chat-staging.arinova.ai
           try {
@@ -163,7 +188,7 @@ export function registerSetupOpenclaw(program: Command): void {
             // Create a new bot
             console.log(`Creating bot for agent "${agent.name}"...`);
             try {
-              const created = (await post("/api/agents", {
+              const created = (await apiPost("/api/agents", {
                 name: agent.name,
                 description: "OpenClaw agent",
               })) as RemoteAgent;
