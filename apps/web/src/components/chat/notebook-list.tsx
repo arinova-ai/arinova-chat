@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-is-mobile";
+import { RenameDialog } from "@/components/ui/rename-dialog";
 import { NotebookSheet } from "./notebook-sheet";
 import { useChatStore } from "@/store/chat-store";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [listRenameTarget, setListRenameTarget] = useState<{ id: string; name: string } | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [shareNotebookId, setShareNotebookId] = useState<string | null>(null);
   const [shareMembers, setShareMembers] = useState<{ userId: string; username: string; permission: string }[]>([]);
@@ -431,6 +433,18 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
         onDelete={handleDelete}
         onRefresh={fetchNotebooks}
       />
+      <RenameDialog
+        open={!!listRenameTarget}
+        onOpenChange={(open) => { if (!open) setListRenameTarget(null); }}
+        defaultValue={listRenameTarget?.name ?? ""}
+        onSave={async (name) => {
+          if (!listRenameTarget) return;
+          try {
+            await api(`/api/notebooks/${listRenameTarget.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+            fetchNotebooks();
+          } catch {}
+        }}
+      />
     </>);
   }
 
@@ -489,27 +503,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
         ) : (
           notebooks.filter((nb) => !nb.archived).map((nb) => (
             <div key={nb.id} className="group">
-              {editingId === nb.id ? (
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <Input
-                    autoFocus
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleRename(nb.id);
-                      if (e.key === "Escape") setEditingId(null);
-                    }}
-                    className="h-7 text-sm flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRename(nb.id)}
-                    className="text-xs font-medium text-brand"
-                  >
-                    {t("notebooks.save")}
-                  </button>
-                </div>
-              ) : (
+              {(
                 <button
                   type="button"
                   onClick={() => selectNotebook(nb)}
@@ -531,7 +525,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                       <span className={cn("inline-flex gap-0.5 ml-1", "opacity-100")}>
                         <span
                           role="button"
-                          onClick={(e) => { e.stopPropagation(); setEditingId(nb.id); setEditName(nb.name); }}
+                          onClick={(e) => { e.stopPropagation(); setListRenameTarget({ id: nb.id, name: nb.name }); }}
                           className="p-0.5 rounded hover:bg-muted text-muted-foreground"
                         >
                           <Pencil className="h-3 w-3" />
@@ -683,8 +677,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
                         className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setEditingId(nb.id);
-                          setEditName(nb.name);
+                          setListRenameTarget({ id: nb.id, name: nb.name });
                           setMenuOpenId(null);
                         }}
                       >
@@ -756,7 +749,22 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
   );
 
   // Inline mode (right panel)
-  if (inline) return <>{content}{shareDialog}</>;
+  const listRenameDialog = (
+    <RenameDialog
+      open={!!listRenameTarget}
+      onOpenChange={(open) => { if (!open) setListRenameTarget(null); }}
+      defaultValue={listRenameTarget?.name ?? ""}
+      onSave={async (name) => {
+        if (!listRenameTarget) return;
+        try {
+          await api(`/api/notebooks/${listRenameTarget.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+          fetchNotebooks();
+        } catch {}
+      }}
+    />
+  );
+
+  if (inline) return <>{content}{shareDialog}{listRenameDialog}</>;
 
   // Mobile portal overlay
   if (!open) return null;
@@ -772,6 +780,7 @@ export function NotebookList({ conversationId, inline, open, onOpenChange }: Not
     >
       {content}
       {shareDialog}
+      {listRenameDialog}
     </div>,
     document.body,
   );
@@ -878,6 +887,8 @@ function NotebookNotes({
     } catch { /* */ }
   }, [notebook.id]);
 
+  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
+
   const [archivedNotes, setArchivedNotes] = useState<{ id: string; title: string }[]>([]);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [archivedLoading, setArchivedLoading] = useState(false);
@@ -959,11 +970,7 @@ function NotebookNotes({
                         className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const newName = prompt("Rename notebook:", nb.name);
-                          if (newName && newName.trim() && newName.trim() !== nb.name) {
-                            api(`/api/notebooks/${nb.id}`, { method: "PATCH", body: JSON.stringify({ name: newName.trim() }) })
-                              .then(() => onRefresh()).catch(() => {});
-                          }
+                          setRenameTarget({ id: nb.id, name: nb.name });
                         }}
                         title="Rename"
                       >
@@ -1237,8 +1244,23 @@ function NotebookNotes({
     </div>
   ) : null;
 
+  const renameDialog = (
+    <RenameDialog
+      open={!!renameTarget}
+      onOpenChange={(open) => { if (!open) setRenameTarget(null); }}
+      defaultValue={renameTarget?.name ?? ""}
+      onSave={async (name) => {
+        if (!renameTarget) return;
+        try {
+          await api(`/api/notebooks/${renameTarget.id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+          onRefresh();
+        } catch {}
+      }}
+    />
+  );
+
   // Inline mode (right panel)
-  if (inline) return <>{content}{membersDialog}</>;
+  if (inline) return <>{content}{membersDialog}{renameDialog}</>;
 
   // Mobile portal overlay
   return createPortal(
@@ -1253,6 +1275,7 @@ function NotebookNotes({
     >
       {content}
       {membersDialog}
+      {renameDialog}
     </div>,
     document.body,
   );

@@ -56,6 +56,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { RenameDialog } from "@/components/ui/rename-dialog";
 import {
   Popover,
   PopoverTrigger,
@@ -1034,36 +1035,35 @@ export function KanbanBoard({ streamAgents = [], conversationId }: KanbanBoardPr
       </Dialog>
 
       {/* Rename Board Dialog */}
-      <Dialog open={renamingBoard} onOpenChange={setRenamingBoard}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("kanban.renameBoard")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              value={renameBoardName}
-              onChange={(e) => setRenameBoardName(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") handleRenameBoard(); }}
-            />
-            <div>
-              <label className="text-xs text-muted-foreground">{t("kanban.autoArchiveDays")}</label>
-              <Input
-                type="number"
-                min={0}
-                max={365}
-                value={autoArchiveDays}
-                onChange={(e) => setAutoArchiveDays(parseInt(e.target.value) || 0)}
-                className="mt-1"
-              />
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("kanban.autoArchiveDaysDesc")}</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenamingBoard(false)}>{t("common.cancel")}</Button>
-            <Button onClick={handleRenameBoard} disabled={!renameBoardName.trim()}>{t("common.save")}</Button>
-          </DialogFooter>
-        </DialogContent>
+      <RenameDialog
+        open={renamingBoard}
+        onOpenChange={setRenamingBoard}
+        defaultValue={renameBoardName}
+        onSave={async (name) => {
+          if (!selectedBoardId) return;
+          try {
+            await api(`/api/kanban/boards/${selectedBoardId}`, {
+              method: "PATCH",
+              body: JSON.stringify({ name, autoArchiveDays }),
+            });
+            await fetchBoard(selectedBoardId);
+          } catch {}
+        }}
+        title={t("kanban.renameBoard")}
+      >
+        <div>
+          <label className="text-xs text-muted-foreground">{t("kanban.autoArchiveDays")}</label>
+          <Input
+            type="number"
+            min={0}
+            max={365}
+            value={autoArchiveDays}
+            onChange={(e) => setAutoArchiveDays(parseInt(e.target.value) || 0)}
+            className="mt-1"
+          />
+          <p className="text-[10px] text-muted-foreground mt-0.5">{t("kanban.autoArchiveDaysDesc")}</p>
+        </div>
+      </RenameDialog>
       </Dialog>
 
       {/* Archive Board Dialog */}
